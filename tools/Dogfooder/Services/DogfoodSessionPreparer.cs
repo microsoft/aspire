@@ -56,9 +56,7 @@ internal sealed record SessionEnvironmentPlan(
 /// <param name="NuGetServer">
 /// The started server when the scenario's
 /// <see cref="ScenarioPlan.UseLocalNuGetProxy"/> was true. Caller is
-/// responsible for registering this with the
-/// <see cref="DogfoodingNuGetServerRegistry"/> so it is disposed when the
-/// session window closes.
+/// responsible for disposing it when the session ends.
 /// </param>
 internal sealed record PreparationResult(
     bool Success,

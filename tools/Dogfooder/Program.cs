@@ -25,8 +25,6 @@ internal static class Program
         // it so screens can hand it back to Hex1bApp.Invalidate without taking
         // a direct dependency on the notifier instance.
         builder.Services.AddSingleton<ChangeNotifier>();
-        builder.Services.AddSingleton<ISessionStoreFile>(_ => new SessionStoreFile());
-        builder.Services.AddSingleton<DogfoodSessionStore>();
         builder.Services.AddSingleton<EnvironmentValidationState>();
         builder.Services.AddSingleton<AppState>();
 
@@ -35,7 +33,6 @@ internal static class Program
         builder.Services.AddSingleton<ILocalAspireCliLocator, LocalAspireCliLocator>();
         builder.Services.AddSingleton<IPackageBuildRunner, PackageBuildRunner>();
         builder.Services.AddSingleton<IDogfoodSessionPreparer, DogfoodSessionPreparer>();
-        builder.Services.AddSingleton<IPrCatalog, StubPrCatalog>();
         builder.Services.AddSingleton<Scenarios.DogfoodScenarioRegistry>();
 
         // Commands themselves are DI'd so they can pull resolved services

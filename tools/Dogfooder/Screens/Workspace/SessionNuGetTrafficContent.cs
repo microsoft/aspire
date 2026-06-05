@@ -27,10 +27,10 @@ internal static class SessionNuGetTrafficContent
     public static Hex1bWidget Build<TParent>(
         WidgetContext<TParent> ctx,
         DogfoodSession session,
-        DogfoodingNuGetServerRegistry registry)
+        DogfoodingNuGetServer? server)
         where TParent : Hex1bWidget
     {
-        if (!registry.TryGet(session.Id, out var server) || session.NuGetTraffic is not { } traffic)
+        if (server is null || session.NuGetTraffic is not { } traffic)
         {
             return ctx.VStack(v => new Hex1bWidget[]
             {

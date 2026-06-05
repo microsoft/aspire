@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dogfooder.Screens;
-using Aspire.Dogfooder.Screens.Workspace;
 using Aspire.Dogfooder.Services;
 using Aspire.Dogfooder.State;
 using Hex1b;
@@ -27,22 +26,19 @@ internal sealed class RunCommand
     {
         _state = state;
         _ghProbe = ghProbe;
-        _preparer = preparer;
         _cliLocator = cliLocator;
-        _workspace = new WorkspaceScreen(state, preparer, scenarioRegistry);
+        _session = new SessionScreen(state, scenarioRegistry, preparer);
     }
 
     private readonly AppState _state;
     private readonly IGitHubAuthProbe _ghProbe;
-    private readonly IDogfoodSessionPreparer _preparer;
     private readonly ILocalAspireCliLocator _cliLocator;
-    private readonly WorkspaceScreen _workspace;
+    private readonly SessionScreen _session;
 
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
-        // Load any previously-persisted sessions before showing the UI so the
-        // session list isn't empty on second-launch.
-        await _state.Sessions.LoadAsync(cancellationToken).ConfigureAwait(false);
+        // No persisted sessions to load — single-session design, fresh
+        // scenario picker on every launch.
 
         // Run validation probes up-front in the background. The validation
         // screen subscribes to ChangeNotifier so its widget tree re-renders
@@ -51,33 +47,19 @@ internal sealed class RunCommand
 
         Hex1bApp? capturedApp = null;
 
-        await using var workspaceDisposables = _workspace.Disposables;
+        await using var sessionDisposables = _session.Disposables;
 
         await using var terminal = Hex1bTerminal.CreateBuilder()
             .WithMouse(true)
             .WithHex1bApp((app, _) =>
             {
                 capturedApp = app;
-                // Bridge state-change events into Hex1b's render loop. We only
-                // subscribe once; the lambda holds a closure over `app` which
-                // outlives the widget builder.
                 _state.Notifier.Changed += () => app.Invalidate();
                 return ctx => BuildRoot(ctx);
             })
             .Build();
 
         await terminal.RunAsync(cancellationToken).ConfigureAwait(false);
-
-        // Best-effort save on shutdown. Failures here shouldn't crash the
-        // process — they'll resurface on next launch when a fresh save runs.
-        try
-        {
-            await _state.Sessions.SaveAsync(CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            // Swallow: shutdown path.
-        }
 
         _ = capturedApp;
         return 0;
@@ -87,7 +69,7 @@ internal sealed class RunCommand
         _state.Phase switch
         {
             AppPhase.Validation => EnvironmentValidationScreen.Build(ctx, _state),
-            AppPhase.Main => _workspace.Build(ctx),
+            AppPhase.Main => _session.Build(ctx),
             _ => ctx.Text("Unknown phase."),
         };
 
