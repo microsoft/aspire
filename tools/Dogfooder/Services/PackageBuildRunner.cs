@@ -191,7 +191,11 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
             // real release pipeline never sets VersionSuffix='' until those
             // deps are promoted, so the upstream gate is unchanged.
             // NU5125 (missing readme) is a separate dogfood-irrelevant gate.
-            "/p:NoWarn=NU5104;NU5125",
+            // ';' inside a /p: value must be escaped as %3B; MSBuild's
+            // command-line parser splits on raw semicolons otherwise and
+            // reports MSB1006 'Property is not valid' against the second
+            // half ('NU5125').
+            "/p:NoWarn=NU5104%3BNU5125",
         };
         if (!request.IncludeNativeBuild)
         {
