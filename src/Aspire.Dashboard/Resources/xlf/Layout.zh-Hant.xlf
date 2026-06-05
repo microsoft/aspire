@@ -17,9 +17,24 @@
         <target state="translated">Aspire 存放庫</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutLaunchAIAgents">
+        <source>AI agents</source>
+        <target state="new">AI agents</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutLaunchNotifications">
+        <source>Notifications</source>
+        <target state="new">Notifications</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutLaunchSettings">
         <source>Settings</source>
         <target state="translated">設定</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutNotificationCenterTitle">
+        <source>Notifications</source>
+        <target state="new">Notifications</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutSettingsDialogClose">
@@ -42,14 +57,14 @@
         <target state="translated">重新載入</target>
         <note />
       </trans-unit>
+      <trans-unit id="MessageUnsecuredEndpointApiBody">
+        <source>Untrusted apps can access telemetry data via the API.</source>
+        <target state="translated">未受信任應用程式可以透過 API 存取遙測資料。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointLink">
         <source>More information</source>
         <target state="translated">詳細資訊</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="MessageUnsecuredEndpointMcpBody">
-        <source>Untrusted apps can access sensitive information about the running services.</source>
-        <target state="translated">未受信任的應用程式可以存取與執行中服務相關的敏感性資訊。</target>
         <note />
       </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointTelemetryBody">

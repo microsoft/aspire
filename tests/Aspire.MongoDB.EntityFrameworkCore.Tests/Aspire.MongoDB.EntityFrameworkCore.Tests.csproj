@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- MongoDB.EntityFrameworkCore does not support EF Core 10 yet, so only target net8.0 and net9.0 -->
+    <TargetFrameworks>$(DefaultTargetFramework);net9.0</TargetFrameworks>
+    <!-- MongoDB.Driver.Core.Extensions.DiagnosticSources and AspNetCore.HealthChecks.MongoDb packages are not signed -->
+    <NoWarn>$(NoWarn);CS8002</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(RepoRoot)src\Aspire.Hosting.MongoDB\MongoDBContainerImageTags.cs" />
+    <Compile Include="..\Aspire.MongoDB.Driver.Tests\MongoDbContainerFixture.cs" />
+    <None Include="$(RepoRoot)src\Components\Aspire.MongoDB.EntityFrameworkCore\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
+
+    <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
+    <PackageReference Include="TestContainers.MongoDb" />
+
+    <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
+    <ProjectReference Include="..\..\src\Components\Aspire.MongoDB.EntityFrameworkCore\Aspire.MongoDB.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+</Project>

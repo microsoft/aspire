@@ -8,15 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)CoalescingAsyncOperation.cs" Link="Utils\CoalescingAsyncOperation.cs" />
-    <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
-    <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
-    <Compile Include="$(SharedDir)RequiredCommandValidator.cs" Link="Utils\RequiredCommandValidator.cs" />
-    <Compile Include="$(SharedDir)OverloadResolutionPriorityAttribute.cs" Link="Utils\OverloadResolutionPriorityAttribute.cs" />
-    <Compile Include="$(RepoRoot)src\Aspire.Hosting\Dcp\Model\ExecutableLaunchConfiguration.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>
 

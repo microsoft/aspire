@@ -51,25 +51,30 @@ internal sealed class ReportingTask : IReportingTask
     /// </summary>
     public string CompletionMessage { get; internal set; } = string.Empty;
 
-    /// <summary>
-    /// Updates the status text of this task.
-    /// </summary>
-    /// <param name="statusText">The new status text.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <inheritdoc />
     public async Task UpdateAsync(string statusText, CancellationToken cancellationToken = default)
     {
-        await ParentStep.Reporter.UpdateTaskAsync(this, statusText, cancellationToken).ConfigureAwait(false);
+        await ParentStep.Reporter.UpdateTaskAsync(this, statusText, enableMarkdown: false, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Completes the task with the specified completion message.
-    /// </summary>
-    /// <param name="completionMessage">Optional completion message that will appear as a dimmed child message.</param>
-    /// <param name="completionState">The completion state of the task.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <inheritdoc />
+    public async Task UpdateAsync(MarkdownString statusText, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(statusText);
+        await ParentStep.Reporter.UpdateTaskAsync(this, statusText.Value, enableMarkdown: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
     public async Task CompleteAsync(string? completionMessage = null, CompletionState completionState = CompletionState.Completed, CancellationToken cancellationToken = default)
     {
-        await ParentStep.Reporter.CompleteTaskAsync(this, completionState, completionMessage, cancellationToken).ConfigureAwait(false);
+        await ParentStep.Reporter.CompleteTaskAsync(this, completionState, completionMessage, enableMarkdown: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task CompleteAsync(MarkdownString completionMessage, CompletionState completionState = CompletionState.Completed, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(completionMessage);
+        await ParentStep.Reporter.CompleteTaskAsync(this, completionState, completionMessage.Value, enableMarkdown: true, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

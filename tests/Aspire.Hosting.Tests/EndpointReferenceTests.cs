@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class EndpointReferenceTests
 {
     [Fact]
@@ -285,7 +287,334 @@ public class EndpointReferenceTests
         Assert.Null(targetPort);
     }
 
+    [Fact]
+    public void AllocatedEndpoint_ThrowsWhenNetworkIdDoesNotMatch()
+    {
+        var annotation = new EndpointAnnotation(ProtocolType.Tcp, KnownNetworkIdentifiers.LocalhostNetwork, uriScheme: "http", name: "http");
+
+        // Create an AllocatedEndpoint with a different network ID.
+        var mismatchedEndpoint = new AllocatedEndpoint(
+            annotation, "localhost", 8080,
+            EndpointBindingMode.SingleAddress,
+            targetPortExpression: null,
+            networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => annotation.AllocatedEndpoint = mismatchedEndpoint);
+    }
+
+    [Theory]
+    [InlineData(EndpointProperty.Url, ResourceKind.Host, ResourceKind.Host, "blah://localhost:1234")]
+    [InlineData(EndpointProperty.Url, ResourceKind.Host, ResourceKind.Container, "blah://localhost:1234")]
+    [InlineData(EndpointProperty.Url, ResourceKind.Container, ResourceKind.Host, "blah://host.docker.internal:1234")]
+    [InlineData(EndpointProperty.Url, ResourceKind.Container, ResourceKind.Container, "blah://destination.dev.internal:4567")]
+    [InlineData(EndpointProperty.Host, ResourceKind.Host, ResourceKind.Host, "localhost")]
+    [InlineData(EndpointProperty.Host, ResourceKind.Host, ResourceKind.Container, "localhost")]
+    [InlineData(EndpointProperty.Host, ResourceKind.Container, ResourceKind.Host, "host.docker.internal")]
+    [InlineData(EndpointProperty.Host, ResourceKind.Container, ResourceKind.Container, "destination.dev.internal")]
+    [InlineData(EndpointProperty.IPV4Host, ResourceKind.Host, ResourceKind.Host, "127.0.0.1")]
+    [InlineData(EndpointProperty.IPV4Host, ResourceKind.Host, ResourceKind.Container, "127.0.0.1")]
+    [InlineData(EndpointProperty.IPV4Host, ResourceKind.Container, ResourceKind.Host, "host.docker.internal")]
+    [InlineData(EndpointProperty.IPV4Host, ResourceKind.Container, ResourceKind.Container, "destination.dev.internal")]
+    [InlineData(EndpointProperty.Port, ResourceKind.Host, ResourceKind.Host, "1234")]
+    [InlineData(EndpointProperty.Port, ResourceKind.Host, ResourceKind.Container, "1234")]
+    [InlineData(EndpointProperty.Port, ResourceKind.Container, ResourceKind.Host, "1234")]
+    [InlineData(EndpointProperty.Port, ResourceKind.Container, ResourceKind.Container, "4567")]
+    [InlineData(EndpointProperty.Scheme, ResourceKind.Host, ResourceKind.Host, "blah")]
+    [InlineData(EndpointProperty.Scheme, ResourceKind.Host, ResourceKind.Container, "blah")]
+    [InlineData(EndpointProperty.Scheme, ResourceKind.Container, ResourceKind.Host, "blah")]
+    [InlineData(EndpointProperty.Scheme, ResourceKind.Container, ResourceKind.Container, "blah")]
+    [InlineData(EndpointProperty.HostAndPort, ResourceKind.Host, ResourceKind.Host, "localhost:1234")]
+    [InlineData(EndpointProperty.HostAndPort, ResourceKind.Host, ResourceKind.Container, "localhost:1234")]
+    [InlineData(EndpointProperty.HostAndPort, ResourceKind.Container, ResourceKind.Host, "host.docker.internal:1234")]
+    [InlineData(EndpointProperty.HostAndPort, ResourceKind.Container, ResourceKind.Container, "destination.dev.internal:4567")]
+    public async Task PropertyResolutionTest(EndpointProperty property, ResourceKind sourceKind, ResourceKind destinationKind, object expectedResult)
+    {
+        int port = 1234;
+        int targetPort = 4567;
+
+        var source = CreateResource("caller", sourceKind);
+        var destination = CreateResource("destination", destinationKind);
+
+        var network = source.GetDefaultResourceNetwork();
+
+        // This logic is tightly coupled to how `DcpExecutor` allocates endpoints
+        var annotation = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "blah", name: "http");
+        annotation.AllocatedEndpoint = new(annotation, "localhost", port);
+        destination.Annotations.Add(annotation);
+
+        (string containerHost, int containerPort) = destination.IsContainer()
+            ? ("destination.dev.internal", targetPort)
+            : ("host.docker.internal", port);
+
+        var containerEndpoint = new AllocatedEndpoint(annotation, containerHost, containerPort, EndpointBindingMode.SingleAddress, targetPortExpression: targetPort.ToString(), KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, containerEndpoint);
+
+        var expression = destination.GetEndpoint(annotation.Name).Property(property);
+
+        var resultFromCaller = await expression.GetValueAsync(new ValueProviderContext
+        {
+            Caller = source
+        });
+        Assert.Equal(expectedResult, resultFromCaller);
+
+        var resultFromNetwork = await expression.GetValueAsync(new ValueProviderContext
+        {
+            Network = network
+        });
+        Assert.Equal(expectedResult, resultFromNetwork);
+
+        static IResourceWithEndpoints CreateResource(string name, ResourceKind kind)
+        {
+            if (kind == ResourceKind.Container)
+            {
+                var resource = new TestResource(name);
+                resource.Annotations.Add(new ContainerImageAnnotation { Image = "test-image" });
+                return resource;
+            }
+            else
+            {
+                return new TestResource(name);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WaitingForAllocatedEndpointWorks()
+    {
+        var resource = new TestResource("test");
+        var annotation = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http");
+        resource.Annotations.Add(annotation);
+        var endpointRef = new EndpointReference(resource, annotation);
+
+        var waitStarted = new SemaphoreSlim(0, 1);
+
+#pragma warning disable CA2012 // Use ValueTasks correctly
+        var consumer = new WithWaitStartedNotification<string?>(waitStarted, endpointRef.GetValueAsync(CancellationToken.None).GetAwaiter());
+#pragma warning restore CA2012 // Use ValueTasks correctly
+
+        await Task.WhenAll
+        (
+            Task.Run(async() =>
+            {
+                await waitStarted.WaitAsync();
+                var allocatedEndpoint = new AllocatedEndpoint(annotation, "localhost", 5000);
+                annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.LocalhostNetwork, allocatedEndpoint);
+            }),
+            Task.Run(async () =>
+            {
+                var url = await consumer;
+                Assert.Equal("http://localhost:5000", url);
+            })
+        ).WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task GetValueAsync_AllocatesEndpointOnDemandWhenCallerIsUnknown()
+    {
+        var (_, _, expression, allocationCount) = CreateOnDemandEndpointExpression();
+
+        var url = await expression.GetValueAsync(new ValueProviderContext());
+
+        Assert.Equal("http://localhost:8080", url);
+        Assert.Equal(1, allocationCount());
+    }
+
+    [Fact]
+    public async Task GetValueAsync_AllocatesEndpointOnDemandForSelfReference()
+    {
+        var (resource, _, expression, allocationCount) = CreateOnDemandEndpointExpression();
+
+        var url = await expression.GetValueAsync(new ValueProviderContext { Caller = resource, ExecutionContext = CreateExecutionContext() });
+
+        Assert.Equal("http://localhost:8080", url);
+        Assert.Equal(1, allocationCount());
+    }
+
+    [Fact]
+    public async Task GetValueAsync_AllocatesEndpointOnDemandWhenEndpointResourceWaitsOnCaller()
+    {
+        var caller = new TestResource("caller");
+        var (resource, _, expression, allocationCount) = CreateOnDemandEndpointExpression();
+        resource.Annotations.Add(new WaitAnnotation(caller, WaitType.WaitUntilStarted));
+
+        var url = await expression.GetValueAsync(new ValueProviderContext { Caller = caller, ExecutionContext = CreateExecutionContext() });
+
+        Assert.Equal("http://localhost:8080", url);
+        Assert.Equal(1, allocationCount());
+    }
+
+    [Fact]
+    public async Task GetValueAsync_AllocatesEndpointOnDemandWhenEndpointResourceReferencesCaller()
+    {
+        var caller = new TestResource("caller");
+        var (resource, _, expression, allocationCount) = CreateOnDemandEndpointExpression();
+        var callerEndpoint = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http");
+        caller.Annotations.Add(callerEndpoint);
+        resource.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+        {
+            context.EnvironmentVariables["CALLER_URL"] = new EndpointReference(caller, callerEndpoint);
+        }));
+
+        var url = await expression.GetValueAsync(new ValueProviderContext { Caller = caller, ExecutionContext = CreateExecutionContext() });
+
+        Assert.Equal("http://localhost:8080", url);
+        Assert.Equal(1, allocationCount());
+    }
+
+    [Fact]
+    public async Task GetValueAsync_AllocatesEndpointOnDemandWhenEndpointResourceTransitivelyDependsOnCaller()
+    {
+        var caller = new TestResource("caller");
+        var intermediate = new TestResource("intermediate");
+        var (resource, _, expression, allocationCount) = CreateOnDemandEndpointExpression();
+
+        resource.Annotations.Add(new WaitAnnotation(intermediate, WaitType.WaitUntilStarted));
+        intermediate.Annotations.Add(new WaitAnnotation(caller, WaitType.WaitUntilStarted));
+
+        var url = await expression.GetValueAsync(new ValueProviderContext { Caller = caller, ExecutionContext = CreateExecutionContext() });
+
+        Assert.Equal("http://localhost:8080", url);
+        Assert.Equal(1, allocationCount());
+    }
+
+    [Fact]
+    public async Task GetValueAsync_WaitsForEndpointAllocationWhenContainerEndpointResourceDoesNotDependOnCaller()
+    {
+        var caller = new TestResource("caller");
+        var (_, annotation, expression, allocationCount) = CreateOnDemandEndpointExpression(isContainerEndpoint: true);
+
+        var getValueTask = expression.GetValueAsync(new ValueProviderContext { Caller = caller, ExecutionContext = CreateExecutionContext() });
+
+        Assert.False(getValueTask.IsCompleted);
+        Assert.Equal(0, allocationCount());
+
+        annotation.AllocatedEndpoint = new AllocatedEndpoint(annotation, "localhost", 8081);
+
+        var url = await getValueTask;
+
+        Assert.Equal("http://localhost:8081", url);
+        Assert.Equal(0, allocationCount());
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWhenEndpointNameNotDefined_ListsAvailableEndpoints()
+    {
+        var resource = new TestResource("api-boston");
+        var httpEndpoint = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https", name: "http");
+        resource.Annotations.Add(httpEndpoint);
+
+        var endpointRef = new EndpointReference(resource, "https");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Contains("`https`", ex.Message);
+        Assert.Contains("`api-boston`", ex.Message);
+        Assert.Contains("Available endpoints", ex.Message);
+        Assert.Contains("`http`", ex.Message);
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWhenEndpointNameNotDefined_ListsMultipleAvailableEndpoints()
+    {
+        var resource = new TestResource("api");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http"));
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "tcp", name: "grpc"));
+
+        var endpointRef = new EndpointReference(resource, "https");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Contains("`https`", ex.Message);
+        Assert.Contains("`http`", ex.Message);
+        Assert.Contains("`grpc`", ex.Message);
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWhenResourceHasNoEndpoints_MessageIsClear()
+    {
+        var resource = new TestResource("api");
+
+        var endpointRef = new EndpointReference(resource, "https");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Contains("`https`", ex.Message);
+        Assert.Contains("`api`", ex.Message);
+        Assert.Contains("no endpoints defined", ex.Message);
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWithCustomErrorMessageWhenSet()
+    {
+        var resource = new TestResource("api");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http"));
+
+        var endpointRef = new EndpointReference(resource, "https") { ErrorMessage = "custom message" };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Equal("custom message", ex.Message);
+    }
+
+    public enum ResourceKind
+    {
+        Host,
+        Container
+    }
+
     private sealed class TestResource(string name) : Resource(name), IResourceWithEndpoints
     {
+    }
+
+    private static (TestResource Resource, EndpointAnnotation Endpoint, EndpointReferenceExpression Expression, Func<int> AllocationCount) CreateOnDemandEndpointExpression(bool isContainerEndpoint = false)
+    {
+        var resource = new TestResource("test");
+        var annotation = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http");
+        var allocationCount = 0;
+
+        if (isContainerEndpoint)
+        {
+            resource.Annotations.Add(new ContainerImageAnnotation { Image = "test-image" });
+        }
+
+        resource.Annotations.Add(annotation);
+        resource.Annotations.Add(new OnDemandEndpointAllocationAnnotation((endpoint, networkId) =>
+        {
+            allocationCount++;
+            return new AllocatedEndpoint(endpoint, "localhost", 8080, EndpointBindingMode.SingleAddress, networkId: networkId);
+        }));
+
+        return (resource, annotation, new EndpointReference(resource, annotation).Property(EndpointProperty.Url), () => allocationCount);
+    }
+
+    private static DistributedApplicationExecutionContext CreateExecutionContext() => new(DistributedApplicationOperation.Run);
+
+    private struct WithWaitStartedNotification<T>
+    {
+        private readonly WaitStartedNotificationAwaiter<T> _awaiter;
+
+        public WithWaitStartedNotification(SemaphoreSlim waitStarted, ValueTaskAwaiter<T> inner)
+        {
+            _awaiter = new WaitStartedNotificationAwaiter<T>(waitStarted, inner);
+        }
+        public WaitStartedNotificationAwaiter<T> GetAwaiter() => _awaiter;
+    }
+
+    private struct WaitStartedNotificationAwaiter<T>: INotifyCompletion
+    {
+        private readonly ValueTaskAwaiter<T> _inner;
+        private readonly SemaphoreSlim _waitStarted;
+
+        public WaitStartedNotificationAwaiter(SemaphoreSlim waitStarted, ValueTaskAwaiter<T> inner)
+        {
+            _waitStarted = waitStarted;
+            _inner = inner;
+        }
+
+        public bool IsCompleted => false; // Force continuation
+
+        public void OnCompleted(Action continuation)
+        {
+            _waitStarted.Release();
+            _inner.OnCompleted(continuation);
+        }
+
+        public T GetResult() => _inner.GetResult();
     }
 }

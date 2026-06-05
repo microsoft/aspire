@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure;
@@ -13,7 +15,8 @@ namespace Aspire.Hosting.Azure;
 public class AzureQueueStorageResource(string name, AzureStorageResource storage) : Resource(name),
     IResourceWithConnectionString,
     IResourceWithParent<AzureStorageResource>,
-    IResourceWithAzureFunctionsConfig
+    IResourceWithAzureFunctionsConfig,
+    IAzurePrivateEndpointTarget
 {
     /// <summary>
     /// Gets the parent AzureStorageResource of this AzureQueueStorageResource.
@@ -26,7 +29,7 @@ public class AzureQueueStorageResource(string name, AzureStorageResource storage
     /// <remarks>
     /// Format: <c>https://{host}:{port}</c> for emulator or <c>{queueEndpoint}</c> for Azure.
     /// </remarks>
-    public ReferenceExpression ServiceUriExpression => Parent.QueueServiceUriExpression;
+    public ReferenceExpression UriExpression => Parent.QueueUriExpression;
 
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Queue Storage resource.
@@ -74,13 +77,19 @@ public class AzureQueueStorageResource(string name, AzureStorageResource storage
         }
     }
 
+    BicepOutputReference IAzurePrivateEndpointTarget.Id => Parent.Id;
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["queue"];
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.queue.core.windows.net"];
+
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        foreach (var property in Parent.GetConnectionProperties())
-        {
-            yield return property;
-        }
+        yield return new("Uri", UriExpression);
 
-        yield return new("Uri", ServiceUriExpression);
+        if (Parent.IsEmulator)
+        {
+            yield return new("ConnectionString", ConnectionStringExpression);
+        }
     }
 }

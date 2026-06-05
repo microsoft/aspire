@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Tests.Devcontainers;
 
+[Trait("Partition", "4")]
 public class SshRemoteOptionsTests
 {
     [Fact]

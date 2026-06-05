@@ -134,7 +134,9 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         {
             var existingResourceName = existingAnnotation.Name is ParameterResource nameParameter
                 ? nameParameter.AsProvisioningParameter(infrastructure)
-                : new BicepValue<string>((string)existingAnnotation.Name);
+                : existingAnnotation.Name is BicepOutputReference nameOutputReference
+                    ? nameOutputReference.AsProvisioningParameter(infrastructure)
+                    : new BicepValue<string>((string)existingAnnotation.Name);
             provisionedResource = createExisting(infrastructure.AspireResource.GetBicepIdentifier(), existingResourceName);
             if (existingAnnotation.ResourceGroup is not null)
             {
@@ -176,6 +178,7 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         var existingResourceName = existingAnnotation.Name switch
         {
             ParameterResource nameParameter => nameParameter.AsProvisioningParameter(infra),
+            BicepOutputReference nameOutputReference => nameOutputReference.AsProvisioningParameter(infra),
             string s => new BicepValue<string>(s),
             _ => throw new NotSupportedException($"Existing resource name type '{existingAnnotation.Name.GetType()}' is not supported.")
         };

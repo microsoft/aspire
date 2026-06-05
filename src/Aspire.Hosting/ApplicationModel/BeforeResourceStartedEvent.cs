@@ -13,13 +13,12 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// Resources that are created by orchestrators may not yet be ready to handle requests.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 public class BeforeResourceStartedEvent(IResource resource, IServiceProvider services) : IDistributedApplicationResourceEvent
 {
     /// <inheritdoc />
     public IResource Resource { get; } = resource;
 
-    /// <summary>
-    /// The <see cref="IServiceProvider"/> for the app host.
-    /// </summary>
+    /// <inheritdoc />
     public IServiceProvider Services { get; } = services;
 }

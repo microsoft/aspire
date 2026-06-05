@@ -1,21 +1,32 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREUSERSECRETS001
 
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
+using System.Reflection;
+using System.Reflection.Emit;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
+using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class DistributedApplicationBuilderTests
 {
+    private static readonly ConstructorInfo s_userSecretsIdAttrCtor = typeof(UserSecretsIdAttribute).GetConstructor([typeof(string)])!;
+
     [Theory]
     [InlineData(new string[0], DistributedApplicationOperation.Run)]
     [InlineData(new string[] { "--publisher", "manifest" }, DistributedApplicationOperation.Publish)]
@@ -45,7 +56,8 @@ public class DistributedApplicationBuilderTests
         Assert.Collection(
             eventingSubscribers,
             s => Assert.IsType<DashboardEventHandlers>(s),
-            s => Assert.IsType<DevcontainerPortForwardingLifecycleHook>(s)
+            s => Assert.IsType<DevcontainerPortForwardingEventingSubscriber>(s),
+            s => Assert.IsType<RequiredCommandValidationEventingSubscriber>(s)
         );
 
         var options = app.Services.GetRequiredService<IOptions<PipelineOptions>>();
@@ -97,6 +109,43 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
+    public void PipelineOutputServiceUsesAppHostDirectoryByDefault()
+    {
+        var projectDirectory = OperatingSystem.IsWindows() ? @"C:\projects\Tailspin" : "/projects/Tailspin";
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory
+        });
+        using var app = appBuilder.Build();
+
+        var outputService = app.Services.GetRequiredService<IPipelineOutputService>();
+        Assert.Equal(Path.Combine(projectDirectory, "aspire-output"), outputService.GetOutputDirectory());
+    }
+
+    [Fact]
+    public void PipelineOutputServiceIgnoresInvalidAppHostDirectoryWhenOutputPathSpecified()
+    {
+        var outputPath = OperatingSystem.IsWindows() ? @"C:\tmp\output" : "/tmp/output";
+        var appBuilder = DistributedApplication.CreateBuilder(["--publisher", "manifest", "--output-path", outputPath]);
+        appBuilder.Configuration["AppHost:Directory"] = "\0";
+        using var app = appBuilder.Build();
+
+        var outputService = app.Services.GetRequiredService<IPipelineOutputService>();
+        Assert.Equal(Path.GetFullPath(outputPath), outputService.GetOutputDirectory());
+    }
+
+    [Fact]
+    public void PipelineOutputServiceFallsBackToCurrentDirectoryWhenAppHostDirectoryIsInvalid()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder(["--publisher", "manifest"]);
+        appBuilder.Configuration["AppHost:Directory"] = "\0";
+        using var app = appBuilder.Build();
+
+        var outputService = app.Services.GetRequiredService<IPipelineOutputService>();
+        Assert.Equal(Path.Combine(Environment.CurrentDirectory, "aspire-output"), outputService.GetOutputDirectory());
+    }
+
+    [Fact]
     public void ResourceServiceConfig_Secured()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -105,6 +154,105 @@ public class DistributedApplicationBuilderTests
         var config = app.Services.GetRequiredService<IConfiguration>();
         Assert.Equal(nameof(ResourceServiceAuthMode.ApiKey), config["AppHost:ResourceService:AuthMode"]);
         Assert.False(string.IsNullOrEmpty(config["AppHost:ResourceService:ApiKey"]));
+    }
+
+    [Fact]
+    public void AspireLogLevelOverridesConfiguredDefaultLogLevel()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder(args: [$"{KnownConfigNames.AspireLogLevel}=Trace"]);
+        appBuilder.Configuration["Logging:LogLevel:Default"] = "Information";
+
+        using var app = appBuilder.Build();
+
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AspireLogLevelTest");
+        Assert.True(logger.IsEnabled(LogLevel.Trace));
+    }
+
+    [Fact]
+    public void PolyglotAppHostUsesAspireUserSecretsIdForUserSecretsManager()
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var userSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+
+        if (File.Exists(userSecretsPath))
+        {
+            File.Delete(userSecretsPath);
+        }
+
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"],
+            DisableDashboard = true,
+        });
+
+        Assert.True(appBuilder.UserSecretsManager.IsAvailable);
+        Assert.Equal(userSecretsPath, appBuilder.UserSecretsManager.FilePath);
+    }
+
+    [Fact]
+    public void AspireUserSecretsIdOverridesAppHostAssemblyUserSecretsId()
+    {
+        var assemblyUserSecretsId = Guid.NewGuid().ToString("N");
+        var configuredUserSecretsId = Guid.NewGuid().ToString("N");
+        var assemblyUserSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(assemblyUserSecretsId);
+        var configuredUserSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(configuredUserSecretsId);
+
+        DeleteUserSecretsFile(assemblyUserSecretsPath);
+        DeleteUserSecretsFile(configuredUserSecretsPath);
+
+        File.WriteAllText(assemblyUserSecretsPath, """
+            {
+              "AssemblyOnly": "assembly-only",
+              "Probe": "assembly"
+            }
+            """);
+
+        File.WriteAllText(configuredUserSecretsPath, """
+            {
+              "ConfiguredOnly": "configured-only",
+              "Probe": "configured"
+            }
+            """);
+
+        var testAssembly = AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName($"TestAssembly{Guid.NewGuid():N}"),
+            AssemblyBuilderAccess.RunAndCollect,
+            [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [assemblyUserSecretsId])]);
+
+        try
+        {
+            var configuration = new ConfigurationManager();
+            configuration.AddUserSecrets(testAssembly);
+            configuration[KnownConfigNames.AspireUserSecretsId] = configuredUserSecretsId;
+
+            Assert.Equal(configuredUserSecretsId, DistributedApplicationBuilder.ResolveUserSecretsId(testAssembly, configuration));
+
+            DistributedApplicationBuilder.AddConfiguredUserSecrets(configuration, testAssembly, configuredUserSecretsId, isDevelopment: true);
+
+            Assert.Null(configuration["AssemblyOnly"]);
+            Assert.Equal("configured-only", configuration["ConfiguredOnly"]);
+            Assert.Equal("configured", configuration["Probe"]);
+        }
+        finally
+        {
+            DeleteUserSecretsFile(assemblyUserSecretsPath);
+            DeleteUserSecretsFile(configuredUserSecretsPath);
+        }
+    }
+
+    [Fact]
+    public void EmptyAspireUserSecretsIdFallsBackToAppHostAssemblyUserSecretsId()
+    {
+        var assemblyUserSecretsId = Guid.NewGuid().ToString("N");
+        var testAssembly = AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName($"TestAssembly{Guid.NewGuid():N}"),
+            AssemblyBuilderAccess.RunAndCollect,
+            [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [assemblyUserSecretsId])]);
+
+        var configuration = new ConfigurationManager();
+        configuration[KnownConfigNames.AspireUserSecretsId] = "";
+
+        Assert.Equal(assemblyUserSecretsId, DistributedApplicationBuilder.ResolveUserSecretsId(testAssembly, configuration));
     }
 
     [Theory]
@@ -118,6 +266,20 @@ public class DistributedApplicationBuilderTests
         var config = app.Services.GetRequiredService<IConfiguration>();
         Assert.Equal(nameof(ResourceServiceAuthMode.Unsecured), config["AppHost:ResourceService:AuthMode"]);
         Assert.True(string.IsNullOrEmpty(config["AppHost:ResourceService:ApiKey"]));
+    }
+
+    private static void DeleteUserSecretsFile(string userSecretsPath)
+    {
+        if (File.Exists(userSecretsPath))
+        {
+            File.Delete(userSecretsPath);
+        }
+
+        var directory = Path.GetDirectoryName(userSecretsPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
     }
 
     [Fact]
@@ -140,30 +302,6 @@ public class DistributedApplicationBuilderTests
 
         var ex = Assert.Throws<DistributedApplicationException>(() => appBuilder.AddResource(new ContainerResource("TEST")));
         Assert.Equal("Cannot add resource of type 'Aspire.Hosting.ApplicationModel.ContainerResource' with name 'TEST' because resource of type 'Aspire.Hosting.ApplicationModel.ContainerResource' with that name already exists. Resource names are case-insensitive.", ex.Message);
-    }
-
-    [Fact]
-    public void Build_DuplicateResourceNames_MixedCasing_Error()
-    {
-        var appBuilder = DistributedApplication.CreateBuilder();
-
-        appBuilder.Resources.Add(new ContainerResource("Test"));
-        appBuilder.Resources.Add(new ContainerResource("Test"));
-
-        var ex = Assert.Throws<DistributedApplicationException>(appBuilder.Build);
-        Assert.Equal("Multiple resources with the name 'Test'. Resource names are case-insensitive.", ex.Message);
-    }
-
-    [Fact]
-    public void Build_DuplicateResourceNames_SameCasing_Error()
-    {
-        var appBuilder = DistributedApplication.CreateBuilder();
-
-        appBuilder.Resources.Add(new ContainerResource("Test"));
-        appBuilder.Resources.Add(new ContainerResource("TEST"));
-
-        var ex = Assert.Throws<DistributedApplicationException>(appBuilder.Build);
-        Assert.Equal("Multiple resources with the name 'Test'. Resource names are case-insensitive.", ex.Message);
     }
 
     [Fact]
@@ -236,10 +374,63 @@ public class DistributedApplicationBuilderTests
         Assert.Equal(projectNameSha, legacySha);
     }
 
+    [Fact]
+    public void AddResource_InvalidName_Error()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var longName = new string('a', 65);
+        var resource = new ContainerResource(longName);
+
+        var ex = Assert.Throws<ArgumentException>(() => appBuilder.AddResource(resource));
+        Assert.Equal($"Resource name '{longName}' is invalid. Name must be between 1 and 64 characters long. (Parameter 'name')", ex.Message);
+    }
+
+    [Fact]
+    public void AddResource_InvalidNameWithExcludeAnnotation_Success()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var longName = new string('a', 65);
+        var resource = new ContainerResource(longName);
+        resource.Annotations.Add(NameValidationPolicyAnnotation.None);
+
+        appBuilder.AddResource(resource);
+
+        Assert.Contains(appBuilder.Resources, r => r.Name == longName);
+    }
+
+    [Fact]
+    public void Build_InvalidName_Error()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var longName = new string('a', 65);
+        appBuilder.Resources.Add(new ContainerResource(longName));
+
+        var ex = Assert.Throws<ArgumentException>(appBuilder.Build);
+        Assert.Equal($"Resource name '{longName}' is invalid. Name must be between 1 and 64 characters long. (Parameter 'name')", ex.Message);
+    }
+
+    [Fact]
+    public void Build_InvalidNameWithExcludeAnnotation_Success()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var longName = new string('a', 65);
+        var resource = new ContainerResource(longName);
+        resource.Annotations.Add(NameValidationPolicyAnnotation.None);
+        appBuilder.Resources.Add(resource);
+
+        var app = appBuilder.Build();
+
+        Assert.NotNull(app);
+    }
+
     private sealed class TestResource : IResource
     {
         public string Name => nameof(TestResource);
 
-        public ResourceAnnotationCollection Annotations => throw new NotImplementedException();
+        public ResourceAnnotationCollection Annotations { get; } = new();
     }
 }

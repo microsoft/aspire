@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning.KeyVault;
 using Azure.Provisioning.Primitives;
@@ -13,7 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
 public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IAzureKeyVaultResource
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IAzureKeyVaultResource, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     /// <summary>
     /// The secrets for this Key Vault.
@@ -30,6 +32,11 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
+    /// Gets the "id" output reference for the Azure Key Vault resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
+
+    /// <summary>
     /// Gets a value indicating whether the Azure Key Vault resource is running in the local emulator.
     /// </summary>
     public bool IsEmulator => this.IsContainer();
@@ -44,7 +51,7 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
     /// In Azure mode, resolves to the Azure Key Vault URI.
     /// Format: <c>https://{name}.vault.azure.net/</c>.
     /// </remarks>
-    public ReferenceExpression Endpoint =>
+    public ReferenceExpression UriExpression =>
         IsEmulator ?
             ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") :
             ReferenceExpression.Create($"{VaultUri}");
@@ -137,6 +144,10 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        yield return new("Uri", Endpoint);
+        yield return new("Uri", UriExpression);
     }
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["vault"];
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.vaultcore.azure.net"];
 }

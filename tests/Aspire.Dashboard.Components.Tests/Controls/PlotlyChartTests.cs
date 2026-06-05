@@ -64,7 +64,8 @@ public class PlotlyChartTests : DashboardTestContext
                 Unit = "Unit-<b>Bold</b>",
                 Description = "Description-<b>Bold</b>",
                 Parent = new OtlpScope("Parent-Name-<b>Bold</b>", string.Empty, []),
-                Type = OtlpInstrumentType.Sum
+                Type = OtlpInstrumentType.Sum,
+                AggregationTemporality = OtlpAggregationTemporality.Cumulative
             },
             Context = context
         };

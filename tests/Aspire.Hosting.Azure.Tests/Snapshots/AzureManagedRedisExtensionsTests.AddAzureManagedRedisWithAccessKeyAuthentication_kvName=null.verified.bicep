@@ -11,6 +11,7 @@ resource redis_cache 'Microsoft.Cache/redisEnterprise@2025-07-01' = {
   }
   properties: {
     minimumTlsVersion: '1.2'
+    publicNetworkAccess: 'Enabled'
   }
 }
 
@@ -44,5 +45,7 @@ resource primaryAccessKey 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
 }
 
 output name string = redis_cache.name
+
+output id string = redis_cache.id
 
 output hostName string = redis_cache.properties.hostName

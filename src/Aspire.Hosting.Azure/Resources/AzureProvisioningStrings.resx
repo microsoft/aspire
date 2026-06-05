@@ -132,7 +132,7 @@
   <data name="InputsMessage" xml:space="preserve">
     <value>The model contains Azure resources that require an Azure Subscription.
 
-To learn more, see the [Azure provisioning docs](https://aka.ms/dotnet/aspire/azure/provisioning).</value>
+To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</value>
     <comment>Contains markdown</comment>
   </data>
   <data name="LocationLabel" xml:space="preserve">

@@ -1,12 +1,12 @@
 # Aspire.Hosting.AppHost library
 
-Provides the core APIs and MSBuild logic for .NET Aspire AppHost projects.
+Provides the core APIs and MSBuild logic for Aspire AppHost projects.
 
 ## Getting started
 
 ### Install the package
 
-In your project, install the .NET Aspire AppHost library with [NuGet](https://www.nuget.org):
+In your project, install the Aspire AppHost library with [NuGet](https://www.nuget.org):
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.AppHost
@@ -28,8 +28,8 @@ builder.Build().Run();
 ```
 
 ## Additional documentation
-https://learn.microsoft.com/dotnet/aspire/
+https://aspire.dev/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

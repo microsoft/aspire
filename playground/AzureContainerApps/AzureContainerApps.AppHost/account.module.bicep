@@ -70,3 +70,5 @@ resource db_connectionString 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
 }
 
 output name string = account.name
+
+output id string = account.id

@@ -5,11 +5,9 @@ using Aspire.Dashboard.Components.Controls.PropertyValues;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
-using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
@@ -34,9 +32,6 @@ public partial class SpanDetails : IDisposable
     public bool HideToolbar { get; set; }
 
     [Inject]
-    public required IDialogService DialogService { get; init; }
-
-    [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
@@ -50,6 +45,12 @@ public partial class SpanDetails : IDisposable
 
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
+
+    [Inject]
+    public required SpanMenuBuilder SpanMenuBuilder { get; init; }
+
+    [Inject]
+    public required DashboardDialogService DialogService { get; init; }
 
     private IQueryable<TelemetryPropertyViewModel> FilteredItems =>
         ViewModel.Properties.Where(ApplyFilter).AsQueryable();
@@ -103,28 +104,12 @@ public partial class SpanDetails : IDisposable
     private void UpdateSpanActionsMenu()
     {
         _spanActionsMenuItems.Clear();
-
-        // Add "View structured logs" at the top
-        _spanActionsMenuItems.Add(new MenuButtonItem
-        {
-            Text = Loc[nameof(ControlsStrings.ViewStructuredLogsText)],
-            Icon = new Icons.Regular.Size16.SlideTextSparkle(),
-            OnClick = () =>
-            {
-                NavigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(spanId: ViewModel.Span.SpanId));
-                return Task.CompletedTask;
-            }
-        });
-
-        if (GenAIHelpers.HasGenAIAttribute(ViewModel.Span.Attributes))
-        {
-            _spanActionsMenuItems.Add(new MenuButtonItem
-            {
-                Text = Loc[nameof(ControlsStrings.GenAIDetailsTitle)],
-                Icon = new Icons.Regular.Size16.Sparkle(),
-                OnClick = () => LaunchGenAICallback.InvokeAsync(ViewModel.Span)
-            });
-        }
+        SpanMenuBuilder.AddMenuItems(
+            _spanActionsMenuItems,
+            ViewModel.Span,
+            EventCallback.Empty,
+            LaunchGenAICallback,
+            showViewDetails: false);
     }
 
     protected override void OnParametersSet()

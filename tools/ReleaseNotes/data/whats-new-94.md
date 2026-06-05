@@ -1,25 +1,25 @@
 ---
-title: What's new in .NET Aspire 9.4
-description: Learn what's new in the official general availability release of .NET Aspire 9.4.
+title: What's new in Aspire 9.4
+description: Learn what's new in the official general availability release of Aspire 9.4.
 ms.date: 07/29/2025
 ---
 
-## What's new in .NET Aspire 9.4
+## What's new in Aspire 9.4
 
-📢 .NET Aspire 9.4 is the next minor version release of .NET Aspire. It supports:
+📢 Aspire 9.4 is the next minor version release of Aspire. It supports:
 
 - .NET 8.0 Long Term Support (LTS)
 - .NET 9.0 Standard Term Support (STS)
 - .NET 10.0 Preview 6
 
-If you have feedback, questions, or want to contribute to .NET Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/dotnet/aspire) or join us on our new [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://aka.ms/aspire-discord) to chat with the team and other community members.
+If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/microsoft/aspire) or join us on our new [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://aka.ms/aspire-discord) to chat with the team and other community members.
 
-It's important to note that .NET Aspire releases out-of-band from .NET releases. While major versions of Aspire align with major .NET versions, minor versions are released more frequently. For more information on .NET and .NET Aspire version support, see:
+It's important to note that Aspire releases out-of-band from .NET releases. While major versions of Aspire align with major .NET versions, minor versions are released more frequently. For more information on .NET and Aspire version support, see:
 
 - [.NET support policy](https://dotnet.microsoft.com/platform/support/policy): Definitions for LTS and STS.
-- [.NET Aspire support policy](https://dotnet.microsoft.com/platform/support/policy/aspire): Important unique product lifecycle details.
+- [Aspire support policy](https://dotnet.microsoft.com/platform/support/policy/aspire): Important unique product lifecycle details.
 
-## ⬆️ Upgrade to .NET Aspire 9.4
+## ⬆️ Upgrade to Aspire 9.4
 
 Moving between minor releases of Aspire is simple:
 
@@ -29,10 +29,10 @@ Moving between minor releases of Aspire is simple:
     <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.0" />
     ```
 
-    For more information, see [.NET Aspire SDK](xref:dotnet/aspire/sdk).
+    For more information, see [Aspire SDK](xref:microsoft/aspire/sdk).
 
 1. Check for any NuGet package updates, either using the NuGet Package Manager in Visual Studio or the **Update NuGet Package** command from C# Dev Kit in VS Code.
-1. Update to the latest [.NET Aspire templates](../fundamentals/aspire-sdk-templates.md) by running the following .NET command line:
+1. Update to the latest [Aspire templates](../fundamentals/aspire-sdk-templates.md) by running the following .NET command line:
 
     ```dotnetcli
     dotnet new install Aspire.ProjectTemplates
@@ -40,7 +40,7 @@ Moving between minor releases of Aspire is simple:
 
     > The `dotnet new install` command will update existing Aspire templates to the latest version if they are already installed.
 
-If your AppHost project file doesn't have the `Aspire.AppHost.Sdk` reference, you might still be using .NET Aspire 8. To upgrade to 9, follow [the upgrade guide](../get-started/upgrade-to-aspire-9.md).
+If your AppHost project file doesn't have the `Aspire.AppHost.Sdk` reference, you might still be using Aspire 8. To upgrade to 9, follow [the upgrade guide](../get-started/upgrade-to-aspire-9.md).
 
 ## 🛠️ Aspire CLI is generally available
 
@@ -200,14 +200,14 @@ This custom deployment logic executes as follows from the `aspire deploy` comman
 Now, integration owners can create sophisticated `aspire deploy` workflows. This work also provides a foundation for advanced deployment automation scenarios.
 
 > [!NOTE]
-> While the `Aspire.Hosting.Publishing.DeployingCallbackAnnotation` API is available in .NET Aspire 9.4, there are currently no built-in resources that natively support deployment callbacks. Built-in resource support for deployment callbacks will be added in the next version of .NET Aspire.
+> While the `Aspire.Hosting.Publishing.DeployingCallbackAnnotation` API is available in Aspire 9.4, there are currently no built-in resources that natively support deployment callbacks. Built-in resource support for deployment callbacks will be added in the next version of Aspire.
 >
 > [!IMPORTANT]
 > 🧪 **Feature Flag**: The `aspire deploy` command is behind a feature flag and **disabled by default** in this release. It must be explicitly enabled for use with `aspire config set features.deployCommandEnabled true`
 
 ### 📃 Enhanced publish and deploy output
 
-.NET Aspire 9.4 significantly improves the feedback and progress reporting during publish and deploy operations, providing clearer visibility into what's happening during deployment processes.
+Aspire 9.4 significantly improves the feedback and progress reporting during publish and deploy operations, providing clearer visibility into what's happening during deployment processes.
 
 **Key improvements:**
 
@@ -232,7 +232,7 @@ For more information about publishing and deploying Aspire apps, see [aspire dep
 
 ### 🎛️ Interaction service
 
-.NET Aspire 9.4 introduces the [interaction service](../extensibility/interaction-service.md), a general service that allows developers to build rich experiences at runtime by extending the dashboard UX and at publish and deploy time using the Aspire CLI. It allows you to build complex interactions where input is required from the user.
+Aspire 9.4 introduces the [interaction service](../extensibility/interaction-service.md), a general service that allows developers to build rich experiences at runtime by extending the dashboard UX and at publish and deploy time using the Aspire CLI. It allows you to build complex interactions where input is required from the user.
 
 > [!IMPORTANT]
 > 🧪 This feature is experimental and may change in future releases.
@@ -340,7 +340,7 @@ These interactions work seamlessly whether you're running your application throu
 
 ### 🔄 Interactive parameter prompting during run mode
 
-.NET Aspire 9.4 introduces interactive parameter prompting, automatically collecting missing parameter values in the dashboard during application startup through the new [interaction service](#️-interaction-service).
+Aspire 9.4 introduces interactive parameter prompting, automatically collecting missing parameter values in the dashboard during application startup through the new [interaction service](#️-interaction-service).
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -443,7 +443,7 @@ For more information, including supported input types, see the [Interaction Serv
 
 ### 🌐 External service modeling
 
-Modern applications frequently need to integrate with external APIs, third-party services, or existing infrastructure that isn't managed by Aspire. .NET Aspire 9.4 introduces first-class support for [modeling external services](../fundamentals/orchestrate-resources.md#express-external-service-resources) as resources in your application graph.
+Modern applications frequently need to integrate with external APIs, third-party services, or existing infrastructure that isn't managed by Aspire. Aspire 9.4 introduces first-class support for [modeling external services](../fundamentals/orchestrate-resources.md#express-external-service-resources) as resources in your application graph.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -467,7 +467,7 @@ External services appear in the Aspire dashboard with health status, can be refe
 
 ### 🔗 Enhanced endpoint URL support
 
-.NET Aspire 9.4 introduces support for [non-localhost URLs](../fundamentals/networking-overview.md), making it easier to work with custom domains and network configurations. This includes support for `*.localhost` subdomains and automatic generation of multiple URL variants for endpoints listening on multiple addresses.
+Aspire 9.4 introduces support for [non-localhost URLs](../fundamentals/networking-overview.md), making it easier to work with custom domains and network configurations. This includes support for `*.localhost` subdomains and automatic generation of multiple URL variants for endpoints listening on multiple addresses.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -511,7 +511,7 @@ This simplifies development workflows where custom domains or external network a
 
 ### 🐳 Enhanced persistent container support
 
-.NET Aspire 9.4 improves support for [persistent containers](../app-host/persistent-containers.md) with better lifecycle management and networking capabilities, ensuring containers can persist across application restarts while maintaining proper connectivity.
+Aspire 9.4 improves support for [persistent containers](../app-host/persistent-containers.md) with better lifecycle management and networking capabilities, ensuring containers can persist across application restarts while maintaining proper connectivity.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -543,7 +543,7 @@ This will greatly improve your experience while building stateful services that 
 
 ### 🎛️ Resource command service
 
-.NET Aspire 9.4 introduces `Aspire.Hosting.ApplicationModel.ResourceCommandService`, an API for executing commands against resources. You can now easily execute the commands that appear in the dashboard programmatically. For example, when writing unit tests for commands, or having other integrations in Aspire execute commands.
+Aspire 9.4 introduces `Aspire.Hosting.ApplicationModel.ResourceCommandService`, an API for executing commands against resources. You can now easily execute the commands that appear in the dashboard programmatically. For example, when writing unit tests for commands, or having other integrations in Aspire execute commands.
 
 The example below uses `ResourceCommandService` to have a command execute other commands.
 
@@ -639,7 +639,7 @@ public async Task Should_ResetCache_WhenTestStarts()
 
 ### 🔄 Resource lifecycle events
 
-.NET Aspire 9.4 introduces convenient extension methods on `Aspire.Hosting.ApplicationModel.IResourceBuilder` that make it much easier to subscribe to [lifecycle events](../app-host/eventing.md#app-host-life-cycle-events) directly on resources, providing a cleaner and more intuitive API.
+Aspire 9.4 introduces convenient extension methods on `Aspire.Hosting.ApplicationModel.IResourceBuilder` that make it much easier to subscribe to [lifecycle events](../app-host/eventing.md#app-host-life-cycle-events) directly on resources, providing a cleaner and more intuitive API.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -739,7 +739,7 @@ The new extension methods make it much easier to implement common patterns like 
 
 ### 📁 Enhanced container file mounting
 
-Configuring container file systems often requires understanding complex Docker volume syntax and managing file permissions manually. .NET Aspire 9.4 introduces enhanced file mounting APIs that handle common scenarios with sensible defaults.
+Configuring container file systems often requires understanding complex Docker volume syntax and managing file permissions manually. Aspire 9.4 introduces enhanced file mounting APIs that handle common scenarios with sensible defaults.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -774,7 +774,7 @@ The [enhanced APIs](../fundamentals/persist-data-volumes.md) handle file permiss
 > [!NOTE]
 > The [YARP integration](../proxies/yarp-integration.md) is currently in preview and APIs may change in future releases.
 
-Building sophisticated reverse proxy configurations has traditionally required deep knowledge of YARP's transform system and manual JSON configuration. .NET Aspire 9.4 introduces a comprehensive set of fluent APIs that make advanced routing transformations accessible through strongly-typed C# code.
+Building sophisticated reverse proxy configurations has traditionally required deep knowledge of YARP's transform system and manual JSON configuration. Aspire 9.4 introduces a comprehensive set of fluent APIs that make advanced routing transformations accessible through strongly-typed C# code.
 
 **Breaking change in 9.4:** The `WithConfigFile()` method has been removed and replaced with a code-based configuration model. This new approach works seamlessly with deployment scenarios as the strongly-typed configuration methods translate directly into the appropriate environment variables.
 
@@ -860,16 +860,16 @@ builder.Build().Run();
 
 #### Migration from YARP 9.3 to 9.4
 
-If you were using `WithConfigFile()` in .NET Aspire 9.3, you'll need to migrate to the new code-based configuration model shown above. The strongly-typed APIs provide better IntelliSense support and work seamlessly with deployment scenarios.
+If you were using `WithConfigFile()` in Aspire 9.3, you'll need to migrate to the new code-based configuration model shown above. The strongly-typed APIs provide better IntelliSense support and work seamlessly with deployment scenarios.
 
 > [!NOTE]
-> We are working on a more general-purpose solution for file-based configuration during deployment. File-based configuration support will return in a future version of .NET Aspire.
+> We are working on a more general-purpose solution for file-based configuration during deployment. File-based configuration support will return in a future version of Aspire.
 
 This eliminates the need for complex YARP configuration files while providing complete access to YARP's powerful transformation pipeline through a fluent API.
 
 ### 🔒 Enhanced Docker Compose deployment security
 
-.NET Aspire 9.4 improves [Docker Compose publish](../deployment/overview.md) security with smart port mapping - only external endpoints are exposed to the host while internal services use Docker's internal networking.
+Aspire 9.4 improves [Docker Compose publish](../deployment/overview.md) security with smart port mapping - only external endpoints are exposed to the host while internal services use Docker's internal networking.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -907,17 +907,17 @@ Now, only `isExternal: true` endpoints are exposed to host, and internal endpoin
 
 ### 🔔 Automatic upgrade check notifications
 
-.NET Aspire 9.4 includes an update notification system that automatically checks for newer versions and notifies developers when updates are available, making sure you stay current with the latest improvements and security updates.
+Aspire 9.4 includes an update notification system that automatically checks for newer versions and notifies developers when updates are available, making sure you stay current with the latest improvements and security updates.
 
 When a newer version is detected, a friendly notification appears in the Aspire dashboard:
 
 :::image type="content" source="media/dashboard-update-notification.png" lightbox="media/dashboard-update-notification.png" alt-text="Screenshot of dashboard showing an update notification.":::
 
-Aspire only shows notifications when a newer version is available, and the checks happen in the background without impacting application startup or performance. The upgrade check system can be disable by setting the `ASPIRE_VERSION_CHECK_DISABLED` environment variable to `true`. For more information, see [App host configuration](/dotnet/aspire/app-host/configuration).
+Aspire only shows notifications when a newer version is available, and the checks happen in the background without impacting application startup or performance. The upgrade check system can be disable by setting the `ASPIRE_VERSION_CHECK_DISABLED` environment variable to `true`. For more information, see [App host configuration](/microsoft/aspire/app-host/configuration).
 
 ### 📋 Parameters and connection strings visible in dashboard
 
-.NET Aspire 9.4 makes parameters and connection strings visible in the Aspire dashboard, providing better visibility into your application's configuration and connectivity status during development.
+Aspire 9.4 makes parameters and connection strings visible in the Aspire dashboard, providing better visibility into your application's configuration and connectivity status during development.
 
 Connection strings:
 
@@ -931,11 +931,11 @@ External parameters are no longer hidden. The parameter state and value is visib
 
 :::image type="content" source="media/dashboard-parameters.png" lightbox="media/dashboard-parameters.png" alt-text="Screenshot of dashboard showing parameters.":::
 
-For more information, see [external parameters](/dotnet/aspire/fundamentals/external-parameters).
+For more information, see [external parameters](/microsoft/aspire/fundamentals/external-parameters).
 
 ### 🔗 Enhanced dashboard peer visualization for uninstrumented resources
 
-.NET Aspire 9.4 lets you observe connections between resources even when they aren't instrumented with telemetry.
+Aspire 9.4 lets you observe connections between resources even when they aren't instrumented with telemetry.
 
 For example, the screenshot below shows a call to a GitHub model resolving to the model resource in Aspire:
 
@@ -950,15 +950,15 @@ OpenTelemetry spans can now resolve to peers that are defined by parameters, con
 
 ### 📋 Console logs text wrapping control
 
-.NET Aspire 9.4 introduces a new toggle option in the dashboard console logs to control text wrapping behavior, giving you better control over how long log lines are displayed.
+Aspire 9.4 introduces a new toggle option in the dashboard console logs to control text wrapping behavior, giving you better control over how long log lines are displayed.
 
 :::image type="content" source="media/dashboard-console-logs-wrapping.gif" lightbox="media/dashboard-console-logs-wrapping.gif" alt-text="Recording of toggling line wrapping on console logs page.":::
 
-Some Aspire users have run into trouble with viewing large console logs, which is tracked in this GitHub issue: [Console logs not showing, plus browser window size affecting displayed logs #7969](https://github.com/dotnet/aspire/issues/7969). If you're having trouble with logs please try experimenting with disabling wrapping and see whether it improves your user experience. Feedback on this issue would be very helpful.
+Some Aspire users have run into trouble with viewing large console logs, which is tracked in this GitHub issue: [Console logs not showing, plus browser window size affecting displayed logs #7969](https://github.com/microsoft/aspire/issues/7969). If you're having trouble with logs please try experimenting with disabling wrapping and see whether it improves your user experience. Feedback on this issue would be very helpful.
 
 ### 👁️ Show/hide hidden resources in dashboard
 
-.NET Aspire 9.4 introduces the ability to show or hide hidden resources in the dashboard, giving you complete visibility into your application's infrastructure components and internal resources that are normally hidden from view.
+Aspire 9.4 introduces the ability to show or hide hidden resources in the dashboard, giving you complete visibility into your application's infrastructure components and internal resources that are normally hidden from view.
 
 :::image type="content" source="media/dashboard-hidden-resources.png" lightbox="media/dashboard-hidden-resources.png" alt-text="Dashboard resources page with the show/hide hidden resources UI visible.":::
 
@@ -966,11 +966,11 @@ If there are no hidden resources in your Aspire app then the show/hide UI is dis
 
 ### 🏗️ Enhanced dashboard infrastructure with proxied endpoints
 
-.NET Aspire 9.4 introduces significant infrastructure improvements to the dashboard system, implementing proxied endpoints that make dashboard launching more reliable and avoiding port reuse problems. This architectural enhancement resolves issues with dashboard connectivity during application startup and shutdown scenarios. The UI when the dashboard is attempting to reconnect has also been updated to be more reliable and with a new cohesive look and animation.
+Aspire 9.4 introduces significant infrastructure improvements to the dashboard system, implementing proxied endpoints that make dashboard launching more reliable and avoiding port reuse problems. This architectural enhancement resolves issues with dashboard connectivity during application startup and shutdown scenarios. The UI when the dashboard is attempting to reconnect has also been updated to be more reliable and with a new cohesive look and animation.
 
 ### 🐳 Docker Compose with integrated Aspire Dashboard
 
-Managing observability in Docker Compose environments often requires running separate monitoring tools or losing the rich insights that Aspire provides during development. .NET Aspire 9.4 introduces native Aspire Dashboard integration for Docker Compose environments.
+Managing observability in Docker Compose environments often requires running separate monitoring tools or losing the rich insights that Aspire provides during development. Aspire 9.4 introduces native Aspire Dashboard integration for Docker Compose environments.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -989,7 +989,7 @@ builder.Build().Run();
 
 ### 🐙 GitHub Models integration
 
-.NET Aspire 9.4 introduces support for [GitHub Models](https://docs.github.com/en/github-models), enabling easy integration with AI models hosted on GitHub's platform. This provides a simple way to incorporate AI capabilities into your applications using GitHub's model hosting service.
+Aspire 9.4 introduces support for [GitHub Models](https://docs.github.com/en/github-models), enabling easy integration with AI models hosted on GitHub's platform. This provides a simple way to incorporate AI capabilities into your applications using GitHub's model hosting service.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -1019,7 +1019,7 @@ The [GitHub Models integration](../github/github-models-integration.md) provides
 
 ### 🤖 Azure AI Foundry integration
 
-.NET Aspire 9.4 introduces comprehensive [Azure AI Foundry](https://ai.azure.com/) support, bringing enterprise AI capabilities directly into your distributed applications. This integration simplifies working with AI models and deployments through the Azure AI platform, supporting both Azure-hosted deployments and local development with [Foundry Local](https://github.com/microsoft/Foundry-Local).
+Aspire 9.4 introduces comprehensive [Azure AI Foundry](https://ai.azure.com/) support, bringing enterprise AI capabilities directly into your distributed applications. This integration simplifies working with AI models and deployments through the Azure AI platform, supporting both Azure-hosted deployments and local development with [Foundry Local](https://github.com/microsoft/Foundry-Local).
 
 #### Hosting configuration
 
@@ -1140,13 +1140,13 @@ All database providers now support `WithInitFiles()` method, replacing the more 
 
 ### 🏷️ Consistent resource name exposure
 
-.NET Aspire 9.4 now consistently exposes the actual names of all Azure resources through `Aspire.Hosting.Azure.NameOutputReference` property. This enables applications to access the real Azure resource names that get generated during deployment, which is essential for scenarios requiring direct Azure resource coordination. This is particularly valuable for external automation scripts and monitoring and alerting systems that reference resources by their actual names.
+Aspire 9.4 now consistently exposes the actual names of all Azure resources through `Aspire.Hosting.Azure.NameOutputReference` property. This enables applications to access the real Azure resource names that get generated during deployment, which is essential for scenarios requiring direct Azure resource coordination. This is particularly valuable for external automation scripts and monitoring and alerting systems that reference resources by their actual names.
 
 ### 🗄️ Azure Cosmos DB
 
 #### Hierarchical partition keys
 
-.NET Aspire 9.4 introduces support for **hierarchical partition keys** (subpartitioning) in Azure Cosmos DB, enabling multi-level partitioning for better data distribution and query performance.
+Aspire 9.4 introduces support for **hierarchical partition keys** (subpartitioning) in Azure Cosmos DB, enabling multi-level partitioning for better data distribution and query performance.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -1204,7 +1204,7 @@ For detailed comparison and limits, see [Azure Cosmos DB serverless documentatio
 
 ### 🆔 Consistent user-assigned managed identity support
 
-.NET Aspire 9.4 introduces comprehensive support for Azure user-assigned managed identities, providing enhanced security and consistent identity management across your Azure infrastructure:
+Aspire 9.4 introduces comprehensive support for Azure user-assigned managed identities, providing enhanced security and consistent identity management across your Azure infrastructure:
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -1243,7 +1243,7 @@ This approach provides:
 
 #### 🔐 Disabled local authentication to enforce managed identity
 
-.NET Aspire 9.4 automatically disables local authentication for [Azure EventHubs](../messaging/azure-event-hubs-integration.md) and [Azure Web PubSub](../messaging/azure-web-pubsub-integration.md) resources, enforcing managed identity authentication by default.
+Aspire 9.4 automatically disables local authentication for [Azure EventHubs](../messaging/azure-event-hubs-integration.md) and [Azure Web PubSub](../messaging/azure-web-pubsub-integration.md) resources, enforcing managed identity authentication by default.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -1267,7 +1267,7 @@ This change automatically applies to all Azure EventHubs and Web PubSub resource
 
 ### 🔐 Azure Key Vault enhancements
 
-.NET Aspire 9.4 introduces significant improvements to the [Azure Key Vault integration](../security/azure-security-key-vault-integration.md) with new secret management APIs that provide strongly typed access to secrets:
+Aspire 9.4 introduces significant improvements to the [Azure Key Vault integration](../security/azure-security-key-vault-integration.md) with new secret management APIs that provide strongly typed access to secrets:
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -1301,7 +1301,7 @@ var webApi = builder.AddProject<Projects.WebAPI>("webapi")
 
 #### 📥Resource Deep Linking for Azure Storage Queues
 
-.NET Aspire 9.4 expands resource deep linking to include Azure Queue Storage queues, building on the model already used for Azure Blob Storage, Cosmos DB, etc.
+Aspire 9.4 expands resource deep linking to include Azure Queue Storage queues, building on the model already used for Azure Blob Storage, Cosmos DB, etc.
 
 You can now model individual storage queues directly in your app host, then inject scoped QueueClient instances into your services—making it easy to interact with queues without manually configuring connection strings or access.
 
@@ -1355,7 +1355,7 @@ This approach provides clean separation of concerns, secure container scoping, a
 
 ### 📡 OpenTelemetry tracing support for Azure App Configuration
 
-.NET Aspire 9.4 introduces **OpenTelemetry tracing support** for [Azure App Configuration](../azure/azure-app-configuration-integration.md), completing the observability story for this integration. The Azure App Configuration integration now automatically instruments configuration retrieval operations and refresh operations with distributed tracing.
+Aspire 9.4 introduces **OpenTelemetry tracing support** for [Azure App Configuration](../azure/azure-app-configuration-integration.md), completing the observability story for this integration. The Azure App Configuration integration now automatically instruments configuration retrieval operations and refresh operations with distributed tracing.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -1388,7 +1388,7 @@ This enhancement brings Azure App Configuration in line with other Azure compone
 
 ### ⚙️ Enhanced Azure provisioning interaction
 
-.NET Aspire 9.4 significantly improves the Azure provisioning experience by leveraging the interaction services to streamline Azure subscription and resource group configuration during deployment workflows.
+Aspire 9.4 significantly improves the Azure provisioning experience by leveraging the interaction services to streamline Azure subscription and resource group configuration during deployment workflows.
 
 The enhanced Azure provisioning system:
 
@@ -1402,7 +1402,7 @@ This enhancement makes Azure deployment significantly more user-friendly, especi
 
 ### 🐳 Azure App Service container support
 
-.NET Aspire 9.4 introduces support for deploying containerized applications with Dockerfiles to Azure App Service environments. This enables a seamless transition from local container development to Azure App Service deployment.
+Aspire 9.4 introduces support for deploying containerized applications with Dockerfiles to Azure App Service environments. This enables a seamless transition from local container development to Azure App Service deployment.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -1424,7 +1424,7 @@ This feature bridges the gap between container development and Azure App Service
 
 ### 🏗️ Improvements to the Azure Container Apps integration
 
-Managing complex Azure Container Apps environments often requires integrating with existing Azure resources like Log Analytics workspaces. .NET Aspire 9.4 enhances the [Container Apps integration](../azure/configure-aca-environments.md) with support for existing Azure resources and improved configuration.
+Managing complex Azure Container Apps environments often requires integrating with existing Azure resources like Log Analytics workspaces. Aspire 9.4 enhances the [Container Apps integration](../azure/configure-aca-environments.md) with support for existing Azure resources and improved configuration.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -1449,11 +1449,11 @@ This also helps manage cost control by reusing existing resources like Log Analy
 
 #### 🛡️ Automatic DataProtection configuration for .NET on ACA
 
-.NET Aspire 9.4 automatically configures DataProtection for .NET projects deployed to Azure Container Apps, ensuring applications work correctly when scaling beyond a single instance.
+Aspire 9.4 automatically configures DataProtection for .NET projects deployed to Azure Container Apps, ensuring applications work correctly when scaling beyond a single instance.
 
 When ASP.NET Core applications scale to multiple instances, they need shared DataProtection keys to decrypt cookies, authentication tokens, and other protected data across all instances. Without proper configuration, users experience authentication issues and data corruption when load balancers route requests to different container instances.
 
-.NET Aspire now automatically enables `autoConfigureDataProtection` for all .NET projects deployed to Azure Container Apps:
+Aspire now automatically enables `autoConfigureDataProtection` for all .NET projects deployed to Azure Container Apps:
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -1472,7 +1472,7 @@ This enhancement aligns Aspire-generated deployments with Azure Developer CLI (`
 
 ### ⚡ Azure Functions Container Apps integration
 
-.NET Aspire 9.4 improves Azure Functions deployment to Azure Container Apps by automatically setting the correct function app kind. This ensures Azure Functions are properly recognized and managed within the Azure Container Apps environment.
+Aspire 9.4 improves Azure Functions deployment to Azure Container Apps by automatically setting the correct function app kind. This ensures Azure Functions are properly recognized and managed within the Azure Container Apps environment.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -1489,11 +1489,11 @@ This change resolves issues where Azure Functions deployed to Container Apps wer
 
 ## 📋 Project template improvements
 
-.NET Aspire 9.4 introduces enhancements to project templates, including .NET 10 support and improved file naming conventions.
+Aspire 9.4 introduces enhancements to project templates, including .NET 10 support and improved file naming conventions.
 
 ### 🚀 .NET 10 framework support
 
-All .NET Aspire project templates now support .NET 10 with framework selection. .NET 9.0 remains the default target framework.
+All Aspire project templates now support .NET 10 with framework selection. .NET 9.0 remains the default target framework.
 
 ```bash
 # Create a new Aspire project targeting .NET 10
@@ -1820,7 +1820,7 @@ var resource = builder.AddAzureInfrastructure("custom", infra =>
 });
 ```
 
-**Migration impact**: Replace auto-injected parameters with explicit resource modeling for better resource graph representation and support for multiple Azure compute environments. See [Azure resource customization docs](https://learn.microsoft.com/dotnet/aspire/azure/customize-azure-resources) for more details.
+**Migration impact**: Replace auto-injected parameters with explicit resource modeling for better resource graph representation and support for multiple Azure compute environments. See [Azure resource customization docs](https://learn.microsoft.com/microsoft/aspire/azure/customize-azure-resources) for more details.
 
 ### 🔧 ParameterResource.Value synchronous behavior change
 
@@ -1861,12 +1861,12 @@ var syncValue = apiKey.Resource.Value;  // Still works but may block
 
 **Migration impact**: When working with `ParameterResource` values in async contexts, use the new `GetValueAsync()` method instead of the `Value` property to avoid potential deadlocks. For `WithEnvironment()` calls, prefer passing the parameter resource directly rather than accessing `.Value` synchronously.
 
-With every release, we strive to make .NET Aspire better. However, some changes may break existing functionality. For complete details on breaking changes in this release, see:
+With every release, we strive to make Aspire better. However, some changes may break existing functionality. For complete details on breaking changes in this release, see:
 
-- [Breaking changes in .NET Aspire 9.4](../compatibility/9.4/index.md)
+- [Breaking changes in Aspire 9.4](../compatibility/9.4/index.md)
 
 ## 🎯 Upgrade today
 
-Follow the directions outlined in the [Upgrade to .NET Aspire 9.4](#️-upgrade-to-net-aspire-94) section to make the switch to 9.4 and take advantage of all these new features today! As always, we're listening for your feedback on [GitHub](https://github.com/dotnet/aspire/issues)—and looking out for what you want to see in 9.5 ☺️.
+Follow the directions outlined in the [Upgrade to Aspire 9.4](#️-upgrade-to-net-aspire-94) section to make the switch to 9.4 and take advantage of all these new features today! As always, we're listening for your feedback on [GitHub](https://github.com/microsoft/aspire/issues)—and looking out for what you want to see in 9.5 ☺️.
 
-For a complete list of issues addressed in this release, see [.NET Aspire GitHub repository—9.4 milestone](https://github.com/dotnet/aspire/issues?q=is%3Aissue%20state%3Aclosed%20milestone%3A9.4%20).
+For a complete list of issues addressed in this release, see [Aspire GitHub repository—9.4 milestone](https://github.com/microsoft/aspire/issues?q=is%3Aissue%20state%3Aclosed%20milestone%3A9.4%20).

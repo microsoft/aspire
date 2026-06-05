@@ -19,6 +19,7 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes;
 /// The <c>Service</c> class can be used to define a container's image, ports, volumes, environment settings,
 /// and advanced settings like logging and health checks.
 /// </example>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class Service : NamedComposeMember
 {
@@ -33,6 +34,17 @@ public sealed class Service : NamedComposeMember
     /// </remarks>
     [YamlMember(Alias = "image")]
     public string? Image { get; set; }
+
+    /// <summary>
+    /// Specifies the policy for pulling the Docker image.
+    /// </summary>
+    /// <remarks>
+    /// This property determines when the container runtime should pull the image.
+    /// Common values include "always", "never", "missing", "if_not_present", or "build".
+    /// If not specified, the default behavior depends on the container runtime configuration.
+    /// </remarks>
+    [YamlMember(Alias = "pull_policy")]
+    public string? PullPolicy { get; set; }
 
     /// <summary>
     /// Specifies the name of the container to be used.
@@ -239,6 +251,13 @@ public sealed class Service : NamedComposeMember
     /// </summary>
     [YamlMember(Alias = "pid")]
     public string? Pid { get; set; }
+
+    /// <summary>
+    /// Indicates whether the container should run in privileged mode.
+    /// When set to true, the container is granted extended Linux capabilities and device access.
+    /// </summary>
+    [YamlMember(Alias = "privileged")]
+    public bool? Privileged { get; set; }
 
     /// <summary>
     /// Specifies a list of Linux capabilities to add to the container.

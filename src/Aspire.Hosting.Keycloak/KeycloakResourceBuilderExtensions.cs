@@ -5,7 +5,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Keycloak;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -36,6 +35,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="adminUsername">The parameter used as the admin for the Keycloak resource. If <see langword="null"/> a default value will be used.</param>
     /// <param name="adminPassword">The parameter used as the admin password for the Keycloak resource. If <see langword="null"/> a default password will be used.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The container exposes port 8080 by default.
     /// This version of the package defaults to the <inheritdoc cref="KeycloakContainerImageTags.Tag"/> tag of the <inheritdoc cref="KeycloakContainerImageTags.Registry"/>/<inheritdoc cref="KeycloakContainerImageTags.Image"/> container image.
@@ -49,6 +49,8 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<KeycloakResource> AddKeycloak(
         this IDistributedApplicationBuilder builder,
         string name,
@@ -70,6 +72,7 @@ public static class KeycloakResourceBuilderExtensions
             .WithImageTag(KeycloakContainerImageTags.Tag)
             .WithHttpEndpoint(port: port, targetPort: DefaultContainerPort)
             .WithHttpEndpoint(targetPort: ManagementInterfaceContainerPort, name: ManagementEndpointName)
+            .WithEndpoint(ManagementEndpointName, e => e.ExcludeReferenceEndpoint = true)
             .WithHttpHealthCheck(endpointName: ManagementEndpointName, path: "/health/ready")
             .WithOtlpExporter()
             .WithEnvironment(context =>
@@ -106,33 +109,21 @@ public static class KeycloakResourceBuilderExtensions
 
         if (builder.ExecutionContext.IsRunMode)
         {
-            builder.Eventing.Subscribe<BeforeStartEvent>((@event, cancellationToken) =>
+            keycloak.SubscribeHttpsEndpointsUpdate(ctx =>
             {
-                var developerCertificateService = @event.Services.GetRequiredService<IDeveloperCertificateService>();
-
-                bool addHttps = false;
-                if (!resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var annotation))
-                {
-                    if (developerCertificateService.UseForHttps)
+                // If a TLS certificate is configured, switch the primary endpoint to HTTPS and
+                // tell Keycloak to run its HTTPS listener on the existing endpoint target port.
+                keycloak
+                    .WithEnvironment(context =>
                     {
-                        addHttps = true;
-                    }
-                }
-                else if (annotation.UseDeveloperCertificate.GetValueOrDefault(developerCertificateService.UseForHttps) || annotation.Certificate is not null)
-                {
-                    addHttps = true;
-                }
-
-                if (addHttps)
-                {
-                    // If a TLS certificate is configured, ensure the keycloak resource has an HTTPS endpoint and
-                    // configure the environment variables to use it.
-                    keycloak
-                        .WithHttpsEndpoint(targetPort: DefaultHttpsPort, env: "KC_HTTPS_PORT")
-                        .WithEndpoint(ManagementEndpointName, ep => ep.UriScheme = "https");
-                }
-
-                return Task.CompletedTask;
+                        context.EnvironmentVariables["KC_HTTPS_PORT"] = keycloak.GetEndpoint(KeycloakResource.PrimaryEndpointName).Property(EndpointProperty.TargetPort);
+                    })
+                    .WithEndpoint(KeycloakResource.PrimaryEndpointName, ep =>
+                    {
+                        ep.UriScheme = "https";
+                        ep.TargetPort = DefaultHttpsPort;
+                    })
+                    .WithEndpoint(ManagementEndpointName, ep => ep.UriScheme = "https");
             });
         }
 
@@ -156,6 +147,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The volume is mounted at /opt/keycloak/data in the container.
     /// <example>
@@ -166,6 +158,7 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDataVolume(this IResourceBuilder<KeycloakResource> builder, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -179,6 +172,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The source directory is mounted at /opt/keycloak/data in the container.
     /// <example>
@@ -189,6 +183,7 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDataBindMount(this IResourceBuilder<KeycloakResource> builder, string source)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -244,6 +239,7 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Parameter name 'import' is a reserved keyword in TypeScript. Use the internal ATS-compatible overload instead.")]
     public static IResourceBuilder<KeycloakResource> WithRealmImport(
         this IResourceBuilder<KeycloakResource> builder,
         string import)
@@ -265,6 +261,8 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">Names of features to enable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithEnabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,
         params string[] features)
@@ -285,6 +283,8 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">Names of features to disable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDisabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,
         params string[] features)
@@ -310,6 +310,7 @@ public static class KeycloakResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">The keycloak resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{KeycloakResource}"/>.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
     public static IResourceBuilder<KeycloakResource> WithOtlpExporter(this IResourceBuilder<KeycloakResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -319,6 +320,21 @@ public static class KeycloakResourceBuilderExtensions
         OtlpConfigurationExtensions.WithOtlpExporter(builder);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Configures the OTLP exporter for Keycloak
+    /// </summary>
+    [AspireExport("withOtlpExporter")]
+    internal static IResourceBuilder<KeycloakResource> WithOtlpExporterForPolyglot(
+        this IResourceBuilder<KeycloakResource> builder,
+        OtlpProtocol? protocol = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return protocol is null
+            ? builder.WithOtlpExporter()
+            : builder.WithOtlpExporter(protocol.Value);
     }
 
     /// <summary>
@@ -333,6 +349,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The keycloak resource builder.</param>
     /// <param name="protocol">The protocol to use for the OTLP exporter. If not set, it will try gRPC then Http.</param>
     /// <returns>The <see cref="IResourceBuilder{KeycloakResource}"/>.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
     public static IResourceBuilder<KeycloakResource> WithOtlpExporter(this IResourceBuilder<KeycloakResource> builder, OtlpProtocol protocol)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -342,5 +359,16 @@ public static class KeycloakResourceBuilderExtensions
         OtlpConfigurationExtensions.WithOtlpExporter(builder, protocol);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Adds a realm import to a Keycloak container resource.
+    /// </summary>
+    [AspireExport("withRealmImport")]
+    internal static IResourceBuilder<KeycloakResource> WithRealmImportInternal(
+        this IResourceBuilder<KeycloakResource> builder,
+        string importPath)
+    {
+        return builder.WithRealmImport(importPath);
     }
 }

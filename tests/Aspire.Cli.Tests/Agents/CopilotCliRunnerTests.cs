@@ -24,4 +24,37 @@ public class CopilotCliRunnerTests
         // we just verify the method completes without throwing
         // Version can be null (not installed) or a real version
     }
+
+    [Theory]
+    [InlineData("GitHub Copilot CLI 0.0.397", 0, 0, 397)]
+    [InlineData("GitHub Copilot CLI 1.2.3", 1, 2, 3)]
+    [InlineData("0.0.397", 0, 0, 397)]
+    [InlineData("1.2.3", 1, 2, 3)]
+    [InlineData("v1.2.3", 1, 2, 3)]
+    [InlineData("V1.2.3", 1, 2, 3)]
+    [InlineData("GitHub Copilot CLI 0.0.397\nsome other output", 0, 0, 397)]
+    [InlineData("  GitHub Copilot CLI 0.0.397  ", 0, 0, 397)]
+    [InlineData("GitHub Copilot CLI 0.0.397.", 0, 0, 397)]
+    public void TryParseVersionOutput_ValidVersionStrings_ReturnsTrue(string input, int major, int minor, int patch)
+    {
+        var result = CopilotCliRunner.TryParseVersionOutput(input, out var version);
+
+        Assert.True(result);
+        Assert.NotNull(version);
+        Assert.Equal(major, version.Major);
+        Assert.Equal(minor, version.Minor);
+        Assert.Equal(patch, version.Patch);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("not a version")]
+    public void TryParseVersionOutput_InvalidVersionStrings_ReturnsFalse(string input)
+    {
+        var result = CopilotCliRunner.TryParseVersionOutput(input, out var version);
+
+        Assert.False(result);
+        Assert.Null(version);
+    }
 }

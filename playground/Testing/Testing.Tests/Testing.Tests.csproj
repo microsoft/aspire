@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
+    <IsAspireHost>true</IsAspireHost>
+    <SkipTests Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</SkipTests>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Testing" />
+
+    <PackageReference Include="xunit.v3.assert"/>
+  </ItemGroup>
+
+</Project>

@@ -30,7 +30,7 @@ internal class ExecutableLaunchConfiguration(string type)
     public string Mode { get; set; } = System.Diagnostics.Debugger.IsAttached ? ExecutableLaunchMode.Debug : ExecutableLaunchMode.NoDebug;
 }
 
-internal class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration("project")
+internal sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration("project")
 {
     [JsonPropertyName("launch_profile")]
     public string LaunchProfile { get; set; } = string.Empty;

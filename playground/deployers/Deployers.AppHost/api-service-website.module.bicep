@@ -106,3 +106,13 @@ resource api_service_website_ra 'Microsoft.Authorization/roleAssignments@2022-04
   }
   scope: webapp
 }
+
+resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
+  name: 'slotConfigNames'
+  properties: {
+    appSettingNames: [
+      'OTEL_SERVICE_NAME'
+    ]
+  }
+  parent: webapp
+}

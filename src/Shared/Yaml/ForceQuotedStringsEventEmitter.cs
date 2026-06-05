@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#if KUBERNETES // This namespace is only available in the Kubernetes integration
+using Aspire.Hosting.Kubernetes.Extensions;
+#endif
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.EventEmitters;
@@ -18,6 +21,8 @@ namespace Aspire.Hosting.Yaml;
 internal sealed class ForceQuotedStringsEventEmitter : ChainedEventEmitter
 {
     private readonly Stack<EmitterState> _state = new();
+    private readonly Func<string, (bool, ScalarStyle?)> _shouldApply;
+   
 
     /// <summary>
     /// A custom event emitter that forces string scalar values to use double-quoted style when serialized in YAML.
@@ -28,10 +33,12 @@ internal sealed class ForceQuotedStringsEventEmitter : ChainedEventEmitter
     /// or compatibility with specific YAML consumers.
     /// </remarks>
     public ForceQuotedStringsEventEmitter(
-        IEventEmitter nextEmitter
+        IEventEmitter nextEmitter,
+        Func<string, (bool, ScalarStyle?)>? shouldApply = null
     ) : base(nextEmitter)
     {
         _state.Push(new(EmitterState.EventType.Root));
+        _shouldApply = shouldApply ?? AlwaysTrue;
     }
 
     /// <summary>
@@ -53,7 +60,10 @@ internal sealed class ForceQuotedStringsEventEmitter : ChainedEventEmitter
         {
             eventInfo = new(eventInfo.Source)
             {
-                Style = ScalarStyle.DoubleQuoted,
+                Style = eventInfo.Source.Value is string value
+                        && _shouldApply(value) is (false, var style)
+                      ? style ?? throw new InvalidOperationException("Style cannot be null when not applying double quotes.")
+                      : ScalarStyle.DoubleQuoted
             };
         }
 
@@ -156,4 +166,6 @@ internal sealed class ForceQuotedStringsEventEmitter : ChainedEventEmitter
             Sequence,
         }
     }
+
+    private static (bool, ScalarStyle?) AlwaysTrue(string _) => (true, null);
 }

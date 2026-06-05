@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Security.Authentication;
 using Aspire.Hosting.ApplicationModel;
 using Yarp.ReverseProxy.Configuration;
 using Yarp.ReverseProxy.Forwarder;
@@ -10,21 +11,39 @@ namespace Aspire.Hosting.Yarp;
 /// <summary>
 /// Represents a cluster for YARP routes
 /// </summary>
+[AspireExport]
 public class YarpCluster
 {
     // Testing only
     internal YarpCluster(ClusterConfig config, params object[] targets)
     {
         ClusterConfig = config;
-        Targets = targets;
+        _targets = targets;
     }
+
+    private readonly object[] _targets;
+
     /// <summary>
     /// Construct a new YarpCluster targeting the endpoint in parameter.
     /// </summary>
     /// <param name="endpoint">The endpoint to target.</param>
     internal YarpCluster(EndpointReference endpoint)
-        : this(endpoint.Resource.Name, $"{endpoint.Scheme}://_{endpoint.EndpointName}.{endpoint.Resource.Name}")
+        : this(endpoint.Resource.Name, endpoint)
     {
+    }
+
+    private static string BuildEndpointTarget(EndpointReference endpoint)
+    {
+        // For endpoints named "http" or "https", use standard resolution without
+        // the named endpoint prefix since the scheme key already matches the scheme.
+        // For all other endpoint names, use the named endpoint DNS-SD convention
+        // which .NET service discovery resolves via the endpoint name in the config key.
+        if (endpoint.IsHttpSchemeNamedEndpoint)
+        {
+            return $"{endpoint.Scheme}://{endpoint.Resource.Name}";
+        }
+
+        return $"{endpoint.Scheme}://_{endpoint.EndpointName}.{endpoint.Resource.Name}";
     }
 
     /// <summary>
@@ -32,7 +51,7 @@ public class YarpCluster
     /// </summary>
     /// <param name="resource">The resource to target.</param>
     internal YarpCluster(IResourceWithServiceDiscovery resource)
-        : this(resource.Name, BuildEndpointUri(resource))
+        : this(resource.Name, resource)
     {
     }
 
@@ -41,7 +60,7 @@ public class YarpCluster
     /// </summary>
     /// <param name="externalService">The external service.</param>
     internal YarpCluster(ExternalServiceResource externalService)
-        : this(externalService.Name, GetAddressFromExternalService(externalService))
+        : this(externalService.Name, externalService)
     {
     }
 
@@ -57,25 +76,74 @@ public class YarpCluster
             ClusterId = $"cluster_{resourceName}",
             Destinations = new Dictionary<string, DestinationConfig>(StringComparer.OrdinalIgnoreCase)
         };
-        Targets = targets;
+        _targets = targets;
     }
 
     internal ClusterConfig ClusterConfig { get; private set; }
 
-    internal object[] Targets { get; private set; }
+    internal object[] Targets => GetResolvedTargets();
 
     internal void Configure(Func<ClusterConfig, ClusterConfig> configure)
     {
         ClusterConfig = configure(ClusterConfig);
     }
 
-    private static object BuildEndpointUri(IResourceWithServiceDiscovery resource)
+    internal object[] GetResolvedTargets()
+    {
+        var targets = new List<object>(_targets.Length);
+        foreach (var target in _targets)
+        {
+            targets.AddRange(ResolveTargets(target));
+        }
+
+        return [.. targets];
+    }
+
+    private static IEnumerable<object> ResolveTargets(object target)
+    {
+        switch (target)
+        {
+            case EndpointReference endpoint:
+                yield return BuildEndpointTarget(endpoint);
+                break;
+            case IResourceWithServiceDiscovery resource:
+                foreach (var resourceTarget in BuildEndpointTargets(resource))
+                {
+                    yield return resourceTarget;
+                }
+                break;
+            case ExternalServiceResource externalService:
+                yield return GetAddressFromExternalService(externalService);
+                break;
+            default:
+                yield return target;
+                break;
+        }
+    }
+
+    private static object[] BuildEndpointTargets(IResourceWithServiceDiscovery resource)
     {
         var resourceName = resource.Name;
 
-        var endpoints = resource.GetEndpoints();
-        var hasHttpsEndpoint = endpoints.Any(e => e.Exists && e.IsHttps);
-        var hasHttpEndpoint = endpoints.Any(e => e.Exists && e.IsHttp);
+        var endpoints = resource.GetEndpoints()
+            .Where(e => e.Exists && !e.ExcludeReferenceEndpoint && (e.IsHttp || e.IsHttps))
+            .ToArray();
+        var schemeNamedEndpoints = endpoints
+            .Where(e => e.IsHttpSchemeNamedEndpoint)
+            .ToArray();
+
+        if (schemeNamedEndpoints.Length == 0)
+        {
+            if (endpoints.Length == 0)
+            {
+                throw new ArgumentException("Cannot find a http or https endpoint for this resource.", nameof(resource));
+            }
+
+            return [.. endpoints.Select(BuildEndpointTarget)];
+        }
+
+        var hasHttpsEndpoint = schemeNamedEndpoints.Any(e => e.IsHttps);
+        var hasHttpEndpoint = schemeNamedEndpoints.Any(e => e.IsHttp);
 
         var scheme = (hasHttpsEndpoint, hasHttpEndpoint) switch
         {
@@ -85,7 +153,7 @@ public class YarpCluster
             _ => throw new ArgumentException("Cannot find a http or https endpoint for this resource.", nameof(resource))
         };
 
-        return $"{scheme}://{resourceName}";
+        return [$"{scheme}://{resourceName}"];
     }
 
     private static object GetAddressFromExternalService(ExternalServiceResource externalService)
@@ -111,6 +179,8 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the ForwarderRequestConfig for the cluster.
     /// </summary>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the DTO-based overload instead.</remarks>
+    [AspireExportIgnore(Reason = "ForwarderRequestConfig is not ATS-compatible. Use the DTO-based overload instead.")]
     public static YarpCluster WithForwarderRequestConfig(this YarpCluster cluster, ForwarderRequestConfig config)
     {
         cluster.Configure(c => c with { HttpRequest = config });
@@ -118,8 +188,22 @@ public static class YarpClusterExtensions
     }
 
     /// <summary>
+    /// Set the forwarder request configuration for the cluster.
+    /// </summary>
+    [AspireExport]
+    internal static YarpCluster WithForwarderRequestConfig(this YarpCluster cluster, YarpForwarderRequestConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        cluster.Configure(c => c with { HttpRequest = ToForwarderRequestConfig(config) });
+        return cluster;
+    }
+
+    /// <summary>
     /// Set the ForwarderRequestConfig for the cluster.
     /// </summary>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the DTO-based overload instead.</remarks>
+    [AspireExportIgnore(Reason = "HttpClientConfig is not ATS-compatible. Use the DTO-based overload instead.")]
     public static YarpCluster WithHttpClientConfig(this YarpCluster cluster, HttpClientConfig config)
     {
         cluster.Configure(c => c with { HttpClient = config });
@@ -127,8 +211,22 @@ public static class YarpClusterExtensions
     }
 
     /// <summary>
+    /// Set the HTTP client configuration for the cluster.
+    /// </summary>
+    [AspireExport]
+    internal static YarpCluster WithHttpClientConfig(this YarpCluster cluster, YarpHttpClientConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        cluster.Configure(c => c with { HttpClient = ToHttpClientConfig(config) });
+        return cluster;
+    }
+
+    /// <summary>
     /// Set the SessionAffinityConfig for the cluster.
     /// </summary>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the DTO-based overload instead.</remarks>
+    [AspireExportIgnore(Reason = "SessionAffinityConfig is not ATS-compatible. Use the DTO-based overload instead.")]
     public static YarpCluster WithSessionAffinityConfig(this YarpCluster cluster, SessionAffinityConfig config)
     {
         cluster.Configure(c => c with { SessionAffinity = config });
@@ -136,8 +234,22 @@ public static class YarpClusterExtensions
     }
 
     /// <summary>
+    /// Set the session affinity configuration for the cluster.
+    /// </summary>
+    [AspireExport]
+    internal static YarpCluster WithSessionAffinityConfig(this YarpCluster cluster, YarpSessionAffinityConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        cluster.Configure(c => c with { SessionAffinity = ToSessionAffinityConfig(config) });
+        return cluster;
+    }
+
+    /// <summary>
     /// Set the HealthCheckConfig for the cluster.
     /// </summary>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the DTO-based overload instead.</remarks>
+    [AspireExportIgnore(Reason = "HealthCheckConfig is not ATS-compatible. Use the DTO-based overload instead.")]
     public static YarpCluster WithHealthCheckConfig(this YarpCluster cluster, HealthCheckConfig config)
     {
         cluster.Configure(c => c with { HealthCheck = config });
@@ -145,8 +257,21 @@ public static class YarpClusterExtensions
     }
 
     /// <summary>
+    /// Set the health check configuration for the cluster.
+    /// </summary>
+    [AspireExport]
+    internal static YarpCluster WithHealthCheckConfig(this YarpCluster cluster, YarpHealthCheckConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        cluster.Configure(c => c with { HealthCheck = ToHealthCheckConfig(config) });
+        return cluster;
+    }
+
+    /// <summary>
     /// Set the LoadBalancingPolicy for the cluster.
     /// </summary>
+    [AspireExport]
     public static YarpCluster WithLoadBalancingPolicy(this YarpCluster cluster, string policy)
     {
         cluster.Configure(c => c with { LoadBalancingPolicy = policy });
@@ -156,9 +281,144 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the Metadata for the cluster.
     /// </summary>
+    [AspireExport("withClusterMetadata", MethodName = "withMetadata")]
     public static YarpCluster WithMetadata(this YarpCluster cluster, IReadOnlyDictionary<string, string> metadata)
     {
         cluster.Configure(c => c with { Metadata = metadata });
         return cluster;
+    }
+
+    // These mappings keep the existing public YARP-config overloads for .NET callers while exposing
+    // ATS-friendly DTO shapes for polyglot callers. The raw YARP types include nested config objects,
+    // Version values, and flags enums that do not round-trip cleanly through ATS as-is.
+    private static ForwarderRequestConfig ToForwarderRequestConfig(YarpForwarderRequestConfig config)
+    {
+        Version? parsedVersion = null;
+
+        if (!string.IsNullOrWhiteSpace(config.Version))
+        {
+            if (!Version.TryParse(config.Version, out var version))
+            {
+                throw new ArgumentException(
+                    $"The value '{config.Version}' is not a valid HTTP version. Expected format is 'major.minor', for example '1.1' or '2.0'.",
+                    nameof(config));
+            }
+
+            parsedVersion = version;
+        }
+
+        return new ForwarderRequestConfig
+        {
+            ActivityTimeout = config.ActivityTimeout,
+            AllowResponseBuffering = config.AllowResponseBuffering,
+            Version = parsedVersion,
+            VersionPolicy = config.VersionPolicy,
+        };
+    }
+
+    private static HttpClientConfig ToHttpClientConfig(YarpHttpClientConfig config)
+    {
+        return new HttpClientConfig
+        {
+            DangerousAcceptAnyServerCertificate = config.DangerousAcceptAnyServerCertificate,
+            EnableMultipleHttp2Connections = config.EnableMultipleHttp2Connections,
+            MaxConnectionsPerServer = config.MaxConnectionsPerServer,
+            RequestHeaderEncoding = config.RequestHeaderEncoding,
+            ResponseHeaderEncoding = config.ResponseHeaderEncoding,
+            SslProtocols = MapSslProtocols(config.SslProtocols),
+            WebProxy = config.WebProxy is null ? null : ToWebProxyConfig(config.WebProxy),
+        };
+    }
+
+    private static WebProxyConfig ToWebProxyConfig(YarpWebProxyConfig config)
+    {
+        return new WebProxyConfig
+        {
+            Address = config.Address,
+            BypassOnLocal = config.BypassOnLocal,
+            UseDefaultCredentials = config.UseDefaultCredentials,
+        };
+    }
+
+    private static SessionAffinityConfig ToSessionAffinityConfig(YarpSessionAffinityConfig config)
+    {
+        return new SessionAffinityConfig
+        {
+            AffinityKeyName = config.AffinityKeyName ?? string.Empty,
+            Cookie = config.Cookie is null ? null : ToSessionAffinityCookieConfig(config.Cookie),
+            Enabled = config.Enabled,
+            FailurePolicy = config.FailurePolicy,
+            Policy = config.Policy,
+        };
+    }
+
+    private static SessionAffinityCookieConfig ToSessionAffinityCookieConfig(YarpSessionAffinityCookieConfig config)
+    {
+        return new SessionAffinityCookieConfig
+        {
+            Domain = config.Domain,
+            Expiration = config.Expiration,
+            HttpOnly = config.HttpOnly,
+            IsEssential = config.IsEssential,
+            MaxAge = config.MaxAge,
+            Path = config.Path,
+            SameSite = config.SameSite,
+            SecurePolicy = config.SecurePolicy,
+        };
+    }
+
+    private static HealthCheckConfig ToHealthCheckConfig(YarpHealthCheckConfig config)
+    {
+        return new HealthCheckConfig
+        {
+            Active = config.Active is null ? null : ToActiveHealthCheckConfig(config.Active),
+            AvailableDestinationsPolicy = config.AvailableDestinationsPolicy,
+            Passive = config.Passive is null ? null : ToPassiveHealthCheckConfig(config.Passive),
+        };
+    }
+
+    private static ActiveHealthCheckConfig ToActiveHealthCheckConfig(YarpActiveHealthCheckConfig config)
+    {
+        return new ActiveHealthCheckConfig
+        {
+            Enabled = config.Enabled,
+            Interval = config.Interval,
+            Path = config.Path,
+            Policy = config.Policy,
+            Query = config.Query,
+            Timeout = config.Timeout,
+        };
+    }
+
+    private static PassiveHealthCheckConfig ToPassiveHealthCheckConfig(YarpPassiveHealthCheckConfig config)
+    {
+        return new PassiveHealthCheckConfig
+        {
+            Enabled = config.Enabled,
+            Policy = config.Policy,
+            ReactivationPeriod = config.ReactivationPeriod,
+        };
+    }
+
+    private static SslProtocols? MapSslProtocols(IReadOnlyList<YarpSslProtocol>? protocols)
+    {
+        if (protocols is null)
+        {
+            return null;
+        }
+
+        var result = SslProtocols.None;
+        foreach (var protocol in protocols)
+        {
+            result |= protocol switch
+            {
+                YarpSslProtocol.None => SslProtocols.None,
+                YarpSslProtocol.Tls12 => SslProtocols.Tls12,
+                YarpSslProtocol.Tls13 => SslProtocols.Tls13,
+                _ => throw new ArgumentOutOfRangeException(nameof(protocols), protocol, $"Unsupported {nameof(YarpSslProtocol)} value."),
+            };
+        }
+
+        return result;
     }
 }

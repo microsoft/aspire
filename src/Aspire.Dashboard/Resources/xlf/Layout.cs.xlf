@@ -17,9 +17,24 @@
         <target state="translated">Úložiště Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutLaunchAIAgents">
+        <source>AI agents</source>
+        <target state="new">AI agents</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutLaunchNotifications">
+        <source>Notifications</source>
+        <target state="new">Notifications</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutLaunchSettings">
         <source>Settings</source>
         <target state="translated">Nastavení</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutNotificationCenterTitle">
+        <source>Notifications</source>
+        <target state="new">Notifications</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutSettingsDialogClose">
@@ -42,14 +57,14 @@
         <target state="translated">Načíst znovu</target>
         <note />
       </trans-unit>
+      <trans-unit id="MessageUnsecuredEndpointApiBody">
+        <source>Untrusted apps can access telemetry data via the API.</source>
+        <target state="translated">Nedůvěryhodné aplikace mohou přistupovat k telemetrickým datům přes rozhraní API.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointLink">
         <source>More information</source>
         <target state="translated">Další informace</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="MessageUnsecuredEndpointMcpBody">
-        <source>Untrusted apps can access sensitive information about the running services.</source>
-        <target state="translated">Nedůvěryhodné aplikace můžou přistupovat k citlivým informacím o spuštěných službách.</target>
         <note />
       </trans-unit>
       <trans-unit id="MessageUnsecuredEndpointTelemetryBody">

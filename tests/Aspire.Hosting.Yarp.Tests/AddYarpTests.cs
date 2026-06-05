@@ -8,6 +8,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Yarp.Tests;
@@ -80,6 +81,29 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("ASPNETCORE_ENVIRONMENT", env);
 
         Assert.DoesNotContain("YARP_UNSAFE_OLTP_CERT_ACCEPT_ANY_SERVER_CERTIFICATE", env);
+    }
+
+    [Fact]
+    public void VerifyResourceRouteDestinationUsesLatestEndpointScheme()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var backend = builder.AddResource(new TestServiceDiscoveryResource("backend"))
+            .WithHttpEndpoint();
+
+        var yarp = builder.AddYarp("yarp")
+            .WithConfiguration(config =>
+            {
+                config.AddRoute("/api/{**catchall}", backend);
+            });
+
+        backend.WithEndpoint("http", endpoint => endpoint.UriScheme = "https");
+
+        var env = new Dictionary<string, object>();
+        YarpEnvConfigGenerator.PopulateEnvVariables(env, yarp.Resource.Routes, yarp.Resource.Clusters);
+
+        var address = Assert.Contains("REVERSEPROXY__CLUSTERS__cluster_backend__DESTINATIONS__destination1__ADDRESS", env);
+        Assert.Equal("https://backend", address);
     }
 
     [Fact]
@@ -213,7 +237,7 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
         var dockerfile = await annotation.DockerfileFactory(context);
 
         Assert.Contains("FROM", dockerfile);
-        Assert.Contains("dotnet/nightly/yarp:2.3.0-preview.4", dockerfile);
+        Assert.Contains("dotnet/nightly/yarp:2.3-preview", dockerfile);
         Assert.Contains("AS yarp", dockerfile);
         Assert.Contains("WORKDIR /app", dockerfile);
         Assert.Contains("COPY . /app/wwwroot", dockerfile);
@@ -396,7 +420,65 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
         await Verify(dockerfile);
     }
 
+    [Fact]
+    public async Task VerifyWithHostHttpsPortCreatesHttpsEndpointWithSpecifiedPort()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
+            new List<X509Certificate2>(),
+            supportsContainerTrust: true,
+            trustCertificate: true,
+            tlsTerminate: false));
+
+        const int httpsPort = 12345;
+
+        var yarp = builder.AddYarp("yarp")
+            .WithHttpsDeveloperCertificate()
+            .WithHostHttpsPort(httpsPort);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var beforeStartEvent = new BeforeStartEvent(app.Services, model);
+        await builder.Eventing.PublishAsync(beforeStartEvent);
+
+        var httpsEndpoint = Assert.Single(yarp.Resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "https");
+        Assert.Equal(httpsPort, httpsEndpoint.Port);
+        Assert.Equal("https", httpsEndpoint.UriScheme);
+    }
+
+    [Fact]
+    public async Task VerifyWithHostHttpsPortDoesNotCreateHttpsEndpointWithoutCertificateConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
+            new List<X509Certificate2>(),
+            supportsContainerTrust: true,
+            trustCertificate: true,
+            tlsTerminate: false));
+
+        var yarp = builder.AddYarp("yarp")
+            .WithHostHttpsPort(12345);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var beforeStartEvent = new BeforeStartEvent(app.Services, model);
+        await builder.Eventing.PublishAsync(beforeStartEvent);
+
+        Assert.DoesNotContain(yarp.Resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "https");
+    }
+
     private sealed class TestContainerFilesResource(string name) : ContainerResource(name), IResourceWithContainerFiles
     {
+    }
+
+    private sealed class TestServiceDiscoveryResource(string name) : IResourceWithServiceDiscovery
+    {
+        public string Name => name;
+
+        public ResourceAnnotationCollection Annotations { get; } = new ResourceAnnotationCollection();
     }
 }

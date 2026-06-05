@@ -35,6 +35,7 @@ public static class ModelTestHelpers
             ResourceType = resourceType ?? KnownResourceTypes.Container,
             DisplayName = displayName ?? resourceName ?? "Display name!",
             Uid = Guid.NewGuid().ToString(),
+            ReplicaIndex = 0,
             CreationTimeStamp = DateTime.UtcNow,
             StartTimeStamp = DateTime.UtcNow,
             StopTimeStamp = DateTime.UtcNow,

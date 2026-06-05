@@ -10,63 +10,90 @@ namespace Aspire.Hosting
 {
     public static partial class OrleansServiceClientExtensions
     {
+        [AspireExport("withOrleansClientReference")]
         public static ApplicationModel.IResourceBuilder<T> WithReference<T>(this ApplicationModel.IResourceBuilder<T> builder, Orleans.OrleansServiceClient orleansServiceClient)
             where T : ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithEndpoints { throw null; }
     }
 
     public static partial class OrleansServiceExtensions
     {
+        [AspireExport]
         public static Orleans.OrleansService AddOrleans(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansServiceClient AsClient(this Orleans.OrleansService orleansService) { throw null; }
 
+        [AspireExportIgnore(Reason = "IProviderConfiguration cannot be created directly by polyglot callers. Use the default provider overload instead.")]
         public static Orleans.OrleansService WithBroadcastChannel(this Orleans.OrleansService orleansServiceBuilder, string name, Orleans.IProviderConfiguration provider) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithBroadcastChannel(this Orleans.OrleansService orleansServiceBuilder, string name) { throw null; }
 
+        [AspireExportIgnore(Reason = "ParameterResource handle overload is not needed in polyglot. Use the string overload instead.")]
         public static Orleans.OrleansService WithClusterId(this Orleans.OrleansService orleansServiceBuilder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> clusterId) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithClusterId(this Orleans.OrleansService orleansServiceBuilder, string clusterId) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithClustering(this Orleans.OrleansService orleansServiceBuilder, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> provider) { throw null; }
 
+        [AspireExportIgnore(Reason = "IProviderConfiguration cannot be created directly by polyglot callers. Use the resource-based overload instead.")]
         public static Orleans.OrleansService WithClustering(this Orleans.OrleansService orleansServiceBuilder, Orleans.IProviderConfiguration provider) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithDevelopmentClustering(this Orleans.OrleansService orleansServiceBuilder) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with explicit provider name instead.")]
         public static Orleans.OrleansService WithGrainDirectory(this Orleans.OrleansService orleansServiceBuilder, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> provider) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithGrainDirectory(this Orleans.OrleansService orleansServiceBuilder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> provider) { throw null; }
 
+        [AspireExportIgnore(Reason = "IProviderConfiguration cannot be created directly by polyglot callers. Use the resource-based overload instead.")]
         public static Orleans.OrleansService WithGrainDirectory(this Orleans.OrleansService orleansServiceBuilder, string name, Orleans.IProviderConfiguration provider) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with explicit provider name instead.")]
         public static Orleans.OrleansService WithGrainStorage(this Orleans.OrleansService orleansServiceBuilder, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> provider) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithGrainStorage(this Orleans.OrleansService orleansServiceBuilder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> provider) { throw null; }
 
+        [AspireExportIgnore(Reason = "IProviderConfiguration cannot be created directly by polyglot callers. Use the resource-based overload instead.")]
         public static Orleans.OrleansService WithGrainStorage(this Orleans.OrleansService orleansServiceBuilder, string name, Orleans.IProviderConfiguration provider) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithMemoryGrainStorage(this Orleans.OrleansService orleansServiceBuilder, string name) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithMemoryReminders(this Orleans.OrleansService orleansServiceBuilder) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithMemoryStreaming(this Orleans.OrleansService orleansServiceBuilder, string name) { throw null; }
 
+        [AspireExport("withOrleansReference")]
         public static ApplicationModel.IResourceBuilder<T> WithReference<T>(this ApplicationModel.IResourceBuilder<T> builder, Orleans.OrleansService orleansService)
             where T : ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithEndpoints { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithReminders(this Orleans.OrleansService orleansServiceBuilder, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> provider) { throw null; }
 
+        [AspireExportIgnore(Reason = "IProviderConfiguration cannot be created directly by polyglot callers. Use the resource-based overload instead.")]
         public static Orleans.OrleansService WithReminders(this Orleans.OrleansService orleansServiceBuilder, Orleans.IProviderConfiguration provider) { throw null; }
 
+        [AspireExportIgnore(Reason = "ParameterResource handle overload is not needed in polyglot. Use the string overload instead.")]
         public static Orleans.OrleansService WithServiceId(this Orleans.OrleansService orleansServiceBuilder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> serviceId) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithServiceId(this Orleans.OrleansService orleansServiceBuilder, string serviceId) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with explicit provider name instead.")]
         public static Orleans.OrleansService WithStreaming(this Orleans.OrleansService orleansServiceBuilder, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> provider) { throw null; }
 
+        [AspireExport]
         public static Orleans.OrleansService WithStreaming(this Orleans.OrleansService orleansServiceBuilder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> provider) { throw null; }
 
+        [AspireExportIgnore(Reason = "IProviderConfiguration cannot be created directly by polyglot callers. Use the resource-based overload instead.")]
         public static Orleans.OrleansService WithStreaming(this Orleans.OrleansService orleansServiceBuilder, string name, Orleans.IProviderConfiguration provider) { throw null; }
     }
 }
@@ -79,6 +106,7 @@ namespace Aspire.Hosting.Orleans
             where T : ApplicationModel.IResourceWithEnvironment;
     }
 
+    [AspireExport]
     public sealed partial class OrleansService
     {
         public OrleansService(IDistributedApplicationBuilder builder, string name) { }
@@ -102,6 +130,7 @@ namespace Aspire.Hosting.Orleans
         public System.Collections.Generic.Dictionary<string, IProviderConfiguration> Streaming { get { throw null; } }
     }
 
+    [AspireExport]
     public sealed partial class OrleansServiceClient
     {
         public OrleansServiceClient(OrleansService service) { }

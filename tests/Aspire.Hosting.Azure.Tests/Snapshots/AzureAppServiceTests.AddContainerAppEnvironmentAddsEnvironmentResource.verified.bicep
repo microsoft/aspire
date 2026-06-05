@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param userPrincipalId string = ''
@@ -67,20 +67,24 @@ resource dashboard 'Microsoft.Web/sites@2025-03-01' = {
       acrUserManagedIdentityID: env_mi.properties.clientId
       appSettings: [
         {
-          name: 'Dashboard__Frontend__AuthMode'
+          name: 'DASHBOARD__FRONTEND__AUTHMODE'
           value: 'Unsecured'
         }
         {
-          name: 'Dashboard__Otlp__AuthMode'
+          name: 'DASHBOARD__OTLP__AUTHMODE'
           value: 'Unsecured'
         }
         {
-          name: 'Dashboard__Otlp__SuppressUnsecuredMessage'
+          name: 'DASHBOARD__OTLP__SUPPRESSUNSECUREDTELEMETRYMESSAGE'
           value: 'true'
         }
         {
-          name: 'Dashboard__ResourceServiceClient__AuthMode'
+          name: 'DASHBOARD__RESOURCESERVICECLIENT__AUTHMODE'
           value: 'Unsecured'
+        }
+        {
+          name: 'DASHBOARD__UI__DISABLEIMPORT'
+          value: 'true'
         }
         {
           name: 'WEBSITES_PORT'

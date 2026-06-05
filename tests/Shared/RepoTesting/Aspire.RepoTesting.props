@@ -13,7 +13,8 @@
 
     <!-- https://github.com/dotnet/arcade/issues/15654 -->
     <!-- We currently have our own Xunit3.targets in eng/Xunit3, which Arcade will import -->
-    <TestRunnerName>Xunit3</TestRunnerName>
+    <!-- Allow command-line override of TestRunnerName for runsheet builders -->
+    <TestRunnerName Condition="'$(TestRunnerName)' == ''">Xunit3</TestRunnerName>
 
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>

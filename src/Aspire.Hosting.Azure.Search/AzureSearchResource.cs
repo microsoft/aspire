@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Search;
@@ -13,7 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure AI Search resource.</param>
 public class AzureSearchResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     /// <summary>
     /// Gets the "connectionString" output reference from the Azure AI Search resource.
@@ -29,12 +31,25 @@ public class AzureSearchResource(string name, Action<AzureResourceInfrastructure
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
+    /// Gets the "id" output reference for the resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
+
+    /// <summary>
     /// Gets the service endpoint URI expression for the Azure AI Search resource.
     /// </summary>
     /// <remarks>
     /// Format: <c>https://{name}.search.windows.net</c>.
     /// </remarks>
     public BicepOutputReference Endpoint => new("endpoint", this);
+
+    /// <summary>
+    /// Gets the service endpoint URI expression for the Azure AI Search resource.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>https://{name}.search.windows.net</c>.
+    /// </remarks>
+    public ReferenceExpression UriExpression => ReferenceExpression.Create($"{Endpoint}");
 
     /// <summary>
     /// Gets the connection string template for the manifest for the resource.
@@ -73,6 +88,10 @@ public class AzureSearchResource(string name, Action<AzureResourceInfrastructure
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        yield return new("Uri", ReferenceExpression.Create($"{Endpoint}"));
+        yield return new("Uri", UriExpression);
     }
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["searchService"];
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.search.windows.net"];
 }

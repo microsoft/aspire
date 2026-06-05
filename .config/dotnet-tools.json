@@ -13,6 +13,12 @@
       "commands": [
         "pwsh"
       ]
+    },
+    "hex1b.tool": {
+      "version": "0.78.0",
+      "commands": [
+        "hex1b"
+      ]
     }
   }
 }

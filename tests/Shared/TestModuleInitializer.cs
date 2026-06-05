@@ -12,16 +12,27 @@ sealed class TestModuleInitializer
     [ModuleInitializer]
     internal static void Setup()
     {
-        // Set the directory for all Verify calls in test projects
-        var asmDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly()!.Location) ?? string.Empty;
+        // This file is compiled into multiple test assemblies. When test assemblies reference
+        // each other (e.g., Aspire.Cli.Tests references Aspire.Hosting.Tests), multiple module
+        // initializers may attempt to configure Verify. DerivePathInfo can only be called once
+        // before any Verify test runs. We use VerifyInitializer (in the shared Aspire.TestUtilities
+        // assembly) to ensure only the first caller configures it.
+        if (!VerifyInitializer.TryInitialize())
+        {
+            return;
+        }
 
-        // If it contains a relative path, it will be combined with the project directory.
         DerivePathInfo(
                 (sourceFile, projectDirectory, type, method) => new(
                     directory: Path.Combine(
-                        PlatformDetection.IsRunningOnHelix ? asmDir : projectDirectory,
+                        PlatformDetection.IsRunningOnHelix
+                            ? Path.GetDirectoryName(Assembly.GetExecutingAssembly()!.Location) ?? string.Empty
+                            : projectDirectory,
                         "Snapshots"),
                     typeName: type.Name,
                     methodName: method.Name));
+
+        // auto-accept baseline changes when running locally
+        VerifierSettings.AutoVerify(includeBuildServer: false, throwException: true);
     }
 }

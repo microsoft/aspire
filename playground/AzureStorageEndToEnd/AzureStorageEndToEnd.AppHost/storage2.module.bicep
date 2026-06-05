@@ -11,6 +11,7 @@ resource storage2 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   properties: {
     accessTier: 'Hot'
     allowSharedKeyAccess: false
+    isHnsEnabled: false
     minimumTlsVersion: 'TLS1_2'
     networkAcls: {
       defaultAction: 'Allow'
@@ -33,8 +34,12 @@ resource foocontainer 'Microsoft.Storage/storageAccounts/blobServices/containers
 
 output blobEndpoint string = storage2.properties.primaryEndpoints.blob
 
+output dataLakeEndpoint string = storage2.properties.primaryEndpoints.dfs
+
 output queueEndpoint string = storage2.properties.primaryEndpoints.queue
 
 output tableEndpoint string = storage2.properties.primaryEndpoints.table
 
 output name string = storage2.name
+
+output id string = storage2.id

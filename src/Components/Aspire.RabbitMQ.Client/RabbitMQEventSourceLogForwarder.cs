@@ -127,7 +127,8 @@ internal sealed class RabbitMQEventSourceLogForwarder : IDisposable
     /// </summary>
     private sealed class RabbitMQEventSourceListener : EventListener
     {
-        private readonly List<EventSource> _eventSources = new List<EventSource>();
+        // This must be initialized here so it is available before the base constructor is called.
+        private readonly List<EventSource> _eventSources = [];
 
         private readonly Action<EventWrittenEventArgs> _log;
         private readonly EventLevel _level;
@@ -137,6 +138,7 @@ internal sealed class RabbitMQEventSourceLogForwarder : IDisposable
             _log = log;
             _level = level;
 
+            // Enable any event sources that were created before this listener. Safe to do now that _level is set.
             foreach (EventSource eventSource in _eventSources)
             {
                 OnEventSourceCreated(eventSource);
@@ -145,13 +147,23 @@ internal sealed class RabbitMQEventSourceLogForwarder : IDisposable
             _eventSources.Clear();
         }
 
+        // This is called from the base constructor and so _log and _level may not be initialized yet.
+        // https://github.com/dotnet/runtime/blob/15663b5a44d507e0c120f88b6e2e96f977ceac90/src/libraries/System.Private.CoreLib/src/System/Diagnostics/Tracing/EventSource.cs#L4153-L4158
         protected sealed override void OnEventSourceCreated(EventSource eventSource)
         {
+            // Defensive check for being passed a event source.
+            if (eventSource == null)
+            {
+                return;
+            }
+
             base.OnEventSourceCreated(eventSource);
 
+            // Log will be null during base constructor call. Store registered event source to enable later when class is initialized.
             if (_log == null)
             {
                 _eventSources.Add(eventSource);
+                return;
             }
 
             if (eventSource.Name == "rabbitmq-dotnet-client" || eventSource.Name == "rabbitmq-client")

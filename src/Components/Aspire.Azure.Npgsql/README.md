@@ -90,7 +90,7 @@ Also you can pass the `Action<AzureNpgsqlSettings> configureSettings` delegate t
     builder.AddAzureNpgsqlDataSource("postgresdb", settings => settings.DisableHealthChecks = true);
 ```
 
-Use the `AzureNpgsqlSettings.Credential` property to establish a connection. If no credential is configured, the [DefaultAzureCredential](https://learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential) is used.
+Use the `AzureNpgsqlSettings.Credential` property to establish a connection. If no credential is configured, a [default TokenCredential is created based on the current environment](https://aka.ms/aspire/default-azure-credential).
 
 If the connection string contains a username and a password then the credential will be ignored.
 
@@ -117,7 +117,7 @@ The `WithReference` method configures a connection in the `MyService` project na
 builder.AddAzureNpgsqlDataSource("postgresdb");
 ```
 
-This will also require your Azure environment to be configure by following [these instructions](https://learn.microsoft.com/dotnet/aspire/azure/local-provisioning#configuration).
+This will also require your Azure environment to be configure by following [these instructions](https://aspire.dev/integrations/cloud/azure/local-provisioning#configuration).
 
 ## Troubleshooting
 
@@ -134,11 +134,12 @@ builder.AddAzureNpgsqlDataSource("db", configureDataSourceBuilder:
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/cloud/azure/azure-postgresql/
 * https://www.npgsql.org/doc/basic-usage.html
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Postgres, PostgreSQL and the Slonik Logo are trademarks or registered trademarks of the PostgreSQL Community Association of Canada, and used with their permission._

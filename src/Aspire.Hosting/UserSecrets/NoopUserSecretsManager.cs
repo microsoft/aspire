@@ -20,11 +20,19 @@ internal sealed class NoopUserSecretsManager : IUserSecretsManager
     {
     }
 
+    public bool IsAvailable => false;
+
     public string FilePath => string.Empty;
 
     public bool TrySetSecret(string name, string value)
     {
         Debug.WriteLine($"User secrets are not enabled. Cannot set secret '{name}'.");
+        return false;
+    }
+
+    public bool TryDeleteSecret(string name)
+    {
+        Debug.WriteLine($"User secrets are not enabled. Cannot delete secret '{name}'.");
         return false;
     }
 

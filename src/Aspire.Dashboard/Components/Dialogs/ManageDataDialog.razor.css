@@ -1,0 +1,27 @@
+::deep .name-title-text {
+    display: flex;
+    align-items: center;
+    margin-left: 34px;
+    user-select: none;
+}
+
+::deep .resources-name-container {
+    display: flex;
+    align-items: center;
+}
+
+::deep .resource-name-container {
+    display: inline-flex;
+}
+
+.button-container {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    margin-top: 16px;
+}
+
+.error-message {
+    color: var(--error);
+    font-size: var(--type-ramp-minus-1-font-size);
+    margin-top: 8px;
+}

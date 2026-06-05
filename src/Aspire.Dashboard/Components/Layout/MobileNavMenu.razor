@@ -39,7 +39,16 @@
     public required Func<Task> LaunchHelpAsync { get; set; }
 
     [Parameter, EditorRequired]
+    public required Func<Task> LaunchAIAgentsAsync { get; set; }
+
+    [Parameter, EditorRequired]
+    public required bool IsAgentHelpEnabled { get; set; }
+
+    [Parameter, EditorRequired]
     public required Func<Task> LaunchAIAssistantAsync { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<Task> LaunchNotificationsAsync { get; set; }
 
     [Parameter, EditorRequired]
     public required Func<Task> LaunchSettingsAsync { get; set; }

@@ -27,6 +27,8 @@
     <Compile Include="$(TestsSharedDir)TestAIContextProvider.cs" Link="shared/TestAIContextProvider.cs" />
     <Compile Include="$(TestsSharedDir)TestStringLocalizer.cs" Link="shared/TestStringLocalizer.cs" />
     <Compile Include="$(TestsSharedDir)TestDashboardClient.cs" Link="shared/TestDashboardClient.cs" />
+    <Compile Include="$(TestsSharedDir)TestDialogService.cs" Link="shared/TestDialogService.cs" />
+    <Compile Include="$(TestsSharedDir)TestSessionStorage.cs" Link="shared/TestSessionStorage.cs" />
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)Telemetry\*.cs" LinkBase="shared/Telemetry" />
     <Compile Include="$(TestsSharedDir)Logging\*.cs" LinkBase="shared/Logging" />

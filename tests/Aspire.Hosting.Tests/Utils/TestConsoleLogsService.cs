@@ -3,7 +3,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using Aspire.Hosting.ConsoleLogs;
+using Aspire.Shared.ConsoleLogs;
 
 namespace Aspire.Hosting.Tests.Utils;
 

@@ -1,5 +1,5 @@
 # Manual trigger pipeline for Azure DevOps tests
-# Can be invoked manually with "/azp run azdo-tests"
+# Can be invoked manually with "/azp run aspire-tests"
 
 # Only manual triggers - no automatic builds
 trigger: none

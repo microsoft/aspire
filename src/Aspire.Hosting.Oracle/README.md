@@ -54,8 +54,8 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-https://learn.microsoft.com/dotnet/aspire/database/oracle-entity-framework-component?tabs=dotnet-cli
+https://aspire.dev/integrations/databases/oracle/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

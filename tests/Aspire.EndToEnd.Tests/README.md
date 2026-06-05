@@ -36,7 +36,7 @@ The following changes need to be made to when adding a new integration:
   * If the integration's container starts in a reasonable time, the new test can just be a new `[InlineData]` entry to the existing `VerifyComponentWorks` test.
   * If the container takes a long time to start, or is flaky, add a separate test scenario (similar to Oracle and CosmosDb).
 
-See https://github.com/dotnet/aspire/pull/4179 for an example.
+See https://github.com/microsoft/aspire/pull/4179 for an example.
 
 ## (details) What is the goal here?
 

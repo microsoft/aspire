@@ -61,10 +61,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Manage disk cache for CLI operations.</value>
+    <value>Manage disk cache for CLI operations</value>
   </data>
   <data name="ClearCommand_Description" xml:space="preserve">
-    <value>Clear all cache entries.</value>
+    <value>Clear all cache entries</value>
   </data>
   <data name="CacheCleared" xml:space="preserve">
     <value>Cache cleared successfully.</value>

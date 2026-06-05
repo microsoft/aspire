@@ -3,6 +3,7 @@
 
 namespace Aspire.Hosting.Tests.ApplicationModel;
 
+[Trait("Partition", "4")]
 public class EndpointHostHelpersTests
 {
     [Theory]

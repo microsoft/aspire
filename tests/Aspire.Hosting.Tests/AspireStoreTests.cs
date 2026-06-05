@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class AspireStoreTests
 {
     [Fact]
@@ -50,6 +51,22 @@ public class AspireStoreTests
         var path = store.BasePath;
 
         Assert.Contains(".aspire", path);
+    }
+
+    [Fact]
+    public void BasePath_ShouldFallbackToAppHostAspireDirectory_WhenIntermediateOutputMetadataIsUnavailable()
+    {
+        using var projectDirectory = new TestTempDirectory();
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(string).Assembly.GetName().Name,
+            ProjectDirectory = projectDirectory.Path
+        });
+
+        using var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+
+        Assert.Equal(Path.Combine(projectDirectory.Path, ".aspire"), store.BasePath);
     }
 
     [Fact]

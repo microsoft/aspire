@@ -3,8 +3,6 @@
 
 using System.Collections.Concurrent;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -20,28 +18,16 @@ public partial class ResourceActions : ComponentBase
     private AspireMenuButton? _menuButton;
 
     [Inject]
+    public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
+
+    [Inject]
     public required IStringLocalizer<Resources.Resources> Loc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Resources.ControlsStrings> ControlLoc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Commands> CommandsLoc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Resources.AIAssistant> AIAssistantLoc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Resources.AIPrompts> AIPromptsLoc { get; init; }
+    public required IStringLocalizer<ControlsStrings> ControlLoc { get; init; }
 
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
-
-    [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
-
-    [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
 
     [Inject]
     public required IconResolver IconResolver { get; init; }
@@ -57,9 +43,6 @@ public partial class ResourceActions : ComponentBase
 
     [Parameter]
     public required ResourceViewModel Resource { get; set; }
-
-    [Parameter]
-    public required Func<ResourceViewModel, string> GetResourceName { get; set; }
 
     [Parameter]
     public required int MaxHighlightedCount { get; set; }
@@ -78,24 +61,16 @@ public partial class ResourceActions : ComponentBase
         _menuItems.Clear();
         _highlightedCommands.Clear();
 
-        ResourceMenuItems.AddMenuItems(
+        ResourceMenuBuilder.AddMenuItems(
             _menuItems,
             Resource,
-            NavigationManager,
-            TelemetryRepository,
-            AIContextProvider,
-            GetResourceName,
-            ControlLoc,
-            Loc,
-            AIAssistantLoc,
-            AIPromptsLoc,
-            CommandsLoc,
+            ResourceByName,
             EventCallback.Factory.Create(this, () => OnViewDetails.InvokeAsync(_menuButton?.MenuButtonId)),
             CommandSelected,
             IsCommandExecuting,
+            showViewDetails: true,
             showConsoleLogsItem: true,
-            showUrls: false,
-            IconResolver);
+            showUrls: false);
 
         // If display is desktop then we display highlighted commands next to the ... button.
         if (ViewportInformation.IsDesktop)

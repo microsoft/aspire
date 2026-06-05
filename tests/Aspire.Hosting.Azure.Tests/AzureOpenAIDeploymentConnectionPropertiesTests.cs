@@ -23,7 +23,7 @@ public class AzureOpenAIDeploymentConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("Uri", property.Key);
-                Assert.Equal("{openai.outputs.connectionString}", property.Value.ValueExpression);
+                Assert.Equal("{openai.outputs.endpoint}", property.Value.ValueExpression);
             },
             property =>
             {

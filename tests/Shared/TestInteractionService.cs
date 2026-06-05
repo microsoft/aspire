@@ -25,9 +25,12 @@ internal sealed class TestInteractionService : IInteractionService
         throw new NotImplementedException();
     }
 
-    public Task<InteractionResult<InteractionInput>> PromptInputAsync(string title, string? message, InteractionInput input, InputsDialogInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    public async Task<InteractionResult<InteractionInput>> PromptInputAsync(string title, string? message, InteractionInput input, InputsDialogInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var data = new InteractionData(title, message, new InteractionInputCollection([input]), options, cancellationToken, new TaskCompletionSource<object>());
+        Interactions.Writer.TryWrite(data);
+        var result = (InteractionResult<InteractionInput>)await data.CompletionTcs.Task;
+        return result;
     }
 
     public async Task<InteractionResult<InteractionInputCollection>> PromptInputsAsync(string title, string? message, IReadOnlyList<InteractionInput> inputs, InputsDialogInteractionOptions? options = null, CancellationToken cancellationToken = default)

@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(RepoRoot)src\Shared\AzureRoleAssignmentUtils.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="StringComparers.cs" />
+    <Compile Include="$(SharedDir)AzureCredentialHelper.cs" Link="AzureCredentialHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,6 +20,7 @@
     <PackageReference Include="AspNetCore.HealthChecks.Azure.Storage.Queues" />
     <PackageReference Include="Azure.Provisioning" />
     <PackageReference Include="Azure.Provisioning.Storage" />
+    <PackageReference Include="Azure.Storage.Files.DataLake" />
   </ItemGroup>
 
 </Project>

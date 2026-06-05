@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    Microsoft ResX Schema
+    Version 2.0
+    The primary goals of this format is to allow a simple XML format
+    that is mostly human readable. The generation and parsing of the
+    various data types are done through the TypeConverter classes
+    associated with the data types.
+    Example:
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+    There are any number of "resheader" rows that contain simple
+    name/value pairs.
+    Each data row contains a name, and value. The row also contains a
+    type or mimetype. Type corresponds to a .NET class that support
+    text/value conversion through the TypeConverter architecture.
+    Classes that don't support this are serialized and stored with the
+    mimetype set.
+    The mimetype is used for serialized objects, and tells the
+    ResXResourceReader how to depersist the object. This is currently not
+    extensible. For a given mimetype the value must be set accordingly:
+    Note - application/x-microsoft.net.object.binary.base64 is the format
+    that the ResXResourceWriter will generate, however the reader can
+    read any of the formats listed below.
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Description" xml:space="preserve">
+    <value>Manage AI agent environment configuration</value>
+  </data>
+  <data name="McpCommand_Description" xml:space="preserve">
+    <value>Start the MCP (Model Context Protocol) server</value>
+  </data>
+  <data name="InitCommand_Description" xml:space="preserve">
+    <value>Initialize agent environment configuration for detected agents</value>
+  </data>
+  <data name="DeprecatedConfigUpdate_Description" xml:space="preserve">
+    <value>Update {0} config to use new 'agent mcp' command</value>
+  </data>
+  <data name="DeprecatedConfigWarning" xml:space="preserve">
+    <value>{0} config uses deprecated 'mcp start' command</value>
+  </data>
+  <data name="DeprecatedConfigFix" xml:space="preserve">
+    <value>Run 'aspire agent init' to update configuration</value>
+  </data>
+  <data name="ConfigUpdatesSelectPrompt" xml:space="preserve">
+    <value>The following agent configurations use the deprecated 'mcp start' command. Update them?</value>
+  </data>
+  <data name="MalformedConfigFileError" xml:space="preserve">
+    <value>The configuration file '{0}' contains malformed JSON. Please fix the file manually and re-run the command.</value>
+  </data>
+  <data name="SkippedMalformedConfigFile" xml:space="preserve">
+    <value>Skipping update of '{0}'.</value>
+  </data>
+  <data name="ConfigurationCompletedWithErrors" xml:space="preserve">
+    <value>Configuration completed with errors. Please fix the reported issues and re-run the command.</value>
+  </data>
+  <data name="SkipNoneDescription" xml:space="preserve">
+    <value>None — skip</value>
+  </data>
+  <data name="InitCommand_ConfigureMcpServer" xml:space="preserve">
+    <value>Install Aspire MCP server</value>
+  </data>
+  <data name="InitCommand_SelectSkillLocations" xml:space="preserve">
+    <value>Where should skill files be installed?</value>
+  </data>
+  <data name="InitCommand_SelectSkills" xml:space="preserve">
+    <value>Which skills should be installed?</value>
+  </data>
+  <data name="InitCommand_InstalledPlaywrightCli" xml:space="preserve">
+    <value>Installed Playwright CLI.</value>
+  </data>
+  <data name="InitCommand_PlaywrightCliSkipped" xml:space="preserve">
+    <value>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</value>
+  </data>
+  <data name="InitCommand_InstalledSkillsSummary" xml:space="preserve">
+    <value>Installed Aspire agent skills:</value>
+  </data>
+  <data name="InitCommand_InstalledSkillsSummarySkills" xml:space="preserve">
+    <value>Skills: {0}</value>
+  </data>
+  <data name="InitCommand_InstalledSkillsSummaryLocations" xml:space="preserve">
+    <value>Locations: {0}</value>
+  </data>
+  <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
+    <value>Failed to install {0} skill at {1}: {2}</value>
+  </data>
+  <data name="InitCommand_ConfiguresDetectedAgentEnvironments" xml:space="preserve">
+    <value>(configures detected agent environments)</value>
+  </data>
+  <data name="SkillDescription_Aspire" xml:space="preserve">
+    <value>Aspire CLI commands and workflows for distributed apps</value>
+  </data>
+  <data name="SkillDescription_AspireDeployment" xml:space="preserve">
+    <value>Aspire deployment target selection, preflight, publish, and deploy workflows</value>
+  </data>
+  <data name="SkillDescription_PlaywrightCli" xml:space="preserve">
+    <value>Browser automation and functional testing</value>
+  </data>
+  <data name="SkillDescription_DotnetInspect" xml:space="preserve">
+    <value>Query .NET API surfaces across NuGet packages and platform libraries</value>
+  </data>
+  <data name="SkillDescription_Aspireify" xml:space="preserve">
+    <value>One-time setup: wire up AppHost with discovered projects</value>
+  </data>
+  <data name="SkillLocation_StandardName" xml:space="preserve">
+    <value>Standard (.agents/skills/)</value>
+  </data>
+  <data name="SkillLocation_StandardDescription" xml:space="preserve">
+    <value>Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</value>
+  </data>
+  <data name="SkillLocation_ClaudeCodeName" xml:space="preserve">
+    <value>Claude Code (.claude/skills/)</value>
+  </data>
+  <data name="SkillLocation_ClaudeCodeDescription" xml:space="preserve">
+    <value>Required for Claude Code</value>
+  </data>
+  <data name="SkillLocation_GitHubSkillsName" xml:space="preserve">
+    <value>VS Code / GitHub Copilot (.github/skills/)</value>
+  </data>
+  <data name="SkillLocation_GitHubSkillsDescription" xml:space="preserve">
+    <value>Legacy location for GitHub Copilot skills</value>
+  </data>
+  <data name="SkillLocation_OpenCodeName" xml:space="preserve">
+    <value>OpenCode (.opencode/skill/)</value>
+  </data>
+  <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
+    <value>Legacy location for OpenCode skills</value>
+  </data>
+  <data name="AspireSkillsInstaller_InstallingStatus" xml:space="preserve">
+    <value>Installing Aspire skills...</value>
+  </data>
+  <data name="AspireSkillsInstaller_GitHubUnavailable" xml:space="preserve">
+    <value>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</value>
+  </data>
+  <data name="AspireSkillsInstaller_InvalidBundle" xml:space="preserve">
+    <value>The Aspire skills bundle is invalid: {0}</value>
+  </data>
+  <data name="AspireSkillsInstaller_InvalidMetadata" xml:space="preserve">
+    <value>Embedded Aspire skills bundle metadata is invalid: {0}</value>
+  </data>
+  <data name="AspireSkillsInstaller_MissingMetadataVersion" xml:space="preserve">
+    <value>Embedded Aspire skills metadata must specify a version.</value>
+  </data>
+  <data name="AspireSkillsInstaller_MetadataRepositoryMismatch" xml:space="preserve">
+    <value>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</value>
+  </data>
+  <data name="AspireSkillsInstaller_MissingMetadataTag" xml:space="preserve">
+    <value>Embedded Aspire skills metadata must specify a GitHub release tag.</value>
+  </data>
+  <data name="AspireSkillsInstaller_MissingMetadataAssetName" xml:space="preserve">
+    <value>Embedded Aspire skills metadata must specify a release asset name.</value>
+  </data>
+  <data name="AspireSkillsInstaller_MissingMetadataSha256" xml:space="preserve">
+    <value>Embedded Aspire skills metadata must specify the release asset SHA-256 hash.</value>
+  </data>
+  <data name="AspireSkillsInstaller_ArchiveHashVerificationFailed" xml:space="preserve">
+    <value>Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
+    <value>Installing Playwright CLI...</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToResolvePackage" xml:space="preserve">
+    <value>Failed to resolve {0} from the npm registry.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_ProvenanceVerificationFailed" xml:space="preserve">
+    <value>Provenance verification failed for {0}: {1}</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToDownload" xml:space="preserve">
+    <value>Failed to download {0}.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_IntegrityVerificationFailed" xml:space="preserve">
+    <value>Integrity verification failed for {0}. The downloaded package may have been tampered with.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToInstallGlobally" xml:space="preserve">
+    <value>Failed to install {0} globally via npm.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_FailedToGenerateSkillFiles" xml:space="preserve">
+    <value>Failed to generate Playwright CLI skill files.</value>
+  </data>
+  <data name="PlaywrightCliInstaller_InstalledWithMirrorWarnings" xml:space="preserve">
+    <value>Installed Playwright CLI (some locations failed to mirror).</value>
+  </data>
+  <data name="InitCommand_WorkspaceRootOptionDescription" xml:space="preserve">
+    <value>Path to the workspace root directory</value>
+  </data>
+  <data name="InitCommand_SkillLocationsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</value>
+  </data>
+  <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
+  </data>
+</root>

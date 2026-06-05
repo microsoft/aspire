@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 
 static class TestResourceExtensions
 {
+    [AspireExportIgnore(Reason = "Playground-only custom resource sample; not part of the supported ATS surface.")]
     public static IResourceBuilder<TestResource> AddTestResource(this IDistributedApplicationBuilder builder, string name)
     {
         builder.Services.TryAddEventingSubscriber<TestResourceLifecycle>();

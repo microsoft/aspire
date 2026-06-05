@@ -1,49 +1,33 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.CommandLine;
-using System.CommandLine.Help;
-using Aspire.Cli.Agents;
-using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Git;
-using Aspire.Cli.Interaction;
-using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Utils;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class McpCommand : BaseCommand
+/// <summary>
+/// MCP command for interacting with MCP tools exposed by running resources.
+/// Also provides legacy 'start' and 'init' subcommands for backward compatibility.
+/// </summary>
+internal sealed class McpCommand : ParentCommand
 {
+    internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
+
     public McpCommand(
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor,
-        ILoggerFactory loggerFactory,
-        ILogger<McpStartCommand> logger,
-        IAgentEnvironmentDetector agentEnvironmentDetector,
-        IGitRepository gitRepository,
-        IPackagingService packagingService)
-        : base("mcp", McpCommandStrings.Description, features, updateNotifier, executionContext, interactionService)
+        McpStartCommand startCommand,
+        McpInitCommand initCommand,
+        McpToolsCommand toolsCommand,
+        McpCallCommand callCommand,
+        CommonCommandServices services)
+        : base("mcp", McpCommandStrings.Description, services)
     {
-        ArgumentNullException.ThrowIfNull(interactionService);
+        Subcommands.Add(toolsCommand);
+        Subcommands.Add(callCommand);
 
-        var startCommand = new McpStartCommand(interactionService, features, updateNotifier, executionContext, auxiliaryBackchannelMonitor, loggerFactory, logger, packagingService);
+        // Legacy subcommands — hidden, use 'aspire agent' instead
+        startCommand.Hidden = true;
+        initCommand.Hidden = true;
         Subcommands.Add(startCommand);
-
-        var initCommand = new McpInitCommand(interactionService, features, updateNotifier, executionContext, agentEnvironmentDetector, gitRepository);
         Subcommands.Add(initCommand);
-    }
-
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
-    {
-        new HelpAction().Invoke(parseResult);
-        return Task.FromResult(ExitCodeConstants.InvalidCommand);
     }
 }

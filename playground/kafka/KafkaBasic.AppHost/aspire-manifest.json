@@ -1,10 +1,9 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "kafka": {
       "type": "container.v0",
       "connectionString": "{kafka.bindings.tcp.host}:{kafka.bindings.tcp.port}",
-      "image": "docker.io/confluentinc/confluent-local:8.1.0",
+      "image": "docker.io/confluentinc/confluent-local:8.1.1",
       "env": {
         "KAFKA_LISTENERS": "PLAINTEXT://localhost:29092,CONTROLLER://localhost:29093,PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:9093",
         "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT",
@@ -54,7 +53,7 @@
     "kafka2": {
       "type": "container.v0",
       "connectionString": "{kafka2.bindings.tcp.host}:{kafka2.bindings.tcp.port}",
-      "image": "docker.io/confluentinc/confluent-local:8.1.0",
+      "image": "docker.io/confluentinc/confluent-local:8.1.1",
       "env": {
         "KAFKA_LISTENERS": "PLAINTEXT://localhost:29092,CONTROLLER://localhost:29093,PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:9093",
         "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT",

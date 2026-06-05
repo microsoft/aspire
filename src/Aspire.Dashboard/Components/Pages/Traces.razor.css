@@ -14,6 +14,20 @@
     font-weight: normal;
 }
 
+::deep .trace-name-container {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+::deep .trace-name-content {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
 .trace-tag {
     display: flex;
     align-items: center;

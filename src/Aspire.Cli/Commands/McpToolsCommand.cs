@@ -1,0 +1,122 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.CommandLine;
+using System.Globalization;
+using System.Text.Json;
+using Aspire.Cli.Backchannel;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
+using Microsoft.Extensions.Logging;
+using Spectre.Console;
+
+namespace Aspire.Cli.Commands;
+
+/// <summary>
+/// Lists MCP tools exposed by running Aspire resources.
+/// </summary>
+internal sealed class McpToolsCommand : BaseCommand
+{
+    internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
+
+    private readonly AppHostConnectionResolver _connectionResolver;
+
+    private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
+    private static readonly Option<OutputFormat> s_formatOption = new("--format")
+    {
+        Description = McpCommandStrings.ToolsCommand_FormatOptionDescription
+    };
+
+    public McpToolsCommand(
+        IAuxiliaryBackchannelMonitor backchannelMonitor,
+        IProjectLocator projectLocator,
+        ILogger<McpToolsCommand> logger,
+        CommonCommandServices services)
+        : base("tools", McpCommandStrings.ToolsCommand_Description, services)
+    {
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
+
+        Options.Add(s_appHostOption);
+        Options.Add(s_formatOption);
+    }
+
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
+        var format = parseResult.GetValue(s_formatOption);
+
+        var result = await _connectionResolver.ResolveConnectionAsync(
+            passedAppHostProjectFile,
+            SharedCommandStrings.ScanningForRunningAppHosts,
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, "list MCP tools for"),
+            SharedCommandStrings.AppHostNotRunning,
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, InteractionService));
+        }
+
+        var connection = result.Connection!;
+        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken);
+        var resourcesWithTools = snapshots.Where(r => r.McpServer is not null).ToList();
+
+        if (resourcesWithTools.Count == 0)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, "No resources with MCP tools found.");
+            return CommandResult.Success();
+        }
+
+        if (format == OutputFormat.Json)
+        {
+            // `aspire mcp tools --format json` writes this shape directly because MCP schemas
+            // are already JsonNode instances; keep docs/specs/cli-output-formats.md in sync when changing it.
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+            {
+                writer.WriteStartArray();
+                foreach (var r in resourcesWithTools)
+                {
+                    var resourceName = r.DisplayName ?? r.Name;
+                    foreach (var t in r.McpServer!.Tools)
+                    {
+                        writer.WriteStartObject();
+                        writer.WriteString("resource", resourceName);
+                        writer.WriteString("tool", t.Name);
+                        writer.WriteString("description", t.Description ?? "");
+                        writer.WritePropertyName("inputSchema");
+                        t.InputSchema.WriteTo(writer);
+                        writer.WriteEndObject();
+                    }
+                }
+                writer.WriteEndArray();
+            }
+
+            InteractionService.DisplayRawText(System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+        }
+        else
+        {
+            var table = new Table();
+            table.AddColumn("Resource");
+            table.AddColumn("Tool");
+            table.AddColumn("Description");
+
+            foreach (var resource in resourcesWithTools)
+            {
+                var resourceName = resource.DisplayName ?? resource.Name;
+                foreach (var tool in resource.McpServer!.Tools)
+                {
+                    table.AddRow(
+                        resourceName.EscapeMarkup(),
+                        tool.Name.EscapeMarkup(),
+                        (tool.Description ?? "").EscapeMarkup());
+                }
+            }
+
+            InteractionService.DisplayRenderable(table);
+        }
+
+        return CommandResult.Success();
+    }
+}

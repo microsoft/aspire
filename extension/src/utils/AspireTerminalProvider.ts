@@ -4,11 +4,14 @@ import { extensionLogOutputChannel } from './logging';
 import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
-import { EnvironmentVariables } from './environment';
+import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
+import { resolveCliPath } from './cliPath';
 import path from 'path';
 
 export const enum AnsiColors {
-    Green = '\x1b[32m'
+    Green = '\x1b[32m',
+    Yellow = '\x1b[33m',
+    Blue = '\x1b[34m',
 }
 
 export interface AspireTerminal {
@@ -16,10 +19,57 @@ export interface AspireTerminal {
     dispose: () => void;
 }
 
+export interface SendAspireCommandOptions {
+    redactAdditionalArgs?: boolean;
+}
+
+export interface AspireTerminalCommandEvent {
+    subcommand: string;
+    commandLine: string;
+    showTerminal: boolean;
+    additionalArgs?: readonly string[];
+    containsRedactedArgs: boolean;
+    executionSuppressed: boolean;
+    executionMode: 'suppressed' | 'shellIntegration' | 'sendText';
+}
+
+/**
+ * Quotes a single argument for safe interpolation into a shell command line.
+ *
+ * Windows: The output targets PowerShell (powershell.exe / pwsh.exe), which is
+ * VS Code's default integrated terminal on Windows. The argument is wrapped in
+ * double quotes and the interpolation-significant characters (backtick, double
+ * quote, dollar sign) are backtick-escaped. This form is NOT safe for cmd.exe;
+ * users who have configured cmd.exe as their default terminal may see
+ * unexpected behavior. End-to-end coverage through a real child process is
+ * out of scope for this helper.
+ *
+ * Unix: The output uses POSIX single-quote quoting, which is interpreted the
+ * same way by bash, zsh, dash, sh, and fish. Embedded single quotes are split
+ * out and rejoined with a double-quoted single quote.
+ *
+ * @param arg The raw argument value to quote.
+ * @param platform Override for the target platform. Defaults to
+ * `process.platform`, but tests pass an explicit value to validate both
+ * branches regardless of the host OS.
+ */
+export function quoteShellArg(arg: string, platform: NodeJS.Platform = process.platform): string {
+    if (platform === 'win32') {
+        // Order matters: escape backticks first so that the backticks we
+        // introduce when escaping " and $ are not themselves re-escaped.
+        return `"${arg.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')}"`;
+    }
+
+    return `'${arg.replace(/'/g, "'\"'\"'")}'`;
+}
+
 export class AspireTerminalProvider implements vscode.Disposable {
     private _terminalByDebugSessionId: Map<string | null, AspireTerminal> = new Map();
     private _rpcServerConnectionInfo?: RpcServerConnectionInfo;
     private _dcpServerConnectionInfo?: DcpServerConnectionInfo;
+
+    private readonly _onDidSendAspireCommand = new vscode.EventEmitter<AspireTerminalCommandEvent>();
+    readonly onDidSendAspireCommand = this._onDidSendAspireCommand.event;
 
     constructor(subscriptions: vscode.Disposable[]) {
         subscriptions.push(vscode.window.onDidCloseTerminal(closedTerminal => {
@@ -56,35 +106,81 @@ export class AspireTerminalProvider implements vscode.Disposable {
         this._dcpServerConnectionInfo = value;
     }
 
-    sendAspireCommandToAspireTerminal(subcommand: string, showTerminal: boolean = true) {
-        const cliPath = this.getAspireCliExecutablePath();
+    async sendAspireCommandToAspireTerminal(subcommand: string, showTerminal: boolean = true, additionalArgs?: string[], options?: SendAspireCommandOptions) {
+        const cliPath = await this.getAspireCliExecutablePath();
 
         // On Windows, use & to execute paths, especially those with special characters
         // On Unix, just use the path directly
         let command: string;
         if (process.platform === 'win32') {
-            // Use & call operator with quoted path for Windows
-            command = `& "${cliPath}" ${subcommand}`;
+            command = `& ${quoteShellArg(cliPath)} ${subcommand}`;
         } else {
             // For Unix-like systems, quote only if needed
             const quotedPath = /[\s"'`$!*?()&|<>;]/.test(cliPath) ? `'${cliPath.replace(/'/g, `'\"'\"'`)}'` : cliPath;
             command = `${quotedPath} ${subcommand}`;
         }
+        const baseCommand = command;
 
+        const extensionArgs: string[] = [];
         if (this.isCliDebugLoggingEnabled()) {
-            command += ' --debug';
+            extensionArgs.push('--debug');
         }
 
         if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            command += ' --cli-wait-for-debugger';
+            extensionArgs.push('--cli-wait-for-debugger');
+        }
+
+        const cliArgs = additionalArgs && additionalArgs.length > 0
+            ? [...extensionArgs, ...additionalArgs]
+            : extensionArgs;
+
+        if (cliArgs.length > 0) {
+            const quotedArgs = cliArgs.map(arg => quoteShellArg(arg));
+            command += ' ' + quotedArgs.join(' ');
         }
 
         const aspireTerminal = this.getAspireTerminal();
-        extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${command}`);
-        aspireTerminal.terminal.sendText(command);
+        let logCommand = command;
+        if (options?.redactAdditionalArgs && additionalArgs && additionalArgs.length > 0) {
+            const logArgs = extensionArgs.map(arg => quoteShellArg(arg));
+            logArgs.push('[redacted command arguments]');
+            logCommand = `${baseCommand} ${logArgs.join(' ')}`;
+        }
+        const executionSuppressed = isE2eTerminalCommandExecutionSuppressed();
+        const executionMode = executionSuppressed
+            ? 'suppressed'
+            : aspireTerminal.terminal.shellIntegration
+                ? 'shellIntegration'
+                : 'sendText';
+        this._onDidSendAspireCommand.fire({
+            subcommand,
+            commandLine: logCommand,
+            showTerminal,
+            additionalArgs: options?.redactAdditionalArgs ? undefined : cliArgs,
+            containsRedactedArgs: options?.redactAdditionalArgs === true && additionalArgs !== undefined && additionalArgs.length > 0,
+            executionSuppressed,
+            executionMode,
+        });
+        extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${logCommand}`);
+
         if (showTerminal) {
             aspireTerminal.terminal.show();
         }
+
+        if (executionSuppressed) {
+            return;
+        }
+
+        if (executionMode === 'shellIntegration' && aspireTerminal.terminal.shellIntegration) {
+            aspireTerminal.terminal.shellIntegration.executeCommand(command);
+        }
+        else {
+            // Without shell integration, VS Code can't tell whether the terminal is idle or
+            // a foreground process is running, so keep the previous safe interruption behavior.
+            aspireTerminal.terminal.sendText('\x03', false);
+            aspireTerminal.terminal.sendText(command);
+        }
+
     }
 
     getAspireTerminal(forceCreate?: boolean): AspireTerminal {
@@ -121,11 +217,11 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean): any {
         if (noExtensionVariables) {
-            return process.env;
+            return getEnvironmentWithoutE2EBridgeVariables();
         }
 
         const env: any = {
-            ...process.env,
+            ...getEnvironmentWithoutE2EBridgeVariables(),
 
             // Extension connection information
             ASPIRE_EXTENSION_ENDPOINT: this.rpcServerConnectionInfo.address,
@@ -149,6 +245,11 @@ export class AspireTerminalProvider implements vscode.Disposable {
             env.ASPIRE_EXTENSION_DEBUG_RUN_MODE = noDebug === false ? "Debug" : "NoDebug";
             env.DEBUG_SESSION_INFO = JSON.stringify(getRunSessionInfo());
             env.ASPIRE_EXTENSION_CAPABILITIES = getSupportedCapabilities().join(',');
+            // Extension-managed debug/run sessions stream CLI output into VS Code's
+            // debug console, which is not an interactive terminal. Keep prompts routed
+            // through the extension backchannel while disabling Spectre live output
+            // such as the first-run banner and spinners.
+            env.ASPIRE_NON_INTERACTIVE = 'true';
 
             // if DCP debug logging is enabled, set DCP-specific logging environment variables
             const dcpDebugLoggingEnabled = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireDcpDebugLogging', false);
@@ -196,21 +297,27 @@ export class AspireTerminalProvider implements vscode.Disposable {
         for (const terminal of this._terminalByDebugSessionId.values()) {
             terminal.dispose();
         }
+        this._onDidSendAspireCommand.dispose();
     }
 
 
-    getAspireCliExecutablePath(): string {
-        const aspireCliPath = vscode.workspace.getConfiguration('aspire').get<string>('aspireCliExecutablePath', '');
-        if (aspireCliPath && aspireCliPath.trim().length > 0) {
-            extensionLogOutputChannel.debug(`Using user-configured Aspire CLI path: ${aspireCliPath}`);
-            return aspireCliPath.trim();
-        }
-
-        extensionLogOutputChannel.debug('No user-configured Aspire CLI path found');
-        return "aspire";
+    async getAspireCliExecutablePath(): Promise<string> {
+        const result = await resolveCliPath();
+        return result.cliPath;
     }
 
     isCliDebugLoggingEnabled(): boolean {
         return vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireCliDebugLogging', false);
     }
+
+    isDebugConfigEnvironmentLoggingEnabled(): boolean {
+        return vscode.workspace.getConfiguration('aspire').get<boolean>('enableDebugConfigEnvironmentLogging', false);
+    }
+}
+
+function isE2eTerminalCommandExecutionSuppressed(): boolean {
+    return process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE === 'true' &&
+        !!process.env.ASPIRE_EXTENSION_E2E_STATE_FILE &&
+        !!process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE &&
+        process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION === 'true';
 }

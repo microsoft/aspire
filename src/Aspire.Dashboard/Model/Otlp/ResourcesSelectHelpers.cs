@@ -111,7 +111,7 @@ public static class ResourcesSelectHelpers
                 new SelectViewModel<ResourceTypeDetails>
                 {
                     Id = ResourceTypeDetails.CreateReplicaInstance(replica.ResourceKey.ToString(), resourceName),
-                    Name = OtlpResource.GetResourceName(replica, resources)
+                    Name = OtlpHelpers.GetResourceName(replica, resources)
                 }));
         }
 

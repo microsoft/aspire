@@ -16,7 +16,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Description>Dashboard browser interface for .NET Aspire.</Description>
+    <Description>Dashboard browser interface for Aspire.</Description>
   </PropertyGroup>
 
   <ItemGroup>

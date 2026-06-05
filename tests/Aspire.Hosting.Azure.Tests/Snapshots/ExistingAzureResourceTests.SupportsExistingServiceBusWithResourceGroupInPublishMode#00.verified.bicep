@@ -17,3 +17,5 @@ output serviceBusEndpoint string = messaging.properties.serviceBusEndpoint
 output serviceBusHostName string = split(replace(messaging.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
 
 output name string = messaging.name
+
+output id string = messaging.id

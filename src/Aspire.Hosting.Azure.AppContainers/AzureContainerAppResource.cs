@@ -39,13 +39,6 @@ public class AzureContainerAppResource : AzureProvisioningResource
 
             var steps = new List<PipelineStep>();
 
-            if (!targetResource.TryGetEndpoints(out var endpoints))
-            {
-                endpoints = [];
-            }
-
-            var anyPublicEndpoints = endpoints.Any(e => e.IsExternal);
-
             var printResourceSummary = new PipelineStep
             {
                 Name = $"print-{targetResource.Name}-summary",
@@ -55,16 +48,22 @@ public class AzureContainerAppResource : AzureProvisioningResource
                     var containerAppEnv = (AzureContainerAppEnvironmentResource)deploymentTargetAnnotation.ComputeEnvironment!;
 
                     var domainValue = await containerAppEnv.ContainerAppDomain.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
+                    var portalLink = await ContainerAppUrls.GetPortalLinkAsync(containerAppEnv, targetResource.Name.ToLowerInvariant(), ctx.CancellationToken).ConfigureAwait(false);
 
-                    if (anyPublicEndpoints)
+                    if (targetResource.TryGetEndpoints(out var endpoints) && endpoints.Any(e => e.IsExternal))
                     {
                         var endpoint = $"https://{targetResource.Name.ToLowerInvariant()}.{domainValue}";
+                        var summaryValue = $"[{endpoint}]({endpoint}) ({portalLink})";
 
-                        ctx.ReportingStep.Log(LogLevel.Information, $"Successfully deployed **{targetResource.Name}** to [{endpoint}]({endpoint})", enableMarkdown: true);
+                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to {summaryValue}"));
+                        ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
                     }
                     else
                     {
-                        ctx.ReportingStep.Log(LogLevel.Information, $"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. No public endpoints were configured.", enableMarkdown: true);
+                        var summaryValue = $"No public endpoints ({portalLink})";
+
+                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. {summaryValue}"));
+                        ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
                     }
                 },
                 Tags = ["print-summary"],

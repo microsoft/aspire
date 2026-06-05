@@ -1,0 +1,70 @@
+parameters:
+  - name: version
+    type: string
+    default: ''
+  - name: channel
+    type: string
+  - name: archiveRoot
+    type: string
+    default: ''
+
+steps:
+  - bash: |
+      set -euo pipefail
+      version='${{ parameters.version }}'
+      channel='${{ parameters.channel }}'
+
+      if [ -z "$version" ]; then
+        echo "##[error]Version parameter is required"
+        exit 1
+      fi
+
+      if [ -z "$channel" ]; then
+        echo "##[error]Channel parameter is required (stable or prerelease)"
+        exit 1
+      fi
+
+      # Casks are generated for every channel. The artifact is a CI-only build
+      # output consumed by dogfooders via 'brew install --cask <local-path>'.
+      # Public Homebrew publishing for the stable cask is handled by upstream
+      # Homebrew/homebrew-cask's autobump workflow (see eng/homebrew/README.md)
+      # — this pipeline does not push to the public tap.
+      artifactName="homebrew-cask-$channel"
+
+      echo "Version: $version"
+      echo "Channel: $channel"
+      echo "Artifact name: $artifactName"
+
+      echo "##vso[task.setvariable variable=CliVersion]$version"
+      echo "##vso[task.setvariable variable=HomebrewChannel]$channel"
+      echo "##vso[task.setvariable variable=HomebrewArtifactName]$artifactName"
+    displayName: 🟣Set version ${{ parameters.version }}
+
+  - bash: |
+      set -euo pipefail
+      # prepare-cask-artifact.sh defaults to LiveArchives mode, which is what
+      # source-build prep needs — the cask URL points at a github.com release
+      # that doesn't exist yet at prep time. The full LiveRelease audit + real
+      # brew install runs later in release-publish-nuget.yml's
+      # HomebrewValidateJob, against the cask emitted by this prep stage.
+      args=(
+        --version "$(CliVersion)"
+        --channel "$(HomebrewChannel)"
+        --output-dir "$(Build.StagingDirectory)/homebrew-cask"
+      )
+
+      if [ -n "${ARCHIVE_ROOT}" ]; then
+        args+=(--archive-root "$ARCHIVE_ROOT")
+      fi
+
+      "$(Build.SourcesDirectory)/eng/homebrew/prepare-cask-artifact.sh" "${args[@]}"
+    displayName: 🟣Prepare Homebrew cask
+    env:
+      ARCHIVE_ROOT: '${{ parameters.archiveRoot }}'
+
+  - task: 1ES.PublishBuildArtifacts@1
+    displayName: 🟣Publish Homebrew cask
+    condition: always()
+    inputs:
+      PathtoPublish: '$(Build.StagingDirectory)/homebrew-cask'
+      ArtifactName: $(HomebrewArtifactName)

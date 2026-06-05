@@ -109,7 +109,7 @@
       </trans-unit>
       <trans-unit id="DialogTitle">
         <source>GitHub Copilot chat</source>
-        <target state="translated">Чат GitHub Copilot</target>
+        <target state="translated">GitHub Copilot Chat</target>
         <note />
       </trans-unit>
       <trans-unit id="DislikeMessageButtonText">
@@ -164,7 +164,7 @@
       </trans-unit>
       <trans-unit id="SidebarTitle">
         <source>GitHub Copilot chat</source>
-        <target state="translated">Чат GitHub Copilot</target>
+        <target state="translated">GitHub Copilot Chat</target>
         <note />
       </trans-unit>
       <trans-unit id="ToolNotificationConsoleLogs">

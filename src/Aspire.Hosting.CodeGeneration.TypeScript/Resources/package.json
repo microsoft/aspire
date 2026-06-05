@@ -1,0 +1,17 @@
+{
+  "name": "aspire-host",
+  "type": "module",
+  "scripts": {
+    "start": "aspire run",
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "nodemon": "^3.1.9",
+    "typescript": "^5.8.2"
+  }
+}

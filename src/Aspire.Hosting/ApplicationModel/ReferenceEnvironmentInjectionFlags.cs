@@ -25,7 +25,7 @@ public enum ReferenceEnvironmentInjectionFlags
     ConnectionProperties = 1 << 1,
 
     /// <summary>
-    /// Each endpoint defined on the resource will be injected using the format "services__{resourceName}__{endpointName}__{endpointIndex}".
+    /// Each endpoint defined on the resource will be injected using the format "services__{resourceName}__{endpointScheme}__{endpointIndex}".
     /// </summary>
     ServiceDiscovery = 1 << 2,
 

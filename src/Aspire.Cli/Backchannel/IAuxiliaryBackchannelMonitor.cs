@@ -9,9 +9,16 @@ namespace Aspire.Cli.Backchannel;
 internal interface IAuxiliaryBackchannelMonitor
 {
     /// <summary>
-    /// Gets the collection of active AppHost connections.
+    /// Gets all active AppHost connections.
     /// </summary>
-    IReadOnlyDictionary<string, AppHostAuxiliaryBackchannel> Connections { get; }
+    IEnumerable<IAppHostAuxiliaryBackchannel> Connections { get; }
+
+    /// <summary>
+    /// Gets connections for a specific AppHost hash (prefix).
+    /// </summary>
+    /// <param name="hash">The AppHost hash.</param>
+    /// <returns>All connections for the given hash, or empty if none.</returns>
+    IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash);
 
     /// <summary>
     /// Gets or sets the path to the selected AppHost. When set, this AppHost will be used for MCP operations.
@@ -22,12 +29,31 @@ internal interface IAuxiliaryBackchannelMonitor
     /// Gets the currently selected AppHost connection based on the selection logic.
     /// Returns the explicitly selected AppHost, or the single in-scope AppHost, or null if none available.
     /// </summary>
-    AppHostAuxiliaryBackchannel? SelectedConnection { get; }
+    IAppHostAuxiliaryBackchannel? SelectedConnection { get; }
+
+    /// <summary>
+    /// Gets the AppHost path of the currently resolved connection, or <c>null</c> if no connection is available.
+    /// </summary>
+    string? ResolvedAppHostPath => SelectedConnection?.AppHostInfo?.AppHostPath;
 
     /// <summary>
     /// Gets all connections that are within the scope of the specified working directory.
     /// </summary>
     /// <param name="workingDirectory">The working directory to check against.</param>
     /// <returns>A list of in-scope connections.</returns>
-    IReadOnlyList<AppHostAuxiliaryBackchannel> GetConnectionsForWorkingDirectory(DirectoryInfo workingDirectory);
+    IReadOnlyList<IAppHostAuxiliaryBackchannel> GetConnectionsForWorkingDirectory(DirectoryInfo workingDirectory);
+
+    /// <summary>
+    /// Triggers an immediate scan of the backchannels directory for new/removed AppHosts.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A task representing the scan operation.</returns>
+    Task ScanAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Watches for AppHost connection changes and yields the full active connection set after each change.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The active connections after the initial scan and after each observed change.</returns>
+    IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync(CancellationToken cancellationToken = default);
 }

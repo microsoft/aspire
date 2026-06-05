@@ -161,6 +161,20 @@ Aspire.MongoDB.Driver:
 - Metric names:
   - none
 
+Aspire.MongoDB.EntityFrameworkCore:
+- Log categories:
+  - "Microsoft.EntityFrameworkCore.ChangeTracking"
+  - "Microsoft.EntityFrameworkCore.Database.Command"
+  - "Microsoft.EntityFrameworkCore.Infrastructure"
+  - "Microsoft.EntityFrameworkCore.Model"
+  - "Microsoft.EntityFrameworkCore.Model.Validation"
+  - "Microsoft.EntityFrameworkCore.Query"
+  - "Microsoft.EntityFrameworkCore.Update"
+- Activity source names:
+  - "MongoDB.Driver.Core.Extensions.DiagnosticSources"
+- Metric names:
+  - none
+
 Aspire.Microsoft.EntityFrameworkCore.Cosmos:
 - Log categories:
   - "Azure-Cosmos-Operation-Request-Diagnostics"
@@ -348,7 +362,9 @@ Aspire.RabbitMQ.Client:
 - Log categories:
   - "RabbitMQ.Client"
 - Activity source names:
-  - "Aspire.RabbitMQ.Client"
+  - "Aspire.RabbitMQ.Client" (connection establishment and retry attempts)
+  - "RabbitMQ.Client.Publisher" (message publishing operations; RabbitMQ.Client v7+ only)
+  - "RabbitMQ.Client.Subscriber" (message consumption operations; RabbitMQ.Client v7+ only)
 - Metric names:
   - none (currently not supported by RabbitMQ.Client library)
 

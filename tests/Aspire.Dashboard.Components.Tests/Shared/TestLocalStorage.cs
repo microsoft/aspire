@@ -9,9 +9,15 @@ public sealed class TestLocalStorage : ILocalStorage
 {
     public Func<string, (bool Success, object? Value)>? OnGetUnprotectedAsync { get; set; }
     public Action<string, object?>? OnSetUnprotectedAsync { get; set; }
+    public Func<string, (bool Success, object? Value)>? OnGetAsync { get; set; }
 
     public Task<StorageResult<T>> GetAsync<T>(string key)
     {
+        if (OnGetAsync is { } callback)
+        {
+            var (success, value) = callback(key);
+            return Task.FromResult(new StorageResult<T>(success: success, value: (T)(value ?? default(T))!));
+        }
         return Task.FromResult(new StorageResult<T>(success: false, value: default));
     }
 

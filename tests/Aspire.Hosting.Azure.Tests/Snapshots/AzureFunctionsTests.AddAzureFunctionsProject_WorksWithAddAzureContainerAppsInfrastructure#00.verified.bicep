@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param env_outputs_azure_container_apps_environment_default_domain string
@@ -19,9 +19,11 @@ param funcstorage634f8_outputs_queueendpoint string
 
 param funcstorage634f8_outputs_tableendpoint string
 
+param funcstorage634f8_outputs_datalakeendpoint string
+
 param funcapp_identity_outputs_clientid string
 
-resource funcapp 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource funcapp 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'funcapp'
   location: location
   properties: {
@@ -84,6 +86,10 @@ resource funcapp 'Microsoft.App/containerApps@2025-02-02-preview' = {
               value: funcstorage634f8_outputs_tableendpoint
             }
             {
+              name: 'AzureWebJobsStorage__dataLakeServiceUri'
+              value: funcstorage634f8_outputs_datalakeendpoint
+            }
+            {
               name: 'Aspire__Azure__Storage__Blobs__AzureWebJobsStorage__ServiceUri'
               value: funcstorage634f8_outputs_blobendpoint
             }
@@ -94,6 +100,10 @@ resource funcapp 'Microsoft.App/containerApps@2025-02-02-preview' = {
             {
               name: 'Aspire__Azure__Data__Tables__AzureWebJobsStorage__ServiceUri'
               value: funcstorage634f8_outputs_tableendpoint
+            }
+            {
+              name: 'Aspire__Azure__Storage__Files__DataLake__AzureWebJobsStorage__ServiceUri'
+              value: funcstorage634f8_outputs_datalakeendpoint
             }
             {
               name: 'AZURE_CLIENT_ID'

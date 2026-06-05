@@ -9,6 +9,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -190,10 +191,31 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
                              .WithReference(externalService);
 
         // Should throw when trying to evaluate environment variables with invalid parameter value
-        await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
         {
             await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
         });
+
+        Assert.Equal("The URL parameter 'nuget-url' for source resource 'nuget' is invalid while configuring target resource 'project': The URL for the external service must be an absolute URI.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ExternalServiceEnvironmentWithInvalidParameterThrowsInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["Parameters:nuget-url"] = "invalid-url";
+
+        var urlParam = builder.AddParameter("nuget-url");
+        var externalService = builder.AddExternalService("nuget", urlParam);
+        var project = builder.AddProject<TestProject>("project")
+                             .WithEnvironment("NUGET_URL", externalService);
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+        });
+
+        Assert.Equal("The URL parameter 'nuget-url' for source resource 'nuget' is invalid while configuring target resource 'project': The URL for the external service must be an absolute URI.", ex.Message);
     }
 
     [Fact]
@@ -325,8 +347,8 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
         // Verify the resource is in the correct state
         Assert.Equal(KnownResourceStates.FailedToStart, resourceEvent.Snapshot.State?.Text);
 
+        await appStartTask; // Ensure start completes before stopping
         await app.StopAsync();
-        await appStartTask; // Ensure start completes
     }
 
     [Fact]
@@ -352,8 +374,8 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
         // Verify the resource is in the correct state
         Assert.Equal(KnownResourceStates.FailedToStart, resourceEvent.Snapshot.State?.Text);
 
+        await appStartTask; // Ensure start completes before stopping
         await app.StopAsync();
-        await appStartTask; // Ensure start completes
     }
 
     [Fact]
@@ -379,8 +401,8 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
         // Verify the resource is in the correct state
         Assert.Equal(KnownResourceStates.Running, resourceEvent.Snapshot.State?.Text);
 
+        await appStartTask; // Ensure start completes before stopping
         await app.StopAsync();
-        await appStartTask; // Ensure start completes
     }
 
     [Fact]
@@ -551,7 +573,37 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
 
         var uri = new Uri("https://api.example.com/service");
         var ex = Assert.Throws<InvalidOperationException>(() => project.WithReference("api", uri));
+        Assert.Contains("reference 'api'", ex.Message);
+        Assert.Contains("target resource 'project'", ex.Message);
         Assert.Contains("absolute path must end with '/'", ex.Message);
+    }
+
+    [Fact]
+    public void WithReferenceThrowsForUriWithFragment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var project = builder.AddProject<TestProject>("project");
+
+        var uri = new Uri("https://api.example.com/service/#fragment");
+        var ex = Assert.Throws<InvalidOperationException>(() => project.WithReference("api", uri));
+        Assert.Contains("reference 'api'", ex.Message);
+        Assert.Contains("target resource 'project'", ex.Message);
+        Assert.Contains("fragment", ex.Message);
+    }
+
+    [Fact]
+    public void WithReferenceThrowsForUriWithQueryString()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var project = builder.AddProject<TestProject>("project");
+
+        var uri = new Uri("https://api.example.com/service/?query=1");
+        var ex = Assert.Throws<InvalidOperationException>(() => project.WithReference("api", uri));
+        Assert.Contains("reference 'api'", ex.Message);
+        Assert.Contains("target resource 'project'", ex.Message);
+        Assert.Contains("query string", ex.Message);
     }
 
     [Fact]

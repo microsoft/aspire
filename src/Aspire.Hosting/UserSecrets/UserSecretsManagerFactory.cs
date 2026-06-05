@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Pipelines.Internal;
+using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
 
@@ -89,6 +90,8 @@ internal sealed class UserSecretsManagerFactory
             _fileSystemService = fileSystemService;
         }
 
+        public bool IsAvailable => true;
+
         public string FilePath { get; }
 
         public bool TrySetSecret(string name, string value)
@@ -99,6 +102,27 @@ internal sealed class UserSecretsManagerFactory
                 try
                 {
                     SetSecretCore(name, value);
+                    return true;
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public bool TryDeleteSecret(string name)
+        {
+            try
+            {
+                _semaphore.Wait();
+                try
+                {
+                    DeleteSecretCore(name);
                     return true;
                 }
                 finally
@@ -160,6 +184,16 @@ internal sealed class UserSecretsManagerFactory
             var secrets = Load();
             secrets[name] = value;
             Save(secrets);
+        }
+
+        private void DeleteSecretCore(string name)
+        {
+            var secrets = Load();
+            if (secrets.Remove(name))
+            {
+                EnsureUserSecretsDirectory();
+                Save(secrets);
+            }
         }
 
         private Dictionary<string, string?> Load()

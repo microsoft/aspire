@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.GitHub.Models;
@@ -8,6 +9,7 @@ namespace Aspire.Hosting.GitHub.Models;
 /// <summary>
 /// Represents a GitHub Model resource.
 /// </summary>
+[DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Model = {Model}")]
 public class GitHubModelResource : Resource, IResourceWithConnectionString
 {
     internal ParameterResource DefaultKeyParameter { get; set; }

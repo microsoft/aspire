@@ -42,12 +42,12 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://learn.microsoft.com/dotnet/aspire/caching/stackexchange-redis-component
-* https://learn.microsoft.com/dotnet/aspire/caching/stackexchange-redis-output-caching-component
-* https://learn.microsoft.com/dotnet/aspire/caching/stackexchange-redis-distributed-caching-component
+* https://aspire.dev/integrations/caching/redis/
+* https://aspire.dev/integrations/caching/redis-output/
+* https://aspire.dev/integrations/caching/redis-distributed/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Redis is a registered trademark of Redis Ltd. Any rights therein are reserved to Redis Ltd._

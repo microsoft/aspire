@@ -22,7 +22,7 @@ public class QuarantineScriptTests
         }
         """,
         "N1.N2.C.M",
-        "https://github.com/dotnet/aspire/issues/1")]
+        "https://github.com/microsoft/aspire/issues/1")]
     [InlineData(
         """
         namespace N1.N2
@@ -37,7 +37,7 @@ public class QuarantineScriptTests
         }
         """,
         "N1.N2.Outer+Inner.M",
-        "https://github.com/dotnet/aspire/issues/2")]
+        "https://github.com/microsoft/aspire/issues/2")]
     public void Quarantine_AddsAttribute_WhenMissing(string code, string fullName, string issue)
     {
         var updated = Quarantine(fullName, issue, code);
@@ -50,15 +50,15 @@ public class QuarantineScriptTests
     [Fact]
     public void Quarantine_IsIdempotent_DoesNotDuplicateOrChangeReason()
     {
-        const string originalUrl = "https://github.com/dotnet/aspire/issues/100";
-        const string newUrl = "https://github.com/dotnet/aspire/issues/200";
+        const string originalUrl = "https://github.com/microsoft/aspire/issues/100";
+        const string newUrl = "https://github.com/microsoft/aspire/issues/200";
         const string code = """
         namespace N;
         using Xunit;
         using Aspire.TestUtilities;
         public class C {
             [Fact]
-            [QuarantinedTest("https://github.com/dotnet/aspire/issues/100")]
+            [QuarantinedTest("https://github.com/microsoft/aspire/issues/100")]
             public void M() { }
         }
         """;
@@ -79,7 +79,7 @@ public class QuarantineScriptTests
         using Aspire.TestUtilities;
         public class C {
             [Fact]
-            [QuarantinedTest("https://github.com/dotnet/aspire/issues/3")]
+            [QuarantinedTest("https://github.com/microsoft/aspire/issues/3")]
             public void M() { }
         }
         """;
@@ -97,7 +97,7 @@ public class QuarantineScriptTests
 
     [Theory]
     [InlineData("http://example.com/issue/1", true)]
-    [InlineData("https://github.com/dotnet/aspire/issues/123", true)]
+    [InlineData("https://github.com/microsoft/aspire/issues/123", true)]
     [InlineData("ftp://example.com/issue/1", false)]
     [InlineData("www.github.com/issue/1", false)]
     [InlineData("/relative/path", false)]
@@ -117,9 +117,9 @@ public class QuarantineScriptTests
         public class C { [Fact] public void M() { } }
         """;
 
-        var updated = Quarantine("N.C.M", "https://github.com/dotnet/aspire/issues/500", code);
+        var updated = Quarantine("N.C.M", "https://github.com/microsoft/aspire/issues/500", code);
         Assert.Contains("using Aspire.TestUtilities;", updated);
-        Assert.Contains("[QuarantinedTest(\"https://github.com/dotnet/aspire/issues/500\")]", updated);
+        Assert.Contains("[QuarantinedTest(\"https://github.com/microsoft/aspire/issues/500\")]", updated);
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public class QuarantineScriptTests
         using Aspire.TestUtilities;
         public class C {
             [Fact]
-            [QuarantinedTest("https://github.com/dotnet/aspire/issues/3")]
+            [QuarantinedTest("https://github.com/microsoft/aspire/issues/3")]
             public void M() { }
         }
         """;
@@ -162,8 +162,8 @@ public class QuarantineScriptTests
         namespace N2 { public class B { [Fact] public void M() { } } }
         """;
 
-        var updated1 = Quarantine("N1.A.M", "https://github.com/dotnet/aspire/issues/10", code);
-        Assert.Contains("[QuarantinedTest(\"https://github.com/dotnet/aspire/issues/10\")]", updated1);
+        var updated1 = Quarantine("N1.A.M", "https://github.com/microsoft/aspire/issues/10", code);
+        Assert.Contains("[QuarantinedTest(\"https://github.com/microsoft/aspire/issues/10\")]", updated1);
         // Ensure only the N1.A.M got the attribute, not N2.B.M
         var tree = CSharpSyntaxTree.ParseText(updated1);
         var root = tree.GetCompilationUnitRoot();
@@ -186,15 +186,15 @@ public class QuarantineScriptTests
         }
         """;
 
-        var updated1 = Quarantine("N.C.M1", "https://github.com/dotnet/aspire/issues/11", code);
-        var updated2 = Quarantine("N.C.M2", "https://github.com/dotnet/aspire/issues/11", updated1);
+        var updated1 = Quarantine("N.C.M1", "https://github.com/microsoft/aspire/issues/11", code);
+        var updated2 = Quarantine("N.C.M2", "https://github.com/microsoft/aspire/issues/11", updated1);
         var norm = NormalizeNewlines(updated2);
     // Only one using should be present
         var count = Regex.Matches(norm, "using Aspire.TestUtilities;").Count;
         Assert.Equal(1, count);
     // Both methods should be quarantined (ignore indentation)
-    var rx1 = new Regex(@"\[QuarantinedTest\(""https://github.com/dotnet/aspire/issues/11""\)\]\n\s*public void M1\(\)", RegexOptions.Multiline);
-    var rx2 = new Regex(@"\[QuarantinedTest\(""https://github.com/dotnet/aspire/issues/11""\)\]\n\s*public void M2\(\)", RegexOptions.Multiline);
+    var rx1 = new Regex(@"\[QuarantinedTest\(""https://github.com/microsoft/aspire/issues/11""\)\]\n\s*public void M1\(\)", RegexOptions.Multiline);
+    var rx2 = new Regex(@"\[QuarantinedTest\(""https://github.com/microsoft/aspire/issues/11""\)\]\n\s*public void M2\(\)", RegexOptions.Multiline);
     Assert.True(rx1.IsMatch(norm), $"Expected to match M1 pattern, but did not.\nPattern: {rx1}\nText:\n{norm}");
     Assert.True(rx2.IsMatch(norm), $"Expected to match M2 pattern, but did not.\nPattern: {rx2}\nText:\n{norm}");
     }
@@ -211,12 +211,12 @@ public class QuarantineScriptTests
         }
         """;
 
-        var updated = Quarantine("N.C.M", "https://github.com/dotnet/aspire/issues/99", code);
+        var updated = Quarantine("N.C.M", "https://github.com/microsoft/aspire/issues/99", code);
         var norm = NormalizeNewlines(updated);
     // Ensure there is no blank line between [Fact] and [QuarantinedTest]
     Assert.DoesNotMatch(new Regex(@"\[Fact\]\n\s*\n\s*\[QuarantinedTest", RegexOptions.Multiline), norm);
     // But [Fact] followed by [QuarantinedTest(...)] on the next line should exist (ignore indentation)
-    Assert.Matches(new Regex(@"\[Fact\]\n\s+\[QuarantinedTest\(""https://github.com/dotnet/aspire/issues/99""\)\]", RegexOptions.Multiline), norm);
+    Assert.Matches(new Regex(@"\[Fact\]\n\s+\[QuarantinedTest\(""https://github.com/microsoft/aspire/issues/99""\)\]", RegexOptions.Multiline), norm);
     }
 
     private static string Quarantine(string fullMethodName, string issueUrl, string code)

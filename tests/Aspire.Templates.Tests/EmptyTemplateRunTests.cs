@@ -17,8 +17,8 @@ public class EmptyTemplateRunTests : TemplateTestsBase, IClassFixture<EmptyTempl
     }
 
     [Fact]
-    [RequiresPlaywright]
-    [RequiresSSLCertificate("Needed for dashboard access")]
+    [RequiresFeature(TestFeature.Playwright)]
+    [RequiresFeature(TestFeature.SSLCertificate)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResourcesShowUpOnDashboad()
     {

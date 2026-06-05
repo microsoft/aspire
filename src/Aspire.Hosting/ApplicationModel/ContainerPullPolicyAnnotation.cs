@@ -22,6 +22,10 @@ public enum ImagePullPolicy
     /// Pull the image only if it does not already exist.
     /// </summary>
     Missing,
+    /// <summary>
+    /// Never pull the image from the registry even if it is missing locally.
+    /// </summary>
+    Never,
 }
 
 /// <summary>

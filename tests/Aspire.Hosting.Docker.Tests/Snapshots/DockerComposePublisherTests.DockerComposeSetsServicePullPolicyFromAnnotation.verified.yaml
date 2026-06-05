@@ -1,0 +1,9 @@
+﻿services:
+  api:
+    image: "my-api:latest"
+    pull_policy: "always"
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"

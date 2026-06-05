@@ -127,11 +127,11 @@ resource apiservice 'Microsoft.App/containerApps@2025-02-02-preview' = {
             }
             {
               name: 'FUNCAPP_HTTP'
-              value: 'http://funcapp.${env_outputs_azure_container_apps_environment_default_domain}'
+              value: 'https://funcapp.${env_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'services__funcapp__http__0'
-              value: 'http://funcapp.${env_outputs_azure_container_apps_environment_default_domain}'
+              value: 'https://funcapp.${env_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'FUNCAPP_HTTPS'

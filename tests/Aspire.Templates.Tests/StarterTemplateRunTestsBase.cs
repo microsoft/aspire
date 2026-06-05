@@ -23,7 +23,7 @@ public abstract class StarterTemplateRunTestsBase<T> : TemplateTestsBase, IClass
     }
 
     [Fact]
-    [RequiresPlaywright]
+    [RequiresFeature(TestFeature.Playwright)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResourcesShowUpOnDashboard()
     {
@@ -38,7 +38,7 @@ public abstract class StarterTemplateRunTestsBase<T> : TemplateTestsBase, IClass
     [Theory]
     [InlineData("http://")]
     [InlineData("https://")]
-    [RequiresPlaywright]
+    [RequiresFeature(TestFeature.Playwright)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task WebFrontendWorks(string urlPrefix)
     {
@@ -58,7 +58,7 @@ public abstract class StarterTemplateRunTestsBase<T> : TemplateTestsBase, IClass
     [Theory]
     [InlineData("http://")]
     [InlineData("https://")]
-    [RequiresPlaywright]
+    [RequiresFeature(TestFeature.Playwright)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     [Trait("category", "basic-build")]
     public async Task ApiServiceWorks(string urlPrefix)

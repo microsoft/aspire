@@ -52,11 +52,6 @@
         <target state="translated">Não há suporte para a versão da CLI {0} do túnel do desenvolvedor instalada. A versão {1} ou superior é necessária.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InstallationInstructions">
-        <source>Installation instructions</source>
-        <target state="translated">Instruções de instalação</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LoginWithGitHub">
         <source>Login with GitHub</source>
         <target state="translated">Fazer logon com o GitHub</target>
@@ -65,21 +60,6 @@
       <trans-unit id="LoginWithMicrosoft">
         <source>Login with Microsoft</source>
         <target state="translated">Fazer logon com a Microsoft</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotification">
-        <source>Required command '{0}' was not found on PATH or at a specified location.</source>
-        <target state="translated">O comando necessário "{0}" não foi encontrado em PATH ou em um local especificado.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithLink">
-        <source>Required command '{0}' was not found. See installation instructions for more details.</source>
-        <target state="translated">O comando necessário "{0}" não foi encontrado. Consulte as instruções de instalação para obter mais detalhes.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithValidation">
-        <source>{0} See installation instructions for more details.</source>
-        <target state="translated">{0} Consulte as instruções de instalação para obter mais detalhes.</target>
         <note />
       </trans-unit>
     </body>

@@ -9,6 +9,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// A URL that should be displayed for a resource.
 /// </summary>
 [DebuggerDisplay("Url = {Url}, DisplayText = {DisplayText}")]
+[AspireDto]
 public sealed class ResourceUrlAnnotation : IResourceAnnotation
 {
     /// <summary>

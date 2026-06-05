@@ -15,6 +15,9 @@ public partial class GenAIItemTitle
     [Parameter, EditorRequired]
     public required string ResourceName { get; set; }
 
+    [Parameter]
+    public bool ShowIcon { get; set; } = true;
+
     [Inject]
     public required IStringLocalizer<Resources.Dialogs> Loc { get; init; }
 

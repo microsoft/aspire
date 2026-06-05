@@ -16,6 +16,11 @@ public class YarpResource : ContainerResource, IResourceWithServiceDiscovery, IC
 
     internal List<YarpCluster> Clusters { get; } = [];
 
+    /// <summary>
+    /// Gets or sets the HTTPS host port for the YARP resource.
+    /// </summary>
+    internal int? HostHttpsPort { get; set; }
+
     /// <param name="name">The name of the resource.</param>
     public YarpResource(string name) : base(name)
     {

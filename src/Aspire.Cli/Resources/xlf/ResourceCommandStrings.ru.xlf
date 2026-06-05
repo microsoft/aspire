@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ru" original="../ResourceCommandStrings.resx">
+    <body>
+      <trans-unit id="ArgumentRequired">
+        <source>The '{0}' argument is required.</source>
+        <target state="new">The '{0}' argument is required.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AvailableResourceCommands">
+        <source>Available resource commands:</source>
+        <target state="new">Available resource commands:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandDescription">
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Выполнить команду на ресурсе.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandNameArgumentDescription">
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Имя команды, которую нужно выполнить.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandResourceArgumentDescription">
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">Имя целевого ресурса, на котором будет выполняться команда.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandSpecificHelpAllowedValues">
+        <source>Allowed values: {0}.</source>
+        <target state="new">Allowed values: {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandSpecificHelpCommandOptions">
+        <source>Command options:</source>
+        <target state="new">Command options:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandSpecificHelpDefaultValue">
+        <source>Default: {0}.</source>
+        <target state="new">Default: {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandSpecificHelpDelimiterHint">
+        <source>Use `-- --{0}{1}` to pass this command option.</source>
+        <target state="new">Use `-- --{0}{1}` to pass this command option.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandSpecificHelpRequired">
+        <source>Required.</source>
+        <target state="new">Required.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandSpecificHelpUsageSyntax">
+        <source>aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</source>
+        <target state="new">aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandSpecificHelpValuePlaceholder">
+        <source>value</source>
+        <target state="new">value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectAppHostAction">
+        <source>connect to</source>
+        <target state="translated">подключить к</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

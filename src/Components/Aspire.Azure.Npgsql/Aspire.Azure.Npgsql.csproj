@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Include="..\Common\ManagedIdentityTokenCredentialHelpers.cs" Link="ManagedIdentityTokenCredentialHelpers.cs" />
+    <Compile Include="..\..\Shared\AzureCredentialHelper.cs" Link="AzureCredentialHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>

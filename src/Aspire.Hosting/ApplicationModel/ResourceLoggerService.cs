@@ -6,7 +6,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using Aspire.Hosting.ConsoleLogs;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -14,12 +14,14 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// A service that provides loggers for resources to write to.
 /// </summary>
-public class ResourceLoggerService
+public class ResourceLoggerService : IDisposable
 {
     // Internal for testing.
     internal TimeProvider TimeProvider { get; set; } = TimeProvider.System;
 
     private readonly ConcurrentDictionary<string, ResourceLoggerState> _loggers = new();
+    private readonly CancellationTokenSource _disposing = new();
+    private int _disposed;
     private IConsoleLogsService _consoleLogsService = new FakeConsoleLogsService();
     private Action<(string, ResourceLoggerState)>? _loggerAdded;
     private event Action<(string, ResourceLoggerState)> LoggerAdded
@@ -221,22 +223,29 @@ public class ResourceLoggerService
     public async IAsyncEnumerable<LogSubscriber> WatchAnySubscribersAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var channel = Channel.CreateUnbounded<LogSubscriber>();
+        var subscribedStates = new List<(ResourceLoggerState State, Action<bool> Handler)>();
+
+        // Create a linked token that cancels when either the service is disposing or the caller cancels.
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_disposing.Token, cancellationToken);
 
         void OnLoggerAdded((string Name, ResourceLoggerState State) loggerItem)
         {
             var (name, state) = loggerItem;
 
-            state.OnSubscribersChanged += (hasSubscribers) =>
+            Action<bool> handler = (hasSubscribers) =>
             {
                 channel.Writer.TryWrite(new(name, hasSubscribers));
             };
-        }
 
-        LoggerAdded += OnLoggerAdded;
+            state.OnSubscribersChanged += handler;
+            subscribedStates.Add((state, handler));
+        }
 
         try
         {
-            await foreach (var entry in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            LoggerAdded += OnLoggerAdded;
+
+            await foreach (var entry in channel.Reader.ReadAllAsync(linkedCts.Token).ConfigureAwait(false))
             {
                 yield return entry;
             }
@@ -244,6 +253,13 @@ public class ResourceLoggerService
         finally
         {
             LoggerAdded -= OnLoggerAdded;
+
+            // Unsubscribe from all OnSubscribersChanged events to prevent memory leaks
+            foreach (var (state, handler) in subscribedStates)
+            {
+                state.OnSubscribersChanged -= handler;
+            }
+
             channel.Writer.Complete();
         }
     }
@@ -613,6 +629,27 @@ public class ResourceLoggerService
     internal void SetConsoleLogsService(IConsoleLogsService consoleLogsService)
     {
         _consoleLogsService = consoleLogsService;
+    }
+
+    /// <summary>
+    /// Disposes the service and completes all log streams.
+    /// </summary>
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        // Complete all loggers to signal that no more logs will be written.
+        foreach (var logger in _loggers)
+        {
+            logger.Value.Complete();
+        }
+
+        // Cancel but don't dispose - other methods may still be accessing _disposing.Token
+        // The CTS will be garbage collected with the service.
+        _disposing.Cancel();
     }
 
     private sealed class FakeConsoleLogsService : IConsoleLogsService

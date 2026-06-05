@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Aspire.Templates.Tests;
 
-[RequiresSSLCertificate]
+[RequiresFeature(TestFeature.SSLCertificate)]
 public class StarterTemplateRunTests_PreviousTFM : StarterTemplateRunTestsBase<StarterTemplateFixture_PreviousTFM>
 {
     public StarterTemplateRunTests_PreviousTFM(StarterTemplateFixture_PreviousTFM fixture, ITestOutputHelper testOutput)

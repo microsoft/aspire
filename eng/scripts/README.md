@@ -4,6 +4,8 @@ This directory contains scripts to download and install the Aspire CLI for diffe
 
 ## Scripts
 
+### CLI installers
+
 - **`get-aspire-cli.sh`** - Bash script for Unix-like systems (Linux, macOS)
 - **`get-aspire-cli.ps1`** - PowerShell script for cross-platform use (Windows, Linux, macOS)
 
@@ -167,21 +169,48 @@ Additional scripts exist to fetch CLI and NuGet artifacts from a pull request bu
 - `get-aspire-cli-pr.sh`
 - `get-aspire-cli-pr.ps1`
 
-Quick fetch (Bash):
+The PR scripts support four install modes:
+
+- **Archive mode** (default) installs the PR's native CLI archive under a PR-specific dogfood path and copies PR packages into `~/.aspire/hives/pr-<PR_NUMBER>/packages`.
+- **Tool mode** installs the PR's `Aspire.Cli` package as a .NET tool from the RID-specific NuGet artifact and also populates the same `~/.aspire/hives/pr-<PR_NUMBER>/packages` hive. Use this when you also want to dogfood the dotnet-tool packaging or acquisition route.
+- **WinGet mode** installs from the PR's generated WinGet manifest artifact and local Windows native archive artifacts.
+- **Homebrew mode** installs from the PR's generated Homebrew cask artifact and local macOS native archive artifacts.
+
+Quick archive-mode fetch (Bash):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER>
+curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER>
 ```
 
-Quick fetch (PowerShell):
+Quick archive-mode fetch (PowerShell):
 ```powershell
-iex "& { $(irm https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>"
+iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>"
+```
+
+Quick tool-mode fetch (Bash):
+```bash
+curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER> --install-mode tool
+```
+
+Quick tool-mode fetch (PowerShell):
+```powershell
+iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER> -InstallMode Tool"
+```
+
+Quick WinGet-mode fetch (Windows):
+```powershell
+iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER> -InstallMode WinGet"
+```
+
+Quick Homebrew-mode fetch (macOS):
+```bash
+curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER> --install-mode homebrew
 ```
 
 NuGet hive path pattern: `~/.aspire/hives/pr-<PR_NUMBER>/packages`
 
 ### Repository Override
 
-You can point the PR artifact retrieval scripts at a fork by setting the `ASPIRE_REPO` environment variable to `owner/name` before invoking the script (defaults to `dotnet/aspire`).
+You can point the PR artifact retrieval scripts at a fork by setting the `ASPIRE_REPO` environment variable to `owner/name` before invoking the script (defaults to `microsoft/aspire`).
 
 Examples:
 
@@ -194,3 +223,30 @@ export ASPIRE_REPO=myfork/aspire
 $env:ASPIRE_REPO = 'myfork/aspire'
 ./get-aspire-cli-pr.ps1 1234
 ```
+
+## Self-Extracting Binary
+
+The Aspire CLI can also be distributed as a self-extracting binary that embeds the full bundle
+payload inside the native AOT executable. This is the simplest installation method:
+
+```bash
+# Linux/macOS - download and extract
+mkdir -p ~/.aspire/bin
+curl -fsSL <url>/aspire -o ~/.aspire/bin/aspire
+chmod +x ~/.aspire/bin/aspire
+~/.aspire/bin/aspire setup
+
+# Add to PATH
+export PATH="$HOME/.aspire/bin:$PATH"
+```
+
+```powershell
+# Windows - download and extract
+New-Item -ItemType Directory -Force -Path "$env:LOCALAPPDATA\Aspire\bin"
+Invoke-WebRequest -Uri <url>/aspire.exe -OutFile "$env:LOCALAPPDATA\Aspire\bin\aspire.exe"
+& "$env:LOCALAPPDATA\Aspire\bin\aspire.exe" setup
+```
+
+The `aspire setup` command extracts the embedded payload to the parent directory of the CLI binary.
+Alternatively, extraction happens lazily on the first command that needs the bundle layout
+(e.g., `aspire run` with a polyglot project).

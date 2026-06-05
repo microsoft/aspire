@@ -6,7 +6,6 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Controls.PropertyValues;
 
@@ -22,7 +21,7 @@ public partial class SpanIdButtonValue
     public required string TraceId { get; set; }
 
     [Inject]
-    public required IDialogService DialogService { get; init; }
+    public required DashboardDialogService DialogService { get; init; }
 
     [Inject]
     public required TelemetryRepository TelemetryRepository { get; init; }

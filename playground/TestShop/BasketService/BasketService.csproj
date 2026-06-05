@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

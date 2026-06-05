@@ -7,6 +7,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// A resource that represents a MongoDB container.
 /// </summary>
 /// <param name="name">The name of the resource.</param>
+[AspireExport(ExposeProperties = true)]
 public class MongoDBServerResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
     internal const string PrimaryEndpointName = "tcp";
@@ -100,9 +101,14 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
 
         builder.Append($"{PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}");
 
+        if (databaseName is not null || PasswordParameter is not null)
+        {
+            builder.AppendLiteral("/");
+        }
+
         if (databaseName is not null)
         {
-            builder.Append($"/{databaseName:uri}");
+            builder.Append($"{databaseName:uri}");
         }
 
         if (PasswordParameter is not null)

@@ -25,9 +25,9 @@ builder.Build().Run();
 ```
 
 ## Additional documentation
-https://github.com/dotnet/aspire-samples/tree/main/samples/aspire-with-javascript
-https://github.com/dotnet/aspire-samples/tree/main/samples/aspire-with-node
+https://github.com/microsoft/aspire-samples/tree/main/samples/aspire-with-javascript
+https://github.com/microsoft/aspire-samples/tree/main/samples/aspire-with-node
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

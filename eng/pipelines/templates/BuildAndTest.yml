@@ -16,9 +16,6 @@ parameters:
     type: string
   - name: dotnetScript
     type: string
-  - name: targetRids
-    type: object
-    default: ''
   - name: runHelixTests
     type: boolean
     default: false
@@ -28,9 +25,15 @@ parameters:
   - name: dockerCliVersion
     type: string
     default: '28.0.0'
+  - name: packageVSCodeExtensionAsPreRelease
+    type: boolean
+    default: false
 
 steps:
   # Internal pipeline: Build with pack+sign
+  # Native archives are produced by the build_sign_native stage for all platforms
+  # (macOS, Linux, Windows). This job builds all managed packages, signs them,
+  # and publishes.
   - ${{ if ne(parameters.runAsPublic, 'true') }}:
     - script: ${{ parameters.buildScript }}
               -restore -build
@@ -41,10 +44,154 @@ steps:
               /bl:${{ parameters.repoLogPath }}/build.binlog
               $(_OfficialBuildIdArgs)
               $(_InternalBuildArgs)
-              /p:TargetRids=${{ join(':', parameters.targetRids) }}
+              /p:SkipNativeBuild=true
               /p:SkipTestProjects=true
               /p:BuildExtension=true
+              /p:PackageVSCodeExtensionAsPreRelease=${{ lower(eq(parameters.packageVSCodeExtensionAsPreRelease, true)) }}
       displayName: 🟣Build
+
+    - pwsh: |
+        $ErrorActionPreference = 'Stop'
+        $shippingPackagesDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping'
+
+        if (!(Test-Path $shippingPackagesDir)) {
+          Write-Error "Shipping packages directory not found: $shippingPackagesDir"
+          exit 1
+        }
+
+        $npmPackages = @(Get-ChildItem -Path $shippingPackagesDir -Filter "microsoft-aspire-cli*.tgz" -Recurse -File)
+        if ($npmPackages.Count -eq 0) {
+          Write-Error "No Aspire CLI npm packages were found under '$shippingPackagesDir'."
+          exit 1
+        }
+
+        $missingSignatures = @()
+        $invalidSignatures = @()
+        foreach ($package in $npmPackages) {
+          $signaturePath = "$($package.FullName).sig"
+          if (!(Test-Path $signaturePath)) {
+            $missingSignatures += $signaturePath
+            continue
+          }
+
+          # Content sanity check: catch the most likely silent failure mode
+          # where Arcade/ESRP signing emits the sidecar file but the content
+          # is empty or garbage. A real PGP signature is hundreds of bytes
+          # and starts with either the ASCII-armored header
+          # `-----BEGIN PGP SIGNATURE-----` (RFC 9580 §6) or an OpenPGP
+          # binary signature packet (tag 2: old-format 0x88..0x8B or
+          # new-format 0xC2, RFC 9580 §4.3 / §5.2).
+          $signatureFile = Get-Item -LiteralPath $signaturePath
+          if ($signatureFile.Length -lt 64) {
+            $invalidSignatures += "$signaturePath (only $($signatureFile.Length) bytes)"
+            continue
+          }
+          $bytes = [System.IO.File]::ReadAllBytes($signaturePath)[0..63]
+          $asciiPreview = [System.Text.Encoding]::ASCII.GetString($bytes)
+          $looksArmored = $asciiPreview.Contains('-----BEGIN PGP SIGNATURE-----')
+          $firstByte = $bytes[0]
+          $looksBinarySignaturePacket = ($firstByte -ge 0x88 -and $firstByte -le 0x8B) -or $firstByte -eq 0xC2
+          if (-not $looksArmored -and -not $looksBinarySignaturePacket) {
+            $hexPrefix = ($bytes[0..15] | ForEach-Object { '{0:x2}' -f $_ }) -join ' '
+            $invalidSignatures += "$signaturePath (no PGP signature marker; first 16 bytes: $hexPrefix)"
+            continue
+          }
+
+          Write-Host "Found npm package signature sidecar: $([System.IO.Path]::GetFileName($signaturePath))"
+        }
+
+        if ($missingSignatures.Count -gt 0) {
+          Write-Error "Missing detached signature sidecar(s) for npm package(s): $($missingSignatures -join ', ')"
+          exit 1
+        }
+
+        if ($invalidSignatures.Count -gt 0) {
+          Write-Error "Detached signature sidecar(s) failed content sanity check: $($invalidSignatures -join '; ')"
+          exit 1
+        }
+
+        Write-Host "Validated $($npmPackages.Count) Aspire CLI npm package signature sidecar(s)."
+      displayName: 🟣Validate npm package signatures
+      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
+    # Log MicroBuild environment for debugging
+    # MicroBuildOutputFolderOverride is set by the MicroBuildSigningPlugin task in eng/common/templates-official/job/onelocbuild.yml
+    # which is installed via the Arcade SDK's install-microbuild.yml template that runs before our build steps.
+    # This environment variable points to where MicroBuild plugins are installed on the build agent.
+    - pwsh: |
+        Write-Host "=== MicroBuild Environment Check ==="
+        Write-Host "MicroBuildOutputFolderOverride: $env:MicroBuildOutputFolderOverride"
+        if ($env:MicroBuildOutputFolderOverride) {
+          $pluginPath = Join-Path $env:MicroBuildOutputFolderOverride "MicroBuild.Plugins.Signing"
+          if (Test-Path $pluginPath) {
+            Write-Host "✅ MicroBuild.Plugins.Signing found at: $pluginPath"
+            Get-ChildItem $pluginPath -Recurse | Select-Object FullName | Format-Table
+          } else {
+            Write-Host "##[warning]MicroBuild.Plugins.Signing NOT found at: $pluginPath"
+            Write-Host "Contents of MicroBuildOutputFolderOverride:"
+            Get-ChildItem $env:MicroBuildOutputFolderOverride -Recurse -ErrorAction SilentlyContinue | Select-Object FullName | Format-Table
+          }
+        } else {
+          Write-Host "##[warning]MicroBuildOutputFolderOverride environment variable is not set!"
+        }
+        Write-Host "=== End MicroBuild Environment Check ==="
+      displayName: 🟣Check MicroBuild environment
+      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
+    # Sign the VS Code extension .signature.p7s file using MicroBuild with VSCodePublisher certificate
+    # This must happen after the main build (which creates the manifest) but before publishing
+    # MicroBuild is already installed by the install-microbuild.yml step that runs before our build
+    # Pass MicroBuildOutputFolderOverride as a property to ensure MSBuild can find the signing plugin
+    - script: ${{ parameters.dotnetScript }}
+              build
+              extension/signing/signVsix.proj
+              -c ${{ parameters.buildConfig }}
+              /bl:${{ parameters.repoLogPath }}/signVsix.binlog
+              /p:SignType=$(_SignType)
+              "/p:MicroBuildOutputFolderOverride=%MicroBuildOutputFolderOverride%"
+      displayName: 🟣Sign VS Code extension
+      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
+    # Verify the VS Code extension signature using vsce verify-signature
+    - pwsh: |
+        $vsixDir = '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
+        $vsixFiles = Get-ChildItem -Path "$vsixDir/*.vsix" -ErrorAction SilentlyContinue
+        if ($vsixFiles.Count -eq 0) {
+          Write-Host "##[warning]No .vsix files found - VS Code extension may not have been built"
+          exit 0
+        }
+        foreach ($vsix in $vsixFiles) {
+          $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
+          $manifestPath = Join-Path $vsixDir "$baseName.manifest"
+          $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
+
+          if (-not (Test-Path $manifestPath)) {
+            Write-Host "##[error]Manifest file not found: $manifestPath"
+            exit 1
+          }
+          if (-not (Test-Path $signaturePath)) {
+            Write-Host "##[error]Signature file not found: $signaturePath"
+            exit 1
+          }
+
+          # First verify the .signature.p7s is in PKCS#7 format (binary)
+          $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
+          if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
+            $firstByte = if ($bytes.Length -gt 0) { "0x{0:X2}" -f $bytes[0] } else { "empty" }
+            Write-Host "##[error]$baseName.signature.p7s does NOT appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)"
+            exit 1
+          }
+
+          Write-Host "Verifying signature for $($vsix.Name)..."
+          npx vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "##[error]Signature verification failed for $($vsix.Name)"
+            exit 1
+          }
+          Write-Host "✅ $($vsix.Name) signature verified successfully"
+        }
+      displayName: 🟣Verify VS Code extension signature
+      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
 
     - task: 1ES.PublishBuildArtifacts@1
       displayName: 🟣Publish vscode extension
@@ -84,6 +231,7 @@ steps:
               -configuration ${{ parameters.buildConfig }}
               -pack
               /p:PrepareForHelix=${{ lower(eq(parameters.runHelixTests, 'true')) }}
+              /p:ArchiveTests=${{ lower(eq(parameters.runHelixTests, 'true')) }}
               /bl:${{ parameters.repoLogPath }}/build.binlog
               $(_OfficialBuildIdArgs)
       displayName: Build
@@ -121,7 +269,7 @@ steps:
               "${{ parameters.buildScript }} -testnobuild -test -configuration ${{ parameters.buildConfig }} /bl:${{ parameters.repoLogPath }}/tests.binlog /maxcpucount:1 /p:BuildInParallel=false $(_OfficialBuildIdArgs)"
       env:
         DOCKER_BUILDKIT: 1
-        # https://github.com/dotnet/aspire/issues/5195#issuecomment-2271687822
+        # https://github.com/microsoft/aspire/issues/5195#issuecomment-2271687822
         DOTNET_ASPIRE_DEPENDENCY_CHECK_TIMEOUT: 180
         ASPIRE__TEST__DCPLOGBASEPATH: $(Build.ArtifactStagingDirectory)/artifacts/log/dcp
         DOTNET_ROOT: $(Build.SourcesDirectory)/.dotnet

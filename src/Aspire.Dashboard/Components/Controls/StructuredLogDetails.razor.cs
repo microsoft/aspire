@@ -32,6 +32,9 @@ public partial class StructuredLogDetails : IDisposable
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
 
+    [Inject]
+    public required StructuredLogMenuBuilder StructuredLogMenuBuilder { get; init; }
+
     internal IQueryable<TelemetryPropertyViewModel> FilteredItems =>
         _logEntryAttributes.Where(ApplyFilter).AsQueryable();
 
@@ -53,6 +56,7 @@ public partial class StructuredLogDetails : IDisposable
     private List<TelemetryPropertyViewModel> _logEntryAttributes = null!;
     private List<TelemetryPropertyViewModel> _contextAttributes = null!;
     private List<TelemetryPropertyViewModel> _exceptionAttributes = null!;
+    private readonly List<MenuButtonItem> _logActionsMenuItems = [];
     private AIContext? _aiContext;
 
     protected override void OnInitialized()
@@ -132,7 +136,15 @@ public partial class StructuredLogDetails : IDisposable
                     Parameters = { ["LogEntry"] = _viewModel.LogEntry }
                 },
             };
+
+            UpdateLogActionsMenu();
         }
+    }
+
+    private void UpdateLogActionsMenu()
+    {
+        _logActionsMenuItems.Clear();
+        StructuredLogMenuBuilder.AddMenuItems(_logActionsMenuItems, ViewModel.LogEntry, EventCallback.Empty, showViewDetails: false);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

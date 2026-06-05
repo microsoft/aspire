@@ -27,6 +27,46 @@
         <target state="translated">Uygulamayı çalıştırmak için Aspire.Hosting.AppHost paketinin daha yeni bir sürümü gereklidir. En az '{0}' sürümüne referans verdiğinizden emin olun.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InstallationInstructions">
+        <source>Installation instructions</source>
+        <target state="translated">Yükleme yönergeleri</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingCommandNotificationTitle">
+        <source>Missing command</source>
+        <target state="translated">Eksik komut</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">'{0}' kaynağının yaşam süresi kalıcı ancak AppHost projesinin yapılandırılmış kullanıcı gizli dizileri yok. Oluşturulan parametre değerleri (parolalar gibi) her yeniden başlatmada değişebilir ve bu da kalıcı kapsayıcıların yeniden oluşturulmasına yol açabilir. Kullanıcı gizli dizilerini başlatmak için 'aspire secret set' komutunu çalıştırın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFound">
+        <source>Required command '{0}' was not found on PATH or at the specified location.</source>
+        <target state="translated">Gerekli '{0}' komutu PATH'de veya belirtilen konumda bulunamadı.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFoundWithLink">
+        <source>Required command '{0}' was not found on PATH or at the specified location. For installation instructions, see: {1}</source>
+        <target state="translated">Gerekli '{0}' komutu PATH'de veya belirtilen konumda bulunamadı. Yükleme yönergeleri için bkz. {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailed">
+        <source>Command '{0}' validation failed: {1}</source>
+        <target state="translated">'{0}' komutu doğrulanamadı: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailedWithLink">
+        <source>Command '{0}' validation failed: {1}. For installation instructions, see: {2}</source>
+        <target state="translated">'{0}' komutu doğrulanamadı: {1}. Yükleme yönergeleri için bkz. {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceMayFailToStart">
+        <source>Resource '{0}' may fail to start: {1}</source>
+        <target state="translated">'{0}' kaynağı başlatılamayabilir: {1}</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

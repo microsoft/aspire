@@ -20,10 +20,10 @@ public abstract partial class PerTestFrameworkTemplatesTests : TemplateTestsBase
 
     [Theory]
     [MemberData(nameof(ProjectNames_TestData))]
-    [RequiresPlaywright]
+    [RequiresFeature(TestFeature.Playwright)]
     [Trait("category", "basic-build")]
-    [OuterLoop("playwright test")]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/8011")]
+    [OuterloopTest("playwright test")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/8011")]
     public async Task TemplatesForIndividualTestFrameworks(string prefix)
     {
         var id = $"{prefix}-{_testTemplateName}";
@@ -36,7 +36,7 @@ public abstract partial class PerTestFrameworkTemplatesTests : TemplateTestsBase
             buildEnvironment: BuildEnvironment.ForDefaultFramework);
 
         await project.BuildAsync(extraBuildArgs: [$"-c {config}"]);
-        if (RequiresSSLCertificateAttribute.IsSupported)
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.SSLCertificate))
         {
             await using (var context = await CreateNewBrowserContextAsync())
             {

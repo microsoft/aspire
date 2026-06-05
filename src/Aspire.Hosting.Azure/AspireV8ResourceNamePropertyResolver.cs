@@ -8,10 +8,10 @@ using Azure.Provisioning;
 namespace Aspire.Hosting.Azure;
 
 /// <summary>
-/// Uses the .NET Aspire v8.x naming scheme to provide default names for Azure resources.
+/// Uses the Aspire v8.x naming scheme to provide default names for Azure resources.
 /// </summary>
 /// <remarks>
-/// Can be used to keep consistent Azure resource names with .NET Aspire 8.x.
+/// Can be used to keep consistent Azure resource names with Aspire 8.x.
 /// </remarks>
 public sealed class AspireV8ResourceNamePropertyResolver : DynamicResourceNamePropertyResolver
 {
@@ -28,7 +28,7 @@ public sealed class AspireV8ResourceNamePropertyResolver : DynamicResourceNamePr
     /// Use the 'aspire-resource-name' tag to get the prefix for the resource name, if available.
     /// </summary>
     /// <remarks>
-    /// The BicepIdentifier has already had any dashes changed to underscores, which we don't want to use since .NET Aspire 8.x used the dashes.
+    /// The BicepIdentifier has already had any dashes changed to underscores, which we don't want to use since Aspire 8.x used the dashes.
     /// </remarks>
     private static string GetNamePrefix(ProvisionableResource resource)
     {

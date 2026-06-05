@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Aspire.Templates.Tests;
 
-[RequiresSSLCertificate]
+[RequiresFeature(TestFeature.SSLCertificate)]
 public class StarterTemplateRunTests : StarterTemplateRunTestsBase<StarterTemplateFixture>
 {
     public StarterTemplateRunTests(StarterTemplateFixture fixture, ITestOutputHelper testOutput)

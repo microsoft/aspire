@@ -97,6 +97,24 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Notifications.
+        /// </summary>
+        public static string MainLayoutLaunchNotifications {
+            get {
+                return ResourceManager.GetString("MainLayoutLaunchNotifications", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Notifications.
+        /// </summary>
+        public static string MainLayoutNotificationCenterTitle {
+            get {
+                return ResourceManager.GetString("MainLayoutNotificationCenterTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
         public static string MainLayoutSettingsDialogClose {
@@ -142,11 +160,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Untrusted apps can access sensitive information about the running services..
+        ///   Looks up a localized string similar to Untrusted apps can access telemetry data via the API..
         /// </summary>
-        public static string MessageUnsecuredEndpointMcpBody {
+        public static string MessageUnsecuredEndpointApiBody {
             get {
-                return ResourceManager.GetString("MessageUnsecuredEndpointMcpBody", resourceCulture);
+                return ResourceManager.GetString("MessageUnsecuredEndpointApiBody", resourceCulture);
             }
         }
         
@@ -255,6 +273,15 @@ namespace Aspire.Dashboard.Resources {
         public static string ReconnectRetryButtonText {
             get {
                 return ResourceManager.GetString("ReconnectRetryButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to AI agents.
+        /// </summary>
+        public static string MainLayoutLaunchAIAgents {
+            get {
+                return ResourceManager.GetString("MainLayoutLaunchAIAgents", resourceCulture);
             }
         }
     }

@@ -1,0 +1,314 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Text.Json.Nodes;
+using Aspire.Shared;
+using Aspire.TypeSystem;
+
+namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
+
+public sealed class TypeScriptLanguageSupportTests
+{
+    private readonly TypeScriptLanguageSupport _languageSupport = new();
+
+    [Fact]
+    public void Scaffold_CreatesAppHostSpecificScriptsAndTsConfig_ForNewProject()
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "BrownfieldApp"
+        });
+
+        Assert.Contains("apphost.mts", files.Keys);
+        Assert.Contains("package.json", files.Keys);
+        Assert.Contains("tsconfig.apphost.json", files.Keys);
+        Assert.DoesNotContain("tsconfig.json", files.Keys);
+
+        var packageJson = ParseJson(files["package.json"]);
+        var scripts = packageJson["scripts"]!.AsObject();
+        var devDependencies = packageJson["devDependencies"]!.AsObject();
+
+        Assert.Equal("brownfieldapp", packageJson["name"]?.GetValue<string>());
+        Assert.Equal("1.0.0", packageJson["version"]?.GetValue<string>());
+        Assert.True(packageJson["private"]?.GetValue<bool>());
+        Assert.Equal("module", packageJson["type"]?.GetValue<string>());
+        Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
+        Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:lint", scripts["lint"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:lint", scripts["predev"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:start", scripts["dev"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:lint", scripts["prebuild"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:build", scripts["build"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:dev", scripts["watch"]?.GetValue<string>());
+        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("^10.0.3", devDependencies["eslint"]?.GetValue<string>());
+        Assert.Equal("^8.57.1", devDependencies["typescript-eslint"]?.GetValue<string>());
+
+        var engines = packageJson["engines"]!.AsObject();
+        Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
+
+        // Verify the raw JSON does not contain unicode escapes for >= (fidelity check)
+        Assert.DoesNotContain("\\u003E", files["package.json"]);
+
+        Assert.Contains("eslint.config.mjs", files.Keys);
+        Assert.Contains("project: './tsconfig.apphost.json'", files["eslint.config.mjs"]);
+
+        var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
+        Assert.Equal("./dist/apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Scaffold_BrownfieldOutput_ContainsOnlyAspireEntries()
+    {
+        using var testDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(testDir.Path, "package.json"), """
+            {
+              "name": "vite-brownfield",
+              "version": "2.0.0",
+              "type": "commonjs",
+              "scripts": {
+                "dev": "vite",
+                "build": "vite build",
+                "preview": "vite preview",
+                "aspire:start": "custom-start"
+              },
+              "dependencies": {
+                "vscode-jsonrpc": "^9.9.9"
+              },
+              "devDependencies": {
+                "tsx": "^9.9.9",
+                "vite": "^7.0.0"
+              }
+            }
+            """);
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "Ignored"
+        });
+
+        var packageJson = ParseJson(files["package.json"]);
+        var scripts = packageJson["scripts"]!.AsObject();
+        var dependencies = packageJson["dependencies"]!.AsObject();
+        var devDependencies = packageJson["devDependencies"]!.AsObject();
+
+        // Scaffold output should NOT echo existing content — the CLI-side
+        // PackageJsonMerger handles combining with the on-disk file.
+        Assert.Null(packageJson["name"]);
+        Assert.Null(packageJson["version"]);
+        Assert.Null(packageJson["type"]);
+        Assert.Null(packageJson["private"]);
+
+        // Scaffold should only contain Aspire-desired scripts
+        Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
+        Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
+        Assert.False(scripts.ContainsKey("dev"));
+        Assert.False(scripts.ContainsKey("build"));
+        Assert.False(scripts.ContainsKey("preview"));
+
+        // Scaffold should only contain Aspire-desired dependencies (at Aspire's versions)
+        Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
+        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
+        Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
+        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.False(devDependencies.ContainsKey("vite"));
+
+        // engines.node is always set
+        var engines = packageJson["engines"]!.AsObject();
+        Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Scaffold_NestedBrownfieldPackage_UsesStableAppHostPackageName()
+    {
+        using var testDir = new TestTempDirectory();
+        File.WriteAllText(Path.Combine(testDir.Path, "package.json"), """{ "name": "existing-app" }""");
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(testDir.Path, "aspire-apphost"));
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = appHostDirectory.FullName,
+            ProjectName = "ExistingApp"
+        });
+
+        var packageJson = ParseJson(files["package.json"]);
+
+        Assert.Equal("aspire-apphost", packageJson["name"]?.GetValue<string>());
+        Assert.Equal("1.0.0", packageJson["version"]?.GetValue<string>());
+        Assert.True(packageJson["private"]?.GetValue<bool>());
+        Assert.Equal("module", packageJson["type"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Scaffold_AlwaysOutputsAspireVersions_RegardlessOfExistingDependencies()
+    {
+        using var testDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(testDir.Path, "package.json"), """
+            {
+              "dependencies": {
+                "vscode-jsonrpc": "^8.1.0"
+              },
+              "devDependencies": {
+                "@types/node": "^18.0.0",
+                "nodemon": "^3.1.0",
+                "tsx": "^4.18.0",
+                "typescript": "^5.2.0"
+              }
+            }
+            """);
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "Ignored"
+        });
+
+        var packageJson = ParseJson(files["package.json"]);
+        var dependencies = packageJson["dependencies"]!.AsObject();
+        var devDependencies = packageJson["devDependencies"]!.AsObject();
+
+        // Scaffold always produces Aspire's desired versions — the CLI-side
+        // PackageJsonMerger handles semver comparison with existing on-disk versions.
+        Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
+        Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
+        Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
+        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Scaffold_DoesNotEmitRootTsConfig_WhenOneAlreadyExists()
+    {
+        using var testDir = new TestTempDirectory();
+        var existingTsConfigPath = Path.Combine(testDir.Path, "tsconfig.json");
+        var existingTsConfig = """
+            {
+              "compilerOptions": {
+                "module": "ESNext"
+              }
+            }
+            """;
+
+        File.WriteAllText(existingTsConfigPath, existingTsConfig);
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "BrownfieldApp"
+        });
+
+        Assert.DoesNotContain("tsconfig.json", files.Keys);
+        Assert.Contains("tsconfig.apphost.json", files.Keys);
+        Assert.Equal(existingTsConfig, File.ReadAllText(existingTsConfigPath));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(16626)]
+    [InlineData(55571)]
+    public void Scaffold_GeneratesProfilePortsOutsideWindowsEphemeralRange(int? portSeed)
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "PortsApp",
+            PortSeed = portSeed
+        });
+
+        var appHostRunJson = ParseJson(files["apphost.run.json"]);
+        var httpsProfile = appHostRunJson["profiles"]!["https"]!.AsObject();
+        var applicationUrls = httpsProfile["applicationUrl"]!.GetValue<string>().Split(';', StringSplitOptions.RemoveEmptyEntries);
+        var environmentVariables = httpsProfile["environmentVariables"]!.AsObject();
+
+        Assert.Equal(2, applicationUrls.Length);
+
+        var httpsPort = GetPort(applicationUrls.Single(url => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)));
+        var httpPort = GetPort(applicationUrls.Single(url => url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)));
+        var otlpHttpsPort = GetPort(environmentVariables["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        var resourceServiceHttpsPort = GetPort(environmentVariables["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+
+        AssertPortInRange(httpPort, AppHostProfilePortGenerator.DashboardHttpPortMin, AppHostProfilePortGenerator.DashboardHttpPortMaxExclusive);
+        AssertPortInRange(httpsPort, AppHostProfilePortGenerator.DashboardHttpsPortMin, AppHostProfilePortGenerator.DashboardHttpsPortMaxExclusive);
+        AssertPortInRange(otlpHttpsPort, AppHostProfilePortGenerator.OtlpHttpsPortMin, AppHostProfilePortGenerator.OtlpHttpsPortMaxExclusive);
+        AssertPortInRange(resourceServiceHttpsPort, AppHostProfilePortGenerator.ResourceServiceHttpsPortMin, AppHostProfilePortGenerator.ResourceServiceHttpsPortMaxExclusive);
+    }
+
+    [Fact]
+    public void GetRuntimeSpec_UsesAppHostSpecificTsConfig()
+    {
+        var runtimeSpec = _languageSupport.GetRuntimeSpec();
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
+        var watchExecute = Assert.IsType<CommandSpec>(runtimeSpec.WatchExecute);
+
+        Assert.Equal("npx", preExecute.Command);
+        Assert.Equal(new[] { "--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json" }, preExecute.Args);
+        Assert.Equal(new[] { "--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}" }, runtimeSpec.Execute.Args);
+        Assert.Contains("npx --no-install tsc --noEmit -p tsconfig.apphost.json && npx --no-install tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", watchExecute.Args);
+    }
+
+    [Fact]
+    public void Scaffold_EmitsScaffoldedEslintConfigVerbatim()
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "SnapshotApp"
+        });
+
+        Assert.Contains("eslint.config.mjs", files.Keys);
+
+        // The scaffold emits the embedded eslint.config.mjs verbatim. Asserting
+        // equality against the embedded resource keeps a single source of truth
+        // (the ts-starter template file linked into this project) so no
+        // separate .verified.mjs snapshot can drift from it.
+        Assert.Equal(EmbeddedResources.Read("eslint.config.mjs"), files["eslint.config.mjs"]);
+    }
+
+    [Fact]
+    public void Scaffold_EmitsScaffoldedAppHostTsConfigVerbatim()
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "SnapshotApp"
+        });
+
+        Assert.Contains("tsconfig.apphost.json", files.Keys);
+
+        // The scaffold emits the embedded tsconfig.apphost.json verbatim. See
+        // Scaffold_EmitsScaffoldedEslintConfigVerbatim for the rationale.
+        Assert.Equal(EmbeddedResources.Read("tsconfig.apphost.json"), files["tsconfig.apphost.json"]);
+    }
+
+    private static JsonObject ParseJson(string content) => JsonNode.Parse(content)!.AsObject();
+
+    private static int GetPort(string url) => new Uri(url).Port;
+
+    private const int WindowsEphemeralPortMin = 49152;
+
+    private static void AssertPortInRange(int port, int minInclusive, int maxExclusive)
+    {
+        Assert.InRange(port, minInclusive, maxExclusive - 1);
+        Assert.True(port < WindowsEphemeralPortMin, $"Expected port {port} to be below the Windows ephemeral range.");
+    }
+}

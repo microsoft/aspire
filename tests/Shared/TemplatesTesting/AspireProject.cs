@@ -17,7 +17,7 @@ public partial class AspireProject : IAsyncDisposable
 {
     public const int DashboardAvailabilityTimeoutSecs = 60;
     private const int AppStartupWaitTimeoutSecs = 5 * 60;
-    private static readonly Regex s_dashboardUrlRegex = new(@"Login to the dashboard at (?<url>.*)", RegexOptions.Compiled);
+    private static readonly Regex s_dashboardUrlRegex = new(@"Login URL:\s+(?<url>.*)", RegexOptions.Compiled);
 
     public static string GetNuGetConfigPathFor(TestTargetFramework targetFramework) =>
         Path.Combine(BuildEnvironment.TestAssetsPath, "nuget8.config");
@@ -115,9 +115,11 @@ public partial class AspireProject : IAsyncDisposable
         cmd.WithWorkingDirectory(Path.GetDirectoryName(projectDir)!)
            .WithTimeout(TimeSpan.FromMinutes(5));
 
-        var tfmToUseString = tfmToUse.ToTFMString();
-        var cmdString = $"{template} {extraArgs} -o \"{id}\" -f {tfmToUseString}";
-
+        var cmdString = $"{template} {extraArgs} -o \"{id}\"";
+        if (tfmToUse != TestTargetFramework.None)
+        {
+            cmdString = $"{cmdString} -f {tfmToUse.ToTFMString()}";
+        }
         var res = await cmd.ExecuteAsync(cmdString).ConfigureAwait(false);
         res.EnsureSuccessful();
         if (res.Output.Contains("Restore failed", StringComparison.OrdinalIgnoreCase) ||
@@ -139,9 +141,9 @@ public partial class AspireProject : IAsyncDisposable
                 throw new XunitException($"Expected to find exactly one <TargetFramework> element in {csprojPath}: {csprojContent}");
             }
 
-            if (matches[0].Groups["tfm"].Value != tfmToUseString)
+            if (matches[0].Groups["tfm"].Value != tfmToUse.ToTFMString())
             {
-                throw new XunitException($"Expected to find {tfmToUseString} but found '{matches[0].Groups["tfm"].Value}' in {csprojPath}: {csprojContent}");
+                throw new XunitException($"Expected to find {tfmToUse.ToTFMString()} but found '{matches[0].Groups["tfm"].Value}' in {csprojPath}: {csprojContent}");
             }
         }
 
@@ -444,7 +446,7 @@ public partial class AspireProject : IAsyncDisposable
 
     public async Task DumpDockerInfoAsync(ITestOutputHelper? testOutputArg = null, CancellationToken cancellationToken = default)
     {
-        if (!RequiresDockerAttribute.IsSupported)
+        if (!RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
         {
             return;
         }
@@ -461,7 +463,7 @@ public partial class AspireProject : IAsyncDisposable
 
     public async Task DumpComponentLogsAsync(string component, ITestOutputHelper? testOutputArg = null)
     {
-        if (!RequiresDockerAttribute.IsSupported)
+        if (!RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
         {
             return;
         }

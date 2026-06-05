@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAspireHost>true</IsAspireHost>
+    <UserSecretsId>d3e0c7a8-1f5b-4c2d-8e9a-6b7c8d9e0f1a</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.AppContainers" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Network" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Sql" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Storage" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+
+    <ProjectReference Include="..\AzureVirtualNetworkEndToEnd.ApiService\AzureVirtualNetworkEndToEnd.ApiService.csproj" />
+  </ItemGroup>
+
+</Project>

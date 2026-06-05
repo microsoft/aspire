@@ -26,6 +26,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// });
 /// </code>
 /// </example>
+[AspireExport(ExposeProperties = true)]
 public class AfterResourcesCreatedEvent(IServiceProvider services, DistributedApplicationModel model) : IDistributedApplicationEvent
 {
     /// <summary>

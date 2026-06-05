@@ -1,19 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { isWorkspaceOpen } from '../utils/workspace';
 import { noWorkspaceFolder, aspireConfigExists, failedToConfigureLaunchJson, defaultConfigurationName } from '../loc/strings';
 
 export async function configureLaunchJsonCommand() {
-    if (!isWorkspaceOpen()) {
-        return;
-    }
-
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-        vscode.window.showErrorMessage(noWorkspaceFolder);
-        return;
-    }
-
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]!;
     const launchJsonPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'launch.json');
 
     try {
@@ -54,6 +44,7 @@ export async function configureLaunchJsonCommand() {
 
             if (hasAspireConfig) {
                 vscode.window.showInformationMessage(aspireConfigExists);
+                vscode.window.showTextDocument(await vscode.workspace.openTextDocument(launchUri));
                 return;
             }
         } catch {

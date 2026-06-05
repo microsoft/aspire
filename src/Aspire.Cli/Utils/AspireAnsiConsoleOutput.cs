@@ -63,8 +63,8 @@ internal sealed class AspireAnsiConsoleOutput : IAnsiConsoleOutput
     {
         // Check if explicit width override is set via ASPIRE_CONSOLE_WIDTH
         var consoleWidthOverride = _configuration["ASPIRE_CONSOLE_WIDTH"];
-        if (!string.IsNullOrEmpty(consoleWidthOverride) && 
-            int.TryParse(consoleWidthOverride, out var width) && 
+        if (!string.IsNullOrEmpty(consoleWidthOverride) &&
+            int.TryParse(consoleWidthOverride, out var width) &&
             width > 0)
         {
             // Cap at reasonable maximum to prevent performance issues
@@ -118,6 +118,13 @@ internal sealed class AspireAnsiConsoleOutput : IAnsiConsoleOutput
                 // Return default width for non-terminal environments
                 // In CI environments, 80 columns is too narrow, use 160 instead
                 return IsTerminal ? 80 : 160;
+            }
+
+            // When BufferWidth returns 80 (historical default) but we're not in a real terminal,
+            // use 160 to avoid awkward line breaks. Some CI systems report 80 even without a terminal.
+            if (width == 80 && !IsTerminal)
+            {
+                return 160;
             }
 
             return width;

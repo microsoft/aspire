@@ -52,17 +52,18 @@ internal sealed class PipelineExecutor(
                     new BeforePublishEvent(serviceProvider, model), stoppingToken
                     ).ConfigureAwait(false);
 
-                await ExecutePipelineAsync(model, stoppingToken).ConfigureAwait(false);
+                // Execute the pipeline and get the summary from the context
+                var pipelineSummary = await ExecutePipelineAsync(model, stoppingToken).ConfigureAwait(false);
 
                 await eventing.PublishAsync<AfterPublishEvent>(
                     new AfterPublishEvent(serviceProvider, model), stoppingToken
                     ).ConfigureAwait(false);
 
-                // We pass null here so the aggregate state can be calculated based on the state of
-                // each of the pipeline steps that have been enumerated.
+                // Get the pipeline summary items (preserves insertion order)
+                var summaryItems = pipelineSummary.Items.Count > 0 ? pipelineSummary.Items : null;
 
                 await step.SucceedAsync(cancellationToken: stoppingToken).ConfigureAwait(false);
-                await activityReporter.CompletePublishAsync(completionMessage: null, completionState: null, cancellationToken: stoppingToken).ConfigureAwait(false);
+                await activityReporter.CompletePublishAsync(new PublishCompletionOptions { PipelineSummary = summaryItems }, stoppingToken).ConfigureAwait(false);
 
                 // If we are running in publish mode and a backchannel is being
                 // used then we don't want to stop the app host. Instead the
@@ -80,7 +81,7 @@ internal sealed class PipelineExecutor(
 
                 await step.FailAsync(cancellationToken: stoppingToken).ConfigureAwait(false);
 
-                await activityReporter.CompletePublishAsync(completionMessage: ex.Message, completionState: CompletionState.CompletedWithError, cancellationToken: stoppingToken).ConfigureAwait(false);
+                await activityReporter.CompletePublishAsync(new PublishCompletionOptions { CompletionMessage = ex.Message, CompletionState = CompletionState.CompletedWithError }, stoppingToken).ConfigureAwait(false);
 
                 if (!backchannelService.IsBackchannelExpected)
                 {
@@ -95,11 +96,16 @@ internal sealed class PipelineExecutor(
         }
     }
 
-    public async Task ExecutePipelineAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
+    /// <summary>
+    /// Executes the pipeline and returns the summary that was populated by pipeline steps.
+    /// </summary>
+    public async Task<PipelineSummary> ExecutePipelineAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
         var pipelineContext = new PipelineContext(model, executionContext, serviceProvider, logger, cancellationToken);
 
         var pipeline = serviceProvider.GetRequiredService<IDistributedApplicationPipeline>();
         await pipeline.ExecuteAsync(pipelineContext).ConfigureAwait(false);
+
+        return pipelineContext.Summary;
     }
 }

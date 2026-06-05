@@ -4,7 +4,6 @@
 @using Aspire.Dashboard.Resources
 
 @inject IStringLocalizer<ControlsStrings> Loc
-@inject IStringLocalizer<Dashboard.Resources.Dialogs> DialogsLoc
 
 @if (!string.IsNullOrWhiteSpace(ExceptionText))
 {
@@ -21,14 +20,16 @@
     [Parameter, EditorRequired]
     public required string ExceptionText { get; set; }
 
-    [CascadingParameter]
-    public required ViewportInformation ViewportInformation { get; init; }
-
     [Inject]
-    public required IDialogService DialogService { get; init; }
+    public required DashboardDialogService DialogService { get; init; }
 
     private async Task OnExceptionDetailsClickedAsync()
     {
-        await TextVisualizerDialog.OpenDialogAsync(ViewportInformation, DialogService, DialogsLoc, Loc[nameof(ControlsStrings.ExceptionDetailsTitle)], ExceptionText, containsSecret: false);
+        await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+        {
+            DialogService = DialogService,
+            ValueDescription = Loc[nameof(ControlsStrings.ExceptionDetailsTitle)],
+            Value = ExceptionText
+        });
     }
 }

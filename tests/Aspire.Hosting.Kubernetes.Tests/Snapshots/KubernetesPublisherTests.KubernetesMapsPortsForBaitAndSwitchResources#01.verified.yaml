@@ -1,0 +1,10 @@
+parameters:
+  api:
+    api_image: "api:latest"
+secrets: {}
+config:
+  api:
+    PORT: "8000"
+  gateway:
+    API_HTTP: "http://api-service:8000"
+    services__api__http__0: "http://api-service:8000"

@@ -1,0 +1,58 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.CommandLine;
+using System.Globalization;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
+using Spectre.Console;
+
+namespace Aspire.Cli.Commands;
+
+/// <summary>
+/// Gets a secret value from an AppHost project.
+/// </summary>
+internal sealed class SecretGetCommand : BaseCommand
+{
+    private static readonly Argument<string> s_keyArgument = new("key")
+    {
+        Description = SecretCommandStrings.KeyRetrieveArgumentDescription
+    };
+
+    private readonly SecretStoreResolver _secretStoreResolver;
+
+    public SecretGetCommand(
+        SecretStoreResolver secretStoreResolver,
+        CommonCommandServices services)
+        : base("get", SecretCommandStrings.GetDescription, services)
+    {
+        _secretStoreResolver = secretStoreResolver;
+
+        Arguments.Add(s_keyArgument);
+        Options.Add(SecretCommand.s_appHostOption);
+    }
+
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        // Argument arity guarantees non-null
+        var key = parseResult.GetValue(s_keyArgument)!;
+        var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
+
+        var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
+        if (result is null)
+        {
+            return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
+        }
+
+        var value = result.Store.Get(key);
+        if (value is null)
+        {
+            return CommandResult.Failure(CliExitCodes.ConfigNotFound, string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretNotFound, key.EscapeMarkup()));
+        }
+
+        // Write value to stdout (machine-readable)
+        InteractionService.DisplayRawText(value, consoleOverride: ConsoleOutput.Standard);
+        return CommandResult.Success();
+    }
+}

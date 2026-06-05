@@ -1,11 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire;
 using Aspire.Azure.Common;
 using Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration;
 using Azure.Core.Pipeline;
 using Azure.Core;
-using Azure.Identity;
 using Microsoft.Extensions.Configuration.AzureAppConfiguration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Microsoft.Extensions.Hosting;
 
 /// <summary>
-/// Provides extension methods for registering and configuring Azure App Configuration in a .NET Aspire application.
+/// Provides extension methods for registering and configuring Azure App Configuration in an Aspire application.
 /// </summary>
 public static class AspireAppConfigurationExtensions
 {
@@ -75,7 +75,7 @@ public static class AspireAppConfigurationExtensions
             {
                 if (settings.ConnectionString is null)
                 {
-                    options.Connect(settings.Endpoint, settings.Credential ?? new DefaultAzureCredential());
+                    options.Connect(settings.Endpoint, settings.Credential ?? AzureCredentialHelper.CreateDefaultAzureCredential());
                 }
                 else
                 {

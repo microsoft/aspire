@@ -47,7 +47,7 @@ public sealed class ResourceViewModelTests
         };
 
         // Act
-        var vm = resource.ToViewModel(new MockKnownPropertyLookup(), NullLogger.Instance);
+        var vm = ToViewModel(resource);
 
         // Assert
         Assert.Collection(vm.Environment,
@@ -75,7 +75,7 @@ public sealed class ResourceViewModelTests
         };
 
         // Act
-        var vm = resource.ToViewModel(new MockKnownPropertyLookup(), NullLogger.Instance);
+        var vm = ToViewModel(resource);
 
         // Assert
         Assert.Collection(vm.Properties,
@@ -99,7 +99,7 @@ public sealed class ResourceViewModelTests
         };
 
         // Act
-        var ex = Assert.Throws<InvalidOperationException>(() => resource.ToViewModel(new MockKnownPropertyLookup(), NullLogger.Instance));
+        var ex = Assert.Throws<InvalidOperationException>(() => ToViewModel(resource));
 
         // Assert
         Assert.Equal(@"Error converting resource ""TestName-abc"" to ResourceViewModel.", ex.Message);
@@ -125,11 +125,11 @@ public sealed class ResourceViewModelTests
         var kp = new KnownProperty("foo", loc => "bar");
 
         // Act
-        var viewModel = resource.ToViewModel(new MockKnownPropertyLookup(123, kp), NullLogger.Instance);
+        var vm = ToViewModel(resource, knownPropertyLookup: new MockKnownPropertyLookup(123, kp));
 
         // Assert
         Assert.Collection(
-            viewModel.Properties.OrderBy(p => p.Key),
+            vm.Properties.OrderBy(p => p.Key),
             p =>
             {
                 Assert.Equal("Property1", p.Key);
@@ -167,7 +167,7 @@ public sealed class ResourceViewModelTests
         };
 
         // Act
-        var vm = resource.ToViewModel(new MockKnownPropertyLookup(), NullLogger.Instance);
+        var vm = ToViewModel(resource);
 
         // Assert
         Assert.Equal("Database", vm.IconName);
@@ -189,7 +189,7 @@ public sealed class ResourceViewModelTests
         };
 
         // Act
-        var vm = resource.ToViewModel(new MockKnownPropertyLookup(), NullLogger.Instance);
+        var vm = ToViewModel(resource);
 
         // Assert
         Assert.Equal("CloudArrowUp", vm.IconName);
@@ -210,10 +210,15 @@ public sealed class ResourceViewModelTests
         };
 
         // Act
-        var vm = resource.ToViewModel(new MockKnownPropertyLookup(), NullLogger.Instance);
+        var vm = ToViewModel(resource);
 
         // Assert
         Assert.Null(vm.IconName);
         Assert.Null(vm.IconVariant);
+    }
+
+    private static ResourceViewModel ToViewModel(Resource resource, IKnownPropertyLookup? knownPropertyLookup = null)
+    {
+        return resource.ToViewModel(replicaIndex: 0, knownPropertyLookup ?? new MockKnownPropertyLookup(), NullLogger.Instance);
     }
 }

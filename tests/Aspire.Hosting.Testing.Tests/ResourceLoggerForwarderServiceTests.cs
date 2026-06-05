@@ -35,10 +35,28 @@ public class ResourceLoggerForwarderServiceTests(ITestOutputHelper output)
         var loggerFactory = new NullLoggerFactory();
         var resourceLogForwarder = new ResourceLoggerForwarderService(resourceNotificationService, resourceLoggerService, hostEnvironment, loggerFactory);
 
+        // use a task to signal when the resourceLogForwarder has started executing
+        var subscribedTcs = new TaskCompletionSource();
+        var subscriberLoop = Task.Run(async () =>
+        {
+            await foreach (var sub in resourceLoggerService.WatchAnySubscribersAsync(hostApplicationLifetime.ApplicationStopping))
+            {
+                subscribedTcs.TrySetResult();
+                return;
+            }
+        });
+
         await resourceLogForwarder.StartAsync(hostApplicationLifetime.ApplicationStopping);
 
         Assert.NotNull(resourceLogForwarder.ExecuteTask);
         Assert.Equal(TaskStatus.WaitingForActivation, resourceLogForwarder.ExecuteTask.Status);
+
+        // Publish an update to the resource to kickstart the notification service loop
+        var myresource = new CustomResource("myresource");
+        await resourceNotificationService.PublishUpdateAsync(myresource, snapshot => snapshot with { State = "Running" });
+
+        // Wait for the log stream to begin
+        await subscribedTcs.Task.WaitAsync(TimeSpan.FromSeconds(15));
 
         // Signal the stopping token
         hostApplicationLifetime.StopApplication();

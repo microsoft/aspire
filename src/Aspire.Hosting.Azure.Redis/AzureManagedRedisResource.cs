@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
@@ -16,8 +18,9 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
+[AspireExport(ExposeProperties = true)]
 public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget
 {
     /// <summary>
     /// Gets the "connectionString" output reference from the bicep template for the Azure Managed Redis resource.
@@ -46,6 +49,11 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
+    /// Gets the "id" output reference for the resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
+
+    /// <summary>
     /// Gets the "hostName" output reference from the bicep template for the Azure Redis resource.
     /// </summary>
     private BicepOutputReference HostNameOutput => new("hostName", this);
@@ -65,6 +73,8 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     internal RedisResource? InnerResource { get; private set; }
 
     /// <inheritdoc />
+    /// <remarks>This property is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore]
     public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
 
     /// <summary>
@@ -240,4 +250,8 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
             yield return new("Password", Password);
         }
     }
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["redisEnterprise"];
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.redis.azure.net"];
 }

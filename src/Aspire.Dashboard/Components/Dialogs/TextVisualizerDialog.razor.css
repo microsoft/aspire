@@ -17,7 +17,9 @@
     margin-left: 0;
 }
 
-.text-visualizer-container ::deep.text-visualizer-copy {
+.text-visualizer-container ::deep.button-container-right {
+    display: flex;
+    gap: 8px;
     margin-left: auto;
 }
 
@@ -30,5 +32,11 @@
 
 .text-visualizer-container ::deep.log-overflow {
     max-height: 60vh;
+    margin-bottom: 16px;
+}
+
+.markdown-content {
+    max-height: 60vh;
+    overflow-y: auto;
     margin-bottom: 16px;
 }

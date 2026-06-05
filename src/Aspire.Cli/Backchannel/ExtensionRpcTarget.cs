@@ -24,6 +24,9 @@ internal interface IExtensionRpcTarget
 
     [JsonRpcMethod("getDebugSessionId")]
     Task<string?> GetDebugSessionIdAsync();
+
+    [JsonRpcMethod("getCliCapabilities")]
+    Task<string[]> GetCliCapabilitiesAsync();
 }
 
 internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcTarget
@@ -42,12 +45,17 @@ internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcT
 
     public Task StopCliAsync()
     {
-        Environment.Exit(ExitCodeConstants.Success);
+        Environment.Exit(CliExitCodes.Success);
         return Task.CompletedTask;
     }
 
     public Task<string?> GetDebugSessionIdAsync()
     {
         return Task.FromResult(configuration[KnownConfigNames.ExtensionDebugSessionId]);
+    }
+
+    public Task<string[]> GetCliCapabilitiesAsync()
+    {
+        return Task.FromResult(KnownCapabilities.GetAdvertisedCapabilities());
     }
 }

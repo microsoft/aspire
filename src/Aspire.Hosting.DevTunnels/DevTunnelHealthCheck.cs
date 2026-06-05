@@ -24,7 +24,7 @@ internal sealed class DevTunnelHealthCheck(
     {
         try
         {
-            var tunnelStatus = await _devTunnelClient.GetTunnelAsync(_tunnelResource.TunnelId, logger, cancellationToken).ConfigureAwait(false);
+            var tunnelStatus = await _devTunnelClient.GetTunnelAsync(_tunnelResource.ResolvedTunnelId, logger, cancellationToken).ConfigureAwait(false);
             tunnelResource.LastKnownStatus = tunnelStatus;
             if (tunnelStatus.HostConnections == 0)
             {
@@ -34,22 +34,24 @@ internal sealed class DevTunnelHealthCheck(
             // Check that expected ports are active
             foreach (var portResource in _tunnelResource.Ports)
             {
-                var portStatus = tunnelStatus.Ports?.FirstOrDefault(p => p.PortNumber == portResource.TargetEndpoint.Port);
+                var tunnelPort = await portResource.GetTunnelPortAsync(cancellationToken).ConfigureAwait(false);
+                var portStatus = tunnelStatus.Ports?.FirstOrDefault(p => p.PortNumber == tunnelPort);
                 portResource.LastKnownStatus = portStatus;
                 if (portStatus?.PortUri is null)
                 {
-                    return HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelUnhealthy_PortInactive, _tunnelResource.TunnelId, portResource.TargetEndpoint.Port));
+                    return HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelUnhealthy_PortInactive, _tunnelResource.TunnelId, tunnelPort));
                 }
             }
 
             // Get tunnel and port access status
-            var tunnelAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.TunnelId, portNumber: null, logger, cancellationToken).ConfigureAwait(false);
+            var tunnelAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.ResolvedTunnelId, portNumber: null, logger, cancellationToken).ConfigureAwait(false);
             _tunnelResource.LastKnownAccessStatus = tunnelAccessStatus;
 
             // Get access status for each port
             foreach (var portResource in _tunnelResource.Ports)
             {
-                var portAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.TunnelId, portResource.TargetEndpoint.Port, logger, cancellationToken).ConfigureAwait(false);
+                var tunnelPort = await portResource.GetTunnelPortAsync(cancellationToken).ConfigureAwait(false);
+                var portAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.ResolvedTunnelId, tunnelPort, logger, cancellationToken).ConfigureAwait(false);
                 portResource.LastKnownAccessStatus = portAccessStatus;
             }
 

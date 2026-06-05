@@ -30,6 +30,7 @@ internal static class KnownProperties
         public const string AppArgs = "resource.appArgs";
         public const string AppArgsSensitivity = "resource.appArgsSensitivity";
         public const string ExcludeFromMcp = "resource.excludeFromMcp";
+        public const string WaitingFor = "resource.waitingFor";
     }
 
     public static class Container
@@ -59,5 +60,12 @@ internal static class KnownProperties
     public static class Parameter
     {
         public const string Value = "Value";
+    }
+
+    public static class Tool
+    {
+        public const string Package = "tool.package";
+        public const string Version = "tool.version";
+        public const string ExecArgs = "tool.execArgs";
     }
 }

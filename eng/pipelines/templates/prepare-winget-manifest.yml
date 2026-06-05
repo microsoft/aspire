@@ -1,0 +1,107 @@
+parameters:
+  - name: version
+    type: string
+    default: ''
+  - name: channel
+    type: string
+  - name: artifactVersion
+    type: string
+    default: ''
+  - name: archiveRoot
+    type: string
+    default: ''
+
+steps:
+  - pwsh: |
+      $ErrorActionPreference = 'Stop'
+      $version = '${{ parameters.version }}'
+      $channel = '${{ parameters.channel }}'
+      $artifactVersion = '${{ parameters.artifactVersion }}'
+
+      if ([string]::IsNullOrWhiteSpace($version)) {
+        Write-Error "Version parameter is required"
+        exit 1
+      }
+
+      if ([string]::IsNullOrWhiteSpace($channel)) {
+        Write-Error "Channel parameter is required (stable or prerelease)"
+        exit 1
+      }
+
+      # Manifests are generated for every channel. The artifact is a CI-only
+      # build output consumed by dogfooders via 'winget install --manifest <path>'.
+      # Public WinGet publishing is gated separately by publish-winget.yml in the
+      # release-publish pipeline, which downloads 'winget-manifests-stable' by
+      # name — so prerelease artifacts can never reach the public catalog.
+      $isPrereleaseInStablePackage = $channel -ne 'stable'
+      $templateDir = 'microsoft.aspire'
+      $artifactName = "winget-manifests-$channel"
+
+      Write-Host "Version: $version"
+      Write-Host "Channel: $channel"
+      Write-Host "Is prerelease in stable package: $isPrereleaseInStablePackage"
+      Write-Host "Artifact version: $(if ([string]::IsNullOrWhiteSpace($artifactVersion)) { $version } else { $artifactVersion })"
+      Write-Host "Template dir: $templateDir"
+      Write-Host "Artifact name: $artifactName"
+      Write-Host "##vso[task.setvariable variable=CliVersion]$version"
+      Write-Host "##vso[task.setvariable variable=CliArtifactVersion]$(if ([string]::IsNullOrWhiteSpace($artifactVersion)) { $version } else { $artifactVersion })"
+      Write-Host "##vso[task.setvariable variable=WinGetTemplateDir]$templateDir"
+      Write-Host "##vso[task.setvariable variable=WinGetArtifactName]$artifactName"
+      Write-Host "##vso[task.setvariable variable=WinGetIsPrereleaseInStablePackage]$isPrereleaseInStablePackage"
+    displayName: 🟣Set version ${{ parameters.version }}
+
+  - pwsh: |
+      # Probe-only: do not attempt to install/repair winget here. The 1ES `1es-windows-2022`
+      # pool blocks outbound access to cdn.winget.microsoft.com, so
+      # `Repair-WinGetPackageManager` fails with "An attempt was made to access a socket in a
+      # way forbidden by its access permissions. (cdn.winget.microsoft.com:443)".
+      #
+      # `prepare-manifest-artifact.ps1` only needs winget when ValidationMode is `Full`
+      # (install/uninstall round-trip) or `Offline` (best-effort `winget validate`); in
+      # Offline mode it tolerates winget being missing and still produces the manifest
+      # artifact. This pipeline hardcodes Offline (see the Prepare step below), so
+      # probing for a pre-installed winget on the image is sufficient and avoids the
+      # blocked CDN path entirely.
+      #
+      # Manifest validation is intentionally delegated to upstream microsoft/winget-pkgs
+      # CI; see eng/winget/README.md "Validation model" for what upstream checks.
+      $winget = Get-Command winget -ErrorAction SilentlyContinue
+      if ($winget) {
+        Write-Host "winget already on PATH at $($winget.Source):"
+        winget --version
+      } else {
+        Write-Host "##[warning]winget was not found on PATH. Offline validation will skip the winget validate step (see prepare-manifest-artifact.ps1)."
+      }
+    displayName: 🟣Probe winget CLI
+
+  - pwsh: |
+      $ErrorActionPreference = 'Stop'
+
+      $args = @{
+        Version = '$(CliVersion)'
+        ArtifactVersion = '$(CliArtifactVersion)'
+        Channel = '${{ parameters.channel }}'
+        TemplateDir = '$(Build.SourcesDirectory)/eng/winget/$(WinGetTemplateDir)'
+        OutputPath = '$(Build.StagingDirectory)/winget-manifests'
+        # Hardcoded Offline: Full mode requires winget.exe on the agent, which
+        # is not present on 1ES `1es-windows-2022` and cannot be installed
+        # (see the Probe step above). prepare-manifest-artifact.ps1 still accepts
+        # ValidationMode for local/dogfood callers running on a machine with
+        # winget installed. Manifest validation is delegated to upstream
+        # microsoft/winget-pkgs CI — see eng/winget/README.md "Validation model".
+        ValidationMode = 'Offline'
+      }
+
+      if (-not [string]::IsNullOrWhiteSpace('${{ parameters.archiveRoot }}')) {
+        $args.ArchiveRoot = '${{ parameters.archiveRoot }}'
+      }
+
+      & "$(Build.SourcesDirectory)/eng/winget/prepare-manifest-artifact.ps1" @args
+    displayName: 🟣Prepare WinGet manifests
+
+  - task: 1ES.PublishBuildArtifacts@1
+    displayName: 🟣Publish WinGet manifests
+    condition: always()
+    inputs:
+      PathtoPublish: '$(Build.StagingDirectory)/winget-manifests'
+      ArtifactName: $(WinGetArtifactName)

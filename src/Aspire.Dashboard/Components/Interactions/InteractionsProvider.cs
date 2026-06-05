@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Net;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Pages;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Telemetry;
@@ -68,7 +69,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
     public required IDashboardClient DashboardClient { get; init; }
 
     [Inject]
-    public required IDialogService DialogService { get; init; }
+    public required DashboardDialogService DialogService { get; init; }
 
     [Inject]
     public required IMessageService MessageService { get; init; }
@@ -155,7 +156,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 var item = ((IList<WatchInteractionsResponseUpdate>)_pendingInteractions)[0];
                 _pendingInteractions.RemoveAt(0);
 
-                Func<IDialogService, Task<IDialogReference>> openDialog;
+                Func<DashboardDialogService, Task<IDialogReference>> openDialog;
                 string dialogComponentId;
 
                 if (item.MessageBox is { } messageBox)
@@ -387,6 +388,10 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                             {
                                 options.Title = WebUtility.HtmlEncode(item.Title);
                                 options.Body = GetMessageHtml(item);
+                                // Allow for HTML in title and body. This is needed to support Markdown output.
+                                // It's safe to enable because content is always either HTML-encoded or generated from Markdown which is sanitized.
+                                options.UseMarkupString = true;
+
                                 options.Intent = MapMessageIntent(notification.Intent);
                                 options.Section = DashboardUIHelpers.MessageBarSection;
                                 options.AllowDismiss = item.ShowDismiss;
@@ -530,7 +535,6 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
         var dialogParameters = new DialogParameters
         {
             ShowDismiss = interaction.ShowDismiss,
-            DismissTitle = Loc[nameof(Resources.Dialogs.DialogCloseButtonText)],
             PrimaryAction = ResolvedPrimaryButtonText(interaction, intent),
             SecondaryAction = ResolvedSecondaryButtonText(interaction),
             PreventDismissOnOverlayClick = true,
@@ -566,10 +570,11 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
             : Loc[nameof(Resources.Dialogs.InteractionButtonCancel)];
     }
 
-    public async Task<IDialogReference> ShowMessageBoxAsync(IDialogService dialogService, MessageBoxContent content, DialogParameters parameters)
+    public async Task<IDialogReference> ShowMessageBoxAsync(DashboardDialogService dialogService, MessageBoxContent content, DialogParameters parameters)
     {
-        var dialogParameters = new DialogParameters
+        var dialogParameters = new DialogParameters<MessageBoxContent>
         {
+            Content = content,
             DialogType = DialogType.MessageBox,
             Alignment = HorizontalAlignment.Center,
             Title = content.Title,
@@ -582,7 +587,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
             OnDialogResult = parameters.OnDialogResult,
             PreventDismissOnOverlayClick = true
         };
-        return await dialogService.ShowDialogAsync(typeof(MessageBox), content, dialogParameters);
+        return await dialogService.ShowMessageBoxAsync(dialogParameters).ConfigureAwait(false);
     }
 
     private void NotifyInteractionAvailable()

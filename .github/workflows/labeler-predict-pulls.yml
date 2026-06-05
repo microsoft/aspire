@@ -43,7 +43,7 @@ env:
 jobs:
   predict-pull-label:
     # Do not automatically run the workflow on forks outside the 'dotnet' org
-    if: ${{ github.event_name == 'workflow_dispatch' || github.repository_owner == 'dotnet' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

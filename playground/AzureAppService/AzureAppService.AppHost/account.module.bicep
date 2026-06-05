@@ -42,3 +42,5 @@ resource db 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-08-15' = {
 output connectionString string = account.properties.documentEndpoint
 
 output name string = account.name
+
+output id string = account.id

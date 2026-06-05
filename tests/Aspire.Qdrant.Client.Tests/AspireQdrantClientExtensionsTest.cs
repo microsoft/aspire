@@ -23,12 +23,12 @@ public class AspireQdrantClientExtensionsTest : IClassFixture<QdrantContainerFix
     }
 
     private string DefaultConnectionString =>
-            RequiresDockerAttribute.IsSupported ? _containerFixture.GetConnectionString() : "Endpoint=http://localhost1:6331;Key=pass";
+            RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker) ? _containerFixture.GetConnectionString() : "Endpoint=http://localhost1:6331;Key=pass";
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task AddQdrantClient_HealthCheckShouldBeRegisteredWhenEnabled(bool useKeyed)
     {
         var key = DefaultConnectionName;

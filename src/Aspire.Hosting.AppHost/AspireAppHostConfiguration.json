@@ -2,7 +2,7 @@
   "type": "object",
   "properties": {
     "Parameters": {
-      "description": ".NET Aspire parameter configuration. A parameter's value will be retrieved from the property with the same name.",
+      "description": "Aspire parameter configuration. A parameter's value will be retrieved from the property with the same name.",
       "type": "object"
     }
   }

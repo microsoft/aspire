@@ -1,12 +1,12 @@
-# Manifest Specification for .NET Aspire's Distributed Application Model
+# Manifest Specification for Aspire's Distributed Application Model
 
-This is a specification for the manifest file for .NET Aspire's Distributed Application Model. The purpose of the manifest file is to allow developers to export definitions of components that comprise their distributed application model and their dependencies so that other tools can process it to facilitate deployment into target runtime environments.
+This is a specification for the manifest file for Aspire's Distributed Application Model. The purpose of the manifest file is to allow developers to export definitions of components that comprise their distributed application model and their dependencies so that other tools can process it to facilitate deployment into target runtime environments.
 
 The format of the manifest file itself does not pre-suppose a particular target environment but this document will make reference to specific cloud providers and technologies for illustrative purposes.
 
 ## Basic model
 
-The .NET Aspire distributed application model is comprised components which are typically deployed together as a unit. For example there may be a front-end ASP.NET Core application which calls into one or more backend services which in turn may depend on relational databases or caches. Consider the following sample (taken from the eShop light example):
+The Aspire distributed application model is comprised components which are typically deployed together as a unit. For example there may be a front-end ASP.NET Core application which calls into one or more backend services which in turn may depend on relational databases or caches. Consider the following sample (taken from the eShop light example):
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);

@@ -22,6 +22,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Orchestrator;
 
+[Trait("Partition", "3")]
 public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -400,7 +401,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             return Task.CompletedTask;
         });
 
-        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, parentResource.Resource, parentResource.Resource.Name));
+        await events.PublishAsync(new OnConnectionStringAvailableContext(CancellationToken.None, parentResource.Resource));
 
         Assert.True(parentConnectionStringAvailable);
         Assert.True(childConnectionStringAvailable);
@@ -453,6 +454,63 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.True(isSensitive);
     }
 
+    [Fact]
+    public async Task OnResourceFailedToStart_WithErrorMessage_SetsErrorStyleOnState()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var container = builder.AddContainer("api", "test-image");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourceFailedToStartContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            container.Resource,
+            "api-dcp",
+            ErrorMessage: "The endpoint `https` is not defined for the resource `api`. Available endpoints: `http`."));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var snapshotEvent));
+        Assert.Equal(KnownResourceStates.FailedToStart, snapshotEvent.Snapshot.State?.Text);
+        Assert.Equal(KnownResourceStateStyles.Error, snapshotEvent.Snapshot.State?.Style);
+    }
+
+    [Fact]
+    public async Task OnResourceFailedToStart_WithoutErrorMessage_DoesNotSetErrorStyle()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var container = builder.AddContainer("api", "test-image");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourceFailedToStartContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            container.Resource,
+            "api-dcp"));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var snapshotEvent));
+        Assert.Equal(KnownResourceStates.FailedToStart, snapshotEvent.Snapshot.State?.Text);
+        Assert.Null(snapshotEvent.Snapshot.State?.Style);
+    }
+
     private ApplicationOrchestrator CreateOrchestrator(
         DistributedApplicationModel distributedAppModel,
         ResourceNotificationService notificationService,
@@ -486,8 +544,10 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
                 CreateInteractionService(),
                 serviceProvider.GetRequiredService<ILogger<ParameterProcessor>>(),
                 executionContext,
-                deploymentStateManager: new MockDeploymentStateManager()),
-            Options.Create(dashboardOptions ?? new())
+                deploymentStateManager: new MockDeploymentStateManager(),
+                userSecretsManager: UserSecrets.NoopUserSecretsManager.Instance),
+            Options.Create(dashboardOptions ?? new()),
+            serviceProvider.GetRequiredService<ILogger<ApplicationOrchestrator>>()
         );
     }
 
@@ -510,6 +570,13 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         }
 
         public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }

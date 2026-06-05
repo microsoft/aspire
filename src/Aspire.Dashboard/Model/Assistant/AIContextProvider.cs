@@ -281,7 +281,7 @@ public class AIContextProvider : IAIContextProvider
         // Explicitly disable AI in configuration.
         if (_dashboardOptions.CurrentValue.AI.Disabled.GetValueOrDefault())
         {
-            _logger.LogInformation("AI is disabled in configuration.");
+            _logger.LogDebug("AI is disabled in configuration.");
             return false;
         }
 

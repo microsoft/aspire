@@ -144,7 +144,9 @@ internal static class PackageUpdateHelpers
             {
                 var id = packageResult.GetProperty("id").GetString()!;
 
-                var version = packageResult.GetProperty("latestVersion").GetString()!;
+                var version = packageResult.TryGetProperty("latestVersion", out var latestVersionProp)
+                    ? latestVersionProp.GetString()!
+                    : packageResult.GetProperty("version").GetString()!;
 
                 if (packageId == null || id == packageId)
                 {

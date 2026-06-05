@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
@@ -18,7 +16,7 @@ internal sealed class ContainerAppJobContext(IResource resource, ContainerAppEnv
     {
         _infrastructure = infra;
         // Write a fake parameter for the container app environment
-        // so azd knows the Dashboard URL - see https://github.com/dotnet/aspire/issues/8449.
+        // so azd knows the Dashboard URL - see https://github.com/microsoft/aspire/issues/8449.
         // This is temporary until a real fix can be made in azd.
         AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppDomain);
 

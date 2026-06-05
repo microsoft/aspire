@@ -22,7 +22,7 @@
 
   <PropertyGroup>
     <PackageId>Aspire.Hosting.Orchestration.$(DcpRuntime)</PackageId>
-    <Description>.NET Aspire Orchestration Dependencies</Description>
+    <Description>Aspire Orchestration Dependencies</Description>
   </PropertyGroup>
 
   <ItemGroup>

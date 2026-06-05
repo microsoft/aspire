@@ -1,8 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.ConsoleLogs;
-using Aspire.Hosting.ConsoleLogs;
+using Aspire.Shared.ConsoleLogs;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.ConsoleLogsTests;
@@ -18,7 +17,7 @@ public class LogEntriesTests
 
     private static void AddLogLine(LogEntries logEntries, string content, bool isError)
     {
-        var logParser = new LogParser(ConsoleColor.Black);
+        var logParser = new LogParser(ConsoleColor.Black, encodeForHtml: true);
         var logEntry = logParser.CreateLogEntry(content, isError, resourcePrefix: null);
         logEntries.InsertSorted(logEntry);
     }
@@ -30,7 +29,7 @@ public class LogEntriesTests
         var logEntries = CreateLogEntries();
 
         // Act
-        var logParser = new LogParser(ConsoleColor.Black);
+        var logParser = new LogParser(ConsoleColor.Black, encodeForHtml: true);
 
         // Insert log with no timestamp.
         var logEntry1 = logParser.CreateLogEntry("Test", isErrorOutput: false, resourcePrefix: null);
@@ -297,7 +296,7 @@ public class LogEntriesTests
     public void CreateLogEntry_AnsiAndUrl_HasUrlAnchor()
     {
         // Arrange
-        var parser = new LogParser(ConsoleColor.Black);
+        var parser = new LogParser(ConsoleColor.Black, encodeForHtml: true);
 
         // Act
         var entry = parser.CreateLogEntry("\x1b[36mhttps://www.example.com\u001b[0m", isErrorOutput: false, resourcePrefix: null);
@@ -312,7 +311,7 @@ public class LogEntriesTests
     public void CreateLogEntry_DefaultBackgroundColor_SkipMatchingColor(ConsoleColor defaultBackgroundColor, string output)
     {
         // Arrange
-        var parser = new LogParser(defaultBackgroundColor);
+        var parser = new LogParser(defaultBackgroundColor, encodeForHtml: true);
 
         // Act
         var entry = parser.CreateLogEntry("\u001b[40m\u001b[32minfo\u001b[39m\u001b[22m\u001b[49m: LoggerName", isErrorOutput: false, resourcePrefix: null);

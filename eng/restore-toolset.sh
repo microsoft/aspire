@@ -3,7 +3,7 @@
 # Install MAUI workload if -restoreMaui was passed
 # Only on macOS (MAUI doesn't support Linux, Windows uses .cmd)
 
-if [[ "$restore_maui" == true ]]; then
+if [[ "${restore_maui:-false}" == true ]]; then
   # Check if we're on macOS
   if [[ "$(uname -s)" == "Darwin" ]]; then
     echo ""

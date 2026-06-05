@@ -85,7 +85,7 @@ public class AspireAzureSearchExtensionsTests
 
         using var host = builder.Build();
 
-        // Unkeyed services don't work with keyed services. See https://github.com/dotnet/aspire/issues/3890
+        // Unkeyed services don't work with keyed services. See https://github.com/microsoft/aspire/issues/3890
         //var client1 = host.Services.GetRequiredService<SearchIndexClient>();
         var client2 = host.Services.GetRequiredKeyedService<SearchIndexClient>("search2");
         var client3 = host.Services.GetRequiredKeyedService<SearchIndexClient>("search3");

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.Azure;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.WebPubSub;
@@ -13,7 +15,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
 public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget
 {
     internal Dictionary<string, AzureWebPubSubHubResource> Hubs { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -28,9 +30,22 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
+    /// Gets the "id" output reference for the resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
+
+    /// <summary>
     /// Gets the connection string template for the manifest for Azure Web PubSub.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{Endpoint}");
+
+    /// <summary>
+    /// Gets the service endpoint URI expression for the Azure Web PubSub resource.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>https://{name}.webpubsub.azure.com</c>.
+    /// </remarks>
+    public ReferenceExpression UriExpression => ReferenceExpression.Create($"{Endpoint}");
 
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)
@@ -63,6 +78,10 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        yield return new("Uri", ReferenceExpression.Create($"{Endpoint}"));
+        yield return new("Uri", UriExpression);
     }
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["webpubsub"];
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.webpubsub.azure.com"];
 }

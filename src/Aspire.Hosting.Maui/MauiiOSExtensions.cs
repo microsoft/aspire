@@ -34,6 +34,9 @@ public static class MauiiOSExtensions
     /// are connected, use the overload with deviceId parameter to specify which device to use by UDID.
     /// You can find the device UDID in Xcode under Window > Devices and Simulators > Devices tab.
     /// </para>
+    /// <para>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddiOSDevice(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Add an iOS device to a MAUI project:
@@ -46,6 +49,7 @@ public static class MauiiOSExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "Convenience overload. Use the overload with name and optional device UDID instead.")]
     public static IResourceBuilder<MauiiOSDeviceResource> AddiOSDevice(
         this IResourceBuilder<MauiProjectResource> builder)
     {
@@ -79,6 +83,9 @@ public static class MauiiOSExtensions
     /// are connected, use the overload with deviceId parameter to specify which device to use by UDID.
     /// You can find the device UDID in Xcode under Window > Devices and Simulators > Devices tab.
     /// </para>
+    /// <para>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddiOSDevice(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Add multiple iOS devices to a MAUI project:
@@ -92,6 +99,7 @@ public static class MauiiOSExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "Convenience overload. Use the overload with the optional device UDID parameter instead.")]
     public static IResourceBuilder<MauiiOSDeviceResource> AddiOSDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name)
@@ -106,6 +114,7 @@ public static class MauiiOSExtensions
     /// <param name="name">The name of the iOS device resource.</param>
     /// <param name="deviceId">Optional device UDID to target a specific iOS device. If not specified, uses the only attached device (requires exactly one device to be connected).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new iOS device platform resource that will run the MAUI application
     /// targeting the iOS platform using <c>dotnet run</c>. The resource does not auto-start 
@@ -141,6 +150,7 @@ public static class MauiiOSExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport]
     public static IResourceBuilder<MauiiOSDeviceResource> AddiOSDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name,
@@ -230,6 +240,9 @@ public static class MauiiOSExtensions
     /// Xcode will launch the default simulator. To target a specific simulator, use the overload with
     /// simulatorId parameter.
     /// </para>
+    /// <para>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddiOSSimulator(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Add an iOS simulator to a MAUI project:
@@ -242,6 +255,7 @@ public static class MauiiOSExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "Convenience overload. Use the overload with name and optional simulator UDID instead.")]
     public static IResourceBuilder<MauiiOSSimulatorResource> AddiOSSimulator(
         this IResourceBuilder<MauiProjectResource> builder)
     {
@@ -270,6 +284,9 @@ public static class MauiiOSExtensions
     /// Xcode will launch the default simulator. To target a specific simulator, use the overload with
     /// simulatorId parameter.
     /// </para>
+    /// <para>
+    /// This overload is not available in polyglot app hosts. Use <see cref="AddiOSSimulator(IResourceBuilder{MauiProjectResource}, string, string)"/> instead.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Add multiple iOS simulators to a MAUI project:
@@ -283,6 +300,7 @@ public static class MauiiOSExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExportIgnore(Reason = "Convenience overload. Use the overload with the optional simulator UDID parameter instead.")]
     public static IResourceBuilder<MauiiOSSimulatorResource> AddiOSSimulator(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name)
@@ -297,6 +315,7 @@ public static class MauiiOSExtensions
     /// <param name="name">The name of the iOS simulator resource.</param>
     /// <param name="simulatorId">Optional simulator UDID to target a specific iOS simulator. If not specified, uses the default simulator.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new iOS simulator platform resource that will run the MAUI application
     /// targeting the iOS platform using <c>dotnet run</c>. The resource does not auto-start 
@@ -327,6 +346,7 @@ public static class MauiiOSExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport]
     public static IResourceBuilder<MauiiOSSimulatorResource> AddiOSSimulator(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name,

@@ -3,6 +3,12 @@
 
 namespace Aspire.Dashboard.Otlp.Model;
 
+/// <summary>
+/// Specifies the relationship between a span and its parent/children in a trace.
+/// </summary>
+/// <remarks>
+/// Values map to <c>OpenTelemetry.Proto.Trace.V1.Span.Types.SpanKind</c>.
+/// </remarks>
 public enum OtlpSpanKind
 {
     /// <summary>

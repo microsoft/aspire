@@ -57,6 +57,8 @@ public class AzureAppConfigurationExtensionsTests(ITestOutputHelper output)
             output appConfigEndpoint string = appConfig.properties.endpoint
 
             output name string = appConfig.name
+
+            output id string = appConfig.id
             """;
         output.WriteLine(manifest.BicepText);
         Assert.Equal(expectedBicep, manifest.BicepText);

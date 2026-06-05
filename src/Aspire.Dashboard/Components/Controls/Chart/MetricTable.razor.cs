@@ -10,6 +10,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
@@ -34,7 +35,10 @@ public partial class MetricTable : ChartBase
     public required IJSRuntime JS { get; init; }
 
     [Inject]
-    public required IDialogService DialogService { get; init; }
+    public required DashboardDialogService DialogService { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Resources.Dialogs> DialogsLoc { get; init; }
 
     public bool OnlyShowValueChangesInTable { get; set; } = true;
 
@@ -104,7 +108,6 @@ public partial class MetricTable : ChartBase
         {
             Title = DialogsLoc[nameof(Dashboard.Resources.Dialogs.ExemplarsDialogTitle)],
             PrimaryAction = DialogsLoc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],
-            DismissTitle = DialogsLoc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],
             SecondaryAction = string.Empty,
             Width = "800px",
             Height = "auto"

@@ -93,6 +93,25 @@ var tunnel = builder.AddDevTunnel(
              .WithReference(api);
 ```
 
+### Setting devtunnel region
+
+When creating a dev tunnel, you can optionally specify the Azure region where the tunnel will be hosted.
+If not set, when attempting to connect to an existing dev tunnel, it is possible based on ping a different region is chosen. This will create a new dev tunnel in that region,
+which may be undesired if testing registered webhooks or a similar scenario.
+
+To prevent this behaviour, it is recommended to explicitly set the desired region.
+
+```csharp
+var options = new DevTunnelOptions
+{
+    Region = DevTunnelRegion.NorthEurope
+};
+
+var tunnel = builder.AddDevTunnel(name: "devtunnel", options: options)            
+                    .WithReference(api);
+             
+```
+
 ### Multiple tunnels for different audiences
 
 ```csharp
@@ -117,7 +136,7 @@ builder.AddProject<Projects.ClientApp>("client")
        .WithReference(web, publicTunnel);  // Use the tunneled address for 'web'
 ```
 
-Environment variables are injected after the tunnel port is allocated using the [Aspire service discovery](https://learn.microsoft.com/dotnet/aspire/service-discovery/overview) configuration format:
+Environment variables are injected after the tunnel port is allocated using the [Aspire service discovery](https://aspire.dev/fundamentals/service-discovery/) configuration format:
 
 ```env
 services__{ResourceName}__{EndpointName}__0 = https://{public-host}/
@@ -206,7 +225,7 @@ The logging helps you verify that your tunnel configuration is working as expect
 
 ## Additional documentation
 
-* [Aspire documentation](https://learn.microsoft.com/dotnet/aspire/)
+* [Aspire documentation](https://aspire.dev/integrations/devtools/dev-tunnels/)
 * [Dev tunnels service](https://learn.microsoft.com/azure/developer/dev-tunnels/overview)
 * [Dev tunnels FAQ](https://learn.microsoft.com/azure/developer/dev-tunnels/faq)
 
@@ -214,6 +233,6 @@ The logging helps you verify that your tunnel configuration is working as expect
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 Contributions (improvements, clarifications, samples) are welcome.

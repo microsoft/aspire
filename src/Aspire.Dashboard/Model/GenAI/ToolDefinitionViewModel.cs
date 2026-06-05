@@ -10,4 +10,6 @@ public class ToolDefinitionViewModel
 {
     public required ToolDefinition ToolDefinition { get; init; }
     public bool Expanded { get; set; }
+    public bool Highlighted { get; set; }
+    public string ElementId { get; } = $"tool-def-{Guid.NewGuid():N}";
 }

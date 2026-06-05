@@ -18,4 +18,8 @@
     <PackageReference Include="Azure.Provisioning.CognitiveServices" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Tests" />
+  </ItemGroup>
+
 </Project>

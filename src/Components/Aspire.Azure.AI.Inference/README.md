@@ -1,13 +1,13 @@
 # Aspire.Azure.AI.Inference library
 
-Registers [ChatCompletionsClient](https://learn.microsoft.com/dotnet/api/azure.ai.inference.chatcompletionsclient) as a singleton in the DI container for connecting to Azure AI Foundry and GitHub Models. Enables corresponding metrics, logging and telemetry.
+Registers [ChatCompletionsClient](https://learn.microsoft.com/dotnet/api/azure.ai.inference.chatcompletionsclient) as a singleton in the DI container for connecting to Microsoft Foundry and GitHub Models. Enables corresponding metrics, logging and telemetry.
 
 ## Getting started
 
 ### Prerequisites
 
 - Azure subscription - [create one for free](https://azure.microsoft.com/free/)
-- Azure AI Foundry Resource - [create an Azure AI Foundry resource](https://learn.microsoft.com/azure/ai-foundry/how-to/develop/sdk-overview?tabs=sync&pivots=programming-language-csharp)
+- Microsoft Foundry Resource - [create an Microsoft Foundry resource](https://learn.microsoft.com/azure/ai-foundry/how-to/develop/sdk-overview?tabs=sync&pivots=programming-language-csharp)
 
 ### Install the package
 
@@ -36,11 +36,11 @@ public CognitiveController(ChatCompletionsClient client)
 }
 ```
 
-See the [Azure AI Foundry SDK quickstarts](https://learn.microsoft.com/azure/ai-foundry/how-to/develop/sdk-overview) for examples on using the `ChatCompletionsClient`.
+See the [Microsoft Foundry SDK quickstarts](https://learn.microsoft.com/azure/ai-foundry/how-to/develop/sdk-overview) for examples on using the `ChatCompletionsClient`.
 
 ## Configuration
 
-The Aspire Azure AI Inference library provides multiple options to configure the Azure AI Foundry Service based on the requirements and conventions of your project. Note that either an `Endpoint` and a deployment identifier (`Deployment` or `Model`), or a `ConnectionString` is required to be supplied.
+The Aspire Azure AI Inference library provides multiple options to configure the Microsoft Foundry Service based on the requirements and conventions of your project. Note that either an `Endpoint` and a deployment identifier (`Deployment` or `Model`), or a `ConnectionString` is required to be supplied.
 
 ### Use a connection string
 
@@ -52,9 +52,9 @@ builder.AddChatCompletionsClient("connectionName");
 
 And then the connection string will be retrieved from the `ConnectionStrings` configuration section. Two connection formats are supported:
 
-#### Azure AI Foundry Endpoint
+#### Microsoft Foundry Endpoint
 
-The recommended approach is to use an Endpoint, which works with the `ChatCompletionsClientSettings.Credential` property to establish a connection. If no credential is configured, the [DefaultAzureCredential](https://learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential) is used.
+The recommended approach is to use an Endpoint, which works with the `ChatCompletionsClientSettings.Credential` property to establish a connection. If no credential is configured, a [default TokenCredential is created based on the current environment](https://aka.ms/aspire/default-azure-credential).
 
 ```json
 {
@@ -80,7 +80,7 @@ Alternatively, a custom connection string can be used.
 
 The library supports multiple formats for specifying the deployment:
 
-- **`Deployment={deploymentName}`** - Preferred format for Azure AI Foundry deployments
+- **`Deployment={deploymentName}`** - Preferred format for Microsoft Foundry deployments
 - **`Model={modelName}`** - Format used by GitHub Models
 
 Only one of these keys should be present in a connection string. If multiple are provided, an `ArgumentException` will be thrown.
@@ -148,8 +148,8 @@ or by setting the "AZURE_EXPERIMENTAL_ENABLE_ACTIVITY_SOURCE" environment variab
 ## Additional documentation
 
 * https://learn.microsoft.com/dotnet/api/azure.ai.inference
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

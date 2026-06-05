@@ -31,7 +31,7 @@ namespace Aspire.Dashboard.ServiceClient;
 /// lives until the stream is closed.
 /// </para>
 /// <para>
-/// If the <c>DOTNET_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable is not specified, then there's
+/// If the <c>ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable is not specified, then there's
 /// no known endpoint to connect to, and this dashboard client will be disabled. Calls to
 /// <see cref="IDashboardClient.SubscribeResourcesAsync"/> and <see cref="IDashboardClient.SubscribeConsoleLogs"/>
 /// will throw if <see cref="IDashboardClient.IsEnabled"/> is <see langword="false"/>. Callers should
@@ -170,7 +170,8 @@ internal sealed class DashboardClient : IDashboardClient
                     HttpHandler = httpHandler,
                     ServiceConfig = new() { MethodConfigs = { methodConfig } },
                     LoggerFactory = _loggerFactory,
-                    ThrowOperationCanceledOnCancellation = true
+                    ThrowOperationCanceledOnCancellation = true,
+                    MaxReceiveMessageSize = 16 * 1024 * 1024 // 16 MB
                 });
 
             X509CertificateCollection GetFileCertificate()
@@ -343,6 +344,16 @@ internal sealed class DashboardClient : IDashboardClient
         }
     }
 
+    private int CalculateReplicaIndex(string displayName)
+    {
+        Debug.Assert(Monitor.IsEntered(_lock), "Caller must hold _lock.");
+
+        // There is no consistent way to know which replica is instance 1 vs instance 2. It shouldn't ever matter.
+        // This index provides an easy way to identify resources across app runs that takes into account replicas.
+        var replicas = _resourceByName.Values.Count(r => r.DisplayName == displayName);
+        return replicas + 1;
+    }
+
     private async Task<RetryResult> WatchResourcesAsync(RetryContext retryContext, CancellationToken cancellationToken)
     {
         var call = _client!.WatchResources(new WatchResourcesRequest { IsReconnect = retryContext.ErrorCount != 0 }, headers: _headers, cancellationToken: cancellationToken);
@@ -366,7 +377,7 @@ internal sealed class DashboardClient : IDashboardClient
                     foreach (var resource in response.InitialData.Resources)
                     {
                         // Add to map.
-                        var viewModel = resource.ToViewModel(_knownPropertyLookup, _logger);
+                        var viewModel = resource.ToViewModel(CalculateReplicaIndex(resource.DisplayName), _knownPropertyLookup, _logger);
                         _resourceByName[resource.Name] = viewModel;
 
                         // Send this update to any subscribers too.
@@ -386,7 +397,7 @@ internal sealed class DashboardClient : IDashboardClient
                         if (change.KindCase == WatchResourcesChange.KindOneofCase.Upsert)
                         {
                             // Upsert (i.e. add or replace)
-                            var viewModel = change.Upsert.ToViewModel(_knownPropertyLookup, _logger);
+                            var viewModel = change.Upsert.ToViewModel(CalculateReplicaIndex(change.Upsert.DisplayName), _knownPropertyLookup, _logger);
                             _resourceByName[change.Upsert.Name] = viewModel;
                             changes.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
                         }
@@ -411,6 +422,15 @@ internal sealed class DashboardClient : IDashboardClient
                 else
                 {
                     throw new FormatException($"Unexpected {nameof(WatchResourcesUpdate)} kind: {response.KindCase}");
+                }
+
+                // Resolve resource colors for all resources so that color assignment is
+                // deterministic of order returned from the service, not order that the color for a resource is first used.
+                if (changes is not null)
+                {
+                    var resolvedNames = _resourceByName.Values
+                        .Select(r => ResourceViewModel.GetResourceName(r, _resourceByName));
+                    ColorGenerator.Instance.ResolveAll(resolvedNames);
                 }
             }
 
@@ -731,17 +751,27 @@ internal sealed class DashboardClient : IDashboardClient
         return resourceLogLines;
     }
 
-    public async Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, CancellationToken cancellationToken)
+    public async Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         EnsureInitialized();
 
         var request = new ResourceCommandRequest()
         {
             CommandName = command.Name,
-            Parameter = command.Parameter,
             ResourceName = resourceName,
-            ResourceType = resourceType
+            ResourceType = resourceType,
+            NonInteractive = options.NonInteractive
         };
+
+        if (options.Arguments is { } arguments)
+        {
+            foreach (var (key, value) in arguments)
+            {
+                request.Arguments.Add(key, value);
+            }
+        }
 
         try
         {
@@ -760,7 +790,8 @@ internal sealed class DashboardClient : IDashboardClient
             return new ResourceCommandResponseViewModel()
             {
                 Kind = ResourceCommandResponseKind.Failed,
-                ErrorMessage = errorMessage
+                ErrorMessage = errorMessage,
+                Message = errorMessage
             };
         }
     }
@@ -791,7 +822,7 @@ internal sealed class DashboardClient : IDashboardClient
             {
                 foreach (var data in initialData)
                 {
-                    _resourceByName[data.Name] = data.ToViewModel(_knownPropertyLookup, _logger);
+                    _resourceByName[data.Name] = data.ToViewModel(CalculateReplicaIndex(data.DisplayName), _knownPropertyLookup, _logger);
                 }
             }
         }

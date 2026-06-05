@@ -8,6 +8,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents Azure Container Registry information for deployment targets.
 /// </summary>
+[Obsolete("Use IAzureContainerRegistryResource instead and access container registry through IAzureComputeEnvironmentResource.ContainerRegistry property.")]
 public interface IAzureContainerRegistry : IContainerRegistry
 {
     /// <summary>

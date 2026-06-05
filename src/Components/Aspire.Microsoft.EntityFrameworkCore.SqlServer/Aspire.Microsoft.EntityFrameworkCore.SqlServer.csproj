@@ -17,15 +17,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(VendoringDir)OpenTelemetry.Instrumentation.SqlClient\**\*.cs" LinkBase="OpenTelemetry.Instrumentation.SqlClient" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.SqlClient" />
   </ItemGroup>
   
 </Project>

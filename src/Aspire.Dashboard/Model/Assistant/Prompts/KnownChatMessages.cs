@@ -5,6 +5,7 @@ using System.Globalization;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.AI;
 
 namespace Aspire.Dashboard.Model.Assistant.Prompts;
@@ -84,7 +85,7 @@ internal static class KnownChatMessages
                 Summarize recent traces and structured logs for all resources.
                 Investigate the root cause of any errors in traces or structured logs.
                 """;
-                
+
             return new(ChatRole.User, prompt);
         }
 
@@ -176,9 +177,10 @@ internal static class KnownChatMessages
 
     public static class StructuredLogs
     {
-        public static ChatMessage CreateErrorStructuredLogsMessage(List<OtlpLogEntry> errorLogs, DashboardOptions options)
+        public static ChatMessage CreateErrorStructuredLogsMessage(List<OtlpLogEntry> errorLogs, DashboardOptions options, Func<IOtlpResource, string> getResourceName)
         {
-            var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(errorLogs, options);
+            var otlpData = TelemetryExportService.ConvertLogsToOtlpJson(errorLogs);
+            var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(otlpData, options, getResourceName);
 
             var prompt =
                 $"""
@@ -194,8 +196,10 @@ internal static class KnownChatMessages
             return new(ChatRole.User, prompt);
         }
 
-        public static ChatMessage CreateAnalyzeLogEntryMessage(OtlpLogEntry logEntry, DashboardOptions options)
+        public static ChatMessage CreateAnalyzeLogEntryMessage(OtlpLogEntry logEntry, DashboardOptions options, Func<IOtlpResource, string> getResourceName)
         {
+            var otlpData = TelemetryExportService.ConvertLogsToOtlpJson([logEntry]);
+
             var prompt =
                 $"""
                 My application has written a log entry. Provide context about the state of the app when the log entry was written and why.
@@ -204,7 +208,7 @@ internal static class KnownChatMessages
 
                 # LOG ENTRY DATA
 
-                {AIHelpers.GetStructuredLogJson(logEntry, options)}
+                {AIHelpers.GetStructuredLogJson(otlpData, options, getResourceName)}
                 """;
 
             return new(ChatRole.User, prompt);
@@ -280,9 +284,13 @@ internal static class KnownChatMessages
             return new ChatMessage(ChatRole.User, message);
         }
 
-        public static ChatMessage CreateAnalyzeTraceMessage(OtlpTrace trace, List<OtlpLogEntry> traceLogEntries, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers, DashboardOptions options)
+        public static ChatMessage CreateAnalyzeTraceMessage(OtlpTrace trace, List<OtlpLogEntry> traceLogEntries, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers, DashboardOptions options, Func<IOtlpResource, string> getResourceName)
         {
-            var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(traceLogEntries, options);
+            var spans = TelemetryExportService.ConvertTracesToOtlpJson([trace], outgoingPeerResolvers.ToArray()).ResourceSpans;
+            var (tracesData, _) = SharedAIHelpers.GetTracesJson(spans, getResourceName, AIHelpers.GetDashboardUrl(options));
+
+            var otlpData = TelemetryExportService.ConvertLogsToOtlpJson(traceLogEntries);
+            var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(otlpData, options, getResourceName);
 
             var prompt =
                 $"""
@@ -291,7 +299,7 @@ internal static class KnownChatMessages
 
                 # DISTRIBUTED TRACE DATA
 
-                {AIHelpers.GetTraceJson(trace, outgoingPeerResolvers, new PromptContext(), options)}
+                {tracesData}
                 
                 # STRUCTURED LOGS DATA
 
@@ -303,9 +311,13 @@ internal static class KnownChatMessages
             return new(ChatRole.User, prompt);
         }
 
-        public static ChatMessage CreateAnalyzeSpanMessage(OtlpSpan span, List<OtlpLogEntry> traceLogEntries, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers, DashboardOptions options)
+        public static ChatMessage CreateAnalyzeSpanMessage(OtlpSpan span, List<OtlpLogEntry> traceLogEntries, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers, DashboardOptions options, Func<IOtlpResource, string> getResourceName)
         {
-            var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(traceLogEntries, options);
+            var spans = TelemetryExportService.ConvertTracesToOtlpJson([span.Trace], outgoingPeerResolvers.ToArray()).ResourceSpans;
+            var (tracesData, _) = SharedAIHelpers.GetTracesJson(spans, getResourceName, AIHelpers.GetDashboardUrl(options));
+
+            var otlpData = TelemetryExportService.ConvertLogsToOtlpJson(traceLogEntries);
+            var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(otlpData, options, getResourceName);
 
             var prompt =
                 $"""
@@ -314,7 +326,7 @@ internal static class KnownChatMessages
 
                 # DISTRIBUTED TRACE DATA
 
-                {AIHelpers.GetTraceJson(span.Trace, outgoingPeerResolvers, new PromptContext(), options)}
+                {tracesData}
                 
                 # STRUCTURED LOGS DATA
                 
@@ -326,9 +338,10 @@ internal static class KnownChatMessages
             return new(ChatRole.User, prompt);
         }
 
-        public static ChatMessage CreateErrorTracesMessage(List<OtlpTrace> errorTraces, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers, DashboardOptions options)
+        public static ChatMessage CreateErrorTracesMessage(List<OtlpTrace> errorTraces, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers, DashboardOptions options, Func<IOtlpResource, string> getResourceName)
         {
-            var (tracesData, limitMessage) = AIHelpers.GetTracesJson(errorTraces, outgoingPeerResolvers, options);
+            var spans = TelemetryExportService.ConvertTracesToOtlpJson(errorTraces, outgoingPeerResolvers.ToArray()).ResourceSpans;
+            var (tracesData, limitMessage) = SharedAIHelpers.GetTracesJson(spans, getResourceName, AIHelpers.GetDashboardUrl(options));
 
             var prompt =
                 $"""

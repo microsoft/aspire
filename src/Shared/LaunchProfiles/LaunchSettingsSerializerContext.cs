@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 namespace Aspire.Hosting;
 
 [JsonSerializable(typeof(LaunchSettings))]
-[JsonSourceGenerationOptions(ReadCommentHandling = JsonCommentHandling.Skip)]
+[JsonSourceGenerationOptions(ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)]
 internal sealed partial class LaunchSettingsSerializerContext : JsonSerializerContext
 {
 

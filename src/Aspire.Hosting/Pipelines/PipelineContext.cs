@@ -16,6 +16,7 @@ namespace Aspire.Hosting.Pipelines;
 /// <param name="logger">The logger for pipeline operations.</param>
 /// <param name="cancellationToken">The cancellation token for the pipeline operation.</param>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class PipelineContext(
     DistributedApplicationModel model,
     DistributedApplicationExecutionContext executionContext,
@@ -47,4 +48,21 @@ public sealed class PipelineContext(
     /// Gets the cancellation token for the pipeline operation.
     /// </summary>
     public CancellationToken CancellationToken { get; set; } = cancellationToken;
+
+    /// <summary>
+    /// Gets the pipeline summary that steps can add information to.
+    /// The summary will be displayed to users after pipeline execution completes.
+    /// </summary>
+    /// <remarks>
+    /// Pipeline steps can add key-value pairs to the summary to provide useful information
+    /// about the pipeline execution, such as deployment targets, resource names, URLs, etc.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // In a pipeline step
+    /// context.PipelineContext.Summary.Add("☁️ Target", "Azure");
+    /// context.PipelineContext.Summary.Add("📦 Resource Group", "rg-myapp");
+    /// </code>
+    /// </example>
+    public PipelineSummary Summary { get; } = new();
 }

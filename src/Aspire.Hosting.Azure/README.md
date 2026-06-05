@@ -1,6 +1,6 @@
 # Aspire.Hosting.Azure library
 
-Provides core extensions to the .NET Aspire hosting model for Azure services.
+Provides core extensions to the Aspire hosting model for Azure services.
 
 ## Getting started
 
@@ -10,7 +10,7 @@ Provides core extensions to the .NET Aspire hosting model for Azure services.
 
 ### Install the package
 
-In your AppHost project, install the .NET Aspire Azure Hosting library with [NuGet](https://www.nuget.org):
+In your AppHost project, install the Aspire Azure Hosting library with [NuGet](https://www.nuget.org):
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure
@@ -18,7 +18,7 @@ dotnet add package Aspire.Hosting.Azure
 
 ## Configure Azure Provisioning for local development
 
-Adding Azure resources to the .NET Aspire application model will automatically enable development-time provisioning
+Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
 to be available via .NET configuration. Set these values in user secrets in order to allow resources to be configured
 automatically.
@@ -49,8 +49,9 @@ var bicepResource = builder.AddBicepTemplate("bicep", "template.bicep")
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/cloud/azure/overview/
 * https://learn.microsoft.com/azure/azure-resource-manager/bicep/overview
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

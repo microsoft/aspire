@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "Orleans.AppHost/Orleans.AppHost.csproj"
+  }
+}

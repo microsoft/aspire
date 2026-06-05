@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param env_outputs_azure_container_apps_environment_default_domain string
@@ -50,7 +50,7 @@ resource pg_kv_connectionstrings__db 'Microsoft.KeyVault/vaults/secrets@2024-11-
   parent: pg_kv
 }
 
-resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'api'
   location: location
   properties: {
@@ -203,7 +203,7 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
             }
             {
               name: 'HTTP_EP'
-              value: 'http://api.internal.${env_outputs_azure_container_apps_environment_default_domain}'
+              value: 'https://api.internal.${env_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'HTTPS_EP'
@@ -219,7 +219,7 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
             }
             {
               name: 'PORT'
-              value: '80'
+              value: '443'
             }
             {
               name: 'HOST'
@@ -227,11 +227,11 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
             }
             {
               name: 'HOSTANDPORT'
-              value: 'api.internal.${env_outputs_azure_container_apps_environment_default_domain}:80'
+              value: 'api.internal.${env_outputs_azure_container_apps_environment_default_domain}:443'
             }
             {
               name: 'SCHEME'
-              value: 'http'
+              value: 'https'
             }
             {
               name: 'INTERNAL_HOSTANDPORT'

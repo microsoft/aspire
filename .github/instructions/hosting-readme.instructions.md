@@ -23,6 +23,7 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 ```
 
 **Guidelines:**
+
 - Title format: `# Aspire.Hosting.{Technology} library`
 - Use "library" (not "package" or "component")
 - Start description with "Provides extension methods and resource definitions for an Aspire AppHost to configure..."
@@ -30,7 +31,7 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 ### 2. Getting Started Section
 
-```markdown
+````markdown
 ## Getting started
 
 ### Prerequisites
@@ -44,16 +45,17 @@ In your AppHost project, install the Aspire {Technology} Hosting library with [N
 \```dotnetcli
 dotnet add package Aspire.Hosting.{Technology}
 \```
-```
+````
 
 **Guidelines:**
+
 - Include a "Prerequisites" subsection only if there are specific requirements (e.g., Azure subscription for Azure resources)
 - Installation command should be in a `dotnetcli` code block
 - Use consistent phrasing: "In your AppHost project, install the Aspire {Technology} Hosting library with [NuGet](https://www.nuget.org):"
 
 ### 3. Usage Example
 
-```markdown
+````markdown
 ## Usage example
 
 Then, in the _AppHost.cs_ file of `AppHost`, add {a/an} {Technology} resource and consume the connection using the following methods:
@@ -62,11 +64,12 @@ Then, in the _AppHost.cs_ file of `AppHost`, add {a/an} {Technology} resource an
 var {resourceName} = builder.Add{Technology}("{name}"){.AddDatabase("dbname") if applicable};
 
 var myService = builder.AddProject<Projects.MyService>()
-                       .WithReference({resourceName});
+.WithReference({resourceName});
 \```
-```
+````
 
 **Guidelines:**
+
 - Start with "Then, in the _AppHost.cs_ file of `AppHost`, add..."
 - Show the minimal working example
 - Use descriptive variable names that match the technology (e.g., `redis`, `postgres`, `sql`, `mongodb`)
@@ -80,7 +83,7 @@ var myService = builder.AddProject<Projects.MyService>()
 
 For Azure services that support emulators:
 
-```markdown
+````markdown
 ### Emulator usage
 
 Aspire supports the usage of the {Azure Service} emulator. To use the emulator, add the following to your AppHost project:
@@ -91,7 +94,7 @@ var {resource} = builder.Add{AzureService}("{name}").RunAsEmulator();
 \```
 
 When the AppHost starts up, a local container running the {Azure Service} emulator will also be started.
-```
+````
 
 #### Azure Provisioning Configuration (if applicable)
 
@@ -103,7 +106,7 @@ For Azure resources:
 Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
 to be available via .NET configuration. The Aspire dashboard will prompt you to set these values if they are not already
-configured. See [Local Azure Provisioning](https://learn.microsoft.com/dotnet/aspire/azure/local-provisioning) for more details.
+configured. See [Local Azure Provisioning](https://aspire.dev/integrations/cloud/azure/local-provisioning/) for more details.
 
 > NOTE: Developers must have Owner access to the target subscription so that role assignments
 > can be configured for the provisioned resources.
@@ -119,9 +122,10 @@ configured. See [Local Azure Provisioning](https://learn.microsoft.com/dotnet/as
 ```
 
 **Guidelines:**
-- Include links to Microsoft Learn documentation for the component
+
+- Include links to aspire.dev documentation for the component
 - Include links to official technology documentation
-- Use the format: `https://learn.microsoft.com/dotnet/aspire/...`
+- Use the format: `https://aspire.dev/...`
 - For multiple links, use a bulleted list with `*` prefix (hosting READMEs) or separate lines (simpler hosting READMEs)
 
 ### 6. Feedback & Contributing
@@ -129,10 +133,11 @@ configured. See [Local Azure Provisioning](https://learn.microsoft.com/dotnet/as
 ```markdown
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 ```
 
 **Guidelines:**
+
 - Always include this section at the end
 - Use exactly this format with no additional text
 
@@ -145,6 +150,7 @@ _{Trademark notice text}_
 ```
 
 **Guidelines:**
+
 - Place trademark notices at the very end after "Feedback & contributing"
 - Use markdown italic formatting.
 - The trademark itself should be bolded using asterisks
@@ -156,7 +162,7 @@ _{Trademark notice text}_
 
 Here's a complete example for a hosting integration:
 
-```markdown
+````markdown
 # Aspire.Hosting.PostgreSQL library
 
 Provides extension methods and resource definitions for an Aspire AppHost to configure a PostgreSQL resource.
@@ -179,20 +185,20 @@ Then, in the _AppHost.cs_ file of `AppHost`, add a PostgreSQL resource and consu
 var db = builder.AddPostgres("pgsql").AddDatabase("mydb");
 
 var myService = builder.AddProject<Projects.MyService>()
-                       .WithReference(db);
+.WithReference(db);
 \```
 
 ## Additional documentation
 
-https://learn.microsoft.com/dotnet/aspire/database/postgresql-component
-https://learn.microsoft.com/dotnet/aspire/database/postgresql-entity-framework-component
+https://aspire.dev/integrations/databases/postgres-client/
+https://aspire.dev/integrations/databases/postgresql-extensions/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Postgres*, *PostgreSQL* and the *Slonik Logo* are trademarks or registered trademarks of the *PostgreSQL Community Association of Canada*, and used with their permission._
-```
+````
 
 ## Key Principles
 
@@ -215,11 +221,12 @@ _*Postgres*, *PostgreSQL* and the *Slonik Logo* are trademarks or registered tra
 ## When to Update
 
 Update hosting integration README.md files when:
+
 - Adding new resource types or major extension methods
 - Changing the primary usage pattern
 - Adding emulator support
 - Updating prerequisites or installation steps
-- New Microsoft Learn documentation becomes available
+- New aspire.dev documentation becomes available
 
 ## Review Checklist
 
@@ -230,7 +237,7 @@ When reviewing or creating a hosting integration README.md:
 - [ ] Installation section uses correct package name and `dotnetcli` code block
 - [ ] Usage example shows `Add{Technology}` method with `WithReference` pattern
 - [ ] Usage example uses appropriate variable names and resource names
-- [ ] "Additional documentation" section includes relevant Microsoft Learn links
+- [ ] "Additional documentation" section includes relevant aspire.dev links
 - [ ] "Feedback & contributing" section is present at the end
 - [ ] Trademark notices are included if applicable
 - [ ] No configuration details that belong in client integration READMEs

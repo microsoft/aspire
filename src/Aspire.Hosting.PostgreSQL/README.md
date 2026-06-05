@@ -52,13 +52,26 @@ The PostgreSQL database resource inherits all properties from its parent `Postgr
 
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
 
+## MCP (Model Context Protocol) Support
+
+The PostgreSQL hosting integration provides support for adding an MCP sidecar container that enables AI agents to interact with PostgreSQL databases. This is enabled by calling `WithPostgresMcp()` on a PostgreSQL database resource.
+
+```csharp
+var db = builder.AddPostgres("pg")
+                .AddDatabase("mydb")
+                .WithPostgresMcp();
+```
+
+The PostgreSQL MCP server is currently powered by [Postgres MCP Pro](https://github.com/crystaldba/postgres-mcp)) and provides tools
+for database exploration, query execution, index tuning, and health checks.
+
 ## Additional documentation
 
-https://learn.microsoft.com/dotnet/aspire/database/postgresql-component
-https://learn.microsoft.com/dotnet/aspire/database/postgresql-entity-framework-component
+https://aspire.dev/integrations/databases/postgres/postgres-get-started/
+https://aspire.dev/integrations/databases/efcore/postgresql/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Postgres, PostgreSQL and the Slonik Logo are trademarks or registered trademarks of the PostgreSQL Community Association of Canada, and used with their permission._

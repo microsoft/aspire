@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Azure.Provisioning.WebPubSub;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -10,6 +11,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="webpubsub">The <see cref="AzureWebPubSubResource"/> that the resource belongs to.</param>
+[DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Hub = {HubName}")]
 public class AzureWebPubSubHubResource(string name, AzureWebPubSubResource webpubsub) : Resource(name),
     IResourceWithParent<AzureWebPubSubResource>, IResourceWithConnectionString
 {

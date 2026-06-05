@@ -25,7 +25,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
     /// </summary>
     public string NormalizedContainerAppName => resource.Name.ToLowerInvariant();
 
-    protected record struct EndpointMapping(string Scheme, string Host, int Port, int? TargetPort, bool IsHttpIngress, bool External);
+    protected record struct EndpointMapping(string Scheme, string Host, int Port, int? TargetPort, bool IsHttpIngress, bool External, bool TlsEnabled);
     protected readonly Dictionary<string, EndpointMapping> _endpointMapping = [];
 
     // Resolved environment variables and command line args
@@ -186,7 +186,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
     private BicepValue<string> GetEndpointValue(EndpointMapping mapping, EndpointProperty property)
     {
-        var (scheme, host, port, targetPort, isHttpIngress, external) = mapping;
+        var (scheme, host, port, targetPort, isHttpIngress, external, tlsEnabled) = mapping;
 
         BicepValue<string> GetHostValue(string? prefix = null, string? suffix = null)
         {
@@ -208,6 +208,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             EndpointProperty.HostAndPort => GetHostValue(suffix: $":{port}"),
             EndpointProperty.TargetPort => targetPort is null ? AllocateContainerPortParameter() : $"{targetPort}",
             EndpointProperty.Scheme => scheme,
+            EndpointProperty.TlsEnabled => tlsEnabled ? bool.TrueString : bool.FalseString,
             _ => throw new NotSupportedException(),
         };
     }
@@ -221,6 +222,15 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReference ep)
         {
+            // The referenced endpoint may belong to a resource deployed to a different compute
+            // environment (for example a Foundry hosted agent). In that case delegate to the owning
+            // compute environment instead of looking it up in this environment's local endpoint map.
+            if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                ep, [_containerAppEnvironmentContext.Environment], out var crossExpr))
+            {
+                return ProcessValue(crossExpr, secretType, parent);
+            }
+
             var context = ep.Resource == resource
                 ? this
                 : _containerAppEnvironmentContext.GetContainerAppContext(ep.Resource);
@@ -273,6 +283,12 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReferenceExpression epExpr)
         {
+            if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                epExpr, [_containerAppEnvironmentContext.Environment], out var crossExpr))
+            {
+                return ProcessValue(crossExpr, secretType, parent);
+            }
+
             var context = epExpr.Endpoint.Resource == resource
                 ? this
                 : _containerAppEnvironmentContext.GetContainerAppContext(epExpr.Endpoint.Resource);
@@ -286,6 +302,43 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is ReferenceExpression expr)
         {
+            // Handle conditional expressions
+            if (expr.IsConditional)
+            {
+                var (conditionVal, _) = ProcessValue(expr.Condition!, secretType, parent: expr);
+
+                // If the condition resolves to a static string, evaluate at publish time
+                string? staticCondition = conditionVal is string str ? str : null;
+                if (staticCondition is null && conditionVal is BicepValue<string> bv
+                    && bv.Compile() is StringLiteralExpression sle)
+                {
+                    staticCondition = sle.Value;
+                }
+
+                if (staticCondition is not null)
+                {
+                    var branch = string.Equals(staticCondition, expr.MatchValue, StringComparison.OrdinalIgnoreCase)
+                        ? expr.WhenTrue!
+                        : expr.WhenFalse!;
+                    return ProcessValue(branch, secretType, parent: parent);
+                }
+
+                // Condition is a Bicep parameter/output — emit a ternary expression
+                var (whenTrueVal, trueSecret) = ProcessValue(expr.WhenTrue!, secretType, parent: expr);
+                var (whenFalseVal, falseSecret) = ProcessValue(expr.WhenFalse!, secretType, parent: expr);
+
+                var conditional = new ConditionalExpression(
+                    new BinaryExpression(BicepFunction.ToLower(ResolveValue(conditionVal).Compile()).Compile(), BinaryBicepOperator.Equal, new StringLiteralExpression((expr.MatchValue ?? string.Empty).ToLowerInvariant())),
+                    ResolveValue(whenTrueVal).Compile(),
+                    ResolveValue(whenFalseVal).Compile());
+
+                var finalSecret = trueSecret != SecretType.None || falseSecret != SecretType.None
+                    ? SecretType.Normal
+                    : SecretType.None;
+
+                return (new BicepValue<string>(conditional), finalSecret);
+            }
+
             // Special case simple expressions
             if (expr.Format == "{0}" && expr.ValueProviders.Count == 1)
             {

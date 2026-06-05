@@ -10,18 +10,24 @@ namespace Aspire.Hosting
 {
     public static partial class KafkaBuilderExtensions
     {
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<KafkaServerResource> AddKafka(this IDistributedApplicationBuilder builder, string name, int? port = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<KafkaServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<KafkaServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<KafkaServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<KafkaServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<KafkaUIContainerResource> WithHostPort(this ApplicationModel.IResourceBuilder<KafkaUIContainerResource> builder, int? port) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<KafkaServerResource> WithKafkaUI(this ApplicationModel.IResourceBuilder<KafkaServerResource> builder, System.Action<ApplicationModel.IResourceBuilder<KafkaUIContainerResource>>? configureContainer = null, string? containerName = null) { throw null; }
     }
 
-    public partial class KafkaServerResource : ApplicationModel.ContainerResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithEnvironment
+    [AspireExport(ExposeProperties = true)]
+    public partial class KafkaServerResource : ApplicationModel.ContainerResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithEnvironment
     {
         public KafkaServerResource(string name) : base(default!, default) { }
 

@@ -3,7 +3,7 @@
 
 using System.Diagnostics;
 
-namespace Aspire.Hosting.ConsoleLogs;
+namespace Aspire.Shared.ConsoleLogs;
 
 // Type is shared by dashboard and hosting.
 // It needs to be public in dashboard so it can be bound to a parameter.

@@ -31,3 +31,5 @@ resource signalrDefault 'Microsoft.SignalRService/signalR@2024-03-01' = {
 output hostName string = signalrDefault.properties.hostName
 
 output name string = signalrDefault.name
+
+output id string = signalrDefault.id

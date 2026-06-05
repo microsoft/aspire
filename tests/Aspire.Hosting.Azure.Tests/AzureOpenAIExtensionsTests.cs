@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.CognitiveServices;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.CognitiveServices;
 using Microsoft.Extensions.DependencyInjection;
@@ -89,7 +90,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
 
             param principalId string
 
-            resource openai 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
+            resource openai 'Microsoft.CognitiveServices/accounts@2025-09-01' existing = {
               name: openai_outputs_name
             }
 
@@ -105,6 +106,130 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
             """;
         output.WriteLine(openaiRolesManifest.BicepText);
         Assert.Equal(expectedBicep, openaiRolesManifest.BicepText);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_ValidRoles_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var openai = builder.AddAzureOpenAI("openai");
+        var container = builder.AddContainer("myContainer", "nginx");
+
+        var exception = Record.Exception(() =>
+            container.WithRoleAssignments(openai, AzureOpenAIRole.CognitiveServicesOpenAIUser, AzureOpenAIRole.CognitiveServicesOpenAIContributor));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_SingleRole_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var openai = builder.AddAzureOpenAI("openai");
+        var container = builder.AddContainer("myContainer", "nginx");
+
+        var exception = Record.Exception(() =>
+            container.WithRoleAssignments(openai, AzureOpenAIRole.CognitiveServicesUser));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_InvalidRole_ThrowsArgumentException()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var openai = builder.AddAzureOpenAI("openai");
+        var container = builder.AddContainer("myContainer", "nginx");
+        var invalidRole = (AzureOpenAIRole)(-1);
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            container.WithRoleAssignments(openai, invalidRole));
+
+        Assert.Contains("is not a valid AzureOpenAIRole value", exception.Message);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_MixedValidAndInvalidRoles_ThrowsOnInvalid()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var openai = builder.AddAzureOpenAI("openai");
+        var container = builder.AddContainer("myContainer", "nginx");
+        var invalidRole = (AzureOpenAIRole)123;
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            container.WithRoleAssignments(openai, AzureOpenAIRole.CognitiveServicesOpenAIUser, invalidRole));
+
+        Assert.Contains("is not a valid AzureOpenAIRole value", exception.Message);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_DuplicateRoles_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var openai = builder.AddAzureOpenAI("openai");
+        var container = builder.AddContainer("myContainer", "nginx");
+
+        var exception = Record.Exception(() =>
+            container.WithRoleAssignments(openai, AzureOpenAIRole.CognitiveServicesOpenAIUser, AzureOpenAIRole.CognitiveServicesOpenAIUser));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_AllBuiltInRoles_AreAccepted()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var openai = builder.AddAzureOpenAI("openai");
+        var container = builder.AddContainer("myContainer", "nginx");
+
+        var roles = new[]
+        {
+            AzureOpenAIRole.CognitiveServicesOpenAIContributor,
+            AzureOpenAIRole.CognitiveServicesOpenAIUser,
+            AzureOpenAIRole.CognitiveServicesUser
+        };
+
+        foreach (var role in roles)
+        {
+            var exception = Record.Exception(() =>
+                container.WithRoleAssignments(openai, role));
+
+            Assert.Null(exception);
+        }
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_EmptyRoles_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var openai = builder.AddAzureOpenAI("openai");
+        var container = builder.AddContainer("myContainer", "nginx");
+
+        var exception = Record.Exception(() =>
+            container.WithRoleAssignments(openai, Array.Empty<AzureOpenAIRole>()));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_NullRoles_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var openai = builder.AddAzureOpenAI("openai");
+        var container = builder.AddContainer("myContainer", "nginx");
+
+        var exception = Record.Exception(() =>
+            container.WithRoleAssignments(openai, (AzureOpenAIRole[]?)null!));
+
+        Assert.Null(exception);
     }
 
     [Fact]

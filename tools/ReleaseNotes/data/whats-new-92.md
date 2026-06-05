@@ -1,29 +1,29 @@
 ---
-title: What's new in .NET Aspire 9.2
-description: Learn what's new in the official general availability release of .NET Aspire 9.2.
+title: What's new in Aspire 9.2
+description: Learn what's new in the official general availability release of Aspire 9.2.
 ms.date: 04/10/2025
 ---
 
-## What's new in .NET Aspire 9.2
+## What's new in Aspire 9.2
 
-📢 .NET Aspire 9.2 is the next minor version release of .NET Aspire; it supports:
+📢 Aspire 9.2 is the next minor version release of Aspire; it supports:
 
 - .NET 8.0 Long Term Support (LTS)
 - .NET 9.0 Standard Term Support (STS)
 
-If you have feedback, questions, or want to contribute to .NET Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/dotnet/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://discord.com/invite/h87kDAHQgJ) to chat with team members.
+If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/microsoft/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://discord.com/invite/h87kDAHQgJ) to chat with team members.
 
-It's important to note that .NET Aspire releases out-of-band from .NET releases. While major versions of .NET Aspire align with .NET major versions, minor versions are released more frequently. For more information on .NET and .NET Aspire version support, see:
+It's important to note that Aspire releases out-of-band from .NET releases. While major versions of Aspire align with .NET major versions, minor versions are released more frequently. For more information on .NET and Aspire version support, see:
 
 - [.NET support policy](https://dotnet.microsoft.com/platform/support/policy): Definitions for LTS and STS.
-- [.NET Aspire support policy](https://dotnet.microsoft.com/platform/support/policy/aspire): Important unique product life cycle details.
+- [Aspire support policy](https://dotnet.microsoft.com/platform/support/policy/aspire): Important unique product life cycle details.
 
-## ⬆️ Upgrade to .NET Aspire 9.2
+## ⬆️ Upgrade to Aspire 9.2
 
 > [!IMPORTANT]
 > If you are using `azd` to deploy Azure PostgreSQL or Azure SQL Server, you now have to configure Azure Managed Identities. For more information, see [🛡️ Improved Managed Identity defaults](#️-improved-managed-identity-defaults).
 
-Moving between minor releases of .NET Aspire is simple:
+Moving between minor releases of Aspire is simple:
 
 1. In your app host project file (that is, _MyApp.AppHost.csproj_), update the [📦 Aspire.AppHost.Sdk](https://www.nuget.org/packages/Aspire.AppHost.Sdk) NuGet package to version `9.2.0`:
 
@@ -50,10 +50,10 @@ Moving between minor releases of .NET Aspire is simple:
     > [!IMPORTANT]
     > The `IsAspireHost` property is no longer required in the project file. For more information, see [🚧 Project file changes](#-project-file-changes).
 
-    For more information, see [.NET Aspire SDK](xref:dotnet/aspire/sdk).
+    For more information, see [Aspire SDK](xref:microsoft/aspire/sdk).
 
 1. Check for any NuGet package updates, either using the NuGet Package Manager in Visual Studio or the **Update NuGet Package** command in VS Code.
-1. Update to the latest [.NET Aspire templates](../fundamentals/aspire-sdk-templates.md) by running the following .NET command line:
+1. Update to the latest [Aspire templates](../fundamentals/aspire-sdk-templates.md) by running the following .NET command line:
 
     ```dotnetcli
     dotnet new update
@@ -62,15 +62,15 @@ Moving between minor releases of .NET Aspire is simple:
     > [!IMPORTANT]
     > The `dotnet new update` command updates all of your templates to the latest version.
 
-If your app host project file doesn't have the `Aspire.AppHost.Sdk` reference, you might still be using .NET Aspire 8. To upgrade to 9.0, follow [the upgrade guide](../get-started/upgrade-to-aspire-9.md).
+If your app host project file doesn't have the `Aspire.AppHost.Sdk` reference, you might still be using Aspire 8. To upgrade to 9.0, follow [the upgrade guide](../get-started/upgrade-to-aspire-9.md).
 
 ## 🖥️ App host enhancements
 
-The [app host](../fundamentals/app-host-overview.md) is the core of .NET Aspire, providing the local hosting environment for your distributed applications. In .NET Aspire 9.2, we've made several improvements to the app host:
+The [app host](../fundamentals/app-host-overview.md) is the core of Aspire, providing the local hosting environment for your distributed applications. In Aspire 9.2, we've made several improvements to the app host:
 
 ### 🚧 Project file changes
 
-The .NET Aspire app host project file no longer requires the `IsAspireHost` property. This property was moved to the `Aspire.AppHost.Sdk` SDK, therefore, you can remove it from your project file. For more information, see [dotnet/aspire issue #8144](https://github.com/dotnet/aspire/pull/8144).
+The Aspire app host project file no longer requires the `IsAspireHost` property. This property was moved to the `Aspire.AppHost.Sdk` SDK, therefore, you can remove it from your project file. For more information, see [microsoft/aspire issue #8144](https://github.com/microsoft/aspire/pull/8144).
 
 ### 🔗 Define custom resource URLs
 
@@ -94,13 +94,13 @@ For more information, see [Define custom resource URLs](../fundamentals/custom-r
 
 ## 🔧 Dashboard user experience improvements
 
-.NET Aspire 9.2 adds new features to the [dashboard](../fundamentals/dashboard/overview.md), making it a more powerful developer tool than ever. The following features were added to the dashboard in .NET Aspire 9.2:
+Aspire 9.2 adds new features to the [dashboard](../fundamentals/dashboard/overview.md), making it a more powerful developer tool than ever. The following features were added to the dashboard in Aspire 9.2:
 
 ### 🧩 Resource graph
 
 The resource graph is a new way to visualize the resources in your apps. It displays a graph of resources, linked by relationships. Click the 'Graph' tab on the Resources page to view the resource graph. See it in action on [James's BlueSky](https://bsky.app/profile/james.newtonking.com/post/3lj7odu4re22p).
 
-For more information, see [.NET Aspire dashboard: Resources page](../fundamentals/dashboard/explore.md#resources-page).
+For more information, see [Aspire dashboard: Resources page](../fundamentals/dashboard/explore.md#resources-page).
 
 ### 🎨 Resource icons
 
@@ -134,7 +134,7 @@ We've added a search text box to trace details. Now you can quickly filter large
 
 ### 🌐 HTTP-based resource command functionality
 
-[Custom resource commands](../fundamentals/custom-resource-commands.md) now support HTTP-based functionality with the addition of the `WithHttpCommand` API, enabling you to define endpoints for tasks like database migrations or resets. These commands can be run directly from the .NET Aspire dashboard.
+[Custom resource commands](../fundamentals/custom-resource-commands.md) now support HTTP-based functionality with the addition of the `WithHttpCommand` API, enabling you to define endpoints for tasks like database migrations or resets. These commands can be run directly from the Aspire dashboard.
 
 Adds WithHttpCommand(), which lets you define a resource command that sends an HTTP request to your app during development. Useful for triggering endpoints like seed or reset from the dashboard.
 
@@ -159,7 +159,7 @@ if (builder.Environment.IsDevelopment())
 }
 ```
 
-For more information, see [Custom HTTP commands in .NET Aspire](../fundamentals/http-commands.md).
+For more information, see [Custom HTTP commands in Aspire](../fundamentals/http-commands.md).
 
 ### 🗂️ Connection string resource type
 
@@ -197,11 +197,11 @@ The `ImagePullPolicy` is set to `Always`, which means the image will always be p
 
 ### 📂 New container files API
 
-In .NET Aspire 9.2, we've added a new `WithContainerFiles` API, a way to create files and folders inside a container at runtime by defining them in code. Under the hood, it uses `docker cp` / `podman cp` to copy the files in. Supports setting contents, permissions, and ownership—no bind mounts or temp files needed.
+In Aspire 9.2, we've added a new `WithContainerFiles` API, a way to create files and folders inside a container at runtime by defining them in code. Under the hood, it uses `docker cp` / `podman cp` to copy the files in. Supports setting contents, permissions, and ownership—no bind mounts or temp files needed.
 
 ## 🤝 Integrations updates
 
-Integrations are a key part of .NET Aspire, allowing you to easily add and configure services in your app. In .NET Aspire 9.2, we've made several updates to integrations:
+Integrations are a key part of Aspire, allowing you to easily add and configure services in your app. In Aspire 9.2, we've made several updates to integrations:
 
 ### 🔐 Redis/Valkey/Garnet: Password support enabled by default
 
@@ -209,7 +209,7 @@ The Redis, Valkey, and Garnet containers enable password authentication by defau
 
 ### 💾 Automatic database creation support
 
-There's [plenty of feedback and confusion](https://github.com/dotnet/aspire/issues/7101) around the `AddDatabase` API. The name implies that it adds a database, but it didn't actually create the database. In .NET Aspire 9.2, the `AddDatabase` API now creates a database for the following hosting integrations:
+There's [plenty of feedback and confusion](https://github.com/microsoft/aspire/issues/7101) around the `AddDatabase` API. The name implies that it adds a database, but it didn't actually create the database. In Aspire 9.2, the `AddDatabase` API now creates a database for the following hosting integrations:
 
 | Hosting integration | API reference |
 |--|--|
@@ -218,7 +218,7 @@ There's [plenty of feedback and confusion](https://github.com/dotnet/aspire/issu
 
 The Azure SQL and Azure PostgreSQL hosting integrations also expose `AddDatabase` APIs which work with their respective `RunAsContainer` methods. For more information, see [Understand Azure integration APIs](../azure/integrations-overview.md#understand-azure-integration-apis).
 
-By default, .NET Aspire will create an empty database if it doesn't exist. You can also optionally provide a custom script to run during creation for advanced setup or seeding.
+By default, Aspire will create an empty database if it doesn't exist. You can also optionally provide a custom script to run during creation for advanced setup or seeding.
 
 Example using Postgres:
 
@@ -247,11 +247,11 @@ The following hosting integrations don't currently support database creation:
 
 ## ☁️ Azure integration updates
 
-In .NET Aspire 9.2, we've made significant updates to Azure integrations, including:
+In Aspire 9.2, we've made significant updates to Azure integrations, including:
 
 ### ⚙️ Configure Azure Container Apps environments
 
-.NET Aspire 9.2 introduces `AddAzureContainerAppEnvironment`, allowing you to define an Azure Container App environment directly in your app model. This adds an `AzureContainerAppsEnvironmentResource` that lets you configure the environment and its supporting infrastructure (like container registries and volume file shares) using C# and the <xref:Azure.Provisioning> APIs—without relying on `azd` for infrastructure generation.
+Aspire 9.2 introduces `AddAzureContainerAppEnvironment`, allowing you to define an Azure Container App environment directly in your app model. This adds an `AzureContainerAppsEnvironmentResource` that lets you configure the environment and its supporting infrastructure (like container registries and volume file shares) using C# and the <xref:Azure.Provisioning> APIs—without relying on `azd` for infrastructure generation.
 
 > [!IMPORTANT]
 > This uses a different resource naming scheme than `azd`. If you're upgrading an existing deployment, this may create duplicate resources. To avoid this, you can opt into `azd`'s naming convention:
@@ -267,7 +267,7 @@ For more information, see [Configure Azure Container Apps environments](../azure
 
 ### 🆕 New Client integrations: Azure PostgreSQL (Npgsql & EF Core)
 
-.NET Aspire 9.2 adds client integrations for working with **Azure Database for PostgreSQL**, supporting both local development and secure cloud deployment.
+Aspire 9.2 adds client integrations for working with **Azure Database for PostgreSQL**, supporting both local development and secure cloud deployment.
 
 These integrations automatically use **Managed Identity (Entra ID)** in the cloud and during local development by default. They also support username/password, if configured in your AppHost. No application code changes are required to switch between authentication models.
 
@@ -333,7 +333,7 @@ This makes it easy and convenient to use the SDKs to interact with specific reso
 
 ### 🛡️ Improved Managed Identity defaults
 
-Starting in _.NET Aspire 9.2_, each Azure Container App now gets its _own dedicated managed identity_ by default. This is a significant change from previous versions, where all apps shared a single, highly privileged identity.
+Starting in _Aspire 9.2_, each Azure Container App now gets its _own dedicated managed identity_ by default. This is a significant change from previous versions, where all apps shared a single, highly privileged identity.
 
 This change strengthens Aspire's *secure by default* posture:
 
@@ -355,7 +355,7 @@ This new identity model is an important step toward more secure and maintainable
 
 ### 🔑 Least-privilege role assignment functionality
 
-.NET Aspire now supports APIs for modeling **least-privilege role assignments** when referencing Azure resources. This enables more secure defaults by allowing you to define exactly which roles each app needs for specific Azure resources.
+Aspire now supports APIs for modeling **least-privilege role assignments** when referencing Azure resources. This enables more secure defaults by allowing you to define exactly which roles each app needs for specific Azure resources.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -377,7 +377,7 @@ Each container app automatically gets its own **managed identity**, and Aspire n
 
 ### 1️⃣ First-class Azure Key Vault Secret support
 
-.NET Aspire now supports `IAzureKeyVaultSecretReference`, a new primitive for modeling secrets directly in the app model. This replaces `BicepSecretOutputReference` and gives finer grain control over Key Vault creation when using `AzureBicepResource`.
+Aspire now supports `IAzureKeyVaultSecretReference`, a new primitive for modeling secrets directly in the app model. This replaces `BicepSecretOutputReference` and gives finer grain control over Key Vault creation when using `AzureBicepResource`.
 
 You can now:
 
@@ -425,13 +425,13 @@ This update continues the security-focused improvements in this release.
 
 ## 🚀 Deployment improvements
 
-We're excited to announce several new deployment features in .NET Aspire 9.2, including:
+We're excited to announce several new deployment features in Aspire 9.2, including:
 
 ### 📦 Publishers (Preview)
 
-Publishers are a new extensibility point in .NET Aspire that allow you to define how your distributed application gets transformed into deployable assets. Rather than relying on an [intermediate manifest format](../deployment/manifest-format.md), publishers can now plug directly into the application model to generate Docker Compose files, Kubernetes manifests, Azure resources, or whatever else your environment needs.
+Publishers are a new extensibility point in Aspire that allow you to define how your distributed application gets transformed into deployable assets. Rather than relying on an [intermediate manifest format](../deployment/manifest-format.md), publishers can now plug directly into the application model to generate Docker Compose files, Kubernetes manifests, Azure resources, or whatever else your environment needs.
 
-When .NET Aspire launched, it introduced a deployment manifest format—a serialized snapshot of the application model. While useful it burdened deployment tools with interpreting the manifest and resource authors with ensuring accurate serialization. This approach also complicated schema evolution and target-specific behaviors.
+When Aspire launched, it introduced a deployment manifest format—a serialized snapshot of the application model. While useful it burdened deployment tools with interpreting the manifest and resource authors with ensuring accurate serialization. This approach also complicated schema evolution and target-specific behaviors.
 
 Publishers simplify this process by working directly with the full application model in-process, enabling richer, more flexible, and maintainable publishing experiences.
 
@@ -457,7 +457,7 @@ You can also build your own publisher by implementing the publishing APIs and ca
 
 ### 🆕 Aspire CLI (Preview)
 
-.NET Aspire 9.2 introduces the new **`aspire` CLI**, a tool for creating, running, and publishing Aspire applications from the command line. It provides a rich, interactive experience tailored for Aspire users.
+Aspire 9.2 introduces the new **`aspire` CLI**, a tool for creating, running, and publishing Aspire applications from the command line. It provides a rich, interactive experience tailored for Aspire users.
 
 The CLI is available as a .NET tool and can be installed with:
 
@@ -481,7 +481,7 @@ aspire publish --publisher docker-compose
 - `add <integration>` – Add an integration to your project  
 - `publish` – Generate deployment artifacts from your app host
 
-🧪 The CLI is **preview**. We're exploring how to make it a first-class experience for .NET Aspire users—your feedback is welcome!
+🧪 The CLI is **preview**. We're exploring how to make it a first-class experience for Aspire users—your feedback is welcome!
 
 ## 🧪 Testing template updates
 
@@ -497,10 +497,10 @@ By default, to the `v3` experience. For more information, see:
 - [Microsoft Testing Platform support in xUnit.net v3](https://xunit.net/docs/getting-started/v3/microsoft-testing-platform)
 
 > [!NOTE]
-> Both `v3` versions are only supported with .NET Aspire 9.2 or later.
+> Both `v3` versions are only supported with Aspire 9.2 or later.
 
 ## 💔 Breaking changes
 
-With every release, we strive to make .NET Aspire better. However, some changes may break existing functionality. The following breaking changes are introduced in .NET Aspire 9.2:
+With every release, we strive to make Aspire better. However, some changes may break existing functionality. The following breaking changes are introduced in Aspire 9.2:
 
-- [Breaking changes in .NET Aspire 9.2](../compatibility/9.2/index.md)
+- [Breaking changes in Aspire 9.2](../compatibility/9.2/index.md)

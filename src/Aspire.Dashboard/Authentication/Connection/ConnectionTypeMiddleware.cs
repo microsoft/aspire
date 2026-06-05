@@ -7,7 +7,7 @@ namespace Aspire.Dashboard.Authentication.Connection;
 
 /// <summary>
 /// This connection middleware registers a connection type feature on the connection.
-/// OTLP and MCP services check for this feature when authorizing incoming requests to
+/// OTLP services check for this feature when authorizing incoming requests to
 /// ensure services are only available on specified connections.
 /// </summary>
 internal sealed class ConnectionTypeMiddleware

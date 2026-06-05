@@ -11,6 +11,6 @@ internal static class AppConfigurationEmulatorContainerImageTags
     /// <remarks>azure-app-configuration/app-configuration-emulator</remarks>
     public const string Image = "azure-app-configuration/app-configuration-emulator";
 
-    /// <remarks>1.0.0-preview</remarks>
-    public const string Tag = "1.0.0-preview";
+    /// <remarks>1.0.2</remarks>
+    public const string Tag = "1.0.2";
 }

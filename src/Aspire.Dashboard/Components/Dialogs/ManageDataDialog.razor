@@ -1,0 +1,163 @@
+﻿@using Aspire.Dashboard.Components.Controls.Chart
+@using Aspire.Dashboard.Components.ResourcesGridColumns
+@using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Components.Controls.Grid
+@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Model.ManageData
+@using Resources = Aspire.Dashboard.Resources.Resources
+@using Dialogs = Aspire.Dashboard.Resources.Dialogs
+
+<div style="height: 44vh; overflow-y: auto;">
+    <FluentDataGrid @ref="_dataGrid"
+                    Items="@GetGridItems()"
+                    ItemSize="46"
+                    Virtualize="true"
+                    GenerateHeader="GenerateHeaderOption.Sticky"
+                    GridTemplateColumns="2fr 1fr"
+                    TGridItem="ManageDataGridItem"
+                    OnRowClick="@OnRowClicked"
+                    ShowHover="true"
+                    ItemKey="@(item => GetItemKey(item))"
+                    Class="enable-row-click">
+        <ChildContent>
+            <TemplateColumn Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]">
+                <HeaderCellItemTemplate>
+                    <div style="display: flex; justify-content: flex-start;">
+                        <div style="width: calc(100% - 10px);">
+                            <div class="name-title-text">
+                                <FluentButton Appearance="Appearance.Lightweight"
+                                              IconEnd="@GetHeaderCheckboxIcon()"
+                                              OnClick="OnSelectAllClicked"
+                                              Disabled="@(_resourceDataRows.Count == 0)"
+                                              style="margin-right: 8px;" />
+                                @ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]
+                            </div>
+                        </div>
+                    </div>
+
+                </HeaderCellItemTemplate>
+                <ChildContent>
+                    @{
+                        var indent = context.Depth * 48;
+                    }
+                    <span class="resources-name-container" style="margin-left: @(indent)px;">
+                        @if (context.IsResourceRow && context.ResourceRow is not null)
+                        {
+                            <span @onclick:stopPropagation="true" class="main-grid-expand-container @(IsResourceExpanded(context.ResourceRow.Name) ? "main-grid-expanded" : "main-grid-collapsed")">
+                                @if (context.ResourceRow.TelemetryData.Count > 0)
+                                {
+                                    <FluentButton Appearance="Appearance.Lightweight"
+                                                  Class="main-grid-expand-button"
+                                                  OnClick="@(() => OnToggleExpand(context.ResourceRow))"
+                                                  aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]">
+                                        <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Neutral" />
+                                    </FluentButton>
+                                }
+                            </span>
+                            <span @onclick:stopPropagation="true">
+                                <FluentButton Appearance="Appearance.Lightweight"
+                                              IconEnd="@GetResourceCheckboxIcon(context.ResourceRow)"
+                                              OnClick="@(() => OnSelectRowClicked(context.ResourceRow))"
+                                              style="margin-right: 8px;" />
+                            </span>
+                            @if (context.ResourceRow.Resource is not null)
+                            {
+                                <ResourceNameDisplay Resource="context.ResourceRow.Resource" FilterText="" FormatName="GetResourceName" />
+                            }
+                            else if (context.ResourceRow.OtlpResource is not null)
+                            {
+                                @* Telemetry-only resource - display with default icon *@
+                                <span class="resource-name-container">
+                                    @* Do this to trim significant whitespace so there isn't a space added between icon and text *@
+                                    @{
+                                        <FluentIcon Width="16px"
+                                                    Class="resource-icon"
+                                                    Color="Color.Custom"
+                                                    CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(context.ResourceRow.Name)"
+                                                    Value="@(new Icons.Filled.Size16.Book())" />
+                                    }
+                                    <span class="resource-name-text">@GetOtlpResourceName(context.ResourceRow.OtlpResource)</span>
+                                </span>
+                            }
+                        }
+                        else if (context.IsNestedRow && context.NestedRow is not null && context.ParentResourceName is not null)
+                        {
+                            <span @onclick:stopPropagation="true">
+                                <FluentButton Appearance="Appearance.Lightweight"
+                                              IconEnd="@(IsDataRowSelected(context.ParentResourceName, context.NestedRow.DataType) ? _iconSelectedMultiple : _iconUnselectedMultiple)"
+                                              OnClick="@(() => OnSelectDataRowClicked(context.ParentResourceName, context.NestedRow.DataType))"
+                                              style="margin-right: 8px;" />
+                            </span>
+                            <span class="cellText">@GetDataTypeDisplayName(context.NestedRow.DataType)</span>
+                        }
+                    </span>
+                </ChildContent>
+            </TemplateColumn>
+            <TemplateColumn Title="@Loc[nameof(Dialogs.ManageDataSummaryColumnHeader)]">
+                @if (context.IsResourceRow && context.ResourceRow is not null)
+                {
+                    <span @onclick:stopPropagation="true">
+                        @foreach (var dataRow in context.ResourceRow.TelemetryData)
+                        {
+                            <FluentButton Appearance="Appearance.Lightweight"
+                                          IconEnd="@dataRow.Icon"
+                                          OnClick="@(() => NavigateToDataPage(dataRow))"
+                                          Title="@GetDataTypeDisplayName(dataRow.DataType)"
+                                          aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
+                                          Style="margin-right: 4px;" />
+                        }
+                    </span>
+                }
+            </TemplateColumn>
+        </ChildContent>
+        <EmptyContent>
+            <FluentIcon Icon="Icons.Regular.Size24.AppGeneric" />&nbsp;@Loc[nameof(Dialogs.ManageDataNoResources)]
+        </EmptyContent>
+    </FluentDataGrid>
+</div>
+
+<div class="button-container">
+    <div>
+        <FluentButton IconStart="@(new Icons.Regular.Size16.ArrowDownload())"
+                      OnClick="ExportSelectedAsync"
+                      Loading="@_isExporting"
+                      Disabled="@AreNoneSelected()"
+                      Title="@Loc[nameof(Dialogs.ManageDataExportButtonText)]"
+                      aria-label="@Loc[nameof(Dialogs.ManageDataExportButtonText)]">
+            @Loc[nameof(Dialogs.ManageDataExportButtonText)]
+        </FluentButton>
+        <FluentButton IconStart="@(new Icons.Regular.Size16.Delete())"
+                      OnClick="RemoveSelectedAsync"
+                      Loading="@_isRemoving"
+                      Disabled="@AreNoneSelected()"
+                      Title="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]"
+                      aria-label="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]">
+            @Loc[nameof(Dialogs.ManageDataRemoveButtonText)]
+        </FluentButton>
+    </div>
+    @if (TelemetryImportService.IsImportEnabled)
+    {
+        <div>
+            <FluentInputFile AnchorId="import-button"
+                             DragDropZoneVisible="false"
+                             Accept=".zip,.json"
+                             Multiple="false"
+                             MaximumFileSize="@(100 * 1024 * 1024)"
+                             Mode="InputFileMode.SaveToTemporaryFolder"
+                             OnCompleted="OnInputFileCompleted"
+                             OnProgressChange="OnInputFileProgressChange" />
+            <FluentButton Id="import-button"
+                          IconStart="@(new Icons.Regular.Size16.ArrowUpload())"
+                          Loading="@_isImporting"
+                          Title="@Loc[nameof(Dialogs.SettingsImportButtonText)]"
+                          aria-label="@Loc[nameof(Dialogs.SettingsImportButtonText)]">
+                @Loc[nameof(Dialogs.SettingsImportButtonText)]
+            </FluentButton>
+        </div>
+    }
+</div>
+
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="error-message">@_errorMessage</div>
+}

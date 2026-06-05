@@ -27,6 +27,46 @@
         <target state="translated">Do uruchomienia aplikacji jest wymagana nowsza wersja pakietu Aspire.Hosting.AppHost. Upewnij się, że odwołujesz się do co najmniej wersji „{0}”.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InstallationInstructions">
+        <source>Installation instructions</source>
+        <target state="translated">Instrukcje instalacji</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MissingCommandNotificationTitle">
+        <source>Missing command</source>
+        <target state="translated">Brakujące polecenie</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">Zasób „{0}” ma trwały okres istnienia, ale host AppHost nie ma skonfigurowanych wpisów tajnych użytkownika. Wygenerowane wartości parametru (takie jak hasła) mogą ulec zmianie przy każdym ponownym uruchomieniu, co spowoduje ponowne utworzenie trwałych kontenerów. Uruchom „zestaw wpisów tajnych aspire” w celu zainicjowania wpisów tajnych użytkownika.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFound">
+        <source>Required command '{0}' was not found on PATH or at the specified location.</source>
+        <target state="translated">Nie znaleziono wymaganego polecenia „{0}” w ścieżce PATH lub w podanej lokalizacji.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandNotFoundWithLink">
+        <source>Required command '{0}' was not found on PATH or at the specified location. For installation instructions, see: {1}</source>
+        <target state="translated">Nie znaleziono wymaganego polecenia „{0}” w ścieżce PATH lub w podanej lokalizacji. Instrukcje instalacji znajdziesz pod adresem: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailed">
+        <source>Command '{0}' validation failed: {1}</source>
+        <target state="translated">Walidacja polecenia „{0}” nie powiodła się: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RequiredCommandValidationFailedWithLink">
+        <source>Command '{0}' validation failed: {1}. For installation instructions, see: {2}</source>
+        <target state="translated">Weryfikacja polecenia „{0}” nie powiodła się: {1}. Instrukcje instalacji znajdziesz pod adresem: {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceMayFailToStart">
+        <source>Resource '{0}' may fail to start: {1}</source>
+        <target state="translated">Uruchomienie zasobu „{0}” może się nie powieść: {1}</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

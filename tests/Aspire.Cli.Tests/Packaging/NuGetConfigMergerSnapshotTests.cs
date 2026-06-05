@@ -1,12 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
 using System.Xml.Linq;
 using Aspire.Cli.Packaging;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Configuration;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -21,24 +22,11 @@ public class NuGetConfigMergerSnapshotTests
         _output = output;
     }
 
-    private sealed class FakeNuGetPackageCache : INuGetPackageCache
-    {
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-    }
-
-    private sealed class FakeFeatures : IFeatures
-    {
-        public bool IsFeatureEnabled(string featureFlag, bool defaultValue) => defaultValue;
-    }
-
     private static PackagingService CreatePackagingService(CliExecutionContext executionContext)
     {
-        var features = new FakeFeatures();
+        var features = new TestFeatures();
         var configuration = new ConfigurationBuilder().Build();
-        return new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        return new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
     }
 
     private static async Task<FileInfo> WriteConfigAsync(DirectoryInfo dir, string content)
@@ -61,8 +49,7 @@ public class NuGetConfigMergerSnapshotTests
         var hivesDir = root.CreateSubdirectory("hives");
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
-        var cacheDir = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -76,12 +63,12 @@ public class NuGetConfigMergerSnapshotTests
             </configuration>
             """);
 
-        var channels = await packagingService.GetChannelsAsync();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         // Filter to explicit channels here so we never select the implicit ("default") channel
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -89,7 +76,8 @@ public class NuGetConfigMergerSnapshotTests
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
-            var hivePath = Path.Combine(hivesDir.FullName, channelName);
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
             xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
         }
 
@@ -110,8 +98,7 @@ public class NuGetConfigMergerSnapshotTests
         var hivesDir = root.CreateSubdirectory("hives");
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
-        var cacheDir2 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir2, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -138,12 +125,12 @@ public class NuGetConfigMergerSnapshotTests
             </configuration>
             """);
 
-        var channels = await packagingService.GetChannelsAsync();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         // Filter to explicit channels here so we never select the implicit ("default") channel
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -151,7 +138,8 @@ public class NuGetConfigMergerSnapshotTests
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
-            var hivePath = Path.Combine(hivesDir.FullName, channelName);
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
             xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
         }
 
@@ -172,8 +160,7 @@ public class NuGetConfigMergerSnapshotTests
         var hivesDir = root.CreateSubdirectory("hives");
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
-        var cacheDir3 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir3, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -199,12 +186,12 @@ public class NuGetConfigMergerSnapshotTests
             </configuration>
             """);
 
-        var channels = await packagingService.GetChannelsAsync();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         // Filter to explicit channels here so we never select the implicit ("default") channel
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -212,7 +199,8 @@ public class NuGetConfigMergerSnapshotTests
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
-            var hivePath = Path.Combine(hivesDir.FullName, channelName);
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
             xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
         }
 
@@ -233,8 +221,7 @@ public class NuGetConfigMergerSnapshotTests
         var hivesDir = root.CreateSubdirectory("hives");
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
-        var cacheDir4 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir4, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -258,12 +245,12 @@ public class NuGetConfigMergerSnapshotTests
             </configuration>
             """);
 
-        var channels = await packagingService.GetChannelsAsync();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         // Filter to explicit channels here so we never select the implicit ("default") channel
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -271,7 +258,8 @@ public class NuGetConfigMergerSnapshotTests
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
-            var hivePath = Path.Combine(hivesDir.FullName, channelName);
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
             xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
         }
 
@@ -292,8 +280,7 @@ public class NuGetConfigMergerSnapshotTests
         var hivesDir = root.CreateSubdirectory("hives");
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
-        var cacheDir5 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir5, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")));
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -322,12 +309,12 @@ public class NuGetConfigMergerSnapshotTests
             </configuration>
             """);
 
-        var channels = await packagingService.GetChannelsAsync();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         // Filter to explicit channels here so we never select the implicit ("default") channel
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -335,7 +322,8 @@ public class NuGetConfigMergerSnapshotTests
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
-            var hivePath = Path.Combine(hivesDir.FullName, channelName);
+            // Use forward slashes to match the normalized paths in NuGet config
+            var hivePath = Path.Combine(hivesDir.FullName, channelName).Replace('\\', '/');
             xmlString = xmlString.Replace(hivePath, "{PR_HIVE}");
         }
 

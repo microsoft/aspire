@@ -108,7 +108,7 @@ public partial class Login : IAsyncDisposable, IComponentWithTelemetry
 
     private string GetRedirectUrl()
     {
-        return ReturnUrl ?? DashboardUrls.ResourcesUrl();
+        return UrlValidationHelper.IsSafeRedirectUrl(ReturnUrl) ? ReturnUrl : DashboardUrls.ResourcesUrl();
     }
 
     public async ValueTask DisposeAsync()

@@ -5,7 +5,7 @@ using System.Globalization;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
-using Aspire.Hosting.ConsoleLogs;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.JSInterop;
@@ -45,6 +45,9 @@ public sealed partial class LogViewer
 
     [Parameter]
     public bool NoWrapLogs { get; set; }
+
+    [Parameter]
+    public bool ShowNoLogsMessage { get; set; }
 
     private Virtualize<LogEntry>? VirtualizeRef
     {

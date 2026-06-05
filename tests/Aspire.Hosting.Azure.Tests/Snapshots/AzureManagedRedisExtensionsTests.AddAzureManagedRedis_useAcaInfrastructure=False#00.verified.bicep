@@ -9,6 +9,7 @@ resource redis_cache 'Microsoft.Cache/redisEnterprise@2025-07-01' = {
   }
   properties: {
     minimumTlsVersion: '1.2'
+    publicNetworkAccess: 'Enabled'
   }
 }
 
@@ -24,5 +25,7 @@ resource redis_cache_default 'Microsoft.Cache/redisEnterprise/databases@2025-07-
 output connectionString string = '${redis_cache.properties.hostName}:10000,ssl=true'
 
 output name string = redis_cache.name
+
+output id string = redis_cache.id
 
 output hostName string = redis_cache.properties.hostName

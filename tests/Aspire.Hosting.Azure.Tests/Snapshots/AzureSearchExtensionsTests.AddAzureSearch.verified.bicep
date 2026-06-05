@@ -25,3 +25,5 @@ output connectionString string = 'Endpoint=https://${search.name}.search.windows
 output endpoint string = 'https://${search.name}.search.windows.net'
 
 output name string = search.name
+
+output id string = search.id

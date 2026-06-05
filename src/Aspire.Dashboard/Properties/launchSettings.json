@@ -1,18 +1,35 @@
 {
   "profiles": {
-    "Aspire.Dashboard": {
+    "https (browser only)": {
       "commandName": "Project",
-      "launchBrowser": true
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:15888"
     },
-    "Aspire.Dashboard.Test": {
+    "http (browser only)": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:15877",
-        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "https://localhost:15876"
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:4317",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:4318"
       },
-      "applicationUrl": "https://localhost:15889;http://localhost:15888"
+      "applicationUrl": "http://localhost:15889"
+    },
+    "http (browser + api)": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:4317",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:4318",
+        "ASPIRE_DASHBOARD_API_ENABLED": "true",
+        "DASHBOARD__API__PRIMARYAPIKEY": "12345678",
+        "DASHBOARD__API__AUTHMODE": "ApiKey"
+      },
+      "applicationUrl": "http://localhost:15889"
     }
   }
 }

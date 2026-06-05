@@ -39,7 +39,13 @@ public partial class ResourceSelect
 
     private Task SelectedResourceChangedCore()
     {
-        return InvokeAsync(() => SelectedResourceChanged.InvokeAsync(SelectedResource));
+        return InvokeAsync(async () =>
+        {
+            if (SelectedResource is { } resource)
+            {
+                await SelectedResourceChanged.InvokeAsync(resource);
+            }
+        });
     }
 
     private static void ValuedChanged(string? value)

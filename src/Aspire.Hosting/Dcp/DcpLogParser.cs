@@ -3,6 +3,7 @@
 
 using System.Text;
 using System.Text.Json;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dcp;
@@ -23,15 +24,30 @@ internal static class DcpLogParser
     /// <returns>True if the line was successfully parsed as a DCP log; false otherwise.</returns>
     public static bool TryParseDcpLog(ReadOnlySpan<byte> line, out string message, out LogLevel logLevel, out string category)
     {
+        return TryParseDcpLog(line, out message, out logLevel, out category, out _);
+    }
+
+    /// <summary>
+    /// Tries to parse a DCP-formatted log line.
+    /// </summary>
+    /// <param name="line">The log line to parse (as bytes).</param>
+    /// <param name="message">The extracted message.</param>
+    /// <param name="logLevel">The extracted log level.</param>
+    /// <param name="category">The extracted category.</param>
+    /// <param name="timestamp">The extracted timestamp, if present and valid.</param>
+    /// <returns>True if the line was successfully parsed as a DCP log; false otherwise.</returns>
+    public static bool TryParseDcpLog(ReadOnlySpan<byte> line, out string message, out LogLevel logLevel, out string category, out DateTimeOffset? timestamp)
+    {
         message = string.Empty;
         logLevel = LogLevel.Information;
         category = string.Empty;
+        timestamp = null;
 
         try
         {
             // The log format is
             // <date>\t<level>\t<category>\t<log message>
-            // e.g. 2023-09-19T20:40:50.509-0700      info    dcpctrl.ServiceReconciler       service /apigateway is now in state Ready       {"ServiceName": {"name":"apigateway"}}
+            // e.g. 2023-09-19T20:40:50.509-0700      info    dcp.ServiceReconciler       service /apigateway is now in state Ready       {"ServiceName": {"name":"apigateway"}}
 
             var tab = line.IndexOf((byte)'\t');
             if (tab < 0)
@@ -39,24 +55,24 @@ internal static class DcpLogParser
                 return false;
             }
 
-            // Skip date
+            var timestampBytes = line[..tab];
             line = line[(tab + 1)..];
-            
+
             tab = line.IndexOf((byte)'\t');
             if (tab < 0)
             {
                 return false;
             }
-            
+
             var level = line[..tab];
             line = line[(tab + 1)..];
-            
+
             tab = line.IndexOf((byte)'\t');
             if (tab < 0)
             {
                 return false;
             }
-            
+
             var categorySpan = line[..tab];
             line = line[(tab + 1)..];
 
@@ -67,6 +83,12 @@ internal static class DcpLogParser
             }
 
             var messageSpan = line;
+
+            var timestampText = Encoding.UTF8.GetString(timestampBytes);
+            if (TimestampParser.TryParseConsoleTimestamp(timestampText, out var timestampParseResult))
+            {
+                timestamp = timestampParseResult.Value.Timestamp;
+            }
 
             // Parse log level
             if (level.SequenceEqual("info"u8))
@@ -110,8 +132,22 @@ internal static class DcpLogParser
     /// <returns>True if the line was successfully parsed as a DCP log; false otherwise.</returns>
     public static bool TryParseDcpLog(string line, out string message, out LogLevel logLevel, out bool isErrorLevel)
     {
+        return TryParseDcpLog(line, out message, out logLevel, out isErrorLevel, out _);
+    }
+
+    /// <summary>
+    /// Tries to parse a DCP-formatted log line from a string.
+    /// </summary>
+    /// <param name="line">The log line to parse (as string).</param>
+    /// <param name="message">The extracted message.</param>
+    /// <param name="logLevel">The extracted log level.</param>
+    /// <param name="isErrorLevel">True if the log level indicates an error.</param>
+    /// <param name="timestamp">The extracted timestamp, if present and valid.</param>
+    /// <returns>True if the line was successfully parsed as a DCP log; false otherwise.</returns>
+    public static bool TryParseDcpLog(string line, out string message, out LogLevel logLevel, out bool isErrorLevel, out DateTimeOffset? timestamp)
+    {
         var bytes = Encoding.UTF8.GetBytes(line);
-        var result = TryParseDcpLog(bytes.AsSpan(), out message, out logLevel, out _);
+        var result = TryParseDcpLog(bytes.AsSpan(), out message, out logLevel, out _, out timestamp);
         isErrorLevel = logLevel == LogLevel.Error;
         return result;
     }
@@ -124,7 +160,7 @@ internal static class DcpLogParser
     public static string FormatSystemLog(string message)
     {
         const string SystemLogPrefix = "[sys] ";
-        
+
         // Try to find JSON portion in the message (starts with a tab followed by '{')
         var jsonStart = message.IndexOf('\t');
         if (jsonStart < 0)
@@ -145,7 +181,7 @@ internal static class DcpLogParser
             // Build the formatted message
             var sb = new StringBuilder();
             sb.Append(SystemLogPrefix);
-            
+
             // Add the text part if it exists
             if (!string.IsNullOrWhiteSpace(textPart))
             {
@@ -195,7 +231,7 @@ internal static class DcpLogParser
                         {
                             sb.Append(hasAddedField ? ", " : ": ");
                         }
-                        
+
                         // Add field in format "Name = Value"
                         sb.Append(name);
                         sb.Append(" = ");

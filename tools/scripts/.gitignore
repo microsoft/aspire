@@ -1,0 +1,6 @@
+.output/
+
+# Downloaded CI failure logs and artifacts
+failed_job_*.log
+artifact_*.zip
+artifact_*/

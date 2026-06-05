@@ -3,7 +3,7 @@
 
 using System.Diagnostics;
 
-namespace Aspire.Hosting.ConsoleLogs;
+namespace Aspire.Shared.ConsoleLogs;
 
 [DebuggerDisplay("LineNumber = {LineNumber}, Timestamp = {Timestamp}, ResourcePrefix = {ResourcePrefix}, Content = {Content}, Type = {Type}")]
 #if ASPIRE_DASHBOARD

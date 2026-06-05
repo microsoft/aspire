@@ -24,7 +24,7 @@ public class AspireNatsClientExtensionsTests : IClassFixture<NatsContainerFixtur
     public AspireNatsClientExtensionsTests(NatsContainerFixture containerFixture)
     {
         _containerFixture = containerFixture;
-        _connectionString = RequiresDockerAttribute.IsSupported
+        _connectionString = RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker)
             ? _containerFixture.GetConnectionString()
             : "nats://aspire-host:4222";
     }
@@ -206,7 +206,7 @@ public class AspireNatsClientExtensionsTests : IClassFixture<NatsContainerFixtur
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public void NatsInstrumentationEndToEnd()
     {
         RemoteExecutor.Invoke(async (connectionString) =>
@@ -231,6 +231,36 @@ public class AspireNatsClientExtensionsTests : IClassFixture<NatsContainerFixtur
             Assert.Equal("test publish", activity.OperationName);
             Assert.Contains(activity.Tags, kvp => kvp.Key == "messaging.system" && kvp.Value == "nats");
         }, _connectionString).Dispose();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RegistersINatsClient(bool useKeyed)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:nats", _connectionString)
+        ]);
+
+        if (useKeyed)
+        {
+            builder.AddKeyedNatsClient("nats");
+        }
+        else
+        {
+            builder.AddNatsClient("nats");
+        }
+
+        using var host = builder.Build();
+        var client = useKeyed ?
+            host.Services.GetRequiredKeyedService<INatsClient>("nats") :
+            host.Services.GetRequiredService<INatsClient>();
+        var connection = useKeyed ?
+            host.Services.GetRequiredKeyedService<INatsConnection>("nats") :
+            host.Services.GetRequiredService<INatsConnection>();
+
+        Assert.Same(connection, client);
     }
 
     [Fact]

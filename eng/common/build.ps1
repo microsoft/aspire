@@ -30,7 +30,6 @@ Param(
   [string] $runtimeSourceFeedKey = '',
   [switch] $excludePrereleaseVS,
   [switch] $nativeToolsOnMachine,
-  [switch] $restoreMaui,
   [switch] $help,
   [Parameter(ValueFromRemainingArguments=$true)][String[]]$properties
 )
@@ -77,7 +76,6 @@ function Print-Usage() {
   Write-Host "  -nodeReuse <value>      Sets nodereuse msbuild parameter ('true' or 'false')"
   Write-Host "  -buildCheck             Sets /check msbuild parameter"
   Write-Host "  -fromVMR                Set when building from within the VMR"
-  Write-Host "  -restoreMaui            Restore the MAUI workload after restore (only on Windows/macOS)"
   Write-Host ""
 
   Write-Host "Command line arguments not listed above are passed thru to msbuild."

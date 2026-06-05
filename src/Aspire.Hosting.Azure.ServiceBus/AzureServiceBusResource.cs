@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.ServiceBus;
@@ -12,8 +14,9 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure Service Bus resource.</param>
+[AspireExport]
 public class AzureServiceBusResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithAzureFunctionsConfig, IResourceWithEndpoints
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithAzureFunctionsConfig, IResourceWithEndpoints, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     internal List<AzureServiceBusQueueResource> Queues { get; } = [];
     internal List<AzureServiceBusTopicResource> Topics { get; } = [];
@@ -32,6 +35,11 @@ public class AzureServiceBusResource(string name, Action<AzureResourceInfrastruc
     /// Gets the "name" output reference for the resource.
     /// </summary>
     public BicepOutputReference NameOutputReference => new("name", this);
+
+    /// <summary>
+    /// Gets the "id" output reference for the resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
 
     internal EndpointReference EmulatorEndpoint => new(this, "emulator");
 
@@ -185,4 +193,8 @@ public class AzureServiceBusResource(string name, Action<AzureResourceInfrastruc
             yield return new("ConnectionString", ConnectionStringExpression);
         }
     }
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["namespace"];
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.servicebus.windows.net"];
 }

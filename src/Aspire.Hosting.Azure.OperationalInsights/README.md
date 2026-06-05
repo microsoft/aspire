@@ -57,4 +57,4 @@ var myService = builder.AddProject<Projects.MyService>()
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

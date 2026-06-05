@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="AddingAppHostProjectToSolution">
         <source>Adding AppHost project to solution...</source>
-        <target state="translated">Agregando el proyecto AppHost a la solución...</target>
+        <target state="needs-review-translation">Agregando el proyecto AppHost a la solución...</target>
         <note />
       </trans-unit>
       <trans-unit id="AddingProjectsToSolution">
@@ -17,14 +17,34 @@
         <target state="translated">Agregando el proyecto ServiceDefaults a la solución...</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostCreatedRunOne">
+        <source>Aspire AppHost created! To complete setup, run:</source>
+        <target state="new">Aspire AppHost created! To complete setup, run:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostCreatedRunOneOf">
+        <source>Aspire AppHost created! To complete setup, run one of:</source>
+        <target state="new">Aspire AppHost created! To complete setup, run one of:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireInitializationComplete">
         <source>Aspire initialization complete!</source>
         <target state="translated">Se ha completado la inicialización de Aspire.</target>
         <note />
       </trans-unit>
+      <trans-unit id="CreatedFile">
+        <source>Created {0}</source>
+        <target state="new">Created {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CreatingAppHostFromTemplate">
+        <source>Creating AppHost from template...</source>
+        <target state="new">Creating AppHost from template...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CreatingAppHostProject">
         <source>Creating AppHost project...</source>
-        <target state="translated">Creando proyecto AppHost...</target>
+        <target state="needs-review-translation">Creando proyecto AppHost...</target>
         <note />
       </trans-unit>
       <trans-unit id="CreatingServiceDefaultsProject">
@@ -32,9 +52,44 @@
         <target state="translated">Creando proyecto ServiceDefaults...</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeprecatedOptionWarning">
+        <source>`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</source>
+        <target state="new">`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
-        <source>Initialize Aspire support in an existing solution or create a single-file AppHost.</source>
-        <target state="translated">Inicializa la compatibilidad con Initialize en una solución existente o crea un AppHost de un solo archivo.</target>
+        <source>Initialize Aspire in an existing codebase</source>
+        <target state="needs-review-translation">Inicializa la compatibilidad con Initialize en una solución existente o crea un AppHost de un solo archivo.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedToCreateAppHostFromTemplate">
+        <source>Failed to create AppHost from template (exit code {0}).</source>
+        <target state="new">Failed to create AppHost from template (exit code {0}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedToParseExistingConfig">
+        <source>Failed to parse existing {0} at '{1}': {2}</source>
+        <target state="new">Failed to parse existing {0} at '{1}': {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FileAlreadyExistsSkipping">
+        <source>{0} already exists — skipping.</source>
+        <target state="new">{0} already exists — skipping.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FixOrRemoveConfigAndRerun">
+        <source>Fix or remove {0} and re-run `aspire init`.</source>
+        <target state="new">Fix or remove {0} and re-run `aspire init`.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InstallingAspireProjectTemplates">
+        <source>Installing Aspire project templates...</source>
+        <target state="new">Installing Aspire project templates...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LanguageOptionDescription">
+        <source>The programming language for the AppHost (csharp, typescript)</source>
+        <target state="new">The programming language for the AppHost (csharp, typescript)</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleSolutionsFound">
@@ -44,7 +99,12 @@
       </trans-unit>
       <trans-unit id="NoSolutionFoundCreatingSingleFileAppHost">
         <source>No solution file found. Creating single-file AppHost...</source>
-        <target state="translated">No se encontró ningún archivo de solución. Creando AppHost de un solo archivo...</target>
+        <target state="needs-review-translation">No se encontró ningún archivo de solución. Creando AppHost de un solo archivo...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResolvingTemplateVersion">
+        <source>Resolving template version...</source>
+        <target state="translated">Resolviendo versión de plantilla...</target>
         <note />
       </trans-unit>
       <trans-unit id="SolutionDetected">
@@ -55,6 +115,11 @@
       <trans-unit id="SolutionAlreadyInitialized">
         <source>Solution has already been initialized with Aspire.</source>
         <target state="translated">La solución ya está inicializada con Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SolutionAndProjectInSameDirectory">
+        <source>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</source>
+        <target state="new">The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</target>
         <note />
       </trans-unit>
     </body>

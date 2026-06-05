@@ -11,7 +11,7 @@ public class PlaywrightProvider
     public const string BrowserPathEnvironmentVariableName = "BROWSER_PATH";
     private const string PlaywrightBrowsersPathEnvironmentVariableName = "PLAYWRIGHT_BROWSERS_PATH";
 
-    public static bool HasPlaywrightSupport => RequiresPlaywrightAttribute.IsSupported;
+    public static bool HasPlaywrightSupport => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Playwright);
 
     public static async Task<IBrowser> CreateBrowserAsync(BrowserTypeLaunchOptions? options = null)
     {

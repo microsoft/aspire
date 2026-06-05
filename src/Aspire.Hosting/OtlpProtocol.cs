@@ -16,5 +16,10 @@ public enum OtlpProtocol
     /// <summary>
     /// Http/Protobuf-based OTLP exporter.
     /// </summary>
-    HttpProtobuf
+    HttpProtobuf,
+
+    /// <summary>
+    /// Http/JSON-based OTLP exporter.
+    /// </summary>
+    HttpJson
 }

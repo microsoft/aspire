@@ -1,9 +1,10 @@
-#pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECERTIFICATES001
 
 using Microsoft.Extensions.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
+
+builder.AddDockerComposeEnvironment("compose");
 
 var pass = builder.AddParameter("pass", "p@ssw0rd1");
 
@@ -13,14 +14,17 @@ var cache = builder
 
 var weatherapi = builder.AddProject<Projects.AspireWithNode_AspNetCoreApi>("weatherapi");
 
+#pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 var frontend = builder.AddJavaScriptApp("frontend", "../NodeFrontend", "watch")
+    .WithPnpm()
     .WithReference(weatherapi)
     .WaitFor(weatherapi)
     .WithReference(cache)
     .WaitFor(cache)
     .WithHttpEndpoint(env: "PORT")
     .WithExternalHttpEndpoints()
-    .PublishAsDockerFile();
+    .PublishAsPackageScript("start");
+#pragma warning restore ASPIREJAVASCRIPT001
 
 var launchProfile = builder.Configuration["DOTNET_LAUNCH_PROFILE"];
 

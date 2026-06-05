@@ -9,5 +9,5 @@ internal static class YarpContainerImageTags
 
     public const string Image = "dotnet/nightly/yarp";
 
-    public const string Tag = "2.3.0-preview.4";
+    public const string Tag = "2.3-preview";
 }

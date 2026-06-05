@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Hosting.Kubernetes.Extensions;
+using System.Text.RegularExpressions;
+using YamlDotNet.Core;
 
-internal static class HelmExtensions
+namespace Aspire.Hosting.Kubernetes.Extensions;
+internal static partial class HelmExtensions
 {
     private const string DeploymentKey = "deployment";
     private const string StatefulSetKey = "statefulset";
@@ -16,6 +18,10 @@ internal static class HelmExtensions
     public const string ConfigKey = "config";
     public const string TemplateFileSeparator = "---";
 
+    public const string StartDelimiter = "{{";
+    public const string EndDelimiter = "}}";
+    public const string PipelineDelimiter = "|";
+
     /// <summary>
     /// Converts the specified resource name into a Helm configuration section name.
     /// </summary>
@@ -26,14 +32,17 @@ internal static class HelmExtensions
     public static string ToHelmValuesSectionName(this string resourceName)
         => $"{resourceName.Replace("-", "_")}";
 
+    public static string ToHelmExpression(this string expression)
+        => $"{StartDelimiter} {expression} {EndDelimiter}";
+
     public static string ToHelmParameterExpression(this string parameterName, string resourceName)
-        => $"{{{{ {ValuesSegment}.{ParametersKey}.{resourceName}.{parameterName} }}}}".ToHelmValuesSectionName();
+        => $"{ValuesSegment}.{ParametersKey}.{resourceName}.{parameterName}".ToHelmValuesSectionName().ToHelmExpression();
 
     public static string ToHelmSecretExpression(this string parameterName, string resourceName)
-        => $"{{{{ {ValuesSegment}.{SecretsKey}.{resourceName}.{parameterName} }}}}".ToHelmValuesSectionName();
+        => $"{ValuesSegment}.{SecretsKey}.{resourceName}.{parameterName}".ToHelmValuesSectionName().ToHelmExpression();
 
     public static string ToHelmConfigExpression(this string parameterName, string resourceName)
-        => $"{{{{ {ValuesSegment}.{ConfigKey}.{resourceName}.{parameterName} }}}}".ToHelmValuesSectionName();
+        => $"{ValuesSegment}.{ConfigKey}.{resourceName}.{parameterName}".ToHelmValuesSectionName().ToHelmExpression();
 
     public static string ToHelmChartName(this string applicationName)
         => applicationName.ToLower().Replace("_", "-").Replace(".", "-");
@@ -70,8 +79,68 @@ internal static class HelmExtensions
         => $"{resourceName.ToKubernetesResourceName()}-{volumeName}-{PvKey}";
 
     public static bool ContainsHelmExpression(this string value)
-        => value.Contains($"{{{{ {ValuesSegment}.", StringComparison.Ordinal);
+        => ExpressionPattern().IsMatch(value);
 
-    public static bool ContainsHelmSecretExpression(this string value)
-        => value.Contains($"{{{{ {ValuesSegment}.{SecretsKey}.", StringComparison.Ordinal);
+    public static bool ContainsHelmValuesExpression(this string value)
+        => ExpressionPattern().IsMatch(value)
+        && value.Contains($"{ValuesSegment}.", StringComparison.Ordinal);
+
+    public static bool ContainsHelmValuesSecretExpression(this string value)
+        => ExpressionPattern().IsMatch(value)
+        && value.Contains($"{ValuesSegment}.{SecretsKey}.", StringComparison.Ordinal);
+
+    public static (bool, ScalarStyle?) ShouldDoubleQuoteString(string value)
+    {
+        // Flow control expressions (if/else) must be rendered as plain YAML so Helm
+        // can process them as template expressions without YAML escaping. This check
+        // runs first because if/else blocks contain multiple {{ }} pairs and won't
+        // match ScalarExpressionPattern.
+        if (HelmFlowControlPattern().IsMatch(value))
+        {
+            return (false, ScalarStyle.ForcePlain);
+        }
+
+        if (!ScalarExpressionPattern().IsMatch(value))
+        {
+            return (true, null);
+        }
+
+        // Scalar Helm expressions that contain type conversions (| int, | float64, etc.)
+        // must be rendered as plain (unquoted) YAML so that Helm can process them as
+        // template expressions without YAML escaping interference.
+        if (EndWithNonStringTypePattern().IsMatch(value))
+        {
+            return (false, ScalarStyle.ForcePlain);
+        }
+
+        return (true, null);
+    }
+
+    /// <summary>
+    /// Preserves numeric Helm conversions while ensuring the rendered value is written as a string.
+    /// </summary>
+    public static string EnsureStringOutput(this string value)
+    {
+        return EndWithNonStringTypePattern().Replace(value, match =>
+        {
+            var endDelimiterIndex = match.Value.LastIndexOf(EndDelimiter, StringComparison.Ordinal);
+
+            return endDelimiterIndex >= 0
+                ? $"{match.Value[..endDelimiterIndex].TrimEnd()} {PipelineDelimiter} toString {EndDelimiter}"
+                : match.Value;
+        });
+    }
+
+    [GeneratedRegex(@"^\{\{\s*if\b")]
+    internal static partial Regex HelmFlowControlPattern();
+
+    [GeneratedRegex(@"\{\{[^}]*\|\s*(int|int64|float64)\s*\}\}")]
+    internal static partial Regex EndWithNonStringTypePattern();
+
+    [GeneratedRegex(@"((?<=^\{\{\s*)(?:[^{}]+?)(?=(?:\}\}$)))")]
+    internal static partial Regex ScalarExpressionPattern();
+
+    [GeneratedRegex(@"((?<=\{\{\s*)(?:[^{}]+?)(?=(?:\}\})))")]
+    internal static partial Regex ExpressionPattern();
+
 }

@@ -1,3 +1,27 @@
+parameters:
+  - name: packageVSCodeExtensionAsPreRelease
+    displayName: 'Package VS Code Extension as Pre-Release'
+    type: boolean
+    default: false
+  # Operator-controlled override for the AspireCliChannel baked into native CLI
+  # binaries by build_sign_native.yml. The default 'auto' lets the pipeline pick
+  # stable / staging / daily / pr-<N> from Build.Reason and Build.SourceBranch
+  # (where release/* and internal/release/* branches always resolve to 'staging'
+  # so stabilizing dogfood builds aren't mis-baked as 'stable' — see
+  # https://github.com/microsoft/aspire/issues/17527). Set this to 'stable' when
+  # kicking off the official GA ship build from a release/* branch so the
+  # distributed binary identifies as stable and `aspire init` writes a
+  # nuget.org-only nuget.config matching the promoted package set.
+  - name: aspireCliChannelOverride
+    displayName: 'Aspire CLI channel override (auto = derive from branch; set to stable for the GA ship build)'
+    type: string
+    default: 'auto'
+    values:
+      - auto
+      - stable
+      - staging
+      - daily
+
 trigger:
   batch: true
   branches:
@@ -90,6 +114,8 @@ resources:
 extends:
   template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
   parameters:
+    settings:
+      networkIsolationPolicy: Permissive,CFSClean,CFSClean2
     featureFlags:
       autoEnablePREfastWithNewRuleset: false
       autoEnableRoslynWithNewRuleset: false
@@ -106,7 +132,7 @@ extends:
         justificationForDisabling: 'see https://portal.microsofticm.com/imp/v3/incidents/incident/482258316/summary'
       sourceAnalysisPool:
         name: NetCore1ESPool-Internal
-        image: windows.vs2022preview.amd64
+        image: windows.vs2026preview.scout.amd64
         os: windows
       tsa:
         enabled: true
@@ -143,6 +169,7 @@ extends:
             - osx-x64
           codeSign: true
           teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
             $(_SignArgs)
@@ -158,6 +185,20 @@ extends:
           # no need to sign ELF binaries on linux
           codeSign: false
           teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
+          extraBuildArgs: >-
+            /p:Configuration=$(_BuildConfig)
+            $(_OfficialBuildIdArgs)
+
+      - template: /eng/pipelines/templates/build_sign_native.yml@self
+        parameters:
+          agentOs: windows
+          targetRidsForSameOS:
+            - win-x64
+            - win-arm64
+          codeSign: true
+          teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
             $(_SignArgs)
@@ -200,7 +241,7 @@ extends:
 
             pool:
               name: NetCore1ESPool-Internal
-              image: windows.vs2022preview.amd64
+              image: windows.vs2026preview.scout.amd64
               os: windows
 
             variables:
@@ -210,6 +251,7 @@ extends:
             preSteps:
               - checkout: self
                 fetchDepth: 1
+                clean: true
 
             steps:
               - task: DownloadPipelineArtifact@2
@@ -218,7 +260,27 @@ extends:
                   itemPattern: |
                     **/aspire-cli-*.zip
                     **/aspire-cli-*.tar.gz
-                  targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)'
+                  # Download to a separate directory from artifacts/packages so that
+                  # MicroBuild's -sign step doesn't process these already-signed archives.
+                  # Repacking tar.gz on Windows changes their SHA-256, breaking installer
+                  # validation (Homebrew cask audit, WinGet manifest) against published URLs.
+                  targetPath: '$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)'
+
+              - task: DownloadPipelineArtifact@2
+                displayName: 🟣Download Native CLI Packages
+                inputs:
+                  itemPattern: |
+                    **/Aspire.Cli*.nupkg
+                    **/microsoft-aspire-cli*.tgz
+                  targetPath: '$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)'
+
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  & "$(Build.SourcesDirectory)/eng/scripts/stage-native-cli-tool-packages.ps1" `
+                    -DownloadRoot "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)" `
+                    -ShippingDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping" `
+                    -RequireNpmPackages
+                displayName: 🟣Stage Native CLI Packages
 
               - task: PowerShell@2
                 displayName: 🟣List artifacts packages contents
@@ -227,27 +289,31 @@ extends:
                   script: |
                     Get-ChildItem -Path "$(Build.SourcesDirectory)\artifacts\packages" -File -Recurse | Select-Object FullName, @{Name="Size(MB)";Expression={[math]::Round($_.Length/1MB,2)}} | Format-Table -AutoSize
 
-              - task: NodeTool@0
+              - task: UseNode@1
                 displayName: 🟣Install node.js
                 inputs:
-                  versionSpec: '20.x'
+                  version: '22.x'
+
+              - task: npmAuthenticate@0
+                displayName: 🟣NPM authenticate
+                inputs:
+                  workingFile: $(Build.SourcesDirectory)\.npmrc
 
               - task: PowerShell@2
-                displayName: 🟣Install yarn
+                displayName: 🟣Set .npmrc environment
                 inputs:
                   targetType: 'inline'
-                  script: |
-                    $env:NPM_CONFIG_USERCONFIG="$(Build.SourcesDirectory)\.npmrc"
-                    npm install -g yarn@1.22.22
-                    yarn --version
-                  workingDirectory: '$(Build.SourcesDirectory)'
+                  script: Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$(Build.SourcesDirectory)\.npmrc"
+
+              - template: /eng/pipelines/templates/install-corepack.yml
+                parameters:
+                  displayPrefix: '🟣'
 
               - task: PowerShell@2
                 displayName: 🟣Install vsce
                 inputs:
                   targetType: 'inline'
                   script: |
-                    $env:NPM_CONFIG_USERCONFIG="$(Build.SourcesDirectory)\.npmrc"
                     npm install -g @vscode/vsce@3.7.1
                     vsce --version
                   workingDirectory: '$(Build.SourcesDirectory)'
@@ -261,13 +327,253 @@ extends:
                   repoLogPath: $(Build.Arcade.LogsPath)
                   repoTestResultsPath: $(Build.Arcade.TestResultsPath)
                   isWindows: true
-                  targetRids:
-                    - win-x64
-                    - win-arm64
-      - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
-        - template: /eng/common/templates-official/job/onelocbuild.yml@self
-          parameters:
-            LclSource: lclFilesfromPackage
-            LclPackageId: 'LCL-JUNO-PROD-ASPIRE'
-            MirrorRepo: aspire
-            MirrorBranch: main
+                  packageVSCodeExtensionAsPreRelease: ${{ parameters.packageVSCodeExtensionAsPreRelease }}
+
+              # Extract the Aspire version from a generated nupkg filename so downstream
+              # stages can use it. Aspire.Hosting.AppHost has no RID in its filename and
+              # does not suppress final package version stabilization, so stripping the
+              # prefix cleanly yields the stable version for installer publishing.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                  $nupkg = Get-ChildItem -Path $shippingDir -Filter "Aspire.Hosting.AppHost.*.nupkg" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -notmatch '\.symbols\.' } |
+                    Select-Object -First 1
+
+                  if (-not $nupkg) {
+                    Write-Error "Could not find Aspire.Hosting.AppHost nupkg in $shippingDir"
+                    exit 1
+                  }
+
+                  $version = $nupkg.Name -replace '^Aspire\.Hosting\.AppHost\.', '' -replace '\.nupkg$', ''
+
+                  if ($version -notmatch '^\d+\.\d+\.\d+') {
+                    Write-Error "Extracted version '$version' does not look like a valid semver. Check the nupkg name."
+                    exit 1
+                  }
+
+                  Write-Host "Detected Aspire version: $version (from $($nupkg.Name))"
+                  Write-Host "##vso[task.setvariable variable=aspireVersion;isOutput=true]$version"
+
+                  # Tag the build so the release pipeline can auto-derive ReleaseVersion
+                  # without operators retyping it. The 'release-version - ' prefix avoids
+                  # collisions with other custom build tags (e.g., 1ES compliance tags),
+                  # and the tag is visible in the AzDO source-build picker so operators
+                  # can verify the version at queue time. The format intentionally mirrors
+                  # the ' - '-separated 'BAR ID - <id>' tag style: AzDO's 1ES PT request
+                  # validator rejects ':' in tag names because the tag becomes part of the
+                  # URL path of the addbuildtag REST call.
+                  Write-Host "##vso[build.addbuildtag]release-version - $version"
+                name: computeVersion
+                displayName: 🟣Compute Aspire version from nupkg
+
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $artifactVersion = dotnet msbuild "$(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj" -getProperty:PackageVersion -property:SuppressFinalPackageVersion=true -property:OfficialBuildId=$(BUILD.BUILDNUMBER)
+                  $artifactVersion = $artifactVersion.Trim()
+
+                  if ($artifactVersion -notmatch '^\d+\.\d+\.\d+') {
+                    Write-Error "Computed artifact version '$artifactVersion' does not look like a valid semver. Check PackageVersion evaluation."
+                    exit 1
+                  }
+
+                  Write-Host "Detected installer artifact version: $artifactVersion"
+                  Write-Host "##vso[task.setvariable variable=aspireArtifactVersion;isOutput=true]$artifactVersion"
+                name: computeArtifactVersion
+                displayName: 🟣Compute installer artifact version
+
+              # Determine stable vs prerelease for installer pipelines.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $versionKind = dotnet msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
+                  $versionKind = $versionKind.Trim()
+                  Write-Host "DotNetFinalVersionKind: '$versionKind'"
+
+                  if ($versionKind -eq 'release') {
+                    $channel = 'stable'
+                  } else {
+                    $channel = 'prerelease'
+                  }
+
+                  # Safety gate (defense in depth): on a release branch with
+                  # StabilizePackageVersion=true the channel MUST be stable. The
+                  # two signals are normally coupled via eng/Versions.props
+                  # (StabilizePackageVersion=true => DotNetFinalVersionKind=release
+                  # => channel=stable). A mismatch indicates someone overrode one
+                  # property without the other — refuse to build prerelease
+                  # installer artifacts under a stable release-branch name.
+                  $stabilize = dotnet msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:StabilizePackageVersion
+                  if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Failed to read StabilizePackageVersion from eng/Versions.props (dotnet msbuild exit code: $LASTEXITCODE). Cannot evaluate release-branch safety gate; refusing to continue."
+                    exit 1
+                  }
+                  $stabilize = $stabilize.Trim()
+                  $isReleaseBranch = '$(Build.SourceBranch)'.StartsWith('refs/heads/release/') -or '$(Build.SourceBranch)'.StartsWith('refs/heads/internal/release/')
+                  Write-Host "StabilizePackageVersion: '$stabilize'"
+                  Write-Host "Build.SourceBranch: '$(Build.SourceBranch)' (isReleaseBranch=$isReleaseBranch)"
+                  if ($isReleaseBranch -and $stabilize -eq 'true' -and $channel -ne 'stable') {
+                    Write-Error "Release branch + StabilizePackageVersion=true but installer channel computed as '$channel'. Refusing to build prerelease installer artifacts on a stable release branch."
+                    exit 1
+                  }
+
+                  Write-Host "Installer channel: $channel"
+                  Write-Host "##vso[task.setvariable variable=installerChannel;isOutput=true]$channel"
+                name: computeChannel
+                displayName: 🟣Determine installer channel
+
+      # OneLocBuild is temporarily disabled while we work with the loc team
+      # to reconfigure it after the repo migration from dotnet/aspire to microsoft/aspire.
+      # - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
+      #   - template: /eng/common/templates-official/job/onelocbuild.yml@self
+      #     parameters:
+      #       LclSource: lclFilesfromPackage
+      #       LclPackageId: 'LCL-JUNO-PROD-ASPIRE'
+      #       GitHubOrg: microsoft
+      #       MirrorRepo: aspire
+      #       MirrorBranch: main
+
+    # ----------------------------------------------------------------
+    # Generate installer packages (WinGet + Homebrew) and validate npm install.
+    # Artifacts are consumed by release-publish-nuget.yml for stable
+    # publishing. No publishing happens from this pipeline.
+    # ----------------------------------------------------------------
+    - stage: prepare_installers
+      displayName: Prepare Installers
+      dependsOn:
+        - build
+      variables:
+        aspireVersion: $[ stageDependencies.build.Windows.outputs['computeVersion.aspireVersion'] ]
+        aspireArtifactVersion: $[ stageDependencies.build.Windows.outputs['computeArtifactVersion.aspireArtifactVersion'] ]
+        installerChannel: $[ stageDependencies.build.Windows.outputs['computeChannel.installerChannel'] ]
+      condition: |
+        and(
+          succeeded(),
+          or(
+            eq(variables['Build.Reason'], 'PullRequest'),
+            or(
+              ne(dependencies.build.outputs['Windows.computeChannel.installerChannel'], 'stable'),
+              or(
+                eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+                startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+              )
+            )
+          )
+        )
+      jobs:
+      - template: /eng/common/templates-official/jobs/jobs.yml@self
+        parameters:
+          enableMicrobuild: false
+          enablePublishUsingPipelines: false
+          enablePublishBuildAssets: false
+          # WinGet and Homebrew jobs only consume previously-built CLI archives;
+          # they don't run the repo build, so artifacts/log/$(_BuildConfig) is
+          # never created. Leaving this 'true' makes the 1ES Publish Logs output
+          # fail because its targetPath doesn't exist.
+          enablePublishBuildArtifacts: false
+          enableTelemetry: true
+          workspace:
+            clean: all
+          jobs:
+          - job: WinGet
+            displayName: WinGet Manifest
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: 1es-windows-2022
+              os: windows
+            steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (win-x64)
+              inputs:
+                artifact: native_archives_win_x64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_win_x64'
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (win-arm64)
+              inputs:
+                artifact: native_archives_win_arm64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_win_arm64'
+            - template: /eng/pipelines/templates/prepare-winget-manifest.yml@self
+              parameters:
+                version: $(aspireVersion)
+                artifactVersion: $(aspireArtifactVersion)
+                channel: $(installerChannel)
+                archiveRoot: $(Pipeline.Workspace)/native-archives
+
+          - job: Homebrew
+            displayName: Homebrew Cask
+            timeoutInMinutes: 30
+            pool:
+              name: Azure Pipelines
+              vmImage: macOS-latest-internal
+              os: macOS
+            steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (osx-x64)
+              inputs:
+                artifact: native_archives_osx_x64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_osx_x64'
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (osx-arm64)
+              inputs:
+                artifact: native_archives_osx_arm64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_osx_arm64'
+            - template: /eng/pipelines/templates/prepare-homebrew-cask.yml@self
+              parameters:
+                version: $(aspireVersion)
+                channel: $(installerChannel)
+                archiveRoot: $(Pipeline.Workspace)/native-archives
+
+          - job: NpmInstall_Windows_x64
+            displayName: npm install validation (win-x64)
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: 1es-windows-2022
+              os: windows
+            steps:
+              - template: /eng/pipelines/templates/npm-cli-install-validation-steps.yml@self
+                parameters:
+                  rid: win-x64
+                  validationSummaryArtifactName: $(NPM_VALIDATION_SUMMARY_WIN_X64_ARTIFACT)
+
+          - job: NpmInstall_Linux_x64
+            displayName: npm install validation (linux-x64)
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: 1es-ubuntu-2204
+              os: linux
+            steps:
+              - template: /eng/pipelines/templates/npm-cli-install-validation-steps.yml@self
+                parameters:
+                  rid: linux-x64
+                  validationSummaryArtifactName: $(NPM_VALIDATION_SUMMARY_LINUX_X64_ARTIFACT)
+
+          - job: NpmInstall_macOS
+            displayName: npm install validation (macOS native RID)
+            timeoutInMinutes: 30
+            pool:
+              name: Azure Pipelines
+              vmImage: macOS-latest-internal
+              os: macOS
+            steps:
+              - template: /eng/pipelines/templates/npm-cli-install-validation-steps.yml@self
+                parameters:
+                  rid: $(NpmValidationRid)
+                  validationSummaryArtifactName: $(NPM_VALIDATION_SUMMARY_OSX_ARTIFACT)
+                  preSteps:
+                    - pwsh: |
+                        $ErrorActionPreference = 'Stop'
+                        $rid = switch ('$(Agent.OSArchitecture)') {
+                          'ARM64' { 'osx-arm64' }
+                          'X64' { 'osx-x64' }
+                          default { throw "Unsupported macOS agent architecture '$(Agent.OSArchitecture)'." }
+                        }
+
+                        Write-Host "Resolved macOS npm validation RID: $rid"
+                        Write-Host "##vso[task.setvariable variable=NpmValidationRid]$rid"
+                      displayName: 🟣Resolve native macOS RID

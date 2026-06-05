@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Agents;
 
 namespace Aspire.Cli.Tests.Agents;
@@ -19,7 +20,7 @@ public class AgentEnvironmentApplicatorTests
                 return Task.CompletedTask;
             });
 
-        await applicator.ApplyAsync(CancellationToken.None);
+        await applicator.ApplyAsync(CancellationToken.None).DefaultTimeout();
 
         Assert.True(callbackInvoked);
     }
@@ -37,7 +38,7 @@ public class AgentEnvironmentApplicatorTests
                 return Task.CompletedTask;
             });
 
-        await applicator.ApplyAsync(cts.Token);
+        await applicator.ApplyAsync(cts.Token).DefaultTimeout();
 
         Assert.Equal(cts.Token, receivedToken);
     }

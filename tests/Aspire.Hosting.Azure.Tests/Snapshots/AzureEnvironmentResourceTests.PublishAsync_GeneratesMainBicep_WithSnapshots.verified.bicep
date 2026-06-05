@@ -125,12 +125,6 @@ module fe_roles_storage 'fe-roles-storage/fe-roles-storage.bicep' = {
   }
 }
 
-output acaEnv_acr_name string = acaEnv_acr.outputs.name
-
-output acaEnv_acr_loginServer string = acaEnv_acr.outputs.loginServer
-
-output acaEnv_AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = acaEnv.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID
-
 output acaEnv_AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = acaEnv.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN
 
 output acaEnv_AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = acaEnv.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID
@@ -142,6 +136,8 @@ output account_connectionString string = account.outputs.connectionString
 output myapp_identity_clientId string = myapp_identity.outputs.clientId
 
 output acaEnv_AZURE_CONTAINER_REGISTRY_ENDPOINT string = acaEnv.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT
+
+output acaEnv_AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = acaEnv.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID
 
 output fe_identity_id string = fe_identity.outputs.id
 

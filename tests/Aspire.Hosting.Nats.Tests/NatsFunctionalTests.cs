@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.TestUtilities;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Hosting;
@@ -20,7 +22,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
     private const string SubjectName = "test-subject";
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyNatsResource()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -58,7 +60,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(null, null)]
     [InlineData("nats", null)]
     [InlineData(null, "password")]
@@ -102,7 +104,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData("user", "wrong-password")]
     [InlineData("wrong-user", "password")]
     [InlineData(null, null)]
@@ -152,7 +154,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         string? volumeName = null;
@@ -322,7 +324,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWaitForOnNatsBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -358,4 +360,15 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
 
         await app.StopAsync();
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Nats_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddNats("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
 }

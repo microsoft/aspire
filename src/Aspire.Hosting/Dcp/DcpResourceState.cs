@@ -7,7 +7,7 @@ using Aspire.Hosting.Dcp.Model;
 
 namespace Aspire.Hosting.Dcp;
 
-internal sealed class DcpResourceState(Dictionary<string, IResource> applicationModel, List<AppResource> appResources)
+internal sealed class DcpResourceState(IDictionary<string, IResource> applicationModel, IEnumerable<IAppResource> appResources)
 {
     public readonly ConcurrentDictionary<string, Container> ContainersMap = [];
     public readonly ConcurrentDictionary<string, Executable> ExecutablesMap = [];
@@ -16,6 +16,6 @@ internal sealed class DcpResourceState(Dictionary<string, IResource> application
     public readonly ConcurrentDictionary<string, Endpoint> EndpointsMap = [];
     public readonly ConcurrentDictionary<(string, string), List<string>> ResourceAssociatedServicesMap = [];
 
-    public Dictionary<string, IResource> ApplicationModel { get; } = applicationModel;
-    public List<AppResource> AppResources { get; } = appResources;
+    public IDictionary<string, IResource> ApplicationModel { get; } = applicationModel;
+    public IEnumerable<IAppResource> AppResources { get; } = appResources;
 }

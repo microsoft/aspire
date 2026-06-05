@@ -1,10 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
-using System.Collections.Concurrent;
-using System.Net.Sockets;
 using System.Collections;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Net.Sockets;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -22,7 +23,10 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     private bool _portSetToNull;
     private int? _targetPort;
     private bool _targetPortSetToNull;
-    private readonly NetworkIdentifier _networkID;
+    private bool? _tlsEnabled;
+    private bool _isProxied = true;
+    private bool? _isExplicitlyProxied;
+    private readonly NetworkIdentifier _networkId;
 
     /// <summary>
     /// Initializes a new instance of <see cref="EndpointAnnotation"/>.
@@ -34,7 +38,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// <param name="port">Desired port for the service.</param>
     /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
     /// <param name="isExternal">Indicates that this endpoint should be exposed externally at publish time.</param>
-    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
+    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to <see langword="null"/>.</param>
     public EndpointAnnotation(
         ProtocolType protocol,
         string? uriScheme = null,
@@ -43,7 +47,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
         int? port = null,
         int? targetPort = null,
         bool? isExternal = null,
-        bool isProxied = true
+        bool? isProxied = null
     ) : this(
         protocol,
         null,
@@ -61,25 +65,58 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// Initializes a new instance of <see cref="EndpointAnnotation"/>.
     /// </summary>
     /// <param name="protocol">Network protocol: TCP or UDP are supported today, others possibly in future.</param>
-    /// <param name="networkID">The ID of the network that is the "default" network for the Endpoint.
     /// <param name="uriScheme">If a service is URI-addressable, this is the URI scheme to use for constructing service URI.</param>
     /// <param name="transport">Transport that is being used (e.g. http, http2, http3 etc).</param>
     /// <param name="name">Name of the service.</param>
     /// <param name="port">Desired port for the service.</param>
     /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
     /// <param name="isExternal">Indicates that this endpoint should be exposed externally at publish time.</param>
-    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
-    /// Clients connected to the same network can reach the endpoint without any routing or network address translation.</param>
+    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP.</param>
     public EndpointAnnotation(
         ProtocolType protocol,
-        NetworkIdentifier? networkID,
+        string? uriScheme,
+        string? transport,
+        [EndpointName] string? name,
+        int? port,
+        int? targetPort,
+        bool? isExternal,
+        bool isProxied
+    ) : this(
+        protocol,
+        null,
+        uriScheme,
+        transport,
+        name,
+        port,
+        targetPort,
+        isExternal,
+        isProxied
+    )
+    { }
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="EndpointAnnotation"/>.
+    /// </summary>
+    /// <param name="protocol">Network protocol: TCP or UDP are supported today, others possibly in future.</param>
+    /// <param name="networkId">The ID of the network that is the "default" network for the Endpoint.
+    /// Clients connected to the same network can reach the endpoint without any routing or network address translation.</param>
+    /// <param name="uriScheme">If a service is URI-addressable, this is the URI scheme to use for constructing service URI.</param>
+    /// <param name="transport">Transport that is being used (e.g. http, http2, http3 etc).</param>
+    /// <param name="name">Name of the service.</param>
+    /// <param name="port">Desired port for the service.</param>
+    /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
+    /// <param name="isExternal">Indicates that this endpoint should be exposed externally at publish time.</param>
+    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to <see langword="null"/>.</param>
+    public EndpointAnnotation(
+        ProtocolType protocol,
+        NetworkIdentifier? networkId,
         string? uriScheme = null,
         string? transport = null,
         [EndpointName] string? name = null,
         int? port = null,
         int? targetPort = null,
         bool? isExternal = null,
-        bool isProxied = true
+        bool? isProxied = null
     )
     {
         // If the URI scheme is null, we'll adopt either udp:// or tcp:// based on the
@@ -99,10 +136,48 @@ public sealed class EndpointAnnotation : IResourceAnnotation
         _port = port;
         _targetPort = targetPort;
         IsExternal = isExternal ?? false;
-        IsProxied = isProxied;
-        _networkID = networkID ?? KnownNetworkIdentifiers.LocalhostNetwork;
-        AllAllocatedEndpoints.TryAdd(_networkID, AllocatedEndpointSnapshot);
+        IsExplicitlyProxied = isProxied;
+        _networkId = networkId ?? KnownNetworkIdentifiers.LocalhostNetwork;
+#pragma warning disable CS0618 // Type or member is obsolete
+        AllAllocatedEndpoints.TryAdd(_networkId, AllocatedEndpointSnapshot);
+#pragma warning restore CS0618 // Type or member is obsolete
     }
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="EndpointAnnotation"/>.
+    /// </summary>
+    /// <param name="protocol">Network protocol: TCP or UDP are supported today, others possibly in future.</param>
+    /// <param name="networkId">The ID of the network that is the "default" network for the Endpoint.
+    /// Clients connected to the same network can reach the endpoint without any routing or network address translation.</param>
+    /// <param name="uriScheme">If a service is URI-addressable, this is the URI scheme to use for constructing service URI.</param>
+    /// <param name="transport">Transport that is being used (e.g. http, http2, http3 etc).</param>
+    /// <param name="name">Name of the service.</param>
+    /// <param name="port">Desired port for the service.</param>
+    /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
+    /// <param name="isExternal">Indicates that this endpoint should be exposed externally at publish time.</param>
+    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP.</param>
+    public EndpointAnnotation(
+        ProtocolType protocol,
+        NetworkIdentifier? networkId,
+        string? uriScheme,
+        string? transport,
+        [EndpointName] string? name,
+        int? port,
+        int? targetPort,
+        bool? isExternal,
+        bool isProxied
+    ) : this(
+        protocol,
+        networkId,
+        uriScheme,
+        transport,
+        name,
+        port,
+        targetPort,
+        isExternal,
+        (bool?)isProxied
+    )
+    { }
 
     /// <summary>
     ///  Name of the service
@@ -133,6 +208,8 @@ public sealed class EndpointAnnotation : IResourceAnnotation
             _portSetToNull = value == null;
         }
     }
+
+    internal int? SpecifiedPort => _port;
 
     /// <summary>
     /// This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.
@@ -166,7 +243,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// </summary>
     public string Transport
     {
-        get => _transport ?? (UriScheme == "http" || UriScheme == "https" ? "http" : Protocol.ToString().ToLowerInvariant());
+        get => _transport ?? (string.Equals(UriScheme, "http", StringComparisons.EndpointAnnotationUriScheme) || string.Equals(UriScheme, "https", StringComparisons.EndpointAnnotationUriScheme) ? "http" : Protocol.ToString().ToLowerInvariant());
         set => _transport = value;
     }
 
@@ -177,10 +254,73 @@ public sealed class EndpointAnnotation : IResourceAnnotation
 
     /// <summary>
     /// Indicates that this endpoint should be managed by DCP. This means it can be replicated and use a different port internally than the one publicly exposed.
-    /// Setting to false means the endpoint will be handled and exposed by the resource.
+    /// Setting to <see langword="false"/> means the endpoint will be handled and exposed by the resource.
     /// </summary>
-    /// <remarks>Defaults to <c>true</c>.</remarks>
-    public bool IsProxied { get; set; } = true;
+    /// <remarks>
+    /// Defaults to <see langword="true"/> until DCP resolves the effective value from <see cref="IsExplicitlyProxied"/>
+    /// and the resource that owns the endpoint. Read this value after endpoint allocation or another late lifecycle
+    /// callback when code needs the resolved value.
+    /// </remarks>
+    public bool IsProxied
+    {
+        get => _isProxied;
+        set
+        {
+            _isProxied = value;
+            _isExplicitlyProxied = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this endpoint was explicitly configured to be proxied.
+    /// </summary>
+    /// <remarks>
+    /// A <see langword="null"/> value means the effective proxy mode is resolved from the resource that owns the endpoint.
+    /// </remarks>
+    public bool? IsExplicitlyProxied
+    {
+        get => _isExplicitlyProxied;
+        set
+        {
+            _isExplicitlyProxied = value;
+            _isProxied = value ?? true;
+        }
+    }
+
+    internal void SetResolvedIsProxied(bool isProxied)
+    {
+        _isProxied = isProxied;
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this endpoint is excluded from the default set when referencing the resource's endpoints
+    /// via <c>WithReference(resource)</c>. When <c>true</c>, the endpoint is excluded from the default set and must be
+    /// referenced explicitly using <c>WithReference(resource.GetEndpoint("name"))</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Defaults to <c>false</c>.</para>
+    /// <para>
+    /// This is useful for resources that expose auxiliary endpoints (e.g., management dashboards, health check ports)
+    /// that should not be included in service discovery by default.
+    /// </para>
+    /// </remarks>
+    public bool ExcludeReferenceEndpoint { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether TLS is enabled for this endpoint.
+    /// </summary>
+    /// <remarks>
+    /// This property is used to track TLS state on the endpoint so that connection string expressions
+    /// can dynamically include TLS-related parameters (e.g., <c>ssl=true</c> for Redis) at resolution time
+    /// rather than at expression build time. For HTTP-based endpoints, the <see cref="UriScheme"/> property
+    /// being set to <c>https</c> already implies TLS. This property is primarily useful for non-HTTP protocols
+    /// (e.g., Redis, databases) that need explicit TLS configuration in their connection strings.
+    /// </remarks>
+    public bool TlsEnabled
+    {
+        get => _tlsEnabled ?? string.Equals(UriScheme, "https", StringComparisons.EndpointAnnotationUriScheme);
+        set => _tlsEnabled = value;
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether the endpoint is from a launch profile.
@@ -195,15 +335,17 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// <summary>
     /// Gets the ID of the network that is the "default" network for the Endpoint (the one the Endpoint is associated with and can be reached without routing or network address translation).
     /// </summary>
-    public NetworkIdentifier DefaultNetworkID => _networkID;
+    public NetworkIdentifier DefaultNetworkID => _networkId;
 
     /// <summary>
     /// Gets or sets the default <see cref="AllocatedEndpoint"/> for this Endpoint.
     /// </summary>
     public AllocatedEndpoint? AllocatedEndpoint
     {
+#pragma warning disable CS0618 // Type or member is obsolete (AllocatedEndpointSnapshot)
         get
         {
+
             if (!AllocatedEndpointSnapshot.IsValueSet)
             {
                 return null;
@@ -223,14 +365,20 @@ public sealed class EndpointAnnotation : IResourceAnnotation
             }
             else
             {
+                if (_networkId != value.NetworkID)
+                {
+                    throw new InvalidOperationException($"The default AllocatedEndpoint's network ID must match the EndpointAnnotation network ID ('{_networkId}'). The attempted AllocatedEndpoint belongs to '{value.NetworkID}'.");
+                }
                 AllocatedEndpointSnapshot.SetValue(value);
             }
         }
+#pragma warning restore CS0618 // Type or member is obsolete
     }
 
     /// <summary>
     /// Gets the <see cref="AllocatedEndpointSnapshot"/> for the default <see cref="AllocatedEndpoint"/>.
     /// </summary>
+    [Obsolete("This property will be marked as internal in future Aspire release. Use AllocatedEndpoint and AllAllocatedEndpoints properties to access and change allocated endpoints associated with an EndpointAnnotation.")]
     public ValueSnapshot<AllocatedEndpoint> AllocatedEndpointSnapshot { get; } = new();
 
     /// <summary>
@@ -244,6 +392,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
 /// </summary>
 /// <param name="Snapshot">AllocatedEndpoint snapshot</param>
 /// <param name="NetworkID">The ID of the network that is associated with the AllocatedEndpoint snapshot.</param>
+[DebuggerDisplay("NetworkID = {NetworkID}, Endpoint = {Snapshot}")]
 public record class NetworkEndpointSnapshot(ValueSnapshot<AllocatedEndpoint> Snapshot, NetworkIdentifier NetworkID);
 
 /// <summary>
@@ -251,6 +400,7 @@ public record class NetworkEndpointSnapshot(ValueSnapshot<AllocatedEndpoint> Sna
 /// </summary>
 public class NetworkEndpointSnapshotList : IEnumerable<NetworkEndpointSnapshot>
 {
+    [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
     private readonly ConcurrentBag<NetworkEndpointSnapshot> _snapshots = new();
 
     /// <summary>
@@ -269,16 +419,72 @@ public class NetworkEndpointSnapshotList : IEnumerable<NetworkEndpointSnapshot>
     /// <summary>
     /// Adds an AllocatedEndpoint snapshot for a specific network if one does not already exist.
     /// </summary>
-    public bool TryAdd(NetworkIdentifier networkID, ValueSnapshot<AllocatedEndpoint> snapshot)
+    [Obsolete("This method is for internal use only and will be marked internal in a future Aspire release. Use AddOrUpdateAllocatedEndpoint instead.")]
+    public bool TryAdd(NetworkIdentifier networkId, ValueSnapshot<AllocatedEndpoint> snapshot)
     {
         lock (_snapshots)
         {
-            if (_snapshots.Any(s => s.NetworkID.Equals(networkID)))
+            if (_snapshots.Any(s => s.NetworkID.Equals(networkId)))
             {
                 return false;
             }
-            _snapshots.Add(new NetworkEndpointSnapshot(snapshot, networkID));
+            _snapshots.Add(new NetworkEndpointSnapshot(snapshot, networkId));
             return true;
         }
     }
+
+    /// <summary>
+    /// Adds or updates an AllocatedEndpoint value associated with a specific network in the snapshot list.
+    /// </summary>
+    public void AddOrUpdateAllocatedEndpoint(NetworkIdentifier networkId, AllocatedEndpoint endpoint)
+    {
+        if (endpoint.NetworkID != networkId)
+        {
+            throw new ArgumentException($"AllocatedEndpoint must use the same network as the {nameof(networkId)} parameter", nameof(endpoint));
+        }
+        var nes = GetSnapshotFor(networkId);
+        nes.Snapshot.SetValue(endpoint);
+    }
+
+    /// <summary>
+    /// Gets an AllocatedEndpoint for a given network ID, waiting for it to appear if it is not already present.
+    /// </summary>
+    public Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkId, CancellationToken cancellationToken = default)
+    {
+        var nes = GetSnapshotFor(networkId);
+        return nes.Snapshot.GetValueAsync(cancellationToken);
+    }
+
+    internal bool TryGetAllocatedEndpoint(NetworkIdentifier networkId, [NotNullWhen(true)] out AllocatedEndpoint? endpoint)
+    {
+        endpoint = null;
+
+        foreach (var endpointSnapshot in _snapshots)
+        {
+            if (!endpointSnapshot.NetworkID.Equals(networkId) || !endpointSnapshot.Snapshot.IsValueSet)
+            {
+                continue;
+            }
+
+            endpoint = endpointSnapshot.Snapshot.GetValueAsync().GetAwaiter().GetResult();
+            return true;
+        }
+
+        return false;
+    }
+
+    private NetworkEndpointSnapshot GetSnapshotFor(NetworkIdentifier networkId)
+    {
+        lock (_snapshots)
+        {
+            var nes = _snapshots.FirstOrDefault(s => s.NetworkID.Equals(networkId));
+            if (nes is null)
+            {
+                nes = new NetworkEndpointSnapshot(new ValueSnapshot<AllocatedEndpoint>(), networkId);
+                _snapshots.Add(nes);
+            }
+            return nes;
+        }
+    }
+
 }

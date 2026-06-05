@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "ServiceBus.AppHost/ServiceBus.AppHost.csproj"
+  }
+}

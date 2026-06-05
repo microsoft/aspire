@@ -1,0 +1,1 @@
+﻿await Aspire.Hosting.RemoteHost.RemoteHostServer.RunAsync(args);

@@ -38,6 +38,14 @@ internal static class OtlpEndpointResolver
             }
             return (dashboardOtlpHttpUrl, "http/protobuf");
         }
+        else if (requiredProtocol is OtlpProtocol.HttpJson)
+        {
+            if (dashboardOtlpHttpUrl is null)
+            {
+                throw new InvalidOperationException("OtlpExporter is configured to require http/json, but no endpoint was configured for ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL");
+            }
+            return (dashboardOtlpHttpUrl, "http/json");
+        }
         else
         {
             // No specific protocol required, use the existing preference logic

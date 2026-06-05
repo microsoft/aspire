@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
-[RequiresPlaywright]
+[RequiresFeature(TestFeature.Playwright)]
 public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
 {
     public AppBarTests(DashboardServerFixture dashboardServerFixture)
@@ -61,53 +61,6 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
                     "Checkbox isn't immediately checked.");
 
                 await closeButton.First.ClickAsync();
-            }
-        });
-    }
-
-    [Fact]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/9152", typeof(PlatformDetection), nameof(PlatformDetection.IsMacOS))]
-    [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task AppBar_Change_Theme_ReloadPage()
-    {
-        // Arrange
-        await RunTestAsync(async page =>
-        {
-            await SetAndVerifyTheme(Dialogs.SettingsDialogSystemTheme, null).DefaultTimeout(); // don't guess system theme
-            await SetAndVerifyTheme(Dialogs.SettingsDialogLightTheme, "light").DefaultTimeout();
-            await SetAndVerifyTheme(Dialogs.SettingsDialogDarkTheme, "dark").DefaultTimeout();
-
-            async Task SetAndVerifyTheme(string checkboxText, string? expected)
-            {
-                await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page);
-
-                var settingsButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Layout.MainLayoutLaunchSettings });
-                await settingsButton.ClickAsync();
-
-                // Set theme
-                var checkbox = page.GetByRole(AriaRole.Radio).And(page.GetByText(checkboxText)).First;
-                await checkbox.ClickAsync();
-
-                if (expected != null)
-                {
-                    await Assertions
-                        .Expect(page.Locator("html"))
-                        .ToHaveAttributeAsync("data-theme", expected);
-                }
-
-                // Reload page.
-                await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page);
-
-                // Re-open settings and assert that the correct checkbox is checked.
-                settingsButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Layout.MainLayoutLaunchSettings });
-                await settingsButton.ClickAsync();
-
-                checkbox = page.GetByRole(AriaRole.Radio).And(page.GetByText(checkboxText)).First;
-
-                await AsyncTestHelpers.AssertIsTrueRetryAsync(
-                    async () => await checkbox.IsCheckedAsync(),
-                    "Checkbox isn't immediately checked.",
-                    retries: 15 /* this seems to take a very long time to run, so needs a long timeout */);
             }
         });
     }

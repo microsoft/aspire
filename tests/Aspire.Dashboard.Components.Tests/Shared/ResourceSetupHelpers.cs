@@ -27,6 +27,7 @@ internal static class ResourceSetupHelpers
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
+        context.Services.AddSingleton<IconResolver>();
 
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentSearch(context);
@@ -40,7 +41,7 @@ internal static class ResourceSetupHelpers
         context.JSInterop.SetupVoid("scrollToTop", _ => true);
     }
 
-    public static void SetupResourcesPage(TestContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null)
+    public static void SetupResourcesPage(TestContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)
     {
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);
@@ -54,7 +55,7 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentOverflow(context);
         FluentUISetupHelpers.SetupFluentMenu(context);
 
-        FluentUISetupHelpers.AddCommonDashboardServices(context);
+        FluentUISetupHelpers.AddCommonDashboardServices(context, localStorage: localStorage);
         context.Services.AddSingleton<IconResolver>();
         context.Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);
         context.Services.AddSingleton<StructuredLogsViewModel>();

@@ -138,6 +138,12 @@
   <data name="MainLayoutSettingsDialogClose" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="MainLayoutLaunchNotifications" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
+  <data name="MainLayoutNotificationCenterTitle" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
   <data name="NavMenuResourcesTab" xml:space="preserve">
     <value>Resources</value>
   </data>
@@ -180,7 +186,10 @@
   <data name="MessageUnsecuredEndpointTitle" xml:space="preserve">
     <value>Endpoint is unsecured</value>
   </data>
-  <data name="MessageUnsecuredEndpointMcpBody" xml:space="preserve">
-    <value>Untrusted apps can access sensitive information about the running services.</value>
+  <data name="MessageUnsecuredEndpointApiBody" xml:space="preserve">
+    <value>Untrusted apps can access telemetry data via the API.</value>
+  </data>
+  <data name="MainLayoutLaunchAIAgents" xml:space="preserve">
+    <value>AI agents</value>
   </data>
 </root>

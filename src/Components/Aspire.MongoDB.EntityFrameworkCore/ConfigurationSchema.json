@@ -1,0 +1,85 @@
+{
+  "definitions": {
+    "logLevel": {
+      "properties": {
+        "Microsoft.EntityFrameworkCore": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.ChangeTracking": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.Database": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.Database.Command": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.Database.Connection": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.Database.Transaction": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.Infrastructure": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.Migrations": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.Model": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.Model.Validation": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.Query": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Microsoft.EntityFrameworkCore.Update": {
+          "$ref": "#/definitions/logLevelThreshold"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "Aspire": {
+      "type": "object",
+      "properties": {
+        "MongoDB": {
+          "type": "object",
+          "properties": {
+            "EntityFrameworkCore": {
+              "type": "object",
+              "properties": {
+                "ConnectionString": {
+                  "type": "string",
+                  "description": "Gets or sets the connection string of the MongoDB database to connect to."
+                },
+                "DatabaseName": {
+                  "type": "string",
+                  "description": "Gets or sets the name of the MongoDB database to connect to."
+                },
+                "DisableHealthChecks": {
+                  "type": "boolean",
+                  "description": "Gets or sets a boolean value that indicates whether the MongoDB health check is disabled or not.",
+                  "default": false
+                },
+                "DisableTracing": {
+                  "type": "boolean",
+                  "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry tracing is disabled or not.",
+                  "default": false
+                },
+                "HealthCheckTimeout": {
+                  "type": "integer",
+                  "description": "Gets or sets a integer value that indicates the MongoDB health check timeout in milliseconds."
+                }
+              },
+              "description": "Provides the client configuration settings for connecting to a MongoDB database using EntityFrameworkCore."
+            }
+          }
+        }
+      }
+    }
+  }
+}

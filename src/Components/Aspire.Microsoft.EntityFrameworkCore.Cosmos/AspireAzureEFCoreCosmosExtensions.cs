@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire;
 using Aspire.Hosting.Azure.CosmosDB;
 using Aspire.Microsoft.EntityFrameworkCore.Cosmos;
-using Azure.Identity;
 using Microsoft.Azure.Cosmos;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Cosmos.Infrastructure.Internal;
@@ -135,7 +134,7 @@ public static class AspireAzureEFCoreCosmosExtensions
             }
             else if (settings.AccountEndpoint is not null)
             {
-                var credential = settings.Credential ?? new DefaultAzureCredential();
+                var credential = settings.Credential ?? AzureCredentialHelper.CreateDefaultAzureCredential();
                 dbContextOptionsBuilder.UseCosmos(settings.AccountEndpoint.OriginalString, credential, settings.DatabaseName, UseCosmosBody);
             }
             else

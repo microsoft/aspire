@@ -881,7 +881,7 @@ fluent-switch.table-switch::part(label) {
 
 /*
     Korean text can have bad wrapping behavior. See https://github.com/w3c/csswg-drafts/issues/4285
-    This rule prevents Korean "Close" text in tooltip from wrapping. See https://github.com/dotnet/aspire/issues/8170
+    This rule prevents Korean "Close" text in tooltip from wrapping. See https://github.com/microsoft/aspire/issues/8170
 */
 fluent-tooltip[anchor="dialog_close"] > div {
     word-break: keep-all;
@@ -927,9 +927,18 @@ fluent-tooltip[anchor="dialog_close"] > div {
     margin-right: var(--inline-icon-margin);
 }
 
-.aspire-menu-container > fluent-menu > fluent-menu-item::part(content) {
+.aspire-menu-container {
+    --aspire-menu-max-width: 368px;
+}
+
+.aspire-menu-container fluent-menu-item::part(content) {
     width: 100%;
+    overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.aspire-menu-container fluent-menu fluent-menu {
+    max-width: var(--aspire-menu-max-width);
 }
 
 .overflow-fluent-menu-item::part(content) {

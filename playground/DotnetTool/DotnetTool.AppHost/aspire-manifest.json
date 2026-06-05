@@ -1,0 +1,275 @@
+{
+  "resources": {
+    "simpleUsage": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-ef",
+        "--yes",
+        "--"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "wildcard": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-ef",
+        "--version",
+        "10.0.*",
+        "--yes",
+        "--"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "prerelease": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-ef",
+        "--prerelease",
+        "--yes",
+        "--"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "sameToolDifferentVersion1": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-dump",
+        "--version",
+        "9.0.652701",
+        "--yes",
+        "--",
+        "--version"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "sameToolDifferentVersion2": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-dump",
+        "--version",
+        "9.0.621003",
+        "--yes",
+        "--",
+        "--version"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "sametoolconcurrency-0": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-trace",
+        "--yes",
+        "--",
+        "--version"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "sametoolconcurrency-1": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-trace",
+        "--yes",
+        "--",
+        "--version"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "sametoolconcurrency-2": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-trace",
+        "--yes",
+        "--",
+        "--version"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "sametoolconcurrency-3": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-trace",
+        "--yes",
+        "--",
+        "--version"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "sametoolconcurrency-4": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-trace",
+        "--yes",
+        "--",
+        "--version"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "substituted": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "calc",
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "offlineSimpleUsage": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-ef",
+        "--source",
+        "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\does-not-exist\\2623c613-5a82-4b5a-9f8a-09e9eb9a98c1",
+        "--ignore-failed-sources",
+        "--yes",
+        "--"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "offlineWildcard": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-ef",
+        "--source",
+        "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\does-not-exist\\2623c613-5a82-4b5a-9f8a-09e9eb9a98c1",
+        "--ignore-failed-sources",
+        "--version",
+        "10.0.*",
+        "--yes",
+        "--"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "offlinePrerelease": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-ef",
+        "--source",
+        "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\does-not-exist\\2623c613-5a82-4b5a-9f8a-09e9eb9a98c1",
+        "--ignore-failed-sources",
+        "--prerelease",
+        "--yes",
+        "--"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "secret": {
+      "type": "parameter.v0",
+      "value": "{secret.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "secretArg": {
+      "type": "executable.v0",
+      "workingDirectory": ".",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-ef",
+        "--yes",
+        "--",
+        "--version",
+        "{secret.value}"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "incompatibleSdk": {
+      "type": "executable.v0",
+      "workingDirectory": "IncompatibleSdk",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-ef",
+        "--yes",
+        "--"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    }
+  }
+}

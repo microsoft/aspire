@@ -31,6 +31,13 @@ public class ResourceStateViewModelTests
     [InlineData(
         /* state */ "CustomResource", KnownResourceState.Finished, null, null, null,
         /* expected output */ $"Localized:{nameof(Columns.StateColumnResourceExited)}:CustomResource", "RecordStop", Color.Info, "Finished")]
+    // Resource failed to start - should use dedicated message, not "no longer running"
+    [InlineData(
+        /* state */ "Container", KnownResourceState.FailedToStart, null, null, null,
+        /* expected output */ $"Localized:{nameof(Columns.StateColumnResourceFailedToStart)}:Container", "Warning", Color.Warning, "Failed to start")]
+    [InlineData(
+        /* state */ "CustomResource", KnownResourceState.FailedToStart, null, null, null,
+        /* expected output */ $"Localized:{nameof(Columns.StateColumnResourceFailedToStart)}:CustomResource", "Warning", Color.Warning, "Failed to start")]
     [InlineData(
         /* state */ "Container", KnownResourceState.Unknown, null, null, null,
         /* expected output */ "Unknown", "CircleHint", Color.Info, "Unknown")]
@@ -100,5 +107,130 @@ public class ResourceStateViewModelTests
         Assert.Equal(expectedIconName, vm.Icon.Name);
         Assert.Equal(expectedColor, vm.Color);
         Assert.Equal(expectedText, vm.Text);
+    }
+
+    [Fact]
+    public void WaitingResourceTooltipIncludesWaitingForDependenciesWhenPresent()
+    {
+        var resource = ModelTestHelpers.CreateResource(
+            state: KnownResourceState.Waiting,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.WaitingFor] = new(
+                    KnownProperties.Resource.WaitingFor,
+                    Value.ForList(Value.ForString("nginx"), Value.ForString("redis")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    priority: 0)
+            });
+
+        var localizer = new TestStringLocalizer<Columns>();
+
+        var tooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, localizer);
+
+        Assert.Equal($"Localized:{nameof(Columns.StateColumnResourceWaitingFor)}:nginx, redis", tooltip);
+    }
+
+    [Fact]
+    public void WaitingResourceTooltipUsesDisplayNamesForNonReplicaDependencies()
+    {
+        var dependency = ModelTestHelpers.CreateResource(
+            resourceName: "messaging-abcxyz",
+            displayName: "messaging");
+
+        var resource = ModelTestHelpers.CreateResource(
+            state: KnownResourceState.Waiting,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.WaitingFor] = new(
+                    KnownProperties.Resource.WaitingFor,
+                    Value.ForList(Value.ForString("messaging-abcxyz")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    priority: 0)
+            });
+
+        var localizer = new TestStringLocalizer<Columns>();
+
+        var tooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, localizer, [resource, dependency]);
+
+        Assert.Equal($"Localized:{nameof(Columns.StateColumnResourceWaitingFor)}:messaging", tooltip);
+    }
+
+    [Fact]
+    public void WaitingResourceTooltipUsesUniqueNamesForReplicaDependencies()
+    {
+        var firstDependency = ModelTestHelpers.CreateResource(
+            resourceName: "messaging-abcxyz",
+            displayName: "messaging");
+        var secondDependency = ModelTestHelpers.CreateResource(
+            resourceName: "messaging-defuvw",
+            displayName: "messaging");
+
+        var resource = ModelTestHelpers.CreateResource(
+            state: KnownResourceState.Waiting,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.WaitingFor] = new(
+                    KnownProperties.Resource.WaitingFor,
+                    Value.ForList(Value.ForString("messaging-abcxyz")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    priority: 0)
+            });
+
+        var localizer = new TestStringLocalizer<Columns>();
+
+        var tooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, localizer, [resource, firstDependency, secondDependency]);
+
+        Assert.Equal($"Localized:{nameof(Columns.StateColumnResourceWaitingFor)}:messaging-abcxyz", tooltip);
+    }
+
+    [Fact]
+    public void TryGetResolvedWaitingForDependenciesDoesNotMaterializeAllResources()
+    {
+        var dependency = ModelTestHelpers.CreateResource(
+            resourceName: "messaging-abcxyz",
+            displayName: "messaging");
+
+        var resource = ModelTestHelpers.CreateResource(
+            state: KnownResourceState.Waiting,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.WaitingFor] = new(
+                    KnownProperties.Resource.WaitingFor,
+                    Value.ForList(Value.ForString("messaging-abcxyz")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    priority: 0)
+            });
+
+        var resources = new CopyToThrowingResourceCollection(resource, dependency);
+
+        var result = resource.TryGetResolvedWaitingForDependencies(resources, out var dependencies);
+
+        Assert.True(result);
+        Assert.Equal(["messaging"], dependencies);
+    }
+
+    private sealed class CopyToThrowingResourceCollection(params ResourceViewModel[] resources) : ICollection<ResourceViewModel>, IReadOnlyCollection<ResourceViewModel>
+    {
+        public int Count => resources.Length;
+
+        public bool IsReadOnly => true;
+
+        public void Add(ResourceViewModel item) => throw new NotSupportedException();
+
+        public void Clear() => throw new NotSupportedException();
+
+        public bool Contains(ResourceViewModel item) => resources.Contains(item);
+
+        public void CopyTo(ResourceViewModel[] array, int arrayIndex) => throw new InvalidOperationException("The resources collection should not be copied.");
+
+        public IEnumerator<ResourceViewModel> GetEnumerator() => resources.AsEnumerable().GetEnumerator();
+
+        public bool Remove(ResourceViewModel item) => throw new NotSupportedException();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

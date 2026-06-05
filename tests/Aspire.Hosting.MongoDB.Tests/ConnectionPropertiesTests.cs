@@ -52,7 +52,7 @@ public class ConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("Uri", property.Key);
-                Assert.Equal("mongodb://{user.value}:{password.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}?authSource=admin&authMechanism=SCRAM-SHA-256", property.Value.ValueExpression);
+                Assert.Equal("mongodb://{user.value}:{password.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/?authSource=admin&authMechanism=SCRAM-SHA-256", property.Value.ValueExpression);
             });
     }
 

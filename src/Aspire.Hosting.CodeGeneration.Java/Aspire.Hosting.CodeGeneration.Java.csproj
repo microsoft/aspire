@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Aspire.Hosting.CodeGeneration.Java</RootNamespace>
+    <!-- Required for Java AppHost support -->
+    <IsPackable>true</IsPackable>
+    <!-- No baseline exists since this package was previously not published -->
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="aspire" />
+    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Java.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Transport.java" LogicalName="Aspire.Hosting.CodeGeneration.Java.Resources.Transport.java" />
+    <EmbeddedResource Include="Resources\Base.java" LogicalName="Aspire.Hosting.CodeGeneration.Java.Resources.Base.java" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="AtsJsonCodeWriter.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
+  </ItemGroup>
+
+</Project>
