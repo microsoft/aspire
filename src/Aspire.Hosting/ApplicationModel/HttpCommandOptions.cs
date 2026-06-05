@@ -77,7 +77,7 @@ internal sealed class HttpCommandExportOptions
     /// <summary>
     /// Optional command configuration.
     /// </summary>
-    public CommandOptions? CommandOptions { get; set; }
+    public CommandOptions? CommandOptions { get; init; }
 
     /// <summary>
     /// Optional description of the command, to be shown in the UI.
@@ -122,7 +122,7 @@ internal sealed class HttpCommandExportOptions
     /// <summary>
     /// Gets or sets a callback to be invoked to configure the request before it is sent.
     /// </summary>
-    public Func<HttpCommandPrepareRequestContext, Task<HttpCommandRequestExportData>>? PrepareRequest { get; set; }
+    public Func<HttpCommandPrepareRequestContext, Task<HttpCommandRequestExportData>>? PrepareRequest { get; init; }
 
     /// <summary>
     /// Gets or sets how the HTTP response content should be returned as command result data.

@@ -364,13 +364,15 @@ public class AtsCapabilityScannerTests
 
         var dto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(HttpCommandExportOptions)));
         Assert.Equal(nameof(HttpCommandExportOptions), dto.Name);
-        Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandOptions));
+        var commandOptionsProperty = Assert.Single(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandOptions));
+        Assert.True(commandOptionsProperty.IsOptional);
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.EndpointName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.MethodName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.ResultMode));
         var prepareRequestProperty = Assert.Single(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.PrepareRequest));
         Assert.True(prepareRequestProperty.IsCallback);
+        Assert.True(prepareRequestProperty.IsOptional);
 
         var callbackParameter = Assert.Single(prepareRequestProperty.CallbackParameters!);
         Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(HttpCommandPrepareRequestContext)), callbackParameter.Type.TypeId);
