@@ -1,4 +1,4 @@
-// ===== AddContainerOptions.java =====
+﻿// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1354,6 +1354,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription", (h, c) -> new DistributedApplicationEventSubscription(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext", (h, c) -> new DistributedApplicationExecutionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContextOptions", (h, c) -> new DistributedApplicationExecutionContextOptions(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.LoadInputContext", (h, c) -> new LoadInputContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", (h, c) -> new InteractionInputCollection(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", (h, c) -> new InputsDialogValidationContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions", (h, c) -> new ProjectResourceOptions(h, c));
@@ -11166,6 +11167,14 @@ public class ExecuteCommandContext extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** The service provider. */
+    public IServiceProvider serviceProvider() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider", reqArgs);
+        return (IServiceProvider) result;
+    }
+
     /** The resource name. */
     public String resourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14536,6 +14545,48 @@ public class InputInteractionResult implements JsonSerializable {
     }
 }
 
+// ===== InputLoadOptions.java =====
+// InputLoadOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** InputLoadOptions DTO. */
+public class InputLoadOptions implements JsonSerializable {
+    private Object loadCallback;
+    private Boolean alwaysLoadOnStart;
+    private String[] dependsOnInputs;
+
+    public Object getLoadCallback() { return loadCallback; }
+    public void setLoadCallback(Object value) { this.loadCallback = value; }
+    public Boolean getAlwaysLoadOnStart() { return alwaysLoadOnStart; }
+    public void setAlwaysLoadOnStart(Boolean value) { this.alwaysLoadOnStart = value; }
+    public String[] getDependsOnInputs() { return dependsOnInputs; }
+    public void setDependsOnInputs(String[] value) { this.dependsOnInputs = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InputLoadOptions fromMap(Map<String, Object> map) {
+        var value = new InputLoadOptions();
+        var loadCallbackValue = map.get("LoadCallback");
+        value.setLoadCallback(loadCallbackValue);
+        var alwaysLoadOnStartValue = map.get("AlwaysLoadOnStart");
+        value.setAlwaysLoadOnStart(alwaysLoadOnStartValue == null ? null : (Boolean) alwaysLoadOnStartValue);
+        var dependsOnInputsValue = map.get("DependsOnInputs");
+        value.setDependsOnInputs((String[]) dependsOnInputsValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("LoadCallback", AspireClient.serializeValue(loadCallback));
+        map.put("AlwaysLoadOnStart", AspireClient.serializeValue(alwaysLoadOnStart));
+        map.put("DependsOnInputs", AspireClient.serializeValue(dependsOnInputs));
+        return map;
+    }
+}
+
 // ===== InputType.java =====
 // InputType.java - GENERATED CODE - DO NOT EDIT
 
@@ -14578,12 +14629,15 @@ import java.util.function.*;
 
 /** InputsDialogInteractionOptions DTO. */
 public class InputsDialogInteractionOptions implements JsonSerializable {
+    private Object validationCallback;
     private String primaryButtonText;
     private String secondaryButtonText;
     private Boolean showSecondaryButton;
     private Boolean showDismiss;
     private Boolean enableMessageMarkdown;
 
+    public Object getValidationCallback() { return validationCallback; }
+    public void setValidationCallback(Object value) { this.validationCallback = value; }
     public String getPrimaryButtonText() { return primaryButtonText; }
     public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
     public String getSecondaryButtonText() { return secondaryButtonText; }
@@ -14598,6 +14652,8 @@ public class InputsDialogInteractionOptions implements JsonSerializable {
     @SuppressWarnings("unchecked")
     public static InputsDialogInteractionOptions fromMap(Map<String, Object> map) {
         var value = new InputsDialogInteractionOptions();
+        var validationCallbackValue = map.get("ValidationCallback");
+        value.setValidationCallback(validationCallbackValue);
         var primaryButtonTextValue = map.get("PrimaryButtonText");
         value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
         var secondaryButtonTextValue = map.get("SecondaryButtonText");
@@ -14613,6 +14669,7 @@ public class InputsDialogInteractionOptions implements JsonSerializable {
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
+        map.put("ValidationCallback", AspireClient.serializeValue(validationCallback));
         map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
         map.put("SecondaryButtonText", AspireClient.serializeValue(secondaryButtonText));
         map.put("ShowSecondaryButton", AspireClient.serializeValue(showSecondaryButton));
@@ -14716,7 +14773,7 @@ public class InteractionInput implements JsonSerializable {
     private InputType inputType;
     private Boolean required;
     private Object[] options;
-    private Object dynamicLoading;
+    private InputLoadOptions dynamicLoading;
     private String value;
     private String placeholder;
     private Boolean allowCustomChoice;
@@ -14737,8 +14794,8 @@ public class InteractionInput implements JsonSerializable {
     public void setRequired(Boolean value) { this.required = value; }
     public Object[] getOptions() { return options; }
     public void setOptions(Object[] value) { this.options = value; }
-    public Object getDynamicLoading() { return dynamicLoading; }
-    public void setDynamicLoading(Object value) { this.dynamicLoading = value; }
+    public InputLoadOptions getDynamicLoading() { return dynamicLoading; }
+    public void setDynamicLoading(InputLoadOptions value) { this.dynamicLoading = value; }
     public String getValue() { return value; }
     public void setValue(String value) { this.value = value; }
     public String getPlaceholder() { return placeholder; }
@@ -14768,7 +14825,7 @@ public class InteractionInput implements JsonSerializable {
         var optionsValue = map.get("Options");
         value.setOptions((Object[]) optionsValue);
         var dynamicLoadingValue = map.get("DynamicLoading");
-        value.setDynamicLoading(dynamicLoadingValue);
+        value.setDynamicLoading(dynamicLoadingValue == null ? null : InputLoadOptions.fromMap((Map<String, Object>) dynamicLoadingValue));
         var valueValue = map.get("Value");
         value.setValue(valueValue == null ? null : (String) valueValue);
         var placeholderValue = map.get("Placeholder");
@@ -14894,6 +14951,54 @@ import java.util.function.*;
 
 public interface JsonSerializable {
     Map<String, Object> toMap();
+}
+
+// ===== LoadInputContext.java =====
+// LoadInputContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.LoadInputContext. */
+public class LoadInputContext extends HandleWrapperBase {
+    LoadInputContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the loading input. This is the target of `InputLoadOptions`. */
+    public InteractionInput input() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/LoadInputContext.input", reqArgs);
+        return InteractionInput.fromMap((Map<String, Object>) result);
+    }
+
+    /** Gets the collection of all `InteractionInput` in this prompt. */
+    public InteractionInputCollection allInputs() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/LoadInputContext.allInputs", reqArgs);
+        return (InteractionInputCollection) result;
+    }
+
+    /** Gets the `CancellationToken`. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/LoadInputContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
+    /** Sets the available options for the loading input. */
+    public void setOptions(Map<String, String> options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("options", AspireClient.serializeValue(options));
+        getClient().invokeCapability("Aspire.Hosting/LoadInputContext.setOptions", reqArgs);
+    }
+
 }
 
 // ===== LogFacade.java =====
@@ -26558,6 +26663,7 @@ public final class WithVolumeOptions {
 .aspire/modules/ImagePullPolicy.java
 .aspire/modules/InitializeResourceEvent.java
 .aspire/modules/InputInteractionResult.java
+.aspire/modules/InputLoadOptions.java
 .aspire/modules/InputType.java
 .aspire/modules/InputsDialogInteractionOptions.java
 .aspire/modules/InputsDialogValidationContext.java
@@ -26566,6 +26672,7 @@ public final class WithVolumeOptions {
 .aspire/modules/InteractionInputCollection.java
 .aspire/modules/InteractionOptions.java
 .aspire/modules/JsonSerializable.java
+.aspire/modules/LoadInputContext.java
 .aspire/modules/LogFacade.java
 .aspire/modules/MessageBoxInteractionOptions.java
 .aspire/modules/MessageIntent.java

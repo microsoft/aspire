@@ -72,6 +72,7 @@ Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
 Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles [interface]
 Aspire.Hosting/Aspire.Hosting.IUserSecretsManager [interface, ExposeProperties, ExposeMethods]
+Aspire.Hosting/Aspire.Hosting.LoadInputContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline [interface]
 Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep [interface]
 Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask [interface]
@@ -220,6 +221,7 @@ Aspire.Hosting/Aspire.Hosting.Ats.InputsDialogInteractionOptions # Polyglot opti
   SecondaryButtonText?: string # Optional secondary button text to override the default text.
   ShowDismiss?: boolean # Gets a value indicating whether to show the dismiss button.
   ShowSecondaryButton?: boolean # Gets a value indicating whether to show the secondary button.
+  ValidationCallback?: callback # Gets the validation callback for the inputs dialog.
 Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult # The result of a multi-input interaction prompt.
   Canceled: boolean # A flag indicating whether the interaction was canceled by the user.
   Data?: Aspire.Hosting/Aspire.Hosting.InteractionInputCollection # The data returned from the interaction. The value is `null` when the interaction was canceled.
@@ -268,6 +270,10 @@ Aspire.Hosting/Aspire.Hosting.Ats.ResourceEventDto # DTO for resource events ret
   ResourceName: string # The resource name.
   State?: string # The current state text.
   StateStyle?: string # The state style (e.g., "success", "warn", "error").
+Aspire.Hosting/Aspire.Hosting.InputLoadOptions # Represents configuration options for dynamically loading input data.
+  AlwaysLoadOnStart?: boolean # Gets a value indicating whether `LoadCallback` should always be executed at the start of the input prompt.
+  DependsOnInputs?: string[] # Gets the list of input names that this input depends on. `LoadCallback` is executed whenever any of the specified inputs change.
+  LoadCallback: callback # Gets the callback function that is invoked to perform a load operation using the specified input context.
 Aspire.Hosting/Aspire.Hosting.InteractionInput # Represents an input for an interaction.
   AllowCustomChoice?: boolean # Gets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
   Description?: string # Gets or sets the description for the input.
@@ -415,6 +421,7 @@ Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments(context: Aspire.
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> cancellationToken
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.resourceName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> string
+Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/getEndpoint(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext, name: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
 Aspire.Hosting.ApplicationModel/getValueAsync(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression, cancellationToken: cancellationToken) -> string
 Aspire.Hosting.ApplicationModel/IAspireStore.basePath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore) -> string
@@ -602,6 +609,10 @@ Aspire.Hosting/List.length() -> number
 Aspire.Hosting/List.removeAt(index: number) -> boolean
 Aspire.Hosting/List.set(index: number, value: any) -> void
 Aspire.Hosting/List.toArray() -> any[]
+Aspire.Hosting/LoadInputContext.allInputs(context: Aspire.Hosting/Aspire.Hosting.LoadInputContext) -> Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
+Aspire.Hosting/LoadInputContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.LoadInputContext) -> cancellationToken
+Aspire.Hosting/LoadInputContext.input(context: Aspire.Hosting/Aspire.Hosting.LoadInputContext) -> Aspire.Hosting/Aspire.Hosting.InteractionInput
+Aspire.Hosting/LoadInputContext.setOptions(context: Aspire.Hosting/Aspire.Hosting.LoadInputContext, options: Aspire.Hosting/Dict<string,string>) -> void
 Aspire.Hosting/log(level: string, message: string) -> void
 Aspire.Hosting/logDebug(message: string) -> void
 Aspire.Hosting/logError(message: string) -> void

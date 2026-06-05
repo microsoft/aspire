@@ -342,6 +342,9 @@ type IResourceWithContainerFilesHandle = Handle<'Aspire.Hosting/Aspire.Hosting.I
 /** Defines an interface for managing user secrets with support for read and write operations. */
 type IUserSecretsManagerHandle = Handle<'Aspire.Hosting/Aspire.Hosting.IUserSecretsManager'>;
 
+/** The context for dynamic input loading. Used with `LoadCallback`. */
+type LoadInputContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.LoadInputContext'>;
+
 /** Represents a pipeline for executing deployment steps in a distributed application. */
 type IDistributedApplicationPipelineHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline'>;
 
@@ -900,8 +903,30 @@ export interface InputInteractionResult {
     canceled?: boolean;
 }
 
+/**
+ * Represents configuration options for dynamically loading input data.
+ *
+ * Use this class to specify how and when dynamic input data should be loaded. This type is intended for advanced
+ * scenarios where input loading behavior must be customized.
+ */
+export interface InputLoadOptions {
+    /** Gets the callback function that is invoked to perform a load operation using the specified input context. */
+    loadCallback?: (arg: LoadInputContext) => Promise<void>;
+    /**
+     * Gets a value indicating whether `LoadCallback` should always be executed at the start of the input prompt.
+     *
+     * `LoadCallback` is executed at the start of the input prompt except when it depends on other inputs with `DependsOnInputs`.
+     * Setting this to `true` forces the load to always occur at the start of the prompt, regardless of dependencies.
+     */
+    alwaysLoadOnStart?: boolean;
+    /** Gets the list of input names that this input depends on. `LoadCallback` is executed whenever any of the specified inputs change. */
+    dependsOnInputs?: string[] | null;
+}
+
 /** Polyglot options for inputs dialog interactions. */
 export interface InputsDialogInteractionOptions {
+    /** Gets the validation callback for the inputs dialog. */
+    validationCallback?: (arg: InputsDialogValidationContext) => Promise<void>;
     /** Optional primary button text to override the default text. */
     primaryButtonText?: string | null;
     /** Optional secondary button text to override the default text. */
@@ -5071,6 +5096,8 @@ class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscr
 /** Context for {@link ResourceCommandAnnotation.ExecuteCommand}. */
 export interface ExecuteCommandContext {
     toJSON(): MarshalledHandle;
+    /** The service provider. */
+    serviceProvider(): ServiceProviderPromise;
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -5088,6 +5115,8 @@ export interface ExecuteCommandContext {
 }
 
 export interface ExecuteCommandContextPromise extends PromiseLike<ExecuteCommandContext> {
+    /** The service provider. */
+    serviceProvider(): ServiceProviderPromise;
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -5114,6 +5143,17 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    serviceProvider(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
 
     async resourceName(): Promise<string> {
         return await this._client.invokeCapability<string>(
@@ -5163,6 +5203,10 @@ class ExecuteCommandContextPromiseImpl implements ExecuteCommandContextPromise {
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
     ): PromiseLike<TResult1 | TResult2> {
         return this._promise.then(onfulfilled, onrejected);
+    }
+
+    serviceProvider(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.serviceProvider()), this._client, false);
     }
 
     resourceName(): Promise<string> {
@@ -5434,6 +5478,126 @@ class InputsDialogValidationContextPromiseImpl implements InputsDialogValidation
 
     addValidationError(inputName: string, errorMessage: string): InputsDialogValidationContextPromise {
         return new InputsDialogValidationContextPromiseImpl(this._promise.then(obj => obj.addValidationError(inputName, errorMessage)), this._client);
+    }
+
+}
+
+// ============================================================================
+// LoadInputContext
+// ============================================================================
+
+/** The context for dynamic input loading. Used with `LoadCallback`. */
+export interface LoadInputContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the loading input. This is the target of `InputLoadOptions`. */
+    input(): Promise<InteractionInput>;
+    /** Gets the collection of all `InteractionInput` in this prompt. */
+    allInputs(): Promise<InteractionInputCollection>;
+    /** Gets the `CancellationToken`. */
+    cancellationToken(): Promise<CancellationToken>;
+    /**
+     * Sets the available options for the loading input.
+     * @param options The choice options to display for the loading input, keyed by submitted value.
+     */
+    setOptions(options: Record<string, string>): LoadInputContextPromise;
+}
+
+export interface LoadInputContextPromise extends PromiseLike<LoadInputContext> {
+    /** Gets the loading input. This is the target of `InputLoadOptions`. */
+    input(): Promise<InteractionInput>;
+    /** Gets the collection of all `InteractionInput` in this prompt. */
+    allInputs(): Promise<InteractionInputCollection>;
+    /** Gets the `CancellationToken`. */
+    cancellationToken(): Promise<CancellationToken>;
+    /**
+     * Sets the available options for the loading input.
+     * @param options The choice options to display for the loading input, keyed by submitted value.
+     */
+    setOptions(options: Record<string, string>): LoadInputContextPromise;
+}
+
+// ============================================================================
+// LoadInputContextImpl
+// ============================================================================
+
+/** The context for dynamic input loading. Used with `LoadCallback`. */
+class LoadInputContextImpl implements LoadInputContext {
+    constructor(private _handle: LoadInputContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async input(): Promise<InteractionInput> {
+        return await this._client.invokeCapability<InteractionInput>(
+            'Aspire.Hosting/LoadInputContext.input',
+            { context: this._handle }
+        );
+    }
+
+    async allInputs(): Promise<InteractionInputCollection> {
+        return await this._client.invokeCapability<InteractionInputCollection>(
+            'Aspire.Hosting/LoadInputContext.allInputs',
+            { context: this._handle }
+        );
+    }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting/LoadInputContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+    /** @internal */
+    async _setOptionsInternal(options: Record<string, string>): Promise<LoadInputContext> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, options };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/LoadInputContext.setOptions',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Sets the available options for the loading input.
+     * @param options The choice options to display for the loading input, keyed by submitted value.
+     */
+    setOptions(options: Record<string, string>): LoadInputContextPromise {
+        return new LoadInputContextPromiseImpl(this._setOptionsInternal(options), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for LoadInputContext that enables fluent chaining.
+ */
+class LoadInputContextPromiseImpl implements LoadInputContextPromise {
+    constructor(private _promise: Promise<LoadInputContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = LoadInputContext, TResult2 = never>(
+        onfulfilled?: ((value: LoadInputContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    input(): Promise<InteractionInput> {
+        return this._promise.then(obj => obj.input());
+    }
+
+    allInputs(): Promise<InteractionInputCollection> {
+        return this._promise.then(obj => obj.allInputs());
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+    setOptions(options: Record<string, string>): LoadInputContextPromise {
+        return new LoadInputContextPromiseImpl(this._promise.then(obj => obj.setOptions(options)), this._client);
     }
 
 }
@@ -54023,6 +54187,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegis
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext', (handle, client) => new ExecuteCommandContextImpl(handle as ExecuteCommandContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent', (handle, client) => new InitializeResourceEventImpl(handle as InitializeResourceEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext', (handle, client) => new InputsDialogValidationContextImpl(handle as InputsDialogValidationContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.LoadInputContext', (handle, client) => new LoadInputContextImpl(handle as LoadInputContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade', (handle, client) => new LogFacadeImpl(handle as LogFacadeHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext', (handle, client) => new PipelineConfigurationContextImpl(handle as PipelineConfigurationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext', (handle, client) => new PipelineContextImpl(handle as PipelineContextHandle, client));

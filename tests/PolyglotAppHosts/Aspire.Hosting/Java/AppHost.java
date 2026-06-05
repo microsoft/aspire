@@ -4,7 +4,6 @@ import java.util.function.Function;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
-        var resourceCommandService = new ResourceCommandService[1];
         var container = builder.addContainer("mycontainer", "nginx");
         container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
@@ -252,14 +251,146 @@ void main() throws Exception {
             result.setSuccess("hello".equals(commandArguments[0].getValue()));
             return result;
         }, echoCommandOptions);
-        container.withCommand("restart", "Restart", (ctx) -> {
-            var cancellationToken = ctx.cancellationToken();
-            return resourceCommandService[0].executeCommandAsync(
+        container.withCommand("restart", "Restart", (commandContext) -> {
+            var cancellationToken = commandContext.cancellationToken();
+            // Command callbacks run after build(), when the execution context service provider is populated; accessing it before build() throws.
+            var serviceProvider = commandContext.serviceProvider();
+            var resourceCommandService = serviceProvider.getResourceCommandService();
+            return resourceCommandService.executeCommandAsync(
                 container,
                 "echo",
                 new ExecuteCommandAsyncOptions()
                     .arguments(Map.of("message", "hello"))
                     .cancellationToken(cancellationToken));
+        });
+        container.withCommand("interaction-validation", "Interaction Validation", (commandContext) -> {
+            // Command callbacks run after build(), when the execution context service provider is populated; accessing it before build() throws.
+            var interactionService = commandContext.serviceProvider().getInteractionService();
+            var interactionServiceAvailable = interactionService.isAvailable();
+            var interactionInput = new InteractionInput();
+            interactionInput.setName("validation");
+            interactionInput.setInputType(InputType.TEXT);
+            interactionInput.setValue("default");
+            interactionInput.setDisabled(false);
+            var choiceInput = new InteractionInput();
+            choiceInput.setName("choice");
+            choiceInput.setInputType(InputType.CHOICE);
+            choiceInput.setPlaceholder("Placeholder!");
+            choiceInput.setRequired(true);
+            choiceInput.setOptions(new Object[] {
+                Map.of("Value", "option1", "Label", "Option 1"),
+                Map.of("Value", "option2", "Label", "Option 2"),
+                Map.of("Value", "option3", "Label", "Option 3")
+            });
+            var dynamicLoading = new InputLoadOptions();
+            dynamicLoading.setAlwaysLoadOnStart(true);
+            dynamicLoading.setLoadCallback((Function<Object[], Object>) (args) -> {
+                var loadContext = (LoadInputContext) args[0];
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(ex);
+                }
+
+                loadContext.setOptions(Map.of(
+                    "dynamic1", "Dynamic Option 1",
+                    "dynamic2", "Dynamic Option 2"));
+                return null;
+            });
+            var dynamicChoiceInput = new InteractionInput();
+            dynamicChoiceInput.setName("dynamic-choice");
+            dynamicChoiceInput.setInputType(InputType.CHOICE);
+            dynamicChoiceInput.setPlaceholder("Loading choices...");
+            dynamicChoiceInput.setRequired(true);
+            dynamicChoiceInput.setDynamicLoading(dynamicLoading);
+            var confirmationOptions = new MessageBoxInteractionOptions();
+            confirmationOptions.setIntent(MessageIntent.CONFIRMATION);
+            confirmationOptions.setPrimaryButtonText("Continue");
+            interactionService.promptConfirmationAsync(
+                "Confirm",
+                "Continue?",
+                new PromptConfirmationAsyncOptions().options(confirmationOptions));
+            var messageBoxOptions = new MessageBoxInteractionOptions();
+            messageBoxOptions.setIntent(MessageIntent.INFORMATION);
+            messageBoxOptions.setEnableMessageMarkdown(true);
+            interactionService.promptMessageBoxAsync(
+                "Message",
+                "Message body",
+                new PromptMessageBoxAsyncOptions().options(messageBoxOptions));
+            var inputOptions = new InputsDialogInteractionOptions();
+            inputOptions.setPrimaryButtonText("Submit");
+            interactionService.promptInputAsync(
+                "Input",
+                "Input body",
+                "Name",
+                "Placeholder",
+                new PromptInputAsyncOptions().options(inputOptions));
+            var inputWithInputOptions = new InputsDialogInteractionOptions();
+            inputWithInputOptions.setPrimaryButtonText("Submit");
+            inputWithInputOptions.setSecondaryButtonText("Skip");
+            inputWithInputOptions.setShowSecondaryButton(true);
+            inputWithInputOptions.setEnableMessageMarkdown(true);
+            inputWithInputOptions.setShowDismiss(true);
+            interactionService.promptInputWithInputAsync(
+                "Choice inputs",
+                "Range of choice inputs",
+                choiceInput,
+                new PromptInputWithInputAsyncOptions().options(inputWithInputOptions));
+            var inputsOptions = new InputsDialogInteractionOptions();
+            inputsOptions.setShowSecondaryButton(true);
+            inputsOptions.setSecondaryButtonText("Skip");
+            interactionService.promptInputsAsync(
+                "Inputs",
+                "Inputs body",
+                new InteractionInput[] { interactionInput, choiceInput },
+                new PromptInputsAsyncOptions().options(inputsOptions));
+            var dynamicChoiceOptions = new InputsDialogInteractionOptions();
+            dynamicChoiceOptions.setPrimaryButtonText("Submit");
+            dynamicChoiceOptions.setValidationCallback((Function<Object[], Object>) (args) -> {
+                var validationContext = (InputsDialogValidationContext) args[0];
+                var selectedValue = "";
+                for (var input : validationContext.inputs().toArray()) {
+                    if ("dynamic-choice".equals(input.getName())) {
+                        selectedValue = input.getValue();
+                        break;
+                    }
+                }
+                if (!"dynamic1".equals(selectedValue) && !"dynamic2".equals(selectedValue)) {
+                    validationContext.addValidationError("dynamic-choice", "Select a dynamically loaded option.");
+                }
+                return null;
+            });
+            var dynamicChoiceResult = interactionService.promptInputsAsync(
+                "Dynamic choice",
+                "Select a dynamically loaded option.",
+                new InteractionInput[] { dynamicChoiceInput },
+                new PromptInputsAsyncOptions().options(dynamicChoiceOptions));
+            var notificationOptions = new NotificationInteractionOptions();
+            notificationOptions.setIntent(MessageIntent.INFORMATION);
+            notificationOptions.setLinkText("Docs");
+            notificationOptions.setLinkUrl("https://aspire.dev");
+            interactionService.promptNotificationAsync(
+                "Notification",
+                "Notification body",
+                new PromptNotificationAsyncOptions().options(notificationOptions));
+            var dynamicChoiceValue = "default";
+            if (!dynamicChoiceResult.getCanceled() && dynamicChoiceResult.getData() != null) {
+                for (var input : dynamicChoiceResult.getData().toArray()) {
+                    if ("dynamic-choice".equals(input.getName()) && input.getValue() != null && !input.getValue().isEmpty()) {
+                        dynamicChoiceValue = input.getValue();
+                        break;
+                    }
+                }
+            }
+            commandContext.logger().logInformation("Dynamic choice selected: " + dynamicChoiceValue);
+            var data = new CommandResultData();
+            data.setValue(dynamicChoiceValue);
+            data.setFormat(CommandResultFormat.TEXT);
+            var result = new ExecuteCommandResult();
+            result.setSuccess(interactionServiceAvailable);
+            result.setData(data);
+            return result;
         });
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();
@@ -267,63 +398,5 @@ void main() throws Exception {
         httpCmdOptions.setConfirmationMessage("Are you sure?");
         container.withHttpCommand("/api/reset", "Reset", httpCmdOptions);
         var app = builder.build();
-
-        // The execution context service provider is populated by build(); accessing it before this point throws.
-        var executionContextServiceProvider = builderExecutionContext.serviceProvider();
-        var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
-        resourceCommandService[0] = executionContextServiceProvider.getResourceCommandService();
-        var interactionService = executionContextServiceProvider.getInteractionService();
-        var _interactionServiceAvailable = interactionService.isAvailable();
-        var interactionInput = new InteractionInput();
-        interactionInput.setName("validation");
-        interactionInput.setInputType(InputType.TEXT);
-        interactionInput.setValue("default");
-        interactionInput.setDisabled(false);
-        var confirmationOptions = new MessageBoxInteractionOptions();
-        confirmationOptions.setIntent(MessageIntent.CONFIRMATION);
-        confirmationOptions.setPrimaryButtonText("Continue");
-        interactionService.promptConfirmationAsync(
-            "Confirm",
-            "Continue?",
-            new PromptConfirmationAsyncOptions().options(confirmationOptions));
-        var messageBoxOptions = new MessageBoxInteractionOptions();
-        messageBoxOptions.setIntent(MessageIntent.INFORMATION);
-        messageBoxOptions.setEnableMessageMarkdown(true);
-        interactionService.promptMessageBoxAsync(
-            "Message",
-            "Message body",
-            new PromptMessageBoxAsyncOptions().options(messageBoxOptions));
-        var inputOptions = new InputsDialogInteractionOptions();
-        inputOptions.setPrimaryButtonText("Submit");
-        interactionService.promptInputAsync(
-            "Input",
-            "Input body",
-            "Name",
-            "Placeholder",
-            new PromptInputAsyncOptions().options(inputOptions));
-        var inputWithInputOptions = new InputsDialogInteractionOptions();
-        inputWithInputOptions.setShowDismiss(true);
-        interactionService.promptInputWithInputAsync(
-            "Input",
-            "Input body",
-            interactionInput,
-            new PromptInputWithInputAsyncOptions().options(inputWithInputOptions));
-        var inputsOptions = new InputsDialogInteractionOptions();
-        inputsOptions.setShowSecondaryButton(true);
-        inputsOptions.setSecondaryButtonText("Skip");
-        interactionService.promptInputsAsync(
-            "Inputs",
-            "Inputs body",
-            new InteractionInput[] { interactionInput },
-            new PromptInputsAsyncOptions().options(inputsOptions));
-        var notificationOptions = new NotificationInteractionOptions();
-        notificationOptions.setIntent(MessageIntent.INFORMATION);
-        notificationOptions.setLinkText("Docs");
-        notificationOptions.setLinkUrl("https://aspire.dev");
-        interactionService.promptNotificationAsync(
-            "Notification",
-            "Notification body",
-            new PromptNotificationAsyncOptions().options(notificationOptions));
-
         app.run();
     }

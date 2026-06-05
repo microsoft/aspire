@@ -203,6 +203,7 @@ internal sealed class InputLoadingState(InputLoadOptions options)
 /// scenarios where input loading behavior must be customized.
 /// </remarks>
 [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireDto]
 public sealed class InputLoadOptions
 {
     /// <summary>
@@ -230,6 +231,7 @@ public sealed class InputLoadOptions
 /// The context for dynamic input loading. Used with <see cref="InputLoadOptions.LoadCallback"/>.
 /// </summary>
 [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class LoadInputContext
 {
     /// <summary>
@@ -245,12 +247,25 @@ public sealed class LoadInputContext
     /// <summary>
     /// Gets the service provider.
     /// </summary>
+    [AspireExportIgnore(Reason = "IServiceProvider is not part of the polyglot dynamic loading surface.")]
     public required IServiceProvider Services { get; init; }
 
     /// <summary>
     /// Gets the <see cref="CancellationToken"/>.
     /// </summary>
     public required CancellationToken CancellationToken { get; init; }
+
+    /// <summary>
+    /// Sets the available options for the loading input.
+    /// </summary>
+    /// <param name="options">The choice options to display for the loading input, keyed by submitted value.</param>
+    [AspireExport("LoadInputContext.setOptions", MethodName = "setOptions")]
+    internal void SetOptions(IReadOnlyDictionary<string, string> options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        Input.Options = options.ToArray();
+    }
 }
 
 /// <summary>

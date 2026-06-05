@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"apphost/modules/aspire"
 )
@@ -11,7 +12,6 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	var resourceCommandService aspire.ResourceCommandService
 
 	// ===================================================================
 	// Factory methods on builder
@@ -382,8 +382,6 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	_, _ = builderConfiguration.GetChildren()
 	_, _ = builderConfiguration.Exists("MyConfig:Key")
 
-	builderExecutionContext := builder.ExecutionContext()
-
 	// Subscriptions (typed callbacks)
 	beforeStartSub := builder.SubscribeBeforeStart(func(e aspire.BeforeStartEvent) {
 		beforeStartModel := e.Model()
@@ -546,8 +544,8 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			UpdateState: updateCommandState,
 		},
 	})
-	_ = container.WithCommand("echo", "Echo", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		commandArguments, err := ctx.Arguments().ToArray()
+	_ = container.WithCommand("echo", "Echo", func(commandContext aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		commandArguments, err := commandContext.Arguments().ToArray()
 		if err != nil {
 			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
 		}
@@ -563,11 +561,14 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			},
 		},
 	})
-	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		cancellationToken, err := ctx.CancellationToken()
+	_ = container.WithCommand("restart", "Restart", func(commandContext aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		cancellationToken, err := commandContext.CancellationToken()
 		if err != nil {
 			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
 		}
+		// Command callbacks run after Build(), when the execution context service provider is populated; accessing it before Build() throws.
+		serviceProvider := commandContext.ServiceProvider()
+		resourceCommandService := serviceProvider.GetResourceCommandService()
 		result, err := resourceCommandService.ExecuteCommandAsync(container, "echo", &aspire.ExecuteCommandAsyncOptions{Arguments: map[string]string{"message": "hello"}, CancellationToken: cancellationToken})
 		if err != nil {
 			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
@@ -575,26 +576,34 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 		return result
 	})
+	_ = container.WithCommand("interaction-validation", "Interaction Validation", func(commandContext aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		// Command callbacks run after Build(), when the execution context service provider is populated; accessing it before Build() throws.
+		interactionService := commandContext.ServiceProvider().GetInteractionService()
+		isAvailable, _ := interactionService.IsAvailable()
+		dynamicChoiceValue := validateInteractionServicePromptApis(interactionService)
+		_ = commandContext.Logger().LogInformation("Dynamic choice selected: " + dynamicChoiceValue)
+		resultFormat := aspire.CommandResultFormatText
+
+		return &aspire.ExecuteCommandResult{
+			Success: isAvailable,
+			Data: &aspire.CommandResultData{
+				Value:  dynamicChoiceValue,
+				Format: &resultFormat,
+			},
+		}
+	})
 
 	app, err := builder.Build()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// The execution context service provider is populated by Build(); accessing it before this point throws.
-	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
-	_ = executionContextServiceProvider.GetDistributedApplicationModel()
-	resourceCommandService = executionContextServiceProvider.GetResourceCommandService()
-	interactionService := executionContextServiceProvider.GetInteractionService()
-	_, _ = interactionService.IsAvailable()
-	validateInteractionServicePromptApis(interactionService)
-
 	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }
 
-func validateInteractionServicePromptApis(interactionService aspire.InteractionService) {
+func validateInteractionServicePromptApis(interactionService aspire.InteractionService) string {
 	confirmationIntent := aspire.MessageIntentConfirmation
 	informationIntent := aspire.MessageIntentInformation
 	interactionInput := &aspire.InteractionInput{
@@ -602,6 +611,28 @@ func validateInteractionServicePromptApis(interactionService aspire.InteractionS
 		InputType: aspire.InputTypeText,
 		Value:     "default",
 		Disabled:  false,
+	}
+	dynamicChoiceInput := &aspire.InteractionInput{
+		Name:        "dynamic-choice",
+		InputType:   aspire.InputTypeChoice,
+		Placeholder: aspire.StringPtr("Loading choices..."),
+		Required:    aspire.BoolPtr(true),
+		DynamicLoading: &aspire.InputLoadOptions{
+			AlwaysLoadOnStart: aspire.BoolPtr(true),
+			LoadCallback: func(args ...any) any {
+				loadContext, ok := args[0].(aspire.LoadInputContext)
+				if !ok {
+					return nil
+				}
+
+				time.Sleep(time.Second)
+				_ = loadContext.SetOptions(map[string]string{
+					"dynamic1": "Dynamic Option 1",
+					"dynamic2": "Dynamic Option 2",
+				})
+				return nil
+			},
+		},
 	}
 
 	_, _ = interactionService.PromptConfirmationAsync("Confirm", "Continue?", &aspire.PromptConfirmationAsyncOptions{
@@ -632,6 +663,35 @@ func validateInteractionServicePromptApis(interactionService aspire.InteractionS
 			SecondaryButtonText: aspire.StringPtr("Skip"),
 		},
 	})
+	dynamicChoiceResult, _ := interactionService.PromptInputsAsync("Dynamic choice", "Select a dynamically loaded option.", []*aspire.InteractionInput{dynamicChoiceInput}, &aspire.PromptInputsAsyncOptions{
+		Options: &aspire.InputsDialogInteractionOptions{
+			PrimaryButtonText: aspire.StringPtr("Submit"),
+			ValidationCallback: func(args ...any) any {
+				validationContext, ok := args[0].(aspire.InputsDialogValidationContext)
+				if !ok {
+					return nil
+				}
+
+				inputs, err := validationContext.Inputs().ToArray()
+				if err != nil {
+					_ = validationContext.AddValidationError("dynamic-choice", aspire.FormatError(err))
+					return nil
+				}
+
+				selectedValue := ""
+				for _, input := range inputs {
+					if input.Name == "dynamic-choice" {
+						selectedValue = input.Value
+						break
+					}
+				}
+				if selectedValue != "dynamic1" && selectedValue != "dynamic2" {
+					_ = validationContext.AddValidationError("dynamic-choice", "Select a dynamically loaded option.")
+				}
+				return nil
+			},
+		},
+	})
 	_, _ = interactionService.PromptNotificationAsync("Notification", "Notification body", &aspire.PromptNotificationAsyncOptions{
 		Options: &aspire.NotificationInteractionOptions{
 			Intent:   &informationIntent,
@@ -639,4 +699,21 @@ func validateInteractionServicePromptApis(interactionService aspire.InteractionS
 			LinkUrl:  aspire.StringPtr("https://aspire.dev"),
 		},
 	})
+
+	if dynamicChoiceResult == nil || dynamicChoiceResult.Canceled || dynamicChoiceResult.Data == nil {
+		return "default"
+	}
+
+	inputs, err := (*dynamicChoiceResult.Data).ToArray()
+	if err != nil {
+		return "default"
+	}
+
+	for _, input := range inputs {
+		if input.Name == "dynamic-choice" && input.Value != "" {
+			return input.Value
+		}
+	}
+
+	return "default"
 }

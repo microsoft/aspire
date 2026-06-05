@@ -5,6 +5,7 @@ import {
     WellKnownPipelineTags,
     createBuilder,
     CertificateTrustScope,
+    CommandResultFormat,
     EndpointProperty,
     HealthStatus,
     IconVariant,
@@ -15,12 +16,11 @@ import {
     ResourceCommandState,
     refExpr,
 } from './.aspire/modules/aspire.mjs';
-import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext, ResourceCommandService } from './.aspire/modules/aspire.mjs';
+import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext, InputLoadOptions, InteractionInput, LoadInputContext } from './.aspire/modules/aspire.mjs';
 import { fileURLToPath } from 'node:url';
 
 const builder = await createBuilder();
 const processCommandStdinScriptPath = fileURLToPath(new URL("./process-command-scripts/stdin.js", import.meta.url));
-let resourceCommandService: ResourceCommandService;
 
 // ===================================================================
 // Factory methods on builder
@@ -718,8 +718,8 @@ await container.withCommand("noop", "Noop", async () => {
         },
     },
 });
-await container.withCommand("echo", "Echo", async (ctx) => {
-    const commandInputs = await ctx.arguments();
+await container.withCommand("echo", "Echo", async (commandContext) => {
+    const commandInputs = await commandContext.arguments();
     const commandArguments = await commandInputs.toArray();
 
     return { success: commandArguments[0]?.value === "hello" };
@@ -734,13 +734,106 @@ await container.withCommand("echo", "Echo", async (ctx) => {
         ]
     }
 });
-await container.withCommand("restart", "Restart", async (ctx) => {
-    const cancellationToken = await ctx.cancellationToken();
+await container.withCommand("restart", "Restart", async (commandContext) => {
+    const cancellationToken = await commandContext.cancellationToken();
+    // Command callbacks run after build(), when the execution context service provider is populated; accessing it before build() throws.
+    const resourceCommandService = await commandContext.serviceProvider().getResourceCommandService();
 
     return await resourceCommandService.executeCommandAsync(container, "echo", {
         arguments: { message: "hello" },
         cancellationToken
     });
+});
+await container.withCommand("interaction-validation", "Interaction Validation", async (commandContext) => {
+    // Command callbacks run after build(), when the execution context service provider is populated; accessing it before build() throws.
+    const interactionService = await commandContext.serviceProvider().getInteractionService();
+    const interactionServiceAvailable = await interactionService.isAvailable();
+    const textInput = {
+        name: "validation",
+        inputType: InputType.Text,
+        value: "default",
+        disabled: false,
+    };
+    const choiceInput = {
+        name: "choice",
+        inputType: InputType.Choice,
+        placeholder: "Placeholder!",
+        required: true,
+        options: [
+            { key: "option1", value: "Option 1" },
+            { key: "option2", value: "Option 2" },
+            { key: "option3", value: "Option 3" },
+        ],
+    };
+    const dynamicLoading: InputLoadOptions = {
+        alwaysLoadOnStart: true,
+        loadCallback: async (loadContext: LoadInputContext) => {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await loadContext.setOptions({
+                dynamic1: "Dynamic Option 1",
+                dynamic2: "Dynamic Option 2",
+            });
+        },
+    };
+    const dynamicChoiceInput: InteractionInput = {
+        name: "dynamic-choice",
+        inputType: InputType.Choice,
+        placeholder: "Choose a dynamically loaded value",
+        required: true,
+        dynamicLoading,
+    };
+
+    await interactionService.promptConfirmationAsync("Confirm", "Continue?", {
+        options: { intent: MessageIntent.Confirmation, primaryButtonText: "Continue" },
+    });
+    await interactionService.promptMessageBoxAsync("Message", "Message body", {
+        options: { intent: MessageIntent.Information, enableMessageMarkdown: true },
+    });
+    await interactionService.promptInputAsync("Input", "Input body", "Name", "Placeholder", {
+        options: { primaryButtonText: "Submit" },
+    });
+    await interactionService.promptInputWithInputAsync("Choice inputs", "Range of choice inputs", choiceInput, {
+        options: {
+            primaryButtonText: "Submit",
+            secondaryButtonText: "Skip",
+            showSecondaryButton: true,
+            enableMessageMarkdown: true,
+            showDismiss: true,
+        },
+    });
+    await interactionService.promptInputsAsync("Inputs", "Inputs body", [textInput, choiceInput], {
+        options: { showSecondaryButton: true, secondaryButtonText: "Skip" },
+    });
+    const dynamicChoiceResult = await interactionService.promptInputWithInputAsync(
+        "Dynamic choice input",
+        "Options are loaded after the prompt opens.",
+        dynamicChoiceInput,
+        {
+            options: {
+                primaryButtonText: "Submit",
+                validationCallback: async (validationContext) => {
+                    const inputs = await validationContext.inputs();
+                    const dynamicChoice = await inputs.required("dynamic-choice");
+                    if (dynamicChoice.value !== "dynamic1" && dynamicChoice.value !== "dynamic2") {
+                        await validationContext.addValidationError("dynamic-choice", "Select one of the dynamically loaded values.");
+                    }
+                },
+            },
+        });
+    const dynamicChoiceValue = dynamicChoiceResult.data?.value ?? "canceled";
+    const commandLogger = await commandContext.logger();
+    await commandLogger.logInformation(`Dynamic choice selected: ${dynamicChoiceValue}`);
+    await interactionService.promptNotificationAsync("Notification", "Notification body", {
+        options: { intent: MessageIntent.Information, linkText: "Docs", linkUrl: "https://aspire.dev" },
+    });
+
+    return {
+        success: interactionServiceAvailable,
+        data: {
+            value: dynamicChoiceValue,
+            format: CommandResultFormat.Text,
+        },
+    };
 });
 
 // withProcessCommand
@@ -770,36 +863,4 @@ await container.withHttpCommand("/health", "Health Check");
 await container.withHttpCommand("/api/reset", "Reset", { methodName: "POST", confirmationMessage: "Are you sure?" });
 
 const app = await builder.build();
-
-// The execution context service provider is populated by build(); accessing it before this point throws.
-const executionContextServiceProvider = await builderExecutionContext.serviceProvider();
-const _distributedApplicationModelFromExecutionContext = await executionContextServiceProvider.getDistributedApplicationModel();
-resourceCommandService = await executionContextServiceProvider.getResourceCommandService();
-const interactionService = await executionContextServiceProvider.getInteractionService();
-const _interactionServiceAvailable = await interactionService.isAvailable();
-const interactionInput = {
-    name: "validation",
-    inputType: InputType.Text,
-    value: "default",
-    disabled: false,
-};
-void await interactionService.promptConfirmationAsync("Confirm", "Continue?", {
-    options: { intent: MessageIntent.Confirmation, primaryButtonText: "Continue" },
-});
-void await interactionService.promptMessageBoxAsync("Message", "Message body", {
-    options: { intent: MessageIntent.Information, enableMessageMarkdown: true },
-});
-void await interactionService.promptInputAsync("Input", "Input body", "Name", "Placeholder", {
-    options: { primaryButtonText: "Submit" },
-});
-void await interactionService.promptInputWithInputAsync("Input", "Input body", interactionInput, {
-    options: { showDismiss: true },
-});
-void await interactionService.promptInputsAsync("Inputs", "Inputs body", [interactionInput], {
-    options: { showSecondaryButton: true, secondaryButtonText: "Skip" },
-});
-void await interactionService.promptNotificationAsync("Notification", "Notification body", {
-    options: { intent: MessageIntent.Information, linkText: "Docs", linkUrl: "https://aspire.dev" },
-});
-
 await app.run();

@@ -1833,7 +1833,13 @@ class InputInteractionResult(typing.TypedDict, total=False):
     Data: InteractionInput
     Canceled: bool
 
+class InputLoadOptions(typing.TypedDict, total=False):
+    LoadCallback: typing.Callable
+    AlwaysLoadOnStart: bool
+    DependsOnInputs: typing.Iterable[str]
+
 class InputsDialogInteractionOptions(typing.TypedDict, total=False):
+    ValidationCallback: typing.Callable
     PrimaryButtonText: str | None
     SecondaryButtonText: str | None
     ShowSecondaryButton: bool | None
@@ -1852,7 +1858,7 @@ class InteractionInput(typing.TypedDict, total=False):
     InputType: InputType
     Required: bool
     Options: typing.Iterable[typing.Any]
-    DynamicLoading: typing.Any
+    DynamicLoading: InputLoadOptions
     Value: str | None
     Placeholder: str | None
     AllowCustomChoice: bool
@@ -4931,6 +4937,15 @@ class ExecuteCommandContext:
         return self._handle
 
     @_cached_property
+    def service_provider(self) -> AbstractServiceProvider:
+        """The service provider."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    @_cached_property
     def resource_name(self) -> str:
         """The resource name."""
         result = self._client.invoke_capability(
@@ -5093,6 +5108,57 @@ class InteractionInputCollection:
             rpc_args,
         )
         return result
+
+
+class LoadInputContext:
+    """Type class for LoadInputContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"LoadInputContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def input(self) -> InteractionInput:
+        """Gets the loading input. This is the target of `InputLoadOptions`."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/LoadInputContext.input',
+            {'context': self._handle}
+        )
+        return typing.cast(InteractionInput, result)
+
+    @_cached_property
+    def all_inputs(self) -> InteractionInputCollection:
+        """Gets the collection of all `InteractionInput` in this prompt."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/LoadInputContext.allInputs',
+            {'context': self._handle}
+        )
+        return typing.cast(InteractionInputCollection, result)
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting/LoadInputContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+    def set_options(self, options: typing.Mapping[str, str]) -> None:
+        """Sets the available options for the loading input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['options'] = options
+        self._client.invoke_capability(
+            'Aspire.Hosting/LoadInputContext.setOptions',
+            rpc_args
+        )
 
 
 class LogFacade:
@@ -11622,9 +11688,9 @@ def create_builder(
 
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression", lambda handle, _: ReferenceExpression(handle))
 _register_handle_wrapper("System.Private.CoreLib/System.Threading.CancellationToken", CancellationToken)
+_register_handle_wrapper("Aspire.Hosting/Dict<string,string>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/List<string>", AspireList)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,any>", AspireDict)
-_register_handle_wrapper("Aspire.Hosting/Dict<string,string>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,number>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", AbstractAspireStore)
 _register_handle_wrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", AbstractConfiguration)
@@ -11672,6 +11738,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Execute
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", InitializeResourceEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", InputsDialogValidationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", InteractionInputCollection)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.LoadInputContext", LoadInputContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", LogFacade)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", PipelineConfigurationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext", PipelineContext)

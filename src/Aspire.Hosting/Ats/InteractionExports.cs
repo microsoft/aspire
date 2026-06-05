@@ -293,9 +293,17 @@ internal sealed class MessageBoxInteractionOptions : InteractionOptions
 [AspireDto]
 internal sealed class InputsDialogInteractionOptions : InteractionOptions
 {
+    /// <summary>
+    /// Gets the validation callback for the inputs dialog.
+    /// </summary>
+    public Func<InputsDialogValidationContext, Task>? ValidationCallback { get; init; }
+
     internal PublicInputsDialogInteractionOptions ToInputsDialogInteractionOptions()
     {
-        var options = new PublicInputsDialogInteractionOptions();
+        var options = new PublicInputsDialogInteractionOptions
+        {
+            ValidationCallback = ValidationCallback
+        };
 
         ApplyTo(options);
         return options;

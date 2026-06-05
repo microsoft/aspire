@@ -576,6 +576,31 @@ impl std::fmt::Display for TestResourceStatus {
 // DTOs
 // ============================================================================
 
+/// InputLoadOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InputLoadOptions {
+    #[serde(rename = "LoadCallback")]
+    pub load_callback: Value,
+    #[serde(rename = "AlwaysLoadOnStart", skip_serializing_if = "Option::is_none")]
+    pub always_load_on_start: Option<bool>,
+    #[serde(rename = "DependsOnInputs", skip_serializing_if = "Option::is_none")]
+    pub depends_on_inputs: Option<Vec<String>>,
+}
+
+impl InputLoadOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("LoadCallback".to_string(), serde_json::to_value(&self.load_callback).unwrap_or(Value::Null));
+        if let Some(ref v) = self.always_load_on_start {
+            map.insert("AlwaysLoadOnStart".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.depends_on_inputs {
+            map.insert("DependsOnInputs".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
 /// InteractionInput
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct InteractionInput {
@@ -594,7 +619,7 @@ pub struct InteractionInput {
     #[serde(rename = "Options")]
     pub options: Vec<Value>,
     #[serde(rename = "DynamicLoading", skip_serializing_if = "Option::is_none")]
-    pub dynamic_loading: Option<Value>,
+    pub dynamic_loading: Option<InputLoadOptions>,
     #[serde(rename = "Value")]
     pub value: String,
     #[serde(rename = "Placeholder", skip_serializing_if = "Option::is_none")]
@@ -862,6 +887,8 @@ impl MessageBoxInteractionOptions {
 /// InputsDialogInteractionOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct InputsDialogInteractionOptions {
+    #[serde(rename = "ValidationCallback", skip_serializing_if = "Option::is_none")]
+    pub validation_callback: Option<Value>,
     #[serde(rename = "PrimaryButtonText", skip_serializing_if = "Option::is_none")]
     pub primary_button_text: Option<String>,
     #[serde(rename = "SecondaryButtonText", skip_serializing_if = "Option::is_none")]
@@ -877,6 +904,9 @@ pub struct InputsDialogInteractionOptions {
 impl InputsDialogInteractionOptions {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
+        if let Some(ref v) = self.validation_callback {
+            map.insert("ValidationCallback".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.primary_button_text {
             map.insert("PrimaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
@@ -9098,6 +9128,15 @@ impl ExecuteCommandContext {
         &self.client
     }
 
+    /// The service provider.
+    pub fn service_provider(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
     /// The resource name.
     pub fn resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -11879,6 +11918,67 @@ impl InteractionInputCollection {
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/InteractionInputCollection.toArray", args)?;
         Ok(serde_json::from_value(result)?)
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.LoadInputContext
+pub struct LoadInputContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for LoadInputContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl LoadInputContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the loading input. This is the target of `InputLoadOptions`.
+    pub fn input(&self) -> Result<InteractionInput, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/LoadInputContext.input", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the collection of all `InteractionInput` in this prompt.
+    pub fn all_inputs(&self) -> Result<InteractionInputCollection, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/LoadInputContext.allInputs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(InteractionInputCollection::new(handle, self.client.clone()))
+    }
+
+    /// Gets the `CancellationToken`.
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/LoadInputContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+
+    /// Sets the available options for the loading input.
+    pub fn set_options(&self, options: HashMap<String, String>) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/LoadInputContext.setOptions", args)?;
+        Ok(())
     }
 }
 

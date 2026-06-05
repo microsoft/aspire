@@ -246,6 +246,22 @@ const (
 // DTOs
 // ============================================================================
 
+// InputLoadOptions represents InputLoadOptions.
+type InputLoadOptions struct {
+	LoadCallback func(...any) any `json:"LoadCallback,omitempty"`
+	AlwaysLoadOnStart *bool `json:"AlwaysLoadOnStart,omitempty"`
+	DependsOnInputs []string `json:"DependsOnInputs,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *InputLoadOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.LoadCallback != nil { m["LoadCallback"] = serializeValue(d.LoadCallback) }
+	if d.AlwaysLoadOnStart != nil { m["AlwaysLoadOnStart"] = serializeValue(d.AlwaysLoadOnStart) }
+	if d.DependsOnInputs != nil { m["DependsOnInputs"] = serializeValue(d.DependsOnInputs) }
+	return m
+}
+
 // InteractionInput represents InteractionInput.
 type InteractionInput struct {
 	Name string `json:"Name,omitempty"`
@@ -255,7 +271,7 @@ type InteractionInput struct {
 	InputType InputType `json:"InputType,omitempty"`
 	Required *bool `json:"Required,omitempty"`
 	Options []any `json:"Options,omitempty"`
-	DynamicLoading any `json:"DynamicLoading,omitempty"`
+	DynamicLoading *InputLoadOptions `json:"DynamicLoading,omitempty"`
 	Value string `json:"Value,omitempty"`
 	Placeholder *string `json:"Placeholder,omitempty"`
 	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
@@ -422,6 +438,7 @@ func (d *MessageBoxInteractionOptions) ToMap() map[string]any {
 
 // InputsDialogInteractionOptions represents InputsDialogInteractionOptions.
 type InputsDialogInteractionOptions struct {
+	ValidationCallback func(...any) any `json:"ValidationCallback,omitempty"`
 	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
 	SecondaryButtonText *string `json:"SecondaryButtonText,omitempty"`
 	ShowSecondaryButton *bool `json:"ShowSecondaryButton,omitempty"`
@@ -432,6 +449,7 @@ type InputsDialogInteractionOptions struct {
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *InputsDialogInteractionOptions) ToMap() map[string]any {
 	m := map[string]any{}
+	if d.ValidationCallback != nil { m["ValidationCallback"] = serializeValue(d.ValidationCallback) }
 	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
 	if d.SecondaryButtonText != nil { m["SecondaryButtonText"] = serializeValue(d.SecondaryButtonText) }
 	if d.ShowSecondaryButton != nil { m["ShowSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
@@ -14308,6 +14326,7 @@ type ExecuteCommandContext interface {
 	CancellationToken() (*CancellationToken, error)
 	Logger() Logger
 	ResourceName() (string, error)
+	ServiceProvider() ServiceProvider
 	Err() error
 }
 
@@ -14387,6 +14406,25 @@ func (s *executeCommandContext) ResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// ServiceProvider the service provider.
+func (s *executeCommandContext) ServiceProvider() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // ExecutionConfigurationBuilder is the public interface for handle type ExecutionConfigurationBuilder.
@@ -16124,6 +16162,87 @@ func (s *interactionService) PromptNotificationAsync(title string, message strin
 		return zero, err
 	}
 	return decodeAs[*BooleanInteractionResult](result)
+}
+
+// LoadInputContext is the public interface for handle type LoadInputContext.
+type LoadInputContext interface {
+	handleReference
+	AllInputs() InteractionInputCollection
+	CancellationToken() (*CancellationToken, error)
+	Input() (*InteractionInput, error)
+	SetOptions(options map[string]string) error
+	Err() error
+}
+
+// loadInputContext is the unexported impl of LoadInputContext.
+type loadInputContext struct {
+	*resourceBuilderBase
+}
+
+// newLoadInputContextFromHandle wraps an existing handle as LoadInputContext.
+func newLoadInputContextFromHandle(h *handle, c *client) LoadInputContext {
+	return &loadInputContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AllInputs gets the collection of all `InteractionInput` in this prompt.
+func (s *loadInputContext) AllInputs() InteractionInputCollection {
+	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/LoadInputContext.allInputs", reqArgs)
+	if err != nil {
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/LoadInputContext.allInputs returned unexpected type %T", result)
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// CancellationToken gets the `CancellationToken`.
+func (s *loadInputContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/LoadInputContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// Input gets the loading input. This is the target of `InputLoadOptions`.
+func (s *loadInputContext) Input() (*InteractionInput, error) {
+	if s.err != nil { var zero *InteractionInput; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/LoadInputContext.input", reqArgs)
+	if err != nil {
+		var zero *InteractionInput
+		return zero, err
+	}
+	return decodeAs[*InteractionInput](result)
+}
+
+// SetOptions sets the available options for the loading input.
+func (s *loadInputContext) SetOptions(options map[string]string) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if options != nil { reqArgs["options"] = serializeValue(options) }
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/LoadInputContext.setOptions", reqArgs)
+	return err
 }
 
 // LogFacade is the public interface for handle type LogFacade.
@@ -26845,6 +26964,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IInteractionService", func(h *handle, c *client) any {
 		return newInteractionServiceFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.LoadInputContext", func(h *handle, c *client) any {
+		return newLoadInputContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", func(h *handle, c *client) any {
 		return newLogFacadeFromHandle(h, c)

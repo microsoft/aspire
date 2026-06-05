@@ -5,8 +5,6 @@ from aspire_app import AksNodeVmSizes, AzureServiceTags, ReferenceExpression, We
 
 
 with create_builder() as builder:
-    resource_command_service = None
-
     def update_existing_http_endpoint(endpoint):
         endpoint.port = 8080
         endpoint.is_proxied = False
@@ -412,12 +410,121 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     container.with_command(
         "noop",
         "Noop",
-        lambda *_args, **_kwargs: {"success": True},
+        lambda command_context: {"success": True},
         command_options={"UpdateState": update_command_state}
     )
 
-    def restart_command(_ctx):
+    def restart_command(command_context):
+        # Command callbacks run after build(), when the execution context service provider is populated; accessing it before build() throws.
+        service_provider = command_context.service_provider
+        resource_command_service = service_provider.get_resource_command_service()
         return resource_command_service.execute_command(container, "echo", arguments={"message": "hello"})
+
+    def interaction_validation_command(command_context):
+        # Command callbacks run after build(), when the execution context service provider is populated; accessing it before build() throws.
+        service_provider = command_context.service_provider
+        interaction_service = service_provider.get_interaction_service()
+        is_available = interaction_service.is_available()
+        text_input = {
+            "Name": "validation",
+            "InputType": "Text",
+            "Value": "default",
+            "Disabled": False,
+        }
+        choice_input = {
+            "Name": "choice",
+            "InputType": "Choice",
+            "Placeholder": "Placeholder!",
+            "Required": True,
+            "Options": [
+                {"Key": "option1", "Value": "Option 1"},
+                {"Key": "option2", "Value": "Option 2"},
+                {"Key": "option3", "Value": "Option 3"},
+            ],
+        }
+
+        def load_dynamic_choices(load_context):
+            import time
+            time.sleep(1)
+            load_context.set_options({
+                "dynamic1": "Dynamic Option 1",
+                "dynamic2": "Dynamic Option 2",
+            })
+
+        def validate_dynamic_choice(validation_context):
+            dynamic_choice = validation_context.inputs.required("dynamic-choice")
+            if dynamic_choice.get("Value") not in ("dynamic1", "dynamic2"):
+                validation_context.add_validation_error("dynamic-choice", "Select one of the dynamically loaded values.")
+
+        dynamic_choice_input = {
+            "Name": "dynamic-choice",
+            "InputType": "Choice",
+            "Placeholder": "Choose a dynamically loaded value",
+            "Required": True,
+            "DynamicLoading": {
+                "AlwaysLoadOnStart": True,
+                "LoadCallback": load_dynamic_choices,
+            },
+        }
+        interaction_service.prompt_confirmation(
+            "Confirm",
+            "Continue?",
+            options={"Intent": "Confirmation", "PrimaryButtonText": "Continue"},
+        )
+        interaction_service.prompt_message_box(
+            "Message",
+            "Message body",
+            options={"Intent": "Information", "EnableMessageMarkdown": True},
+        )
+        input_result = interaction_service.prompt_input(
+            "Input",
+            "Input body",
+            "Name",
+            "Placeholder",
+            options={"PrimaryButtonText": "Submit"},
+        )
+        choice_result = interaction_service.prompt_input_with_input(
+            "Choice inputs",
+            "Range of choice inputs",
+            choice_input,
+            options={
+                "PrimaryButtonText": "Submit",
+                "SecondaryButtonText": "Skip",
+                "ShowSecondaryButton": True,
+                "EnableMessageMarkdown": True,
+                "ShowDismiss": True,
+            },
+        )
+        interaction_service.prompt_inputs(
+            "Inputs",
+            "Inputs body",
+            [text_input, choice_input],
+            options={"ShowSecondaryButton": True, "SecondaryButtonText": "Skip"},
+        )
+        dynamic_choice_result = interaction_service.prompt_input_with_input(
+            "Dynamic choice input",
+            "Options are loaded after the prompt opens.",
+            dynamic_choice_input,
+            options={
+                "PrimaryButtonText": "Submit",
+                "ValidationCallback": validate_dynamic_choice,
+            },
+        )
+        dynamic_choice_value = (dynamic_choice_result.get("data") or {}).get("Value", "canceled")
+        command_context.logger.log_information("Dynamic choice selected: %s", dynamic_choice_value)
+        interaction_service.prompt_notification(
+            "Notification",
+            "Notification body",
+            options={"Intent": "Information", "LinkText": "Docs", "LinkUrl": "https://aspire.dev"},
+        )
+
+        return {
+            "success": is_available or input_result.get("canceled") is True or choice_result.get("canceled") is True,
+            "data": {
+                "value": dynamic_choice_value,
+                "format": "Text",
+            },
+        }
 
     container.with_command(
         "echo",
@@ -426,58 +533,11 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         command_options={"Arguments": [{"Name": "message", "InputType": "Text", "Required": True}]}
     )
     container.with_command("restart", "Restart", restart_command)
+    container.with_command("interaction-validation", "Interaction Validation", interaction_validation_command)
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})
     app = builder.build()
-
-    # The execution context service provider is populated by build(); accessing it before this point throws.
-    execution_context_service_provider = builder_execution_context.service_provider
-    _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
-    resource_command_service = execution_context_service_provider.get_resource_command_service()
-    interaction_service = execution_context_service_provider.get_interaction_service()
-    _interaction_service_available = interaction_service.is_available()
-    _interaction_input = {
-        "Name": "validation",
-        "InputType": "Text",
-        "Value": "default",
-        "Disabled": False,
-    }
-    interaction_service.prompt_confirmation(
-        "Confirm",
-        "Continue?",
-        options={"Intent": "Confirmation", "PrimaryButtonText": "Continue"},
-    )
-    interaction_service.prompt_message_box(
-        "Message",
-        "Message body",
-        options={"Intent": "Information", "EnableMessageMarkdown": True},
-    )
-    interaction_service.prompt_input(
-        "Input",
-        "Input body",
-        "Name",
-        "Placeholder",
-        options={"PrimaryButtonText": "Submit"},
-    )
-    interaction_service.prompt_input_with_input(
-        "Input",
-        "Input body",
-        _interaction_input,
-        options={"ShowDismiss": True},
-    )
-    interaction_service.prompt_inputs(
-        "Inputs",
-        "Inputs body",
-        [_interaction_input],
-        options={"ShowSecondaryButton": True, "SecondaryButtonText": "Skip"},
-    )
-    interaction_service.prompt_notification(
-        "Notification",
-        "Notification body",
-        options={"Intent": "Information", "LinkText": "Docs", "LinkUrl": "https://aspire.dev"},
-    )
-
     _distributed_app_connection_string = app.get_connection_string()
     _distributed_app_endpoint = app.get_endpoint("default")
     _distributed_app_endpoint_for_network = app.get_endpoint_for_network("resource")
