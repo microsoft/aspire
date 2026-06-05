@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { applyE2eControl, isSamePath, readStateFile, waitForExtensionState, waitForNoRunningAppHost } from './assertions';
+import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../../types/configInfo';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './paths';
 import { runProcess, terminateProcessTree } from './process';
 
@@ -171,6 +172,21 @@ export function writeSlowAppHostDiscoveryCliWrapper(delayMs: number, name = 'asp
     });
 }
 
+export function writeStreamingAppHostDiscoveryCliWrapper(completionDelayMs: number, name = 'aspire-streaming-ls'): string {
+    return writeCliWrapper(name, {
+        configInfoJson: {
+            localSettingsPath: path.join(getWorkspaceRoot(), 'aspire.config.json'),
+            globalSettingsPath: path.join(getWorkspaceRoot(), 'global-aspire.config.json'),
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
+        },
+        lsStreamCompletionDelayMs: completionDelayMs,
+        rejectIncludeDisabledCommands: false,
+    });
+}
+
 export async function restoreWorkspaceCliPath(): Promise<void> {
     await writeWorkspaceCliPath(getCliPath());
 }
@@ -330,7 +346,7 @@ function getLegacyAspireSettingsPath(): string {
 
 function writeCliWrapper(
     name: string,
-    options: { configInfoJson?: unknown; configInfoExitCode?: number; configInfoStderr?: string; lsDelayMs?: number },
+    options: { configInfoJson?: unknown; configInfoExitCode?: number; configInfoStderr?: string; lsDelayMs?: number; lsStreamCompletionDelayMs?: number; rejectIncludeDisabledCommands?: boolean },
 ): string {
     const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
     fs.mkdirSync(wrapperDirectory, { recursive: true });
@@ -341,7 +357,7 @@ const { spawnSync } = require('child_process');
 const realCli = ${JSON.stringify(getCliPath())};
 const args = process.argv.slice(2);
 
-if (args.includes('--include-disabled-commands')) {
+if (${options.rejectIncludeDisabledCommands ?? true} && args.includes('--include-disabled-commands')) {
   console.error('simulated old CLI does not support --include-disabled-commands');
   process.exit(123);
 }
@@ -356,6 +372,35 @@ ${options.configInfoJson === undefined
 
 if (args.includes('ls') && ${options.lsDelayMs ?? 0} > 0) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${options.lsDelayMs ?? 0});
+}
+
+function sleep(ms) {
+  if (ms > 0) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  }
+}
+
+if (args.includes('ls') && args.includes('--stream') && ${options.lsStreamCompletionDelayMs ?? 0} > 0) {
+  const result = spawnSync(realCli, args, {
+    cwd: process.cwd(),
+    env: process.env,
+    encoding: 'utf8',
+    shell: false,
+  });
+
+  if (result.stdout) {
+    process.stdout.write(result.stdout);
+  }
+  if (result.stderr) {
+    process.stderr.write(result.stderr);
+  }
+  if (result.error) {
+    console.error(result.error.stack || result.error.message);
+    process.exit(1);
+  }
+
+  sleep(${options.lsStreamCompletionDelayMs ?? 0});
+  process.exit(result.status ?? (result.signal ? 1 : 0));
 }
 
 const result = spawnSync(realCli, args, {
