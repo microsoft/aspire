@@ -38,6 +38,7 @@ By default, the command outputs a human-readable table. Use `--format json` for 
 ```
 
 Use `--format json --stream` to receive discovery results as NDJSON, with one complete AppHost candidate object per line. `--stream` is valid only with `--format json`.
+Tooling such as the VS Code extension consumes this stream incrementally, so each line must remain a complete candidate object.
 
 ```json
 {"path":"/path/to/MyApp.AppHost/MyApp.AppHost.csproj","language":"C#","status":"buildable"}

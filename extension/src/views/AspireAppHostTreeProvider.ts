@@ -934,18 +934,28 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             const workspaceResources = [...this._repository.workspaceResources];
             const workspaceAppHost = this._repository.workspaceAppHost;
             const workspaceCandidatePaths = this._repository.workspaceAppHostCandidatePaths ?? [];
+            const runningAppHostPaths = this._repository.appHosts.map(appHost => appHost.appHostPath);
+            const discoveryPending = this._repository.isWorkspaceAppHostDiscoveryComplete === false;
+            const workspaceAppHostPaths = workspaceCandidatePaths.length > 0
+                ? discoveryPending
+                    ? [
+                        ...workspaceCandidatePaths,
+                        ...runningAppHostPaths.filter(appHostPath => !workspaceCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHostPath, candidatePath))),
+                    ]
+                    : workspaceCandidatePaths
+                : runningAppHostPaths;
 
-            if (workspaceCandidatePaths.length > 1 || (workspaceResources.length === 0 && !workspaceAppHost)) {
+            if (workspaceAppHostPaths.length > 1 || (workspaceResources.length === 0 && !workspaceAppHost)) {
                 const selectedAppHostPath = workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
-                const labels = shortenPaths(workspaceCandidatePaths);
+                const labels = shortenPaths(workspaceAppHostPaths);
 
                 // When multiple workspace AppHosts are running, use global-style AppHostItem (nested view).
                 // When only one is running, use flat WorkspaceResourcesItem.
                 const runningItems: (AppHostItem | WorkspaceResourcesItem)[] = [];
                 const workspaceItems: WorkspaceAppHostItem[] = [];
 
-                for (let i = 0; i < workspaceCandidatePaths.length; i++) {
-                    const candidatePath = workspaceCandidatePaths[i];
+                for (let i = 0; i < workspaceAppHostPaths.length; i++) {
+                    const candidatePath = workspaceAppHostPaths[i];
                     // Use directory-equivalent matching (not exact path) because `aspire ls`
                     // resolves to a `.csproj` while `aspire ps` can report the AppHost source file
                     // (e.g. Program.cs) in the same directory. AppHostDataRepository uses the same

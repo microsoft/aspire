@@ -1836,6 +1836,61 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
+    test('workspace mode renders running AppHosts before workspace discovery completes', () => {
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [
+                makeAppHost({ appHostPath: '/repo/apps/Store/AppHost.csproj', appHostPid: 1234 }),
+                makeAppHost({ appHostPath: '/repo/samples/Store/AppHost.csproj', appHostPid: 5678 }),
+            ],
+            workspaceResources: [],
+            workspaceAppHost: undefined,
+            workspaceAppHostPath: undefined,
+            workspaceAppHostName: undefined,
+            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        const appHostItems = provider.getChildren();
+
+        assert.deepStrictEqual(appHostItems.map(item => item.label), [
+            'apps/Store/AppHost.csproj',
+            'samples/Store/AppHost.csproj',
+        ]);
+        provider.dispose();
+    });
+
+    test('workspace mode keeps running AppHosts visible while streamed discovery is incomplete', () => {
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [
+                makeAppHost({ appHostPath: '/repo/apps/Store/AppHost.csproj', appHostPid: 1234 }),
+                makeAppHost({ appHostPath: '/repo/samples/Store/AppHost.csproj', appHostPid: 5678 }),
+            ],
+            workspaceResources: [],
+            workspaceAppHost: undefined,
+            workspaceAppHostPath: undefined,
+            workspaceAppHostName: undefined,
+            workspaceAppHostCandidatePaths: ['/repo/apps/Store/AppHost.csproj'],
+            workspaceAppHostDescription: undefined,
+            isWorkspaceAppHostDiscoveryComplete: false,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        const appHostItems = provider.getChildren();
+
+        assert.deepStrictEqual(appHostItems.map(item => item.label), [
+            'apps/Store/AppHost.csproj',
+            'samples/Store/AppHost.csproj',
+        ]);
+        provider.dispose();
+    });
+
     test('workspace resource commands use the AppHost that owns the resource', () => {
         const commands: AspireSubcommand[] = [];
         const selectedHostPath = '/repo/apps/Store/AppHost.csproj';

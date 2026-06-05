@@ -199,10 +199,10 @@ export class AppHostDataRepository {
     private readonly _configChangeDisposable: vscode.Disposable;
     private _disposed = false;
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService) {
-        this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider);
+    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService, configInfoProvider?: ConfigInfoProvider) {
+        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
+        this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider, this._configInfoProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
-        this._configInfoProvider = new ConfigInfoProvider(_terminalProvider);
         this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
             const rootFolder = vscode.workspace.workspaceFolders?.[0];
             if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
@@ -338,7 +338,7 @@ export class AppHostDataRepository {
             this._startDescribeWatch();
         }
         if (this._shouldPoll) {
-            this._fetchAppHosts();
+            this._startPsPolling();
         }
     }
 
@@ -370,9 +370,12 @@ export class AppHostDataRepository {
     }
 
     private get _shouldPoll(): boolean {
-        // Workspace mode still polls ps after the selected AppHost path is known so
-        // a running AppHost can be shown even when describe has no resources to emit.
-        return this._dataActive && (this._viewMode === 'global' || this._workspaceAppHostCandidatePaths.length > 0);
+        // Workspace discovery can take longer than `aspire ps`. Poll immediately so
+        // already-running AppHosts appear in the pane while idle candidates stream in.
+        return this._dataActive
+            && (this._viewMode === 'global'
+                || !this._workspaceAppHostDiscoveryComplete
+                || this._workspaceAppHostCandidatePaths.length > 0);
     }
 
     private get _shouldWatchWorkspace(): boolean {
@@ -446,15 +449,25 @@ export class AppHostDataRepository {
         this._workspaceAppHostDiscoveryInProgress = true;
         this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
 
-        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token).then(appHosts => {
-            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
-                return;
-            }
+        void this._consumeWorkspaceAppHostDiscovery(rootFolder, discoveryVersion, options?.forceRefresh, cancellationSource);
+    }
 
-            const result = getWorkspaceAppHostProjectSearchResult(rootFolder, appHosts);
-            this._workspaceAppHostDiscoveryComplete = true;
-            this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
-        }).catch(error => {
+    private async _consumeWorkspaceAppHostDiscovery(rootFolder: vscode.WorkspaceFolder, discoveryVersion: number, forceRefresh: boolean | undefined, cancellationSource: vscode.CancellationTokenSource): Promise<void> {
+        try {
+            for await (const snapshot of this._appHostDiscoveryService.discoverStream(rootFolder, forceRefresh, cancellationSource.token)) {
+                if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+                    return;
+                }
+
+                const result = getWorkspaceAppHostProjectSearchResult(rootFolder, snapshot.candidates);
+                if (snapshot.isComplete) {
+                    this._workspaceAppHostDiscoveryComplete = true;
+                    this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
+                } else {
+                    this._handleWorkspaceAppHostCandidateProgress(result.app_host_candidates);
+                }
+            }
+        } catch (error) {
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
@@ -466,7 +479,7 @@ export class AppHostDataRepository {
             this._setDescribeError(errorFetchingAppHosts(String(error)));
             this._updateWorkspaceContext({ clearLoading: true });
             this._syncPolling();
-        }).finally(() => {
+        } finally {
             cancellationSource.dispose();
             if (this._workspaceAppHostDiscoveryCancellationSource !== cancellationSource) {
                 return;
@@ -478,7 +491,24 @@ export class AppHostDataRepository {
                 this._workspaceAppHostDiscoveryRefreshQueued = false;
                 this._fetchWorkspaceAppHost({ forceRefresh: true });
             }
-        });
+        }
+    }
+
+    private _handleWorkspaceAppHostCandidateProgress(appHostCandidates: readonly AppHostCandidate[]): void {
+        const buildableAppHostCandidates = appHostCandidates.filter(isBuildableAppHostCandidate);
+        if (buildableAppHostCandidates.length === 0) {
+            return;
+        }
+
+        this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
+        const selectedAppHostPath = this._workspaceAppHostPath;
+        if (selectedAppHostPath && !buildableAppHostCandidates.some(candidate => isMatchingAppHostPath(candidate.path, selectedAppHostPath))) {
+            this._clearWorkspaceAppHostSelection();
+        }
+
+        this._clearErrors();
+        this._syncPolling();
+        this._updateWorkspaceContext();
     }
 
     private _cancelWorkspaceAppHostDiscovery(): void {
@@ -1301,9 +1331,15 @@ export class AppHostDataRepository {
 
     private _handleWorkspacePsOutput(appHosts: readonly AppHostDisplayInfo[]): void {
         let workspaceAppHostPath = this._workspaceAppHostPath;
-        const workspaceAppHosts = this._workspaceAppHostCandidatePaths.length > 0
-            ? appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)))
-            : [];
+        const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
+        let workspaceAppHosts: AppHostDisplayInfo[];
+        if (discoveryPending) {
+            workspaceAppHosts = appHosts.filter(appHost => isPathInWorkspace(appHost.appHostPath));
+        } else if (this._workspaceAppHostCandidatePaths.length > 0) {
+            workspaceAppHosts = appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)));
+        } else {
+            workspaceAppHosts = [];
+        }
         let workspaceAppHost = workspaceAppHostPath
             ? workspaceAppHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, workspaceAppHostPath))
             : undefined;
@@ -1350,7 +1386,7 @@ export class AppHostDataRepository {
         }
 
         if (changed || this._loadingWorkspace) {
-            this._updateWorkspaceContext({ clearLoading: true });
+            this._updateWorkspaceContext({ clearLoading: !discoveryPending || workspaceAppHosts.length > 0 });
         }
     }
 
@@ -1504,7 +1540,9 @@ export class AppHostDataRepository {
                     cleanup();
                 }
             }, AppHostDataRepository._processShutdownGracePeriodMs);
-            forceKillTimer.unref();
+            if (!this._disposed) {
+                forceKillTimer.unref();
+            }
         }
     }
 }
@@ -1607,6 +1645,18 @@ function isWindowsDriveSegment(segment: string): boolean {
 
 function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
+}
+
+function isPathInWorkspace(filePath: string): boolean {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        return false;
+    }
+
+    const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
+    return relativePath !== ''
+        && !relativePath.startsWith('..')
+        && !path.isAbsolute(relativePath);
 }
 
 function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {

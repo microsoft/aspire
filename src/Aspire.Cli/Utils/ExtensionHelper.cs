@@ -43,8 +43,12 @@ internal static class KnownCapabilities
     // pass it and parse (localized) error output when an older CLI rejects it.
     public const string DescribeIncludeDisabledCommands = "describe-include-disabled-commands.v1";
 
+    // Advertised so tooling can consume `aspire ls --format json --stream` without passing
+    // the `--stream` flag to older CLIs that only support buffered JSON discovery.
+    public const string LsJsonStream = "ls-json-stream.v1";
+
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, DescribeIncludeDisabledCommands];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, DescribeIncludeDisabledCommands, LsJsonStream];
 }

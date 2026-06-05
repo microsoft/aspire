@@ -12,6 +12,7 @@ using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -36,6 +37,14 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("\"globalSettingsPath\"", json);
         Assert.Contains("\"availableFeatures\"", json);
         Assert.DoesNotContain("\"LocalSettingsPath\"", json);
+    }
+
+    [Fact]
+    public void KnownCapabilities_AdvertisesLsJsonStream()
+    {
+        var capabilities = KnownCapabilities.GetAdvertisedCapabilities();
+
+        Assert.Contains(KnownCapabilities.LsJsonStream, capabilities);
     }
 
     [Fact]
