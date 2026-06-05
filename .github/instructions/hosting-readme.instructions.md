@@ -19,14 +19,14 @@ All hosting integration README.md files should follow this structure:
 ```markdown
 # {Technology} hosting integration
 
-Use the Aspire {Technology} hosting integration to model, configure, and orchestrate {a/an} {Technology} {resource type} in an Aspire solution.
+Use this integration to model, configure, and orchestrate {a/an} {Technology} {resource type} in an Aspire solution.
 ```
 
 **Guidelines:**
 
 - Title format: `# {Technology} hosting integration`
 - Do not use "library", "package", or "component" in the title
-- Start description with "Use the Aspire {Technology} hosting integration to..."
+- Start description with "Use this integration to..."
 - Be specific about what type of resource is being configured (e.g., "a SQL Server database resource", "a MongoDB resource", "Azure CosmosDB")
 
 ### 2. Getting Started Section
@@ -187,7 +187,7 @@ Here's a complete example for a hosting integration:
 ````markdown
 # PostgreSQL hosting integration
 
-Use the Aspire PostgreSQL hosting integration to model, configure, and orchestrate a PostgreSQL database in an Aspire solution.
+Use this integration to model, configure, and orchestrate a PostgreSQL resource in an Aspire solution.
 
 ## Getting started
 
@@ -266,7 +266,7 @@ Update hosting integration README.md files when:
 When reviewing or creating a hosting integration README.md:
 
 - [ ] Title follows the format: `# {Technology} hosting integration`
-- [ ] Description starts with "Use the Aspire {Technology} hosting integration to..."
+- [ ] Description starts with "Use this integration to..."
 - [ ] Installation section uses `aspire add` with the correct integration ID in a `bash` code block
 - [ ] Usage example shows `Add{Technology}` method with `WithReference` pattern
 - [ ] Usage example includes C# and TypeScript AppHost samples when the API is exported for TypeScript
