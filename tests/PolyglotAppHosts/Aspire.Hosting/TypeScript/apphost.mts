@@ -769,7 +769,7 @@ await container.withCommand("pick-zone", "Pick Zone", async (ctx) => {
         .withDynamicLoading(async (loadContext) => {
             const region = await loadContext.getInputValue("region");
 
-            const zones = region === "eu"
+            const zones: Record<string, string> = region === "eu"
                 ? { "eu-west": "EU West", "eu-north": "EU North" }
                 : { "us-east": "US East", "us-west": "US West" };
 
