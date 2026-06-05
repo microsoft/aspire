@@ -1924,6 +1924,47 @@ suite('AppHostDataRepository global polling', () => {
         repository.dispose();
     });
 
+    test('global ps without dashboard URL keeps dashboard commands hidden', async () => {
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        const childProcess = new TestChildProcess();
+        spawnStub.returns(childProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+        const getNoRunningAppHostsContext = () => executeCommandStub.getCalls()
+            .filter(call => call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts')
+            .at(-1)?.args[2];
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const psLineCallback = spawnStub.firstCall.args[3].lineCallback;
+            psLineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+                dashboardUrl: null,
+            }));
+            await waitForMicrotasks();
+
+            assert.strictEqual(getNoRunningAppHostsContext(), true);
+
+            psLineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+                dashboardUrl: 'https://localhost:17193/login?t=061212',
+            }));
+            await waitForMicrotasks();
+
+            assert.strictEqual(getNoRunningAppHostsContext(), false);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+        }
+    });
+
     test('global describe retries without disabled command flag when CLI does not recognize it', async () => {
         const spawned: { args: string[]; options: any }[] = [];
         spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {

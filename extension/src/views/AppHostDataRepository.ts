@@ -1239,8 +1239,9 @@ export class AppHostDataRepository {
             }
 
             if (changed) {
+                const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
                 vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', appHosts.length === 0);
-                vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', appHosts.length === 0);
+                vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
                 this._onDidChangeData.fire();
             }
         } catch (e) {
