@@ -1958,11 +1958,15 @@ public class DcpExecutorTests
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var eventing = app.Services.GetRequiredService<Hosting.Eventing.IDistributedApplicationEventing>();
+        var events = new DcpExecutorEvents();
+        PublishBeforeResourceStartedEvents(events, eventing, app.Services);
         var appExecutor = CreateAppExecutor(
             distributedAppModel,
             kubernetesService: kubernetesService,
             configuration: configuration,
-            distributedApplicationEventing: app.Services.GetRequiredService<Hosting.Eventing.IDistributedApplicationEventing>());
+            events: events,
+            distributedApplicationEventing: eventing);
 
         await appExecutor.RunApplicationAsync();
 
@@ -1974,6 +1978,45 @@ public class DcpExecutorTests
 
         var entry = Assert.Single(result.Entries).Value;
         Assert.NotEqual($"The URI for the health check on resource '{keyVault.Resource.Name}' is not set. Ensure that the resource has been allocated before the health check is executed.", entry.Exception?.Message);
+    }
+
+    [Fact]
+    public async Task HttpHealthCheckOnSurrogateBuilderUsesForwardedBeforeResourceStartedEvent()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var keyVault = builder.AddContainer("keyvault", "image");
+        var surrogate = builder.CreateResourceBuilder(new TestSurrogateContainerResource(keyVault.Resource))
+            .WithHttpsEndpoint(targetPort: 4997)
+            .WithHttpHealthCheck("/token");
+
+        builder.Eventing.Subscribe<BeforeResourceStartedEvent>(keyVault.Resource, async (@event, ct) =>
+        {
+            await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(surrogate.Resource, @event.Services), ct);
+        });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var eventing = app.Services.GetRequiredService<Hosting.Eventing.IDistributedApplicationEventing>();
+        var events = new DcpExecutorEvents();
+        PublishBeforeResourceStartedEvents(events, eventing, app.Services);
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            events: events,
+            distributedApplicationEventing: eventing);
+
+        await appExecutor.RunApplicationAsync();
+
+        var healthCheckKey = Assert.Single(keyVault.Resource.Annotations.OfType<HealthCheckAnnotation>()).Key;
+        var healthCheckService = app.Services.GetRequiredService<HealthCheckService>();
+        var result = await healthCheckService.CheckHealthAsync(
+            registration => registration.Name == healthCheckKey,
+            CancellationToken.None).DefaultTimeout();
+
+        var entry = Assert.Single(result.Entries).Value;
+        Assert.NotEqual($"The URI for the health check on resource '{surrogate.Resource.Name}' is not set. Ensure that the resource has been allocated before the health check is executed.", entry.Exception?.Message);
     }
 
     [Fact]
@@ -4842,6 +4885,12 @@ public class DcpExecutorTests
             new ProfilingTelemetry(configuration));
     }
 
+    private static void PublishBeforeResourceStartedEvents(DcpExecutorEvents events, Hosting.Eventing.IDistributedApplicationEventing eventing, IServiceProvider services)
+    {
+        events.Subscribe<OnResourceStartingContext>(context =>
+            eventing.PublishAsync(new BeforeResourceStartedEvent(context.Resource, services), context.CancellationToken));
+    }
+
     private static bool RetryTillTrueOrTimeout(Func<bool> check, int timeoutMilliseconds)
     {
         var retry = new ResiliencePipelineBuilder<bool>()
@@ -4928,6 +4977,11 @@ public class DcpExecutorTests
 
         public ReferenceExpression ConnectionStringExpression =>
             ReferenceExpression.Create($"Endpoint={PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}");
+    }
+
+    private sealed class TestSurrogateContainerResource(ContainerResource resource) : ContainerResource(resource.Name)
+    {
+        public override ResourceAnnotationCollection Annotations => resource.Annotations;
     }
 
     private sealed class TestHostEnvironment : IHostEnvironment
