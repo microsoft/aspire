@@ -731,125 +731,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             }
         }
 
-        static bool GetEffectiveIsProxied(IResource resource, EndpointAnnotation endpoint, bool randomizePorts)
-        {
-            if (!resource.SupportsProxy())
-            {
-                return false;
-            }
-
-            if (endpoint.IsExplicitlyProxied is bool isProxied)
-            {
-                return isProxied;
-            }
-
-            if (randomizePorts)
-            {
-                return true;
-            }
-
-            return !resource.HasPersistentLifetime();
-        }
-
-        static int? GetEffectiveFixedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts)
-        {
-            var publicPort = GetDefinedPublicPort(resource, endpoint);
-
-            if (randomizePorts && endpoint.IsProxied && publicPort is not null)
-            {
-                return null;
-            }
-
-            return publicPort;
-        }
-
-        void AllocateUndefinedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
-        {
-            if (!ShouldAllocateUndefinedProxylessEndpointPort(resource, endpoint))
-            {
-                return;
-            }
-
-            if (TryGetPersistedProxylessEndpointPort(resource, endpoint) is int persistedPort)
-            {
-                endpoint.Port = persistedPort;
-                if (!resource.IsContainer())
-                {
-                    endpoint.TargetPort = persistedPort;
-                }
-                _logger.LogDebug("Using persisted public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'.", persistedPort, endpoint.Name, resource.Name);
-                return;
-            }
-
-            var allocatedPort = _proxylessEndpointPortAllocator.AllocatePort(endpoint);
-            endpoint.Port = allocatedPort;
-            if (!resource.IsContainer())
-            {
-                endpoint.TargetPort = allocatedPort;
-            }
-            _logger.LogDebug("Allocated public port {Port} for proxyless endpoint '{EndpointName}' on resource '{ResourceName}'.", allocatedPort, endpoint.Name, resource.Name);
-
-            if (resource.HasPersistentLifetime())
-            {
-                var secretKey = GetPersistedProxylessEndpointPortKey(resource, endpoint);
-                if (!_userSecretsManager.TrySetSecret(secretKey, allocatedPort.ToString(CultureInfo.InvariantCulture)))
-                {
-                    _logger.LogWarning("Failed to persist public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'. Enable user secrets, set a fixed public port, or configure the endpoint to use a proxy to avoid recreating the persistent resource each run.", allocatedPort, endpoint.Name, resource.Name);
-                }
-            }
-        }
-
-        static bool ShouldAllocateUndefinedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
-        {
-            return !endpoint.IsProxied && GetDefinedPublicPort(resource, endpoint) is null;
-        }
-
-        static int? GetDefinedPublicPort(IResource resource, EndpointAnnotation endpoint)
-        {
-            // Use this when deciding whether DCP should bind a public port. Container endpoints
-            // distinguish host/public ports from container target ports, while non-container
-            // proxyless endpoints intentionally allow Port to default from TargetPort.
-            return resource.IsContainer()
-                ? endpoint.SpecifiedPort
-                : endpoint.Port;
-        }
-
-        int? TryGetPersistedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
-        {
-            if (!resource.HasPersistentLifetime() || !ShouldAllocateUndefinedProxylessEndpointPort(resource, endpoint))
-            {
-                return null;
-            }
-
-            var configuredPort = _configuration[GetPersistedProxylessEndpointPortKey(resource, endpoint)];
-            if (configuredPort is null)
-            {
-                return null;
-            }
-
-            if (int.TryParse(configuredPort, NumberStyles.None, CultureInfo.InvariantCulture, out var port) &&
-                port is >= 1 and <= 65535)
-            {
-                return port;
-            }
-
-            _logger.LogDebug("Ignoring invalid persisted public port value '{Port}' for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'.", configuredPort, endpoint.Name, resource.Name);
-            return null;
-        }
-
-        static string GetPersistedProxylessEndpointPortKey(IResource resource, EndpointAnnotation endpoint)
-        {
-            return $"Aspire:ProxylessEndpointPorts:{resource.Name}:{endpoint.Name}";
-        }
-
-        static void ValidateEndpointBeforeDynamicPublicPortAllocation(IResource resource, EndpointAnnotation endpoint)
-        {
-            if (resource.IsContainer() && endpoint.TargetPort is null)
-            {
-                throw new InvalidOperationException($"The endpoint '{endpoint.Name}' for container resource '{resource.Name}' must specify the {nameof(EndpointAnnotation.TargetPort)} value");
-            }
-        }
-
         var containers = _model.Resources.Where(r => r.IsContainer());
         if (!containers.Any())
         {
@@ -869,6 +750,125 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         {
             var containerNetworkServices = _containerCreator.CreateContainerNetworkServicesForHostResource(re);
             _appResources.AddRange(containerNetworkServices.Select(cns => cns.ServiceResource));
+        }
+    }
+
+    private static bool GetEffectiveIsProxied(IResource resource, EndpointAnnotation endpoint, bool randomizePorts)
+    {
+        if (!resource.SupportsProxy())
+        {
+            return false;
+        }
+
+        if (endpoint.IsExplicitlyProxied is bool isProxied)
+        {
+            return isProxied;
+        }
+
+        if (randomizePorts)
+        {
+            return true;
+        }
+
+        return !resource.HasPersistentLifetime();
+    }
+
+    private static int? GetEffectiveFixedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts)
+    {
+        var publicPort = GetDefinedPublicPort(resource, endpoint);
+
+        if (randomizePorts && endpoint.IsProxied && publicPort is not null)
+        {
+            return null;
+        }
+
+        return publicPort;
+    }
+
+    private void AllocateUndefinedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
+    {
+        if (!ShouldAllocateUndefinedProxylessEndpointPort(resource, endpoint))
+        {
+            return;
+        }
+
+        if (TryGetPersistedProxylessEndpointPort(resource, endpoint) is int persistedPort)
+        {
+            endpoint.Port = persistedPort;
+            if (!resource.IsContainer())
+            {
+                endpoint.TargetPort = persistedPort;
+            }
+            _logger.LogDebug("Using persisted public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'.", persistedPort, endpoint.Name, resource.Name);
+            return;
+        }
+
+        var allocatedPort = _proxylessEndpointPortAllocator.AllocatePort(endpoint);
+        endpoint.Port = allocatedPort;
+        if (!resource.IsContainer())
+        {
+            endpoint.TargetPort = allocatedPort;
+        }
+        _logger.LogDebug("Allocated public port {Port} for proxyless endpoint '{EndpointName}' on resource '{ResourceName}'.", allocatedPort, endpoint.Name, resource.Name);
+
+        if (resource.HasPersistentLifetime())
+        {
+            var secretKey = GetPersistedProxylessEndpointPortKey(resource, endpoint);
+            if (!_userSecretsManager.TrySetSecret(secretKey, allocatedPort.ToString(CultureInfo.InvariantCulture)))
+            {
+                _logger.LogWarning("Failed to persist public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'. Enable user secrets, set a fixed public port, or configure the endpoint to use a proxy to avoid recreating the persistent resource each run.", allocatedPort, endpoint.Name, resource.Name);
+            }
+        }
+    }
+
+    private static bool ShouldAllocateUndefinedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
+    {
+        return !endpoint.IsProxied && GetDefinedPublicPort(resource, endpoint) is null;
+    }
+
+    private static int? GetDefinedPublicPort(IResource resource, EndpointAnnotation endpoint)
+    {
+        // Use this when deciding whether DCP should bind a public port. Container endpoints
+        // distinguish host/public ports from container target ports, while non-container
+        // proxyless endpoints intentionally allow Port to default from TargetPort.
+        return resource.IsContainer()
+            ? endpoint.SpecifiedPort
+            : endpoint.Port;
+    }
+
+    private int? TryGetPersistedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
+    {
+        if (!resource.HasPersistentLifetime() || !ShouldAllocateUndefinedProxylessEndpointPort(resource, endpoint))
+        {
+            return null;
+        }
+
+        var configuredPort = _configuration[GetPersistedProxylessEndpointPortKey(resource, endpoint)];
+        if (configuredPort is null)
+        {
+            return null;
+        }
+
+        if (int.TryParse(configuredPort, NumberStyles.None, CultureInfo.InvariantCulture, out var port) &&
+            port is >= 1 and <= 65535)
+        {
+            return port;
+        }
+
+        _logger.LogDebug("Ignoring invalid persisted public port value '{Port}' for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'.", configuredPort, endpoint.Name, resource.Name);
+        return null;
+    }
+
+    private static string GetPersistedProxylessEndpointPortKey(IResource resource, EndpointAnnotation endpoint)
+    {
+        return $"Aspire:ProxylessEndpointPorts:{resource.Name}:{endpoint.Name}";
+    }
+
+    private static void ValidateEndpointBeforeDynamicPublicPortAllocation(IResource resource, EndpointAnnotation endpoint)
+    {
+        if (resource.IsContainer() && endpoint.TargetPort is null)
+        {
+            throw new InvalidOperationException($"The endpoint '{endpoint.Name}' for container resource '{resource.Name}' must specify the {nameof(EndpointAnnotation.TargetPort)} value");
         }
     }
 
