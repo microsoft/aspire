@@ -107,7 +107,7 @@ internal static class SessionNuGetTrafficContent
             .Empty(e => e.Text("  (No NuGet traffic yet — issue a CLI command to populate.)"))
             .FillHeight();
 
-        var details = BuildDetailsPane(ctx, selected);
+        var details = BuildDetailsPane(ctx, selected, traffic);
 
         // Top pane = summary banner + table; bottom pane = details. Keep
         // the splitter at ~16 rows by default so the table dominates but
@@ -128,7 +128,7 @@ internal static class SessionNuGetTrafficContent
             topHeight: 16);
     }
 
-    private static Hex1bWidget BuildDetailsPane<TParent>(WidgetContext<TParent> ctx, DogfoodingNuGetTrafficEvent? ev)
+    private static Hex1bWidget BuildDetailsPane<TParent>(WidgetContext<TParent> ctx, DogfoodingNuGetTrafficEvent? ev, NuGetTrafficState traffic)
         where TParent : Hex1bWidget
     {
         if (ev is null)
@@ -137,9 +137,32 @@ internal static class SessionNuGetTrafficContent
             {
                 v.Text(""),
                 v.Text("  (Select a row to see request details.)"),
-            });
+            }).Fill();
         }
 
+        // TabPanel for the bottom pane lets us put the structured summary
+        // alongside the two raw response bodies (each in a navigable
+        // read-only Editor) without overflowing the splitter. Editors give
+        // the user copy/scroll/search over the captured JSON — the prior
+        // text-only dump was capped to 60 lines and hostile to inspection.
+        return ctx.TabPanel(tp =>
+        {
+            var upstreamLabel = ev.Response.Payloads.UpstreamStatus is int us
+                ? $"Upstream Response ({us})"
+                : "Upstream Response";
+            var outgoingLabel = $"Proxy Response ({ev.Response.StatusCode})";
+            return new List<TabItemWidget>
+            {
+                tp.Tab("Summary", t => new[] { BuildSummaryTab(t, ev) }),
+                tp.Tab(upstreamLabel, t => new[] { BuildEditorTab(t, traffic.GetUpstreamEditor(ev)) }),
+                tp.Tab(outgoingLabel, t => new[] { BuildEditorTab(t, traffic.GetOutgoingEditor(ev)) }),
+            };
+        }).Fill();
+    }
+
+    private static Hex1bWidget BuildSummaryTab<TParent>(WidgetContext<TParent> ctx, DogfoodingNuGetTrafficEvent ev)
+        where TParent : Hex1bWidget
+    {
         var lines = new List<string>
         {
             "",
@@ -172,10 +195,6 @@ internal static class SessionNuGetTrafficContent
         }
 
         var p = ev.Response.Payloads;
-
-        // Upstream request/response: only render when a fetch actually
-        // happened. Synthesised endpoints (service-index) have no upstream
-        // round-trip so this whole block stays out of the way.
         if (!string.IsNullOrEmpty(p.UpstreamUrl))
         {
             lines.Add("");
@@ -184,22 +203,14 @@ internal static class SessionNuGetTrafficContent
             if (p.UpstreamStatus is int us)
             {
                 var ct = string.IsNullOrEmpty(p.UpstreamContentType) ? "" : $"  {p.UpstreamContentType}";
-                lines.Add($"  === UPSTREAM RESPONSE  → {us}{ct} ===");
-                AppendBodyLines(lines, p.UpstreamBody, p.UpstreamBodyTruncated);
+                lines.Add($"    → {us}{ct}  ·  see the “Upstream Response” tab for the body");
             }
         }
 
         lines.Add("");
         var outCt = string.IsNullOrEmpty(p.OutgoingContentType) ? "" : $"  {p.OutgoingContentType}";
         lines.Add($"  === OUTGOING RESPONSE (proxy → CLI){outCt} ===");
-        if (p.OutgoingBody is { Length: > 0 } ob)
-        {
-            AppendBodyLines(lines, ob, p.OutgoingBodyTruncated);
-        }
-        else
-        {
-            lines.Add($"    <binary or non-captured response: {ev.Response.BodyBytes?.ToString("N0", CultureInfo.InvariantCulture) ?? "?"} bytes>");
-        }
+        lines.Add("    see the “Proxy Response” tab for the body");
 
         if (p.Transformations.Count > 0)
         {
@@ -211,58 +222,16 @@ internal static class SessionNuGetTrafficContent
             }
         }
 
-        return ctx.VStack(v => lines.Select(l => (Hex1bWidget)v.Text(l)).ToArray());
+        return ctx.VStack(v => lines.Select(l => (Hex1bWidget)v.Text(l)).ToArray()).Fill();
     }
 
-    private static void AppendBodyLines(List<string> sink, string? body, bool truncated)
+    private static Hex1bWidget BuildEditorTab<TParent>(WidgetContext<TParent> ctx, EditorState state)
+        where TParent : Hex1bWidget
     {
-        if (string.IsNullOrEmpty(body))
-        {
-            sink.Add("    <empty body>");
-            return;
-        }
-        // Cap rendered lines: payloads are already capped at 32KB upstream,
-        // but pretty-printing JSON for the registration index of a popular
-        // package can still produce hundreds of lines. 60 lines keeps the
-        // detail pane scannable without scroll-bar context loss.
-        var pretty = TryPrettyJson(body) ?? body;
-        var split = pretty.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-        var maxLines = 60;
-        var rendered = split.Length > maxLines ? split.AsSpan(0, maxLines).ToArray() : split;
-        foreach (var l in rendered)
-        {
-            sink.Add($"    {l}");
-        }
-        if (split.Length > maxLines)
-        {
-            sink.Add($"    … (+{split.Length - maxLines} more lines, body cap {(truncated ? "hit during capture" : "ok")})");
-        }
-        else if (truncated)
-        {
-            sink.Add("    … (body was truncated at 32KB capture cap)");
-        }
-    }
-
-    private static string? TryPrettyJson(string body)
-    {
-        try
-        {
-            if (System.Text.Json.JsonDocument.Parse(body) is { } doc)
-            {
-                using (doc)
-                {
-                    return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions
-                    {
-                        WriteIndented = true,
-                    });
-                }
-            }
-        }
-        catch
-        {
-            // Not JSON or malformed — fall through to raw rendering.
-        }
-        return null;
+        // The Editor extension already sets HeightHint=Fill; nothing
+        // additional needed for layout. ShowLineNumbers makes scanning
+        // big JSON payloads much easier.
+        return ctx.Editor(state).LineNumbers().WordWrap();
     }
 
     private static string[] BuildKindLines(DogfoodingNuGetTrafficEvent ev)
