@@ -89,7 +89,7 @@ export class ConfigInfoProvider {
      * Returns whether the CLI advertises the given capability token via `config info`. Capability
      * tokens are stable, locale-independent identifiers (see {@link ConfigInfo.capabilities}).
      */
-    async hasCapability(capability: string, options?: { suppressErrors?: boolean }): Promise<boolean> {
+    async hasCapability(capability: string, options?: { suppressErrors?: boolean; forceRefresh?: boolean }): Promise<boolean> {
         const configInfo = await this.getConfigInfo(options);
         return configInfo?.capabilities?.includes(capability) ?? false;
     }

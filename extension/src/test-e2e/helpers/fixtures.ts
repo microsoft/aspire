@@ -35,7 +35,7 @@ export async function writeWorkspaceCliPath(cliPath: string): Promise<void> {
     settings['aspire.aspireCliExecutablePath'] = cliPath;
     fs.writeFileSync(settingsPath, JSON.stringify(settings, undefined, 2));
 
-    await applyE2eControl({ aspireCliExecutablePath: cliPath });
+    await applyE2eControl({ aspireCliExecutablePath: cliPath, e2eCliExecutablePath: cliPath });
 }
 
 export async function setE2eCliPathForE2E(cliPath: string | undefined): Promise<void> {

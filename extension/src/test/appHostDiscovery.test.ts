@@ -8,7 +8,9 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
 import { AppHostDiscoveryService, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
+import type { AppHostDiscoverySnapshot } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import type { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
 
 suite('AppHost discovery', () => {
@@ -542,6 +544,232 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('streams aspire ls candidates before command completion when capability is advertised', async () => {
+            stubFileSystemWatchers(sandbox);
+            const configInfoProvider = makeConfigInfoProvider(true);
+            let lineCallback: ((line: string) => void) | undefined;
+            let exitCallback: ((code: number | null) => void) | undefined;
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                lineCallback = options?.lineCallback;
+                exitCallback = options?.exitCallback;
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider(), configInfoProvider);
+
+            try {
+                const snapshots: AppHostDiscoverySnapshot[] = [];
+                const streamTask = collectSnapshots(service.discoverStream(makeWorkspaceFolder(buildPath('workspace'))), snapshots);
+                await waitForMicrotasks();
+
+                assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--stream']);
+                assert.ok(lineCallback);
+                assert.ok(exitCallback);
+
+                lineCallback(JSON.stringify({
+                    path: buildPath('workspace', 'First', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }));
+                await waitForMicrotasks();
+
+                assert.strictEqual(snapshots.length, 1);
+                assert.strictEqual(snapshots[0].isComplete, false);
+                assert.deepStrictEqual(snapshots[0].candidates.map(candidate => candidate.path), [
+                    buildPath('workspace', 'First', 'AppHost.csproj'),
+                ]);
+
+                lineCallback(JSON.stringify({
+                    path: buildPath('workspace', 'Second', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }));
+                exitCallback(0);
+                const finalCandidates = await streamTask;
+
+                assert.deepStrictEqual(finalCandidates.map(candidate => candidate.path), [
+                    buildPath('workspace', 'First', 'AppHost.csproj'),
+                    buildPath('workspace', 'Second', 'AppHost.csproj'),
+                ]);
+                assert.strictEqual(snapshots.at(-1)?.isComplete, true);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('shares in-flight streaming discovery with promise discovery', async () => {
+            stubFileSystemWatchers(sandbox);
+            const configInfoProvider = makeConfigInfoProvider(true);
+            let lineCallback: ((line: string) => void) | undefined;
+            let exitCallback: ((code: number | null) => void) | undefined;
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                lineCallback = options?.lineCallback;
+                exitCallback = options?.exitCallback;
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider(), configInfoProvider);
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                const snapshots: AppHostDiscoverySnapshot[] = [];
+                const streamTask = collectSnapshots(service.discoverStream(workspaceFolder), snapshots);
+                const discoverTask = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+
+                lineCallback?.(JSON.stringify({
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }));
+                exitCallback?.(0);
+
+                const [streamResult, discoverResult] = await Promise.all([streamTask, discoverTask]);
+                assert.strictEqual(spawnStub.callCount, 1);
+                assert.deepStrictEqual(streamResult, discoverResult);
+                assert.strictEqual(snapshots.length, 2);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('starts streaming discovery when stream attaches after promise-only discovery', async () => {
+            stubFileSystemWatchers(sandbox);
+            const configInfoProvider = makeConfigInfoProvider(true);
+            const spawnedDiscoveries: Array<{ args: string[]; options: any }> = [];
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                spawnedDiscoveries.push({ args, options });
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider(), configInfoProvider);
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                const discoverTask = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+
+                const snapshots: AppHostDiscoverySnapshot[] = [];
+                const streamTask = collectSnapshots(service.discoverStream(workspaceFolder), snapshots);
+                await waitForMicrotasks();
+
+                assert.deepStrictEqual(spawnedDiscoveries.map(discovery => discovery.args), [
+                    ['ls', '--format', 'json'],
+                    ['ls', '--format', 'json', '--stream'],
+                ]);
+                assert.ok(spawnedDiscoveries[1].options.lineCallback);
+                assert.ok(spawnedDiscoveries[1].options.exitCallback);
+
+                spawnedDiscoveries[0].options.stdoutCallback(JSON.stringify([{
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]));
+                spawnedDiscoveries[0].options.exitCallback(0);
+
+                spawnedDiscoveries[1].options.lineCallback(JSON.stringify({
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }));
+                await waitForMicrotasks();
+
+                assert.strictEqual(snapshots.length, 1);
+                assert.strictEqual(snapshots[0].isComplete, false);
+
+                spawnedDiscoveries[1].options.exitCallback(0);
+
+                const [discoverResult, streamResult] = await Promise.all([discoverTask, streamTask]);
+                assert.strictEqual(spawnStub.callCount, 2);
+                assert.deepStrictEqual(discoverResult, streamResult);
+                assert.strictEqual(snapshots.at(-1)?.isComplete, true);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('keeps active streaming discovery cached when replaced promise-only discovery fails', async () => {
+            stubFileSystemWatchers(sandbox);
+            const configInfoProvider = makeConfigInfoProvider(true);
+            const spawnedDiscoveries: Array<{ args: string[]; options: any }> = [];
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                spawnedDiscoveries.push({ args, options });
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider(), configInfoProvider);
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                const discoverTask = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+
+                const firstSnapshots: AppHostDiscoverySnapshot[] = [];
+                const firstStreamTask = collectSnapshots(service.discoverStream(workspaceFolder), firstSnapshots);
+                await waitForMicrotasks();
+
+                assert.strictEqual(spawnStub.callCount, 2);
+
+                spawnedDiscoveries[0].options.stderrCallback('first discovery failed');
+                spawnedDiscoveries[0].options.exitCallback(1);
+                await waitForMicrotasks();
+                assert.deepStrictEqual(spawnedDiscoveries[2].args, ['extension', 'get-apphosts']);
+                spawnedDiscoveries[2].options.stderrCallback('legacy discovery failed');
+                spawnedDiscoveries[2].options.exitCallback(1);
+                await assert.rejects(discoverTask, /first discovery failed/);
+
+                const secondSnapshots: AppHostDiscoverySnapshot[] = [];
+                const secondStreamTask = collectSnapshots(service.discoverStream(workspaceFolder), secondSnapshots);
+                await waitForMicrotasks();
+
+                assert.strictEqual(spawnStub.callCount, 3);
+
+                spawnedDiscoveries[1].options.lineCallback(JSON.stringify({
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }));
+                await waitForMicrotasks();
+                spawnedDiscoveries[1].options.exitCallback(0);
+
+                const [firstStreamResult, secondStreamResult] = await Promise.all([firstStreamTask, secondStreamTask]);
+                assert.deepStrictEqual(firstStreamResult, secondStreamResult);
+                assert.deepStrictEqual(firstSnapshots.at(-1)?.candidates, secondSnapshots.at(-1)?.candidates);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('uses buffered aspire ls when streaming capability is not advertised', async () => {
+            stubFileSystemWatchers(sandbox);
+            const configInfoProvider = makeConfigInfoProvider(false);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.(JSON.stringify([{
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]));
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider(), configInfoProvider);
+
+            try {
+                const snapshots: AppHostDiscoverySnapshot[] = [];
+                const finalCandidates = await collectSnapshots(service.discoverStream(makeWorkspaceFolder(buildPath('workspace'))), snapshots);
+
+                assert.deepStrictEqual(finalCandidates, [{
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]);
+                assert.deepStrictEqual(snapshots.map(snapshot => snapshot.isComplete), [true]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
         test('reports both aspire ls and legacy fallback errors when discovery fails', async () => {
             stubFileSystemWatchers(sandbox);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
@@ -904,6 +1132,20 @@ function makeTerminalProvider(): AspireTerminalProvider {
         getAspireCliExecutablePath: async () => 'aspire',
         createEnvironment: () => ({}),
     } as unknown as AspireTerminalProvider;
+}
+
+function makeConfigInfoProvider(hasLsJsonStreamCapability: boolean): ConfigInfoProvider {
+    return {
+        hasCapability: async () => hasLsJsonStreamCapability,
+    } as unknown as ConfigInfoProvider;
+}
+
+async function collectSnapshots(stream: AsyncIterable<AppHostDiscoverySnapshot>, snapshots: AppHostDiscoverySnapshot[]): Promise<AppHostDiscoverySnapshot['candidates']> {
+    for await (const snapshot of stream) {
+        snapshots.push(snapshot);
+    }
+
+    return snapshots.at(-1)?.candidates ?? [];
 }
 
 function makeCancellationToken(): vscode.CancellationToken {

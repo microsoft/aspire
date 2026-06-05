@@ -11,7 +11,7 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import type { AppHostDiscoveryService, CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import * as cliModule from '../debugger/languages/cli';
 import * as configInfoProvider from '../utils/configInfoProvider';
-import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
+import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 
 class TestChildProcess extends EventEmitter {
     stdout = new PassThrough();
@@ -1004,6 +1004,61 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('workspace discovery applies streamed AppHost candidates before completion', async () => {
+        getConfigInfoStub.resolves({
+            capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
+        } as any);
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let lsOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                lsOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => lsOptions !== undefined, 'streaming aspire ls did not start');
+
+            lsOptions.lineCallback(JSON.stringify({
+                path: '/workspace/apps/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }));
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+            assert.strictEqual(repository.isLoading, false);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+                '/workspace/apps/Store/AppHost.csproj',
+            ]);
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
+
+            lsOptions.lineCallback(JSON.stringify({
+                path: '/workspace/samples/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }));
+            lsOptions.exitCallback(0);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'streaming aspire ls did not complete');
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+                '/workspace/apps/Store/AppHost.csproj',
+                '/workspace/samples/Store/AppHost.csproj',
+            ]);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('workspace discovery with no buildable AppHosts clears stale running state', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
@@ -1023,6 +1078,9 @@ suite('AppHostDataRepository', () => {
         const appHostDiscoveryService = {
             onDidChangeCandidates: discoveryChanges.event,
             discover: async () => candidates,
+            discoverStream: async function* () {
+                yield { candidates, isComplete: true };
+            },
             dispose: () => { },
         };
         let psOptions: any;
@@ -1304,6 +1362,23 @@ suite('AppHostDataRepository', () => {
                     status: 'buildable',
                 },
             ],
+            discoverStream: async function* () {
+                yield {
+                    candidates: [
+                        {
+                            path: '/workspace/apps/Store/AppHost.csproj',
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                        {
+                            path: '/workspace/samples/Store/AppHost.csproj',
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                    ],
+                    isComplete: true,
+                };
+            },
         };
         getCliPathStub.rejects(new Error('CLI missing'));
         const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
@@ -1337,6 +1412,9 @@ suite('AppHostDataRepository', () => {
         const appHostDiscoveryService = {
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => {
+                throw new Error('aspire ls failed');
+            },
+            discoverStream: async function* () {
                 throw new Error('aspire ls failed');
             },
         };
@@ -2127,6 +2205,9 @@ suite('AppHostDataRepository global polling', () => {
         }];
         const discoveryService = {
             discover: async () => candidates,
+            discoverStream: async function* () {
+                yield { candidates, isComplete: true };
+            },
             onDidChangeCandidates: discoveryChanges.event,
             dispose: () => discoveryChanges.dispose(),
         } as unknown as AppHostDiscoveryService;
@@ -2188,6 +2269,9 @@ suite('AppHostDataRepository global polling', () => {
         }];
         const discoveryService = {
             discover: async () => candidates,
+            discoverStream: async function* () {
+                yield { candidates, isComplete: true };
+            },
             onDidChangeCandidates: discoveryChanges.event,
             dispose: () => discoveryChanges.dispose(),
         } as unknown as AppHostDiscoveryService;

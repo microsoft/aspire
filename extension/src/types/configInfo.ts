@@ -43,3 +43,11 @@ export interface ConfigInfo {
  * `KnownCapabilities.DescribeIncludeDisabledCommands` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
  */
 export const describeIncludeDisabledCommandsCapability = 'describe-include-disabled-commands.v1';
+
+/**
+ * Capability advertised by the CLI when `aspire ls --format json --stream` is available.
+ * Tooling uses this to stream AppHost discovery candidates incrementally while keeping older
+ * CLIs on the buffered `aspire ls --format json` path. Keep in sync with
+ * `KnownCapabilities.LsJsonStream` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const lsJsonStreamCapability = 'ls-json-stream.v1';
