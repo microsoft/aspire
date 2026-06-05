@@ -44,8 +44,8 @@ fi
 
 # Auto-detect PR identity from .nupkg filenames (e.g. "Aspire.Hosting.AppHost.13.4.0-pr.16820.g3703c5c4.nupkg")
 # so PR-built packages land in the same hive the CLI's CliExecutionContext.Channel
-# resolves to ("pr-<N>"). Main branch validation passes ASPIRE_CLI_CHANNEL=daily
-# because main-built packages do not carry a PR suffix.
+# resolves to ("pr-<N>"). Main branch validation passes a run-scoped
+# ASPIRE_CLI_CHANNEL because main-built packages do not carry a PR suffix.
 #
 # Anchor on Aspire.Hosting.AppHost because:
 #   - It is the core MSBuild SDK package every AppHost references; removing/renaming it
@@ -68,12 +68,12 @@ fi
 SUFFIX=$(basename "$SAMPLE_NUPKG" | sed -nE 's/.*-(pr\.[0-9]+\.[0-9a-g]+).*\.nupkg$/\1/p')
 if [[ "$SUFFIX" =~ ^pr\.([0-9]+)\.[0-9a-g]+$ ]]; then
     HIVE_LABEL="pr-${BASH_REMATCH[1]}"
-elif [[ "${ASPIRE_CLI_CHANNEL:-}" =~ ^(daily|staging|local)$ ]]; then
+elif [[ "${ASPIRE_CLI_CHANNEL:-}" =~ ^(daily|staging|local|run-[0-9]+)$ ]]; then
     HIVE_LABEL="$ASPIRE_CLI_CHANNEL"
 else
     echo "ERROR: Could not derive PR identity from $(basename "$SAMPLE_NUPKG")." >&2
     echo "       PR validation expects a '-pr.<N>.g<sha>' suffix on the built nupkgs." >&2
-    echo "       Non-PR validation must set ASPIRE_CLI_CHANNEL to daily, staging, or local." >&2
+    echo "       Non-PR validation must set ASPIRE_CLI_CHANNEL to daily, staging, local, or run-<id>." >&2
     exit 1
 fi
 HIVE_DIR="$ASPIRE_HOME/hives/$HIVE_LABEL/packages"
