@@ -257,7 +257,12 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
                     ErrorMessage: error,
                     SearchStats: handlerState.SearchStats);
                 RequestCompleted?.Invoke(resp);
-                var pair = new DogfoodingNuGetTrafficEvent(req, resp);
+                // Fall back to an UnknownDetails envelope so the analyzer
+                // panel can render *something* for endpoints that didn't
+                // set their own details (e.g. exception paths or routes we
+                // haven't yet enriched).
+                var details = handlerState.Details ?? new UnknownDetails(ctx.Request.Path + (ctx.Request.QueryString.HasValue ? ctx.Request.QueryString.Value : ""));
+                var pair = new DogfoodingNuGetTrafficEvent(req, resp, details);
                 EnqueueEvent(pair);
                 TrafficObserved?.Invoke(pair);
             }
@@ -326,6 +331,7 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             }
             """;
             MarkSource(ctx, DogfoodingNuGetSource.Synthesised);
+            MarkDetails(ctx, new ServiceIndexDetails());
             return Results.Text(json, "application/json");
         });
 
@@ -381,7 +387,14 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
                 MarkSource(ctx, DogfoodingNuGetSource.Upstream);
             }
 
-            return Results.Json(new { versions = versions.ToArray() });
+            var versionList = versions.ToArray();
+            MarkDetails(ctx, new FlatVersionsDetails(
+                PackageId: lower,
+                Versions: versionList,
+                UpstreamVersionCount: upstreamJson?["versions"] is JsonArray ua ? ua.Count : 0,
+                LocalVersionCount: _localById.TryGetValue(lower, out var lc) ? lc.Count : 0));
+
+            return Results.Json(new { versions = versionList });
         });
 
         app.MapGet("/v3/flat/{id}/{version}/{filename}", async (string id, string version, string filename, HttpContext ctx, CancellationToken ct) =>
@@ -399,10 +412,12 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
 
                 if (filename.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase))
                 {
+                    MarkDetails(ctx, new NuspecDetails(match.Id, match.Version, match.FilePath, UpstreamUrl: null));
                     return Results.Text(match.NuspecXml, "application/xml");
                 }
                 if (filename.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
                 {
+                    MarkDetails(ctx, new NupkgDetails(match.Id, match.Version, match.FilePath, UpstreamUrl: null));
                     return Results.File(match.FilePath, "application/octet-stream", enableRangeProcessing: true);
                 }
                 return Results.NotFound();
@@ -411,6 +426,14 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             // Proxy upstream.
             var upstream = $"{_upstreamResources!.FlatContainerBase}{lower}/{verLower}/{filename}";
             MarkUpstream(ctx, upstream);
+            if (filename.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase))
+            {
+                MarkDetails(ctx, new NuspecDetails(lower, verLower, LocalFilePath: null, UpstreamUrl: upstream));
+            }
+            else if (filename.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
+            {
+                MarkDetails(ctx, new NupkgDetails(lower, verLower, LocalFilePath: null, UpstreamUrl: upstream));
+            }
             using var resp = await _upstreamClient!.GetAsync(upstream, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)
             {
@@ -462,6 +485,20 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
                 MarkSource(ctx, upstreamJson is null ? DogfoodingNuGetSource.LocalOverride : DogfoodingNuGetSource.Synthesised);
                 MarkLocalPackagesUsed(ctx, locals.Select(p => $"{p.Id}/{p.Version}").ToArray());
             }
+            // Sweep any straggling upstream URLs hiding inside the cloned
+            // catalogEntry payloads (MergeRegistration only rebuilds the
+            // outer envelope; the inner @id/registration/packageContent
+            // strings come from upstream untouched). Rewrites here keep the
+            // CLI from following catalog links direct to nuget.org for the
+            // overlapping versions.
+            var regBaseUri = ctx.Request.Scheme + "://" + ctx.Request.Host.Value;
+            RewriteUpstreamUrls(merged, regBaseUri);
+            var itemCount = (merged["items"] as JsonArray)?.Sum(p => (p?["items"] as JsonArray)?.Count ?? 0) ?? 0;
+            MarkDetails(ctx, new RegistrationDetails(
+                PackageId: lower,
+                MergedItemCount: itemCount,
+                LocalOverrideCount: locals?.Count ?? 0,
+                UpstreamFetched: upstreamJson is not null));
             return Results.Text(merged.ToJsonString(), "application/json");
         });
 
@@ -556,6 +593,27 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             }
             MarkSearchStats(ctx, upstreamHits: upstreamData.Count, localHits: localMatches.Count, mergedCount: mergedData.Count);
 
+            // Rewrite upstream URLs in the merged page so the CLI follows
+            // proxy links rather than going direct to nuget.org (which would
+            // bypass any local-override semantics entirely for downstream
+            // registration/package fetches).
+            var baseUri = ctx.Request.Scheme + "://" + ctx.Request.Host.Value;
+            var rewrites = 0;
+            foreach (var n in pagedArr)
+            {
+                rewrites += RewriteUpstreamUrls(n, baseUri);
+            }
+
+            MarkDetails(ctx, new SearchDetails(
+                Query: q,
+                IncludePrerelease: prerelease,
+                Skip: skip,
+                Take: take,
+                UpstreamHits: upstreamData.Count,
+                LocalHits: localMatches.Count,
+                MergedCount: mergedData.Count,
+                UrlRewrites: rewrites));
+
             var output = new JsonObject
             {
                 ["totalHits"] = mergedData.Count,
@@ -619,6 +677,12 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
                 MarkSource(ctx, DogfoodingNuGetSource.Synthesised);
             }
 
+            MarkDetails(ctx, new AutocompleteDetails(
+                Query: q,
+                UpstreamHits: dataSet.Count,
+                LocalHits: localMatches.Count,
+                MergedCount: merged.Count));
+
             return Results.Json(new { totalHits = merged.Count, data = merged });
         });
     }
@@ -674,6 +738,111 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
     {
         var state = (HandlerState)ctx.Items["__dogfood_state"]!;
         state.SearchStats = new DogfoodingNuGetSearchStats(upstreamHits, localHits, mergedCount);
+    }
+    private static void MarkDetails(HttpContext ctx, NuGetTrafficDetails details)
+    {
+        var state = (HandlerState)ctx.Items["__dogfood_state"]!;
+        state.Details = details;
+    }
+
+    /// <summary>
+    /// Replace any URL that sits under one of the resolved upstream base
+    /// URIs with the equivalent path under the proxy's <paramref name="baseUri"/>,
+    /// but only when the URL appears in a NuGet structural field we
+    /// recognise (<c>@id</c>, <c>registration</c>, <c>packageContent</c>). This deliberately avoids
+    /// blanket find/replace across the whole JSON: free-form text fields
+    /// like <c>description</c> or <c>summary</c> can contain unrelated URLs
+    /// that we shouldn't rewrite. Returns the number of rewrites performed
+    /// so the details panel can surface "n URLs rewritten" as evidence the
+    /// proxy is fully terminating package traffic.
+    /// </summary>
+    /// <remarks>
+    /// Path mapping is endpoint-by-endpoint: anything under the upstream's
+    /// flat-container base maps to <c>/v3/flat/...</c>; anything under the
+    /// registration base maps to <c>/v3/reg/...</c>. The mapping uses the
+    /// upstream base URIs resolved at startup (see
+    /// <see cref="ResolveUpstreamAsync"/>) so we don't hard-code
+    /// <c>api.nuget.org</c> — alternate mirrors work the same way. URLs that
+    /// don't sit under any known upstream base are left alone (a future
+    /// upstream-of-upstream redirect could break this, but the dogfood
+    /// scenarios all point at canonical NuGet endpoints).
+    /// </remarks>
+    private int RewriteUpstreamUrls(JsonNode? node, string baseUri)
+    {
+        if (node is null || _upstreamResources is null)
+        {
+            return 0;
+        }
+        var count = 0;
+        RewriteWalk(node, baseUri, _upstreamResources, ref count);
+        return count;
+    }
+
+    private static void RewriteWalk(JsonNode node, string baseUri, UpstreamResources upstream, ref int count)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var (key, value) in obj.ToArray())
+                {
+                    if (value is JsonValue && IsRewriteTargetKey(key) && value.GetValue<object>() is string s)
+                    {
+                        var rewritten = MapUpstreamToProxy(s, baseUri, upstream);
+                        if (!ReferenceEquals(rewritten, s))
+                        {
+                            obj[key] = rewritten;
+                            count++;
+                        }
+                    }
+                    else if (value is JsonObject or JsonArray)
+                    {
+                        RewriteWalk(value, baseUri, upstream, ref count);
+                    }
+                }
+                break;
+            case JsonArray arr:
+                foreach (var item in arr)
+                {
+                    if (item is not null)
+                    {
+                        RewriteWalk(item, baseUri, upstream, ref count);
+                    }
+                }
+                break;
+        }
+    }
+
+    private static bool IsRewriteTargetKey(string key)
+    {
+        // The NuGet v3 schema reuses these property names for any URL that
+        // a client may follow. Restricting rewrites to these keys keeps us
+        // from touching free-form text like description/summary that might
+        // happen to contain http(s) URLs.
+        return key is "@id" or "registration" or "packageContent" or "catalogEntry" or "parent" or "items";
+    }
+
+    private static string MapUpstreamToProxy(string url, string baseUri, UpstreamResources upstream)
+    {
+        if (TryMapPrefix(url, upstream.FlatContainerBase, baseUri + "/v3/flat/", out var flat))
+        {
+            return flat;
+        }
+        if (TryMapPrefix(url, upstream.RegistrationBase, baseUri + "/v3/reg/", out var reg))
+        {
+            return reg;
+        }
+        return url;
+    }
+
+    private static bool TryMapPrefix(string url, string upstreamBase, string proxyBase, out string mapped)
+    {
+        if (url.StartsWith(upstreamBase, StringComparison.OrdinalIgnoreCase))
+        {
+            mapped = proxyBase + url[upstreamBase.Length..];
+            return true;
+        }
+        mapped = url;
+        return false;
     }
 
     private void EnqueueEvent(DogfoodingNuGetTrafficEvent ev)
@@ -980,6 +1149,7 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
         public string? UpstreamUrl { get; set; }
         public IReadOnlyList<string> LocalPackagesUsed { get; set; } = Array.Empty<string>();
         public DogfoodingNuGetSearchStats? SearchStats { get; set; }
+        public NuGetTrafficDetails? Details { get; set; }
     }
 
     private sealed class CountingStream : Stream
@@ -1068,4 +1238,67 @@ internal sealed record DogfoodingNuGetResponse(
 /// </summary>
 internal sealed record DogfoodingNuGetSearchStats(int UpstreamHits, int LocalHits, int MergedCount);
 
-internal sealed record DogfoodingNuGetTrafficEvent(DogfoodingNuGetRequest Request, DogfoodingNuGetResponse Response);
+internal sealed record DogfoodingNuGetTrafficEvent(
+    DogfoodingNuGetRequest Request,
+    DogfoodingNuGetResponse Response,
+    NuGetTrafficDetails Details);
+
+/// <summary>
+/// Endpoint-specific details captured for a single proxy request, attached
+/// to <see cref="DogfoodingNuGetTrafficEvent"/> so the analyzer panel can
+/// render an explanation tailored to the kind of NuGet call. Subtypes
+/// expose only fields that don't duplicate <see cref="DogfoodingNuGetResponse.Source"/>
+/// — the canonical "where did the bytes come from" lives on the response.
+/// </summary>
+/// <remarks>
+/// Constructed by per-endpoint handlers in <see cref="DogfoodingNuGetServer"/>
+/// via <c>MarkDetails</c> and copied onto the event in the request
+/// middleware so the polymorphism survives across the request/response
+/// boundary. The view layer pattern-matches subtypes to render a tailored
+/// details pane.
+/// </remarks>
+internal abstract record NuGetTrafficDetails(DogfoodingNuGetEndpointKind Kind);
+
+internal sealed record ServiceIndexDetails() : NuGetTrafficDetails(DogfoodingNuGetEndpointKind.ServiceIndex);
+
+internal sealed record FlatVersionsDetails(
+    string PackageId,
+    IReadOnlyList<string> Versions,
+    int UpstreamVersionCount,
+    int LocalVersionCount) : NuGetTrafficDetails(DogfoodingNuGetEndpointKind.Flatcontainer);
+
+internal sealed record NupkgDetails(
+    string PackageId,
+    string Version,
+    string? LocalFilePath,
+    string? UpstreamUrl) : NuGetTrafficDetails(DogfoodingNuGetEndpointKind.Nupkg);
+
+internal sealed record NuspecDetails(
+    string PackageId,
+    string Version,
+    string? LocalFilePath,
+    string? UpstreamUrl) : NuGetTrafficDetails(DogfoodingNuGetEndpointKind.Nuspec);
+
+internal sealed record RegistrationDetails(
+    string PackageId,
+    int MergedItemCount,
+    int LocalOverrideCount,
+    bool UpstreamFetched) : NuGetTrafficDetails(DogfoodingNuGetEndpointKind.Registration);
+
+internal sealed record SearchDetails(
+    string Query,
+    bool IncludePrerelease,
+    int Skip,
+    int Take,
+    int UpstreamHits,
+    int LocalHits,
+    int MergedCount,
+    int UrlRewrites) : NuGetTrafficDetails(DogfoodingNuGetEndpointKind.Search);
+
+internal sealed record AutocompleteDetails(
+    string Query,
+    int UpstreamHits,
+    int LocalHits,
+    int MergedCount) : NuGetTrafficDetails(DogfoodingNuGetEndpointKind.Autocomplete);
+
+internal sealed record UnknownDetails(string RawPath) : NuGetTrafficDetails(DogfoodingNuGetEndpointKind.Unknown);

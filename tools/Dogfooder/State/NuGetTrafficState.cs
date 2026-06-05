@@ -29,7 +29,21 @@ internal sealed class NuGetTrafficState
 
     public TrafficFilter Filter { get; set; } = TrafficFilter.All;
 
+    /// <summary>
+    /// Id of the event currently shown in the details panel. <c>null</c>
+    /// when no row has been selected yet. The view layer falls back to
+    /// "first visible row" when this id is null OR no longer present in
+    /// the filtered set (e.g. the selected event scrolled off the ring
+    /// buffer or the filter changed). Storing the id rather than an index
+    /// lets the selection survive new inbound events (which are inserted
+    /// at the head, shifting indexes underneath the user).
+    /// </summary>
+    public Guid? SelectedEventId { get; set; }
+
     public event Action? OnChanged;
+
+    /// <summary>Notifies listeners (used by the view to invalidate when selection changes).</summary>
+    public void NotifyChanged() => OnChanged?.Invoke();
 
     /// <summary>Replaces all events with <paramref name="backfill"/> ordered oldest→newest.</summary>
     public void Backfill(IReadOnlyList<DogfoodingNuGetTrafficEvent> backfill)

@@ -11,16 +11,19 @@ namespace Aspire.Dogfooder.Screens.Workspace;
 
 /// <summary>
 /// Window-body widget for the "NuGet" tab of a running session. Renders a
-/// live traffic table sourced from <see cref="NuGetTrafficState"/>, plus a
-/// summary line showing where the server is bound and how many local
-/// overrides it carries.
+/// live traffic table at the top + a request-kind-specific details pane
+/// below, split by a vertical splitter so the user can resize the panes.
 /// </summary>
 /// <remarks>
-/// Widgets are built fresh each frame by Hex1b; subscription to live events
-/// is set up by the preparer (which wires the server's RequestCompleted
-/// event into the per-session traffic state). The content here is a pure
-/// view over that state — it reads <see cref="NuGetTrafficState.Events"/>
-/// each render.
+/// Widgets are built fresh each frame by Hex1b; the per-request typed
+/// envelopes come from <see cref="DogfoodingNuGetTrafficEvent.Details"/>
+/// and drive a pattern-matched details factory so each kind of NuGet API
+/// call gets a tailored explanation (search hits + URL-rewrite count,
+/// nupkg local file path vs upstream URL, registration merged item count,
+/// etc.). Selection lives on <see cref="NuGetTrafficState.SelectedEventId"/>
+/// with a "first visible row" fallback so the details pane stays
+/// meaningful even when the selected event scrolls off the ring buffer
+/// or the active filter excludes it.
 /// </remarks>
 internal static class SessionNuGetTrafficContent
 {
@@ -51,23 +54,166 @@ internal static class SessionNuGetTrafficContent
             server.LocalPackageCount,
             allEvents.Count);
 
-        return ctx.VStack(v =>
+        // Resolve the selected event with fallback to the first visible row
+        // — required because the user-visible selection can be evicted by
+        // ring-buffer trim or filter changes, and a stale id would leave
+        // the details pane permanently blank.
+        DogfoodingNuGetTrafficEvent? selected = null;
+        if (traffic.SelectedEventId is { } selId)
         {
-            var rows = new List<Hex1bWidget>
+            foreach (var e in filtered)
             {
-                v.Text(""),
-                v.Text(summary),
-                v.Text("  Filter: [All] [Search] [Restore] [Errors]   (TODO: filter switches)"),
-                v.Text(""),
-                v.Text("  Time      Status  Kind            Source         Dur     Bytes  Path"),
-                v.Text("  --------  ------  --------------  -------------  ------  -----  ----------------------------------"),
-            };
-            foreach (var ev in filtered)
-            {
-                rows.Add(v.Text(FormatRow(ev)));
+                if (e.Request.Id == selId)
+                {
+                    selected = e;
+                    break;
+                }
             }
-            return rows.ToArray();
-        });
+        }
+        if (selected is null && filtered.Count > 0)
+        {
+            selected = filtered[0];
+        }
+
+        var table = ctx.Table(filtered)
+            .RowKey(e => (object)e.Request.Id)
+            .Header(h => new[]
+            {
+                h.Cell("Time").Fixed(10),
+                h.Cell("Status").Fixed(7),
+                h.Cell("Kind").Fixed(15),
+                h.Cell("Source").Fixed(14),
+                h.Cell("Dur").Fixed(7),
+                h.Cell("Bytes").Fixed(9).AlignRight(),
+                h.Cell("Path").Fill(),
+            })
+            .Row((r, ev, state) => new[]
+            {
+                r.Cell(ev.Request.StartedAt.ToString("HH:mm:ss", CultureInfo.InvariantCulture)),
+                r.Cell(ev.Response.StatusCode.ToString(CultureInfo.InvariantCulture)),
+                r.Cell(ev.Request.Kind.ToString()),
+                r.Cell(ev.Response.Source.ToString()),
+                r.Cell($"{ev.Response.Duration.TotalMilliseconds:F0}ms"),
+                r.Cell(ev.Response.BodyBytes?.ToString("N0", CultureInfo.InvariantCulture) ?? "-"),
+                r.Cell(ev.Request.Path + (ev.Request.Query ?? "")),
+            })
+            .Focus(selected?.Request.Id)
+            .OnFocusChanged(key =>
+            {
+                traffic.SelectedEventId = key as Guid?;
+                traffic.NotifyChanged();
+                return Task.CompletedTask;
+            })
+            .Empty(e => e.Text("  (No NuGet traffic yet — issue a CLI command to populate.)"))
+            .FillHeight();
+
+        var details = BuildDetailsPane(ctx, selected);
+
+        // Top pane = summary banner + table; bottom pane = details. Keep
+        // the splitter at ~16 rows by default so the table dominates but
+        // the details pane is still readable (CLI users prefer scanning
+        // the table on the path/status columns).
+        return ctx.VSplitter(
+            top => new Hex1bWidget[]
+            {
+                top.Text(""),
+                top.Text(summary),
+                top.Text(""),
+                table,
+            },
+            bottom => new Hex1bWidget[]
+            {
+                details,
+            },
+            topHeight: 16);
+    }
+
+    private static Hex1bWidget BuildDetailsPane<TParent>(WidgetContext<TParent> ctx, DogfoodingNuGetTrafficEvent? ev)
+        where TParent : Hex1bWidget
+    {
+        if (ev is null)
+        {
+            return ctx.VStack(v => new[]
+            {
+                v.Text(""),
+                v.Text("  (Select a row to see request details.)"),
+            });
+        }
+
+        var common = new List<string>
+        {
+            $"  {ev.Request.Method}  {ev.Request.Path}{ev.Request.Query ?? ""}",
+            $"  → {ev.Response.StatusCode}  in {ev.Response.Duration.TotalMilliseconds:F0}ms  ·  {ev.Response.BodyBytes?.ToString("N0", CultureInfo.InvariantCulture) ?? "-"} bytes  ·  source={ev.Response.Source}",
+        };
+        if (ev.Response.UpstreamUrl is { Length: > 0 } u)
+        {
+            common.Add($"  upstream: {u}");
+        }
+        if (ev.Response.ErrorMessage is { Length: > 0 } err)
+        {
+            common.Add($"  ERROR: {err}");
+        }
+
+        var kindLines = ev.Details switch
+        {
+            ServiceIndexDetails => new[]
+            {
+                "  Synthesised service index (proxy endpoints only — no upstream fetch).",
+            },
+            FlatVersionsDetails f => new[]
+            {
+                $"  package: {f.PackageId}",
+                $"  versions returned: {f.Versions.Count}  (upstream={f.UpstreamVersionCount}, local={f.LocalVersionCount})",
+                f.Versions.Count > 0 ? $"  versions: {string.Join(", ", f.Versions.Take(20))}{(f.Versions.Count > 20 ? " …" : "")}" : "  versions: (none)",
+            },
+            NupkgDetails n => new[]
+            {
+                $"  package: {n.PackageId} {n.Version}",
+                n.LocalFilePath is { Length: > 0 } lp
+                    ? $"  served from LOCAL file: {lp}"
+                    : $"  proxied from UPSTREAM: {n.UpstreamUrl ?? "(unknown)"}",
+            },
+            NuspecDetails nu => new[]
+            {
+                $"  package: {nu.PackageId} {nu.Version}",
+                nu.LocalFilePath is { Length: > 0 } lp
+                    ? $"  served from LOCAL .nuspec inside {lp}"
+                    : $"  proxied from UPSTREAM: {nu.UpstreamUrl ?? "(unknown)"}",
+            },
+            RegistrationDetails r => new[]
+            {
+                $"  package: {r.PackageId}",
+                $"  merged items: {r.MergedItemCount}  ·  local overrides: {r.LocalOverrideCount}  ·  upstream fetched: {(r.UpstreamFetched ? "yes" : "no")}",
+            },
+            SearchDetails s => new[]
+            {
+                $"  query: {(string.IsNullOrEmpty(s.Query) ? "(empty)" : s.Query)}  ·  prerelease={s.IncludePrerelease}  ·  skip={s.Skip} take={s.Take}",
+                $"  hits: upstream={s.UpstreamHits}  local={s.LocalHits}  merged={s.MergedCount}",
+                $"  URLs rewritten to proxy: {s.UrlRewrites}",
+            },
+            AutocompleteDetails a => new[]
+            {
+                $"  query: {(string.IsNullOrEmpty(a.Query) ? "(empty)" : a.Query)}",
+                $"  hits: upstream={a.UpstreamHits}  local={a.LocalHits}  merged={a.MergedCount}",
+            },
+            UnknownDetails un => new[]
+            {
+                $"  raw path: {un.RawPath}",
+                "  (No typed details captured for this endpoint kind.)",
+            },
+            _ => new[] { "  (No details available.)" },
+        };
+
+        var localPackages = ev.Response.LocalPackagesUsed.Count > 0
+            ? new[] { $"  local packages used: {string.Join(", ", ev.Response.LocalPackagesUsed)}" }
+            : Array.Empty<string>();
+
+        var allLines = common
+            .Concat(new[] { "" })
+            .Concat(kindLines)
+            .Concat(localPackages);
+
+        return ctx.VStack(v => allLines.Select(l => (Hex1bWidget)v.Text(l)).ToArray());
     }
 
     private static IReadOnlyList<DogfoodingNuGetTrafficEvent> ApplyFilter(IReadOnlyList<DogfoodingNuGetTrafficEvent> events, TrafficFilter filter)
@@ -83,30 +229,5 @@ internal static class SessionNuGetTrafficContent
             TrafficFilter.Errors => events.Where(e => e.Response.StatusCode >= 400 || e.Response.Source == DogfoodingNuGetSource.Error).ToList(),
             _ => events,
         };
-    }
-
-    private static string FormatRow(DogfoodingNuGetTrafficEvent ev)
-    {
-        // Compact one-line representation tuned for the 80-col window:
-        //   13:48:21  200    Search          Synthesised    42ms     2148  /v3/search?q=Aspire.Hosting
-        var time = ev.Request.StartedAt.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-        var status = ev.Response.StatusCode.ToString(CultureInfo.InvariantCulture);
-        var kind = ev.Request.Kind.ToString();
-        var src = ev.Response.Source.ToString();
-        var dur = $"{ev.Response.Duration.TotalMilliseconds:F0}ms";
-        var bytes = ev.Response.BodyBytes?.ToString("N0", CultureInfo.InvariantCulture) ?? "-";
-        var path = (ev.Request.Path + (ev.Request.Query ?? "")).Length > 40
-            ? (ev.Request.Path + (ev.Request.Query ?? ""))[..40] + "…"
-            : ev.Request.Path + (ev.Request.Query ?? "");
-        return $"  {time}  {status,-6}  {Pad(kind, 14)}  {Pad(src, 13)}  {dur,-6}  {bytes,5}  {path}";
-    }
-
-    private static string Pad(string s, int width)
-    {
-        if (s.Length >= width)
-        {
-            return s[..width];
-        }
-        return s + new string(' ', width - s.Length);
     }
 }
