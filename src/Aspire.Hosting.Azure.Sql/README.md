@@ -116,7 +116,7 @@ var sqlSrv = builder.AddAzureSqlServer("sqlsrv")
 
 ## Additional documentation
 
-* https://aspire.dev/integrations/
+* https://aspire.dev/integrations/gallery/
 * https://learn.microsoft.com/azure/azure-sql/
 
 ## Feedback & contributing

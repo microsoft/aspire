@@ -54,7 +54,7 @@ await builder.addNodeApp("frontend", "../orleans-frontend", "server.js")
 
 ## Additional documentation
 
-https://aspire.dev/integrations/
+https://aspire.dev/integrations/gallery/
 
 ## Feedback & contributing
 

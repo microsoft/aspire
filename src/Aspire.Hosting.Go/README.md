@@ -120,7 +120,7 @@ See the [JetBrains docs](https://www.jetbrains.com/help/go/attach-to-running-go-
 
 ## Additional documentation
 
-- https://aspire.dev/integrations/
+- https://aspire.dev/integrations/gallery/
 - [Aspire documentation](https://aspire.dev/)
 - [Delve debugger](https://github.com/go-delve/delve)
 

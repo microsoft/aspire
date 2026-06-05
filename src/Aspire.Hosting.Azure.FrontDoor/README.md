@@ -42,7 +42,7 @@ const frontDoor = await builder.addAzureFrontDoor("frontdoor")
 
 ## Additional documentation
 
-* https://aspire.dev/integrations/
+* https://aspire.dev/integrations/gallery/
 * https://learn.microsoft.com/azure/frontdoor/
 
 ## Feedback & contributing

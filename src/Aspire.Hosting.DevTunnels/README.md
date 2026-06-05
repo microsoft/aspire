@@ -236,7 +236,7 @@ The logging helps you verify that your tunnel configuration is working as expect
 
 ## Additional documentation
 
-* https://aspire.dev/integrations/
+* https://aspire.dev/integrations/gallery/
 * [Aspire documentation](https://aspire.dev/integrations/devtools/dev-tunnels/)
 * [Dev tunnels service](https://learn.microsoft.com/azure/developer/dev-tunnels/overview)
 * [Dev tunnels FAQ](https://learn.microsoft.com/azure/developer/dev-tunnels/faq)

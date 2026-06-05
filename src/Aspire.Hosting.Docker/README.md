@@ -34,7 +34,7 @@ aspire publish -o docker-compose-artifacts
 
 ## Additional documentation
 
-https://aspire.dev/integrations/
+https://aspire.dev/integrations/gallery/
 
 ## Feedback & contributing
 

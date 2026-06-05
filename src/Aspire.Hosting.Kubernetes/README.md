@@ -40,7 +40,7 @@ aspire publish -o k8s-artifacts
 
 ## Additional documentation
 
-https://aspire.dev/integrations/
+https://aspire.dev/integrations/gallery/
 
 ## Feedback & contributing
 

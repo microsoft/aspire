@@ -103,7 +103,7 @@ Check the [GitHub Models documentation](https://docs.github.com/en/github-models
 
 ## Additional documentation
 
-* https://aspire.dev/integrations/
+* https://aspire.dev/integrations/gallery/
 * https://docs.github.com/en/github-models
 
 ## Feedback & contributing
