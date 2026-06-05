@@ -6,6 +6,17 @@
       <AutoGenerateSymbolPackages>false</AutoGenerateSymbolPackages>
    </PropertyGroup>
 
+  <!-- CLI NativeAOT debug symbols ship to MSDL through two arcade publishing routes:
+       loose-file FilesToPublishToSymbolServer for Windows .pdb (the glob
+       below), and .symbols.nupkg for Linux .dbg / macOS .dwarf (produced by
+       eng/clipack/Aspire.Cli.NativeSymbols.proj on the per-RID build agent
+       and staged into Shipping by
+       eng/pipelines/templates/download_native_symbols.yml on the publish
+       agent). See docs/ci/cli-native-symbols.md#pipeline-architecture. -->
+  <ItemGroup>
+    <FilesToPublishToSymbolServer Include="$(ArtifactsDir)native-symbols\$(Configuration)\**\aspire.pdb" />
+  </ItemGroup>
+
   <PropertyGroup>
     <_UploadPathRoot>aspire</_UploadPathRoot>
     <!-- Already-signed native archives (macOS/Linux) are downloaded to a separate directory
