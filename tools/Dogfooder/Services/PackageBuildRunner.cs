@@ -30,7 +30,41 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
         var packagesDir = Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping");
 
         var (fileName, args) = BuildCommandLine(repoRoot, request);
-        onLine($"$ {fileName} {string.Join(' ', args)}");
+
+        // Mirror every line written to onLine into an on-disk log file so the
+        // user has something to grep after the TUI exits. Placed under the
+        // repo's artifacts/log/dogfooder/ directory because that is git-
+        // ignored and lives alongside the rest of the build's artifacts; one
+        // file per invocation so concurrent dogfooder runs in different
+        // worktrees don't stomp each other.
+        var logDir = Path.Combine(repoRoot, "artifacts", "log", "dogfooder");
+        Directory.CreateDirectory(logDir);
+        var logPath = Path.Combine(
+            logDir,
+            $"build-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}.log");
+        // Use a StreamWriter with AutoFlush so a crash mid-build still leaves
+        // a partial-but-readable log on disk. The file is closed in the
+        // finally block below.
+        var logWriter = new StreamWriter(logPath, append: false) { AutoFlush = true };
+
+        void Tee(string line)
+        {
+            onLine(line);
+            try
+            {
+                logWriter.WriteLine(line);
+            }
+            catch
+            {
+                // Disk full / permissions issue — don't crash the build run
+                // over a missing log file; the in-TUI log is still live.
+            }
+        }
+
+        // Surface the log path as the very first line so the user sees it in
+        // the Build log tab and knows where to look after the TUI exits.
+        Tee($"# Log file: {logPath}");
+        Tee($"$ {fileName} {string.Join(' ', args)}");
 
         var psi = new ProcessStartInfo
         {
@@ -69,52 +103,69 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
         // feed credentials).
 
         var sw = Stopwatch.StartNew();
-        using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-
-        proc.OutputDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                onLine(e.Data);
-            }
-        };
-        proc.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                onLine(e.Data);
-            }
-        };
-
-        proc.Start();
-        proc.BeginOutputReadLine();
-        proc.BeginErrorReadLine();
-
         try
         {
-            await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
+
+            proc.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data is not null)
+                {
+                    Tee(e.Data);
+                }
+            };
+            proc.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data is not null)
+                {
+                    Tee(e.Data);
+                }
+            };
+
+            proc.Start();
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+
+            try
+            {
+                await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Best-effort cooperative shutdown: kill the entire process tree
+                // because the Arcade build spawns MSBuild + dotnet + cl/clang in a
+                // deep tree and a plain Kill() would leave them running.
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                throw;
+            }
+
+            sw.Stop();
+
+            var nupkgs = Directory.Exists(packagesDir)
+                ? Directory.EnumerateFiles(packagesDir, "*.nupkg", SearchOption.TopDirectoryOnly).ToList()
+                : (IReadOnlyList<string>)Array.Empty<string>();
+
+            Tee($"# Exit {proc.ExitCode} in {sw.Elapsed.TotalSeconds:F1}s. Log: {logPath}");
+
+            return new PackageBuildResult(
+                Success: proc.ExitCode == 0,
+                PackagesDirectory: packagesDir,
+                ProducedNupkgPaths: nupkgs,
+                ExitCode: proc.ExitCode,
+                Elapsed: sw.Elapsed);
         }
-        catch (OperationCanceledException)
+        finally
         {
-            // Best-effort cooperative shutdown: kill the entire process tree
-            // because the Arcade build spawns MSBuild + dotnet + cl/clang in a
-            // deep tree and a plain Kill() would leave them running.
-            try { proc.Kill(entireProcessTree: true); } catch { }
-            throw;
+            try
+            {
+                logWriter.Dispose();
+            }
+            catch
+            {
+                // Already best-effort throughout the runner; nothing useful to
+                // do if closing the writer itself throws.
+            }
         }
-
-        sw.Stop();
-
-        var nupkgs = Directory.Exists(packagesDir)
-            ? Directory.EnumerateFiles(packagesDir, "*.nupkg", SearchOption.TopDirectoryOnly).ToList()
-            : (IReadOnlyList<string>)Array.Empty<string>();
-
-        return new PackageBuildResult(
-            Success: proc.ExitCode == 0,
-            PackagesDirectory: packagesDir,
-            ProducedNupkgPaths: nupkgs,
-            ExitCode: proc.ExitCode,
-            Elapsed: sw.Elapsed);
     }
 
     private static (string FileName, IReadOnlyList<string> Args) BuildCommandLine(string repoRoot, PackageBuildRequest request)
