@@ -39,7 +39,7 @@ public sealed class JavaScriptPackageManagerAnnotation(string executableName, st
     /// <summary>
     /// Gets the file patterns for package dependency files.
     /// </summary>
-    public List<CopyFilePattern> PackageFilesPatterns { get; } = [];
+    public List<CopyFilePattern> PackageFilesPatterns { get; init; } = [];
 
     /// <summary>
     /// Gets or sets a callback to initialize the Docker build stage before installing packages.

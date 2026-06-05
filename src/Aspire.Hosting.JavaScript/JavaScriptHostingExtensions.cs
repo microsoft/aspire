@@ -20,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting;
 
@@ -1871,7 +1872,8 @@ public static class JavaScriptHostingExtensions
 
         var workingDirectory = resource.Resource.WorkingDirectory;
         var hasPnpmLock = File.Exists(Path.Combine(workingDirectory, "pnpm-lock.yaml"));
-        var hasPnpmWorkspace = File.Exists(Path.Combine(workingDirectory, "pnpm-workspace.yaml"));
+        var pnpmWorkspacePath = Path.Combine(workingDirectory, "pnpm-workspace.yaml");
+        var hasPnpmWorkspace = File.Exists(pnpmWorkspacePath);
 
         installArgs ??= GetDefaultPnpmInstallArgs(resource, hasPnpmLock);
 
@@ -1889,7 +1891,7 @@ public static class JavaScriptHostingExtensions
         resource
             .WithAnnotation(new JavaScriptPackageManagerAnnotation("pnpm", runScriptCommand: "run", cacheMount: "/pnpm/store")
             {
-                PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
+                PackageFilesPatterns = [new CopyFilePattern(packageFilesSourcePattern, "./"), .. (hasPnpmWorkspace ? GetPnpmPatchedDependenciesFilePatterns(pnpmWorkspacePath) : [])],
                 // pnpm does not strip the -- separator and passes it to the script, causing Vite to ignore subsequent arguments.
                 CommandSeparator = null,
                 // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
@@ -2425,5 +2427,43 @@ public static class JavaScriptHostingExtensions
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Parses the pnpm-workspace.yaml file to extract patched dependencies and constructs copy patterns for them.
+    /// </summary>
+    /// <param name="pnpmWorkspacePath">The path to the pnpm-workspace.yaml file.</param>
+    /// <returns>An enumerable of <see cref="CopyFilePattern"/> representing the patched dependencies.</returns>
+    private static IEnumerable<CopyFilePattern> GetPnpmPatchedDependenciesFilePatterns(string pnpmWorkspacePath)
+    {
+        using var reader = new StreamReader(pnpmWorkspacePath);
+        var pnpmWorkspaceYaml = new Deserializer().Deserialize(reader);
+        var copyPatterns = new Dictionary<string, string>(); // key: distination path, value: patch file path
+
+        if (pnpmWorkspaceYaml is Dictionary<object, object> yamlDict &&
+            yamlDict.TryGetValue("patchedDependencies", out var patchedDependenciesObj) &&
+            patchedDependenciesObj is Dictionary<object, object> patchedDependencies)
+        {
+            foreach (var (_, pdPath) in patchedDependencies)
+            {
+                var sourcePath = pdPath as string;
+                if (!string.IsNullOrEmpty(sourcePath))
+                {
+                    var dirIdx = sourcePath.LastIndexOf('/');
+                    var destDir = dirIdx >= 0 ? sourcePath[..dirIdx] : ".";
+
+                    if (copyPatterns.ContainsKey(destDir))
+                    {
+                        copyPatterns[destDir] += $" {sourcePath}";
+                    }
+                    else
+                    {
+                        copyPatterns[destDir] = sourcePath;
+                    }
+                }
+            }
+        }
+
+        return copyPatterns.Select(kvp => new CopyFilePattern(kvp.Value, kvp.Key));
     }
 }
