@@ -11,6 +11,17 @@ namespace Aspire.Hosting.Dcp;
 /// <summary>
 /// Allocates and tracks public ports for proxyless endpoints that do not specify one.
 /// </summary>
+/// <remarks>
+/// Uses a stateful hybrid scan over the configured non-ephemeral port range. The allocator starts
+/// with an exhaustive pseudo-random walk to find a likely-free region, then walks incrementally after
+/// each successful allocation so adjacent free ports are consumed efficiently. If a candidate is in
+/// use, the allocator jumps back to the random walk instead of linearly scanning through a dense used
+/// cluster.
+///
+/// This approach was tested against naive incremental allocation, pure random allocation, and
+/// ephemeral port allocation. It was the fastest strategy tested while avoiding the worst-case
+/// failure modes of naive incremental search.
+/// </remarks>
 internal sealed class ProxylessEndpointPortAllocator : IDisposable
 {
     private readonly object _lock = new();
