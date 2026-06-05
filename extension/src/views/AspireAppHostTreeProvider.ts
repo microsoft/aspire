@@ -1239,29 +1239,37 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 const resources = [...this._repository.workspaceResources];
                 const resourceUrl = this._repository.workspaceAppHost?.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
                 url = getBaseDashboardUrl(resourceUrl);
-            } else {
-                const appHosts = this._repository.appHosts.filter(a => a.dashboardUrl);
-                if (appHosts.length === 1) {
-                    url = appHosts[0].dashboardUrl;
-                } else if (appHosts.length > 1) {
-                    const labels = shortenPaths(appHosts.map(a => a.appHostPath));
-                    const items = appHosts.map((a, index) => ({
-                        label: labels[index],
-                        description: pidDescription(a.appHostPid),
-                        dashboardUrl: a.dashboardUrl!,
-                    }));
-                    const selected = await vscode.window.showQuickPick(items, {
-                        placeHolder: selectDashboardPlaceholder,
-                    });
-                    if (!selected) {
-                        return undefined;
-                    }
-                    url = selected.dashboardUrl;
-                }
+            }
+
+            if (!url) {
+                url = await this._resolveAppHostDashboardUrl();
             }
         }
 
         return url;
+    }
+
+    private async _resolveAppHostDashboardUrl(): Promise<string | null> {
+        const appHosts = this._repository.appHosts.filter(a => a.dashboardUrl);
+        if (appHosts.length === 1) {
+            return appHosts[0].dashboardUrl!;
+        }
+
+        if (appHosts.length === 0) {
+            return null;
+        }
+
+        const labels = shortenPaths(appHosts.map(a => a.appHostPath));
+        const items = appHosts.map((a, index) => ({
+            label: labels[index],
+            description: pidDescription(a.appHostPid),
+            dashboardUrl: a.dashboardUrl!,
+        }));
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: selectDashboardPlaceholder,
+        });
+
+        return selected?.dashboardUrl ?? null;
     }
 
     async runAppHost(element: WorkspaceAppHostItem | undefined, noDebug: boolean): Promise<void> {

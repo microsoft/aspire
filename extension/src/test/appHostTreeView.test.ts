@@ -477,6 +477,34 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(openExternalStub.callCount, 1);
     });
 
+    test('workspace dashboard command falls back to running AppHost dashboards', async () => {
+        const appHosts = [
+            makeAppHost({
+                appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                appHostPid: 1,
+                dashboardUrl: 'http://localhost:1001',
+            }),
+            makeAppHost({
+                appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                appHostPid: 2,
+                dashboardUrl: 'http://localhost:1002',
+            }),
+        ];
+        const provider = makeTreeProvider(appHosts, 'workspace');
+        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick').callsFake(async items => (items as readonly vscode.QuickPickItem[])[1]);
+        const openExternalStub = sandbox.stub(vscode.env, 'openExternal').resolves(true);
+
+        await provider.openDashboard();
+
+        const items = showQuickPickStub.getCall(0).args[0] as readonly vscode.QuickPickItem[];
+        assert.deepStrictEqual(items.map(item => item.label), [
+            'apps/Store/AppHost.csproj',
+            'samples/Store/AppHost.csproj',
+        ]);
+        assert.strictEqual(openExternalStub.callCount, 1);
+        assert.strictEqual(openExternalStub.getCall(0).args[0].toString(), 'http://localhost:1002/');
+    });
+
     test('openDashboardToSide opens the dashboard in the integrated browser side group', async () => {
         const provider = makeTreeProvider([
             makeAppHost({
