@@ -160,6 +160,13 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		DefaultCertificateBundlePaths:    []string{"/etc/ssl/certs/ca-certificates.crt"},
 		DefaultCertificateDirectoryPaths: []string{"/etc/ssl/certs", "/usr/local/share/ca-certificates"},
 	})
+	container.WithContainerFiles("/usr/lib/aspire/container-files", ".", &aspire.WithContainerFilesOptions{
+		Options: &aspire.ContainerFilesOptions{
+			DefaultOwner: aspire.Float64Ptr(1000),
+			DefaultGroup: aspire.Float64Ptr(1000),
+			Umask:        aspire.Float64Ptr(0o022),
+		},
+	})
 
 	// WithImageRegistry
 	container.WithImageRegistry("docker.io")

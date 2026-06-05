@@ -143,6 +143,17 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
  */
 export type CommandOutcome = 'success' | 'canceled' | 'error';
 
+export interface CommandInvocationEvent {
+    command: string;
+    outcome: CommandOutcome;
+    durationMs: number;
+    source?: string;
+    errorKind?: string;
+}
+
+const commandInvocationEmitter = new vscode.EventEmitter<CommandInvocationEvent>();
+export const onDidInvokeCommand = commandInvocationEmitter.event;
+
 /**
  * Wraps an extension command invocation so we capture invocation, outcome and
  * duration in one place. Every `vscode.commands.registerCommand` callback in
@@ -193,6 +204,13 @@ export async function withCommandTelemetry<T>(
             properties.error_kind = errorKind;
         }
         sendTelemetryEvent('command/invoked', properties, { duration_ms: durationMs });
+        commandInvocationEmitter.fire({
+            command: commandName,
+            outcome,
+            durationMs,
+            source: additionalProperties?.source,
+            errorKind,
+        });
     }
 }
 

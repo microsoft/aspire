@@ -2,9 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Cli.Utils;
-
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Projects;
 

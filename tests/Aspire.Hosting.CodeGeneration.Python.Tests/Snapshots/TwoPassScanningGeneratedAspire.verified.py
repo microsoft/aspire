@@ -1633,6 +1633,12 @@ class ContainerCertificatePathsParameters(typing.TypedDict, total=False):
     default_certificate_dir_paths: typing.Iterable[str]
 
 
+class ContainerFilesParameters(typing.TypedDict, total=False):
+    destination_path: typing.Required[str]
+    source_path: typing.Required[str]
+    options: ContainerFilesOptions
+
+
 class DockerfileBuilderParameters(typing.TypedDict, total=False):
     context_path: typing.Required[str]
     callback: typing.Required[typing.Callable[[DockerfileBuilderCallbackContext], None]]
@@ -1764,6 +1770,11 @@ class CommandResultData(typing.TypedDict, total=False):
     Value: str
     Format: CommandResultFormat
     DisplayImmediately: bool
+
+class ContainerFilesOptions(typing.TypedDict, total=False):
+    DefaultOwner: int | None
+    DefaultGroup: int | None
+    Umask: int | None
 
 class CreateBuilderOptions(typing.TypedDict, total=False):
     Args: typing.Iterable[str]
@@ -7699,6 +7710,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     build_arg: tuple[str, str | ParameterResource]
     build_secret: tuple[str, ParameterResource]
     container_certificate_paths: ContainerCertificatePathsParameters | typing.Literal[True]
+    container_files: tuple[str, str] | ContainerFilesParameters
     dockerfile_builder: tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]] | DockerfileBuilderParameters
     container_network_alias: str
     mcp_server: McpServerParameters | typing.Literal[True]
@@ -7933,6 +7945,20 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             rpc_args['defaultCertificateDirectoryPaths'] = default_certificate_dir_paths
         result = self._client.invoke_capability(
             'Aspire.Hosting/withContainerCertificatePaths',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_container_files(self, destination_path: str, source_path: str, *, options: ContainerFilesOptions | None = None) -> typing.Self:
+        """Creates or updates files and folders in a container by copying them from a source path on the host."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['destinationPath'] = destination_path
+        rpc_args['sourcePath'] = source_path
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withContainerFiles',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8597,6 +8623,20 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerCertificatePaths', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_certificate_paths'. Expected: ContainerCertificatePathsParameters or Literal[True]")
+        if _container_files := kwargs.pop("container_files", None):
+            if _validate_tuple_types(_container_files, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["destinationPath"] = typing.cast(tuple[str, str], _container_files)[0]
+                rpc_args["sourcePath"] = typing.cast(tuple[str, str], _container_files)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerFiles', rpc_args))
+            elif _validate_dict_types(_container_files, ContainerFilesParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["destinationPath"] = typing.cast(ContainerFilesParameters, _container_files)["destination_path"]
+                rpc_args["sourcePath"] = typing.cast(ContainerFilesParameters, _container_files)["source_path"]
+                rpc_args["options"] = typing.cast(ContainerFilesParameters, _container_files).get("options")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerFiles', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'container_files'. Expected: (str, str) or ContainerFilesParameters")
         if _dockerfile_builder := kwargs.pop("dockerfile_builder", None):
             if _validate_tuple_types(_dockerfile_builder, (str, typing.Callable[[DockerfileBuilderCallbackContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

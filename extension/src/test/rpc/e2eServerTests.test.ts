@@ -8,38 +8,48 @@ import { StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node';
 import { getAndActivateExtension } from '../common';
 import { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 
+interface TestOnlyExtensionExports {
+	__testOnlyRpcServerInfo?: RpcServerConnectionInfo;
+}
+
 suite('End-to-end RPC server auth tests', () => {
 	vscode.window.showInformationMessage('Starting end-to-end rpc server tests.');
 
 	test('rpcServer authenticated call succeeds', async () => {
-		// Arrange
 		const { connection, rpcServerInfo, client } = await getRealRpcServer();
 
-		// Act & Assert
-		const response = await connection.sendRequest('ping', rpcServerInfo.token);
-		assert.deepStrictEqual(response, 'pong');
-
-		connection.dispose();
-		client.end();
+		try {
+			const response = await connection.sendRequest('ping', rpcServerInfo.token);
+			assert.deepStrictEqual(response, 'pong');
+		}
+		finally {
+			connection.dispose();
+			client.end();
+		}
 	});
 
 	test("rpcServer unauthenticated call fails", async () => {
-		// Arrange
 		const { connection, client } = await getRealRpcServer();
 
-		// Act & Assert
-		assert.rejects(() => connection.sendRequest('ping', { token: 'invalid-token' }));
+		try {
+			await assert.rejects(() => connection.sendRequest('ping', { token: 'invalid-token' }));
+		}
+		finally {
+			connection.dispose();
+			client.end();
+		}
 	});
 
 	async function getRealRpcServer() {
 		const extension = await getAndActivateExtension();
+		const exports = extension.exports as TestOnlyExtensionExports;
 
 		// Wait for the RPC server to start and get the port
 		await waitForExpect(() => {
-			assert.ok(extension.exports.rpcServerInfo);
+			assert.ok(exports.__testOnlyRpcServerInfo);
 		}, 2000, 50);
 
-		const rpcServerInfo = extension.exports.rpcServerInfo as RpcServerConnectionInfo;
+		const rpcServerInfo = exports.__testOnlyRpcServerInfo as RpcServerConnectionInfo;
 
 		const port = Number(rpcServerInfo.address.replace('localhost:', ''));
 		const client = tls.connect({

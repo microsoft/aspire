@@ -145,7 +145,7 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         }
 
         var attestationsNode = doc?["attestations"];
-        if (attestationsNode is not JsonArray { Count: >0 } attestations)
+        if (attestationsNode is not JsonArray { Count: > 0 } attestations)
         {
             return null;
         }

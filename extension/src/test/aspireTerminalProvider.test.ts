@@ -59,6 +59,15 @@ suite('AspireTerminalProvider tests', () => {
         });
     });
 
+    function restoreEnvironmentVariable(name: string, value: string | undefined): void {
+        if (value === undefined) {
+            delete process.env[name];
+            return;
+        }
+
+        process.env[name] = value;
+    }
+
     suite('sendAspireCommandToAspireTerminal', () => {
         const expectedCommand = process.platform === 'win32' ? '& "aspire" logs' : 'aspire logs';
         let originalStopOnEntry: string | undefined;
@@ -85,8 +94,10 @@ suite('AspireTerminalProvider tests', () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
             const events: string[] = [];
             const sentTexts: string[] = [];
+            const terminalEvents: unknown[] = [];
             let executedCommand: string | undefined;
             let shown = false;
+            const eventSubscription = terminalProvider.onDidSendAspireCommand(event => terminalEvents.push(event));
             const terminal = {
                 shellIntegration: {
                     executeCommand: (commandLine: string) => {
@@ -115,8 +126,41 @@ suite('AspireTerminalProvider tests', () => {
                 assert.deepStrictEqual(sentTexts, []);
                 assert.strictEqual(shown, true);
                 assert.deepStrictEqual(events, ['show', 'execute']);
+                assert.deepStrictEqual(terminalEvents.map(event => (event as { executionMode: string }).executionMode), ['shellIntegration']);
             }
             finally {
+                eventSubscription.dispose();
+                getAspireTerminalStub.restore();
+            }
+        });
+
+        test('quotes Windows CLI path with PowerShell escaping', async () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            const cliPath = 'C:\\Tools\\$(bad)\\`bin\\aspire.exe';
+            resolveCliPathStub.resolves({ cliPath, available: true, source: 'configured' });
+            let executedCommand: string | undefined;
+            const terminal = {
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                sendText: () => { },
+                show: () => { }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs');
+
+                assert.strictEqual(executedCommand, `& ${quoteShellArg(cliPath, 'win32')} logs`);
+            }
+            finally {
+                platformStub.restore();
                 getAspireTerminalStub.restore();
             }
         });
@@ -124,6 +168,8 @@ suite('AspireTerminalProvider tests', () => {
         test('sends Ctrl+C before command when shell integration is unavailable', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
             const sentTexts: { text: string; shouldExecute?: boolean }[] = [];
+            const terminalEvents: unknown[] = [];
+            const eventSubscription = terminalProvider.onDidSendAspireCommand(event => terminalEvents.push(event));
             const terminal = {
                 sendText: (text: string, shouldExecute?: boolean) => {
                     sentTexts.push({ text, shouldExecute });
@@ -142,8 +188,60 @@ suite('AspireTerminalProvider tests', () => {
                     { text: '\x03', shouldExecute: false },
                     { text: expectedCommand, shouldExecute: undefined }
                 ]);
+                assert.deepStrictEqual(terminalEvents.map(event => (event as { executionMode: string }).executionMode), ['sendText']);
             }
             finally {
+                eventSubscription.dispose();
+                getAspireTerminalStub.restore();
+            }
+        });
+
+        test('records suppressed execution mode and does not send command when E2E suppression is enabled', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const originalEnableBridge = process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE;
+            const originalStateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
+            const originalControlFile = process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE;
+            const originalSuppressTerminalCommandExecution = process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION;
+            const terminalEvents: unknown[] = [];
+            const eventSubscription = terminalProvider.onDidSendAspireCommand(event => terminalEvents.push(event));
+            let executedCommand: string | undefined;
+            const sentTexts: string[] = [];
+            const terminal = {
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                sendText: (text: string) => {
+                    sentTexts.push(text);
+                },
+                show: () => { }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE = 'true';
+                process.env.ASPIRE_EXTENSION_E2E_STATE_FILE = '/tmp/aspire-extension-state.json';
+                process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE = '/tmp/aspire-extension-control.json';
+                process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION = 'true';
+
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs');
+
+                assert.strictEqual(executedCommand, undefined);
+                assert.deepStrictEqual(sentTexts, []);
+                assert.deepStrictEqual(terminalEvents.map(event => (event as { executionMode: string }).executionMode), ['suppressed']);
+                assert.deepStrictEqual(terminalEvents.map(event => (event as { executionSuppressed: boolean }).executionSuppressed), [true]);
+            }
+            finally {
+                restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE', originalEnableBridge);
+                restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_STATE_FILE', originalStateFile);
+                restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_CONTROL_FILE', originalControlFile);
+                restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION', originalSuppressTerminalCommandExecution);
+                eventSubscription.dispose();
                 getAspireTerminalStub.restore();
             }
         });
@@ -253,6 +351,37 @@ suite('AspireTerminalProvider tests', () => {
                 getAspireTerminalStub.restore();
                 infoStub.restore();
             }
+        });
+    });
+
+    suite('createEnvironment', () => {
+        setup(() => {
+            terminalProvider.rpcServerConnectionInfo = {
+                address: 'http://localhost:1234',
+                token: 'rpc-token',
+                cert: 'rpc-cert',
+            };
+            terminalProvider.dcpServerConnectionInfo = {
+                address: 'http://localhost:5678',
+                token: 'dcp-token',
+                certificate: 'dcp-cert',
+            };
+        });
+
+        test('marks extension-managed debug sessions as non-interactive without disabling extension prompts', () => {
+            const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+            assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, 'debug-session-id');
+            assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
+            assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, 'true');
+        });
+
+        test('does not mark user terminal commands as non-interactive', () => {
+            const env = terminalProvider.createEnvironment();
+
+            assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, undefined);
+            assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
+            assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, undefined);
         });
     });
 

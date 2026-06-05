@@ -20,6 +20,11 @@ on:
         required: true
         type: string
   stale-check: false
+  # Stable releases are published by the `aspire-repo-bot` GitHub App. gh-aw's
+  # activation gate checks the triggering actor's repo permission and GitHub
+  # Apps do not appear as collaborators, so allow-list the App the same way as
+  # other bot-triggered gh-aw workflows in this repo.
+  bots: [aspire-repo-bot]
 
 if: >-
   github.repository == 'microsoft/aspire'

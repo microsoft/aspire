@@ -11,7 +11,6 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -57,22 +56,18 @@ internal sealed class UpdateCommand : BaseCommand
         IAppHostProjectFactory projectFactory,
         ILogger<UpdateCommand> logger,
         ICliDownloader? cliDownloader,
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IConfigurationService configurationService,
-        AspireCliTelemetry telemetry,
-        IConfiguration configuration)
-        : base("update", UpdateCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        IConfiguration configuration,
+        CommonCommandServices services)
+        : base("update", UpdateCommandStrings.Description, services)
     {
         _projectLocator = projectLocator;
         _packagingService = packagingService;
         _projectFactory = projectFactory;
         _logger = logger;
         _cliDownloader = cliDownloader;
-        _updateNotifier = updateNotifier;
-        _features = features;
+        _updateNotifier = services.UpdateNotifier;
+        _features = services.Features;
         _configurationService = configurationService;
         _configuration = configuration;
 

@@ -221,6 +221,61 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
         GetAllocatedEndpoint()
         ?? throw new InvalidOperationException($"The endpoint `{EndpointName}` is not allocated for the resource `{Resource.Name}`.");
 
+    internal async Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkId, ValueProviderContext context, CancellationToken cancellationToken = default)
+    {
+        var endpointAnnotation = EndpointAnnotation;
+        if (endpointAnnotation.AllAllocatedEndpoints.TryGetAllocatedEndpoint(networkId, out var endpoint))
+        {
+            return endpoint;
+        }
+
+        var allocationAnnotations = Resource.Annotations.OfType<OnDemandEndpointAllocationAnnotation>().ToArray();
+        if (allocationAnnotations.Length > 0 && await ShouldAllocateEndpointOnDemandAsync(context, cancellationToken).ConfigureAwait(false))
+        {
+            foreach (var allocationAnnotation in allocationAnnotations)
+            {
+                endpoint = allocationAnnotation.TryAllocate(endpointAnnotation, networkId);
+                if (endpoint is not null)
+                {
+                    return endpoint;
+                }
+            }
+        }
+
+        // Waiting here preserves late allocation for cases that don't need the on-demand fallback,
+        // such as proxyless container endpoints whose actual port is reported by DCP after startup.
+        return await endpointAnnotation.AllAllocatedEndpoints.GetAllocatedEndpointAsync(networkId, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ShouldAllocateEndpointOnDemandAsync(ValueProviderContext context, CancellationToken cancellationToken)
+    {
+        if (context.Caller is not { } caller)
+        {
+            return true;
+        }
+
+        if (Resource == caller)
+        {
+            return true;
+        }
+
+        if (context.ExecutionContext is not { } executionContext)
+        {
+            return true;
+        }
+
+        var dependencies = await Resource.GetResourceDependenciesAsync(
+            executionContext,
+            new ResourceDependencyDiscoveryOptions
+            {
+                DiscoveryMode = ResourceDependencyDiscoveryMode.Recursive,
+                CacheAnnotationCallbackResults = true
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return dependencies.Contains(caller);
+    }
+
     private EndpointAnnotation? GetEndpointAnnotation()
     {
         if (_endpointAnnotation is not null)
@@ -242,20 +297,9 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
             return null;
         }
 
-        foreach (var nes in endpointAnnotation.AllAllocatedEndpoints)
-        {
-            if (string.Equals(nes.NetworkID.Value, (_contextNetworkId ?? KnownNetworkIdentifiers.LocalhostNetwork).Value, StringComparisons.NetworkId))
-            {
-                if (!nes.Snapshot.IsValueSet)
-                {
-                    continue;
-                }
-
-                return nes.Snapshot.GetValueAsync().GetAwaiter().GetResult();
-            }
-        }
-
-        return null;
+        return endpointAnnotation.AllAllocatedEndpoints.TryGetAllocatedEndpoint(_contextNetworkId ?? KnownNetworkIdentifiers.LocalhostNetwork, out var allocatedEndpoint)
+            ? allocatedEndpoint
+            : null;
     }
 
     /// <summary>
@@ -382,8 +426,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
         {
-            var endpointSnapshots = Endpoint.EndpointAnnotation.AllAllocatedEndpoints;
-            var allocatedEndpoint = await endpointSnapshots.GetAllocatedEndpointAsync(networkContext, cancellationToken).ConfigureAwait(false);
+            var allocatedEndpoint = await Endpoint.GetAllocatedEndpointAsync(networkContext, context, cancellationToken).ConfigureAwait(false);
 
             return Property switch
             {
