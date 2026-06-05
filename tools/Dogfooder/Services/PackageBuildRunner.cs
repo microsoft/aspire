@@ -24,10 +24,18 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
         var repoRoot = FindRepoRoot()
             ?? throw new InvalidOperationException("Could not locate repo root (no ancestor directory contains global.json).");
 
-        // Arcade emits packages under artifacts/packages/{Configuration}/{Shipping|NonShipping}.
+        // Arcade emits packages under $(ArtifactsDir)/packages/{Configuration}/{Shipping|NonShipping}.
         // Dogfood builds are always Debug + Shipping today; if we ever want
         // Release dogfood packages we'd extend the request shape.
-        var arcadePackagesDir = Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping");
+        //
+        // When the caller redirected ArtifactsDir (per-session isolation),
+        // mirror that here so we look for produced .nupkg files in the
+        // right place. Otherwise fall back to the repo-shared
+        // artifacts/packages/Debug/Shipping/ that a normal `./build.sh` writes to.
+        var artifactsRoot = request.ArtifactsDirOverride is { Length: > 0 } overrideRoot
+            ? overrideRoot
+            : Path.Combine(repoRoot, "artifacts");
+        var arcadePackagesDir = Path.Combine(artifactsRoot, "packages", "Debug", "Shipping");
 
         var (fileName, args) = BuildCommandLine(repoRoot, request);
 
@@ -127,6 +135,18 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
         // feed credentials).
 
         var sw = Stopwatch.StartNew();
+        // Capture the wall clock just before kicking off the build process so
+        // we can filter the produced .nupkg set down to files that this build
+        // actually wrote, rather than picking up every nupkg that happens to
+        // be sitting in artifacts/packages/Debug/Shipping/ from prior runs.
+        //
+        // Without this filter the local NuGet overlay sees (and serves) every
+        // package version the repo has ever produced — e.g. building 13.5.0
+        // stable will still expose any leftover 13.5.0-dogfood.<stamp> from a
+        // previous dogfood scenario, polluting the registration/search
+        // responses. Use UtcNow minus a small skew window to be safe against
+        // filesystem timestamp granularity (HFS+ is 1s; some FATs are 2s).
+        var buildStartedUtc = DateTime.UtcNow.AddSeconds(-2);
         try
         {
             using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
@@ -165,9 +185,32 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
 
             sw.Stop();
 
-            var arcadeNupkgs = Directory.Exists(arcadePackagesDir)
+            var allArcadeNupkgs = Directory.Exists(arcadePackagesDir)
                 ? Directory.EnumerateFiles(arcadePackagesDir, "*.nupkg", SearchOption.TopDirectoryOnly).ToList()
                 : new List<string>();
+            var arcadeNupkgs = allArcadeNupkgs
+                // Keep only files written during this build. Arcade
+                // re-stamps every package on every pack run, so a
+                // successful build will refresh LastWriteTimeUtc of
+                // everything it produced. Stale leftovers from prior
+                // runs (different VersionPrefix/Suffix) keep their old
+                // mtime and get correctly excluded.
+                .Where(f =>
+                {
+                    try { return File.GetLastWriteTimeUtc(f) >= buildStartedUtc; }
+                    catch { return false; }
+                })
+                // Belt-and-braces: even within freshly-written files,
+                // ignore anything whose filename version segment doesn't
+                // match the version we asked for. This catches the edge
+                // case where Arcade emits an auxiliary package with a
+                // different version (rare, but real for some SDK shims).
+                .Where(f => MatchesExpectedVersion(Path.GetFileName(f), request))
+                .ToList();
+            if (allArcadeNupkgs.Count > arcadeNupkgs.Count)
+            {
+                Tee($"# Skipping {allArcadeNupkgs.Count - arcadeNupkgs.Count} stale/mismatched .nupkg files in {arcadePackagesDir} (kept {arcadeNupkgs.Count} from this build)");
+            }
 
             // When the caller (DogfoodSessionPreparer) gave us a per-session
             // packages dir, copy every produced .nupkg there so the local
@@ -294,6 +337,24 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
             props.Add("/p:DotNetFinalVersionKind=release");
         }
 
+        // Redirect Arcade's entire artifacts tree (packages, intermediates,
+        // bin output, build logs) into a per-session directory so each
+        // dogfood run is fully isolated from the repo's shared
+        // artifacts/ folder and from every other concurrent session.
+        // Arcade defines ArtifactsDir as $(RepoRoot)artifacts/ by default
+        // and derives ArtifactsPackagesDir, ArtifactsBinDir, ArtifactsObjDir
+        // etc. from it — so overriding the root cascades to all of them.
+        // See https://github.com/dotnet/arcade/blob/main/Documentation/ArcadeSdk.md
+        // Trailing slash matters: a number of Arcade targets assume the
+        // value already ends in the platform separator when they concatenate.
+        if (request.ArtifactsDirOverride is { Length: > 0 } artifactsDir)
+        {
+            var normalized = artifactsDir.EndsWith(Path.DirectorySeparatorChar) || artifactsDir.EndsWith('/')
+                ? artifactsDir
+                : artifactsDir + Path.DirectorySeparatorChar;
+            props.Add($"/p:ArtifactsDir={normalized}");
+        }
+
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             // build.cmd uses single-dash flags (-pack, not --pack) on the
@@ -308,6 +369,26 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
             args.AddRange(props);
             return ("/bin/bash", args);
         }
+    }
+
+    private static bool MatchesExpectedVersion(string nupkgFileName, PackageBuildRequest request)
+    {
+        // .nupkg filenames are <id>.<version>.nupkg where <id> can itself
+        // contain dots (e.g. Aspire.AppHost.Sdk). Rather than rebuild a
+        // SemVer parser we just match the expected version suffix:
+        //   prefix only:        ".<prefix>.nupkg"
+        //   prefix + suffix:    ".<prefix>-<suffix>.nupkg"
+        // Only enforced when VersionPrefix is set; otherwise we trust the
+        // timestamp filter alone. EndsWith with OrdinalIgnoreCase mirrors
+        // NuGet's case rules for package filenames.
+        if (request.VersionPrefix is not { Length: > 0 } prefix)
+        {
+            return true;
+        }
+        var expected = request.VersionSuffix.Length == 0
+            ? $".{prefix}.nupkg"
+            : $".{prefix}-{request.VersionSuffix}.nupkg";
+        return nupkgFileName.EndsWith(expected, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? FindRepoRoot()

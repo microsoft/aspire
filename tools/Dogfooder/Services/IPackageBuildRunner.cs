@@ -54,12 +54,24 @@ internal interface IPackageBuildRunner
 /// under <c>artifacts/log/dogfooder/</c>. Used by the session preparer to
 /// route the build log into the per-session <c>logs/</c> directory.
 /// </param>
+/// <param name="ArtifactsDirOverride">
+/// Optional override for Arcade's <c>ArtifactsDir</c> root (forwarded as
+/// <c>/p:ArtifactsDir=&lt;path&gt;/</c>). When set, every artifact the
+/// build produces — packages, intermediates, bin output, build logs —
+/// lands under this directory instead of <c>&lt;repo&gt;/artifacts/</c>.
+/// Used by the session preparer to fully isolate each dogfood run inside
+/// its per-session temp folder so no leftover <c>.nupkg</c> files from
+/// prior sessions can pollute the local NuGet overlay. Trailing slash
+/// is appended by the runner if not present (MSBuild treats trailing
+/// separator as significant in some Property=Value contexts).
+/// </param>
 internal sealed record PackageBuildRequest(
     string VersionSuffix,
     bool IncludeNativeBuild,
     string? VersionPrefix = null,
     string? OutputPackagesDir = null,
-    string? BuildLogPath = null);
+    string? BuildLogPath = null,
+    string? ArtifactsDirOverride = null);
 
 /// <param name="Success">Process exit code was zero.</param>
 /// <param name="PackagesDirectory">

@@ -132,7 +132,13 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
                         IncludeNativeBuild: scenarioPlan.IncludeNativeBuild,
                         VersionPrefix: scenarioPlan.PackageVersionPrefix,
                         OutputPackagesDir: workspace.PackagesDir,
-                        BuildLogPath: buildLogPath),
+                        BuildLogPath: buildLogPath,
+                        // Route Arcade's entire artifacts tree into the
+                        // session's .dogfood/build/ directory so each run
+                        // starts from a clean slate — no leftover .nupkg
+                        // files (e.g. 13.5.0-dogfood.<stamp> from a prior
+                        // run) can pollute the local NuGet overlay.
+                        ArtifactsDirOverride: workspace.BuildArtifactsDir),
                     prep.Append,
                     cancellationToken).ConfigureAwait(false);
                 prep.Append($"# Build exited {buildResult.ExitCode} in {buildResult.Elapsed.TotalSeconds:F1}s, {buildResult.ProducedNupkgPaths.Count} .nupkg files in {buildResult.PackagesDirectory}");

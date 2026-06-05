@@ -35,13 +35,14 @@ namespace Aspire.Dogfooder.State;
 /// </remarks>
 internal sealed class SessionWorkspace
 {
-    public SessionWorkspace(string root, string logsDir, string nugetCacheDir, string nugetHttpCacheDir, string packagesDir, string dogfoodJsonPath)
+    public SessionWorkspace(string root, string logsDir, string nugetCacheDir, string nugetHttpCacheDir, string packagesDir, string buildArtifactsDir, string dogfoodJsonPath)
     {
         Root = root;
         LogsDir = logsDir;
         NuGetCacheDir = nugetCacheDir;
         NuGetHttpCacheDir = nugetHttpCacheDir;
         PackagesDir = packagesDir;
+        BuildArtifactsDir = buildArtifactsDir;
         DogfoodJsonPath = dogfoodJsonPath;
     }
 
@@ -62,6 +63,18 @@ internal sealed class SessionWorkspace
     /// </summary>
     public string NuGetHttpCacheDir { get; }
     public string PackagesDir { get; }
+
+    /// <summary>
+    /// Per-session Arcade <c>ArtifactsDir</c> root (passed to the build as
+    /// <c>/p:ArtifactsDir=&lt;path&gt;/</c>). Routing the entire arcade
+    /// artifacts tree into the session temp folder means each dogfood run
+    /// starts with a fresh package set, intermediates, and bin tree — no
+    /// leftover <c>13.5.0-dogfood.&lt;stamp&gt;.nupkg</c> files from a
+    /// prior run can pollute the local NuGet overlay. Trade-off: the first
+    /// build in a session is a full clean build (~3-5 min) since obj/bin
+    /// are not shared with the repo's regular artifacts/ directory.
+    /// </summary>
+    public string BuildArtifactsDir { get; }
     public string DogfoodJsonPath { get; }
 
     /// <summary>
@@ -78,17 +91,27 @@ internal sealed class SessionWorkspace
         // worktrees) get different directories without us having to
         // coordinate.
         var root = Directory.CreateTempSubdirectory("aspire-dogfood-");
-        var logsDir = Path.Combine(root.FullName, "logs");
-        var nugetCacheDir = Path.Combine(root.FullName, "nugetcache");
-        var nugetHttpCacheDir = Path.Combine(root.FullName, "nugethttpcache");
-        var packagesDir = Path.Combine(root.FullName, "packages");
+        // All dogfooder-owned scaffolding lives under a single hidden
+        // ".dogfood" sub-folder so the workspace root stays clean for the
+        // user's actual CLI work (e.g. `aspire new`, `aspire run`). On Unix
+        // the leading dot makes it hidden in default `ls`; on Windows it
+        // just looks unusual but still doesn't collide with anything an
+        // `aspire new` would scaffold.
+        var dogfoodDir = Path.Combine(root.FullName, ".dogfood");
+        var logsDir = Path.Combine(dogfoodDir, "logs");
+        var nugetCacheDir = Path.Combine(dogfoodDir, "nugetcache");
+        var nugetHttpCacheDir = Path.Combine(dogfoodDir, "nugethttpcache");
+        var packagesDir = Path.Combine(dogfoodDir, "packages");
+        var buildArtifactsDir = Path.Combine(dogfoodDir, "build");
+        Directory.CreateDirectory(dogfoodDir);
         Directory.CreateDirectory(logsDir);
         Directory.CreateDirectory(nugetCacheDir);
         Directory.CreateDirectory(nugetHttpCacheDir);
         Directory.CreateDirectory(packagesDir);
+        Directory.CreateDirectory(buildArtifactsDir);
 
-        var dogfoodJson = Path.Combine(root.FullName, "dogfood.json");
-        return new SessionWorkspace(root.FullName, logsDir, nugetCacheDir, nugetHttpCacheDir, packagesDir, dogfoodJson);
+        var dogfoodJson = Path.Combine(dogfoodDir, "dogfood.json");
+        return new SessionWorkspace(root.FullName, logsDir, nugetCacheDir, nugetHttpCacheDir, packagesDir, buildArtifactsDir, dogfoodJson);
     }
 
     /// <summary>
