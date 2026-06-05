@@ -1926,8 +1926,6 @@ suite('AppHostDataRepository global polling', () => {
 
     test('global ps without dashboard URL keeps dashboard commands hidden', async () => {
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
-        const childProcess = new TestChildProcess();
-        spawnStub.returns(childProcess);
         const repository = new AppHostDataRepository(terminalProvider);
         const getNoRunningAppHostsContext = () => executeCommandStub.getCalls()
             .filter(call => call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts')
@@ -1950,7 +1948,17 @@ suite('AppHostDataRepository global polling', () => {
 
             assert.strictEqual(getNoRunningAppHostsContext(), true);
 
-            psLineCallback(JSON.stringify({
+            repository.setPanelVisible(false);
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.strictEqual(getNoRunningAppHostsContext(), true);
+
+            const latestPsLineCallback = spawnStub.getCalls()
+                .filter(call => call.args[2][0] === 'ps')
+                .at(-1)?.args[3].lineCallback;
+            assert.ok(latestPsLineCallback);
+            latestPsLineCallback(JSON.stringify({
                 appHostPath: '/workspace/AppHost.csproj',
                 appHostPid: 1234,
                 status: 'running',

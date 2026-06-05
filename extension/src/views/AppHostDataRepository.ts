@@ -1128,10 +1128,11 @@ export class AppHostDataRepository {
         }
 
         if (this._viewMode === 'global' && this._loadingGlobal) {
+            const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
             this._loadingGlobal = false;
             this._updateLoadingContext();
             vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
-            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', this._appHosts.length === 0);
+            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
         }
     }
 
