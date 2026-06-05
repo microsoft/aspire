@@ -97,6 +97,21 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
             psi.Environment.Remove(name);
         }
 
+        // Arcade's eng/build.sh always injects /p:TreatWarningsAsErrors=true
+        // on the inner MSBuild command line (via eng/common/tools.sh's
+        // RunBuildTool helper), which overrides anything we try to pass on
+        // the outer command line — including /p:WarningsNotAsErrors=NU5104.
+        // The documented escape hatch is the TreatWarningsAsErrors=false env
+        // var: eng/build.sh checks for it and forwards '-warnAsError 0' down
+        // into Arcade, which then flips TWAE=false on the inner MSBuild call.
+        // This is the only mechanism we've found that demotes NU5104 (stable
+        // depends on prerelease) back to a warning at pack time without
+        // wiping per-project NoWarn (which /p:NoWarn=... would do because
+        // global properties can't be overridden in a csproj <PropertyGroup>).
+        // Safe for dogfooding: built .nupkgs only ever live inside the
+        // in-process DogfoodingNuGetServer overlay; they are never published.
+        psi.Environment["TreatWarningsAsErrors"] = "false";
+
         // Some build steps look at HOME / USERPROFILE; we deliberately do not
         // override the rest of the process environment so the script uses
         // whatever toolchain the user has authenticated for (e.g. dnceng
@@ -178,29 +193,25 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
         var props = new List<string>
         {
             $"/p:VersionSuffix={request.VersionSuffix}",
-            // NU5104 ("stable release should not have a prerelease
-            // dependency") and NU5125 (missing readme) are pack-time
-            // warnings that get promoted to errors by the repo-wide
-            // TreatWarningsAsErrors=true. Both are publish-gate concerns —
-            // dogfood .nupkgs never leave the in-process
-            // DogfoodingNuGetServer overlay — so demote them here.
+            // NB: we do NOT pass /p:NoWarn or /p:WarningsNotAsErrors here.
             //
-            // We deliberately use WarningsNotAsErrors instead of NoWarn:
             // /p:NoWarn=... becomes an MSBuild global property which
             // *replaces* every project's '<NoWarn>$(NoWarn),1573,1591,...
             // </NoWarn>' (global properties can't be overridden in a csproj
             // PropertyGroup without TreatAsLocalProperty), wiping the
             // per-project CS1591/CS1573 suppressions and producing tens of
-            // thousands of unrelated XML-doc and nullable errors across
-            // tests/ and analyzers/. WarningsNotAsErrors only demotes the
-            // listed codes from error back to warning and leaves NoWarn
-            // untouched.
+            // thousands of unrelated XML-doc / nullable errors across
+            // tests/ and analyzers/.
             //
-            // ';' inside a /p: value must be escaped as %3B; MSBuild's
-            // command-line parser otherwise splits on raw semicolons and
-            // reports MSB1006 'Property is not valid' against the second
-            // half.
-            "/p:WarningsNotAsErrors=NU5104%3BNU5125",
+            // /p:WarningsNotAsErrors=NU5104 also doesn't survive: Arcade's
+            // eng/build.sh always re-injects /p:TreatWarningsAsErrors=true
+            // on the inner MSBuild command line (eng/common/tools.sh's
+            // RunBuildTool), so NU5104 gets re-promoted to an error and
+            // the pack fails on Azure.AI.* / Milvus.Client / etc.
+            //
+            // The escape hatch is the TreatWarningsAsErrors=false *env var*
+            // (set above in ProcessStartInfo.Environment), which eng/build.sh
+            // turns into '-warnAsError 0' for the inner Arcade invocation.
         };
         if (!request.IncludeNativeBuild)
         {
