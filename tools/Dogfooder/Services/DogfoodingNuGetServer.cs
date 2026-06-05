@@ -165,7 +165,13 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             throw new InvalidOperationException("Server already started.");
         }
 
-        var builder = WebApplication.CreateSlimBuilder();
+        // Use CreateBuilder (not CreateSlimBuilder) because the slim
+        // builder omits the Kestrel HTTPS configuration loader, leading
+        // to a runtime "Call UseKestrelHttpsConfiguration() to enable
+        // HTTPS configuration" error when we bind to https:// below.
+        // The full builder wires it up by default. The startup cost
+        // difference is irrelevant for the Dogfooder TUI.
+        var builder = WebApplication.CreateBuilder();
         if (_loggerFactory is not null)
         {
             builder.Services.AddSingleton(_loggerFactory);
