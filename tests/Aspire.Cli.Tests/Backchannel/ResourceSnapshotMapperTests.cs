@@ -197,7 +197,9 @@ public class ResourceSnapshotMapperTests
         var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
 
         // SortOrder reflects the registration order the dashboard uses.
-        Assert.Equal(0, result.Commands!["set-parameter"].SortOrder);
+        // Keys are in registration order (no alphabetical sort).
+        Assert.Equal(["set-parameter", "custom-action", "delete-parameter"], result.Commands!.Keys);
+        Assert.Equal(0, result.Commands["set-parameter"].SortOrder);
         Assert.Equal(1, result.Commands["custom-action"].SortOrder);
         Assert.Equal(2, result.Commands["delete-parameter"].SortOrder);
     }
@@ -223,7 +225,9 @@ public class ResourceSnapshotMapperTests
         var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
 
         // SortOrder reflects the registration order even on the default stream.
-        Assert.Equal(0, result.Commands!["set-parameter"].SortOrder);
+        // Keys are in registration order (no alphabetical sort).
+        Assert.Equal(["set-parameter", "custom-action", "delete-parameter"], result.Commands!.Keys);
+        Assert.Equal(0, result.Commands["set-parameter"].SortOrder);
         Assert.Equal(1, result.Commands["custom-action"].SortOrder);
         Assert.Equal(2, result.Commands["delete-parameter"].SortOrder);
     }
