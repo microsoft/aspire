@@ -14959,7 +14959,6 @@ public class InteractionInput implements JsonSerializable {
     private InputType inputType;
     private Boolean required;
     private Object[] options;
-    private Object dynamicLoading;
     private String value;
     private String placeholder;
     private Boolean allowCustomChoice;
@@ -14980,8 +14979,6 @@ public class InteractionInput implements JsonSerializable {
     public void setRequired(Boolean value) { this.required = value; }
     public Object[] getOptions() { return options; }
     public void setOptions(Object[] value) { this.options = value; }
-    public Object getDynamicLoading() { return dynamicLoading; }
-    public void setDynamicLoading(Object value) { this.dynamicLoading = value; }
     public String getValue() { return value; }
     public void setValue(String value) { this.value = value; }
     public String getPlaceholder() { return placeholder; }
@@ -15010,8 +15007,6 @@ public class InteractionInput implements JsonSerializable {
         value.setRequired(requiredValue == null ? null : (Boolean) requiredValue);
         var optionsValue = map.get("Options");
         value.setOptions((Object[]) optionsValue);
-        var dynamicLoadingValue = map.get("DynamicLoading");
-        value.setDynamicLoading(dynamicLoadingValue);
         var valueValue = map.get("Value");
         value.setValue(valueValue == null ? null : (String) valueValue);
         var placeholderValue = map.get("Placeholder");
@@ -15034,7 +15029,6 @@ public class InteractionInput implements JsonSerializable {
         map.put("InputType", AspireClient.serializeValue(inputType));
         map.put("Required", AspireClient.serializeValue(required));
         map.put("Options", AspireClient.serializeValue(options));
-        map.put("DynamicLoading", AspireClient.serializeValue(dynamicLoading));
         map.put("Value", AspireClient.serializeValue(value));
         map.put("Placeholder", AspireClient.serializeValue(placeholder));
         map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));

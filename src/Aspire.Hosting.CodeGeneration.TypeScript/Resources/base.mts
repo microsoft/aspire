@@ -360,7 +360,6 @@ export interface InteractionInput {
     inputType?: InputType;
     required?: boolean;
     options?: InteractionInputOption[];
-    dynamicLoading?: unknown;
     value?: string;
     placeholder?: string;
     allowCustomChoice?: boolean;

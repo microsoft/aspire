@@ -593,8 +593,6 @@ pub struct InteractionInput {
     pub required: Option<bool>,
     #[serde(rename = "Options")]
     pub options: Vec<Value>,
-    #[serde(rename = "DynamicLoading", skip_serializing_if = "Option::is_none")]
-    pub dynamic_loading: Option<Value>,
     #[serde(rename = "Value")]
     pub value: String,
     #[serde(rename = "Placeholder", skip_serializing_if = "Option::is_none")]
@@ -625,9 +623,6 @@ impl InteractionInput {
             map.insert("Required".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map.insert("Options".to_string(), serde_json::to_value(&self.options).unwrap_or(Value::Null));
-        if let Some(ref v) = self.dynamic_loading {
-            map.insert("DynamicLoading".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
         map.insert("Value".to_string(), serde_json::to_value(&self.value).unwrap_or(Value::Null));
         if let Some(ref v) = self.placeholder {
             map.insert("Placeholder".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));

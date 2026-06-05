@@ -285,7 +285,6 @@ Aspire.Hosting/Aspire.Hosting.InteractionInput # Represents an input for an inte
   AllowCustomChoice?: boolean # Gets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
   Description?: string # Gets or sets the description for the input.
   Disabled: boolean # Gets or sets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
-  DynamicLoading?: Aspire.Hosting/Aspire.Hosting.InputLoadOptions # Gets the `InputLoadOptions` for the input. Dynamic loading is used to load data and update inputs after a prompt has started. It can also be used to reload data and update inputs after a dependant input has changed.
   EnableDescriptionMarkdown?: boolean # Gets or sets a value indicating whether the description should be rendered as Markdown. Setting this to `true` allows a description to contain Markdown elements such as links, text decoration and lists.
   InputType: enum:Aspire.Hosting.InputType # Gets or sets the type of the input.
   Label?: string # Gets or sets the label for the input. If not specified, the name will be used as the label.

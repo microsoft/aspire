@@ -1871,7 +1871,6 @@ class InteractionInput(typing.TypedDict, total=False):
     InputType: InputType
     Required: bool
     Options: typing.Iterable[typing.Any]
-    DynamicLoading: typing.Any
     Value: str | None
     Placeholder: str | None
     AllowCustomChoice: bool
