@@ -15,11 +15,12 @@ import {
     ResourceCommandState,
     refExpr,
 } from './.aspire/modules/aspire.mjs';
-import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext } from './.aspire/modules/aspire.mjs';
+import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext, ResourceCommandService } from './.aspire/modules/aspire.mjs';
 import { fileURLToPath } from 'node:url';
 
 const builder = await createBuilder();
 const processCommandStdinScriptPath = fileURLToPath(new URL("./process-command-scripts/stdin.js", import.meta.url));
+let resourceCommandService: ResourceCommandService;
 
 // ===================================================================
 // Factory methods on builder
@@ -443,35 +444,6 @@ const _configChildren = await builderConfiguration.getChildren();
 const _configExists: boolean = await builderConfiguration.exists("MyConfig:Key");
 
 const builderExecutionContext = builder.executionContext();
-const executionContextServiceProvider = await builderExecutionContext.serviceProvider();
-const _distributedApplicationModelFromExecutionContext = await executionContextServiceProvider.getDistributedApplicationModel();
-const resourceCommandService = await executionContextServiceProvider.getResourceCommandService();
-const interactionService = await executionContextServiceProvider.getInteractionService();
-const _interactionServiceAvailable = await interactionService.isAvailable();
-const interactionInput = {
-    name: "validation",
-    inputType: InputType.Text,
-    value: "default",
-    disabled: false,
-};
-void await interactionService.promptConfirmationAsync("Confirm", "Continue?", {
-    options: { intent: MessageIntent.Confirmation, primaryButtonText: "Continue" },
-});
-void await interactionService.promptMessageBoxAsync("Message", "Message body", {
-    options: { intent: MessageIntent.Information, enableMessageMarkdown: true },
-});
-void await interactionService.promptInputAsync("Input", "Input body", "Name", "Placeholder", {
-    options: { primaryButtonText: "Submit" },
-});
-void await interactionService.promptInputWithInputAsync("Input", "Input body", interactionInput, {
-    options: { showDismiss: true },
-});
-void await interactionService.promptInputsAsync("Inputs", "Inputs body", [interactionInput], {
-    options: { showSecondaryButton: true, secondaryButtonText: "Skip" },
-});
-void await interactionService.promptNotificationAsync("Notification", "Notification body", {
-    options: { intent: MessageIntent.Information, linkText: "Docs", linkUrl: "https://aspire.dev" },
-});
 
 await builder.addEventingSubscriber(async (registrationContext) => {
     const _subscriberIsRunMode: boolean = await registrationContext.executionContext().isRunMode();
@@ -798,4 +770,36 @@ await container.withHttpCommand("/health", "Health Check");
 await container.withHttpCommand("/api/reset", "Reset", { methodName: "POST", confirmationMessage: "Are you sure?" });
 
 const app = await builder.build();
+
+// The execution context service provider is populated by build(); accessing it before this point throws.
+const executionContextServiceProvider = await builderExecutionContext.serviceProvider();
+const _distributedApplicationModelFromExecutionContext = await executionContextServiceProvider.getDistributedApplicationModel();
+resourceCommandService = await executionContextServiceProvider.getResourceCommandService();
+const interactionService = await executionContextServiceProvider.getInteractionService();
+const _interactionServiceAvailable = await interactionService.isAvailable();
+const interactionInput = {
+    name: "validation",
+    inputType: InputType.Text,
+    value: "default",
+    disabled: false,
+};
+void await interactionService.promptConfirmationAsync("Confirm", "Continue?", {
+    options: { intent: MessageIntent.Confirmation, primaryButtonText: "Continue" },
+});
+void await interactionService.promptMessageBoxAsync("Message", "Message body", {
+    options: { intent: MessageIntent.Information, enableMessageMarkdown: true },
+});
+void await interactionService.promptInputAsync("Input", "Input body", "Name", "Placeholder", {
+    options: { primaryButtonText: "Submit" },
+});
+void await interactionService.promptInputWithInputAsync("Input", "Input body", interactionInput, {
+    options: { showDismiss: true },
+});
+void await interactionService.promptInputsAsync("Inputs", "Inputs body", [interactionInput], {
+    options: { showSecondaryButton: true, secondaryButtonText: "Skip" },
+});
+void await interactionService.promptNotificationAsync("Notification", "Notification body", {
+    options: { intent: MessageIntent.Information, linkText: "Docs", linkUrl: "https://aspire.dev" },
+});
+
 await app.run();

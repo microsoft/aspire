@@ -4,6 +4,7 @@ import java.util.function.Function;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
+        var resourceCommandService = new ResourceCommandService[1];
         var container = builder.addContainer("mycontainer", "nginx");
         container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
@@ -139,61 +140,6 @@ void main() throws Exception {
         var _configChildren = builderConfiguration.getChildren();
         var _configExists = builderConfiguration.exists("MyConfig:Key");
         var builderExecutionContext = builder.executionContext();
-        var executionContextServiceProvider = builderExecutionContext.serviceProvider();
-        var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
-        var resourceCommandService = executionContextServiceProvider.getResourceCommandService();
-        var interactionService = executionContextServiceProvider.getInteractionService();
-        var _interactionServiceAvailable = interactionService.isAvailable();
-        var interactionInput = new InteractionInput();
-        interactionInput.setName("validation");
-        interactionInput.setInputType(InputType.TEXT);
-        interactionInput.setValue("default");
-        interactionInput.setDisabled(false);
-        var confirmationOptions = new MessageBoxInteractionOptions();
-        confirmationOptions.setIntent(MessageIntent.CONFIRMATION);
-        confirmationOptions.setPrimaryButtonText("Continue");
-        interactionService.promptConfirmationAsync(
-            "Confirm",
-            "Continue?",
-            new PromptConfirmationAsyncOptions().options(confirmationOptions));
-        var messageBoxOptions = new MessageBoxInteractionOptions();
-        messageBoxOptions.setIntent(MessageIntent.INFORMATION);
-        messageBoxOptions.setEnableMessageMarkdown(true);
-        interactionService.promptMessageBoxAsync(
-            "Message",
-            "Message body",
-            new PromptMessageBoxAsyncOptions().options(messageBoxOptions));
-        var inputOptions = new InputsDialogInteractionOptions();
-        inputOptions.setPrimaryButtonText("Submit");
-        interactionService.promptInputAsync(
-            "Input",
-            "Input body",
-            "Name",
-            "Placeholder",
-            new PromptInputAsyncOptions().options(inputOptions));
-        var inputWithInputOptions = new InputsDialogInteractionOptions();
-        inputWithInputOptions.setShowDismiss(true);
-        interactionService.promptInputWithInputAsync(
-            "Input",
-            "Input body",
-            interactionInput,
-            new PromptInputWithInputAsyncOptions().options(inputWithInputOptions));
-        var inputsOptions = new InputsDialogInteractionOptions();
-        inputsOptions.setShowSecondaryButton(true);
-        inputsOptions.setSecondaryButtonText("Skip");
-        interactionService.promptInputsAsync(
-            "Inputs",
-            "Inputs body",
-            new InteractionInput[] { interactionInput },
-            new PromptInputsAsyncOptions().options(inputsOptions));
-        var notificationOptions = new NotificationInteractionOptions();
-        notificationOptions.setIntent(MessageIntent.INFORMATION);
-        notificationOptions.setLinkText("Docs");
-        notificationOptions.setLinkUrl("https://aspire.dev");
-        interactionService.promptNotificationAsync(
-            "Notification",
-            "Notification body",
-            new PromptNotificationAsyncOptions().options(notificationOptions));
         builder.addEventingSubscriber((registrationContext) -> {
             var subscriberExecutionContext = registrationContext.executionContext();
             var _subscriberIsRunMode = subscriberExecutionContext.isRunMode();
@@ -308,7 +254,7 @@ void main() throws Exception {
         }, echoCommandOptions);
         container.withCommand("restart", "Restart", (ctx) -> {
             var cancellationToken = ctx.cancellationToken();
-            return resourceCommandService.executeCommandAsync(
+            return resourceCommandService[0].executeCommandAsync(
                 container,
                 "echo",
                 new ExecuteCommandAsyncOptions()
@@ -321,5 +267,63 @@ void main() throws Exception {
         httpCmdOptions.setConfirmationMessage("Are you sure?");
         container.withHttpCommand("/api/reset", "Reset", httpCmdOptions);
         var app = builder.build();
+
+        // The execution context service provider is populated by build(); accessing it before this point throws.
+        var executionContextServiceProvider = builderExecutionContext.serviceProvider();
+        var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
+        resourceCommandService[0] = executionContextServiceProvider.getResourceCommandService();
+        var interactionService = executionContextServiceProvider.getInteractionService();
+        var _interactionServiceAvailable = interactionService.isAvailable();
+        var interactionInput = new InteractionInput();
+        interactionInput.setName("validation");
+        interactionInput.setInputType(InputType.TEXT);
+        interactionInput.setValue("default");
+        interactionInput.setDisabled(false);
+        var confirmationOptions = new MessageBoxInteractionOptions();
+        confirmationOptions.setIntent(MessageIntent.CONFIRMATION);
+        confirmationOptions.setPrimaryButtonText("Continue");
+        interactionService.promptConfirmationAsync(
+            "Confirm",
+            "Continue?",
+            new PromptConfirmationAsyncOptions().options(confirmationOptions));
+        var messageBoxOptions = new MessageBoxInteractionOptions();
+        messageBoxOptions.setIntent(MessageIntent.INFORMATION);
+        messageBoxOptions.setEnableMessageMarkdown(true);
+        interactionService.promptMessageBoxAsync(
+            "Message",
+            "Message body",
+            new PromptMessageBoxAsyncOptions().options(messageBoxOptions));
+        var inputOptions = new InputsDialogInteractionOptions();
+        inputOptions.setPrimaryButtonText("Submit");
+        interactionService.promptInputAsync(
+            "Input",
+            "Input body",
+            "Name",
+            "Placeholder",
+            new PromptInputAsyncOptions().options(inputOptions));
+        var inputWithInputOptions = new InputsDialogInteractionOptions();
+        inputWithInputOptions.setShowDismiss(true);
+        interactionService.promptInputWithInputAsync(
+            "Input",
+            "Input body",
+            interactionInput,
+            new PromptInputWithInputAsyncOptions().options(inputWithInputOptions));
+        var inputsOptions = new InputsDialogInteractionOptions();
+        inputsOptions.setShowSecondaryButton(true);
+        inputsOptions.setSecondaryButtonText("Skip");
+        interactionService.promptInputsAsync(
+            "Inputs",
+            "Inputs body",
+            new InteractionInput[] { interactionInput },
+            new PromptInputsAsyncOptions().options(inputsOptions));
+        var notificationOptions = new NotificationInteractionOptions();
+        notificationOptions.setIntent(MessageIntent.INFORMATION);
+        notificationOptions.setLinkText("Docs");
+        notificationOptions.setLinkUrl("https://aspire.dev");
+        interactionService.promptNotificationAsync(
+            "Notification",
+            "Notification body",
+            new PromptNotificationAsyncOptions().options(notificationOptions));
+
         app.run();
     }

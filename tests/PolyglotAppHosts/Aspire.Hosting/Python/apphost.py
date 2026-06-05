@@ -5,6 +5,8 @@ from aspire_app import AksNodeVmSizes, AzureServiceTags, ReferenceExpression, We
 
 
 with create_builder() as builder:
+    resource_command_service = None
+
     def update_existing_http_endpoint(endpoint):
         endpoint.port = 8080
         endpoint.is_proxied = False
@@ -288,51 +290,6 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     _config_children = builder_configuration.get_children()
     _config_exists = builder_configuration.exists()
     builder_execution_context = builder.execution_context
-    execution_context_service_provider = builder_execution_context.service_provider
-    _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
-    resource_command_service = execution_context_service_provider.get_resource_command_service()
-    interaction_service = execution_context_service_provider.get_interaction_service()
-    _interaction_service_available = interaction_service.is_available()
-    _interaction_input = {
-        "Name": "validation",
-        "InputType": "Text",
-        "Value": "default",
-        "Disabled": False,
-    }
-    interaction_service.prompt_confirmation(
-        "Confirm",
-        "Continue?",
-        options={"Intent": "Confirmation", "PrimaryButtonText": "Continue"},
-    )
-    interaction_service.prompt_message_box(
-        "Message",
-        "Message body",
-        options={"Intent": "Information", "EnableMessageMarkdown": True},
-    )
-    interaction_service.prompt_input(
-        "Input",
-        "Input body",
-        "Name",
-        "Placeholder",
-        options={"PrimaryButtonText": "Submit"},
-    )
-    interaction_service.prompt_input_with_input(
-        "Input",
-        "Input body",
-        _interaction_input,
-        options={"ShowDismiss": True},
-    )
-    interaction_service.prompt_inputs(
-        "Inputs",
-        "Inputs body",
-        [_interaction_input],
-        options={"ShowSecondaryButton": True, "SecondaryButtonText": "Skip"},
-    )
-    interaction_service.prompt_notification(
-        "Notification",
-        "Notification body",
-        options={"Intent": "Information", "LinkText": "Docs", "LinkUrl": "https://aspire.dev"},
-    )
 
     def configure_eventing_subscriber(registration_context):
         _subscriber_execution_context = registration_context.execution_context
@@ -473,6 +430,54 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})
     app = builder.build()
+
+    # The execution context service provider is populated by build(); accessing it before this point throws.
+    execution_context_service_provider = builder_execution_context.service_provider
+    _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
+    resource_command_service = execution_context_service_provider.get_resource_command_service()
+    interaction_service = execution_context_service_provider.get_interaction_service()
+    _interaction_service_available = interaction_service.is_available()
+    _interaction_input = {
+        "Name": "validation",
+        "InputType": "Text",
+        "Value": "default",
+        "Disabled": False,
+    }
+    interaction_service.prompt_confirmation(
+        "Confirm",
+        "Continue?",
+        options={"Intent": "Confirmation", "PrimaryButtonText": "Continue"},
+    )
+    interaction_service.prompt_message_box(
+        "Message",
+        "Message body",
+        options={"Intent": "Information", "EnableMessageMarkdown": True},
+    )
+    interaction_service.prompt_input(
+        "Input",
+        "Input body",
+        "Name",
+        "Placeholder",
+        options={"PrimaryButtonText": "Submit"},
+    )
+    interaction_service.prompt_input_with_input(
+        "Input",
+        "Input body",
+        _interaction_input,
+        options={"ShowDismiss": True},
+    )
+    interaction_service.prompt_inputs(
+        "Inputs",
+        "Inputs body",
+        [_interaction_input],
+        options={"ShowSecondaryButton": True, "SecondaryButtonText": "Skip"},
+    )
+    interaction_service.prompt_notification(
+        "Notification",
+        "Notification body",
+        options={"Intent": "Information", "LinkText": "Docs", "LinkUrl": "https://aspire.dev"},
+    )
+
     _distributed_app_connection_string = app.get_connection_string()
     _distributed_app_endpoint = app.get_endpoint("default")
     _distributed_app_endpoint_for_network = app.get_endpoint_for_network("resource")

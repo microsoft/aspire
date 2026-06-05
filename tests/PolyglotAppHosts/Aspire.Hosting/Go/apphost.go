@@ -11,6 +11,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
+	var resourceCommandService aspire.ResourceCommandService
 
 	// ===================================================================
 	// Factory methods on builder
@@ -382,12 +383,6 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	_, _ = builderConfiguration.Exists("MyConfig:Key")
 
 	builderExecutionContext := builder.ExecutionContext()
-	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
-	_ = executionContextServiceProvider.GetDistributedApplicationModel()
-	resourceCommandService := executionContextServiceProvider.GetResourceCommandService()
-	interactionService := executionContextServiceProvider.GetInteractionService()
-	_, _ = interactionService.IsAvailable()
-	validateInteractionServicePromptApis(interactionService)
 
 	// Subscriptions (typed callbacks)
 	beforeStartSub := builder.SubscribeBeforeStart(func(e aspire.BeforeStartEvent) {
@@ -585,6 +580,15 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
+
+	// The execution context service provider is populated by Build(); accessing it before this point throws.
+	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
+	_ = executionContextServiceProvider.GetDistributedApplicationModel()
+	resourceCommandService = executionContextServiceProvider.GetResourceCommandService()
+	interactionService := executionContextServiceProvider.GetInteractionService()
+	_, _ = interactionService.IsAvailable()
+	validateInteractionServicePromptApis(interactionService)
+
 	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
