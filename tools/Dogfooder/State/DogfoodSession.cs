@@ -77,4 +77,14 @@ internal sealed class DogfoodSession
     /// <c>UseLocalNuGetProxy</c>.
     /// </summary>
     public NuGetTrafficState? NuGetTraffic { get; set; }
+
+    /// <summary>
+    /// Set by <c>SessionTerminalContent.GetOrCreateTerminal</c> when the
+    /// background PTY/shell task throws on startup or mid-run (e.g. when
+    /// the user's <c>DOGFOODER_SHELL</c> override points at a missing
+    /// binary). The terminal tab renders this in place of the (empty)
+    /// terminal view so the user can see the actual failure instead of
+    /// staring at a blank black rectangle.
+    /// </summary>
+    public string? TerminalCrashMessage { get; set; }
 }

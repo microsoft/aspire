@@ -23,7 +23,21 @@ internal static class SessionTerminalContent
         SessionTerminalRegistry terminals)
         where TParent : Hex1bWidget
     {
-        _ = ctx; // window context not currently needed for the terminal body.
+        // If a prior boot of the PTY task crashed (e.g. shell binary
+        // missing), show the error here instead of returning an empty
+        // TerminalWidget — the empty widget renders as a blank black
+        // rectangle with no indication that anything went wrong, which is
+        // indistinguishable from "shell still booting".
+        if (session.TerminalCrashMessage is { Length: > 0 } crash)
+        {
+            return ctx.VStack(v =>
+            [
+                v.Text(""),
+                v.Text("  [ Terminal failed to start ]"),
+                v.Text(""),
+                v.Text($"  {crash}"),
+            ]);
+        }
 
         var entry = GetOrCreateTerminal(session, terminals);
         // .Fill() forces the TerminalNode to take the full bounds of its
@@ -72,13 +86,25 @@ internal static class SessionTerminalContent
         // Drive the embedded terminal lifecycle on a background task; the
         // render path must remain synchronous. The automator runs as a
         // sibling task once the terminal is alive so its typing shows up in
-        // the PTY rather than racing the boot.
+        // the PTY rather than racing the boot. A crash in either task is
+        // captured onto session.TerminalCrashMessage rather than silently
+        // swallowed so the user can see *why* the shell never started
+        // (e.g. an invalid DOGFOODER_SHELL path) instead of just an empty
+        // black rectangle.
         var cts = new CancellationTokenSource();
         _ = Task.Run(async () =>
         {
             try
             {
                 await terminal.RunAsync(cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Shutdown path; nothing to do.
+            }
+            catch (Exception ex)
+            {
+                session.TerminalCrashMessage = $"Terminal crashed: {ex.GetType().Name}: {ex.Message}";
             }
             finally
             {
