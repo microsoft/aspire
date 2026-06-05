@@ -1836,7 +1836,7 @@ public class DcpExecutorTests
     }
 
     [Fact]
-    public async Task ResourceEndpointsAllocatedEventSubscribersDoNotBlockDcpStartup()
+    public async Task ResourceEndpointsAllocatedEventSubscribersBlockDcpStartup()
     {
         var builder = DistributedApplication.CreateBuilder();
 
@@ -1862,9 +1862,10 @@ public class DcpExecutorTests
 
         var runTask = appExecutor.RunApplicationAsync();
         await subscriberEntered.Task.DefaultTimeout();
-        await runTask.DefaultTimeout();
+        Assert.False(runTask.IsCompleted);
 
         releaseSubscriber.SetResult();
+        await runTask.DefaultTimeout();
     }
 
     [Fact]
