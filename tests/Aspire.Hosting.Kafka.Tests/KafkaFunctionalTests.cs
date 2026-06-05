@@ -276,13 +276,17 @@ public class KafkaFunctionalTests(ITestOutputHelper testOutputHelper)
     }
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    public Task Kafka_WithPersistentLifetime_ReusesContainer()
+    public async Task Kafka_WithPersistentLifetime_ReusesContainer()
     {
-        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
-            testOutputHelper,
-            builder => builder.AddKafka("resource").WithPersistentLifetime(),
-            "resource",
-            useTestContainerRegistry: true);
-    }
+        // Kafka advertises the public listener port in the container environment, so use
+        // a stable public port until proxyless persistent endpoints become the default again.
+        const int port = 19094;
 
+        await PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddKafka("resource", port).WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true,
+            randomizePorts: false);
+    }
 }

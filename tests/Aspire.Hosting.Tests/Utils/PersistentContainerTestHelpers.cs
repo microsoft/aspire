@@ -20,12 +20,14 @@ public static class PersistentContainerTestHelpers
     /// <param name="resourceName">The resource name whose persistent Docker container identity should be compared.</param>
     /// <param name="useTestContainerRegistry">Whether to apply the test container registry override for integrations that require CI-mirrored images.</param>
     /// <param name="timeout">The timeout for starting, stopping, and observing the resource. Defaults to 10 minutes because some container integrations have slow cold starts.</param>
+    /// <param name="randomizePorts">Whether DCP should randomize explicitly configured endpoint ports.</param>
     public static async Task AssertResourceReusesContainerAsync(
         ITestOutputHelper testOutputHelper,
         Action<IDistributedApplicationTestingBuilder> configureResource,
         string resourceName,
         bool useTestContainerRegistry = false,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        bool randomizePorts = true)
     {
         using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(10));
         using var aspireStore = new TestTempDirectory();
@@ -59,6 +61,7 @@ public static class PersistentContainerTestHelpers
             var args = new[]
             {
                 "--environment=Development",
+                $"DcpPublisher:RandomizePorts={randomizePorts}",
                 $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"
             };
 
