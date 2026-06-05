@@ -505,6 +505,29 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(openExternalStub.getCall(0).args[0].toString(), 'http://localhost:1002/');
     });
 
+    test('openDashboard stays silent when dashboard selection is canceled', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                appHostPid: 1,
+                dashboardUrl: 'http://localhost:1001',
+            }),
+            makeAppHost({
+                appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                appHostPid: 2,
+                dashboardUrl: 'http://localhost:1002',
+            }),
+        ]);
+        sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+        const openExternalStub = sandbox.stub(vscode.env, 'openExternal').resolves(true);
+
+        await provider.openDashboard();
+
+        assert.strictEqual(showInformationMessageStub.callCount, 0);
+        assert.strictEqual(openExternalStub.callCount, 0);
+    });
+
     test('openDashboardToSide opens the dashboard in the integrated browser side group', async () => {
         const provider = makeTreeProvider([
             makeAppHost({

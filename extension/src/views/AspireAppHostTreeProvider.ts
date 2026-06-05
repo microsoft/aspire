@@ -1224,7 +1224,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     private async _resolveDashboardUrl(element?: TreeElement): Promise<string | null | undefined> {
-        let url: string | null = null;
+        let url: string | null | undefined = null;
 
         if (element instanceof AppHostItem) {
             url = element.appHost.dashboardUrl;
@@ -1249,7 +1249,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         return url;
     }
 
-    private async _resolveAppHostDashboardUrl(): Promise<string | null> {
+    private async _resolveAppHostDashboardUrl(): Promise<string | null | undefined> {
         const appHosts = this._repository.appHosts.filter(a => a.dashboardUrl);
         if (appHosts.length === 1) {
             return appHosts[0].dashboardUrl!;
@@ -1269,7 +1269,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             placeHolder: selectDashboardPlaceholder,
         });
 
-        return selected?.dashboardUrl ?? null;
+        return selected?.dashboardUrl;
     }
 
     async runAppHost(element: WorkspaceAppHostItem | undefined, noDebug: boolean): Promise<void> {
