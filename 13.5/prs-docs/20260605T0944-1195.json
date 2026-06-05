@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site chore to omit empty TypeScript API module JSON files; no new 13.5 feature documentation",
+  "mergedAt": "2026-06-05T09:44:58Z",
+  "number": 1195,
+  "runDate": "2026-06-05T12:57:17Z",
+  "status": "excluded",
+  "title": "chore: omit empty TypeScript API modules"
+}

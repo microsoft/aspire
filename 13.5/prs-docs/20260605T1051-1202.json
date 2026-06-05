@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site maintenance replacing prose keyboard references with Kbd component; no new 13.5 feature documentation",
+  "mergedAt": "2026-06-05T10:51:44Z",
+  "number": 1202,
+  "runDate": "2026-06-05T12:57:17Z",
+  "status": "excluded",
+  "title": "Use Kbd component for keyboard shortcuts"
+}
