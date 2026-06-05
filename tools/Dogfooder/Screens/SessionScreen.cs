@@ -59,11 +59,18 @@ internal sealed class SessionScreen
 
     public Hex1bWidget Build(RootContext ctx)
     {
+        // .Fill() on the root VStack guarantees it occupies the full
+        // RootContext bounds. Without it, the VStack defaults to its
+        // measured content height — and because the embedded
+        // TerminalNode measures back its current PTY size (defaulting
+        // to 24 rows from WithDimensions), the layout would collapse
+        // the whole UI into a ~26-row strip at the top of the window
+        // instead of letting the Fill children stretch.
         return ctx.VStack(v =>
         [
             BuildInfoBar(v),
             BuildBody(v),
-        ]);
+        ]).Fill();
     }
 
     private Hex1bWidget BuildInfoBar(WidgetContext<VStackWidget> ctx)
@@ -116,7 +123,7 @@ internal sealed class SessionScreen
                 tabs.Add(tp.Tab("Build log", t => new[] { SessionPreparationContent.Build(t, _session, _state) }));
             }
             return tabs;
-        });
+        }).Fill();
     }
 
     private async Task RunPreparationAsync()
