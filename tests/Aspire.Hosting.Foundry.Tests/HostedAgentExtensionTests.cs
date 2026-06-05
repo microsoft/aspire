@@ -78,7 +78,7 @@ public class HostedAgentExtensionTests
         var resource = builder.Resources.Single(r => r.Name == "agent");
         var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
         Assert.Equal("Send Message", command.DisplayName);
-        Assert.EndsWith("-/responses", command.Name);
+        Assert.Equal("send-message", command.Name);
         Assert.Equal("ChatSparkle", command.IconName);
         Assert.Equal(IconVariant.Regular, command.IconVariant);
         Assert.True(command.IsHighlighted);
@@ -136,7 +136,7 @@ public class HostedAgentExtensionTests
 
         var resource = builder.Resources.Single(r => r.Name == "agent");
         var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
-        Assert.EndsWith("-/invocations", command.Name);
+        Assert.Equal("send-message", command.Name);
 
         var urlsCallback = Assert.Single(resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
         var url = new ResourceUrlAnnotation

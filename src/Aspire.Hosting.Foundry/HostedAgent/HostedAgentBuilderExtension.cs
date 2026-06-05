@@ -201,6 +201,7 @@ public static class HostedAgentResourceBuilderExtensions
                 path: protocol.Path,
                 displayName: "Send Message",
                 endpointName: "http",
+                commandName: "send-message",
                 commandOptions: new()
                 {
                     Method = HttpMethod.Post,
