@@ -189,6 +189,7 @@ internal static class CliE2ETestHelpers
         bool mountDockerSocket = false,
         TemporaryWorkspace? workspace = null,
         IEnumerable<string>? additionalVolumes = null,
+        string? network = null,
         int width = 160,
         int height = 48,
         [CallerMemberName] string testName = "")
@@ -229,6 +230,11 @@ internal static class CliE2ETestHelpers
                 if (mountDockerSocket)
                 {
                     c.MountDockerSocket = true;
+                }
+
+                if (network is not null)
+                {
+                    c.Network = network;
                 }
 
                 if (workspace is not null)

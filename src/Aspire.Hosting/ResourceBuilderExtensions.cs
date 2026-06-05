@@ -812,7 +812,7 @@ public static class ResourceBuilderExtensions
             // Track per-scheme index for service discovery keys to handle multiple endpoints with the same scheme.
             var schemeIndexTracker = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var endpoint in annotation.Resource.GetEndpoints(annotation.ContextNetworkID))
+            foreach (var endpoint in annotation.Resource.GetEndpoints(annotation.ContextNetworkId))
             {
                 if (specificEndpointName != null && !string.Equals(endpoint.EndpointName, specificEndpointName, StringComparison.OrdinalIgnoreCase))
                 {
@@ -1407,7 +1407,7 @@ public static class ResourceBuilderExtensions
             endpointReferenceAnnotation = new EndpointReferenceAnnotation(resourceWithEndpoints);
             if (builder.Resource.IsContainer())
             {
-                endpointReferenceAnnotation.ContextNetworkID = KnownNetworkIdentifiers.DefaultAspireContainerNetwork;
+                endpointReferenceAnnotation.ContextNetworkId = KnownNetworkIdentifiers.DefaultAspireContainerNetwork;
             }
             builder.WithAnnotation(endpointReferenceAnnotation);
 
@@ -1482,7 +1482,7 @@ public static class ResourceBuilderExtensions
             // can also be resolved in the context of container-to-container communication by using the target port
             // and the container name as the host. This is why we only set the context network to localhost,
             // for both container and non-container resources.
-            endpoint = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, networkID: KnownNetworkIdentifiers.LocalhostNetwork);
+            endpoint = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, networkId: KnownNetworkIdentifiers.LocalhostNetwork);
             callback(endpoint);
             builder.Resource.Annotations.Add(endpoint);
         }
@@ -1612,7 +1612,7 @@ public static class ResourceBuilderExtensions
             targetPort: targetPort,
             isExternal: isExternal,
             isProxied: isProxied,
-            networkID: KnownNetworkIdentifiers.LocalhostNetwork);
+            networkId: KnownNetworkIdentifiers.LocalhostNetwork);
 
         ConfigureEndpointEnvironmentVariable(builder, annotation, env);
 
@@ -1885,15 +1885,15 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The the resource builder.</param>
     /// <param name="name">The name of the endpoint.</param>
-    /// <param name="contextNetworkID">The network context in which to resolve the endpoint. If null, localhost (loopback) network context will be used.</param>
+    /// <param name="contextNetworkId">The network context in which to resolve the endpoint. If null, localhost (loopback) network context will be used.</param>
     /// <returns>An <see cref="EndpointReference"/> that can be used to resolve the address of the endpoint after resource allocation has occurred.</returns>
     /// <remarks>This method is not available in polyglot app hosts. Use the overload without NetworkIdentifier instead.</remarks>
     [AspireExportIgnore(Reason = "NetworkIdentifier is not ATS-compatible.")]
-    public static EndpointReference GetEndpoint<T>(this IResourceBuilder<T> builder, [EndpointName] string name, NetworkIdentifier contextNetworkID) where T : IResourceWithEndpoints
+    public static EndpointReference GetEndpoint<T>(this IResourceBuilder<T> builder, [EndpointName] string name, NetworkIdentifier contextNetworkId) where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.Resource.GetEndpoint(name, contextNetworkID);
+        return builder.Resource.GetEndpoint(name, contextNetworkId);
     }
 
     /// <summary>
@@ -4888,7 +4888,7 @@ public static class ResourceBuilderExtensions
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="exitCode">The completion exit code to treat as successful. Defaults to <c>0</c>.</param>
+    /// <param name="exitCode">The completion exit code to treat as successful.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method is useful for one-off resources such as setup scripts, migrations, or build steps that should remain visible while running
@@ -4896,7 +4896,7 @@ public static class ResourceBuilderExtensions
     /// Hidden resources can still be accessed directly by their name, by using <c>Show hidden resources</c> toggle in the dashboard or by using <c>aspire describe --include-hidden</c> from the CLI.
     /// </remarks>
     [AspireExportIgnore(Reason = "Use ATS-friendly overload that supports a single exit code or multiple exit codes.")]
-    public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, int exitCode = 0) where T : IResource
+    public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, int exitCode) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
 

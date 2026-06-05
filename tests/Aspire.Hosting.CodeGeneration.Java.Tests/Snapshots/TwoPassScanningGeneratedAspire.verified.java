@@ -3790,6 +3790,48 @@ public class ConnectionStringAvailableEvent extends HandleWrapperBase {
 
 }
 
+// ===== ContainerFilesOptions.java =====
+// ContainerFilesOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** ContainerFilesOptions DTO. */
+public class ContainerFilesOptions implements JsonSerializable {
+    private Double defaultOwner;
+    private Double defaultGroup;
+    private Double umask;
+
+    public Double getDefaultOwner() { return defaultOwner; }
+    public void setDefaultOwner(Double value) { this.defaultOwner = value; }
+    public Double getDefaultGroup() { return defaultGroup; }
+    public void setDefaultGroup(Double value) { this.defaultGroup = value; }
+    public Double getUmask() { return umask; }
+    public void setUmask(Double value) { this.umask = value; }
+
+    @SuppressWarnings("unchecked")
+    public static ContainerFilesOptions fromMap(Map<String, Object> map) {
+        var value = new ContainerFilesOptions();
+        var defaultOwnerValue = map.get("DefaultOwner");
+        value.setDefaultOwner(defaultOwnerValue == null ? null : ((Number) defaultOwnerValue).doubleValue());
+        var defaultGroupValue = map.get("DefaultGroup");
+        value.setDefaultGroup(defaultGroupValue == null ? null : ((Number) defaultGroupValue).doubleValue());
+        var umaskValue = map.get("Umask");
+        value.setUmask(umaskValue == null ? null : ((Number) umaskValue).doubleValue());
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("DefaultOwner", AspireClient.serializeValue(defaultOwner));
+        map.put("DefaultGroup", AspireClient.serializeValue(defaultGroup));
+        map.put("Umask", AspireClient.serializeValue(umask));
+        return map;
+    }
+}
+
 // ===== ContainerImagePushOptions.java =====
 // ContainerImagePushOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -5081,6 +5123,23 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("defaultCertificateDirectoryPaths", AspireClient.serializeValue(defaultCertificateDirectoryPaths));
         }
         getClient().invokeCapability("Aspire.Hosting/withContainerCertificatePaths", reqArgs);
+        return this;
+    }
+
+    public ContainerResource withContainerFiles(String destinationPath, String sourcePath) {
+        return withContainerFiles(destinationPath, sourcePath, null);
+    }
+
+    /** Creates or updates files and folders in a container by copying them from a source path on the host. */
+    public ContainerResource withContainerFiles(String destinationPath, String sourcePath, ContainerFilesOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("destinationPath", AspireClient.serializeValue(destinationPath));
+        reqArgs.put("sourcePath", AspireClient.serializeValue(sourcePath));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerFiles", reqArgs);
         return this;
     }
 
@@ -19067,6 +19126,23 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    public TestDatabaseResource withContainerFiles(String destinationPath, String sourcePath) {
+        return withContainerFiles(destinationPath, sourcePath, null);
+    }
+
+    /** Creates or updates files and folders in a container by copying them from a source path on the host. */
+    public TestDatabaseResource withContainerFiles(String destinationPath, String sourcePath, ContainerFilesOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("destinationPath", AspireClient.serializeValue(destinationPath));
+        reqArgs.put("sourcePath", AspireClient.serializeValue(sourcePath));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerFiles", reqArgs);
+        return this;
+    }
+
     public TestDatabaseResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
         return withDockerfileBuilder(contextPath, callback, null);
     }
@@ -21105,6 +21181,23 @@ public class TestRedisResource extends ContainerResource {
             reqArgs.put("defaultCertificateDirectoryPaths", AspireClient.serializeValue(defaultCertificateDirectoryPaths));
         }
         getClient().invokeCapability("Aspire.Hosting/withContainerCertificatePaths", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withContainerFiles(String destinationPath, String sourcePath) {
+        return withContainerFiles(destinationPath, sourcePath, null);
+    }
+
+    /** Creates or updates files and folders in a container by copying them from a source path on the host. */
+    public TestRedisResource withContainerFiles(String destinationPath, String sourcePath, ContainerFilesOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("destinationPath", AspireClient.serializeValue(destinationPath));
+        reqArgs.put("sourcePath", AspireClient.serializeValue(sourcePath));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerFiles", reqArgs);
         return this;
     }
 
@@ -23218,6 +23311,23 @@ public class TestVaultResource extends ContainerResource {
             reqArgs.put("defaultCertificateDirectoryPaths", AspireClient.serializeValue(defaultCertificateDirectoryPaths));
         }
         getClient().invokeCapability("Aspire.Hosting/withContainerCertificatePaths", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource withContainerFiles(String destinationPath, String sourcePath) {
+        return withContainerFiles(destinationPath, sourcePath, null);
+    }
+
+    /** Creates or updates files and folders in a container by copying them from a source path on the host. */
+    public TestVaultResource withContainerFiles(String destinationPath, String sourcePath, ContainerFilesOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("destinationPath", AspireClient.serializeValue(destinationPath));
+        reqArgs.put("sourcePath", AspireClient.serializeValue(sourcePath));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerFiles", reqArgs);
         return this;
     }
 
@@ -25737,6 +25847,7 @@ public final class WithVolumeOptions {
 .aspire/modules/CompleteTaskMarkdownOptions.java
 .aspire/modules/CompleteTaskOptions.java
 .aspire/modules/ConnectionStringAvailableEvent.java
+.aspire/modules/ContainerFilesOptions.java
 .aspire/modules/ContainerImagePushOptions.java
 .aspire/modules/ContainerImagePushOptionsCallbackContext.java
 .aspire/modules/ContainerImageReference.java

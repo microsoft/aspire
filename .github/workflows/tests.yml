@@ -229,6 +229,49 @@ jobs:
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
+  extension_e2e_changes:
+    name: Detect VS Code extension E2E changes
+    runs-on: ubuntu-latest
+    outputs:
+      run_extension_e2e: ${{ steps.changed.outputs.run_extension_e2e }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check changed paths
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base='${{ github.event.pull_request.base.sha || github.event.before }}'
+          head='${{ github.sha }}'
+
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
+            echo "No usable base SHA is available; running extension E2E tests."
+            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$base" || true
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "Base SHA $base is not available after shallow fetch; running extension E2E tests."
+            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$base" "$head")"
+          echo "$changed_files"
+
+          if echo "$changed_files" | grep -E -q '^(extension/|src/Aspire\.Cli/|src/Aspire/Cli/|src/Aspire\.Hosting[^/]*/|src/Aspire\.Dashboard[^/]*/|tests/Aspire\.Cli\.Tests/|tests/Aspire\.Cli\.EndToEnd\.Tests/|tests/Aspire\.Hosting\.Tests/Cli/|eng/scripts/get-aspire-cli|\.github/workflows/(tests|extension-e2e-tests|build-packages|build-cli-native-archives)\.yml$)'; then
+            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_extension_e2e=false" >> "$GITHUB_OUTPUT"
+          fi
+
   cli_starter_validation_windows:
     name: Aspire CLI Starter Validation (${{ matrix.os.name }})
     runs-on: ${{ matrix.os.runner }}
@@ -310,8 +353,11 @@ jobs:
           if-no-files-found: ignore
 
   extension_tests_win:
-    name: Run VS Code extension tests (Windows)
+    name: Run VS Code extension unit tests (Windows)
     runs-on: windows-latest
+    env:
+      NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
     defaults:
       run:
         working-directory: ./extension
@@ -322,22 +368,130 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '20.x'
+      - name: Install Corepack
+        run: |
+          # Scope Corepack's cache to this job so prepareCorepackYarn.mjs cannot
+          # collide with any other build sharing the runner's user profile.
+          # Cannot be set at job-level env: the `runner` context is unavailable
+          # in job env evaluation, so we forward it through $GITHUB_ENV instead.
+          $CorepackHome = Join-Path $env:RUNNER_TEMP 'corepack'
+          $env:COREPACK_HOME = $CorepackHome
+          "COREPACK_HOME=$CorepackHome" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          $CorepackVersion = (Get-Content -Raw -Path 'scripts/corepack-version.txt').Trim()
+          # The hosted Windows image already has a yarn shim in npm's global
+          # prefix. The npm Corepack package owns that shim too, so force only
+          # in CI where the tool install is isolated to this ephemeral job.
+          npm install --global --force --registry "$env:NPM_REGISTRY" "corepack@$CorepackVersion"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $npmGlobalBin = (npm prefix --global).Trim()
+          $env:PATH = "$npmGlobalBin$([IO.Path]::PathSeparator)$env:PATH"
+          $npmGlobalBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          $installed = (corepack --version).Trim()
+          if ($installed -ne $CorepackVersion) {
+            Write-Error "corepack version mismatch: expected $CorepackVersion, got '$installed'. The bundled Corepack on PATH may be taking precedence over the npm-global install."
+            exit 1
+          }
+
+          corepack enable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Seed Corepack's cache from the internal dnceng npm feed. Corepack's
+          # built-in `corepack prepare --activate` would download Yarn 1.x from
+          # its hardcoded upstream endpoint rather than the configured internal
+          # feed, bypassing the dependency source this workflow is supposed to
+          # validate. The shared
+          # prepareCorepackYarn.mjs script does the equivalent via `npm pack`
+          # against $NPM_REGISTRY, then drops the same on-disk layout Corepack
+          # would have written.
+          node ./scripts/prepareCorepackYarn.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          corepack yarn --version
       - name: Validate lockfile registries
-        run: node -e "const fs = require('fs'); const lock = fs.readFileSync('yarn.lock', 'utf8'); if (/registry\\.(?:npmjs\\.org|yarnpkg\\.com)/.test(lock)) { throw new Error('extension/yarn.lock contains public npm registry URLs. Regenerate it using the internal dotnet-public-npm feed before restoring.'); }"
+        # Allowlist scoped to lines starting with "resolved" (the only lines in
+        # yarn.lock that carry a tarball URL — `npm:` aliases don't).
+        # CONTRIBUTING.MD asks contributors to regenerate yarn.lock through the
+        # internal dotnet-public-npm feed; an allowlist catches drift to any
+        # other public mirror or tarball host.
+        run: |
+          node -e "const fs = require('fs'); const allow = 'pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm'; const bad = fs.readFileSync('yarn.lock', 'utf8').split(/\r?\n/).filter(l => /^\s*resolved\s+\x22/.test(l)).filter(l => !l.includes(allow)); if (bad.length) { throw new Error('extension/yarn.lock contains resolved entries outside the internal dotnet-public-npm feed. Regenerate it through the internal feed before restoring. First offender -> ' + bad[0]); }"
       - name: Install dependencies
-        run: yarn install --frozen-lockfile --non-interactive
+        run: corepack yarn install --frozen-lockfile --non-interactive
       - name: Run tests
-        run: yarn test
+        run: corepack yarn test
       - name: Override extension version for PR builds
         if: ${{ inputs.extensionVersionOverride != '' }}
-        run: yarn version --new-version "${{ inputs.extensionVersionOverride }}" --no-git-tag-version
+        run: corepack yarn version --new-version "${{ inputs.extensionVersionOverride }}" --no-git-tag-version
       - name: Package VSIX
-        run: yarn run vsce package --pre-release -o out/aspire-extension.vsix
+        run: corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
       - name: Upload VSIX
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: aspire-extension
           path: extension/out/aspire-extension.vsix
+
+  extension_bootstrap_linux:
+    name: Validate VS Code extension bootstrap (Linux)
+    # Without this, the non-Windows code paths in
+    # extension/scripts/prepareCorepackYarn.mjs (npm invocation that does not go
+    # through node.exe, POSIX tar) are only exercised on contributor machines
+    # and never on a fresh CI image. extension_tests_win covers the Windows
+    # paths; this job covers Linux/macOS. macOS is omitted because the only
+    # platform-specific branch beyond Linux is the cache path, which is
+    # explicitly overridden via COREPACK_HOME in the build entrypoints.
+    runs-on: ubuntu-latest
+    env:
+      NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    defaults:
+      run:
+        working-directory: ./extension
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Setup Node.js environment
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '20.x'
+      - name: Install Corepack
+        run: |
+          set -euo pipefail
+          # Scope Corepack's cache to this job. Set via $GITHUB_ENV because the
+          # `runner` context is not available in job-level env evaluation.
+          export COREPACK_HOME="$RUNNER_TEMP/corepack"
+          echo "COREPACK_HOME=$COREPACK_HOME" >> "$GITHUB_ENV"
+
+          CorepackVersion="$(tr -d '[:space:]' < scripts/corepack-version.txt)"
+          npm install --global --force --registry "$NPM_REGISTRY" "corepack@${CorepackVersion}"
+
+          installed="$(corepack --version 2>/dev/null || true)"
+          if [ "$installed" != "$CorepackVersion" ]; then
+            echo "corepack version mismatch: expected $CorepackVersion, got '$installed'. The bundled Corepack on PATH may be taking precedence over the npm-global install."
+            exit 1
+          fi
+
+          corepack enable
+      - name: Seed Corepack Yarn cache via prepareCorepackYarn.mjs
+        # Exercises the script's non-Windows branches against a clean cache
+        # directory. Failing here means a contributor on Linux/macOS following
+        # CONTRIBUTING.MD would also be broken.
+        run: node ./scripts/prepareCorepackYarn.mjs
+      - name: Validate lockfile registries
+        # Mirror of the same allowlist guard in extension_tests_win so this
+        # cross-platform bootstrap also catches drift to a public-registry URL.
+        run: |
+          node -e "const fs = require('fs'); const allow = 'pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm'; const bad = fs.readFileSync('yarn.lock', 'utf8').split(/\r?\n/).filter(l => /^\s*resolved\s+\x22/.test(l)).filter(l => !l.includes(allow)); if (bad.length) { throw new Error('extension/yarn.lock contains resolved entries outside the internal dotnet-public-npm feed. Regenerate it through the internal feed before restoring. First offender -> ' + bad[0]); }"
+      - name: Validate seeded cache via yarn install
+        run: corepack yarn install --frozen-lockfile --non-interactive
+
+  extension_e2e_tests:
+    name: Run VS Code extension E2E tests
+    if: ${{ needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' }}
+    uses: ./.github/workflows/extension-e2e-tests.yml
+    needs: [extension_e2e_changes, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
 
   typescript_sdk_tests:
     name: TypeScript SDK Unit Tests
@@ -363,7 +517,10 @@ jobs:
       prepare_winget_installer_artifacts,
       prepare_homebrew_installer_artifacts,
       build_cli_e2e_image,
+      extension_e2e_changes,
       extension_tests_win,
+      extension_e2e_tests,
+      extension_bootstrap_linux,
       cli_starter_validation_windows,
       typescript_sdk_tests,
       typescript_api_compat,
@@ -443,6 +600,8 @@ jobs:
         #   tests, so an empty matrix and 'skipped' result are expected.
         # - cli_starter_validation_windows: this job only runs for pull requests and is expected to
         #   be skipped for other workflow events.
+        # - extension_e2e_tests: this job only runs when the PR/push changes the VS Code extension,
+        #   Aspire CLI, or the extension E2E workflow wiring.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
         #   expected to be skipped for other workflow events.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
@@ -452,6 +611,8 @@ jobs:
                contains(needs.*.result, 'cancelled') ||
                (github.event_name == 'pull_request' &&
                 (needs.extension_tests_win.result == 'skipped' ||
+                 (needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' &&
+                  needs.extension_e2e_tests.result == 'skipped') ||
                  needs.cli_starter_validation_windows.result == 'skipped' ||
                  needs.typescript_sdk_tests.result == 'skipped' ||
                  needs.typescript_api_compat.result == 'skipped' ||
@@ -469,6 +630,8 @@ jobs:
                  needs.polyglot_validation.result == 'skipped')) ||
                (github.event_name != 'pull_request' &&
                 (needs.extension_tests_win.result == 'skipped' ||
+                 (needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' &&
+                  needs.extension_e2e_tests.result == 'skipped') ||
                  needs.typescript_sdk_tests.result == 'skipped' ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  needs.prepare_winget_installer_artifacts.result == 'skipped' ||

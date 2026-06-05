@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
-import { AppHostDiscoveryService, findCandidateForEditorFile, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 
 suite('AppHost discovery', () => {
@@ -189,6 +189,8 @@ suite('AppHost discovery', () => {
 
                 watcherCallbacks[0](vscode.Uri.file(buildPath('workspace', 'AppHost', 'bin', 'Debug', 'Generated.csproj')));
                 assert.strictEqual(changeCount, 0);
+                watcherCallbacks[0](vscode.Uri.file(buildPath('workspace', '.worktrees', 'feature', 'AppHost', 'AppHost.csproj')));
+                assert.strictEqual(changeCount, 0);
 
                 await service.discover(workspaceFolder);
                 assert.strictEqual(spawnStub.callCount, 1);
@@ -326,6 +328,99 @@ suite('AppHost discovery', () => {
             finally {
                 service.dispose();
             }
+        });
+
+        test('falls back to project files when malformed config blocks CLI discovery', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const appHostProjectPath = path.join(tempDir, 'AppHost', 'AppHost.csproj');
+                fs.mkdirSync(path.dirname(appHostProjectPath), { recursive: true });
+                fs.writeFileSync(appHostProjectPath, `<Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+`);
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('*.csproj') ? [vscode.Uri.file(appHostProjectPath)] : [];
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                    options?.stderrCallback?.(`The configuration file '${path.join(tempDir, 'aspire.config.json')}' contains invalid JSON.`);
+                    options?.exitCallback?.(1);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    assert.deepStrictEqual(result, [{
+                        path: vscode.Uri.file(appHostProjectPath).fsPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                    }]);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        test('uses VS Code file system when falling back to project files', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const appHostProjectPath = path.join(tempDir, 'AppHost', 'AppHost.csproj');
+                const appHostProjectUri = vscode.Uri.file(appHostProjectPath);
+                fs.mkdirSync(path.dirname(appHostProjectPath), { recursive: true });
+                fs.writeFileSync(appHostProjectPath, `<Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+`);
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('*.csproj') ? [appHostProjectUri] : [];
+                });
+                const nodeReadStub = sandbox.stub(fs.promises, 'readFile').rejects(new Error('Node fs should not be used for workspace project fallback.'));
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                    options?.stderrCallback?.('CLI discovery failed');
+                    options?.exitCallback?.(1);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    assert.deepStrictEqual(result, [{
+                        path: appHostProjectUri.fsPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                    }]);
+                    assert.strictEqual(nodeReadStub.callCount, 0);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        test('configured AppHost path search excludes git worktree folders', async () => {
+            await findConfiguredAppHostPaths(makeWorkspaceFolder(buildPath('workspace')));
+
+            const excludePatterns = findFilesStub.getCalls().map(call => String(call.args[1]));
+            assert.ok(excludePatterns.length > 0);
+            assert.ok(excludePatterns.every(pattern => pattern.includes('**/.worktrees/**')));
         });
 
         test('selects configured path from recursive config during service discovery', async () => {

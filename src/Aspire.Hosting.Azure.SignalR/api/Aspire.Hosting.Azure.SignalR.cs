@@ -16,7 +16,7 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureSignalRResource> AddAzureSignalR(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Configures an Azure SignalR resource to be emulated. This resource requires an Azure SignalR resource to be added to the application model. Please note that the resource will be emulated in Serverless mode.", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureSignalRResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureSignalRResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureSignalREmulatorResource>>? configureContainer = null) { throw null; }
 
         [AspireExportIgnore(Reason = "SignalRBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureSignalRRole-based overload instead.")]

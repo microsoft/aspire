@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)AzurePortalUrls.cs" Link="AzurePortalUrls.cs" />
     <Compile Include="$(SharedDir)BicepFormattingHelpers.cs" LinkBase="Shared\BicepFormattingHelpers.cs" />
+    <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared\ComputeEnvironmentEndpointResolver.cs" />
     <Compile Include="$(SharedDir)ContainerRegistryInfrastructure.cs" LinkBase="Shared\ContainerRegistryInfrastructure.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" LinkBase="Shared\DashboardConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" LinkBase="Shared\KnownConfigNames.cs" />

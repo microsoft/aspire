@@ -722,6 +722,16 @@ export interface CommandResultData {
     displayImmediately?: boolean;
 }
 
+/** Options for creating or updating files and directories in a container from polyglot apphosts. */
+export interface ContainerFilesOptions {
+    /** The default owner UID for the created or updated file system entries. Defaults to 0 for root if not set. */
+    defaultOwner?: number | null;
+    /** The default group ID for the created or updated file system entries. Defaults to 0 for root if not set. */
+    defaultGroup?: number | null;
+    /** The Unix umask to apply to files or directories without explicit permissions. Use octal literals in JavaScript or TypeScript, for example `0o022`. */
+    umask?: number | null;
+}
+
 /** Options for creating a distributed application builder from polyglot apphosts. */
 export interface CreateBuilderOptions {
     /** The command line arguments. */
@@ -13706,6 +13716,19 @@ export interface ContainerResource {
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): ContainerResourcePromise;
     /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): ContainerResourcePromise;
+    /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -14432,6 +14455,19 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The updated resource builder.
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): ContainerResourcePromise;
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): ContainerResourcePromise;
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
@@ -15411,6 +15447,33 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         const defaultCertificateBundlePaths = options?.defaultCertificateBundlePaths;
         const defaultCertificateDirectoryPaths = options?.defaultCertificateDirectoryPaths;
         return new ContainerResourcePromiseImpl(this._withContainerCertificatePathsInternal(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths), this._client);
+    }
+
+    /** @internal */
+    private async _withContainerFilesInternal(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, sourcePath };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withContainerFiles',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withContainerFilesInternal(destinationPath, sourcePath, options), this._client);
     }
 
     /** @internal */
@@ -17506,6 +17569,10 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
 
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerCertificatePaths(options)), this._client);
+    }
+
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerFiles(destinationPath, sourcePath, options)), this._client);
     }
 
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise {
@@ -36120,6 +36187,19 @@ export interface TestDatabaseResource {
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestDatabaseResourcePromise;
     /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestDatabaseResourcePromise;
+    /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -36846,6 +36926,19 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The updated resource builder.
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestDatabaseResourcePromise;
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestDatabaseResourcePromise;
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
@@ -37824,6 +37917,33 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         const defaultCertificateBundlePaths = options?.defaultCertificateBundlePaths;
         const defaultCertificateDirectoryPaths = options?.defaultCertificateDirectoryPaths;
         return new TestDatabaseResourcePromiseImpl(this._withContainerCertificatePathsInternal(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths), this._client);
+    }
+
+    /** @internal */
+    private async _withContainerFilesInternal(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, sourcePath };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withContainerFiles',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withContainerFilesInternal(destinationPath, sourcePath, options), this._client);
     }
 
     /** @internal */
@@ -39921,6 +40041,10 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerCertificatePaths(options)), this._client);
     }
 
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerFiles(destinationPath, sourcePath, options)), this._client);
+    }
+
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBuilder(contextPath, callback, options)), this._client);
     }
@@ -40436,6 +40560,19 @@ export interface TestRedisResource {
      * @returns The updated resource builder.
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestRedisResourcePromise;
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestRedisResourcePromise;
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
@@ -41227,6 +41364,19 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The updated resource builder.
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestRedisResourcePromise;
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestRedisResourcePromise;
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
@@ -42269,6 +42419,33 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         const defaultCertificateBundlePaths = options?.defaultCertificateBundlePaths;
         const defaultCertificateDirectoryPaths = options?.defaultCertificateDirectoryPaths;
         return new TestRedisResourcePromiseImpl(this._withContainerCertificatePathsInternal(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths), this._client);
+    }
+
+    /** @internal */
+    private async _withContainerFilesInternal(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, sourcePath };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withContainerFiles',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withContainerFilesInternal(destinationPath, sourcePath, options), this._client);
     }
 
     /** @internal */
@@ -44613,6 +44790,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerCertificatePaths(options)), this._client);
     }
 
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerFiles(destinationPath, sourcePath, options)), this._client);
+    }
+
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBuilder(contextPath, callback, options)), this._client);
     }
@@ -45188,6 +45369,19 @@ export interface TestVaultResource {
      * @returns The updated resource builder.
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestVaultResourcePromise;
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestVaultResourcePromise;
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
@@ -45917,6 +46111,19 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The updated resource builder.
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestVaultResourcePromise;
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestVaultResourcePromise;
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
@@ -46897,6 +47104,33 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         const defaultCertificateBundlePaths = options?.defaultCertificateBundlePaths;
         const defaultCertificateDirectoryPaths = options?.defaultCertificateDirectoryPaths;
         return new TestVaultResourcePromiseImpl(this._withContainerCertificatePathsInternal(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths), this._client);
+    }
+
+    /** @internal */
+    private async _withContainerFilesInternal(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, sourcePath };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withContainerFiles',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * Inline file entries and callbacks are only available in .NET apphosts because ATS does not support the recursive,
+     * polymorphic `ContainerFileSystemItem` hierarchy or callbacks that use .NET services.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withContainerFilesInternal(destinationPath, sourcePath, options), this._client);
     }
 
     /** @internal */
@@ -49007,6 +49241,10 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerCertificatePaths(options)), this._client);
+    }
+
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerFiles(destinationPath, sourcePath, options)), this._client);
     }
 
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise {

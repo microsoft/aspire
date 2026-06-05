@@ -148,7 +148,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var resource = resources[0];
         var tracesResult = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resource.ResourceKey,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -231,7 +231,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var resource = resources[0];
         var tracesResult = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resource.ResourceKey,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -244,7 +244,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         {
             var currentTrace = repository.GetTraces(new GetTracesRequest
             {
-                ResourceKey = resource.ResourceKey,
+                ResourceKeys = [resource.ResourceKey],
                 StartIndex = 0,
                 Count = 10,
                 Filters = []

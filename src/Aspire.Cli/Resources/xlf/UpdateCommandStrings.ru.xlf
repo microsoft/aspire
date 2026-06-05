@@ -172,6 +172,11 @@
         <target state="translated">Не удается записать в каталог установки "{0}". Запустите обновление с повышенными правами (например, используя sudo в Linux или macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NpmSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from npm, run:</source>
+        <target state="new">To update the Aspire CLI when installed from npm, run:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NuGetConfigDirOptionDescription">
         <source>Directory to create or update the NuGet.config file in</source>
         <target state="new">Directory to create or update the NuGet.config file in</target>

@@ -25,13 +25,7 @@ parameters:
   - name: dockerCliVersion
     type: string
     default: '28.0.0'
-  - name: publishVSCodeExtension
-    type: boolean
-    default: false
-  - name: vscePublishToken
-    type: string
-    default: ''
-  - name: vscePublishPreRelease
+  - name: packageVSCodeExtensionAsPreRelease
     type: boolean
     default: false
 
@@ -53,7 +47,72 @@ steps:
               /p:SkipNativeBuild=true
               /p:SkipTestProjects=true
               /p:BuildExtension=true
+              /p:PackageVSCodeExtensionAsPreRelease=${{ lower(eq(parameters.packageVSCodeExtensionAsPreRelease, true)) }}
       displayName: 🟣Build
+
+    - pwsh: |
+        $ErrorActionPreference = 'Stop'
+        $shippingPackagesDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping'
+
+        if (!(Test-Path $shippingPackagesDir)) {
+          Write-Error "Shipping packages directory not found: $shippingPackagesDir"
+          exit 1
+        }
+
+        $npmPackages = @(Get-ChildItem -Path $shippingPackagesDir -Filter "microsoft-aspire-cli*.tgz" -Recurse -File)
+        if ($npmPackages.Count -eq 0) {
+          Write-Error "No Aspire CLI npm packages were found under '$shippingPackagesDir'."
+          exit 1
+        }
+
+        $missingSignatures = @()
+        $invalidSignatures = @()
+        foreach ($package in $npmPackages) {
+          $signaturePath = "$($package.FullName).sig"
+          if (!(Test-Path $signaturePath)) {
+            $missingSignatures += $signaturePath
+            continue
+          }
+
+          # Content sanity check: catch the most likely silent failure mode
+          # where Arcade/ESRP signing emits the sidecar file but the content
+          # is empty or garbage. A real PGP signature is hundreds of bytes
+          # and starts with either the ASCII-armored header
+          # `-----BEGIN PGP SIGNATURE-----` (RFC 9580 §6) or an OpenPGP
+          # binary signature packet (tag 2: old-format 0x88..0x8B or
+          # new-format 0xC2, RFC 9580 §4.3 / §5.2).
+          $signatureFile = Get-Item -LiteralPath $signaturePath
+          if ($signatureFile.Length -lt 64) {
+            $invalidSignatures += "$signaturePath (only $($signatureFile.Length) bytes)"
+            continue
+          }
+          $bytes = [System.IO.File]::ReadAllBytes($signaturePath)[0..63]
+          $asciiPreview = [System.Text.Encoding]::ASCII.GetString($bytes)
+          $looksArmored = $asciiPreview.Contains('-----BEGIN PGP SIGNATURE-----')
+          $firstByte = $bytes[0]
+          $looksBinarySignaturePacket = ($firstByte -ge 0x88 -and $firstByte -le 0x8B) -or $firstByte -eq 0xC2
+          if (-not $looksArmored -and -not $looksBinarySignaturePacket) {
+            $hexPrefix = ($bytes[0..15] | ForEach-Object { '{0:x2}' -f $_ }) -join ' '
+            $invalidSignatures += "$signaturePath (no PGP signature marker; first 16 bytes: $hexPrefix)"
+            continue
+          }
+
+          Write-Host "Found npm package signature sidecar: $([System.IO.Path]::GetFileName($signaturePath))"
+        }
+
+        if ($missingSignatures.Count -gt 0) {
+          Write-Error "Missing detached signature sidecar(s) for npm package(s): $($missingSignatures -join ', ')"
+          exit 1
+        }
+
+        if ($invalidSignatures.Count -gt 0) {
+          Write-Error "Detached signature sidecar(s) failed content sanity check: $($invalidSignatures -join '; ')"
+          exit 1
+        }
+
+        Write-Host "Validated $($npmPackages.Count) Aspire CLI npm package signature sidecar(s)."
+      displayName: 🟣Validate npm package signatures
+      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
 
     # Log MicroBuild environment for debugging
     # MicroBuildOutputFolderOverride is set by the MicroBuildSigningPlugin task in eng/common/templates-official/job/onelocbuild.yml
@@ -133,57 +192,6 @@ steps:
         }
       displayName: 🟣Verify VS Code extension signature
       condition: and(succeeded(), eq(variables['_SignType'], 'real'))
-
-    # Publish the signed VS Code extension to the Marketplace
-    # Requires vscePublishToken parameter to be set with a Personal Access Token for the VS Marketplace
-    - ${{ if and(eq(parameters.publishVSCodeExtension, true), ne(parameters.vscePublishToken, '')) }}:
-      # Verify the PAT is valid before attempting to publish
-      - pwsh: |
-          Write-Host "Verifying VS Code Marketplace PAT..."
-          $publisher = "microsoft-aspire"
-          npx vsce verify-pat $publisher
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "##[error]PAT verification failed for publisher '$publisher'. Ensure the token has 'Marketplace: Manage' scope."
-            exit 1
-          }
-          Write-Host "✅ PAT verified successfully for publisher '$publisher'"
-        displayName: 🟣Verify VS Code Marketplace PAT
-        condition: and(succeeded(), eq(variables['_SignType'], 'real'))
-        env:
-          VSCE_PAT: ${{ parameters.vscePublishToken }}
-
-      - pwsh: |
-          $vsixDir = '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
-          $preRelease = '${{ parameters.vscePublishPreRelease }}'
-          $vsixFiles = Get-ChildItem -Path "$vsixDir/*.vsix" -ErrorAction SilentlyContinue
-          if ($vsixFiles.Count -eq 0) {
-            Write-Host "##[error]No .vsix files found to publish"
-            exit 1
-          }
-          foreach ($vsix in $vsixFiles) {
-            $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
-            $manifestPath = Join-Path $vsixDir "$baseName.manifest"
-            $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
-
-            $publishArgs = @("vsce", "publish", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)
-            if ($preRelease -eq 'True') {
-              $publishArgs += "--pre-release"
-              Write-Host "Publishing $($vsix.Name) to VS Code Marketplace as PRE-RELEASE..."
-            } else {
-              Write-Host "Publishing $($vsix.Name) to VS Code Marketplace..."
-            }
-
-            & npx @publishArgs
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "##[error]Failed to publish $($vsix.Name)"
-              exit 1
-            }
-            Write-Host "✅ $($vsix.Name) published successfully"
-          }
-        displayName: 🟣Publish VS Code extension to Marketplace
-        condition: and(succeeded(), eq(variables['_SignType'], 'real'))
-        env:
-          VSCE_PAT: ${{ parameters.vscePublishToken }}
 
     - task: 1ES.PublishBuildArtifacts@1
       displayName: 🟣Publish vscode extension

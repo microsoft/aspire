@@ -1,6 +1,6 @@
 # VS Code Extension Signing
 
-This document explains how the Aspire VS Code extension is signed for publication to the Visual Studio Marketplace. The signing process involves several files across the repository and runs as part of the internal CI pipeline.
+This document explains how the Aspire VS Code extension is signed for publication to the Visual Studio Marketplace. Signing runs as part of the internal CI pipeline; Marketplace publishing runs later from the release pipeline.
 
 VS Code extensions require a PKCS#7 signature file (`.signature.p7s`) alongside a manifest to be verified by the Marketplace and by users. Unlike VS extensions that are Authenticode-signed, the VSIX package itself should remain unchanged after the manifest is generated—otherwise the integrity check fails.
 
@@ -19,7 +19,7 @@ The signing happens in distinct phases during the internal CI build.
 
 ### 1. Build and Package
 
-The main build step (`./build.sh -restore -build -pack -sign -publish`) builds the VS Code extension via `extension/Extension.proj`. This project runs `vsce package` to create the `.vsix` file and `vsce generate-manifest` to create a manifest file that contains a hash of the VSIX contents.
+The main build step (`./build.sh -restore -build -pack -sign -publish`) builds the VS Code extension via `extension/Extension.proj`. This project runs `vsce package` to create the `.vsix` file and `vsce generate-manifest` to create a manifest file that contains a hash of the VSIX contents. Queue the main CI build with `Package VS Code Extension as Pre-Release=true` when the signed VSIX artifact should be marked as a Marketplace pre-release package.
 
 > **Note:** The manifest is generated from the VSIX *before* any signing occurs. The VSIX is not be modified after this point, or else the hash won't match and signature verification will fail.
 
@@ -39,7 +39,7 @@ The pipeline runs `vsce verify-signature` to confirm the signature is valid befo
 
 ### 4. Publish
 
-Finally, `vsce publish` uploads the VSIX along with its manifest and signature to the VS Marketplace.
+The internal CI pipeline publishes the signed VSIX, manifest, and signature as the `aspire-vscode-extension` build artifact. The `release-publish-nuget` Azure DevOps release pipeline consumes that artifact in a 1ES `releaseJob`, verifies the signature again, verifies the `VscePublishToken`, and then runs `vsce publish` with the VSIX, manifest, and signature paths. When the release run has `IsPrerelease=true`, the extension publish step also passes `--pre-release` to `vsce`.
 
 ## Configuration
 
@@ -49,4 +49,4 @@ In `eng/Signing.props`, the `.vsix` extension is mapped to `CertificateName="Non
 <FileExtensionSignInfo Include=".vsix" CertificateName="None" />
 ```
 
-The VSIX is also excluded from `ItemsToSign` to prevent Arcade's signing infrastructure from modifying it. Again, VS Code extensions are authenticated using the signature file and manifest, which is which `vsce publish` accepts signature and manifest arguments.
+The VSIX is also excluded from `ItemsToSign` to prevent Arcade's signing infrastructure from modifying it. Again, VS Code extensions are authenticated using the signature file and manifest, which is why `vsce publish` accepts signature and manifest arguments.

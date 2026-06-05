@@ -231,7 +231,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     /// aren't part of the regression and are covered by the broader integration test.
     /// </summary>
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_BundleOnlySkillsBeyondCliCatalog_AreInstallable()
+    public async Task AgentInit_NonInteractive_BundleOnlySkillsNotInCatalog()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);

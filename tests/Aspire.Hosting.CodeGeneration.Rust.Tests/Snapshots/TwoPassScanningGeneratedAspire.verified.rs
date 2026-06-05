@@ -632,6 +632,33 @@ impl AddContainerOptions {
     }
 }
 
+/// ContainerFilesOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ContainerFilesOptions {
+    #[serde(rename = "DefaultOwner", skip_serializing_if = "Option::is_none")]
+    pub default_owner: Option<f64>,
+    #[serde(rename = "DefaultGroup", skip_serializing_if = "Option::is_none")]
+    pub default_group: Option<f64>,
+    #[serde(rename = "Umask", skip_serializing_if = "Option::is_none")]
+    pub umask: Option<f64>,
+}
+
+impl ContainerFilesOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.default_owner {
+            map.insert("DefaultOwner".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.default_group {
+            map.insert("DefaultGroup".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.umask {
+            map.insert("Umask".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
 /// CreateBuilderOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateBuilderOptions {
@@ -4109,6 +4136,20 @@ impl ContainerResource {
             args.insert("defaultCertificateDirectoryPaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Creates or updates files and folders in a container by copying them from a source path on the host.
+    pub fn with_container_files(&self, destination_path: &str, source_path: &str, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("destinationPath".to_string(), serde_json::to_value(&destination_path).unwrap_or(Value::Null));
+        args.insert("sourcePath".to_string(), serde_json::to_value(&source_path).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerFiles", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -14755,6 +14796,20 @@ impl TestDatabaseResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Creates or updates files and folders in a container by copying them from a source path on the host.
+    pub fn with_container_files(&self, destination_path: &str, source_path: &str, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("destinationPath".to_string(), serde_json::to_value(&destination_path).unwrap_or(Value::Null));
+        args.insert("sourcePath".to_string(), serde_json::to_value(&source_path).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerFiles", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use a programmatically generated Dockerfile
     pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -16242,6 +16297,20 @@ impl TestRedisResource {
             args.insert("defaultCertificateDirectoryPaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Creates or updates files and folders in a container by copying them from a source path on the host.
+    pub fn with_container_files(&self, destination_path: &str, source_path: &str, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("destinationPath".to_string(), serde_json::to_value(&destination_path).unwrap_or(Value::Null));
+        args.insert("sourcePath".to_string(), serde_json::to_value(&source_path).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerFiles", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
@@ -17839,6 +17908,20 @@ impl TestVaultResource {
             args.insert("defaultCertificateDirectoryPaths".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerCertificatePaths", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
+    /// Creates or updates files and folders in a container by copying them from a source path on the host.
+    pub fn with_container_files(&self, destination_path: &str, source_path: &str, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("destinationPath".to_string(), serde_json::to_value(&destination_path).unwrap_or(Value::Null));
+        args.insert("sourcePath".to_string(), serde_json::to_value(&source_path).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerFiles", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }

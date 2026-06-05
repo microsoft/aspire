@@ -18,7 +18,7 @@ internal sealed class TemporaryNuGetConfig : IDisposable
 
     public FileInfo ConfigFile => _configFile;
 
-    public static async Task<TemporaryNuGetConfig> CreateAsync(PackageMapping[] mappings, bool configureGlobalPackagesFolder = false)
+    public static async Task<TemporaryNuGetConfig> CreateAsync(PackageMapping[] mappings, bool configureGlobalPackagesFolder = false, string? globalPackagesFolderValue = null)
     {
         var tempDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config").FullName;
         try
@@ -28,7 +28,7 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             await GenerateNuGetConfigAsync(mappings, configFile);
             if (configureGlobalPackagesFolder)
             {
-                await AddGlobalPackagesFolderToConfigAsync(configFile);
+                await AddGlobalPackagesFolderToConfigAsync(configFile, globalPackagesFolderValue);
             }
             return new TemporaryNuGetConfig(configFile);
         }
@@ -76,7 +76,7 @@ internal sealed class TemporaryNuGetConfig : IDisposable
 
         await xmlWriter.WriteStartDocumentAsync();
         await xmlWriter.WriteStartElementAsync(null, "configuration", null);
-        
+
         // Write packageSources section
         await xmlWriter.WriteStartElementAsync(null, "packageSources", null);
 
@@ -125,7 +125,7 @@ internal sealed class TemporaryNuGetConfig : IDisposable
         await xmlWriter.WriteEndDocumentAsync();
     }
 
-    private static async Task AddGlobalPackagesFolderToConfigAsync(FileInfo configFile)
+    private static async Task AddGlobalPackagesFolderToConfigAsync(FileInfo configFile, string? globalPackagesFolderValue)
     {
         XDocument document;
         await using (var stream = configFile.OpenRead())
@@ -139,7 +139,7 @@ internal sealed class TemporaryNuGetConfig : IDisposable
             document.Add(configuration);
         }
 
-        NuGetConfigMerger.AddGlobalPackagesFolderConfiguration(configuration);
+        NuGetConfigMerger.AddGlobalPackagesFolderConfiguration(configuration, globalPackagesFolderValue);
 
         var content = document.Declaration is null
             ? document.ToString()

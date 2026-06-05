@@ -6,6 +6,19 @@ parameters:
   extraBuildArgs: ''
   codeSign: false
   teamName: ''
+  # Optional override for AspireCliChannel. Accepted values: 'auto' (default;
+  # let computeCliChannel below pick stable/staging/daily/pr-<N> from Build.Reason
+  # and Build.SourceBranch), 'stable', 'staging', 'daily'. Set this to 'stable'
+  # when running the official ship pipeline so the GA CLI binary is baked with
+  # AspireCliChannel=stable (and aspire init then writes a nuget.org-only
+  # nuget.config, which is correct because the packages have been promoted to
+  # nuget.org). For routine stabilizing builds from a release/* branch — which
+  # also set DotNetFinalVersionKind=release — leave this on 'auto' so the
+  # channel falls through to 'staging' and aspire init writes a nuget.config
+  # that maps Aspire.* to the staging feed. See
+  # https://github.com/microsoft/aspire/issues/17527 for the bug that made this
+  # override necessary.
+  aspireCliChannelOverride: 'auto'
 
 jobs:
 
@@ -84,15 +97,32 @@ jobs:
               $reason = '$(Build.Reason)'
               $sourceBranch = '$(Build.SourceBranch)'
               $prNumber = '$(System.PullRequest.PullRequestNumber)'
+              # Template-time substitution: the value is the resolved
+              # aspireCliChannelOverride parameter literal, never a runtime
+              # variable. Quoting protects an empty/default value.
+              $override = '${{ parameters.aspireCliChannelOverride }}'
               Write-Host "Build.Reason: '$reason'"
               Write-Host "Build.SourceBranch: '$sourceBranch'"
               Write-Host "System.PullRequest.PullRequestNumber: '$prNumber'"
+              Write-Host "aspireCliChannelOverride: '$override'"
 
               $versionKind = & "$(Build.SourcesDirectory)/$(dotnetScript)" msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
               $versionKind = $versionKind.Trim()
               Write-Host "DotNetFinalVersionKind: '$versionKind'"
 
-              if ($reason -eq 'PullRequest') {
+              if ($override -and $override -ne 'auto') {
+                # Operator override path. Validate against the same accepted set
+                # that IdentityChannelReader.IsValidChannel enforces at CLI startup
+                # so a typo here fails the pipeline step rather than producing a
+                # binary that refuses to boot. pr-<N> is intentionally excluded
+                # from the override set — PR builds always come from the
+                # PullRequest reason arm below.
+                if ($override -notin @('stable', 'staging', 'daily')) {
+                  throw "aspireCliChannelOverride='$override' is not one of: auto, stable, staging, daily."
+                }
+                $channel = $override.ToLowerInvariant()
+              }
+              elseif ($reason -eq 'PullRequest') {
                 # Defense in depth: validate digit-only PR number rather than just
                 # non-emptiness. If the agent ever returns the literal macro string
                 # (e.g. '$(System.PullRequest.PullRequestNumber)' unresolved) this
@@ -105,10 +135,21 @@ jobs:
                 # Bake the resolved hive label directly into AspireCliChannel. The CLI
                 # consumes this verbatim and avoids the legacy "pr" + parsed-PrNumber join.
                 $channel = "pr-$prNumber"
+              } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
+                # Release/internal-release branches always produce staging artifacts —
+                # they are published to the staging feed for dogfooding and only later
+                # promoted to nuget.org. This must be checked BEFORE the
+                # `versionKind == release` arm, because a release-branch build also sets
+                # StabilizePackageVersion=true (→ DotNetFinalVersionKind=release) once
+                # we are stabilizing for ship. Without this ordering, the stabilized
+                # staging build would bake AspireCliChannel=stable and `aspire init`
+                # would drop a nuget.config with no staging feed mapping, causing
+                # `aspire add` to resolve Aspire.* packages from nuget.org (older
+                # versions) or fail to resolve the +sha-pinned Aspire.AppHost.Sdk.
+                # See https://github.com/microsoft/aspire/issues/17527.
+                $channel = 'staging'
               } elseif ($versionKind -eq 'release') {
                 $channel = 'stable'
-              } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
-                $channel = 'staging'
               } else {
                 # main and any other branch fall through to daily
                 $channel = 'daily'
@@ -169,6 +210,11 @@ jobs:
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
               displayName: 🟣Restore execute permission on aspire-managed
 
+          - task: NodeTool@0
+            displayName: 🟣Install node.js
+            inputs:
+              versionSpec: '22.x'
+
           - script: >-
               $(Build.SourcesDirectory)/$(dotnetScript)
               msbuild
@@ -212,6 +258,21 @@ jobs:
               $verifyParams.ArchivePath = $archive[0].FullName
               & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" @verifyParams
             displayName: 🟣Verify CLI tool nupkg (${{ targetRid }})
+
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $verifyParams = @{
+                PackagesDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)"
+                Rid = "${{ targetRid }}"
+              }
+              $archiveFilter = if ("${{ targetRid }}".StartsWith('win-')) { "aspire-cli-${{ targetRid }}-*.zip" } else { "aspire-cli-${{ targetRid }}-*.tar.gz" }
+              $archive = @(Get-ChildItem -Path $verifyParams.PackagesDir -Filter $archiveFilter -Recurse -File -ErrorAction SilentlyContinue)
+              if ($archive.Count -ne 1) {
+                throw "Expected exactly one CLI archive for ${{ targetRid }}, but found $($archive.Count): $($archive.FullName -join ', ')"
+              }
+              $verifyParams.ArchivePath = $archive[0].FullName
+              & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-npm-package.ps1" @verifyParams
+            displayName: 🟣Verify CLI npm package (${{ targetRid }})
 
           # Verify the signed CLI archive can execute and create a project.
           # Only runs when the target RID architecture matches the build agent
@@ -259,6 +320,20 @@ jobs:
               env:
                 ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
                 DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+          # Native AOT debug symbols (aspire.pdb on Windows,
+          # Aspire.Cli.<rid>.<version>.symbols.nupkg on Linux/macOS) are
+          # produced as first-class MSBuild outputs by the per-RID clipack
+          # project (eng/clipack/Common.projitems _PackNativeAotSymbols
+          # target + eng/clipack/Aspire.Cli.NativeSymbols.proj helper).
+          # They land in $(Build.SourcesDirectory)/artifacts/native-symbols-staging/<rid>/
+          # before this step runs. See docs/ci/cli-native-symbols.md.
+          - task: 1ES.PublishBuildArtifacts@1
+            displayName: 🟣Publish native symbols (${{ targetRid }})
+            condition: always()
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/artifacts/native-symbols-staging/${{ targetRid }}'
+              ArtifactName: native_symbols_${{ replace(targetRid, '-', '_') }}
 
           - task: 1ES.PublishBuildArtifacts@1
             displayName: 🟣Publish Artifacts
