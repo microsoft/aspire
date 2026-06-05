@@ -404,13 +404,13 @@ suite('AppHostDataRepository', () => {
             }));
             await waitForAppHostDiscovery();
 
-            const psFollowCall = spawnStub.getCalls().find(call => call.args[2][0] === 'ps');
+            const psFollowCall = spawnStub.getCalls().filter(call => call.args[2][0] === 'ps' && typeof call.args[3].lineCallback === 'function').at(-1);
             assert.ok(psFollowCall);
             const psFollowOptions = psFollowCall.args[3];
             psFollowOptions.exitCallback(1);
-            await waitForAppHostDiscovery();
+            await waitForCondition(() => spawnStub.getCalls().filter(call => call.args[2][0] === 'ps').some(call => typeof call.args[3].stderrCallback === 'function'), 'ps fallback did not start');
 
-            const psFallbackCall = spawnStub.getCalls().filter(call => call.args[2][0] === 'ps').at(-1);
+            const psFallbackCall = spawnStub.getCalls().filter(call => call.args[2][0] === 'ps').find(call => typeof call.args[3].stderrCallback === 'function');
             assert.ok(psFallbackCall);
             const psFallbackOptions = psFallbackCall.args[3];
             psFallbackOptions.stderrCallback('ps failed');
@@ -440,12 +440,19 @@ suite('AppHostDataRepository', () => {
         const getAppHostsProcess = new TestChildProcess();
         const describeProcess = new TestChildProcess();
         const psProcess = new TestChildProcess();
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
-            return getAppHostsProcess;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            switch (args[0]) {
+                case 'ls':
+                    getAppHostsLineCallback = createLsLineCallback(options);
+                    return getAppHostsProcess;
+                case 'describe':
+                    return describeProcess;
+                case 'ps':
+                    return psProcess;
+                default:
+                    return new TestChildProcess();
+            }
         });
-        spawnStub.onSecondCall().returns(describeProcess);
-        spawnStub.onThirdCall().returns(psProcess);
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -482,12 +489,19 @@ suite('AppHostDataRepository', () => {
         const getAppHostsProcess = new TestChildProcess();
         const describeProcess = new TestChildProcess();
         const psProcess = new TestChildProcess();
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
-            return getAppHostsProcess;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            switch (args[0]) {
+                case 'ls':
+                    getAppHostsLineCallback = createLsLineCallback(options);
+                    return getAppHostsProcess;
+                case 'describe':
+                    return describeProcess;
+                case 'ps':
+                    return psProcess;
+                default:
+                    return new TestChildProcess();
+            }
         });
-        spawnStub.onSecondCall().returns(describeProcess);
-        spawnStub.onThirdCall().returns(psProcess);
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -1069,6 +1083,186 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('workspace ps shows running AppHosts before workspace discovery completes', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start before discovery completed');
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+            ]));
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.appHosts[0].appHostPath, '/workspace/apps/Store/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+
+            discovery.resolve([{
+                path: '/workspace/apps/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }]);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+                '/workspace/apps/Store/AppHost.csproj',
+            ]);
+            assert.strictEqual(repository.appHosts.length, 1);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace ps ignores running AppHosts outside workspace before discovery completes', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start before discovery completed');
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/other/apps/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+            ]));
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+            assert.strictEqual(repository.appHosts.length, 0);
+            assert.strictEqual(repository.workspaceAppHost, undefined);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace ps empty snapshot keeps loading while workspace discovery is pending', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start before discovery completed');
+
+            psOptions.lineCallback(JSON.stringify([]));
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+            assert.strictEqual(repository.isLoading, true);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace ps stops after discovery completes with no buildable AppHosts', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        let psProcess: TestChildProcess | undefined;
+        spawnStub.callsFake((_terminalProvider, _command, args) => {
+            const process = new TestChildProcess();
+            if (args[0] === 'ps') {
+                psProcess = process;
+            }
+            return process;
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psProcess !== undefined, 'workspace ps watch did not start before discovery completed');
+
+            discovery.resolve([{
+                path: '/workspace/apps/Store/Store.csproj',
+                language: 'csharp',
+                status: 'possibly-unbuildable',
+            }]);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
+
+            assert.strictEqual(psProcess?.killed, true);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('workspace ps failure clears loading context and shows error welcome', async () => {
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
@@ -1114,13 +1308,13 @@ suite('AppHostDataRepository', () => {
             }));
             await waitForAppHostDiscovery();
 
-            const psFollowCall = spawnStub.getCalls().find(call => (call.args[2] as string[])[0] === 'ps');
+            const psFollowCall = spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'ps' && typeof call.args[3].lineCallback === 'function').at(-1);
             assert.ok(psFollowCall);
             const psFollowOptions = psFollowCall.args[3];
             psFollowOptions.exitCallback(1);
-            await waitForAppHostDiscovery();
+            await waitForCondition(() => spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'ps').some(call => typeof call.args[3].stderrCallback === 'function'), 'ps fallback did not start');
 
-            const psFallbackCall = spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'ps')[1];
+            const psFallbackCall = spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'ps').find(call => typeof call.args[3].stderrCallback === 'function');
             assert.ok(psFallbackCall);
             const psFallbackOptions = psFallbackCall.args[3];
             psFallbackOptions.stderrCallback('ps failed');
