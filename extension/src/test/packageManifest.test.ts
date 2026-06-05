@@ -35,6 +35,7 @@ type ExtensionManifest = {
         commands?: ManifestCommand[];
         viewsWelcome?: Array<{ view?: string; contents?: string; when?: string }>;
         menus?: {
+            commandPalette?: ManifestMenuItem[];
             'view/title'?: ManifestMenuItem[];
             'view/item/context'?: ManifestMenuItem[];
         };
@@ -129,6 +130,17 @@ suite('extension/package.json', () => {
         assert.ok(openDashboard?.icon);
         assert.ok(openDashboardToSide?.icon);
         assert.notStrictEqual(openDashboardToSide.icon, openDashboard.icon);
+    });
+
+    test('dashboard commands are discoverable from the command palette', () => {
+        const manifest = readManifest();
+        const commandPaletteMenus = manifest.contributes.menus?.commandPalette ?? [];
+
+        const openDashboard = commandPaletteMenus.find(item => item.command === 'aspire-vscode.openDashboard');
+        const openDashboardToSide = commandPaletteMenus.find(item => item.command === 'aspire-vscode.openDashboardToSide');
+
+        assert.strictEqual(openDashboard?.when, undefined);
+        assert.strictEqual(openDashboardToSide?.when, undefined);
     });
 
     test('aspire launch configuration declares an env property as a string-valued object', () => {

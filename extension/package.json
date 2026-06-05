@@ -522,8 +522,7 @@
           "when": "false"
         },
         {
-          "command": "aspire-vscode.openDashboard",
-          "when": "!aspire.noRunningAppHosts"
+          "command": "aspire-vscode.openDashboard"
         },
         {
           "command": "aspire-vscode.stopAppHost",
@@ -626,8 +625,7 @@
           "when": "false"
         },
         {
-          "command": "aspire-vscode.openDashboardToSide",
-          "when": "!aspire.noRunningAppHosts"
+          "command": "aspire-vscode.openDashboardToSide"
         }
       ],
       "view/title": [

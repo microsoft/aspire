@@ -982,11 +982,8 @@ export class AppHostDataRepository {
         const hasRunningAppHosts = this._appHosts.length > 0;
         const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
         vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
-        // `aspire.noRunningAppHosts` gates the Open Dashboard command palette entry,
-        // which requires a live dashboard URL. Keep this distinct from `noAppHosts`
-        // (which also considers discovered idle candidates) so the palette entry
-        // doesn't appear when only idle candidates exist — invoking it would silently
-        // no-op because no dashboard URL is available.
+        // Keep this distinct from `noAppHosts`, which also considers discovered idle
+        // candidates that have no live AppHost process.
         vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasRunningAppHosts);
         const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
         if (this._loadingWorkspace && clearLoading) {
