@@ -196,6 +196,15 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
             // reports MSB1006 'Property is not valid' against the second
             // half ('NU5125').
             "/p:NoWarn=NU5104%3BNU5125",
+            // Arcade flips TreatWarningsAsErrors on whenever VersionSuffix is
+            // empty (the "stable release" code path), which then escalates
+            // CS1591/CS1573/CS8629/etc. into 20k+ errors across the
+            // repo — including under tests/ which the regular CI pack
+            // doesn't gate on. Dogfood packages never leave the in-process
+            // proxy, so the strict gate is pure noise here. Disable it so
+            // repro-vcurrent-local (and any other VersionSuffix='' scenario)
+            // can actually finish packing.
+            "/p:TreatWarningsAsErrors=false",
         };
         if (!request.IncludeNativeBuild)
         {
