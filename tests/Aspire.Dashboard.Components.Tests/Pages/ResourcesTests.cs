@@ -451,25 +451,6 @@ public partial class ResourcesTests : DashboardTestContext
             import { readFileSync } from 'node:fs';
             import assert from 'node:assert/strict';
 
-            const observers = [];
-
-            globalThis.Node = { ELEMENT_NODE: 1 };
-            globalThis.MutationObserver = class {
-                constructor(callback) {
-                    this.callback = callback;
-                    observers.push(this);
-                }
-
-                observe(target, options) {
-                    this.target = target;
-                    this.options = options;
-                }
-
-                disconnect() {
-                    this.disconnected = true;
-                }
-            };
-
             const source = readFileSync(process.argv[2], 'utf8');
             const resourcesModule = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 
@@ -480,17 +461,28 @@ public partial class ResourcesTests : DashboardTestContext
                     ctrlKey: options.ctrlKey ?? false,
                     metaKey: options.metaKey ?? false,
                     shiftKey: options.shiftKey ?? false,
+                    target: options.target,
                     stopped: false,
                     stopPropagation() {
                         this.stopped = true;
+                    },
+                    composedPath() {
+                        const path = [];
+                        let current = this.target;
+                        while (current) {
+                            path.push(current);
+                            current = current.parentElement;
+                        }
+
+                        return path;
                     }
                 };
             }
 
             class FakeElement {
-                nodeType = Node.ELEMENT_NODE;
                 children = [];
                 listeners = new Map();
+                parentElement = null;
 
                 constructor(tagName, attributes = {}) {
                     this.tagName = tagName.toUpperCase();
@@ -498,7 +490,26 @@ public partial class ResourcesTests : DashboardTestContext
                 }
 
                 appendChild(child) {
+                    child.parentElement = this;
                     this.children.push(child);
+                }
+
+                removeChild(child) {
+                    this.children = this.children.filter(c => c !== child);
+                    child.parentElement = null;
+                }
+
+                contains(element) {
+                    let current = element;
+                    while (current) {
+                        if (current === this) {
+                            return true;
+                        }
+
+                        current = current.parentElement;
+                    }
+
+                    return false;
                 }
 
                 matches(selector) {
@@ -520,19 +531,17 @@ public partial class ResourcesTests : DashboardTestContext
                     return this.tagName.toLowerCase() === selector;
                 }
 
-                querySelectorAll(selector) {
-                    const matches = [];
-                    const visit = node => {
-                        for (const child of node.children) {
-                            if (child.matches(selector)) {
-                                matches.push(child);
-                            }
-
-                            visit(child);
+                closest(selector) {
+                    let current = this;
+                    while (current) {
+                        if (current.matches(selector)) {
+                            return current;
                         }
-                    };
-                    visit(this);
-                    return matches;
+
+                        current = current.parentElement;
+                    }
+
+                    return null;
                 }
 
                 addEventListener(type, listener) {
@@ -547,14 +556,23 @@ public partial class ResourcesTests : DashboardTestContext
                 }
 
                 dispatchKeydown(key, options = {}) {
-                    const event = createKeydownEvent(key, options);
+                    const event = createKeydownEvent(key, { ...options, target: options.target ?? this });
                     for (const listener of this.listeners.get('keydown') ?? []) {
                         listener(event);
                     }
 
                     return event.stopped;
                 }
+
+                dispatchFocusIn(options = {}) {
+                    const event = createKeydownEvent('FocusIn', { ...options, target: options.target ?? this });
+                    for (const listener of this.listeners.get('focusin') ?? []) {
+                        listener(event);
+                    }
+                }
             }
+
+            globalThis.Element = FakeElement;
 
             assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter')), true);
             assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent(' ')), false);
@@ -572,27 +590,32 @@ public partial class ResourcesTests : DashboardTestContext
             const text = new FakeElement('span');
             grid.appendChild(button);
             grid.appendChild(text);
-
             const registration = resourcesModule.initializeResourcesGridKeyboardActivation(grid);
 
+            let buttonKeydownCount = 0;
+            button.addEventListener('keydown', () => buttonKeydownCount++);
+
+            grid.dispatchFocusIn({ target: button });
             assert.equal(button.dispatchKeydown('Enter'), true);
+            assert.equal(buttonKeydownCount, 1);
             assert.equal(button.dispatchKeydown('Enter', { ctrlKey: true }), false);
             assert.equal(button.dispatchKeydown(' '), false);
             assert.equal(button.dispatchKeydown('ArrowDown'), false);
             assert.equal(button.dispatchKeydown('Tab'), false);
+
+            grid.dispatchFocusIn({ target: text });
             assert.equal(text.dispatchKeydown('Enter'), false);
 
             const anchor = new FakeElement('a', { href: '#' });
-            observers[0].callback([{ addedNodes: [anchor], removedNodes: [] }]);
+            grid.appendChild(anchor);
+            grid.dispatchFocusIn({ target: anchor });
             assert.equal(anchor.dispatchKeydown('Enter'), true);
 
-            observers[0].callback([{ addedNodes: [], removedNodes: [anchor] }]);
-            assert.equal(anchor.dispatchKeydown('Enter'), false);
-
+            grid.dispatchFocusIn({ target: text });
+            assert.equal(grid.dispatchKeydown('Enter', { target: anchor }), false);
             registration.dispose();
 
-            assert.equal(observers[0].disconnected, true);
-            assert.equal(button.dispatchKeydown('Enter'), false);
+            assert.equal(anchor.dispatchKeydown('Enter'), false);
             """;
 
         await RunNodeScriptAsync(script, scriptPath);
