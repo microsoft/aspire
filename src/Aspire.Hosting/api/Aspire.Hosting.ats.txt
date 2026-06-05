@@ -186,6 +186,10 @@ Aspire.Hosting/Aspire.Hosting.Ats.CertificateTrustExecutionConfigurationExportDa
   CertificateSubjects: string[] # The certificate subjects included in the trust configuration.
   CustomBundlePaths: string[] # The relative custom bundle paths.
   Scope: enum:Aspire.Hosting.ApplicationModel.CertificateTrustScope # The certificate trust scope.
+Aspire.Hosting/Aspire.Hosting.Ats.ContainerFilesOptions # Options for creating or updating files and directories in a container from polyglot apphosts.
+  DefaultGroup?: number # The default group ID for the created or updated file system entries. Defaults to 0 for root if not set.
+  DefaultOwner?: number # The default owner UID for the created or updated file system entries. Defaults to 0 for root if not set.
+  Umask?: number # The Unix umask to apply to files or directories without explicit permissions. Use octal literals in JavaScript or TypeScript, for example `0o022`.
 Aspire.Hosting/Aspire.Hosting.Ats.CreateBuilderOptions # Options for creating a distributed application builder from polyglot apphosts.
   AllowUnsecuredTransport: boolean # Allows the use of HTTP urls for the AppHost resource endpoint.
   AppHostFilePath: string # The full path to the AppHost file (e.g., apphost.ts, apphost.py). Used for consistent socket path computation across CLI and AppHost.
@@ -619,6 +623,7 @@ Aspire.Hosting/withCommand(name: string, displayName: string, executeCommand: ca
 Aspire.Hosting/withComputeEnvironment(computeEnvironmentResource: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting/withConnectionProperty(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString
 Aspire.Hosting/withContainerCertificatePaths(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
+Aspire.Hosting/withContainerFiles(destinationPath: string, sourcePath: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.ContainerFilesOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withContainerFilesSource(sourcePath: string) -> Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles
 Aspire.Hosting/withContainerName(name: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withContainerNetworkAlias(alias: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
