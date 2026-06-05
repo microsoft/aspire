@@ -63,7 +63,7 @@ internal sealed class DoctorCommand : BaseCommand
 
         if (selfOnly)
         {
-            var self = InstallationInfoOutput.DescribeSelfSafely(_installationDiscovery, _logger);
+            var self = InstallationInfoOutput.DescribeSelfSafely(_installationDiscovery, _wingetFirstRunProbe, _logger);
             if (format == OutputFormat.Json)
             {
                 OutputJson([], self);

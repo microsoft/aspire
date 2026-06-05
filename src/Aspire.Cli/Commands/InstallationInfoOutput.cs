@@ -44,8 +44,26 @@ internal static class InstallationInfoOutput
         }
     }
 
-    public static IReadOnlyList<InstallationInfo> DescribeSelfSafely(IInstallationDiscovery discovery, ILogger logger)
+    public static IReadOnlyList<InstallationInfo> DescribeSelfSafely(
+        IInstallationDiscovery discovery,
+        WingetFirstRunProbe wingetFirstRunProbe,
+        ILogger logger)
     {
+        // Mirror DiscoverAllSafelyAsync: even on the `--self` fast-path the probe
+        // must run before discovery reads the install sidecar, otherwise a fresh
+        // winget install reports route=null until some other command (a plain
+        // `aspire doctor` without --self, `aspire restore`, etc.) happens to
+        // run the probe. The PR's verify-winget-install-detection.ps1 calls
+        // `aspire doctor --format json --self` and depends on this priming.
+        try
+        {
+            RunWingetFirstRunProbe(wingetFirstRunProbe, logger);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not run the winget first-run install sidecar probe before doctor self-probe describe.");
+        }
+
         try
         {
             return [discovery.DescribeSelf()];

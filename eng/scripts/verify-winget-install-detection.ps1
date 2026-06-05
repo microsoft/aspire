@@ -3,9 +3,10 @@
     Verifies an already-installed Aspire CLI looks like a winget install end-to-end.
 
 .DESCRIPTION
-    Run AFTER 'winget install --manifest ...' has placed the CLI on PATH and AFTER
-    at least one CLI command has been invoked (so the first-run probe and the
-    bundle extraction have both had a chance to run). Asserts:
+    Run AFTER 'winget install --manifest ...' has placed the CLI on PATH. The
+    script primes the first-run probe and bundle extraction itself by invoking
+    'aspire doctor' before its assertions, so no separate CLI command needs to
+    be run by the caller. Asserts:
 
       1. 'aspire doctor --format json --self' reports the running install with
          route == "winget". This is the highest-signal assertion: the route is
@@ -73,6 +74,20 @@ function Get-DoctorSelfJson {
     }
 }
 
+function Invoke-DoctorPriming {
+    # Belt-and-suspenders against future regressions where the --self fast-path
+    # diverges from the discovery path and the first-run probe (which writes the
+    # sidecar) and bundle extraction stop firing on `aspire doctor --self`. A
+    # plain `aspire doctor` runs both unambiguously. Output is discarded; non-zero
+    # exit is treated as a hard failure because every subsequent assertion in
+    # this script depends on the probe + extract having run.
+    Write-Host "Priming: aspire doctor"
+    $primingOutput = aspire doctor 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Priming 'aspire doctor' exited $LASTEXITCODE; output: $primingOutput"
+    }
+}
+
 function Format-Object($obj) {
     return ($obj | ConvertTo-Json -Depth 8)
 }
@@ -84,6 +99,8 @@ $realBinary = Resolve-AspireBinary
 $binaryDir = Split-Path $realBinary -Parent
 $report['ResolvedBinary'] = $realBinary
 $report['BinaryDirectory'] = $binaryDir
+
+Invoke-DoctorPriming
 
 $doctor = Get-DoctorSelfJson
 $report['DoctorJson'] = $doctor
