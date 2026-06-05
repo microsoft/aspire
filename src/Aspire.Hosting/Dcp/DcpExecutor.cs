@@ -826,7 +826,9 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         return !endpoint.IsProxied && GetDefinedPublicPort(resource, endpoint) is null;
     }
 
-    private static int? GetDefinedPublicPort(IResource resource, EndpointAnnotation endpoint)
+    // Gets the public (= client-facing) port specified by the EndpointAnnotation. 
+    // Returns null if a public port cannot be inferred from the annotation.
+    private static int? GetPublicPortFromEndpointDefinition(IResource resource, EndpointAnnotation endpoint)
     {
         // Use this when deciding whether DCP should bind a public port. Container endpoints
         // distinguish host/public ports from container target ports, while non-container
