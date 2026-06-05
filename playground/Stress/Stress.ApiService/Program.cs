@@ -494,6 +494,15 @@ app.MapGet("/genai-trace", async () =>
                 ]
               },
               {
+                "role": "tool",
+                "parts": [
+                  {
+                    "type": "tool_call_response",
+                    "response": "- First\r\n- Second"
+                  }
+                ]
+              },
+              {
                 "role": "user",
                 "parts": [
                   {

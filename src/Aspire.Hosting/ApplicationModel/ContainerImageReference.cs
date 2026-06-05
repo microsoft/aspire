@@ -1,9 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECOMPUTE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics;
+using Aspire.Hosting.Publishing;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -34,8 +35,36 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
     public IEnumerable<object> References => [Resource];
 
     /// <inheritdoc/>
-    async ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken)
+    ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken)
     {
+        return ((IValueProvider)this).GetValueAsync(new ValueProviderContext(), cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    async ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
+    {
+        // Check if this resource is configured to save as an archive instead of pushing to a registry
+        if (context.ExecutionContext?.ServiceProvider is { } serviceProvider)
+        {
+            var logger = Resource.GetLogger(serviceProvider);
+            var buildOptionsContext = await Resource.ProcessContainerBuildOptionsCallbackAsync(
+                serviceProvider,
+                logger,
+                context.ExecutionContext,
+                cancellationToken).ConfigureAwait(false);
+
+            // For Archive destination, return the local file path
+            if (buildOptionsContext.Destination == ContainerImageDestination.Archive)
+            {
+                if (!string.IsNullOrEmpty(buildOptionsContext.OutputPath))
+                {
+                    var imageName = buildOptionsContext.LocalImageName ?? Resource.Name.ToLowerInvariant();
+                    var imageTag = buildOptionsContext.LocalImageTag;
+                    return ResourceExtensions.GetContainerImageArchivePath(buildOptionsContext.OutputPath, imageName, imageTag);
+                }
+            }
+        }
+
         return await Resource.GetFullRemoteImageNameAsync(cancellationToken).ConfigureAwait(false);
     }
 }

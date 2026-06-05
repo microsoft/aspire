@@ -8,7 +8,5 @@ metadata:
     app.kubernetes.io/component: "SpeciaL-ApP"
     app.kubernetes.io/instance: "{{.Release.Name}}"
 data:
-  OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES: "{{ .Values.config.SpeciaL_ApP.OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES }}"
-  OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES: "{{ .Values.config.SpeciaL_ApP.OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES }}"
   OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.SpeciaL_ApP.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
   ConnectionStrings__api-cs2: "{{ .Values.config.SpeciaL_ApP.ConnectionStrings__api_cs2 }}"

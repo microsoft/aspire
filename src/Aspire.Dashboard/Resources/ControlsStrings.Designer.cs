@@ -196,7 +196,16 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Table.
+        ///   Looks up a localized string similar to Parameters.
+        /// </summary>
+        public static string ChartContainerParametersTab {
+            get {
+                return ResourceManager.GetString("ChartContainerParametersTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resources.
         /// </summary>
         public static string ChartContainerTableTab {
             get {
@@ -752,7 +761,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("PropertyGridValueColumnHeader", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Value not set.
+        /// </summary>
+        public static string ParameterValueNotSet {
+            get {
+                return ResourceManager.GetString("ParameterValueNotSet", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Resource actions.
         /// </summary>

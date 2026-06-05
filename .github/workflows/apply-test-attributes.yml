@@ -1,0 +1,686 @@
+name: Quarantine/Disable Test
+
+on:
+  issue_comment:
+    types: [created]
+
+# Prevent concurrent runs on the same issue/PR to avoid race conditions
+# Use issue/pr prefix to distinguish between issue comments and PR comments
+concurrency:
+  group: quarantine-test-${{ github.event.issue.pull_request && 'pr' || 'issue' }}-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  quarantine_test:
+    if: >-
+      github.repository == 'dotnet/aspire' &&
+      (
+        startsWith(github.event.comment.body, '/quarantine-test ') ||
+        startsWith(github.event.comment.body, '/unquarantine-test ') ||
+        startsWith(github.event.comment.body, '/disable-test ') ||
+        startsWith(github.event.comment.body, '/enable-test ')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+    - name: Extract command and arguments
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      id: extract-command
+      with:
+        result-encoding: string
+        script: |
+          const body = context.payload.comment.body;
+
+          // Link to documentation for usage examples
+          const docsUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/tools/QuarantineTools/README.md`;
+
+          // Helper to fail with an error message that can be captured
+          function failWithError(message) {
+            const fullMessage = `${message}\n\n📖 See [QuarantineTools README](${docsUrl}) for usage examples.`;
+            core.setOutput('error_message', fullMessage);
+            core.setFailed(message);
+          }
+
+          // Unified command pattern: matches /command-name followed by arguments
+          // Commands: quarantine-test, unquarantine-test, disable-test, enable-test
+          const commandPattern = /^\/(quarantine-test|unquarantine-test|disable-test|enable-test)\s+(.+)$/m;
+
+          // Command configuration lookup
+          const commandConfig = {
+            'quarantine-test':   { action: 'quarantine',   mode: 'quarantine',   requiresUrl: true },
+            'unquarantine-test': { action: 'unquarantine', mode: 'quarantine',   requiresUrl: false },
+            'disable-test':      { action: 'quarantine',   mode: 'activeissue',  requiresUrl: true },
+            'enable-test':       { action: 'unquarantine', mode: 'activeissue',  requiresUrl: false }
+          };
+
+          const match = commandPattern.exec(body);
+
+          if (!match) {
+            // This shouldn't happen due to job-level 'if' condition - just fail silently
+            core.setFailed('No valid command found');
+            return;
+          }
+
+          const commandName = match[1];
+          const args = match[2].trim();
+          const matched = commandConfig[commandName];
+
+          // Parse arguments - extract --target-pr option first
+          let targetPrUrl = '';
+          let remainingArgs = args;
+
+          // Extract --target-pr <url> if present
+          const targetPrPattern = /--target-pr\s+(\S+)/;
+          const targetPrMatch = targetPrPattern.exec(args);
+          if (targetPrMatch) {
+            targetPrUrl = targetPrMatch[1];
+            remainingArgs = args.replace(targetPrPattern, '').trim();
+          }
+
+          const parts = remainingArgs.split(/\s+/).filter(p => p.length > 0);
+
+          // Check for unknown arguments (anything starting with - or --)
+          const unknownArgs = parts.filter(p => p.startsWith('-'));
+          if (unknownArgs.length > 0) {
+            failWithError(`Unknown argument(s): ${unknownArgs.join(', ')}. Only --target-pr is supported.`);
+            return;
+          }
+
+          if (parts.length === 0) {
+            failWithError('No test name(s) provided.');
+            return;
+          }
+
+          let testNames = [];
+          let issueUrl = '';
+
+          // URL pattern for validation
+          const urlPattern = /^https?:\/\/.+/i;
+          // GitHub PR URL pattern to extract owner/repo/pr_number
+          const prUrlPattern = /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/;
+
+          // Validate target PR URL format if provided
+          if (targetPrUrl && !prUrlPattern.test(targetPrUrl)) {
+            failWithError(`Invalid --target-pr URL: "${targetPrUrl}". Must be a GitHub pull request URL (e.g., https://github.com/owner/repo/pull/123).`);
+            return;
+          }
+
+          if (matched.requiresUrl) {
+            // For quarantine/disable: need at least test name + issue URL
+            if (parts.length < 2) {
+              failWithError(`Missing required arguments. This command requires at least one test name and an issue URL.`);
+              return;
+            }
+
+            // Last part should be the issue URL
+            const lastPart = parts[parts.length - 1];
+
+            if (urlPattern.test(lastPart)) {
+              issueUrl = lastPart;
+              testNames = parts.slice(0, -1);
+            } else {
+              failWithError(`Invalid issue URL: "${lastPart}". The last argument must be a valid issue URL (e.g., https://github.com/owner/repo/issues/123).`);
+              return;
+            }
+
+            if (testNames.length === 0) {
+              failWithError('No test name(s) provided.');
+              return;
+            }
+          } else {
+            // For unquarantine/enable: test names only
+            testNames = parts;
+          }
+
+          // Validate target PR URL is from the same repo if provided
+          if (targetPrUrl) {
+            const prMatch = prUrlPattern.exec(targetPrUrl);
+            if (prMatch) {
+              const [, prOwner, prRepo] = prMatch;
+              if (prOwner !== context.repo.owner || prRepo !== context.repo.repo) {
+                failWithError(`Target PR must be from the same repository (${context.repo.owner}/${context.repo.repo}). Got: ${prOwner}/${prRepo}`);
+                return;
+              }
+            }
+          }
+
+          // Determine human-readable action name for PR title
+          let actionVerb;
+          if (matched.action === 'quarantine') {
+            actionVerb = matched.mode === 'quarantine' ? 'Quarantine' : 'Disable';
+          } else {
+            actionVerb = matched.mode === 'quarantine' ? 'Unquarantine' : 'Enable';
+          }
+
+          // Determine if comment is on a PR (to use as target if no PR URL specified)
+          const isCommentOnPr = !!context.payload.issue.pull_request;
+          let commentPrNumber = '';
+          if (isCommentOnPr && !targetPrUrl) {
+            commentPrNumber = context.issue.number.toString();
+          }
+
+          const result = {
+            action: matched.action,
+            mode: matched.mode,
+            testNames: testNames,
+            issueUrl: issueUrl,
+            targetPrUrl: targetPrUrl,
+            actionVerb: actionVerb,
+            isCommentOnPr: isCommentOnPr,
+            commentPrNumber: commentPrNumber
+          };
+
+          console.log('Parsed command:', JSON.stringify(result, null, 2));
+
+          core.setOutput('action', result.action);
+          core.setOutput('mode', result.mode);
+          core.setOutput('test_names', testNames.join(' '));
+          core.setOutput('issue_url', issueUrl);
+          core.setOutput('action_verb', actionVerb);
+          core.setOutput('target_pr_url', targetPrUrl);
+          core.setOutput('is_comment_on_pr', isCommentOnPr.toString());
+          core.setOutput('comment_pr_number', commentPrNumber);
+
+          return 'success';
+
+    - name: Verify user has write access
+      if: success()
+      id: verify-permission
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const comment_user = context.payload.comment.user.login;
+
+          try {
+            const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: comment_user
+            });
+
+            const writePermissions = ['admin', 'write'];
+            if (!writePermissions.includes(permission.permission)) {
+              core.setOutput('has_permission', 'false');
+              core.setFailed(`@${comment_user} does not have write access to this repo. Required permissions: write or admin.`);
+              return;
+            }
+
+            core.setOutput('has_permission', 'true');
+            console.log(`Verified ${comment_user} has ${permission.permission} access to the repo.`);
+          } catch (error) {
+            core.setOutput('has_permission', 'false');
+            core.setFailed(`Error checking permissions for @${comment_user}: ${error.message}`);
+          }
+
+    - name: Unlock issue/PR if locked
+      id: unlock-issue
+      if: success() && github.event.issue.locked == true
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          // Capture the original lock reason for re-locking later
+          const lockReason = context.payload.issue.active_lock_reason || 'resolved';
+          core.setOutput('original_lock_reason', lockReason);
+
+          console.log(`Unlocking locked issue/PR #${context.issue.number} (original reason: ${lockReason}).`);
+          await github.rest.issues.unlock({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+
+    - name: Add reaction to indicate processing
+      if: success()
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          await github.rest.reactions.createForIssueComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            comment_id: context.payload.comment.id,
+            content: 'eyes'
+          });
+
+    - name: Determine target PR and branch
+      if: success()
+      id: determine-target
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      env:
+        TARGET_PR_URL: ${{ steps.extract-command.outputs.target_pr_url }}
+        IS_COMMENT_ON_PR: ${{ steps.extract-command.outputs.is_comment_on_pr }}
+        COMMENT_PR_NUMBER: ${{ steps.extract-command.outputs.comment_pr_number }}
+      with:
+        script: |
+          const targetPrUrl = process.env.TARGET_PR_URL || '';
+          const isCommentOnPr = process.env.IS_COMMENT_ON_PR === 'true';
+          const commentPrNumber = process.env.COMMENT_PR_NUMBER || '';
+
+          // Determine target PR number (from URL or from comment context)
+          let targetPrNumber = null;
+          if (targetPrUrl) {
+            const prUrlPattern = /\/pull\/(\d+)/;
+            const match = prUrlPattern.exec(targetPrUrl);
+            if (match) {
+              targetPrNumber = parseInt(match[1], 10);
+            }
+          } else if (isCommentOnPr && commentPrNumber) {
+            targetPrNumber = parseInt(commentPrNumber, 10);
+          }
+
+          if (targetPrNumber) {
+            console.log(`Target PR: #${targetPrNumber}`);
+
+            // Get the PR details
+            let pr;
+            try {
+              const { data } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: targetPrNumber
+              });
+              pr = data;
+            } catch (prError) {
+              let msg;
+              if (prError.status === 404) {
+                msg = `PR #${targetPrNumber} was not found. It may have been deleted or the PR number is invalid.`;
+              } else if (prError.status === 403) {
+                msg = `Access denied when fetching PR #${targetPrNumber}. Check repository permissions.`;
+              } else {
+                msg = `Failed to get PR #${targetPrNumber}: ${prError.message} (status: ${prError.status || 'unknown'})`;
+              }
+              core.setOutput('error_message', msg);
+              core.setFailed(msg);
+              return;
+            }
+
+            // Check if PR is still open
+            if (pr.state !== 'open') {
+              const msg = `PR #${targetPrNumber} is ${pr.state}. Can only push to open PRs.`;
+              core.setOutput('error_message', msg);
+              core.setFailed(msg);
+              return;
+            }
+
+            // Check if PR is from a fork (not supported) - also handle deleted fork repos
+            if (!pr.head.repo || pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              const msg = `PR #${targetPrNumber} is from a fork or the source repository was deleted. Cannot push to fork branches.`;
+              core.setOutput('error_message', msg);
+              core.setFailed(msg);
+              return;
+            }
+
+            core.setOutput('target_pr_number', targetPrNumber.toString());
+            core.setOutput('checkout_ref', pr.head.ref);
+            core.setOutput('pr_url', pr.html_url);
+            core.setOutput('is_new_pr', 'false');
+          } else {
+            console.log('No target PR, will create a new one from main');
+            core.setOutput('target_pr_number', '');
+            core.setOutput('checkout_ref', 'main');
+            core.setOutput('pr_url', '');
+            core.setOutput('is_new_pr', 'true');
+          }
+
+    - name: Post started comment
+      if: success()
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      env:
+        ACTION_VERB: ${{ steps.extract-command.outputs.action_verb }}
+        TEST_NAMES: ${{ steps.extract-command.outputs.test_names }}
+        TARGET_PR_NUMBER: ${{ steps.determine-target.outputs.target_pr_number }}
+      with:
+        script: |
+          const actionVerb = process.env.ACTION_VERB;
+          const testNames = (process.env.TEST_NAMES || '').split(' ');
+          const workflow_run_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          const targetPrNumber = process.env.TARGET_PR_NUMBER || '';
+
+          const testList = testNames.map(t => `\`${t}\``).join(', ');
+          let body = `⏳ Started ${actionVerb.toLowerCase()} operation for ${testList}`;
+          if (targetPrNumber) {
+            body += ` (will push to PR #${targetPrNumber})`;
+          }
+          body += `... ([workflow run](${workflow_run_url}))`;
+
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+
+    # Credentials must persist for git push operations later in workflow
+    - name: Checkout repo
+      if: success()
+      uses: actions/checkout@v4 # zizmor: ignore[artipacked]
+      with:
+        ref: ${{ steps.determine-target.outputs.checkout_ref }}
+        fetch-depth: 0
+
+    - name: Setup .NET
+      if: success()
+      uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+
+    - name: Run QuarantineTools
+      if: success()
+      id: run-tool
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        ACTION: ${{ steps.extract-command.outputs.action }}
+        MODE: ${{ steps.extract-command.outputs.mode }}
+        TEST_NAMES: ${{ steps.extract-command.outputs.test_names }}
+        ISSUE_URL: ${{ steps.extract-command.outputs.issue_url }}
+      run: |
+        # Build the command
+        if [ "$ACTION" = "quarantine" ]; then
+          FLAG="-q"
+        else
+          FLAG="-u"
+        fi
+
+        # Convert space-separated test names to array for proper quoting
+        IFS=' ' read -ra TEST_ARRAY <<< "$TEST_NAMES"
+
+        # Run the tool and capture output
+        if [ "$ACTION" = "quarantine" ]; then
+          echo "Running: dotnet run --project ${{ github.workspace }}/tools/QuarantineTools/QuarantineTools.csproj -- $FLAG -m $MODE -i \"$ISSUE_URL\" ${TEST_ARRAY[*]}"
+          OUTPUT=$(dotnet run --project ${{ github.workspace }}/tools/QuarantineTools/QuarantineTools.csproj -- $FLAG -m "$MODE" -i "$ISSUE_URL" "${TEST_ARRAY[@]}" 2>&1) && EXIT_CODE=0 || EXIT_CODE=$?
+        else
+          echo "Running: dotnet run --project ${{ github.workspace }}/tools/QuarantineTools/QuarantineTools.csproj -- $FLAG -m $MODE ${TEST_ARRAY[*]}"
+          OUTPUT=$(dotnet run --project ${{ github.workspace }}/tools/QuarantineTools/QuarantineTools.csproj -- $FLAG -m "$MODE" "${TEST_ARRAY[@]}" 2>&1) && EXIT_CODE=0 || EXIT_CODE=$?
+        fi
+
+        echo "$OUTPUT"
+
+        # Save output for failure comment (escape for GitHub Actions)
+        EOF="EOF_$(date +%s%N)"
+        echo "tool_output<<$EOF" >> $GITHUB_OUTPUT
+        echo "$OUTPUT" >> $GITHUB_OUTPUT
+        echo "$EOF" >> $GITHUB_OUTPUT
+
+        exit $EXIT_CODE
+
+    - name: Check for changes
+      if: success()
+      id: check-changes
+      run: |
+        if git diff --quiet; then
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+        else
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          git diff --name-only
+        fi
+
+    - name: Create or Update Pull Request
+      if: steps.check-changes.outputs.has_changes == 'true'
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      env:
+        ACTION_VERB: ${{ steps.extract-command.outputs.action_verb }}
+        TEST_NAMES: ${{ steps.extract-command.outputs.test_names }}
+        ISSUE_URL: ${{ steps.extract-command.outputs.issue_url }}
+        MODE: ${{ steps.extract-command.outputs.mode }}
+        TARGET_PR_NUMBER: ${{ steps.determine-target.outputs.target_pr_number }}
+        TARGET_PR_URL: ${{ steps.determine-target.outputs.pr_url }}
+        CHECKOUT_REF: ${{ steps.determine-target.outputs.checkout_ref }}
+        IS_NEW_PR: ${{ steps.determine-target.outputs.is_new_pr }}
+      with:
+        script: |
+          const { spawnSync } = require('child_process');
+          const fs = require('fs');
+          const path = require('path');
+          const os = require('os');
+
+          const actionVerb = process.env.ACTION_VERB;
+          const testNames = process.env.TEST_NAMES.split(' ');
+          const issueUrl = process.env.ISSUE_URL;
+          const mode = process.env.MODE;
+          const targetPrNumber = process.env.TARGET_PR_NUMBER ? parseInt(process.env.TARGET_PR_NUMBER, 10) : null;
+          const targetPrUrl = process.env.TARGET_PR_URL;
+          const checkoutRef = process.env.CHECKOUT_REF;
+          const isNewPr = process.env.IS_NEW_PR === 'true';
+          const comment_user = context.payload.comment.user.login;
+          const issue_number = context.issue.number;
+
+          const testList = testNames.length === 1 ? testNames[0] : `${testNames.length} tests`;
+          const commitMessage = `[automated] ${actionVerb} ${testList}`;
+
+          // Helper to run git commands safely using spawnSync (avoids shell injection)
+          function runGit(args) {
+            const result = spawnSync('git', args, { encoding: 'utf-8', stdio: 'pipe' });
+            if (result.status !== 0) {
+              const error = new Error(result.stderr || result.stdout || 'Git command failed');
+              error.status = result.status;
+              throw error;
+            }
+            return result.stdout;
+          }
+
+          // Helper to commit with a message (uses temp file for safety)
+          function gitCommit(message) {
+            const msgFile = path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'commit-msg.txt');
+            fs.writeFileSync(msgFile, message);
+            try {
+              runGit(['commit', '-F', msgFile]);
+            } finally {
+              fs.unlinkSync(msgFile);
+            }
+          }
+
+          // Configure git
+          runGit(['config', 'user.name', 'github-actions']);
+          runGit(['config', 'user.email', 'github-actions@github.com']);
+
+          let prUrl = '';
+          let prNumber = null;
+          let createdNewPr = false;
+
+          if (!isNewPr && targetPrNumber) {
+            // Push to existing PR - we're already on the PR branch
+            console.log(`Committing and pushing to existing PR #${targetPrNumber}`);
+
+            prUrl = targetPrUrl;
+            prNumber = targetPrNumber;
+
+            // Stage and commit
+            runGit(['add', '-A']);
+            gitCommit(commitMessage);
+
+            // Push to the PR branch (checkoutRef comes from PR, use spawnSync for safety)
+            try {
+              runGit(['push', 'origin', `HEAD:${checkoutRef}`]);
+            } catch (pushError) {
+              core.setFailed(`Failed to push to PR #${targetPrNumber}: ${pushError.message}. The branch may be protected or have been force-pushed.`);
+              return;
+            }
+
+            console.log(`Pushed new commit to PR #${prNumber}`);
+          } else {
+            // Create a new PR
+            createdNewPr = true;
+            // Branch name is safe: actionVerb is from controlled lookup (Quarantine/Disable/etc), runId is numeric
+            // Branch name format: automated/{quarantine|unquarantine|disable|enable}-test-{runId}
+            // Using runId instead of timestamp to guarantee uniqueness across parallel workflow runs
+            const branchName = `automated/${actionVerb.toLowerCase()}-test-${context.runId}`;
+
+            // Create and checkout branch (use spawnSync for safety)
+            runGit(['checkout', '-b', branchName]);
+
+            // Stage and commit changes
+            runGit(['add', '-A']);
+            gitCommit(commitMessage);
+
+            // Push branch
+            try {
+              runGit(['push', 'origin', branchName]);
+            } catch (pushError) {
+              core.setFailed(`Failed to push branch '${branchName}': ${pushError.message}`);
+              return;
+            }
+
+            // Create PR description
+            const testListFormatted = testNames.map(t => `- \`${t}\``).join('\n');
+            const issueRef = issueUrl ? `\n\nRelated issue: ${issueUrl}` : '';
+            const triggerRef = `\n\nTriggered by: #${issue_number} (comment by @${comment_user})`;
+            const attributeType = mode === 'quarantine' ? 'QuarantinedTest' : 'ActiveIssue';
+
+            const prBody = `## ${actionVerb} Test(s)
+
+          This PR was automatically generated to ${actionVerb.toLowerCase()} the following test(s) using the \`${attributeType}\` attribute:
+
+          ${testListFormatted}
+          ${issueRef}${triggerRef}
+
+          ---
+          ⚠️ Please review the changes before merging.`;
+
+            // Create PR
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[automated] ${actionVerb} ${testList}`,
+              body: prBody,
+              head: branchName,
+              base: 'main'
+            });
+
+            prUrl = pr.html_url;
+            prNumber = pr.number;
+            console.log(`Created PR #${prNumber}: ${prUrl}`);
+
+            // Add labels
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: ['area-codeflow']
+              });
+            } catch (labelError) {
+              console.log(`Note: Could not add labels: ${labelError.message}`);
+            }
+          }
+
+          // Post success comment
+          const action = createdNewPr ? 'Created' : 'Updated';
+          const successBody = `✅ ${actionVerb} operation completed! ${action} PR #${prNumber}: ${prUrl}`;
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: successBody
+          });
+
+          // Add success reaction to the command comment
+          await github.rest.reactions.createForIssueComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            comment_id: context.payload.comment.id,
+            content: 'rocket'
+          });
+
+    - name: Post no-changes comment
+      if: steps.check-changes.outputs.has_changes == 'false'
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      env:
+        ACTION_VERB: ${{ steps.extract-command.outputs.action_verb }}
+        TARGET_PR_NUMBER: ${{ steps.determine-target.outputs.target_pr_number }}
+        TARGET_PR_URL: ${{ steps.determine-target.outputs.pr_url }}
+      with:
+        script: |
+          const actionVerb = process.env.ACTION_VERB;
+          const targetPrNumber = process.env.TARGET_PR_NUMBER || '';
+          const targetPrUrl = process.env.TARGET_PR_URL || '';
+
+          let body;
+          if (targetPrNumber && targetPrUrl) {
+            body = `ℹ️ No changes were needed on PR #${targetPrNumber}. The test(s) may already be in the desired state.`;
+          } else {
+            body = `ℹ️ No changes were needed. The test(s) may already be in the desired state.`;
+          }
+
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+
+          // Add reaction to indicate completion
+          await github.rest.reactions.createForIssueComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            comment_id: context.payload.comment.id,
+            content: 'rocket'
+          });
+
+    - name: Post failure comment
+      if: failure()
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      env:
+        ACTION_VERB: ${{ steps.extract-command.outputs.action_verb || '' }}
+        TOOL_OUTPUT: ${{ steps.run-tool.outputs.tool_output || '' }}
+        EXTRACT_ERROR: ${{ steps.extract-command.outputs.error_message || '' }}
+        TARGET_ERROR: ${{ steps.determine-target.outputs.error_message || '' }}
+      with:
+        script: |
+          const comment_user = context.payload.comment.user.login;
+          const workflow_run_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          const actionVerb = process.env.ACTION_VERB || 'Operation';
+          const toolOutput = process.env.TOOL_OUTPUT || '';
+          const extractError = process.env.EXTRACT_ERROR || '';
+          const targetError = process.env.TARGET_ERROR || '';
+
+          let body = `@${comment_user} ❌ ${actionVerb} failed.\n\n`;
+
+          // Check for errors from various steps
+          const errorMessage = extractError || targetError;
+          if (errorMessage) {
+            body += `**Error:** ${errorMessage}\n\n`;
+          } else if (toolOutput) {
+            // Extract just the error lines (skip build output)
+            const lines = toolOutput.split('\n');
+            const errorLines = lines.filter(line =>
+              line.includes('Error') ||
+              line.includes('error') ||
+              line.includes('No method found') ||
+              line.includes('failed') ||
+              line.includes('Invalid')
+            ).slice(0, 10);  // Limit to 10 error lines
+
+            if (errorLines.length > 0) {
+              body += `**Error:**\n\`\`\`\n${errorLines.join('\n')}\n\`\`\`\n\n`;
+            }
+          }
+
+          body += `See the [workflow run](${workflow_run_url}) for full details.`;
+
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+
+    - name: Re-lock issue/PR if it was locked
+      if: github.event.issue.locked == true && (success() || failure())
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      env:
+        ORIGINAL_LOCK_REASON: ${{ steps.unlock-issue.outputs.original_lock_reason }}
+      with:
+        script: |
+          // Use the original lock reason, falling back to 'resolved' if not captured
+          const lockReason = process.env.ORIGINAL_LOCK_REASON || 'resolved';
+          console.log(`Re-locking previously locked issue/PR #${context.issue.number} with reason: ${lockReason}.`);
+          await github.rest.issues.lock({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            lock_reason: lockReason
+          });

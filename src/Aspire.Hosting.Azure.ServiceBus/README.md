@@ -53,6 +53,48 @@ The `WithReference` method passes that connection information into a connection 
 builder.AddAzureServiceBusClient("sb");
 ```
 
+## Connection Properties
+
+When you reference Azure Service Bus resources using `WithReference`, the following connection properties are made available to the consuming project:
+
+### Service Bus namespace
+
+The Service Bus namespace resource exposes the following connection properties:
+
+| Property Name | Description |
+|---------------|-------------|
+| `Host` | The hostname of the Service Bus namespace |
+| `Port` | The port of the Service Bus namespace when the emulator is used |
+| `Uri` | The connection URI, with the format `sb://myservicebus.servicebus.windows.net` |
+| `ConnectionString` | **Emulator only.** Includes SAS key material for the local emulator connection. |
+
+### Service Bus queue
+
+The Service Bus queue resource inherits all properties from its parent Service Bus namespace and adds:
+
+| Property Name | Description |
+|---------------|-------------|
+| `QueueName` | The name of the queue |
+
+### Service Bus topic
+
+The Service Bus topic resource inherits all properties from its parent Service Bus namespace and adds:
+
+| Property Name | Description |
+|---------------|-------------|
+| `TopicName` | The name of the topic |
+
+### Service Bus subscription
+
+The Service Bus subscription resource inherits all properties from its parent Service Bus topic and adds:
+
+| Property Name | Description |
+|---------------|-------------|
+| `SubscriptionName` | The name of the subscription |
+| `ConnectionString` | The connection string for the subscription |
+
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
+
 ## Additional documentation
 
 * https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/servicebus/Azure.Messaging.ServiceBus/README.md

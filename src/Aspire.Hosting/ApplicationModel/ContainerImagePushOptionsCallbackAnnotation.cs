@@ -15,7 +15,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// or <see cref="ResourceBuilderExtensions.WithImagePushOptions{T}(IResourceBuilder{T}, Func{ContainerImagePushOptionsCallbackContext, Task})"/>
 /// to add this annotation to a resource.
 /// </remarks>
-[Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+[Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class ContainerImagePushOptionsCallbackAnnotation : IResourceAnnotation
 {
     /// <summary>

@@ -86,7 +86,7 @@ public class GitHubModelResource : Resource, IResourceWithConnectionString
     {
         yield return new("Uri", UriExpression);
         yield return new("Key", ReferenceExpression.Create($"{Key}"));
-        yield return new("Model", ReferenceExpression.Create($"{Model}"));
+        yield return new("ModelName", ReferenceExpression.Create($"{Model}"));
 
         if (Organization is not null)
         {

@@ -7,14 +7,29 @@
         <target state="translated">管理 MCP (模型上下文协议)服务器。</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AdditionalOptionsSelectPrompt">
+        <source>Which additional options do you want to enable?</source>
+        <target state="translated">你想启用哪些其他选项?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AgentConfigurationSelectPrompt">
-        <source>Select agent environments to configure:</source>
-        <target state="translated">选择要配置的智能体环境:</target>
+        <source>Which agent environments do you want to configure?</source>
+        <target state="translated">你想配置哪些智能体环境?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationComplete">
         <source>Agent environment configuration complete.</source>
         <target state="translated">智能体环境配置完成。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigurePlaywrightPrompt">
+        <source>Pre-configure Playwright MCP server?</source>
+        <target state="translated">预配置 Playwright MCP 服务器?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_CreateAgentInstructionsPrompt">
+        <source>Create agent environment specific instruction files?</source>
+        <target state="translated">创建特定于代理环境的指令文件?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">

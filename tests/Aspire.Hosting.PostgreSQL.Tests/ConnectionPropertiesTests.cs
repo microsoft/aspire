@@ -11,7 +11,7 @@ public class ConnectionPropertiesTests
     public void PostgresServerResourceGetConnectionPropertiesReturnsExpectedValues()
     {
         var user = new ParameterResource("user", _ => "pgadmin");
-    var password = new ParameterResource("password", _ => "p@ssw0rd1", secret: true);
+        var password = new ParameterResource("password", _ => "p@ssw0rd1", secret: true);
         var resource = new PostgresServerResource("postgres", user, password);
 
         var properties = ((IResourceWithConnectionString)resource).GetConnectionProperties().ToArray();
@@ -64,7 +64,7 @@ public class ConnectionPropertiesTests
         Assert.Contains(properties, property => property.Key == "Port" && property.Value.ValueExpression == "{postgres.bindings.tcp.port}");
         Assert.Contains(properties, property => property.Key == "Username" && property.Value.ValueExpression == "{user.value}");
         Assert.Contains(properties, property => property.Key == "Password" && property.Value.ValueExpression == "{password.value}");
-        Assert.Contains(properties, property => property.Key == "Database" && property.Value.ValueExpression == "Customers");
+        Assert.Contains(properties, property => property.Key == "DatabaseName" && property.Value.ValueExpression == "Customers");
         Assert.Contains(
             properties,
             property => property.Key == "Uri" &&

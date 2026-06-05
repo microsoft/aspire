@@ -1,7 +1,7 @@
 ﻿{
   "author": "Microsoft",
-  "name": "Aspire Starter App (FastAPI/React)",
-  "description": "A project template for creating an Aspire app with a React frontend and a Python backend API service, with optional Redis caching.",
+  "name": "Úvodní aplikace Aspire (FastAPI/React)",
+  "description": "Šablona projektu pro vytvoření aplikace Aspire s front-endem Reactu a službou back-endového rozhraní API Pythonu s volitelným ukládáním do mezipaměti Redis",
   "symbols/UseRedisCache/displayName": "Po_užít Redis pro ukládání do mezipaměti (vyžaduje Docker)",
   "symbols/UseRedisCache/description": "Nakonfiguruje, jestli se má aplikace nastavit tak, aby pro ukládání do mezipaměti používala Redis. K místnímu spouštění se vyžaduje podporovaný modul runtime kontejneru. Další podrobnosti najdete na https://aka.ms/aspire/containers.",
   "symbols/appHostHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP v launchSettings.json projektu AppHost.",

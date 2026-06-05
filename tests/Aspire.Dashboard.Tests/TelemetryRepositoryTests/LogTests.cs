@@ -823,6 +823,53 @@ public class LogTests
     }
 
     [Fact]
+    public void FilterLogs_With_EventName_Returns_CorrectLog()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        // Act
+        var addContext = new AddContext();
+        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(instanceId: "1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime.AddMinutes(1), message: "test_message", severity: SeverityNumber.Error, eventName: "MyEventName"),
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = repository.GetResources().First().ResourceKey;
+
+        // Assert
+        Assert.Empty(repository.GetLogs(new GetLogsContext
+        {
+            ResourceKey = resourceKey,
+            StartIndex = 0,
+            Count = 1,
+            Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = KnownStructuredLogFields.EventNameField, Value = "does_not_contain" }]
+        }).Items);
+
+        Assert.Single(repository.GetLogs(new GetLogsContext
+        {
+            ResourceKey = resourceKey,
+            StartIndex = 0,
+            Count = 1,
+            Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = KnownStructuredLogFields.EventNameField, Value = "MyEvent" }]
+        }).Items);
+    }
+
+    [Fact]
     public void AddLogs_MultipleResources_SameInstanceId_CreateMultipleResources()
     {
         // Arrange
@@ -1253,6 +1300,173 @@ public class LogTests
             resource =>
             {
                 Assert.Equal(s_testTime.AddMinutes(1), resource.TimeStamp);
+            });
+    }
+
+    [Fact]
+    public void AddLogs_EventName_FromLogRecordField()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        // Act
+        var addContext = new AddContext();
+        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords = { CreateLogRecord(eventName: "TestEvent") }
+                    }
+                }
+            }
+        });
+
+        // Assert
+        Assert.Equal(0, addContext.FailureCount);
+
+        var logs = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        });
+        Assert.Collection(logs.Items,
+            resource =>
+            {
+                Assert.Equal("TestEvent", resource.EventName);
+            });
+    }
+
+    [Fact]
+    public void AddLogs_EventName_FromLegacyAttribute()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        // Act
+        var addContext = new AddContext();
+        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords = { CreateLogRecord(attributes: [new KeyValuePair<string, string>("logrecord.event.name", "LegacyEvent")]) }
+                    }
+                }
+            }
+        });
+
+        // Assert
+        Assert.Equal(0, addContext.FailureCount);
+
+        var logs = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        });
+        Assert.Collection(logs.Items,
+            resource =>
+            {
+                Assert.Equal("LegacyEvent", resource.EventName);
+                // Legacy attribute should be filtered out
+                Assert.DoesNotContain(resource.Attributes, a => a.Key == "logrecord.event.name");
+            });
+    }
+
+    [Fact]
+    public void AddLogs_EventName_FieldTakesPrecedenceOverAttribute()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        // Act
+        var addContext = new AddContext();
+        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords = { CreateLogRecord(eventName: "FieldEvent", attributes: [new KeyValuePair<string, string>("logrecord.event.name", "AttributeEvent")]) }
+                    }
+                }
+            }
+        });
+
+        // Assert
+        Assert.Equal(0, addContext.FailureCount);
+
+        var logs = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        });
+        Assert.Collection(logs.Items,
+            resource =>
+            {
+                // Field should take precedence over attribute
+                Assert.Equal("FieldEvent", resource.EventName);
+            });
+    }
+
+    [Fact]
+    public void AddLogs_EventName_NullWhenNotSet()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        // Act
+        var addContext = new AddContext();
+        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords = { CreateLogRecord(attributes: []) }
+                    }
+                }
+            }
+        });
+
+        // Assert
+        Assert.Equal(0, addContext.FailureCount);
+
+        var logs = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        });
+        Assert.Collection(logs.Items,
+            resource =>
+            {
+                Assert.Null(resource.EventName);
             });
     }
 }

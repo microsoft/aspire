@@ -24,10 +24,7 @@ namespace Aspire.Hosting.Docker;
 /// </remarks>
 public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource
 {
-    /// <summary>
-    /// The container registry to use.
-    /// </summary>
-    public string? DefaultContainerRegistry { get; set; }
+    private const string DockerComposeUpTag = "docker-compose-up";
 
     /// <summary>
     /// The name of an existing network to be used.
@@ -41,13 +38,15 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
     internal Action<ComposeFile>? ConfigureComposeFile { get; set; }
 
+    internal Action<IDictionary<string, CapturedEnvironmentVariable>>? ConfigureEnvFile { get; set; }
+
     internal IResourceBuilder<DockerComposeAspireDashboardResource>? Dashboard { get; set; }
 
     /// <summary>
     /// Gets the collection of environment variables captured from the Docker Compose environment.
     /// These will be populated into a top-level .env file adjacent to the Docker Compose file.
     /// </summary>
-    internal Dictionary<string, (string? Description, string? DefaultValue, object? Source)> CapturedEnvironmentVariables { get; } = [];
+    internal Dictionary<string, CapturedEnvironmentVariable> CapturedEnvironmentVariables { get; } = [];
 
     internal Dictionary<IResource, DockerComposeServiceResource> ResourceMapping { get; } = new(new ResourceNameComparer());
 
@@ -115,7 +114,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             {
                 Name = $"docker-compose-up-{Name}",
                 Action = ctx => DockerComposeUpAsync(ctx),
-                Tags = ["docker-compose-up"],
+                Tags = [DockerComposeUpTag],
                 DependsOnSteps = [$"prepare-{Name}"]
             };
             dockerComposeUpStep.RequiredBy(WellKnownPipelineSteps.Deploy);
@@ -173,6 +172,15 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 buildSteps.RequiredBy(WellKnownPipelineSteps.Deploy)
                         .RequiredBy($"docker-compose-up-{Name}")
                         .DependsOn(WellKnownPipelineSteps.DeployPrereq);
+            }
+
+            // This ensures that resources that have to be pushed before deployments are handled
+            foreach (var pushResource in context.Model.GetBuildAndPushResources())
+            {
+                var pushSteps = context.GetSteps(pushResource, WellKnownPipelineTags.PushContainerImage);
+                var dockerComposeUpSteps = context.GetSteps(this, DockerComposeUpTag);
+
+                dockerComposeUpSteps.DependsOn(pushSteps);
             }
         }));
     }
@@ -337,27 +345,35 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
         foreach (var entry in CapturedEnvironmentVariables)
         {
-            var (key, (description, defaultValue, source)) = entry;
+            var envVar = entry.Value;
+            var defaultValue = envVar.DefaultValue;
 
-            if (defaultValue is null && source is ParameterResource parameter)
+            if (defaultValue is null && envVar.Source is ParameterResource parameter)
             {
                 defaultValue = await parameter.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
             }
 
-            if (source is ContainerImageReference cir && cir.Resource.TryGetContainerImageName(out var imageName))
+            if (envVar.Source is ContainerImageReference cir)
             {
-                defaultValue = imageName;
+                defaultValue = await ((IValueProvider)cir).GetValueAsync(context.CancellationToken).ConfigureAwait(false);
             }
 
-            envFile.Add(key, defaultValue, description, onlyIfMissing: false);
+            envFile.Add(entry.Key, defaultValue, envVar.Description, onlyIfMissing: false);
         }
 
         envFile.Save(includeValues: true);
     }
 
-    internal string AddEnvironmentVariable(string name, string? description = null, string? defaultValue = null, object? source = null)
+    internal string AddEnvironmentVariable(string name, string? description = null, string? defaultValue = null, object? source = null, IResource? resource = null)
     {
-        CapturedEnvironmentVariables[name] = (description, defaultValue, source);
+        CapturedEnvironmentVariables[name] = new CapturedEnvironmentVariable
+        {
+            Name = name,
+            Description = description,
+            DefaultValue = defaultValue,
+            Source = source,
+            Resource = resource
+        };
 
         return $"${{{name}}}";
     }

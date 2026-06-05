@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
-        <source>Graph. For an accessible view please navigate to the Table tab</source>
-        <target state="translated">Grafo. Per una visualizzazione accessibile, passa alla scheda Tabella</target>
+        <source>Graph. For an accessible view please navigate to the Resources tab</source>
+        <target state="translated">Grafo. Per una visualizzazione accessibile, passare alla scheda Risorse</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -72,14 +72,19 @@
         <target state="translated">È stata rilevata una limitazione della cardinalità</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChartContainerParametersTab">
+        <source>Parameters</source>
+        <target state="translated">Parametri</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">Mostra conteggio</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
-        <source>Table</source>
-        <target state="translated">Tabella</target>
+        <source>Resources</source>
+        <target state="translated">Risorse</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
@@ -335,6 +340,11 @@
       <trans-unit id="PageToolbarLandmark">
         <source>Page toolbar</source>
         <target state="translated">Barra degli strumenti della pagina</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterValueNotSet">
+        <source>Value not set</source>
+        <target state="translated">Valore non impostato</target>
         <note />
       </trans-unit>
       <trans-unit id="PauseButtonTitle">

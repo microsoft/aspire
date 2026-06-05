@@ -222,6 +222,11 @@
         <target state="translated">リソースの種類を非表示にする</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesNoParameters">
+        <source>No parameters found</source>
+        <target state="translated">パラメーターが見つかりません</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesNotFiltered">
         <source>No filters</source>
         <target state="translated">フィルターなし</target>

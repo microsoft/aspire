@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIRECOMPUTE001
 #pragma warning disable ASPIREFILESYSTEM001
 
 using Aspire.Hosting.Publishing;
@@ -617,12 +616,13 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             imageBuilder.BuildImagesAsync([container.Resource], cts.Token));
 
-        Assert.Equal("Container runtime is not running or is unhealthy.", exception.Message);
+        Assert.Contains("Container runtime", exception.Message);
+        Assert.Contains("is not running or is unhealthy", exception.Message);
 
         var collector = app.Services.GetFakeLogCollector();
         var logs = collector.GetSnapshot();
 
-        Assert.Contains(logs, log => log.Message.Contains("Container runtime is not running or is unhealthy. Cannot build container images."));
+        Assert.Contains(logs, log => log.Message.Contains("is not running or is unhealthy. Cannot build container images."));
     }
 
     [Fact]
@@ -1080,5 +1080,202 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.Equal(servicea.Resource, capturedResource);
         Assert.NotNull(capturedServices);
         Assert.Equal(app.Services, capturedServices);
+    }
+
+    [Fact]
+    public async Task BuildImagesAsync_WithArchiveDestinationOnlyResources_DoesNotCheckContainerRuntime()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddFakeLogging();
+            logging.AddXunit(output);
+        });
+
+        // Use FakeContainerRuntime that simulates Docker not running
+        var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
+        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+
+        using var tempDir = new TestTempDirectory();
+
+        var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+            .WithContainerBuildOptions(ctx =>
+            {
+                ctx.Destination = ContainerImageDestination.Archive;
+                ctx.OutputPath = Path.Combine(tempDir.Path, "archives");
+                ctx.ImageFormat = ContainerImageFormat.Oci;
+            });
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.DefaultTimeoutTimeSpan);
+        var imageManager = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        // The check for whether Docker is needed should not call CheckIfRunningAsync
+        // when all resources are Archive destination. However, the actual build will fail
+        // because we can't build without network access to get base images.
+        // We're just verifying that CheckIfRunningAsync is not called in the upfront check.
+        try
+        {
+            await imageManager.BuildImagesAsync([servicea.Resource], cts.Token);
+        }
+        catch (DistributedApplicationException)
+        {
+            // Expected to fail during actual build due to missing network/base images
+            // But we should verify CheckIfRunningAsync was not called
+        }
+        catch (TaskCanceledException)
+        {
+            // Expected if build takes too long
+        }
+
+        // Verify CheckIfRunningAsync was not called in the upfront runtime check
+        Assert.Equal(0, fakeContainerRuntime.CheckIfRunningCallCount);
+    }
+
+    [Fact]
+    public async Task BuildImagesAsync_WithRegistryDestination_ChecksContainerRuntime()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddFakeLogging();
+            logging.AddXunit(output);
+        });
+
+        // Use FakeContainerRuntime that simulates Docker not running
+        var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
+        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+
+        var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+            .WithContainerBuildOptions(ctx =>
+            {
+                ctx.Destination = ContainerImageDestination.Registry;
+            });
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.DefaultTimeoutTimeSpan);
+        var imageManager = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        // Should throw because container runtime is not running
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => imageManager.BuildImagesAsync([servicea.Resource], cts.Token));
+
+        Assert.Contains("is not running or is unhealthy", exception.Message);
+
+        // Verify CheckIfRunningAsync was called in the upfront check
+        Assert.Equal(1, fakeContainerRuntime.CheckIfRunningCallCount);
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_DockerfileResource_RequiresContainerRuntime()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddFakeLogging();
+            logging.AddXunit(output);
+        });
+
+        // Use FakeContainerRuntime that simulates Docker not running
+        var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
+        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+
+        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var container = builder.AddDockerfile("container", tempContextPath, tempDockerfilePath);
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var imageManager = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        // Should throw because Dockerfile builds always require Docker
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => imageManager.BuildImageAsync(container.Resource, cts.Token));
+
+        Assert.Contains("is not running or is unhealthy", exception.Message);
+
+        // Verify CheckIfRunningAsync was called in BuildImageAsync
+        Assert.Equal(1, fakeContainerRuntime.CheckIfRunningCallCount);
+    }
+
+    [Fact]
+    public async Task BuildImagesAsync_MixedDestinations_ChecksRuntimeWhenAnyResourceNeedsIt()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddFakeLogging();
+            logging.AddXunit(output);
+        });
+
+        // Use FakeContainerRuntime that simulates Docker not running
+        var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
+        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+
+        using var tempDir = new TestTempDirectory();
+
+        // Add two projects: one with Archive destination, one without
+        var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+            .WithContainerBuildOptions(ctx =>
+            {
+                ctx.Destination = ContainerImageDestination.Archive;
+                ctx.OutputPath = Path.Combine(tempDir.Path, "archives");
+                ctx.ImageFormat = ContainerImageFormat.Oci;
+            });
+
+        var serviceb = builder.AddProject<Projects.ServiceB>("serviceb");
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.DefaultTimeoutTimeSpan);
+        var imageManager = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        // Should throw because serviceb requires Docker and it's not running
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => imageManager.BuildImagesAsync([servicea.Resource, serviceb.Resource], cts.Token));
+
+        Assert.Contains("is not running or is unhealthy", exception.Message);
+
+        // Verify CheckIfRunningAsync was called once for the entire batch
+        Assert.Equal(1, fakeContainerRuntime.CheckIfRunningCallCount);
+    }
+
+    [Fact]
+    public async Task BuildImagesAsync_NoDestinationSet_ChecksContainerRuntime()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddFakeLogging();
+            logging.AddXunit(output);
+        });
+
+        // Use FakeContainerRuntime that simulates Docker not running
+        var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
+        builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
+
+        // Project without any destination set should default to requiring Docker
+        var servicea = builder.AddProject<Projects.ServiceA>("servicea");
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.DefaultTimeoutTimeSpan);
+        var imageManager = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        // Should throw because container runtime is not running and no Archive destination is set
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => imageManager.BuildImagesAsync([servicea.Resource], cts.Token));
+
+        Assert.Contains("is not running or is unhealthy", exception.Message);
+
+        // Verify CheckIfRunningAsync was called
+        Assert.Equal(1, fakeContainerRuntime.CheckIfRunningCallCount);
     }
 }

@@ -408,6 +408,36 @@ install_archive() {
     say_verbose "Successfully installed archive"
 }
 
+# Function to save global settings using the aspire CLI
+# Uses 'aspire config set -g' to set global configuration values
+# Parameters:
+#   $1 - cli_path: Path to the aspire CLI executable
+#   $2 - key: The configuration key to set
+#   $3 - value: The value to set
+# Expected schema of ~/.aspire/globalsettings.json:
+# {
+#   "channel": "string"  // The channel name (e.g., "daily", "staging", "pr-1234")
+# }
+save_global_settings() {
+    local cli_path="$1"
+    local key="$2"
+    local value="$3"
+    
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] Would run: $cli_path config set -g $key $value"
+        return 0
+    fi
+    
+    say_verbose "Setting global config: $key = $value"
+    
+    if ! "$cli_path" config set -g "$key" "$value" 2>/dev/null; then
+        say_warn "Failed to set global config via aspire CLI"
+        return 1
+    fi
+    
+    say_verbose "Global config saved: $key = $value"
+}
+
 # Function to add PATH to shell configuration file
 # Parameters:
 #   $1 - config_file: Path to the shell configuration file
@@ -1007,6 +1037,19 @@ download_and_install_from_pr() {
         if check_vscode_cli_dependency; then
             install_aspire_extension "$extension_download_dir"
         fi
+    fi
+
+    # Save the global channel setting to the PR hive channel
+    # This allows 'aspire new' and 'aspire init' to use the same channel by default
+    if [[ "$HIVE_ONLY" != true ]]; then
+        # Determine CLI path
+        local cli_path
+        if [[ -f "$cli_install_dir/aspire.exe" ]]; then
+            cli_path="$cli_install_dir/aspire.exe"
+        else
+            cli_path="$cli_install_dir/aspire"
+        fi
+        save_global_settings "$cli_path" "channel" "pr-$PR_NUMBER"
     fi
 }
 

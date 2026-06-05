@@ -679,7 +679,6 @@ public class AzureFunctionsTests
         }
 
         // Verify common environment variables are set
-        Assert.True(context.EnvironmentVariables.ContainsKey("OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES"));
         Assert.True(context.EnvironmentVariables.ContainsKey("FUNCTIONS_WORKER_RUNTIME"));
         Assert.True(context.EnvironmentVariables.ContainsKey("AzureFunctionsJobHost__telemetryMode"));
     }

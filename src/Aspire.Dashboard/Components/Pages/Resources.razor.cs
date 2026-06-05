@@ -34,6 +34,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private const string StartTimeColumn = nameof(StartTimeColumn);
     private const string SourceColumn = nameof(SourceColumn);
     private const string UrlsColumn = nameof(UrlsColumn);
+    private const string ValueColumn = nameof(ValueColumn);
     private const string ActionsColumn = nameof(ActionsColumn);
 
     private Subscription? _logsSubscription;
@@ -137,6 +138,16 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private bool Filter(ResourceViewModel resource)
     {
+        // In Parameters view, only show parameters; in Table view, exclude parameters
+        if (PageViewModel.SelectedViewKind == ResourceViewKind.Parameters && !resource.IsParameter)
+        {
+            return false;
+        }
+        if (PageViewModel.SelectedViewKind == ResourceViewKind.Table && resource.IsParameter)
+        {
+            return false;
+        }
+
         return IsKeyValueTrue(resource.ResourceType, PageViewModel.ResourceTypesToVisibility)
                && IsKeyValueTrue(resource.State ?? string.Empty, PageViewModel.ResourceStatesToVisibility)
                && IsKeyValueTrue(resource.HealthStatus?.Humanize() ?? string.Empty, PageViewModel.ResourceHealthStatusesToVisibility)
@@ -148,22 +159,24 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private async Task OnAllFilterVisibilityCheckedChangedAsync()
     {
-        await ClearSelectedResourceAsync();
-        await _dataGrid.SafeRefreshDataAsync();
+        await VisibleResourcesChangedAsync();
         UpdateMenuButtons();
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
     }
 
     private async Task OnResourceFilterVisibilityChangedAsync(string resourceType, bool isVisible)
     {
-        await UpdateResourceGraphResourcesAsync();
-        await ClearSelectedResourceAsync();
-        await _dataGrid.SafeRefreshDataAsync();
+        await VisibleResourcesChangedAsync();
         UpdateMenuButtons();
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
     }
 
     private async Task HandleSearchFilterChangedAsync()
+    {
+        await VisibleResourcesChangedAsync();
+    }
+
+    private async Task VisibleResourcesChangedAsync()
     {
         await UpdateResourceGraphResourcesAsync();
         await ClearSelectedResourceAsync();
@@ -201,10 +214,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         _gridColumns = [
             new GridColumn(Name: NameColumn, DesktopWidth: "1.5fr", MobileWidth: "1.5fr"),
             new GridColumn(Name: StateColumn, DesktopWidth: "1.25fr", MobileWidth: "1.25fr"),
-            new GridColumn(Name: StartTimeColumn, DesktopWidth: "1fr"),
+            new GridColumn(Name: StartTimeColumn, DesktopWidth: "1fr", IsVisible: () => PageViewModel.SelectedViewKind != ResourceViewKind.Parameters),
             new GridColumn(Name: TypeColumn, DesktopWidth: "1fr", IsVisible: () => _showResourceTypeColumn),
             new GridColumn(Name: SourceColumn, DesktopWidth: "2.25fr"),
-            new GridColumn(Name: UrlsColumn, DesktopWidth: "2.25fr", MobileWidth: "2fr"),
+            new GridColumn(Name: ValueColumn, DesktopWidth: "3.25fr", MobileWidth: "1.5fr", IsVisible: () => PageViewModel.SelectedViewKind == ResourceViewKind.Parameters),
+            new GridColumn(Name: UrlsColumn, DesktopWidth: "2.25fr", MobileWidth: "2fr", IsVisible: () => PageViewModel.SelectedViewKind != ResourceViewKind.Parameters),
             new GridColumn(Name: ActionsColumn, DesktopWidth: "minmax(150px, 1.5fr)", MobileWidth: "1fr")
         ];
 
@@ -512,13 +526,15 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             _showHiddenResources,
             _resourceByName.Values,
             SessionStorage,
-            EventCallback.Factory.Create<bool>(this,
-            async value =>
-            {
-                _showHiddenResources = value;
-                UpdateMenuButtons();
-                await _dataGrid.SafeRefreshDataAsync();
-            }));
+            EventCallback.Factory.Create<bool>(
+                this,
+                async value =>
+                {
+                    _showHiddenResources = value;
+                    UpdateMenuButtons();
+
+                    await VisibleResourcesChangedAsync();
+                }));
     }
 
     private bool HasCollapsedResources()
@@ -529,10 +545,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private void UpdateMaxHighlightedCount()
     {
         var maxHighlightedCount = 0;
-        foreach (var kvp in _resourceByName)
+        foreach (var resource in GetFilteredResources())
         {
             var resourceHighlightedCount = 0;
-            foreach (var command in kvp.Value.Commands)
+            foreach (var command in resource.Commands)
             {
                 if (command.IsHighlighted && command.State != CommandViewModelState.Hidden)
                 {
@@ -673,6 +689,16 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             {
                 await UpdateResourceGraphSelectedAsync();
             }
+            else
+            {
+                // Parameters have their own view. If required, switch view so the selected resource is visible.
+                var resourceViewKind = (resource.IsParameter) ? ResourceViewKind.Parameters : ResourceViewKind.Table;
+                if (resourceViewKind != PageViewModel.SelectedViewKind)
+                {
+                    PageViewModel.SelectedViewKind = resourceViewKind;
+                    await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
+                }
+            }
 
             await _dataGrid.SafeRefreshDataAsync();
         }
@@ -730,6 +756,19 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
     {
         await DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
+    }
+
+    private static (string? Value, bool IsSensitive, bool IsUnresolved) GetParameterValue(ResourceViewModel resource)
+    {
+        var isUnresolved = !resource.IsRunningState();
+
+        if (resource.Properties.TryGetValue(KnownProperties.Parameter.Value, out var property))
+        {
+            // If unresolved, the value contains the exception message - don't show it
+            var value = isUnresolved ? null : (property.Value.HasStringValue ? property.Value.StringValue : null);
+            return (value, property.IsValueSensitive, isUnresolved);
+        }
+        return (null, false, isUnresolved);
     }
 
     private static string GetUrlsTooltip(ResourceViewModel resource)
@@ -854,6 +893,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             await UpdateResourceGraphResourcesAsync();
             await UpdateResourceGraphSelectedAsync();
         }
+        else
+        {
+            // Refresh the data grid when switching between Table and Parameters views
+            // since the filter logic depends on the selected view
+            UpdateMaxHighlightedCount();
+            await _dataGrid.SafeRefreshDataAsync();
+        }
     }
 
     private async Task UpdateResourceGraphSelectedAsync()
@@ -883,6 +929,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     public enum ResourceViewKind
     {
         Table,
+        Parameters,
         Graph
     }
 

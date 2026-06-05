@@ -174,6 +174,16 @@ public class AzureAppServiceEnvironmentResource :
     internal AzureApplicationInsightsResource? ApplicationInsightsResource { get; set; }
 
     /// <summary>
+    /// Deployment slot parameter resource for the App Service Environment.
+    /// </summary>
+    internal ParameterResource? DeploymentSlotParameter { get; set; }
+
+    /// <summary>
+    /// Deployment slot for the App Service Environment.
+    /// </summary>
+    internal string? DeploymentSlot { get; set; }
+
+    /// <summary>
     /// Gets the name of the App Service Plan.
     /// </summary>
     public BicepOutputReference NameOutputReference => new("name", this);

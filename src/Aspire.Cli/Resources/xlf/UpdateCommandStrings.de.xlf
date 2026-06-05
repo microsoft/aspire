@@ -114,7 +114,7 @@
       </trans-unit>
       <trans-unit id="MigratedToNewSdkFormat">
         <source>Migrated to new project format: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</source>
-        <target state="new">Migrated to new project format: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</target>
+        <target state="translated">Zum neuen Projektformat migriert: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
@@ -179,7 +179,7 @@
       </trans-unit>
       <trans-unit id="RemovedObsoleteAppHostPackage">
         <source>Removed obsolete Aspire.Hosting.AppHost package reference</source>
-        <target state="new">Removed obsolete Aspire.Hosting.AppHost package reference</target>
+        <target state="translated">Veralteter Verweis auf das Aspire.Hosting.AppHost-Paket entfernt</target>
         <note />
       </trans-unit>
       <trans-unit id="RetainedFeedFormat">

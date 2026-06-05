@@ -138,9 +138,9 @@ The OpenAI model resource combines the parent properties above and adds the foll
 
 | Property Name | Description |
 |---------------|-------------|
-| `Model` | The model identifier for inference requests, for instance `gpt-4o-mini` |
+| `ModelName` | The model identifier for inference requests, for instance `gpt-4o-mini` |
 
-Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `chat` becomes `CHAT_URI`.
 
 ## Additional documentation
 

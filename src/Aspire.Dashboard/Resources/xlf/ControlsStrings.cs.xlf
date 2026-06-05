@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
-        <source>Graph. For an accessible view please navigate to the Table tab</source>
-        <target state="translated">Graf. Pokud chcete použít přístupné zobrazení, přejděte prosím na kartu Tabulka.</target>
+        <source>Graph. For an accessible view please navigate to the Resources tab</source>
+        <target state="translated">Graf. Pokud chcete použít přístupné zobrazení, přejděte prosím na kartu Prostředky.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -72,14 +72,19 @@
         <target state="translated">Zjistilo se omezování kardinality</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChartContainerParametersTab">
+        <source>Parameters</source>
+        <target state="translated">Parametry</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">Zobrazit počet</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
-        <source>Table</source>
-        <target state="translated">Tabulka</target>
+        <source>Resources</source>
+        <target state="translated">Prostředky</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
@@ -335,6 +340,11 @@
       <trans-unit id="PageToolbarLandmark">
         <source>Page toolbar</source>
         <target state="translated">Panel nástrojů stránky</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterValueNotSet">
+        <source>Value not set</source>
+        <target state="translated">Hodnota není nastavená.</target>
         <note />
       </trans-unit>
       <trans-unit id="PauseButtonTitle">

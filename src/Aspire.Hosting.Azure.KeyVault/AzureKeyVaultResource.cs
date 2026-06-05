@@ -37,6 +37,19 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
     internal EndpointReference EmulatorEndpoint => new(this, "https");
 
     /// <summary>
+    /// Gets the endpoint URI expression for the Key Vault resource.
+    /// </summary>
+    /// <remarks>
+    /// In container mode (emulator), resolves to the container's HTTPS endpoint URL.
+    /// In Azure mode, resolves to the Azure Key Vault URI.
+    /// Format: <c>https://{name}.vault.azure.net/</c>.
+    /// </remarks>
+    public ReferenceExpression Endpoint =>
+        IsEmulator ?
+            ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") :
+            ReferenceExpression.Create($"{VaultUri}");
+
+    /// <summary>
     /// Gets the connection string template for the manifest for the Azure Key Vault resource.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression
@@ -48,9 +61,9 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
                 return connectionStringAnnotation.Resource.ConnectionStringExpression;
             }
 
-            return IsEmulator
-                ? ReferenceExpression.Create($"{EmulatorEndpoint}")
-                : ReferenceExpression.Create($"{VaultUri}");
+            return IsEmulator ?
+                ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") :
+                ReferenceExpression.Create($"{VaultUri}");
         }
     }
 
@@ -120,5 +133,10 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
 
         infra.Add(store);
         return store;
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        yield return new("Uri", Endpoint);
     }
 }

@@ -26,8 +26,6 @@
       "type": "project.v0",
       "path": "../DatabaseMigration.ApiService/DatabaseMigration.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{api.bindings.http.targetPort}",
@@ -36,9 +34,9 @@
         "DB1_PORT": "{sql1.bindings.tcp.port}",
         "DB1_USERNAME": "sa",
         "DB1_PASSWORD": "{sql1-password.value}",
-        "DB1_URI": "mssql://{sql1.bindings.tcp.host}:{sql1.bindings.tcp.port}/db1",
-        "DB1_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql1.bindings.tcp.host}:{sql1.bindings.tcp.port};trustServerCertificate=true;databaseName=db1",
-        "DB1_DATABASE": "db1"
+        "DB1_URI": "mssql://sa:{sql1-password.value}@{sql1.bindings.tcp.host}:{sql1.bindings.tcp.port}/db1",
+        "DB1_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql1.bindings.tcp.host}:{sql1.bindings.tcp.port};databaseName=db1;trustServerCertificate=true",
+        "DB1_DATABASENAME": "db1"
       },
       "bindings": {
         "http": {
@@ -59,17 +57,15 @@
       "type": "project.v0",
       "path": "../DatabaseMigration.MigrationService/DatabaseMigration.MigrationService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ConnectionStrings__db1": "{db1.connectionString}",
         "DB1_HOST": "{sql1.bindings.tcp.host}",
         "DB1_PORT": "{sql1.bindings.tcp.port}",
         "DB1_USERNAME": "sa",
         "DB1_PASSWORD": "{sql1-password.value}",
-        "DB1_URI": "mssql://{sql1.bindings.tcp.host}:{sql1.bindings.tcp.port}/db1",
-        "DB1_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql1.bindings.tcp.host}:{sql1.bindings.tcp.port};trustServerCertificate=true;databaseName=db1",
-        "DB1_DATABASE": "db1"
+        "DB1_URI": "mssql://sa:{sql1-password.value}@{sql1.bindings.tcp.host}:{sql1.bindings.tcp.port}/db1",
+        "DB1_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql1.bindings.tcp.host}:{sql1.bindings.tcp.port};databaseName=db1;trustServerCertificate=true",
+        "DB1_DATABASENAME": "db1"
       }
     },
     "sql1-password": {
@@ -89,6 +85,11 @@
           }
         }
       }
+    },
+    "sql1-password-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{sql1-password.value}",
+      "filter": "uri"
     }
   }
 }

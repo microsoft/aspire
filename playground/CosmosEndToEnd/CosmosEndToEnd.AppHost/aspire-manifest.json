@@ -26,15 +26,24 @@
       "type": "project.v0",
       "path": "../CosmosEndToEnd.ApiService/CosmosEndToEnd.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{api.bindings.http.targetPort}",
         "ConnectionStrings__db": "{db.connectionString}",
+        "DB_URI": "{cosmos.outputs.connectionString}",
+        "DB_DATABASENAME": "db",
         "ConnectionStrings__users": "{users.connectionString}",
+        "USERS_URI": "{cosmos.outputs.connectionString}",
+        "USERS_DATABASENAME": "db",
+        "USERS_CONTAINERNAME": "users",
         "ConnectionStrings__entries": "{entries.connectionString}",
-        "ConnectionStrings__user-todo": "{user-todo.connectionString}"
+        "ENTRIES_URI": "{cosmos.outputs.connectionString}",
+        "ENTRIES_DATABASENAME": "db",
+        "ENTRIES_CONTAINERNAME": "staging-entries",
+        "ConnectionStrings__user-todo": "{user-todo.connectionString}",
+        "USER_TODO_URI": "{cosmos.outputs.connectionString}",
+        "USER_TODO_DATABASENAME": "db",
+        "USER_TODO_CONTAINERNAME": "UserTodo"
       },
       "bindings": {
         "http": {

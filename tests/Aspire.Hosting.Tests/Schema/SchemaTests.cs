@@ -617,8 +617,6 @@ public class SchemaTests
                     "ConnectionStrings__sb": "{sb.connectionString}",
                     "ConnectionStrings__signalr": "{signalr.connectionString}",
                     "ConnectionStrings__table": "{table.connectionString}",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                     "bicepValue0": "{test.outputs.val0}",
                     "bicepValue1": "{test.outputs.val1}",

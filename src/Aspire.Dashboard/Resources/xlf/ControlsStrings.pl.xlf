@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
-        <source>Graph. For an accessible view please navigate to the Table tab</source>
-        <target state="translated">Graf. Aby uzyskać dostępny widok, przejdź do karty Tabela</target>
+        <source>Graph. For an accessible view please navigate to the Resources tab</source>
+        <target state="translated">Wykres. Aby uzyskać widok z ułatwieniami dostępu, przejdź do karty Zasoby</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -72,14 +72,19 @@
         <target state="translated">Wykryto ograniczenie kardynalności</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChartContainerParametersTab">
+        <source>Parameters</source>
+        <target state="translated">Parametry</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">Pokaż liczbę</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
-        <source>Table</source>
-        <target state="translated">Tabela</target>
+        <source>Resources</source>
+        <target state="translated">Zasoby</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
@@ -335,6 +340,11 @@
       <trans-unit id="PageToolbarLandmark">
         <source>Page toolbar</source>
         <target state="translated">Pasek narzędzi strony</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterValueNotSet">
+        <source>Value not set</source>
+        <target state="translated">Wartość nie została ustawiona</target>
         <note />
       </trans-unit>
       <trans-unit id="PauseButtonTitle">

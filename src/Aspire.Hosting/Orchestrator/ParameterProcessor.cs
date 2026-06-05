@@ -118,7 +118,7 @@ public sealed class ParameterProcessor(
     private async Task ProcessResourceDependenciesAsync(IResource resource, DistributedApplicationExecutionContext executionContext, Dictionary<string, ParameterResource> referencedParameters, HashSet<object?> currentDependencySet, CancellationToken cancellationToken)
     {
         // Process the resource's execution configuration to find referenced parameters
-        (var executionConfgiuration, _) = await resource.ExecutionConfigurationBuilder()
+        var executionConfgiuration = await ExecutionConfigurationBuilder.Create(resource)
             .WithArgumentsConfig()
             .WithEnvironmentVariablesConfig()
             .BuildAsync(executionContext, logger, cancellationToken).ConfigureAwait(false);

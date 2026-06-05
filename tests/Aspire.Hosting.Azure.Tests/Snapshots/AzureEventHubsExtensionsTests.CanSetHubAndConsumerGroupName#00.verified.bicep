@@ -32,4 +32,6 @@ resource cg1 'Microsoft.EventHub/namespaces/eventhubs/consumergroups@2024-01-01'
 
 output eventHubsEndpoint string = eh.properties.serviceBusEndpoint
 
+output eventHubsHostName string = split(replace(eh.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
 output name string = eh.name

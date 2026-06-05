@@ -717,17 +717,12 @@ internal sealed partial class ConfigSchemaEmitter(SchemaGenerationSpec spec, Com
 
     private static void ReplaceNodeWithKeyCasingChange(JsonObject jsonObject, string key, JsonNode value)
     {
-        // In System.Text.Json v9, the casing of the new key is not adapted. See https://github.com/dotnet/runtime/issues/108790.
-        // So instead, remove the existing node and insert a new one with the updated key.
-        var index = jsonObject.IndexOf(key);
-        if (index != -1)
+        if (!jsonObject.TryAdd(key, value, out var index))
         {
+            // Starting from System.Text.Json v9, the casing of the new key is not adapted. See https://github.com/dotnet/runtime/issues/108790.
+            // So instead, remove the existing node and insert a new one with the updated key.
             jsonObject.RemoveAt(index);
             jsonObject.Insert(index, key, value);
-        }
-        else
-        {
-            jsonObject[key] = value;
         }
     }
 

@@ -42,6 +42,18 @@ public class AzureKustoClusterResource : AzureProvisioningResource, IResourceWit
     /// </summary>
     public BicepOutputReference ClusterUri => new("clusterUri", this);
 
+    /// <summary>
+    /// Gets the connection URI expression for the Kusto cluster.
+    /// </summary>
+    /// <remarks>
+    /// In emulator mode, resolves to the container's HTTP endpoint.
+    /// In Azure mode, resolves to the Azure Kusto cluster URI.
+    /// </remarks>
+    public ReferenceExpression UriExpression =>
+        IsEmulator
+            ? ReferenceExpression.Create($"{this.GetEndpoint("http")}")
+            : ReferenceExpression.Create($"{ClusterUri}");
+
     /// <inheritdoc/>
     public ReferenceExpression ConnectionStringExpression
     {
@@ -157,5 +169,10 @@ public class AzureKustoClusterResource : AzureProvisioningResource, IResourceWit
         }
 
         throw new InvalidOperationException($"Unsupported principal type kind: {kind}");
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        yield return new("Uri", UriExpression);
     }
 }

@@ -22,10 +22,15 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install VSCE tool
-        run: npm i -g @vscode/vsce
+        run: npm i -g @vscode/vsce@3.7.1
 
       - name: Build with packages
         run: ./build.sh -restore -build -build-extension -ci -pack -bl -p:InstallBrowsersForPlaywright=false -p:SkipTestProjects=true -p:SkipPlaygroundProjects=true ${{ inputs.versionOverrideArg }}
+
+      - name: Clean up artifacts
+        run: |
+          rm -rf artifacts/bin
+          rm -rf artifacts/obj
 
       - name: Stage RID-specific NuGets and remaining packages
         id: stage_rid_specific

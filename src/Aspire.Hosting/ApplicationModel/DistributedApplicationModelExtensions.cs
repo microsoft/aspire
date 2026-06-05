@@ -47,12 +47,24 @@ public static class DistributedApplicationModelExtensions
     {
         foreach (var r in model.Resources)
         {
-            if (r.IsExcludedFromPublish())
-            {
-                continue;
-            }
-
             if (r.RequiresImageBuild())
+            {
+                yield return r;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the build and push resources from the <see cref="DistributedApplicationModel"/>.
+    /// Build and push resources are those that require building and pushing container images to a registry, and are not marked to be ignored by the manifest publishing callback annotation.
+    /// </summary>
+    /// <param name="model">The distributed application model to extract build and push resources from.</param>
+    /// <returns>An enumerable of build and push <see cref="IResource"/> in the model.</returns>
+    public static IEnumerable<IResource> GetBuildAndPushResources(this DistributedApplicationModel model)
+    {
+        foreach (var r in model.Resources)
+        {
+            if (r.RequiresImageBuildAndPush())
             {
                 yield return r;
             }

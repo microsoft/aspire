@@ -146,9 +146,7 @@ public class PostgresServerResource : ContainerResource, IResourceWithConnection
     {
         var builder = new ReferenceExpressionBuilder();
         builder.AppendLiteral("jdbc:postgresql://");
-        builder.Append($"{Host}");
-        builder.AppendLiteral(":");
-        builder.Append($"{Port}");
+        builder.Append($"{Host}:{Port}");
 
         if (databaseName is not null)
         {

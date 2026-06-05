@@ -1,10 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
+    "infra-acr": {
+      "type": "azure.bicep.v0",
+      "path": "infra-acr.module.bicep"
+    },
     "infra": {
       "type": "azure.bicep.v0",
       "path": "infra.module.bicep",
       "params": {
+        "infra_acr_outputs_name": "{infra-acr.outputs.name}",
         "userPrincipalId": ""
       }
     },
@@ -134,6 +139,7 @@
           "storage_outputs_blobendpoint": "{storage.outputs.blobEndpoint}",
           "cache_password_value": "{cache-password.value}",
           "account_kv_outputs_name": "{account-kv.outputs.name}",
+          "account_outputs_connectionstring": "{account.outputs.connectionString}",
           "secretparam_value": "{secretparam.value}",
           "api_identity_outputs_principalname": "{api-identity.outputs.principalName}",
           "api_identity_outputs_clientid": "{api-identity.outputs.clientId}",
@@ -142,18 +148,20 @@
         }
       },
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{api.bindings.http.targetPort}",
         "ConnectionStrings__blobs": "{blobs.connectionString}",
+        "BLOBS_URI": "{storage.outputs.blobEndpoint}",
         "ConnectionStrings__cache": "{cache.connectionString}",
         "CACHE_HOST": "{cache.bindings.tcp.host}",
         "CACHE_PORT": "{cache.bindings.tcp.port}",
         "CACHE_PASSWORD": "{cache-password.value}",
         "CACHE_URI": "redis://:{cache-password-uri-encoded.value}@{cache.bindings.tcp.host}:{cache.bindings.tcp.port}",
         "ConnectionStrings__account": "{account.connectionString}",
+        "ACCOUNT_URI": "{account.outputs.connectionString}",
+        "ACCOUNT_ACCOUNTKEY": "{account-kv.secrets.primaryaccesskey--account}",
+        "ACCOUNT_CONNECTIONSTRING": "{account-kv.secrets.connectionstrings--account}",
         "VALUE": "{secretparam.value}",
         "AZURE_PRINCIPAL_NAME": "{api-identity.outputs.principalName}"
       },

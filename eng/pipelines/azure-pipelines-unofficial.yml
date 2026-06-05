@@ -145,7 +145,6 @@ extends:
             preSteps:
               - checkout: self
                 fetchDepth: 1
-                clean: true
 
             steps:
               - task: DownloadPipelineArtifact@2

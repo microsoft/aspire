@@ -1,0 +1,24 @@
+﻿services:
+  my-service:
+    image: "my-image:latest"
+    volumes:
+      - type: "volume"
+        target: "/container/volume-data"
+        source: "my-volume"
+        read_only: false
+      - type: "bind"
+        target: "/container/bind-data"
+        source: "${MY_SERVICE_BINDMOUNT_0}"
+        read_only: false
+      - type: "bind"
+        target: "/var/run/docker.sock"
+        source: "/var/run/docker.sock"
+        read_only: false
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"
+volumes:
+  my-volume:
+    driver: "local"

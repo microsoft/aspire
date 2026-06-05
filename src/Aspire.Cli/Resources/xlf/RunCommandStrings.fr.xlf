@@ -59,7 +59,7 @@
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
         <source>Stop any running instance of the AppHost without prompting.</source>
-        <target state="new">Stop any running instance of the AppHost without prompting.</target>
+        <target state="translated">Arrêtez les instances en cours d’exécution de AppHost sans requête.</target>
         <note />
       </trans-unit>
       <trans-unit id="Health">
@@ -97,14 +97,9 @@
         <target state="translated">Ressource</target>
         <note>A column header (noun)</note>
       </trans-unit>
-      <trans-unit id="RunningInstanceStopFailed">
-        <source>Failed to stop running instance. The process may have already exited.</source>
-        <target state="new">Failed to stop running instance. The process may have already exited.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="RunningInstanceStopped">
         <source>Running instance stopped successfully.</source>
-        <target state="new">Running instance stopped successfully.</target>
+        <target state="translated">L’instance en cours d’exécution s’est correctement arrêtée.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDebugSessionArgumentDescription">

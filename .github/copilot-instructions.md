@@ -165,7 +165,74 @@ These switches can be repeated to run tests on multiple classes or methods at on
 
 Example: `[QuarantinedTest("..issue url..")]`
 
-- To quarantine or unquarantine tests, use the tool in `tools/QuarantineTools/QuarantineTools.csproj`.
+### Quarantine/Unquarantine via GitHub Commands (Preferred)
+
+Use these commands in any issue or PR comment. They require write access to the repository.
+
+```bash
+# Quarantine a flaky test (creates a new PR)
+/quarantine-test Namespace.Type.Method https://github.com/dotnet/aspire/issues/1234
+
+# Quarantine multiple tests at once
+/quarantine-test TestMethod1 TestMethod2 https://github.com/dotnet/aspire/issues/1234
+
+# Quarantine and push to an existing PR
+/quarantine-test TestMethod https://github.com/dotnet/aspire/issues/1234 --target-pr https://github.com/dotnet/aspire/pull/5678
+
+# Unquarantine a test (creates a new PR)
+/unquarantine-test Namespace.Type.Method
+
+# Unquarantine and push to an existing PR
+/unquarantine-test TestMethod --target-pr https://github.com/dotnet/aspire/pull/5678
+```
+
+When you comment on a PR, the changes are automatically pushed to that PR's branch (no need for `--target-pr`).
+
+### Quarantine/Unquarantine via Local Tool
+
+For local development, use the QuarantineTools directly:
+
+```bash
+# Quarantine a test
+dotnet run --project tools/QuarantineTools -- -q -i https://github.com/dotnet/aspire/issues/1234 Full.Namespace.Type.Method
+
+# Unquarantine a test
+dotnet run --project tools/QuarantineTools -- -u Full.Namespace.Type.Method
+```
+
+## Disabled tests (ActiveIssue)
+
+- Tests that consistently fail due to a known bug or infrastructure issue are marked with the `ActiveIssue` attribute.
+- These tests are completely skipped until the underlying issue is resolved.
+- Use this for tests that are **blocked**, not for flaky tests (use `QuarantinedTest` for flaky tests).
+
+Example: `[ActiveIssue("https://github.com/dotnet/aspire/issues/1234")]`
+
+### Disable/Enable via GitHub Commands (Preferred)
+
+```bash
+# Disable a test due to an active issue (creates a new PR)
+/disable-test Namespace.Type.Method https://github.com/dotnet/aspire/issues/1234
+
+# Disable and push to an existing PR
+/disable-test TestMethod https://github.com/dotnet/aspire/issues/1234 --target-pr https://github.com/dotnet/aspire/pull/5678
+
+# Enable a previously disabled test (creates a new PR)
+/enable-test Namespace.Type.Method
+
+# Enable and push to an existing PR
+/enable-test TestMethod --target-pr https://github.com/dotnet/aspire/pull/5678
+```
+
+### Disable/Enable via Local Tool
+
+```bash
+# Disable a test with ActiveIssue
+dotnet run --project tools/QuarantineTools -- -q -m activeissue -i https://github.com/dotnet/aspire/issues/1234 Full.Namespace.Type.Method
+
+# Enable a test (remove ActiveIssue)
+dotnet run --project tools/QuarantineTools -- -u -m activeissue Full.Namespace.Type.Method
+```
 
 ## Outerloop tests
 

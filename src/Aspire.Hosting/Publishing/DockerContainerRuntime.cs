@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES003
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.Logging;
 
@@ -73,7 +74,8 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
                 if (!string.IsNullOrEmpty(options?.OutputPath))
                 {
-                    outputType += $",dest={Path.Combine(options.OutputPath, resourceName)}.tar";
+                    var archivePath = ResourceExtensions.GetContainerImageArchivePath(options.OutputPath, resourceName, imageTag: null);
+                    outputType += $",dest={archivePath}";
                 }
 
                 arguments += $" --output \"{outputType}\"";

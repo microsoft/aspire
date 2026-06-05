@@ -115,4 +115,14 @@ public class AzureEventHubResource(string name, string hubName, AzureEventHubsRe
         ArgumentException.ThrowIfNullOrEmpty(argument, paramName);
         return argument;
     }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        {
+            yield return property;
+        }
+
+        yield return new("EventHubName", ReferenceExpression.Create($"{HubName}"));
+    }
 }

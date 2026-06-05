@@ -16,6 +16,10 @@ public interface IContainerRegistry
     /// <summary>
     /// Gets the endpoint URL of the container registry.
     /// </summary>
+    /// <remarks>
+    /// An empty endpoint value indicates a local container registry where images are built and used locally
+    /// without being pushed to a remote registry (e.g., Docker Compose scenarios).
+    /// </remarks>
     ReferenceExpression Endpoint { get; }
 
     /// <summary>

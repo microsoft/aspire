@@ -59,7 +59,7 @@
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
         <source>Stop any running instance of the AppHost without prompting.</source>
-        <target state="new">Stop any running instance of the AppHost without prompting.</target>
+        <target state="translated">프롬프트 없이 AppHost의 실행 중인 인스턴스를 중지합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="Health">
@@ -97,14 +97,9 @@
         <target state="translated">리소스</target>
         <note>A column header (noun)</note>
       </trans-unit>
-      <trans-unit id="RunningInstanceStopFailed">
-        <source>Failed to stop running instance. The process may have already exited.</source>
-        <target state="new">Failed to stop running instance. The process may have already exited.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="RunningInstanceStopped">
         <source>Running instance stopped successfully.</source>
-        <target state="new">Running instance stopped successfully.</target>
+        <target state="translated">실행 중인 인스턴스가 중지되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDebugSessionArgumentDescription">

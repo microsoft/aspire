@@ -60,10 +60,10 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     /// Gets the connection URI expression for the SQL Server.
     /// </summary>
     /// <remarks>
-    /// Format: <c>mssql://{host}:{port}</c>.
+    /// Format: <c>mssql://{Username}:{Password}@{Host}:{Port}</c>.
     /// </remarks>
     public ReferenceExpression UriExpression =>
-        ReferenceExpression.Create($"mssql://{Host}:{Port}");
+        ReferenceExpression.Create($"mssql://{DefaultUserName:uri}:{PasswordParameter:uri}@{Host}:{Port}");
 
     internal ReferenceExpression BuildJdbcConnectionString(string? databaseName = null)
     {
@@ -72,7 +72,6 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
         builder.Append($"{Host}");
         builder.AppendLiteral(":");
         builder.Append($"{Port}");
-        builder.AppendLiteral(";trustServerCertificate=true");
 
         if (!string.IsNullOrEmpty(databaseName))
         {
@@ -80,6 +79,8 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
             builder.AppendLiteral(";databaseName=");
             builder.Append($"{databaseNameReference}");
         }
+
+        builder.AppendLiteral(";trustServerCertificate=true");
 
         return builder.Build();
     }

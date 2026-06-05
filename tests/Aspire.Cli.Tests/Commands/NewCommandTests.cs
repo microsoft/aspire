@@ -6,6 +6,7 @@ using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
@@ -245,6 +246,166 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
         Assert.Equal(0, exitCode);
         Assert.False(promptedForPath);
+    }
+
+    [Fact]
+    [QuarantinedTest("https://github.com/dotnet/aspire/issues/10979")]
+    public async Task NewCommandWithChannelOptionUsesSpecifiedChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        
+        string? channelNameUsed = null;
+        bool promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+                
+                prompter.PromptForTemplatesVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt for version when --channel is specified");
+                };
+                
+                return prompter;
+            };
+
+            options.PackagingServiceFactory = (sp) =>
+            {
+                var packagingService = new NewCommandTestPackagingService();
+                packagingService.GetChannelsAsyncCallback = (ct) =>
+                {
+                    var stableCache = new NewCommandTestFakeNuGetPackageCache();
+                    stableCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                    {
+                        channelNameUsed = "stable";
+                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                        return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
+                    };
+                    
+                    var dailyCache = new NewCommandTestFakeNuGetPackageCache();
+                    dailyCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                    {
+                        channelNameUsed = "daily";
+                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "10.0.0-dev" };
+                        return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
+                    };
+                    
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    
+                    return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
+                };
+                
+                return packagingService;
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                {
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        
+        // Assert
+        Assert.Equal(0, exitCode);
+        Assert.Equal("stable", channelNameUsed); // Verify the stable channel was used
+        Assert.False(promptedForVersion); // Should not prompt when --channel is specified
+    }
+
+    [Fact]
+    [QuarantinedTest("https://github.com/dotnet/aspire/issues/10979")]
+    public async Task NewCommandWithChannelOptionAutoSelectsHighestVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        
+        string? selectedVersion = null;
+        bool promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+                
+                prompter.PromptForTemplatesVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt for version when --channel is specified");
+                };
+                
+                return prompter;
+            };
+
+            options.PackagingServiceFactory = (sp) =>
+            {
+                var packagingService = new NewCommandTestPackagingService();
+                packagingService.GetChannelsAsyncCallback = (ct) =>
+                {
+                    var fakeCache = new NewCommandTestFakeNuGetPackageCache();
+                    fakeCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                    {
+                        // Return multiple versions to test auto-selection of highest
+                        var packages = new[]
+                        {
+                            new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.0.0" },
+                            new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" },
+                            new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.1.0" },
+                        };
+                        return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
+                    };
+                    
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache);
+                    return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
+                };
+                
+                return packagingService;
+            };
+            
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                {
+                    selectedVersion = version;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    return 0; // Success
+                };
+                return runner;
+            };
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        
+        // Assert
+        Assert.Equal(0, exitCode);
+        Assert.Equal("9.2.0", selectedVersion); // Should auto-select highest version (9.2.0)
+        Assert.False(promptedForVersion); // Should not prompt when --channel is specified
     }
 
     [Fact]
@@ -753,4 +914,57 @@ internal sealed class OrderTrackingInteractionService(List<string> operationOrde
     public void DisplayMarkdown(string markdown) { }
     public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false) { }
     public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null) { }
+}
+
+internal sealed class NewCommandTestPackagingService : IPackagingService
+{
+    public Func<CancellationToken, Task<IEnumerable<PackageChannel>>>? GetChannelsAsyncCallback { get; set; }
+
+    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
+    {
+        if (GetChannelsAsyncCallback is not null)
+        {
+            return GetChannelsAsyncCallback(cancellationToken);
+        }
+        
+        // Default: Return a fake channel
+        var testChannel = PackageChannel.CreateImplicitChannel(new NewCommandTestFakeNuGetPackageCache());
+        return Task.FromResult<IEnumerable<PackageChannel>>(new[] { testChannel });
+    }
+}
+
+internal sealed class NewCommandTestFakeNuGetPackageCache : INuGetPackageCache
+{
+    public Func<DirectoryInfo, bool, FileInfo?, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetTemplatePackagesAsyncCallback { get; set; }
+
+    public Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+    {
+        if (GetTemplatePackagesAsyncCallback is not null)
+        {
+            return GetTemplatePackagesAsyncCallback(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        }
+
+        var package = new NuGetPackage
+        {
+            Id = "Aspire.ProjectTemplates",
+            Source = "nuget",
+            Version = "10.0.0"
+        };
+        return Task.FromResult<IEnumerable<NuGetPackage>>(new[] { package });
+    }
+
+    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IEnumerable<NuGetPackage>>(Array.Empty<NuGetPackage>());
+    }
+
+    public Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IEnumerable<NuGetPackage>>(Array.Empty<NuGetPackage>());
+    }
+
+    public Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IEnumerable<NuGetPackage>>(Array.Empty<NuGetPackage>());
+    }
 }

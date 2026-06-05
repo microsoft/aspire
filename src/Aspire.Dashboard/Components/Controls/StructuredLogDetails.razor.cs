@@ -86,7 +86,10 @@ public partial class StructuredLogDetails : IDisposable
             [
                 new TelemetryPropertyViewModel { Name = "Category", Key = KnownStructuredLogFields.CategoryField, Value = _viewModel.LogEntry.Scope.Name }
             ];
-            MoveAttributes(attributes, _contextAttributes, a => a.Name is "event.name" or "logrecord.event.id" or "logrecord.event.name");
+            if (!string.IsNullOrEmpty(_viewModel.LogEntry.EventName))
+            {
+                _contextAttributes.Add(new TelemetryPropertyViewModel { Name = "EventName", Key = KnownStructuredLogFields.EventNameField, Value = _viewModel.LogEntry.EventName });
+            }
             if (HasTelemetryBaggage(_viewModel.LogEntry.TraceId))
             {
                 _contextAttributes.Add(new TelemetryPropertyViewModel { Name = "TraceId", Key = KnownStructuredLogFields.TraceIdField, Value = _viewModel.LogEntry.TraceId });

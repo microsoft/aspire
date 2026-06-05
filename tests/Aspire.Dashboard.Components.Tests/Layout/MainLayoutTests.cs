@@ -196,7 +196,6 @@ public partial class MainLayoutTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient, TestDashboardClient>();
         Services.AddSingleton<ITooltipService, TooltipService>();
         Services.AddSingleton<IToastService, ToastService>();
-        Services.AddSingleton<GlobalState>();
         Services.Configure<DashboardOptions>(o =>
         {
             o.Otlp.AuthMode = OtlpAuthMode.Unsecured;

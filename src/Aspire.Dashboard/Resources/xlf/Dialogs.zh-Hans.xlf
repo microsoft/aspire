@@ -382,6 +382,16 @@
         <target state="translated">Aspire MCP API 密钥</target>
         <note />
       </trans-unit>
+      <trans-unit id="McpServerDialogCliInstructionsAbove">
+        <source>The fastest way to get started is to &lt;a href="{0}" target="_blank"&gt;configure the Aspire MCP using the CLI&lt;/a&gt;</source>
+        <target state="translated">最快开始的方法是&lt;a href="{0}" target="_blank"&gt;使用 CLI 配置 Aspire MCP&lt;/a&gt;</target>
+        <note>{0} is a URL</note>
+      </trans-unit>
+      <trans-unit id="McpServerDialogCliInstructionsBelow">
+        <source>The &lt;code&gt;aspire mcp init&lt;/code&gt; command writes MCP JSON to your local workspace. Alternatively, configure your local AI development tools using instructions below.</source>
+        <target state="translated">&lt;code&gt;aspire mcp init&lt;/code&gt; 命令将 MCP JSON 写入你的本地工作区。或者，按照下面的说明来配置本地 AI 开发工具。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="McpServerDialogConfigurationHeading">
         <source>Aspire MCP configuration</source>
         <target state="translated">Aspire MCP 配置</target>

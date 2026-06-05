@@ -83,7 +83,7 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
 
         options.AI.Disabled = _configuration.GetBool(DashboardConfigNames.DashboardAIDisabledName.ConfigKey);
 
-        if (_configuration.GetBool(DashboardConfigNames.Legacy.DashboardOtlpSuppressUnsecuredTelemetryMessage.ConfigKey) is { } suppressUnsecuredTelemetryMessage)
+        if (_configuration.GetBool(DashboardConfigNames.Legacy.DashboardOtlpSuppressUnsecuredTelemetryMessageName.ConfigKey) is { } suppressUnsecuredTelemetryMessage)
         {
             options.Otlp.SuppressUnsecuredMessage = suppressUnsecuredTelemetryMessage;
         }

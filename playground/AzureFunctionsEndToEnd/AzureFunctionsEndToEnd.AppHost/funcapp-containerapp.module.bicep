@@ -62,14 +62,6 @@ resource funcapp 'Microsoft.App/containerApps@2025-02-02-preview' = {
           name: 'funcapp'
           env: [
             {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
               name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
               value: 'in_memory'
             }
@@ -180,6 +172,14 @@ resource funcapp 'Microsoft.App/containerApps@2025-02-02-preview' = {
             {
               name: 'ConnectionStrings__myblobcontainer'
               value: 'Endpoint=${storage_outputs_blobendpoint};ContainerName=myblobcontainer'
+            }
+            {
+              name: 'MYBLOBCONTAINER_URI'
+              value: storage_outputs_blobendpoint
+            }
+            {
+              name: 'MYBLOBCONTAINER_BLOBCONTAINERNAME'
+              value: 'myblobcontainer'
             }
             {
               name: 'blob__blobServiceUri'

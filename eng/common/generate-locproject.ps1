@@ -89,36 +89,36 @@ $locJson = @{
         @{
             LanguageSet = $LanguageSet
             LocItems = @(
-            $locFiles | ForEach-Object {
-                $outputPath = "$(($_.DirectoryName | Resolve-Path -Relative) + "\")"
-                $continue = $true
-                foreach ($exclusion in $exclusions.Exclusions) {
-                    if ($_.FullName.Contains($exclusion))
+                $locFiles | ForEach-Object {
+                    $outputPath = "$(($_.DirectoryName | Resolve-Path -Relative) + "\")"
+                    $continue = $true
+                    foreach ($exclusion in $exclusions.Exclusions) {
+                        if ($_.FullName.Contains($exclusion))
+                        {
+                            $continue = $false
+                        }
+                    }
+                    $sourceFile = ($_.FullName | Resolve-Path -Relative)
+                    if (!$CreateNeutralXlfs -and $_.Extension -eq '.xlf') {
+                        Remove-Item -Path $sourceFile
+                    }
+                    if ($continue)
                     {
-                        $continue = $false
-                    }
-                }
-                $sourceFile = ($_.FullName | Resolve-Path -Relative)
-                if (!$CreateNeutralXlfs -and $_.Extension -eq '.xlf') {
-                    Remove-Item -Path $sourceFile
-                }
-                if ($continue)
-                {
-                    if ($_.Directory.Name -eq 'en' -and $_.Extension -eq '.json') {
-                        return @{
-                            SourceFile = $sourceFile
-                            CopyOption = "LangIDOnPath"
-                            OutputPath = "$($_.Directory.Parent.FullName | Resolve-Path -Relative)\"
-                        }
-                    } else {
-                        return @{
-                            SourceFile = $sourceFile
-                            CopyOption = "LangIDOnName"
-                            OutputPath = $outputPath
+                        if ($_.Directory.Name -eq 'en' -and $_.Extension -eq '.json') {
+                            return @{
+                                SourceFile = $sourceFile
+                                CopyOption = "LangIDOnPath"
+                                OutputPath = "$($_.Directory.Parent.FullName | Resolve-Path -Relative)\"
+                            }
+                        } else {
+                            return @{
+                                SourceFile = $sourceFile
+                                CopyOption = "LangIDOnName"
+                                OutputPath = $outputPath
+                            }
                         }
                     }
                 }
-            }
             )
         },
         @{
@@ -126,24 +126,24 @@ $locJson = @{
             CloneLanguageSet = "WiX_CloneLanguages"
             LssFiles = @( "wxl_loc.lss" )
             LocItems = @(
-            $wxlFilesV3 | ForEach-Object {
-                $outputPath = "$($_.Directory.FullName | Resolve-Path -Relative)\"
-                $continue = $true
-                foreach ($exclusion in $exclusions.Exclusions) {
-                    if ($_.FullName.Contains($exclusion)) {
-                        $continue = $false
+                $wxlFilesV3 | ForEach-Object {
+                    $outputPath = "$($_.Directory.FullName | Resolve-Path -Relative)\"
+                    $continue = $true
+                    foreach ($exclusion in $exclusions.Exclusions) {
+                        if ($_.FullName.Contains($exclusion)) {
+                            $continue = $false
+                        }
+                    }
+                    $sourceFile = ($_.FullName | Resolve-Path -Relative)
+                    if ($continue)
+                    {
+                        return @{
+                            SourceFile = $sourceFile
+                            CopyOption = "LangIDOnPath"
+                            OutputPath = $outputPath
+                        }
                     }
                 }
-                $sourceFile = ($_.FullName | Resolve-Path -Relative)
-                if ($continue)
-                {
-                    return @{
-                        SourceFile = $sourceFile
-                        CopyOption = "LangIDOnPath"
-                        OutputPath = $outputPath
-                    }
-                }
-            }
             )
         },
         @{
@@ -151,24 +151,24 @@ $locJson = @{
             CloneLanguageSet = "WiX_CloneLanguages"
             LssFiles = @( "P210WxlSchemaV4.lss" )
             LocItems = @(
-            $wxlFilesV5 | ForEach-Object {
-                $outputPath = "$($_.Directory.FullName | Resolve-Path -Relative)\"
-                $continue = $true
-                foreach ($exclusion in $exclusions.Exclusions) {
-                    if ($_.FullName.Contains($exclusion)) {
-                        $continue = $false
+                $wxlFilesV5 | ForEach-Object {
+                    $outputPath = "$($_.Directory.FullName | Resolve-Path -Relative)\"
+                    $continue = $true
+                    foreach ($exclusion in $exclusions.Exclusions) {
+                        if ($_.FullName.Contains($exclusion)) {
+                            $continue = $false
+                        }
+                    }
+                    $sourceFile = ($_.FullName | Resolve-Path -Relative)
+                    if ($continue)
+                    {
+                        return @{
+                            SourceFile = $sourceFile
+                            CopyOption = "LangIDOnPath"
+                            OutputPath = $outputPath
+                        }
                     }
                 }
-                $sourceFile = ($_.FullName | Resolve-Path -Relative)
-                if ($continue)
-                {
-                    return @{
-                        SourceFile = $sourceFile
-                        CopyOption = "LangIDOnPath"
-                        OutputPath = $outputPath
-                    }
-                }
-            }
             )
         },
         @{
@@ -176,28 +176,28 @@ $locJson = @{
             CloneLanguageSet = "VS_macOS_CloneLanguages"
             LssFiles = @( ".\eng\common\loc\P22DotNetHtmlLocalization.lss" )
             LocItems = @(
-            $macosHtmlFiles | ForEach-Object {
-                $outputPath = "$($_.Directory.FullName | Resolve-Path -Relative)\"
-                $continue = $true
-                foreach ($exclusion in $exclusions.Exclusions) {
-                    if ($_.FullName.Contains($exclusion)) {
-                        $continue = $false
+                $macosHtmlFiles | ForEach-Object {
+                    $outputPath = "$($_.Directory.FullName | Resolve-Path -Relative)\"
+                    $continue = $true
+                    foreach ($exclusion in $exclusions.Exclusions) {
+                        if ($_.FullName.Contains($exclusion)) {
+                            $continue = $false
+                        }
+                    }
+                    $sourceFile = ($_.FullName | Resolve-Path -Relative)
+                    $lciFile = $sourceFile + ".lci"
+                    if ($continue) {
+                        $result = @{
+                            SourceFile = $sourceFile
+                            CopyOption = "LangIDOnPath"
+                            OutputPath = $outputPath
+                        }
+                        if (Test-Path $lciFile -PathType Leaf) {
+                            $result["LciFile"] = $lciFile
+                        }
+                        return $result
                     }
                 }
-                $sourceFile = ($_.FullName | Resolve-Path -Relative)
-                $lciFile = $sourceFile + ".lci"
-                if ($continue) {
-                    $result = @{
-                        SourceFile = $sourceFile
-                        CopyOption = "LangIDOnPath"
-                        OutputPath = $outputPath
-                    }
-                    if (Test-Path $lciFile -PathType Leaf) {
-                        $result["LciFile"] = $lciFile
-                    }
-                    return $result
-                }
-            }
             )
         }
     )

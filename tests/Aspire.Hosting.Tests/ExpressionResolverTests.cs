@@ -219,11 +219,8 @@ public class ExpressionResolverTests
 
         var connectionStringResource = builder.AddResource(new MyContainerResource("myContainer"))
            .WithImage("redis")
-           .WithHttpEndpoint(targetPort: 8080)
-           .WithEndpoint("http", e =>
-           {
-               e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8001, EndpointBindingMode.SingleAddress, "{{ targetPort }}", KnownNetworkIdentifiers.LocalhostNetwork);
-           });
+           .WithHttpEndpoint(port: 8001, targetPort: 8080)
+           .WithEndpoint("http", ep => ep.AllocatedEndpoint = new(ep, "localhost", 8001, EndpointBindingMode.SingleAddress, "{{ targetPort }}", KnownNetworkIdentifiers.LocalhostNetwork));
 
         var dep = builder.AddContainer("container", "redis")
            .WithReference(connectionStringResource)
@@ -232,6 +229,25 @@ public class ExpressionResolverTests
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(dep.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
         Assert.Equal("http://myContainer.dev.internal:8080", config["ConnectionStrings__myContainer"]);
+    }
+
+    [Fact]
+    public async Task ContainerToContainerEndpointWithLocalhostNetworkIdentifierShouldResolve()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var connectionStringResource = builder.AddResource(new MyContainerResource("myContainer"))
+           .WithImage("redis")
+           .WithHttpEndpoint(port: 8001, targetPort: 8080)
+           .WithEndpoint("http", ep => ep.AllocatedEndpoint = new(ep, "localhost", 8001, EndpointBindingMode.SingleAddress, "{{ targetPort }}", KnownNetworkIdentifiers.LocalhostNetwork));
+
+        var dep = builder.AddContainer("container", "redis")
+           .WithEnvironment("MY_CONTAINER", connectionStringResource.GetEndpoint("http", KnownNetworkIdentifiers.LocalhostNetwork))
+           .WaitFor(connectionStringResource);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(dep.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("http://localhost:8001", config["MY_CONTAINER"]);
     }
 
     [Fact]
@@ -261,7 +277,7 @@ sealed class MyContainerResource : ContainerResource, IResourceWithConnectionStr
 {
     public MyContainerResource(string name) : base(name)
     {
-        PrimaryEndpoint = new(this, "http", KnownNetworkIdentifiers.LocalhostNetwork);
+        PrimaryEndpoint = new(this, "http");
     }
 
     public EndpointReference PrimaryEndpoint { get; }

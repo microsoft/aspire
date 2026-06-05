@@ -573,6 +573,9 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context.EnvironmentVariables[DashboardConfigNames.DashboardMcpAuthModeName.EnvVarName] = "Unsecured";
         }
 
+        // Configure dashboard to show CLI MCP instructions when running with an AppHost (not in standalone mode)
+        context.EnvironmentVariables[DashboardConfigNames.DashboardMcpUseCliMcpName.EnvVarName] = "true";
+
         // Change the dashboard formatter to use JSON so we can parse the logs and render them in the
         // via the ILogger.
         context.EnvironmentVariables["LOGGING__CONSOLE__FORMATTERNAME"] = "json";

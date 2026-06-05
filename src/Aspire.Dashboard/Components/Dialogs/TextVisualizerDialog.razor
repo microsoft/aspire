@@ -33,16 +33,6 @@
         @if (IsTextContentDisplayed)
         {
             <TextVisualizer ViewModel="TextVisualizerViewModel" />
-
-            <FluentButton Id="@_copyButtonId"
-                          Class="text-visualizer-copy"
-                          AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
-                <span slot="start">
-                    <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
-                    <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
-                </span>
-                @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
-            </FluentButton>
         }
         else if (ShowSecretsWarning is true)
         {
@@ -57,9 +47,27 @@
                     @Loc[nameof(Dialogs.TextVisualizerSecretWarningDescription)]
                 </div>
             </div>
-
-            <FluentButton Class="text-visualizer-unmask-content" OnClick="@UnmaskContentAsync">@Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]</FluentButton>
         }
+
+        <div class="button-container">
+            @if (ShowSecretsWarning is true)
+            {
+                <FluentButton Class="text-visualizer-unmask-content"
+                              OnClick="@UnmaskContentAsync">
+                    @Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]
+                </FluentButton>
+            }
+
+            <FluentButton Id="@_copyButtonId"
+                          Class="text-visualizer-copy"
+                          AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                <span slot="start">
+                    <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
+                    <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
+                </span>
+                @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
+            </FluentButton>
+        </div>
     </div>
 </FluentDialogBody>
 

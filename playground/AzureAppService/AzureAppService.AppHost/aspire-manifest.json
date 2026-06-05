@@ -1,10 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
+    "infra-acr": {
+      "type": "azure.bicep.v0",
+      "path": "infra-acr.module.bicep"
+    },
     "infra": {
       "type": "azure.bicep.v0",
       "path": "infra.module.bicep",
       "params": {
+        "infra_acr_outputs_name": "{infra-acr.outputs.name}",
         "userPrincipalId": ""
       }
     },
@@ -60,13 +65,13 @@
         }
       },
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{api.bindings.http.targetPort}",
         "ConnectionStrings__blobs": "{blobs.connectionString}",
+        "BLOBS_URI": "{storage.outputs.blobEndpoint}",
         "ConnectionStrings__account": "{account.connectionString}",
+        "ACCOUNT_URI": "{account.outputs.connectionString}",
         "VALUE": "{secretparam.value}",
         "AZURE_PRINCIPAL_NAME": "{api-identity.outputs.principalName}"
       },

@@ -79,6 +79,33 @@ When the AppHost starts up the local foundry service also be started.
 
 This requires the local machine to have the [Foundry Local](https://learn.microsoft.com/azure/ai-foundry/foundry-local/get-started) installed and running.
 
+## Connection Properties
+
+When you reference Azure AI Foundry resources using `WithReference`, the following connection properties are made available to the consuming project:
+
+### Azure AI Foundry resource
+
+The Azure AI Foundry resource exposes the following connection properties:
+
+| Property Name | Description |
+|---------------|-------------|
+| `Uri`         | The endpoint URI for the Azure AI Foundry resource (e.g., `https://<resource_name>.services.ai.azure.com/` or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
+| `Key`         | The API key when using Foundry Local resource, e.g., `OPENAI_API_KEY` |
+
+### Azure AI Foundry deployment
+
+The Azure AI Foundry deployment resource inherits all properties from its parent Azure AI Foundry resource and adds:
+
+| Property Name | Description |
+|---------------|-------------|
+| `ModelName`   | The deployment name when targeting Azure or model identifier when running Foundry Local, e.g., `Phi-4`, `my-chat` |
+| `Format`      | The deployment format, .e.g., `OpenAI`, `Microsoft`, `xAi`, `Deepseek` |
+| `Version`     | The deployment version, e.g., `1`, `2025-08-07` |
+
+Note: The property named `ModelName` refers to the deployment name when targeting Azure AI Foundry, but to the model identifier when running Foundry Local.
+
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `chat` becomes `CHAT_URI`.
+
 ## Additional documentation
 
 * https://learn.microsoft.com/azure/ai-foundry/what-is-azure-ai-foundry

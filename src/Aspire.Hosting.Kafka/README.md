@@ -36,7 +36,7 @@ The Kafka server resource exposes the following connection properties:
 | `Host` | The host-facing Kafka listener hostname or IP address |
 | `Port` | The host-facing Kafka listener port |
 
-Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `messaging` becomes `MESSAGING_URI`.
 
 ## Additional documentation
 

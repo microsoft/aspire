@@ -7,14 +7,18 @@
     background: transparent;
 }
 
-.text-visualizer-container ::deep.text-visualizer-unmask-content {
+.text-visualizer-container ::deep.button-container {
+    display: flex;
+    width: 100%;
     margin-top: auto;
-    align-self: start;
+}
+
+.text-visualizer-container ::deep.text-visualizer-unmask-content {
+    margin-left: 0;
 }
 
 .text-visualizer-container ::deep.text-visualizer-copy {
-    margin-top: auto;
-    align-self: end;
+    margin-left: auto;
 }
 
 .text-visualizer-container {

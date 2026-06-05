@@ -1,6 +1,6 @@
 {
   "sdk": {
-    "version": "10.0.100",
+    "version": "10.0.101",
     "rollForward": "major",
     "allowPrerelease": true,
     "paths": [
@@ -10,7 +10,7 @@
     "errorMessage": "The .NET SDK could not be found. Run ./restore.sh (Linux/macOS) or ./restore.cmd (Windows) to install the local SDK."
   },
   "tools": {
-    "dotnet": "10.0.100",
+    "dotnet": "10.0.101",
     "runtimes": {
       "dotnet/x64": [
         "$(DotNetRuntimePreviousVersionForTesting)",
@@ -33,8 +33,8 @@
   "msbuild-sdks": {
     "Microsoft.Build.NoTargets": "3.7.0",
     "Microsoft.Build.Traversal": "3.2.0",
-    "Microsoft.DotNet.Arcade.Sdk": "11.0.0-beta.25509.1",
-    "Microsoft.DotNet.Helix.Sdk": "11.0.0-beta.25509.1",
-    "Microsoft.DotNet.SharedFramework.Sdk": "11.0.0-beta.25509.1"
+    "Microsoft.DotNet.Arcade.Sdk": "11.0.0-beta.25610.3",
+    "Microsoft.DotNet.Helix.Sdk": "11.0.0-beta.25610.3",
+    "Microsoft.DotNet.SharedFramework.Sdk": "11.0.0-beta.25610.3"
   }
 }

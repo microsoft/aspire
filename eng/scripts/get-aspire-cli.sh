@@ -454,6 +454,94 @@ install_archive() {
     say_verbose "Successfully installed archive"
 }
 
+# Function to map quality to channel name
+# Parameters:
+#   $1 - quality: The quality string (release, staging, dev)
+# Returns: The corresponding channel name (stable, staging, daily)
+map_quality_to_channel() {
+    local quality="$1"
+    
+    case "$quality" in
+        release)
+            printf "stable"
+            ;;
+        staging)
+            printf "staging"
+            ;;
+        dev)
+            printf "daily"
+            ;;
+        *)
+            # Unknown quality, return as-is
+            printf "%s" "$quality"
+            ;;
+    esac
+}
+
+# Function to save the global settings using the aspire CLI
+# Uses 'aspire config set -g' to set global configuration values
+# Parameters:
+#   $1 - cli_path: Path to the aspire CLI executable
+#   $2 - key: The configuration key to set
+#   $3 - value: The value to set
+# Expected schema of ~/.aspire/globalsettings.json:
+# {
+#   "channel": "string"  // The channel name (e.g., "daily", "staging", "pr-1234")
+# }
+save_global_settings() {
+    local cli_path="$1"
+    local key="$2"
+    local value="$3"
+    
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] Would run: $cli_path config set -g $key $value"
+        return 0
+    fi
+    
+    say_verbose "Setting global config: $key = $value"
+    
+    local output
+    output=$("$cli_path" config set -g "$key" "$value" 2>&1)
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+        say_warn "Failed to set global config via aspire CLI: $output"
+        return 1
+    fi
+    if [[ -n "$output" ]]; then
+        say_verbose "$output"
+    fi
+    
+    say_verbose "Global config saved: $key = $value"
+}
+
+# Function to remove a global setting using the aspire CLI
+# Uses 'aspire config delete -g' to remove global configuration values
+# This is used when installing the release/stable channel to avoid forcing nuget.config creation
+# Parameters:
+#   $1 - cli_path: Path to the aspire CLI executable
+#   $2 - key: The configuration key to remove
+remove_global_settings() {
+    local cli_path="$1"
+    local key="$2"
+    
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] Would run: $cli_path config delete -g $key"
+        return 0
+    fi
+    
+    say_verbose "Removing global config: $key"
+    
+    local output
+    output=$("$cli_path" config delete -g "$key" 2>&1)
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+        say_verbose "Failed to delete global config via aspire CLI: $output"
+        return 1
+    fi
+    
+    say_verbose "Global config removed: $key"
+}
+
 # Function to add PATH to shell configuration file
 # Parameters:
 #   $1 - config_file: Path to the shell configuration file
@@ -907,6 +995,19 @@ download_and_install_archive() {
     cli_path="${INSTALL_PATH}/${cli_exe}"
 
     say_info "Aspire CLI successfully installed to: ${GREEN}$cli_path${RESET}"
+
+    # Save the global channel setting if using quality-based download (not version-specific)
+    # This allows 'aspire new' and 'aspire init' to use the same channel by default
+    # For release/stable channel, remove the setting to avoid forcing nuget.config creation
+    if [[ -z "$VERSION" ]]; then
+        local channel
+        channel=$(map_quality_to_channel "$QUALITY")
+        if [[ "$channel" == "stable" ]]; then
+            remove_global_settings "$cli_path" "channel"
+        else
+            save_global_settings "$cli_path" "channel" "$channel"
+        fi
+    fi
 
     # Download and install VS Code extension if requested
     if [[ "$INSTALL_EXTENSION" == true ]]; then

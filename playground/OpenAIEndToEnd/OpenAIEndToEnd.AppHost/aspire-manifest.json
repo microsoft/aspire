@@ -23,8 +23,6 @@
       "type": "project.v0",
       "path": "../OpenAIEndToEnd.WebStory/OpenAIEndToEnd.WebStory.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{webstory.bindings.http.targetPort}",
@@ -32,7 +30,7 @@
         "CHAT_ENDPOINT": "https://api.openai.com/v1",
         "CHAT_URI": "https://api.openai.com/v1",
         "CHAT_KEY": "{openai-openai-apikey.value}",
-        "CHAT_MODEL": "gpt-4o-mini"
+        "CHAT_MODELNAME": "gpt-4o-mini"
       },
       "bindings": {
         "http": {

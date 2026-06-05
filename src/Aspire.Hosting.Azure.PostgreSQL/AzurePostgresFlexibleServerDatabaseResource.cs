@@ -38,6 +38,34 @@ public class AzurePostgresFlexibleServerDatabaseResource(string name, string dat
     /// </summary>
     internal PostgresDatabaseResource? InnerResource { get; private set; }
 
+    /// <summary>
+    /// Gets a value indicating whether the current resource represents a container. If so the actual resource is not running in Azure.
+    /// </summary>
+    [MemberNotNullWhen(true, nameof(InnerResource))]
+    public bool IsContainer => InnerResource is not null;
+
+    /// <summary>
+    /// Gets the connection URI expression for the PostgreSQL server.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>postgresql://{user}:{password}@{host}:{port}/{database}</c>.
+    /// </remarks>
+    public ReferenceExpression UriExpression =>
+        IsContainer ?
+            InnerResource.UriExpression :
+            ReferenceExpression.Create($"{Parent.UriExpression}/{DatabaseName:uri}");
+
+    /// <summary>
+    /// Gets the JDBC connection string for the Azure Postgres Flexible Server database.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>jdbc:postgresql://{host}:{port}/{database}?sslmode=require&amp;authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin</c>.
+    /// </remarks>
+    public ReferenceExpression JdbcConnectionString =>
+        IsContainer ?
+            InnerResource.JdbcConnectionString :
+            Parent.BuildJdbcConnectionString(databaseName);
+
     /// <inheritdoc />
     public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
 
@@ -57,4 +85,11 @@ public class AzurePostgresFlexibleServerDatabaseResource(string name, string dat
 
         InnerResource = innerResource;
     }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
+        Parent.CombineProperties([
+            new("DatabaseName", ReferenceExpression.Create($"{DatabaseName}")),
+            new("Uri", UriExpression),
+            new("JdbcConnectionString", JdbcConnectionString),
+    ]);
 }

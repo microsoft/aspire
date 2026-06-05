@@ -24,6 +24,7 @@ public class OtlpLogEntry
     public OtlpResourceView ResourceView { get; }
     public OtlpScope Scope { get; }
     public long InternalId { get; }
+    public string? EventName { get; }
     public bool IsError => Severity is LogLevel.Error or LogLevel.Critical;
     public bool IsWarning => Severity is LogLevel.Warning;
 
@@ -34,6 +35,7 @@ public class OtlpLogEntry
 
         string? originalFormat = null;
         string? parentId = null;
+        string? eventNameFromAttribute = null;
         Attributes = record.Attributes.ToKeyValuePairs(context, filter: attribute =>
         {
             switch (attribute.Key)
@@ -47,6 +49,11 @@ public class OtlpLogEntry
                 case "SpanId":
                 case "TraceId":
                     // Explicitly ignore these
+                    return false;
+                case "logrecord.event.name":
+                case "event.name":
+                    // Capture the attribute value for fallback, but filter it out
+                    eventNameFromAttribute ??= attribute.Value.GetString();
                     return false;
                 default:
                     return true;
@@ -65,6 +72,9 @@ public class OtlpLogEntry
         ParentId = parentId ?? string.Empty;
         ResourceView = resourceView;
         Scope = scope;
+
+        // EventName from the LogRecord field takes precedence over the legacy attribute
+        EventName = !string.IsNullOrEmpty(record.EventName) ? record.EventName : eventNameFromAttribute;
     }
 
     private static DateTime ResolveTimeStamp(LogRecord record)
@@ -118,6 +128,7 @@ public class OtlpLogEntry
             KnownStructuredLogFields.SpanIdField => log.SpanId,
             KnownStructuredLogFields.OriginalFormatField => log.OriginalFormat,
             KnownStructuredLogFields.CategoryField => log.Scope.Name,
+            KnownStructuredLogFields.EventNameField => log.EventName,
             KnownResourceFields.ServiceNameField => log.ResourceView.Resource.ResourceName,
             _ => log.Attributes.GetValue(field)
         };

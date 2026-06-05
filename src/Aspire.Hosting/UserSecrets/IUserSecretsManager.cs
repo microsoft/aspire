@@ -5,7 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Configuration;
 
-namespace Aspire.Hosting.UserSecrets;
+namespace Aspire.Hosting;
 
 /// <summary>
 /// Defines an interface for managing user secrets with support for read and write operations.

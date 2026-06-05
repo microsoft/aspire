@@ -41,6 +41,7 @@ public class FieldTelemetryFilter : TelemetryFilter
             KnownStructuredLogFields.SpanIdField => "SpanId",
             KnownStructuredLogFields.OriginalFormatField => "OriginalFormat",
             KnownStructuredLogFields.CategoryField => "Category",
+            KnownStructuredLogFields.EventNameField => "EventName",
             KnownTraceFields.NameField => "Name",
             KnownTraceFields.SpanIdField => "SpanId",
             KnownTraceFields.TraceIdField => "TraceId",

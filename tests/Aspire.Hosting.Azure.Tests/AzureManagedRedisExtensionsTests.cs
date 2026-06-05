@@ -100,7 +100,7 @@ public class AzureManagedRedisExtensionsTests
 
         // Test the new reference properties
         Assert.NotNull(redis.Resource.HostName);
-        Assert.Equal("localhost:12455", await redis.Resource.HostName.GetValueAsync(CancellationToken.None));
+        Assert.Equal("localhost", await redis.Resource.HostName.GetValueAsync(CancellationToken.None));
 
         Assert.NotNull(redis.Resource.Password);
         Assert.Equal("p@ssw0rd1", await redis.Resource.Password.GetValueAsync(CancellationToken.None));
@@ -156,7 +156,7 @@ public class AzureManagedRedisExtensionsTests
 
         // Validate the values can be resolved
         var hostValue = await redis.Resource.HostName.GetValueAsync(CancellationToken.None);
-        Assert.Equal("localhost:6379", hostValue);
+        Assert.Equal("localhost", hostValue);
 
         var passwordValue = await redis.Resource.Password.GetValueAsync(CancellationToken.None);
         Assert.NotNull(passwordValue);

@@ -61,14 +61,6 @@ resource frontend 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'frontend'
           env: [
             {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
               name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
               value: 'in_memory'
             }

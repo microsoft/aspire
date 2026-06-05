@@ -117,7 +117,7 @@ builder.AddAzureChatCompletionsClient("connectionName", settings => settings.Dis
 You can also setup the [AzureAIInferenceClientOptions](https://learn.microsoft.com/dotnet/api/azure.ai.inference.AzureAIInferenceClientOptions) using the optional `Action<IAzureClientBuilder<ChatCompletionsClient, AzureAIInferenceClientOptions>> configureClientBuilder` parameter of the `AddAzureChatCompletionsClient` method. For example, to set the client ID for this client:
 
 ```csharp
-builder.AddAzureChatCompletionsClient("connectionName", configureClientBuilder: builder => builder.ConfigureOptions(options => options.NetworkTimeout = TimeSpan.FromSeconds(2)));
+builder.AddAzureChatCompletionsClient("connectionName", configureClientBuilder: builder => builder.ConfigureOptions(options => options.Retry.NetworkTimeout = TimeSpan.FromSeconds(2)));
 ```
 
 This can also be used to add a custom scope for the `TokenCredential` when the specific error message is returned:

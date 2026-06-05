@@ -22,23 +22,26 @@
       "type": "project.v0",
       "path": "../EventHubsConsumer/EventHubsConsumer.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ConnectionStrings__eventhubOne": "{eventhubOne.connectionString}",
-        "ConnectionStrings__checkpoints": "{checkpoints.connectionString}"
+        "EVENTHUBONE_HOST": "{eventhubns.outputs.eventHubsHostName}",
+        "EVENTHUBONE_URI": "{eventhubns.outputs.eventHubsEndpoint}",
+        "EVENTHUBONE_EVENTHUBNAME": "eventhub",
+        "ConnectionStrings__checkpoints": "{checkpoints.connectionString}",
+        "CHECKPOINTS_URI": "{ehstorage.outputs.blobEndpoint}"
       }
     },
     "api": {
       "type": "project.v0",
       "path": "../EventHubsApi/EventHubsApi.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{api.bindings.http.targetPort}",
-        "ConnectionStrings__eventhubOne": "{eventhubOne.connectionString}"
+        "ConnectionStrings__eventhubOne": "{eventhubOne.connectionString}",
+        "EVENTHUBONE_HOST": "{eventhubns.outputs.eventHubsHostName}",
+        "EVENTHUBONE_URI": "{eventhubns.outputs.eventHubsEndpoint}",
+        "EVENTHUBONE_EVENTHUBNAME": "eventhub"
       },
       "bindings": {
         "http": {

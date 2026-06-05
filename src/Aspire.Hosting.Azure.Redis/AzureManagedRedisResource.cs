@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
@@ -36,6 +34,13 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     internal IAzureKeyVaultSecretReference? ConnectionStringSecretOutput { get; set; }
 
     /// <summary>
+    /// Gets the "primaryAccessKey" secret reference from the key vault associated with this resource.
+    ///
+    /// This is set when access key authentication is used. The primary access key is stored in a secret in the Azure Key Vault.
+    /// </summary>
+    internal IAzureKeyVaultSecretReference? PrimaryAccessKeySecretOutput { get; set; }
+
+    /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>
     public BicepOutputReference NameOutputReference => new("name", this);
@@ -49,6 +54,7 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     /// Gets a value indicating whether the resource uses access key authentication.
     /// </summary>
     [MemberNotNullWhen(true, nameof(ConnectionStringSecretOutput))]
+    [MemberNotNullWhen(true, nameof(PrimaryAccessKeySecretOutput))]
     public bool UseAccessKeyAuthentication => ConnectionStringSecretOutput is not null;
 
     /// <summary>
@@ -79,20 +85,63 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     /// </remarks>
     public ReferenceExpression HostName =>
         InnerResource is not null ?
-            ReferenceExpression.Create($"{InnerResource.PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}") :
+            ReferenceExpression.Create($"{InnerResource.PrimaryEndpoint.Property(EndpointProperty.Host)}") :
             ReferenceExpression.Create($"{HostNameOutput}");
 
     /// <summary>
-    /// Gets the password for the Redis server when running as a container.
+    /// Gets the port for the Redis server.
     /// </summary>
     /// <remarks>
-    /// This property returns null when running in Azure mode, as Redis access is handled via connection strings.
-    /// When running as a container, it resolves to the password parameter value if one exists.
+    /// In container mode, resolves to the container's primary endpoint port.
+    /// In Azure mode, resolves to 10000.
+    /// </remarks>
+    public ReferenceExpression Port =>
+        InnerResource is not null ?
+            ReferenceExpression.Create($"{InnerResource.Port}") :
+            ReferenceExpression.Create($"10000"); // Based on the ConfigureRedisInfrastructure method
+
+    /// <summary>
+    /// Gets the password/access key for the Redis server.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item>When running as a container, returns the password parameter value if one exists.</item>
+    /// <item>When using access key authentication in Azure mode, returns the primary access key from KeyVault.</item>
+    /// <item>When using Entra ID authentication in Azure mode, returns an empty expression.</item>
+    /// </list>
     /// </remarks>
     public ReferenceExpression? Password =>
-        InnerResource is not null && InnerResource.PasswordParameter is not null ?
-            ReferenceExpression.Create($"{InnerResource.PasswordParameter}") :
-            null;
+        InnerResource is not null ?
+            (InnerResource.PasswordParameter is not null ?
+                ReferenceExpression.Create($"{InnerResource.PasswordParameter}") :
+                null) :
+            UseAccessKeyAuthentication ?
+                ReferenceExpression.Create($"{PrimaryAccessKeySecretOutput}") :
+                null;
+
+    /// <summary>
+    /// Gets the connection URI expression for the Redis server.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>redis://[:{password}@]{host}:{port}</c>. The password segment is omitted when using Entra ID authentication in Azure mode.
+    /// </remarks>
+    public ReferenceExpression UriExpression
+    {
+        get
+        {
+            if (InnerResource is not null)
+            {
+                return InnerResource.UriExpression;
+            }
+
+            if (UseAccessKeyAuthentication)
+            {
+                return ReferenceExpression.Create($"rediss://:{PrimaryAccessKeySecretOutput:uri}@{HostName}:{Port}");
+            }
+
+            return ReferenceExpression.Create($"rediss://{HostName}:{Port}");
+        }
+    }
 
     internal void SetInnerResource(RedisResource innerResource)
     {
@@ -169,5 +218,26 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
             AccessPolicyName = "default",
             UserObjectId = principalId
         });
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        if (InnerResource is not null)
+        {
+            foreach (var property in ((IResourceWithConnectionString)InnerResource).GetConnectionProperties())
+            {
+                yield return property;
+            }
+            yield break;
+        }
+
+        yield return new("Host", HostName);
+        yield return new("Port", Port);
+        yield return new("Uri", UriExpression);
+        
+        if (Password is not null)
+        {
+            yield return new("Password", Password);
+        }
     }
 }

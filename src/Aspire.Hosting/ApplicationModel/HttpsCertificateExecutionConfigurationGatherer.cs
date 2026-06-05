@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECERTIFICATES001
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -12,7 +13,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// A gatherer that collects the required configuration to apply HTTPS/TLS server authentication to a resource.
 /// </summary>
-internal class HttpsCertificateExecutionConfigurationGatherer : IResourceExecutionConfigurationGatherer
+internal class HttpsCertificateExecutionConfigurationGatherer : IExecutionConfigurationGatherer
 {
     private readonly Func<X509Certificate2, HttpsCertificateExecutionConfigurationContext> _configContextFactory;
 
@@ -26,7 +27,7 @@ internal class HttpsCertificateExecutionConfigurationGatherer : IResourceExecuti
     }
 
     /// <inheritdoc/>
-    public async ValueTask GatherAsync(IResourceExecutionConfigurationGathererContext context, IResource resource, ILogger resourceLogger, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken = default)
+    public async ValueTask GatherAsync(IExecutionConfigurationGathererContext context, IResource resource, ILogger resourceLogger, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken = default)
     {
         var effectiveAnnotation = new HttpsCertificateAnnotation();
         if (resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var annotation))
@@ -85,7 +86,8 @@ internal class HttpsCertificateExecutionConfigurationGatherer : IResourceExecuti
 /// <summary>
 /// Metadata for HTTPS/TLS server certificate configuration.
 /// </summary>
-public class HttpsCertificateExecutionConfigurationData : IResourceExecutionConfigurationData
+[Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public class HttpsCertificateExecutionConfigurationData : IExecutionConfigurationData
 {
     private ReferenceExpression? _keyPathReference;
     private TrackedReference? _trackedKeyPathReference;
@@ -170,6 +172,7 @@ public class HttpsCertificateExecutionConfigurationData : IResourceExecutionConf
 /// <summary>
 /// Configuration context for server authentication certificate configuration.
 /// </summary>
+[Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class HttpsCertificateExecutionConfigurationContext
 {
     /// <summary>

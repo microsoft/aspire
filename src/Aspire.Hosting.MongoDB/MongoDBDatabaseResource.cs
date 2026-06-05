@@ -46,7 +46,7 @@ public class MongoDBDatabaseResource(string name, string databaseName, MongoDBSe
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
         Parent.CombineProperties([
-            new("Database", ReferenceExpression.Create($"{DatabaseName}")),
+            new("DatabaseName", ReferenceExpression.Create($"{DatabaseName}")),
             new("Uri", UriExpression),
         ]);
 }

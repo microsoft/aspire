@@ -137,29 +137,32 @@ public class DistributedApplicationTests
         var orchestrator = app.Services.GetRequiredService<ApplicationOrchestrator>();
         var logger = app.Services.GetRequiredService<ILogger<DistributedApplicationTests>>();
 
-        var startTask = app.StartAsync();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var token = cts.Token;
 
-        var resourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var startTask = app.StartAsync(token);
+
+        var resourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         logger.LogInformation("Force resource to start.");
-        await orchestrator.StartResourceAsync(resourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await orchestrator.StartResourceAsync(resourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         logger.LogInformation("Stop resource.");
-        await orchestrator.StopResourceAsync(resourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Finished).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await orchestrator.StopResourceAsync(resourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Finished, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         logger.LogInformation("Start resource (into waiting state)");
-        var restartResourceTask = orchestrator.StartResourceAsync(resourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var restartResourceTask = orchestrator.StartResourceAsync(resourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         logger.LogInformation("Force resource to start.");
-        await orchestrator.StartResourceAsync(resourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await orchestrator.StartResourceAsync(resourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         await restartResourceTask.DefaultTimeout(TestConstants.LongTimeoutDuration);
         await startTask.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]
@@ -179,11 +182,14 @@ public class DistributedApplicationTests
         var orchestrator = app.Services.GetRequiredService<ApplicationOrchestrator>();
         var logger = app.Services.GetRequiredService<ILogger<DistributedApplicationTests>>();
 
-        var startTask = app.StartAsync();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var token = cts.Token;
+
+        var startTask = app.StartAsync(token);
 
         // On start, one resource won't be started and the other is waiting on it.
-        var notStartedResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        var dependentResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var notStartedResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var dependentResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Source should be populated on non-started resources.
         Assert.Contains("TestProject.ServiceA.csproj", notStartedResourceEvent.Snapshot.Properties.Single(p => p.Name == "project.path").Value?.ToString());
@@ -203,8 +209,8 @@ public class DistributedApplicationTests
         });
 
         logger.LogInformation("Start explicit start resource.");
-        await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        var runningResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var runningResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         Assert.Collection(runningResourceEvent.Snapshot.Urls, u =>
         {
             Assert.Equal("http://localhost:5156", u.Url);
@@ -212,7 +218,7 @@ public class DistributedApplicationTests
         });
 
         // Dependent resource should now run.
-        var dependentResourceRunningEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var dependentResourceRunningEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         Assert.Collection(dependentResourceRunningEvent.Snapshot.Urls, u =>
         {
             Assert.Equal("http://localhost:5254", u.Url);
@@ -220,15 +226,147 @@ public class DistributedApplicationTests
         });
 
         logger.LogInformation("Stop resource.");
-        await orchestrator.StopResourceAsync(notStartedResourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Finished).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await orchestrator.StopResourceAsync(notStartedResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Finished, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         logger.LogInformation("Start resource again");
-        await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         await startTask.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+    }
+
+    [Fact]
+    public async Task BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation()
+    {
+        const string testName = "before-start-event-explicit-start";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false);
+
+        var explicitStartEventCount = 0;
+        var normalEventCount = 0;
+
+        testProgram.ServiceABuilder.WithExplicitStart()
+            .OnBeforeResourceStarted((_, _, _) =>
+            {
+                Interlocked.Increment(ref explicitStartEventCount);
+                return Task.CompletedTask;
+            });
+
+        // ServiceB is a normal resource without explicit start
+        testProgram.ServiceBBuilder
+            .OnBeforeResourceStarted((_, _, _) =>
+            {
+                Interlocked.Increment(ref normalEventCount);
+                return Task.CompletedTask;
+            });
+
+        var resourcesCreatedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        testProgram.AppBuilder.Eventing.Subscribe<AfterResourcesCreatedEvent>((_, _) =>
+        {
+            resourcesCreatedTcs.SetResult();
+            return Task.CompletedTask;
+        });
+
+        using var app = testProgram.Build();
+        var rns = app.Services.GetRequiredService<ResourceNotificationService>();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
+        var token = cts.Token;
+
+        // Start app in background - it won't complete because of explicit start resource
+        _ = app.StartAsync(token);
+
+        var normalResourceName = $"{testName}-serviceb";
+        var explicitStartResourceName = $"{testName}-servicea";
+
+        // Wait for normal resource to be running
+        await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        // Wait for explicit start resource to be NotStarted
+        await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        // Wait for resource to finish being created.
+        await resourcesCreatedTcs.Task.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        // Verify BeforeResourceStartedEvent was fired for normal resource but NOT for explicit start resource
+        Assert.Equal(1, normalEventCount);
+        Assert.Equal(0, explicitStartEventCount);
+
+        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+    }
+
+    [Fact]
+    public async Task BeforeResourceStartedEvent_FiredWhenExplicitStartResourceIsManuallyStarted()
+    {
+        const string testName = "before-start-event-manual-start";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false);
+
+        var eventCount = 0;
+
+        testProgram.ServiceABuilder.WithExplicitStart()
+            .OnBeforeResourceStarted((_, _, _) =>
+            {
+                Interlocked.Increment(ref eventCount);
+                return Task.CompletedTask;
+            });
+
+        using var app = testProgram.Build();
+        var rns = app.Services.GetRequiredService<ResourceNotificationService>();
+        var orchestrator = app.Services.GetRequiredService<ApplicationOrchestrator>();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
+        var token = cts.Token;
+
+        // Start app in background
+        var startTask = app.StartAsync(token);
+
+        var explicitStartResourceName = $"{testName}-servicea";
+
+        // Wait for the resource to be in NotStarted state
+        var notStartedResourceEvent = await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        // Verify no event has been fired yet (initial creation should not fire the event)
+        Assert.Equal(0, eventCount);
+
+        // Manually start the resource
+        await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        // Wait for the resource to be running
+        await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        await startTask.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        // Verify that BeforeResourceStartedEvent WAS fired when manually started
+        Assert.Equal(1, eventCount);
+
+        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+    }
+
+    [Fact]
+    public async Task BeforeResourceStartedEvent_FiredForNormalResourcesOnInitialStartup()
+    {
+        const string testName = "before-start-event-normal-resource";
+        using var testProgram = CreateTestProgram(testName, randomizePorts: false);
+
+        var eventCount = 0;
+
+        // Don't call WithExplicitStart() - this is a normal resource
+        testProgram.ServiceABuilder
+            .OnBeforeResourceStarted((_, _, _) =>
+            {
+                Interlocked.Increment(ref eventCount);
+                return Task.CompletedTask;
+            });
+
+        using var app = testProgram.Build();
+
+        await app.StartAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        Assert.Equal(1, eventCount);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
     }
 
     [Fact]
@@ -253,11 +391,14 @@ public class DistributedApplicationTests
         var orchestrator = app.Services.GetRequiredService<ApplicationOrchestrator>();
         var logger = app.Services.GetRequiredService<ILogger<DistributedApplicationTests>>();
 
-        var startTask = app.StartAsync();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var token = cts.Token;
+
+        var startTask = app.StartAsync(token);
 
         // On start, one resource won't be started and the other is waiting on it.
-        var notStartedResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        var dependentResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var notStartedResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var dependentResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         Assert.Collection(notStartedResourceEvent.Snapshot.Urls, u =>
         {
@@ -276,15 +417,15 @@ public class DistributedApplicationTests
         Assert.Contains("TestProject.ServiceB.csproj", dependentResourceEvent.Snapshot.Properties.Single(p => p.Name == "project.path").Value?.ToString());
 
         logger.LogInformation("Start explicit start resource.");
-        await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        var runningResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var runningResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         Assert.Collection(runningResourceEvent.Snapshot.Urls, u =>
         {
             Assert.Equal("tcp://localhost:6379", u.Url);
         });
 
         // Dependent resource should now run.
-        var dependentRunningResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        var dependentRunningResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         Assert.Collection(dependentRunningResourceEvent.Snapshot.Urls, u =>
         {
             Assert.Equal("http://localhost:5254", u.Url);
@@ -292,15 +433,15 @@ public class DistributedApplicationTests
         });
 
         logger.LogInformation("Stop resource.");
-        await orchestrator.StopResourceAsync(notStartedResourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Exited).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await orchestrator.StopResourceAsync(notStartedResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Exited, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         logger.LogInformation("Start resource again");
-        await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         await startTask.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]
@@ -329,15 +470,18 @@ public class DistributedApplicationTests
             var orchestrator = app.Services.GetRequiredService<ApplicationOrchestrator>();
             var logger = app.Services.GetRequiredService<ILogger<DistributedApplicationTests>>();
 
-            var startTask = app.StartAsync();
+            using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.ExtraLongTimeoutDuration);
+            var token = cts.Token;
+
+            var startTask = app.StartAsync(token);
 
             ResourceEvent? notStartedResourceEvent = null;
             ResourceEvent? dependentResourceEvent = null;
             if (firstRun)
             {
                 // On start, one resource won't be started and the other is waiting on it.
-                notStartedResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
-                dependentResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+                notStartedResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+                dependentResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Waiting, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
 
                 Assert.Collection(notStartedResourceEvent.Snapshot.Urls, u =>
                 {
@@ -356,17 +500,17 @@ public class DistributedApplicationTests
                 Assert.Contains("TestProject.ServiceB.csproj", dependentResourceEvent.Snapshot.Properties.Single(p => p.Name == "project.path").Value?.ToString());
 
                 logger.LogInformation("Start explicit start resource.");
-                await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+                await orchestrator.StartResourceAsync(notStartedResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
             }
 
-            var runningResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+            var runningResourceEvent = await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
             Assert.Collection(runningResourceEvent.Snapshot.Urls, u =>
             {
                 Assert.Equal("tcp://localhost:6379", u.Url);
             });
 
             // Dependent resource should now run.
-            var dependentRunningResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+            var dependentRunningResourceEvent = await rns.WaitForResourceAsync(dependentResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
             Assert.Collection(dependentRunningResourceEvent.Snapshot.Urls, u =>
             {
                 Assert.Equal("http://localhost:5254", u.Url);
@@ -374,19 +518,19 @@ public class DistributedApplicationTests
             });
 
             logger.LogInformation("Stop resource.");
-            await orchestrator.StopResourceAsync(runningResourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
-            await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Exited).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+            await orchestrator.StopResourceAsync(runningResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+            await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Exited, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
 
             // Stop the continer if this isn't the first run otherwise it'll stay running
             if (firstRun)
             {
                 logger.LogInformation("Start resource again");
-                await orchestrator.StartResourceAsync(runningResourceEvent.ResourceId, CancellationToken.None).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
-                await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+                await orchestrator.StartResourceAsync(runningResourceEvent.ResourceId, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+                await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
             }
 
             await startTask.DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
-            await app.StopAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+            await app.StopAsync(token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
         }
     }
 
@@ -969,23 +1113,26 @@ public class DistributedApplicationTests
         var orchestrator = app.Services.GetRequiredService<ApplicationOrchestrator>();
         var suffix = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value.ResourceNameSuffix;
 
-        await app.StartAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
+        var token = cts.Token;
+
+        await app.StartAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
 
         var executablePattern = $"{testName}-servicea-{ReplicaIdRegex}-{suffix}";
-        var serviceA = await KubernetesHelper.GetResourceByNameMatchAsync<Executable>(kubernetes, executablePattern, r => r.Status?.State == ExecutableState.Running).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        var serviceA = await KubernetesHelper.GetResourceByNameMatchAsync<Executable>(kubernetes, executablePattern, r => r.Status?.State == ExecutableState.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
         Assert.NotNull(serviceA);
 
-        await orchestrator.StopResourceAsync(serviceA.Metadata.Name, CancellationToken.None).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await orchestrator.StopResourceAsync(serviceA.Metadata.Name, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
 
-        serviceA = await KubernetesHelper.GetResourceByNameMatchAsync<Executable>(kubernetes, executablePattern, r => r.Status?.State == ExecutableState.Finished).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        serviceA = await KubernetesHelper.GetResourceByNameMatchAsync<Executable>(kubernetes, executablePattern, r => r.Status?.State == ExecutableState.Finished, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
         Assert.NotNull(serviceA);
 
-        await orchestrator.StartResourceAsync(serviceA.Metadata.Name, CancellationToken.None).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await orchestrator.StartResourceAsync(serviceA.Metadata.Name, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
 
-        serviceA = await KubernetesHelper.GetResourceByNameMatchAsync<Executable>(kubernetes, executablePattern, r => r.Status?.State == ExecutableState.Running).DefaultTimeout(TestConstants.LongTimeoutDuration);
+        serviceA = await KubernetesHelper.GetResourceByNameMatchAsync<Executable>(kubernetes, executablePattern, r => r.Status?.State == ExecutableState.Running, token).DefaultTimeout(TestConstants.LongTimeoutDuration);
         Assert.NotNull(serviceA);
 
-        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }
 
     [Fact]

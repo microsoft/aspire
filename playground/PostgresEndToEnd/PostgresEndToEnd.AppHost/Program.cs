@@ -7,9 +7,34 @@ var db1 = builder.AddAzurePostgresFlexibleServer("pg")
                  .RunAsContainer()
                  .AddDatabase("db1");
 
-builder.AddProject<Projects.PostgresEndToEnd_ApiService>("api")
+// .NET 
+builder.AddProject<Projects.PostgresEndToEnd_ApiService>("dotnet")
        .WithExternalHttpEndpoints()
        .WithReference(db1).WaitFor(db1);
+
+// Python (FastAPI)
+builder.AddUvicornApp("pythonservice", "../PostgresEndToEnd.PythonService", "app:app")
+       .WithUv()
+       .WithExternalHttpEndpoints()
+       .WithReference(db1).WaitFor(db1);
+
+// NodeJS (TypeScript)
+builder.AddNodeApp("nodeservice", "../PostgresEndToEnd.NodeService", "app.ts")
+       .WithHttpEndpoint(env: "PORT")
+       .WithReference(db1)
+       .WaitFor(db1)
+       .WithExternalHttpEndpoints();
+
+// Java (Spark Framework)
+var mvn = builder.AddExecutable("mvn-clean", OperatingSystem.IsWindows() ? "mvn.cmd" : "mvn", "../PostgresEndToEnd.JavaService", ["clean", "package", "-DskipTests"]);
+
+var java = builder.AddExecutable("javaservice", "java", "../PostgresEndToEnd.JavaService", ["-jar", "target/javaservice-1.0.0.jar"])
+       .WithHttpEndpoint(env: "PORT")
+       .WaitForCompletion(mvn)
+       .WithReference(db1).WaitFor(db1)
+       .WithExternalHttpEndpoints();
+
+mvn.WithParentRelationship(java);
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging

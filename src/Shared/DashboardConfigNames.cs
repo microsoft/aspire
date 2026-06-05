@@ -24,6 +24,7 @@ internal static class DashboardConfigNames
     public static readonly ConfigName DashboardMcpAuthModeName = new("Dashboard:Mcp:AuthMode", "DASHBOARD__MCP__AUTHMODE");
     public static readonly ConfigName DashboardMcpPrimaryApiKeyName = new("Dashboard:Mcp:PrimaryApiKey", "DASHBOARD__MCP__PRIMARYAPIKEY");
     public static readonly ConfigName DashboardMcpDisableName = new("Dashboard:Mcp:Disabled", "DASHBOARD__MCP__DISABLED");
+    public static readonly ConfigName DashboardMcpUseCliMcpName = new("Dashboard:Mcp:UseCliMcp", "DASHBOARD__MCP__USECLIMCP");
     public static readonly ConfigName DashboardOtlpSuppressUnsecuredTelemetryMessageName = new("Dashboard:Otlp:SuppressUnsecuredTelemetryMessage", "DASHBOARD__OTLP__SUPPRESSUNSECUREDTELEMETRYMESSAGE");
     public static readonly ConfigName DashboardOtlpCorsAllowedOriginsKeyName = new("Dashboard:Otlp:Cors:AllowedOrigins", "DASHBOARD__OTLP__CORS__ALLOWEDORIGINS");
     public static readonly ConfigName DashboardOtlpCorsAllowedHeadersKeyName = new("Dashboard:Otlp:Cors:AllowedHeaders", "DASHBOARD__OTLP__CORS__ALLOWEDHEADERS");
@@ -51,7 +52,7 @@ internal static class DashboardConfigNames
         public static readonly ConfigName DashboardConfigFilePathName = new(KnownConfigNames.Legacy.DashboardConfigFilePath);
         public static readonly ConfigName DashboardFileConfigDirectoryName = new(KnownConfigNames.Legacy.DashboardFileConfigDirectory);
         public static readonly ConfigName ResourceServiceUrlName = new(KnownConfigNames.Legacy.ResourceServiceEndpointUrl);
-        public static readonly ConfigName DashboardOtlpSuppressUnsecuredTelemetryMessage = new("Dashboard:Otlp:SuppressUnsecuredTelemetryMessage", "Dashboard__Otlp__SuppressUnsecuredTelemetryMessage");
+        public static readonly ConfigName DashboardOtlpSuppressUnsecuredTelemetryMessageName = new("Dashboard:Otlp:SuppressUnsecuredTelemetryMessage", "DASHBOARD__OTLP__SUPPRESSUNSECUREDTELEMETRYMESSAGE");
     }
 }
 

@@ -67,5 +67,14 @@ public class AzureKustoReadWriteDatabaseResource : Resource, IResourceWithParent
         database.Name = DatabaseName;
         return database;
     }
-}
 
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        {
+            yield return property;
+        }
+
+        yield return new("DatabaseName", ReferenceExpression.Create($"{DatabaseName}"));
+    }
+}

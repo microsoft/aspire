@@ -1,7 +1,7 @@
 ﻿{
   "author": "Microsoft",
-  "name": "Aspire Starter App (ASP.NET Core/Blazor)",
-  "description": "A project template for creating an Aspire app with a Blazor web frontend and web API backend service, with optional Redis caching.",
+  "name": "App Starter Aspire (ASP.NET Core/Blazor)",
+  "description": "Modello di progetto per la creazione di un'app Aspire con front-end Web Blazor e servizio back-end API Web, con cache Redis opzionale.",
   "symbols/Framework/description": "Il framework di destinazione per il progetto.",
   "symbols/Framework/choices/net8.0/description": "Destinazione net8.0",
   "symbols/Framework/choices/net9.0/description": "Net9.0 di destinazione",

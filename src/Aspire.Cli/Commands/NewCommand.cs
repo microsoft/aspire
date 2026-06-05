@@ -96,6 +96,18 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         templateVersionOption.Recursive = true;
         Options.Add(templateVersionOption);
 
+        // Customize description based on whether staging channel is enabled
+        var isStagingEnabled = _features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
+        
+        var channelOption = new Option<string?>("--channel")
+        {
+            Description = isStagingEnabled 
+                ? NewCommandStrings.ChannelOptionDescriptionWithStaging
+                : NewCommandStrings.ChannelOptionDescription,
+            Recursive = true
+        };
+        Options.Add(channelOption);
+
         _templates = templateProvider.GetTemplates();
 
         foreach (var template in _templates)

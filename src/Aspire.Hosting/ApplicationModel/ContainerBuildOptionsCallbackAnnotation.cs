@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES003
-
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.Logging;
@@ -13,7 +11,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Annotation that provides a callback to configure container build options for a resource.
 /// </summary>
 /// <param name="callback">The callback function to configure container build options.</param>
-[Experimental("ASPIRECOMPUTE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ContainerBuildOptionsCallbackAnnotation(Func<ContainerBuildOptionsCallbackContext, Task> callback) : IResourceAnnotation
 {
     /// <summary>
@@ -38,7 +36,7 @@ public sealed class ContainerBuildOptionsCallbackAnnotation(Func<ContainerBuildO
 /// <summary>
 /// Context for configuring container build options via a callback.
 /// </summary>
-[Experimental("ASPIRECOMPUTE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ContainerBuildOptionsCallbackContext
 {
     /// <summary>
@@ -87,6 +85,11 @@ public sealed class ContainerBuildOptionsCallbackContext
     /// Gets the distributed application execution context.
     /// </summary>
     public DistributedApplicationExecutionContext? ExecutionContext { get; }
+
+    /// <summary>
+    /// Gets or sets the destination for the container image.
+    /// </summary>
+    public ContainerImageDestination? Destination { get; set; }
 
     /// <summary>
     /// Gets or sets the output path for the container archive.

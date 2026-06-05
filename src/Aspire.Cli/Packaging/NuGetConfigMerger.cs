@@ -65,7 +65,7 @@ internal class NuGetConfigMerger
             return;
         }
 
-        var targetPath = Path.Combine(targetDirectory.FullName, "NuGet.config");
+        var targetPath = Path.Combine(targetDirectory.FullName, "nuget.config");
         var targetFile = new FileInfo(targetPath);
         
         using var tmpConfig = await TemporaryNuGetConfig.CreateAsync(mappings);

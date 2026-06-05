@@ -49,4 +49,6 @@ resource topic2sub 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01
 
 output serviceBusEndpoint string = sb.properties.serviceBusEndpoint
 
+output serviceBusHostName string = split(replace(sb.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
 output name string = sb.name

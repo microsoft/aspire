@@ -41,7 +41,7 @@ public class SqlServerDatabaseResource(string name, string databaseName, SqlServ
     /// Gets the connection URI expression for the SQL Server database.
     /// </summary>
     /// <remarks>
-    /// Format: <c>mssql://{host}:{port}/{database}</c>.
+    /// Format: <c>mssql://{Username}:{Password}@{Host}:{Port}</c>.
     /// </remarks>
     public ReferenceExpression UriExpression =>
         ReferenceExpression.Create($"{Parent.UriExpression}/{DatabaseName:uri}");
@@ -68,7 +68,7 @@ public class SqlServerDatabaseResource(string name, string databaseName, SqlServ
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
         Parent.CombineProperties([
-            new("Database", ReferenceExpression.Create($"{DatabaseName}")),
+            new("DatabaseName", ReferenceExpression.Create($"{DatabaseName}")),
             new("Uri", UriExpression),
             new("JdbcConnectionString", JdbcConnectionString),
         ]);

@@ -57,4 +57,14 @@ public class AzureCosmosDBDatabaseResource(string name, string databaseName, Azu
         ArgumentException.ThrowIfNullOrEmpty(argument, paramName);
         return argument;
     }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        {
+            yield return property;
+        }
+
+        yield return new("DatabaseName", ReferenceExpression.Create($"{DatabaseName}"));
+    }
 }

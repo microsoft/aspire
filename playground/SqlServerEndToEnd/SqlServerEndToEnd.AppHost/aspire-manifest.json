@@ -23,13 +23,21 @@
       "type": "project.v0",
       "path": "../SqlServerEndToEnd.DbSetup/SqlServerEndToEnd.DbSetup.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{dbsetup.bindings.http.targetPort}",
         "ConnectionStrings__db1": "{db1.connectionString}",
-        "ConnectionStrings__db2": "{db2.connectionString}"
+        "DB1_HOST": "{sql1.outputs.sqlServerFqdn}",
+        "DB1_PORT": "1433",
+        "DB1_URI": "mssql://{sql1.outputs.sqlServerFqdn}:1433/db1",
+        "DB1_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql1.outputs.sqlServerFqdn}:1433;database=db1;encrypt=true;trustServerCertificate=false",
+        "DB1_DATABASENAME": "db1",
+        "ConnectionStrings__db2": "{db2.connectionString}",
+        "DB2_HOST": "{sql2.outputs.sqlServerFqdn}",
+        "DB2_PORT": "1433",
+        "DB2_URI": "mssql://{sql2.outputs.sqlServerFqdn}:1433/db2",
+        "DB2_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql2.outputs.sqlServerFqdn}:1433;database=db2;encrypt=true;trustServerCertificate=false",
+        "DB2_DATABASENAME": "db2"
       },
       "bindings": {
         "http": {
@@ -48,13 +56,21 @@
       "type": "project.v0",
       "path": "../SqlServerEndToEnd.ApiService/SqlServerEndToEnd.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{api.bindings.http.targetPort}",
         "ConnectionStrings__db1": "{db1.connectionString}",
-        "ConnectionStrings__db2": "{db2.connectionString}"
+        "DB1_HOST": "{sql1.outputs.sqlServerFqdn}",
+        "DB1_PORT": "1433",
+        "DB1_URI": "mssql://{sql1.outputs.sqlServerFqdn}:1433/db1",
+        "DB1_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql1.outputs.sqlServerFqdn}:1433;database=db1;encrypt=true;trustServerCertificate=false",
+        "DB1_DATABASENAME": "db1",
+        "ConnectionStrings__db2": "{db2.connectionString}",
+        "DB2_HOST": "{sql2.outputs.sqlServerFqdn}",
+        "DB2_PORT": "1433",
+        "DB2_URI": "mssql://{sql2.outputs.sqlServerFqdn}:1433/db2",
+        "DB2_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql2.outputs.sqlServerFqdn}:1433;database=db2;encrypt=true;trustServerCertificate=false",
+        "DB2_DATABASENAME": "db2"
       },
       "bindings": {
         "http": {

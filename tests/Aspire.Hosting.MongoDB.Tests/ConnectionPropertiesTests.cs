@@ -72,7 +72,7 @@ public class ConnectionPropertiesTests
         Assert.Contains(properties, property => property.Key == "Password" && property.Value.ValueExpression == "{password.value}");
         Assert.Contains(properties, property => property.Key == "AuthenticationDatabase" && property.Value.ValueExpression == "admin");
         Assert.Contains(properties, property => property.Key == "AuthenticationMechanism" && property.Value.ValueExpression == "SCRAM-SHA-256");
-        Assert.Contains(properties, property => property.Key == "Database" && property.Value.ValueExpression == "Products");
+        Assert.Contains(properties, property => property.Key == "DatabaseName" && property.Value.ValueExpression == "Products");
         Assert.Contains(
             properties,
             property => property.Key == "Uri" &&

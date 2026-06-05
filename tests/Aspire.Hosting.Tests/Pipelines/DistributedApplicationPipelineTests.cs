@@ -4,6 +4,9 @@
 #pragma warning disable CS0618 // Type or member is obsolete
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
+#pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIRECOMPUTE001
+#pragma warning disable ASPIRECOMPUTE003
 #pragma warning disable IDE0005
 
 using Aspire.Hosting.Backchannel;
@@ -2095,6 +2098,148 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         Assert.NotNull(paramResource);
         Assert.NotNull(paramResource.WaitForValueTcs);
         Assert.True(paramResource.WaitForValueTcs.Task.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public async Task PushPrereq_SkipsRegistryCheckForNonDockerImageFormat()
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        // Add a project that requires build and push
+        var project = builder.AddProject<DummyProject>("test-project", launchProfileName: null);
+
+        // Configure the project to save as archive (not push to registry)
+        project.WithContainerBuildOptions(ctx =>
+        {
+            ctx.Destination = Aspire.Hosting.Publishing.ContainerImageDestination.Archive;
+            ctx.OutputPath = "/tmp/output";
+        });
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        // Act & Assert - Should not throw an exception even though no registry is configured
+        // because the Destination is Archive, not Registry
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task PushPrereq_ThrowsForDockerImageFormatWithoutRegistry()
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        // Add a project that requires build and push
+        var project = builder.AddProject<DummyProject>("test-project", launchProfileName: null);
+
+        // Configure the project to push to registry
+        project.WithContainerBuildOptions(ctx =>
+        {
+            ctx.Destination = Aspire.Hosting.Publishing.ContainerImageDestination.Registry;
+        });
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        // Act & Assert - Should throw an exception because Registry destination requires a registry
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.ExecuteAsync(context).DefaultTimeout());
+
+        Assert.Contains("no container registry is available", exception.Message);
+        Assert.Contains("test-project", exception.Message);
+    }
+
+    [Fact]
+    public async Task PushPrereq_ThrowsForDefaultImageFormatWithoutRegistry()
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        // Add a project that requires build and push without specifying Destination
+        var project = builder.AddProject<DummyProject>("test-project", launchProfileName: null);
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        // Act & Assert - Should throw an exception because default (null) Destination is treated as Registry
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.ExecuteAsync(context).DefaultTimeout());
+
+        Assert.Contains("no container registry is available", exception.Message);
+        Assert.Contains("test-project", exception.Message);
+    }
+
+    [Fact]
+    public async Task PushPrereq_ThrowsForArchiveDestinationWithoutOutputPath()
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        // Add a project that requires build and push
+        var project = builder.AddProject<DummyProject>("test-project", launchProfileName: null);
+
+        // Configure the project to save as archive but without OutputPath
+        project.WithContainerBuildOptions(ctx =>
+        {
+            ctx.Destination = Aspire.Hosting.Publishing.ContainerImageDestination.Archive;
+            // OutputPath is not set
+        });
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        // Act & Assert - Should throw an exception because Archive destination requires OutputPath
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.ExecuteAsync(context).DefaultTimeout());
+
+        Assert.Contains("Destination set to Archive but OutputPath is not configured", exception.Message);
+        Assert.Contains("test-project", exception.Message);
+    }
+
+    [Fact]
+    public async Task PushPrereq_SkipsExcludedFromManifestResources()
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        // Add a container registry so non-excluded projects can push
+        var registry = builder.AddContainerRegistry("test-registry", "registry.example.com");
+
+        // Add a project that is NOT excluded - this should require the registry
+        var includedProject = builder.AddProject<DummyProject>("included-project", launchProfileName: null)
+            .WithContainerRegistry(registry);
+
+        // Add a project that IS excluded - this should be skipped entirely
+        var excludedProject = builder.AddProject<DummyProject>("excluded-project", launchProfileName: null)
+            .ExcludeFromManifest();
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        // Act & Assert - Should not throw an exception
+        // The included project should use the registry, the excluded project should be skipped
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+    }
+
+    private sealed class DummyProject : IProjectMetadata
+    {
+        public string ProjectPath => "dummy.csproj";
     }
 
     private sealed class CustomResource(string name) : Resource(name)

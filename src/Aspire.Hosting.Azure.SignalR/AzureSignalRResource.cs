@@ -33,12 +33,25 @@ public class AzureSignalRResource(string name, Action<AzureResourceInfrastructur
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
+    /// Gets the endpoint URI expression for the SignalR service.
+    /// </summary>
+    /// <remarks>
+    /// In container mode (emulator), resolves to the container's endpoint URL.
+    /// In Azure mode, resolves to the Azure SignalR service endpoint.
+    /// Format: <c>https://{hostname}</c>.
+    /// </remarks>
+    public ReferenceExpression Endpoint =>
+        IsEmulator ? 
+            ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") : 
+            ReferenceExpression.Create($"https://{HostName}");
+
+    /// <summary>
     /// Gets the connection string template for the manifest for Azure SignalR.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
-        IsEmulator
-        ? ReferenceExpression.Create($"Endpoint={EmulatorEndpoint.Property(EndpointProperty.Url)};AccessKey=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGH;Version=1.0;")
-        : ReferenceExpression.Create($"Endpoint=https://{HostName};AuthType=azure");
+        IsEmulator ?
+            ReferenceExpression.Create($"Endpoint={EmulatorEndpoint.Property(EndpointProperty.Url)};AccessKey=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGH;Version=1.0;"):
+            ReferenceExpression.Create($"Endpoint=https://{HostName};AuthType=azure");
 
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)
@@ -67,5 +80,10 @@ public class AzureSignalRResource(string name, Action<AzureResourceInfrastructur
 
         infra.Add(store);
         return store;
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        yield return new("Uri", Endpoint);
     }
 }

@@ -41,8 +41,6 @@
       "type": "project.v0",
       "path": "../MySql.ApiService/MySql.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{apiservice.bindings.http.targetPort}",
@@ -53,7 +51,7 @@
         "CATALOG_PASSWORD": "{mysql-password.value}",
         "CATALOG_URI": "mysql://root:{mysql-password-uri-encoded.value}@{mysql.bindings.tcp.host}:{mysql.bindings.tcp.port}/catalog",
         "CATALOG_JDBCCONNECTIONSTRING": "jdbc:mysql://{mysql.bindings.tcp.host}:{mysql.bindings.tcp.port}/catalog",
-        "CATALOG_DATABASE": "catalog",
+        "CATALOG_DATABASENAME": "catalog",
         "ConnectionStrings__myTestDb": "{myTestDb.connectionString}",
         "MYTESTDB_HOST": "{mysql.bindings.tcp.host}",
         "MYTESTDB_PORT": "{mysql.bindings.tcp.port}",
@@ -61,7 +59,7 @@
         "MYTESTDB_PASSWORD": "{mysql-password.value}",
         "MYTESTDB_URI": "mysql://root:{mysql-password-uri-encoded.value}@{mysql.bindings.tcp.host}:{mysql.bindings.tcp.port}/myTestDb",
         "MYTESTDB_JDBCCONNECTIONSTRING": "jdbc:mysql://{mysql.bindings.tcp.host}:{mysql.bindings.tcp.port}/myTestDb",
-        "MYTESTDB_DATABASE": "myTestDb",
+        "MYTESTDB_DATABASENAME": "myTestDb",
         "ConnectionStrings__myTestDb2": "{myTestDb2.connectionString}",
         "MYTESTDB2_HOST": "{mysql.bindings.tcp.host}",
         "MYTESTDB2_PORT": "{mysql.bindings.tcp.port}",
@@ -69,7 +67,7 @@
         "MYTESTDB2_PASSWORD": "{mysql-password.value}",
         "MYTESTDB2_URI": "mysql://root:{mysql-password-uri-encoded.value}@{mysql.bindings.tcp.host}:{mysql.bindings.tcp.port}/myTestDb2",
         "MYTESTDB2_JDBCCONNECTIONSTRING": "jdbc:mysql://{mysql.bindings.tcp.host}:{mysql.bindings.tcp.port}/myTestDb2",
-        "MYTESTDB2_DATABASE": "myTestDb2"
+        "MYTESTDB2_DATABASENAME": "myTestDb2"
       },
       "bindings": {
         "http": {

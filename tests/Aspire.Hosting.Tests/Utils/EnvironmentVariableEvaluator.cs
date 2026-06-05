@@ -18,13 +18,13 @@ public static class EnvironmentVariableEvaluator
             ServiceProvider = serviceProvider
         });
 
-        (var executionConfiguration, var exception) = await resource.ExecutionConfigurationBuilder()
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
             .WithEnvironmentVariablesConfig()
             .BuildAsync(executionContext, NullLogger.Instance, CancellationToken.None);
 
-        if (exception is not null)
+        if (executionConfiguration.Exception is not null)
         {
-            ExceptionDispatchInfo.Throw(exception);
+            ExceptionDispatchInfo.Throw(executionConfiguration.Exception);
         }
 
         return executionConfiguration.EnvironmentVariables.ToDictionary();

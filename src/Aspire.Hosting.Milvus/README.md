@@ -44,7 +44,7 @@ The Milvus database resource combines the server properties above and adds the f
 
 | Property Name | Description |
 |---------------|-------------|
-| `Database` | The Milvus database name |
+| `DatabaseName` | The Milvus database name |
 
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
 

@@ -202,7 +202,4 @@
   <data name="RunningInstanceStopped" xml:space="preserve">
     <value>Running instance stopped successfully.</value>
   </data>
-  <data name="RunningInstanceStopFailed" xml:space="preserve">
-    <value>Failed to stop running instance. The process may have already exited.</value>
-  </data>
 </root>

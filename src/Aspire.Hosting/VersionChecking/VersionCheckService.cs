@@ -8,7 +8,6 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Hosting.Resources;
-using Aspire.Hosting.UserSecrets;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;

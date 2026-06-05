@@ -190,6 +190,12 @@ public class AzurePostgresExtensionsTests
         Assert.Equal("Host=localhost;Port=12455;Username=user1;Password=p@ssw0rd1", await postgres.Resource.ConnectionStringExpression.GetValueAsync(CancellationToken.None));
 
         // Test the new reference properties
+        Assert.NotNull(postgres.Resource.Host);
+        Assert.Equal("localhost", await postgres.Resource.Host.GetValueAsync(CancellationToken.None));
+
+        Assert.NotNull(postgres.Resource.Port);
+        Assert.Equal("12455", await postgres.Resource.Port.GetValueAsync(CancellationToken.None));
+
         Assert.NotNull(postgres.Resource.HostName);
         Assert.Equal("localhost:12455", await postgres.Resource.HostName.GetValueAsync(CancellationToken.None));
 

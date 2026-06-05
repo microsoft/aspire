@@ -90,10 +90,10 @@ The GitHub Model resource exposes the following connection properties:
 |---------------|-------------|
 | `Uri` | The GitHub Models inference endpoint URI, with the format `https://models.github.ai/inference` |
 | `Key` | The API key (PAT or GitHub App token) for authentication |
-| `Model` | The model identifier for inference requests, for instance `openai/gpt-4o-mini` |
+| `ModelName` | The model identifier for inference requests, for instance `openai/gpt-4o-mini` |
 | `Organization` | The organization attributed to the request (available when configured) |
 
-Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `chat` becomes `CHAT_URI`.
 
 ## Available Models
 

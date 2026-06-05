@@ -363,4 +363,129 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(Array.Empty<Aspire.Shared.NuGetPackageCli>());
         }
     }
+
+    [Fact]
+    public async Task InitCommandWithChannelOptionUsesSpecifiedChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        
+        string? channelNameUsed = null;
+        bool promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+                
+                prompter.PromptForTemplatesVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt for version when --channel is specified");
+                };
+                
+                return prompter;
+            };
+
+            options.PackagingServiceFactory = (sp) =>
+            {
+                return new TestPackagingServiceWithChannelTracking((channelName) => channelNameUsed = channelName);
+            };
+            
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                {
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    var appHostFile = Path.Combine(outputPath, "apphost.cs");
+                    File.WriteAllText(appHostFile, "// Test apphost file");
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<InitCommand>();
+        var result = command.Parse("init --channel stable");
+
+        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        
+        // Assert
+        Assert.Equal(0, exitCode);
+        Assert.Equal("stable", channelNameUsed);
+        Assert.False(promptedForVersion);
+    }
+
+    [Fact]
+    public async Task InitCommandWithInvalidChannelShowsError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.PackagingServiceFactory = (sp) =>
+            {
+                return new TestPackagingServiceWithChannelTracking(_ => { });
+            };
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<InitCommand>();
+        var result = command.Parse("init --channel invalid-channel");
+
+        var exitCode = await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+        
+        // Assert - should fail with non-zero exit code for invalid channel
+        Assert.NotEqual(0, exitCode);
+    }
+
+    private sealed class TestPackagingServiceWithChannelTracking(Action<string> onChannelUsed) : IPackagingService
+    {
+        public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
+        {
+            var stableCache = new FakeNuGetPackageCacheWithTracking("stable", onChannelUsed);
+            var dailyCache = new FakeNuGetPackageCacheWithTracking("daily", onChannelUsed);
+            
+            var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache);
+            var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+            
+            return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
+        }
+    }
+
+    private sealed class FakeNuGetPackageCacheWithTracking(string channelName, Action<string> onChannelUsed) : INuGetPackageCache
+    {
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        {
+            onChannelUsed(channelName);
+            var package = new Aspire.Shared.NuGetPackageCli
+            {
+                Id = "Aspire.ProjectTemplates",
+                Source = "nuget",
+                Version = "10.0.0"
+            };
+            return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(new[] { package });
+        }
+
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(Array.Empty<Aspire.Shared.NuGetPackageCli>());
+        }
+
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(Array.Empty<Aspire.Shared.NuGetPackageCli>());
+        }
+
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(Array.Empty<Aspire.Shared.NuGetPackageCli>());
+        }
+    }
 }

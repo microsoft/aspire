@@ -107,6 +107,11 @@
                                                Icon="@(new Icons.Regular.Size24.Table())">
                                     </FluentTab>
                                     <FluentTab LabelClass="tab-label"
+                                               Id="@($"tab-{ResourceViewKind.Parameters}")"
+                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerParametersTab)]"
+                                               Icon="@(new Icons.Regular.Size24.Key())">
+                                    </FluentTab>
+                                    <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Graph}")"
                                                aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]"
                                                Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphTab)]"
@@ -114,7 +119,7 @@
                                     </FluentTab>
                                 </FluentTabs>
                             }
-                            <div class="resources-grid-container" hidden="@(PageViewModel.SelectedViewKind != ResourceViewKind.Table)">
+                            <div class="resources-grid-container" hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
                                 <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                                     <FluentDataGrid @ref="_dataGrid"
                                                     ColumnResizeLabels="@_resizeLabels"
@@ -170,6 +175,26 @@
                                                     <span class="empty-data"></span>
                                                 }
                                             </AspireTemplateColumn>
+                                            <AspireTemplateColumn ColumnId="@ValueColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.PropertyGridValueColumnHeader)]" Tooltip="true" TooltipText="@(ctx => GetParameterValue(ctx.Resource) is var pv && (pv.IsSensitive || pv.IsUnresolved) ? null : pv.Value)">
+                                                @{
+                                                    var paramValue = GetParameterValue(context.Resource);
+                                                }
+                                                @if (paramValue.Value is not null)
+                                                {
+                                                    <GridValue Value="@paramValue.Value"
+                                                               ValueDescription="@ControlsStringsLoc[nameof(ControlsStrings.PropertyGridValueColumnHeader)]"
+                                                               EnableMasking="@paramValue.IsSensitive"
+                                                               IsMasked="@paramValue.IsSensitive" />
+                                                }
+                                                else if (paramValue.IsUnresolved)
+                                                {
+                                                    <span class="cellText">@ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="empty-data"></span>
+                                                }
+                                            </AspireTemplateColumn>
                                             <AspireTemplateColumn ColumnId="@UrlsColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesUrlsColumnHeader)]" Tooltip="true" TooltipText="@(ctx => GetUrlsTooltip(ctx.Resource))">
                                                 <UrlsColumnDisplay Resource="context.Resource"
                                                                    HasMultipleReplicas="HasMultipleReplicas(context.Resource)"
@@ -188,7 +213,7 @@
                                             </AspireTemplateColumn>
                                         </ChildContent>
                                         <EmptyContent>
-                                            <FluentIcon Icon="Icons.Regular.Size24.AppGeneric" />&nbsp;@Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]
+                                            <FluentIcon Icon="Icons.Regular.Size24.AppGeneric" />&nbsp;@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
                                         </EmptyContent>
                                     </FluentDataGrid>
                                 </GridColumnManager>
@@ -232,7 +257,7 @@
         </MainSection>
         <FooterSection>
             @* Don't display footer with the resource graph *@
-            <div hidden="@(PageViewModel.SelectedViewKind != ResourceViewKind.Table)">
+            <div hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
                 <TotalItemsFooter @ref="_totalItemsFooter"
                                   SingularText="@Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterSingularText)]"
                                   PluralText="@Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterPluralText)]"

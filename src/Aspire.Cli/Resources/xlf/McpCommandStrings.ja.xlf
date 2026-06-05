@@ -7,14 +7,29 @@
         <target state="translated">MCP (モデル コンテキスト プロトコル) サーバーを管理します。</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AdditionalOptionsSelectPrompt">
+        <source>Which additional options do you want to enable?</source>
+        <target state="translated">どの追加オプションを有効にしますか?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AgentConfigurationSelectPrompt">
-        <source>Select agent environments to configure:</source>
-        <target state="translated">構成するエージェント環境を選択してください:</target>
+        <source>Which agent environments do you want to configure?</source>
+        <target state="translated">どのエージェント環境を構成しますか?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationComplete">
         <source>Agent environment configuration complete.</source>
         <target state="translated">エージェント環境の構成が完了しました。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigurePlaywrightPrompt">
+        <source>Pre-configure Playwright MCP server?</source>
+        <target state="translated">Playwright MCP サーバーを事前に構成しますか?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_CreateAgentInstructionsPrompt">
+        <source>Create agent environment specific instruction files?</source>
+        <target state="translated">エージェント環境固有の指示ファイルを作成しますか?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">

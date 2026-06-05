@@ -20,7 +20,7 @@ public class NuGetConfigMergerTests
 
     private static async Task<FileInfo> WriteConfigAsync(DirectoryInfo dir, string content)
     {
-        var path = Path.Combine(dir.FullName, "NuGet.config");
+        var path = Path.Combine(dir.FullName, "nuget.config");
         await File.WriteAllTextAsync(path, content);
         return new FileInfo(path);
     }
@@ -62,7 +62,7 @@ public class NuGetConfigMergerTests
     var channel = CreateChannel(mappings);
     await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var targetConfigPath = Path.Combine(root.FullName, "NuGet.config");
+        var targetConfigPath = Path.Combine(root.FullName, "nuget.config");
         Assert.True(File.Exists(targetConfigPath));
 
     using var tempConfig = await TemporaryNuGetConfig.CreateAsync(mappings);
@@ -86,7 +86,7 @@ public class NuGetConfigMergerTests
     var channel = CreateChannel(mappings);
     await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var targetConfigPath = Path.Combine(root.FullName, "NuGet.config");
+        var targetConfigPath = Path.Combine(root.FullName, "nuget.config");
         Assert.True(File.Exists(targetConfigPath));
 
         var xml = XDocument.Load(targetConfigPath);
@@ -130,7 +130,7 @@ public class NuGetConfigMergerTests
     var channel = CreateChannel(mappings);
     await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var xml = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var packageSources = xml.Root!.Element("packageSources")!;
         Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == "https://feed2.example");
 
@@ -169,7 +169,7 @@ public class NuGetConfigMergerTests
     var channel = CreateChannel(mappings);
     await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var xml = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var packageSources = xml.Root!.Element("packageSources")!;
         // Old source should be removed because it's no longer used
         Assert.DoesNotContain(packageSources.Elements("add"), e => (string?)e.Attribute("value") == "https://old.example");
@@ -209,7 +209,7 @@ public class NuGetConfigMergerTests
     var channel = CreateChannel(mappings);
     await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var xml = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var psm = xml.Root!.Element("packageSourceMapping");
         Assert.NotNull(psm);
         Assert.Equal(2, psm!.Elements("packageSource").Count());
@@ -319,7 +319,7 @@ public class NuGetConfigMergerTests
         var channel = CreateChannel(mappings);
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var xml = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var packageSources = xml.Root!.Element("packageSources")!;
         
         // Existing sources should still be present with their original keys
@@ -369,7 +369,7 @@ public class NuGetConfigMergerTests
         var channel = CreateChannel(mappings);
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var xml = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var packageSources = xml.Root!.Element("packageSources")!;
         
         // All original sources should still be present
@@ -438,7 +438,7 @@ public class NuGetConfigMergerTests
         var channel = CreateChannel(mappings);
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var xml = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var packageSources = xml.Root!.Element("packageSources")!;
         
         // Original source should still be present
@@ -504,7 +504,7 @@ public class NuGetConfigMergerTests
         var channel = CreateChannel(mappings);
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var xml = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var packageSources = xml.Root!.Element("packageSources")!;
         
         // The PR hive source should be removed because it's safe to remove and no longer needed
@@ -577,7 +577,7 @@ public class NuGetConfigMergerTests
         Assert.NotNull(callbackProposedContent);
 
         // Verify file was created
-        var targetConfigPath = Path.Combine(root.FullName, "NuGet.config");
+        var targetConfigPath = Path.Combine(root.FullName, "nuget.config");
         Assert.True(File.Exists(targetConfigPath));
         Assert.Equal(targetConfigPath, callbackTargetFile.FullName);
     }
@@ -607,7 +607,7 @@ public class NuGetConfigMergerTests
         Assert.True(callbackInvoked);
 
         // Verify file was NOT created
-        var targetConfigPath = Path.Combine(root.FullName, "NuGet.config");
+        var targetConfigPath = Path.Combine(root.FullName, "nuget.config");
         Assert.False(File.Exists(targetConfigPath));
     }
 
@@ -657,7 +657,7 @@ public class NuGetConfigMergerTests
         Assert.NotNull(callbackProposedContent);
 
         // Verify file exists and was updated
-        var targetConfigPath = Path.Combine(root.FullName, "NuGet.config");
+        var targetConfigPath = Path.Combine(root.FullName, "nuget.config");
         Assert.True(File.Exists(targetConfigPath));
         Assert.Equal(targetConfigPath, callbackTargetFile.FullName);
     }
@@ -679,7 +679,7 @@ public class NuGetConfigMergerTests
             """;
         
         await WriteConfigAsync(root, existingConfig);
-        var originalContent = await File.ReadAllTextAsync(Path.Combine(root.FullName, "NuGet.config"));
+        var originalContent = await File.ReadAllTextAsync(Path.Combine(root.FullName, "nuget.config"));
 
         var mappings = new[]
         {
@@ -700,7 +700,7 @@ public class NuGetConfigMergerTests
         Assert.True(callbackInvoked);
 
         // Verify file content was NOT changed
-        var targetConfigPath = Path.Combine(root.FullName, "NuGet.config");
+        var targetConfigPath = Path.Combine(root.FullName, "nuget.config");
         var currentContent = await File.ReadAllTextAsync(targetConfigPath);
         Assert.Equal(NormalizeLineEndings(originalContent), NormalizeLineEndings(currentContent));
     }
@@ -722,7 +722,7 @@ public class NuGetConfigMergerTests
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
         // Verify file was created
-        var targetConfigPath = Path.Combine(root.FullName, "NuGet.config");
+        var targetConfigPath = Path.Combine(root.FullName, "nuget.config");
         Assert.True(File.Exists(targetConfigPath));
     }
 

@@ -25,9 +25,9 @@ resource chat 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   name: 'chat'
   properties: {
     model: {
-      format: 'Microsoft'
-      name: 'Phi-4-mini-instruct'
-      version: '1'
+      format: 'OpenAI'
+      name: 'gpt-5-mini'
+      version: '2025-08-07'
     }
   }
   sku: {

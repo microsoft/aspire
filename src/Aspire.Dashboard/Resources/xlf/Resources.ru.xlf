@@ -222,6 +222,11 @@
         <target state="translated">Скрыть типы ресурсов</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesNoParameters">
+        <source>No parameters found</source>
+        <target state="translated">Параметры не найдены</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesNotFiltered">
         <source>No filters</source>
         <target state="translated">Нет фильтров</target>

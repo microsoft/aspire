@@ -315,18 +315,39 @@ internal sealed class BicepProvisioner(
 
     private static void PopulateWellKnownParameters(AzureBicepResource resource, ProvisioningContext context)
     {
+        static void ValidateUnknownPrincipalParameter(ProvisioningContext context)
+        {
+            // Well-known principal parameters can only be populated in run mode.
+            // In publish mode, principal parameters must be provided by the creator of the bicep resource.
+
+            // We assume that the BicepProvisioner only runs in publish mode during `aspire deploy` operations
+            // and not from azd. azd fills in principal parameters during its deployment process with a managed
+            // identity it creates. But the BicepProvisioner only fills them in with the current principal,
+            // which is not correct in publish mode.
+            if (context.ExecutionContext.IsPublishMode)
+            {
+                throw new InvalidOperationException("An Azure principal parameter was not supplied a value. Ensure you are using an environment that supports role assignments, for example AddAzureContainerAppEnvironment.");
+            }
+        }
+
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalId, out var principalId) && principalId is null)
         {
+            ValidateUnknownPrincipalParameter(context);
+
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = context.Principal.Id;
         }
 
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalName, out var principalName) && principalName is null)
         {
+            ValidateUnknownPrincipalParameter(context);
+
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalName] = context.Principal.Name;
         }
 
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var principalType) && principalType is null)
         {
+            ValidateUnknownPrincipalParameter(context);
+
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = "User";
         }
 

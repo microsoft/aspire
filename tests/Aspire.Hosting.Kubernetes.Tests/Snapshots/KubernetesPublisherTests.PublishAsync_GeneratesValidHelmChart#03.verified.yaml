@@ -1,4 +1,4 @@
-﻿---
+---
 apiVersion: "v1"
 kind: "ConfigMap"
 metadata:
@@ -8,8 +8,6 @@ metadata:
     app.kubernetes.io/component: "project1"
     app.kubernetes.io/instance: "{{.Release.Name}}"
 data:
-  OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES: "{{ .Values.config.project1.OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES }}"
-  OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES: "{{ .Values.config.project1.OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES }}"
   OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.project1.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
   MYAPP_HTTP: "{{ .Values.config.project1.MYAPP_HTTP }}"
   services__myapp__http__0: "{{ .Values.config.project1.services__myapp__http__0 }}"

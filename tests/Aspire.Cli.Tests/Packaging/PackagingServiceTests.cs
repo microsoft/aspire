@@ -366,7 +366,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         await NuGetConfigMerger.CreateOrUpdateAsync(tempDir, stagingChannel);
 
         // Assert
-        var nugetConfigPath = Path.Combine(tempDir.FullName, "NuGet.config");
+        var nugetConfigPath = Path.Combine(tempDir.FullName, "nuget.config");
         Assert.True(File.Exists(nugetConfigPath));
         
         var configContent = await File.ReadAllTextAsync(nugetConfigPath);

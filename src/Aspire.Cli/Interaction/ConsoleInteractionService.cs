@@ -15,6 +15,7 @@ internal class ConsoleInteractionService : IInteractionService
     private static readonly Style s_infoMessageStyle = new Style(foreground: Color.Green, background: null, decoration: Decoration.None);
     private static readonly Style s_waitingMessageStyle = new Style(foreground: Color.Yellow, background: null, decoration: Decoration.None);
     private static readonly Style s_errorMessageStyle = new Style(foreground: Color.Red, background: null, decoration: Decoration.Bold);
+    private static readonly Style s_searchHighlightStyle = new Style(foreground: Color.Black, background: Color.Cyan1, decoration: Decoration.None);
 
     private readonly IAnsiConsole _ansiConsole;
     private readonly CliExecutionContext _executionContext;
@@ -112,6 +113,8 @@ internal class ConsoleInteractionService : IInteractionService
             .AddChoices(choices)
             .PageSize(10)
             .EnableSearch();
+        
+        prompt.SearchHighlightStyle = s_searchHighlightStyle;
 
         return await _ansiConsole.PromptAsync(prompt, cancellationToken);
     }

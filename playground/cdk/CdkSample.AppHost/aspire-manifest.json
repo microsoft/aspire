@@ -187,22 +187,47 @@
       "type": "project.v0",
       "path": "../CdkSample.ApiService/CdkSample.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{api.bindings.http.targetPort}",
         "ConnectionStrings__signalr": "{signalr.connectionString}",
+        "SIGNALR_URI": "https://{signalr.outputs.hostName}",
         "ConnectionStrings__blobs": "{blobs.connectionString}",
+        "BLOBS_URI": "{storage.outputs.blobEndpoint}",
         "ConnectionStrings__sqldb": "{sqldb.connectionString}",
+        "SQLDB_HOST": "{sql.outputs.sqlServerFqdn}",
+        "SQLDB_PORT": "1433",
+        "SQLDB_URI": "mssql://{sql.outputs.sqlServerFqdn}:1433/sqldb",
+        "SQLDB_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql.outputs.sqlServerFqdn}:1433;database=sqldb;encrypt=true;trustServerCertificate=false",
+        "SQLDB_DATABASENAME": "sqldb",
         "ConnectionStrings__mykv": "{mykv.connectionString}",
+        "MYKV_URI": "{mykv.outputs.vaultUri}",
         "ConnectionStrings__cache": "{cache.connectionString}",
+        "CACHE_HOST": "{cache.outputs.hostName}",
+        "CACHE_PORT": "10000",
+        "CACHE_URI": "rediss://{cache.outputs.hostName}:10000",
         "ConnectionStrings__cosmos": "{cosmos.connectionString}",
+        "COSMOS_URI": "{cosmos.outputs.connectionString}",
         "ConnectionStrings__pgsqldb": "{pgsqldb.connectionString}",
+        "PGSQLDB_HOST": "{pgsql.outputs.hostName}",
+        "PGSQLDB_PORT": "5432",
+        "PGSQLDB_URI": "postgresql://{pgsqlAdministratorLogin.value}:{pgsqlAdministratorLoginPassword.value}@{pgsql.outputs.hostName}/pgsqldb",
+        "PGSQLDB_JDBCCONNECTIONSTRING": "jdbc:postgresql://{pgsql.outputs.hostName}/pgsqldb?sslmode=require\u0026authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin",
+        "PGSQLDB_USERNAME": "{pgsqlAdministratorLogin.value}",
+        "PGSQLDB_PASSWORD": "{pgsqlAdministratorLoginPassword.value}",
+        "PGSQLDB_DATABASENAME": "pgsqldb",
         "ConnectionStrings__pgsql2db": "{pgsql2db.connectionString}",
+        "PGSQL2DB_HOST": "{pgsql2.outputs.hostName}",
+        "PGSQL2DB_PORT": "5432",
+        "PGSQL2DB_URI": "postgresql://{pgsql2.outputs.hostName}/pgsql2db",
+        "PGSQL2DB_JDBCCONNECTIONSTRING": "jdbc:postgresql://{pgsql2.outputs.hostName}/pgsql2db?sslmode=require\u0026authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin",
+        "PGSQL2DB_DATABASENAME": "pgsql2db",
         "ConnectionStrings__servicebus": "{servicebus.connectionString}",
+        "SERVICEBUS_HOST": "{servicebus.outputs.serviceBusHostName}",
+        "SERVICEBUS_URI": "{servicebus.outputs.serviceBusEndpoint}",
         "ConnectionStrings__appConfig": "{appConfig.connectionString}",
         "ConnectionStrings__search": "{search.connectionString}",
+        "SEARCH_URI": "{search.outputs.endpoint}",
         "APPLICATIONINSIGHTS_CONNECTION_STRING": "{appInsights.connectionString}"
       },
       "bindings": {
@@ -319,6 +344,16 @@
         "principalType": "",
         "principalId": ""
       }
+    },
+    "pgsqlAdministratorLogin-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{pgsqlAdministratorLogin.value}",
+      "filter": "uri"
+    },
+    "pgsqlAdministratorLoginPassword-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{pgsqlAdministratorLoginPassword.value}",
+      "filter": "uri"
     }
   }
 }

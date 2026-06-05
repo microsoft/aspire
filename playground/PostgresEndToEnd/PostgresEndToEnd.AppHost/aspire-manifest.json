@@ -10,16 +10,19 @@
       "type": "value.v0",
       "connectionString": "{pg.connectionString};Database=db1"
     },
-    "api": {
+    "dotnet": {
       "type": "project.v0",
       "path": "../PostgresEndToEnd.ApiService/PostgresEndToEnd.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
-        "HTTP_PORTS": "{api.bindings.http.targetPort}",
-        "ConnectionStrings__db1": "{db1.connectionString}"
+        "HTTP_PORTS": "{dotnet.bindings.http.targetPort}",
+        "ConnectionStrings__db1": "{db1.connectionString}",
+        "DB1_HOST": "{pg.outputs.hostName}",
+        "DB1_PORT": "5432",
+        "DB1_URI": "postgresql://{pg.outputs.hostName}/db1",
+        "DB1_JDBCCONNECTIONSTRING": "jdbc:postgresql://{pg.outputs.hostName}/db1?sslmode=require\u0026authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin",
+        "DB1_DATABASENAME": "db1"
       },
       "bindings": {
         "http": {
@@ -32,6 +35,105 @@
           "scheme": "https",
           "protocol": "tcp",
           "transport": "http",
+          "external": true
+        }
+      }
+    },
+    "pythonservice": {
+      "type": "container.v1",
+      "build": {
+        "context": "../PostgresEndToEnd.PythonService",
+        "dockerfile": "pythonservice.Dockerfile"
+      },
+      "args": [
+        "app:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "{pythonservice.bindings.http.targetPort}"
+      ],
+      "env": {
+        "OTEL_TRACES_EXPORTER": "otlp",
+        "OTEL_LOGS_EXPORTER": "otlp",
+        "OTEL_METRICS_EXPORTER": "otlp",
+        "OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED": "true",
+        "PORT": "{pythonservice.bindings.http.targetPort}",
+        "ConnectionStrings__db1": "{db1.connectionString}",
+        "DB1_HOST": "{pg.outputs.hostName}",
+        "DB1_PORT": "5432",
+        "DB1_URI": "postgresql://{pg.outputs.hostName}/db1",
+        "DB1_JDBCCONNECTIONSTRING": "jdbc:postgresql://{pg.outputs.hostName}/db1?sslmode=require\u0026authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin",
+        "DB1_DATABASENAME": "db1"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8000,
+          "external": true
+        }
+      }
+    },
+    "nodeservice": {
+      "type": "container.v1",
+      "build": {
+        "context": "../PostgresEndToEnd.NodeService",
+        "dockerfile": "nodeservice.Dockerfile"
+      },
+      "env": {
+        "NODE_ENV": "development",
+        "PORT": "{nodeservice.bindings.http.targetPort}",
+        "ConnectionStrings__db1": "{db1.connectionString}",
+        "DB1_HOST": "{pg.outputs.hostName}",
+        "DB1_PORT": "5432",
+        "DB1_URI": "postgresql://{pg.outputs.hostName}/db1",
+        "DB1_JDBCCONNECTIONSTRING": "jdbc:postgresql://{pg.outputs.hostName}/db1?sslmode=require\u0026authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin",
+        "DB1_DATABASENAME": "db1"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8001,
+          "external": true
+        }
+      }
+    },
+    "mvn-clean": {
+      "type": "executable.v0",
+      "workingDirectory": "../PostgresEndToEnd.JavaService",
+      "command": "mvn.cmd",
+      "args": [
+        "clean",
+        "package",
+        "-DskipTests"
+      ]
+    },
+    "javaservice": {
+      "type": "executable.v0",
+      "workingDirectory": "../PostgresEndToEnd.JavaService",
+      "command": "java",
+      "args": [
+        "-jar",
+        "target/javaservice-1.0.0.jar"
+      ],
+      "env": {
+        "PORT": "{javaservice.bindings.http.targetPort}",
+        "ConnectionStrings__db1": "{db1.connectionString}",
+        "DB1_HOST": "{pg.outputs.hostName}",
+        "DB1_PORT": "5432",
+        "DB1_URI": "postgresql://{pg.outputs.hostName}/db1",
+        "DB1_JDBCCONNECTIONSTRING": "jdbc:postgresql://{pg.outputs.hostName}/db1?sslmode=require\u0026authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin",
+        "DB1_DATABASENAME": "db1"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8002,
           "external": true
         }
       }

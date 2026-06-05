@@ -7,14 +7,29 @@
         <target state="translated">Spravujte server MCP (Model Context Protocol).</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AdditionalOptionsSelectPrompt">
+        <source>Which additional options do you want to enable?</source>
+        <target state="translated">Které další možnosti chcete povolit?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AgentConfigurationSelectPrompt">
-        <source>Select agent environments to configure:</source>
-        <target state="translated">Vyberte prostředí agentů, která se mají nakonfigurovat:</target>
+        <source>Which agent environments do you want to configure?</source>
+        <target state="translated">Která prostředí agentů chcete nakonfigurovat?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationComplete">
         <source>Agent environment configuration complete.</source>
         <target state="translated">Konfigurace prostředí agentů se dokončila.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigurePlaywrightPrompt">
+        <source>Pre-configure Playwright MCP server?</source>
+        <target state="translated">Chcete předem nakonfigurovat server Playwright MCP?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_CreateAgentInstructionsPrompt">
+        <source>Create agent environment specific instruction files?</source>
+        <target state="translated">Chcete vytvořit soubory instrukcí specifické pro prostředí agenta?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">

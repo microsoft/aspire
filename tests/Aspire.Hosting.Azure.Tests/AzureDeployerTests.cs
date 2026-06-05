@@ -22,6 +22,7 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -1160,6 +1161,29 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         // Use Verify to snapshot the diagnostic output showing the dependency graph
         // The key assertion is that provision-api-website depends on provision-cache
         // because the Redis resource writes the secret that the API consumes
+        await Verify(logs);
+    }
+
+    [Fact]
+    public async Task DeployAsync_WithAzureResourcesAndNoEnvironment_Fails()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Deploy);
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+
+        ConfigureTestServices(builder, bicepProvisioner: new NoOpBicepProvisioner(), activityReporter: mockActivityReporter);
+        builder.Services.AddSingleton<IBicepProvisioner, BicepProvisioner>();
+        builder.Services.AddSingleton(_ => ProvisioningTestHelpers.CreateBicepCompiler());
+
+        builder.AddAzureSqlServer("sql").AddDatabase("db");
+
+        using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        var logs = mockActivityReporter.LoggedMessages
+                .Where(m => m.LogLevel >= LogLevel.Error)
+                .Select(s => s.Message)
+                .ToList();
+
         await Verify(logs);
     }
 

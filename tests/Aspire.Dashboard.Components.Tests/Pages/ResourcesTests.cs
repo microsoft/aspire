@@ -10,6 +10,7 @@ using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Bunit;
+using ProtobufValue = Google.Protobuf.WellKnownTypes.Value;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -353,20 +354,26 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Contains(filteredResources, r => r.Name == "Resource3");
     }
 
-    private static ResourceViewModel CreateResource(string name, string type, string? state, ImmutableArray<HealthReportViewModel>? healthReports, bool isHidden = false)
+    private static ResourceViewModel CreateResource(
+        string name,
+        string type,
+        string? state,
+        ImmutableArray<HealthReportViewModel>? healthReports,
+        bool isHidden = false,
+        string? stateStyle = null,
+        ImmutableDictionary<string, ResourcePropertyViewModel>? properties = null)
     {
         return new ResourceViewModel
         {
             Name = name,
             ResourceType = type,
             State = state,
-            KnownState = state is not null ? Enum.Parse<KnownResourceState>(state) : null,
+            KnownState = state is not null && Enum.TryParse<KnownResourceState>(state, out var knownState) ? knownState : null,
             DisplayName = name,
             Uid = name,
             HealthReports = healthReports ?? [],
 
-            // unused properties
-            StateStyle = null,
+            StateStyle = stateStyle,
             CreationTimeStamp = null,
             StartTimeStamp = null,
             StopTimeStamp = null,
@@ -374,7 +381,7 @@ public partial class ResourcesTests : DashboardTestContext
             Urls = [],
             Volumes = default,
             Relationships = default,
-            Properties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty,
+            Properties = properties ?? ImmutableDictionary<string, ResourcePropertyViewModel>.Empty,
             Commands = [],
             IsHidden = isHidden,
         };
@@ -405,5 +412,226 @@ public partial class ResourcesTests : DashboardTestContext
         // Assert - the menu button should be present (it contains the "Show hidden resources" option)
         var menuButton = cut.FindComponent<AspireMenuButton>();
         Assert.NotNull(menuButton);
+    }
+
+    [Fact]
+    public void TableView_ExcludesParameters()
+    {
+        // Arrange
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("myapp", "Project", "Running", null),
+            CreateResource("mycontainer", "Container", "Running", null),
+            CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        // Act
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        // Assert - Table view (default) should exclude parameters
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Table, cut.Instance.PageViewModel.SelectedViewKind);
+        var filteredResources = cut.Instance.GetFilteredResources().ToList();
+        Assert.Equal(2, filteredResources.Count);
+        Assert.Contains(filteredResources, r => r.Name == "myapp");
+        Assert.Contains(filteredResources, r => r.Name == "mycontainer");
+        Assert.DoesNotContain(filteredResources, r => r.Name == "myparameter");
+    }
+
+    [Fact]
+    public void ParametersView_ShowsOnlyParameters()
+    {
+        // Arrange
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("myapp", "Project", "Running", null),
+            CreateResource("mycontainer", "Container", "Running", null),
+            CreateResource("myparameter1", KnownResourceTypes.Parameter, "Running", null),
+            CreateResource("myparameter2", KnownResourceTypes.Parameter, "Running", null),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        // Act - switch to Parameters view
+        cut.Instance.PageViewModel.SelectedViewKind = Components.Pages.Resources.ResourceViewKind.Parameters;
+        cut.Render();
+
+        // Assert - Parameters view should show only parameters
+        var filteredResources = cut.Instance.GetFilteredResources().ToList();
+        Assert.Equal(2, filteredResources.Count);
+        Assert.Contains(filteredResources, r => r.Name == "myparameter1");
+        Assert.Contains(filteredResources, r => r.Name == "myparameter2");
+        Assert.DoesNotContain(filteredResources, r => r.Name == "myapp");
+        Assert.DoesNotContain(filteredResources, r => r.Name == "mycontainer");
+    }
+
+    [Fact]
+    public void GraphView_ShowsAllResources()
+    {
+        // Arrange
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("myapp", "Project", "Running", null),
+            CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
+        resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
+        resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        // Act - switch to Graph view
+        cut.Instance.PageViewModel.SelectedViewKind = Components.Pages.Resources.ResourceViewKind.Graph;
+        cut.Render();
+
+        // Assert - Graph view should show all resources (no parameter filtering)
+        var filteredResources = cut.Instance.GetFilteredResources().ToList();
+        Assert.Equal(2, filteredResources.Count);
+        Assert.Contains(filteredResources, r => r.Name == "myapp");
+        Assert.Contains(filteredResources, r => r.Name == "myparameter");
+    }
+
+    [Fact]
+    public void ParametersView_IncludesParametersWithValues()
+    {
+        // Arrange
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parameterProperties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty
+            .Add(KnownProperties.Parameter.Value, new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                ProtobufValue.ForString("my-secret-value"),
+                isValueSensitive: true,
+                knownProperty: null,
+                priority: 0));
+
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null, stateStyle: "success", properties: parameterProperties),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        // Act - switch to Parameters view
+        cut.Instance.PageViewModel.SelectedViewKind = Components.Pages.Resources.ResourceViewKind.Parameters;
+        cut.Render();
+
+        // Assert - The parameter should be displayed in Parameters view
+        var filteredResources = cut.Instance.GetFilteredResources().ToList();
+        Assert.Single(filteredResources);
+        Assert.Equal("myparameter", filteredResources[0].Name);
+
+        // Verify the resource has the expected properties for value display
+        var resource = filteredResources[0];
+        Assert.True(resource.Properties.ContainsKey(KnownProperties.Parameter.Value));
+        Assert.Equal("my-secret-value", resource.Properties[KnownProperties.Parameter.Value].Value.StringValue);
+        Assert.True(resource.Properties[KnownProperties.Parameter.Value].IsValueSensitive);
+        Assert.Equal("success", resource.StateStyle);
+    }
+
+    [Fact]
+    public void ParametersView_IncludesUnresolvedParameters()
+    {
+        // Arrange
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        // Unresolved parameter has warning stateStyle and exception message as value
+        var parameterProperties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty
+            .Add(KnownProperties.Parameter.Value, new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                ProtobufValue.ForString("Parameter 'myparameter' not found in configuration."),
+                isValueSensitive: false,
+                knownProperty: null,
+                priority: 0));
+
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("myparameter", KnownResourceTypes.Parameter, "Value missing", null, stateStyle: "warning", properties: parameterProperties),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        // Act - switch to Parameters view
+        cut.Instance.PageViewModel.SelectedViewKind = Components.Pages.Resources.ResourceViewKind.Parameters;
+        cut.Render();
+
+        // Assert - The unresolved parameter should be displayed in Parameters view
+        var filteredResources = cut.Instance.GetFilteredResources().ToList();
+        Assert.Single(filteredResources);
+        Assert.Equal("myparameter", filteredResources[0].Name);
+
+        // Verify the resource has warning stateStyle (triggers "Value not set" display)
+        var resource = filteredResources[0];
+        Assert.Equal("warning", resource.StateStyle);
+        Assert.Equal("Value missing", resource.State);
+    }
+
+    [Fact]
+    public void ParametersView_IncludesErrorParameters()
+    {
+        // Arrange
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        // Error parameter has error stateStyle
+        var parameterProperties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty
+            .Add(KnownProperties.Parameter.Value, new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                ProtobufValue.ForString("Error initializing parameter"),
+                isValueSensitive: false,
+                knownProperty: null,
+                priority: 0));
+
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("myparameter", KnownResourceTypes.Parameter, "Error", null, stateStyle: "error", properties: parameterProperties),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        // Act - switch to Parameters view
+        cut.Instance.PageViewModel.SelectedViewKind = Components.Pages.Resources.ResourceViewKind.Parameters;
+        cut.Render();
+
+        // Assert - The error parameter should be displayed in Parameters view
+        var filteredResources = cut.Instance.GetFilteredResources().ToList();
+        Assert.Single(filteredResources);
+        Assert.Equal("myparameter", filteredResources[0].Name);
+
+        // Verify the resource has error stateStyle (triggers "Value not set" display)
+        var resource = filteredResources[0];
+        Assert.Equal("error", resource.StateStyle);
     }
 }

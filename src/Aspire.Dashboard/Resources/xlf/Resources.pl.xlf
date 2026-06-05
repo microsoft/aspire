@@ -222,6 +222,11 @@
         <target state="translated">Ukryj typy zasobów</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesNoParameters">
+        <source>No parameters found</source>
+        <target state="translated">Nie znaleziono parametrów</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesNotFiltered">
         <source>No filters</source>
         <target state="translated">Brak filtrów</target>

@@ -32,7 +32,7 @@ app.MapGet("/", async (MyDb1Context db1Context) =>
     return new
     {
         totalEntries = entries.Count,
-        entries = entries
+        entries
     };
 });
 
@@ -44,7 +44,16 @@ public class MyDb1Context(DbContextOptions<MyDb1Context> options) : DbContext(op
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<Entry>().HasKey(e => e.Id);
+        modelBuilder.Entity<Entry>()
+            .ToTable("entries");
+
+        modelBuilder.Entity<Entry>()
+            .Property(e => e.Id)
+            .HasColumnName("id");
+
+        modelBuilder.Entity<Entry>()
+            .HasKey(e => e.Id);
+
     }
 
     public DbSet<Entry> Entries { get; set; }

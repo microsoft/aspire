@@ -13,8 +13,13 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var detector = new AgentEnvironmentDetector([]);
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = workspace.WorkspaceRoot,
+            RepositoryRoot = workspace.WorkspaceRoot,
+        };
 
-        var applicators = await detector.DetectAsync(workspace.WorkspaceRoot, workspace.WorkspaceRoot, CancellationToken.None);
+        var applicators = await detector.DetectAsync(context, CancellationToken.None);
 
         Assert.Empty(applicators);
     }
@@ -25,8 +30,13 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var scanner = new TestAgentEnvironmentScanner();
         var detector = new AgentEnvironmentDetector([scanner]);
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = workspace.WorkspaceRoot,
+            RepositoryRoot = workspace.WorkspaceRoot,
+        };
 
-        var applicators = await detector.DetectAsync(workspace.WorkspaceRoot, workspace.WorkspaceRoot, CancellationToken.None);
+        var applicators = await detector.DetectAsync(context, CancellationToken.None);
 
         Assert.True(scanner.WasScanned);
         Assert.Equal(workspace.WorkspaceRoot.FullName, scanner.ScanContext?.WorkingDirectory.FullName);
@@ -44,8 +54,13 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
                 _ => Task.CompletedTask)
         };
         var detector = new AgentEnvironmentDetector([scanner]);
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = workspace.WorkspaceRoot,
+            RepositoryRoot = workspace.WorkspaceRoot,
+        };
 
-        var applicators = await detector.DetectAsync(workspace.WorkspaceRoot, workspace.WorkspaceRoot, CancellationToken.None);
+        var applicators = await detector.DetectAsync(context, CancellationToken.None);
 
         Assert.Single(applicators);
         Assert.Equal("Test Environment", applicators[0].Description);
@@ -68,12 +83,34 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
                 _ => Task.CompletedTask)
         };
         var detector = new AgentEnvironmentDetector([scanner1, scanner2]);
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = workspace.WorkspaceRoot,
+            RepositoryRoot = workspace.WorkspaceRoot,
+        };
 
-        var applicators = await detector.DetectAsync(workspace.WorkspaceRoot, workspace.WorkspaceRoot, CancellationToken.None);
+        var applicators = await detector.DetectAsync(context, CancellationToken.None);
 
         Assert.True(scanner1.WasScanned);
         Assert.True(scanner2.WasScanned);
         Assert.Equal(2, applicators.Length);
+    }
+
+    [Fact]
+    public async Task DetectAsync_WithConfigurePlaywrightTrue_PassesContextToScanner()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var scanner = new TestAgentEnvironmentScanner();
+        var detector = new AgentEnvironmentDetector([scanner]);
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = workspace.WorkspaceRoot,
+            RepositoryRoot = workspace.WorkspaceRoot,
+        };
+
+        var applicators = await detector.DetectAsync(context, CancellationToken.None);
+
+        Assert.True(scanner.WasScanned);
     }
 
     private sealed class TestAgentEnvironmentScanner : IAgentEnvironmentScanner

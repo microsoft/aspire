@@ -1,7 +1,7 @@
 ﻿{
   "author": "Microsoft",
-  "name": "Aspire Starter App (FastAPI/React)",
-  "description": "A project template for creating an Aspire app with a React frontend and a Python backend API service, with optional Redis caching.",
+  "name": "Aspire 시작 앱(FastAPI/React)",
+  "description": "선택적 Redis 캐싱을 사용하여 React 프런트 엔드와 Python 백 엔드 API 서비스로 Aspire 앱을 만들기 위한 프로젝트 템플릿입니다.",
   "symbols/UseRedisCache/displayName": "캐싱용 _Use Redis(지원되는 컨테이너 런타임 필요)",
   "symbols/UseRedisCache/description": "캐싱에 Redis를 사용하도록 애플리케이션을 설정할지 여부를 구성합니다. 로컬로 실행하려면 지원되는 컨테이너 런타임이 필요합니다. 자세한 내용은 https://aka.ms/aspire/containers를 참조하세요.",
   "symbols/appHostHttpPort/description": "AppHost 프로젝트의 launchSettings.json HTTP 엔드포인트에 사용할 포트 번호입니다.",

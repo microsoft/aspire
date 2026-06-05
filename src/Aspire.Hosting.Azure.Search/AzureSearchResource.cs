@@ -29,6 +29,14 @@ public class AzureSearchResource(string name, Action<AzureResourceInfrastructure
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
+    /// Gets the service endpoint URI expression for the Azure AI Search resource.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>https://{name}.search.windows.net</c>.
+    /// </remarks>
+    public BicepOutputReference Endpoint => new("endpoint", this);
+
+    /// <summary>
     /// Gets the connection string template for the manifest for the resource.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
@@ -61,5 +69,10 @@ public class AzureSearchResource(string name, Action<AzureResourceInfrastructure
 
         infra.Add(store);
         return store;
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        yield return new("Uri", ReferenceExpression.Create($"{Endpoint}"));
     }
 }

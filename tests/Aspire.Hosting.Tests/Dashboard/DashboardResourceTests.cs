@@ -164,6 +164,11 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
             },
             e =>
             {
+                Assert.Equal("DASHBOARD__MCP__USECLIMCP", e.Key);
+                Assert.Equal("true", e.Value);
+            },
+            e =>
+            {
                 Assert.Equal("DASHBOARD__OTLP__AUTHMODE", e.Key);
                 Assert.Equal("Unsecured", e.Value);
             },

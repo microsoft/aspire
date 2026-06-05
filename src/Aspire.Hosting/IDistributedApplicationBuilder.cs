@@ -11,7 +11,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
-using Aspire.Hosting.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

@@ -43,20 +43,20 @@ resource worker 'Microsoft.App/containerApps@2025-02-02-preview' = {
           name: 'worker'
           env: [
             {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
               name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
               value: 'in_memory'
             }
             {
               name: 'ConnectionStrings__testdb'
               value: '${kusto_outputs_clusteruri};Initial Catalog=testdb'
+            }
+            {
+              name: 'TESTDB_URI'
+              value: kusto_outputs_clusteruri
+            }
+            {
+              name: 'TESTDB_DATABASENAME'
+              value: 'testdb'
             }
             {
               name: 'AZURE_CLIENT_ID'

@@ -65,12 +65,14 @@ internal sealed class DockerComposeEnvironmentContext(DockerComposeEnvironmentRe
         }
     }
 
-    private static void ProcessVolumes(DockerComposeServiceResource serviceResource)
+    private void ProcessVolumes(DockerComposeServiceResource serviceResource)
     {
         if (!serviceResource.TargetResource.TryGetContainerMounts(out var mounts))
         {
             return;
         }
+
+        var bindMountIndex = 0;
 
         foreach (var mount in mounts)
         {
@@ -79,15 +81,54 @@ internal sealed class DockerComposeEnvironmentContext(DockerComposeEnvironmentRe
                 throw new InvalidOperationException("Volume source and target must be set");
             }
 
+            var source = mount.Source;
+            var name = mount.Source;
+
+            // For bind mounts, create environment placeholders for the source path
+            // Skip the docker socket which should be left as-is for portability
+            if (mount.Type == ContainerMountType.BindMount && !IsDockerSocket(mount.Source))
+            {
+                // Create environment variable name: {RESOURCE_NAME}_BINDMOUNT_{INDEX}
+                var envVarName = $"{serviceResource.Name.ToUpperInvariant().Replace("-", "_").Replace(".", "_")}_BINDMOUNT_{bindMountIndex}";
+                bindMountIndex++;
+
+                // Add the placeholder to captured environment variables so it gets written to the .env file
+                // Use the original source path as the default value and pass the ContainerMountAnnotation as the source
+                var placeholder = environment.AddEnvironmentVariable(
+                    envVarName,
+                    description: $"Bind mount source for {serviceResource.Name}:{mount.Target}",
+                    defaultValue: mount.Source,
+                    source: mount,
+                    resource: serviceResource.TargetResource);
+
+                // Log warning about host-specific path
+                logger.BindMountHostSpecificPath(serviceResource.Name, mount.Source, envVarName);
+
+                // Use the placeholder in the compose file
+                source = placeholder;
+                name = envVarName;
+            }
+
             serviceResource.Volumes.Add(new Resources.ServiceNodes.Volume
             {
-                Name = mount.Source,
-                Source = mount.Source,
+                Name = name,
+                Source = source,
                 Target = mount.Target,
                 Type = mount.Type == ContainerMountType.BindMount ? "bind" : "volume",
                 ReadOnly = mount.IsReadOnly
             });
         }
+    }
+
+    /// <summary>
+    /// Checks if the source path is the Docker socket path.
+    /// </summary>
+    private static bool IsDockerSocket(string source)
+    {
+        // Check for common Docker socket paths across different platforms
+        return source.Equals("/var/run/docker.sock", StringComparison.OrdinalIgnoreCase) ||
+               source.Equals("//var/run/docker.sock", StringComparison.OrdinalIgnoreCase) ||  // WSL-style path
+               source.Equals(@"\\.\pipe\docker_engine", StringComparison.OrdinalIgnoreCase);  // Windows named pipe
     }
 
     private static async Task ProcessEnvironmentVariablesAsync(DockerComposeServiceResource serviceResource, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)

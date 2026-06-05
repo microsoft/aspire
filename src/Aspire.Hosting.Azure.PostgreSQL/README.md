@@ -54,6 +54,35 @@ The `WithReference` method configures a connection in the `MyService` project na
 builder.AddAzureNpgsqlDataSource("postgresdb");
 ```
 
+## Connection Properties
+
+When you reference Azure PostgreSQL resources using `WithReference`, the following connection properties are made available to the consuming project:
+
+### Azure PostgreSQL flexible server
+
+The Azure PostgreSQL server resource exposes the following connection properties:
+
+| Property Name | Description |
+|---------------|-------------|
+| `Host` | The hostname for the PostgreSQL server |
+| `Port` | The PostgreSQL port (fixed at `5432` in Azure Flexible Server) |
+| `Uri` | The connection URI for the server, with the format `postgresql://{Username}:{Password}@{Host}` (credentials omitted when not applicable) |
+| `JdbcConnectionString` | JDBC-format connection string for the server, with the format `jdbc:postgresql://{Host}?sslmode=require&authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin` |
+| `Username` | Present when password authentication is enabled; the configured administrator username |
+| `Password` | Present when password authentication is enabled; the configured administrator password |
+
+### Azure PostgreSQL database
+
+The Azure PostgreSQL database resource inherits all properties from its parent server and adds:
+
+| Property Name | Description |
+|---------------|-------------|
+| `DatabaseName` | The name of the database |
+| `Uri` | The database-specific connection URI, with the format `postgresql://{Username}:{Password}@{Host}/{DatabaseName}` (credentials omitted when not applicable) |
+| `JdbcConnectionString` | JDBC-format connection string for the database, with the format `jdbc:postgresql://{Host}/{DatabaseName}?sslmode=require&authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin` |
+
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
+
 ## Additional documentation
 
 * https://www.npgsql.org/doc/basic-usage.html

@@ -20,7 +20,9 @@ public sealed class McpInstallButtonServerModel
     public required string Name { get; init; }
     public List<McpInputModel>? Inputs { get; init; }
     public required string Type { get; init; }
-    public required string Url { get; init; }
+    public string? Url { get; init; }
+    public string? Command { get; init; }
+    public List<string>? Args { get; init; }
     public Dictionary<string, string>? Headers { get; init; }
 }
 
@@ -34,7 +36,9 @@ public sealed class McpJsonFileServerModel
 public sealed class McpJsonFileServerInstanceModel
 {
     public required string Type { get; init; }
-    public required string Url { get; init; }
+    public string? Url { get; init; }
+    public string? Command { get; init; }
+    public List<string>? Args { get; init; }
     public Dictionary<string, string>? Headers { get; init; }
 }
 

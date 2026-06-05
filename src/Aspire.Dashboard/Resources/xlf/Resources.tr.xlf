@@ -222,6 +222,11 @@
         <target state="translated">Kaynak türlerini gizle</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesNoParameters">
+        <source>No parameters found</source>
+        <target state="translated">Parametre bulunamadı</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesNotFiltered">
         <source>No filters</source>
         <target state="translated">Filtre mevcut değil</target>

@@ -160,6 +160,9 @@
   <data name="ResourcesNoResources" xml:space="preserve">
     <value>No resources found</value>
   </data>
+  <data name="ResourcesNoParameters" xml:space="preserve">
+    <value>No parameters found</value>
+  </data>
   <data name="ResourcesDetailsContainerArgumentsProperty" xml:space="preserve">
     <value>Container arguments</value>
   </data>

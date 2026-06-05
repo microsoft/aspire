@@ -38,7 +38,7 @@ The Redis resource exposes the following connection properties:
 | `Password` | The password for authentication |
 | `Uri` | The connection URI, with the format `redis://:{Password}@{Host}:{Port}` |
 
-Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `cache` becomes `CACHE_URI`.
 
 ## Additional documentation
 

@@ -24,4 +24,6 @@ resource myhub 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = {
 
 output eventHubsEndpoint string = eventhubs.properties.serviceBusEndpoint
 
+output eventHubsHostName string = split(replace(eventhubs.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
 output name string = eventhubs.name

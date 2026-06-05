@@ -206,11 +206,5 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("RunningInstanceStopped", resourceCulture);
             }
         }
-        
-        public static string RunningInstanceStopFailed {
-            get {
-                return ResourceManager.GetString("RunningInstanceStopFailed", resourceCulture);
-            }
-        }
     }
 }

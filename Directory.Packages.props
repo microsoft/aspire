@@ -50,7 +50,7 @@
     <PackageVersion Include="Azure.Provisioning.OperationalInsights" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.PostgreSql" Version="1.1.1" />
     <PackageVersion Include="Azure.Provisioning.Redis" Version="1.1.0" />
-    <PackageVersion Include="Azure.Provisioning.RedisEnterprise" Version="1.0.0" />
+    <PackageVersion Include="Azure.Provisioning.RedisEnterprise" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.Search" Version="1.0.0" />
     <PackageVersion Include="Azure.Provisioning.ServiceBus" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.SignalR" Version="1.1.0" />
@@ -109,7 +109,7 @@
     <PackageVersion Include="MySqlConnector.Logging.Microsoft.Extensions.Logging" Version="2.1.0" />
     <PackageVersion Include="NATS.Net" Version="2.6.11" />
     <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.0" />
-    <PackageVersion Include="OpenAI" Version="2.6.0" />
+    <PackageVersion Include="OpenAI" Version="2.7.0" />
     <PackageVersion Include="Oracle.EntityFrameworkCore" Version="8.23.90" /> <!-- Can't update to 9.x versions as those lift up LTS versions when targeting net8 -->
     <PackageVersion Include="Oracle.ManagedDataAccess.OpenTelemetry" Version="23.26.0" />
     <PackageVersion Include="Polly.Core" Version="8.6.4" />
@@ -168,7 +168,7 @@
     <!-- https://github.com/Azure/azure-cosmos-dotnet-v3/pull/3313 -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <!-- tools/scripts dependencies -->
-    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="$(MicrosoftExtensionsFileSystemGlobbingVersion)" />
   </ItemGroup>
   <!-- The following 2 groups are for packages that need to switch based on the .NET TFM being used.
        The dependencies on any of these two groups should not be updated manually and should instead use arcade's dependency flow to get updated.-->

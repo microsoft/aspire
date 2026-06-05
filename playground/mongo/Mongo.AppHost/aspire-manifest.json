@@ -26,8 +26,6 @@
       "type": "project.v0",
       "path": "../Mongo.ApiService/Mongo.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{api.bindings.http.targetPort}",
@@ -39,7 +37,7 @@
         "DB_AUTHENTICATIONDATABASE": "admin",
         "DB_AUTHENTICATIONMECHANISM": "SCRAM-SHA-256",
         "DB_URI": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/db?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
-        "DB_DATABASE": "db"
+        "DB_DATABASENAME": "db"
       },
       "bindings": {
         "http": {

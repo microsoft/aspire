@@ -51,16 +51,30 @@ class ResourceGraph {
         this.linkForce = d3
             .forceLink()
             .id(function (link) { return link.id })
-            .strength(function (link) { return 1 })
-            .distance(150);
+            .strength(1.0)
+            .distance(function (link) {
+                // adaptive distance: longer for highly connected nodes
+                const sourceDegree = link.source.degree || 1;
+                const targetDegree = link.target.degree || 1;
+                const maxDegree = Math.max(sourceDegree, targetDegree);
+
+                // scale distance with degree: 150 for low degree, up to 250 for high degree
+                return Math.min(150 + (maxDegree * 10), 250);
+            });
 
         this.simulation = d3
             .forceSimulation()
             .force('link', this.linkForce)
             .force('charge', d3.forceManyBody().strength(-800))
-            .force("collide", d3.forceCollide(110).iterations(10))
-            .force("x", d3.forceX().strength(0.1))
-            .force("y", d3.forceY().strength(0.2));
+            .force("collide", d3.forceCollide(function (d) {
+                var degree = d.degree || 1;
+
+                // scale collide radius with degree: 90 for low degree, up to 180 for high degree
+                return Math.min(90 + (degree * 10), 180);
+            }).iterations(10))
+            .force("x", d3.forceX().strength(0.2))
+            .force("y", d3.forceY().strength(0.4))
+            .force("center", d3.forceCenter().strength(0.01));
 
         // Drag start is trigger on mousedown from click.
         // Only change the state of the simulation when the drag event is triggered.
@@ -223,8 +237,23 @@ class ResourceGraph {
         const existingNodes = this.nodes || []; // Ensure nodes is initialized
         const updatedNodes = [];
 
+        // calculate degree (number of connections) for each resource
+        const degreeMap = new Map();
+        newResources.forEach(resource => {
+            degreeMap.set(resource.name, resource.referencedNames.length);
+        });
+
+        // also count incoming connections
+        newResources.forEach(resource => {
+            resource.referencedNames.forEach(refName => {
+                const currentDegree = degreeMap.get(refName) || 0;
+                degreeMap.set(refName, currentDegree + 1);
+            });
+        });
+
         newResources.forEach(resource => {
             const existingNode = existingNodes.find(node => node.id === resource.name);
+            const degree = degreeMap.get(resource.name) || 1;
 
             if (existingNode) {
                 // Update existing node without replacing it
@@ -234,7 +263,8 @@ class ResourceGraph {
                     endpointUrl: resource.endpointUrl,
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
-                    stateIcon: createIcon(resource.stateIcon)
+                    stateIcon: createIcon(resource.stateIcon),
+                    degree: degree
                 });
             } else {
                 // Add new resource
@@ -244,7 +274,8 @@ class ResourceGraph {
                     endpointUrl: resource.endpointUrl,
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
-                    stateIcon: createIcon(resource.stateIcon)
+                    stateIcon: createIcon(resource.stateIcon),
+                    degree: degree
                 });
             }
         });
@@ -445,11 +476,17 @@ class ResourceGraph {
 
         this.simulation.force("link").links(this.links);
         if (hasStructureChanged) {
-            this.simulation.alpha(1).restart();
+            this.simulation.stop();
+
+            // Set alpha (give energy) and simulate the graph before rendering.
+            // This prevents the graph from jumping around when loaded or changed.
+            this.simulation.alpha(1);
+            for (let i = 0; i < 300; i++) {
+                this.simulation.tick();
+            }
         }
-        else {
-            this.simulation.restart();
-        }
+
+        this.simulation.restart();
 
         function trimText(text, maxLength) {
             if (text.length > maxLength) {
@@ -457,7 +494,7 @@ class ResourceGraph {
             }
             return text;
         }
-   }
+    }
 
     onTick = () => {
         this.nodeElements.attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });

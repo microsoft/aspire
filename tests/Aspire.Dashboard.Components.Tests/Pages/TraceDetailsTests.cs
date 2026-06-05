@@ -5,11 +5,9 @@ using System.Text;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
-using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
-using Aspire.Dashboard.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
@@ -17,7 +15,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
-using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -644,9 +641,6 @@ public partial class TraceDetailsTests : DashboardTestContext
         loggerFactory ??= NullLoggerFactory.Instance;
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);
-        Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
-        Services.AddSingleton<DimensionManager>();
         Services.AddSingleton<ILoggerFactory>(loggerFactory);
-        Services.AddSingleton<ITelemetryErrorRecorder, TestTelemetryErrorRecorder>();
     }
 }

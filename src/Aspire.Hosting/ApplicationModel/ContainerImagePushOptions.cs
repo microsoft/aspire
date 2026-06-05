@@ -14,7 +14,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// and <see cref="RemoteImageTag"/> specifies the tag to apply. Use <see cref="GetFullRemoteImageNameAsync"/>
 /// to construct the complete image reference including registry endpoint and tag.
 /// </remarks>
-[Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+[Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class ContainerImagePushOptions
 {
     /// <summary>
@@ -85,7 +85,7 @@ public sealed class ContainerImagePushOptions
         // Parse the RemoteImageName to check if it contains a host override
         var (host, imagePath) = ParseImageReference(RemoteImageName);
 
-        if (host is not null)
+        if (!string.IsNullOrEmpty(host))
         {
             // RemoteImageName contains a host, use it directly instead of the registry endpoint
             return $"{host}/{imagePath}:{tag}";
@@ -101,14 +101,19 @@ public sealed class ContainerImagePushOptions
             ? await registry.Repository.GetValueAsync(cancellationToken).ConfigureAwait(false)
             : null;
 
-        if (!string.IsNullOrEmpty(repository))
+        // Combine registry endpoint, repository, and image path
+        if (!string.IsNullOrEmpty(repository) && !string.IsNullOrEmpty(registryEndpoint))
         {
-            // Combine registry endpoint, repository, and image path
             return $"{registryEndpoint}/{repository}/{imagePath}:{tag}";
         }
 
         // No repository, just use registry endpoint and image path
-        return $"{registryEndpoint}/{imagePath}:{tag}";
+        if (!string.IsNullOrEmpty(registryEndpoint))
+        {
+            return $"{registryEndpoint}/{imagePath}:{tag}";
+        }
+
+        return $"{imagePath}:{tag}";
     }
 
     /// <summary>

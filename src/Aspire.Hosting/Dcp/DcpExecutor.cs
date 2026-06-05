@@ -1485,6 +1485,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
         {
             AspireEventSource.Instance.CreateAspireExecutableResourcesStart(resource.Name);
 
+            var explicitStartup = resource.TryGetAnnotationsOfType<ExplicitStartupAnnotation>(out _) is true;
+
             // Publish snapshots built from DCP resources. Do this now to populate more values from DCP (source) to ensure they're
             // available if the resource isn't immediately started because it's waiting or is configured for explicit start.
             foreach (var er in executables)
@@ -1501,18 +1503,29 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
                     er.DcpResourceName, new ResourceStatus(null, null, null),
                     snapshotBuild)
                 ).ConfigureAwait(false);
+
+                if (explicitStartup)
+                {
+                    // If explicit startup is configured, we need to set the resource state to NotStarted
+                    await _executorEvents.PublishAsync(new OnResourceChangedContext(
+                        cancellationToken, resourceType, resource,
+                        er.DcpResource.Metadata.Name, new ResourceStatus(KnownResourceStates.NotStarted, null, null), s => s with { State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null) })
+                    ).ConfigureAwait(false);
+                }
+            }
+
+            if (explicitStartup)
+            {
+                // If explicit startup is configured, we aren't going to start the resource now.
+                // We need to exit before we send the BeforeResourceStarted event or create any DCP resources.
+                // The resource can be explicitly started later via user action or API at which point BeforeResourceStarted
+                // will be published and the DCP resource created.
+                return;
             }
 
             await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resource, DcpResourceName: null)).ConfigureAwait(false);
-
             foreach (var er in executables)
             {
-                if (er.ModelResource.TryGetAnnotationsOfType<ExplicitStartupAnnotation>(out _) is true)
-                {
-                    await _executorEvents.PublishAsync(new OnResourceChangedContext(cancellationToken, resourceType, resource, er.DcpResource.Metadata.Name, new ResourceStatus(KnownResourceStates.NotStarted, null, null), s => s with { State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null) })).ConfigureAwait(false);
-                    continue;
-                }
-
                 try
                 {
                     await createResourceFunc(er, resourceLogger, cancellationToken).ConfigureAwait(false);
@@ -1598,7 +1611,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
             var certificatesOutputPath = Path.Join(certificatesRootDir, "certs");
             var baseServerAuthOutputPath = Path.Join(certificatesRootDir, "private");
 
-            (var configuration, var configException) = await er.ModelResource.ExecutionConfigurationBuilder()
+            var configuration = await ExecutionConfigurationBuilder.Create(er.ModelResource)
                 .WithArgumentsConfig()
                 .WithEnvironmentVariablesConfig()
                 .WithCertificateTrustConfig(scope =>
@@ -1698,7 +1711,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
 
             spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
 
-            if (configException is not null)
+            if (configuration.Exception is not null)
             {
                 throw new FailedToApplyEnvironmentException();
             }
@@ -1915,7 +1928,14 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
             var modelContainerResource = cr.ModelResource;
             AspireEventSource.Instance.DcpObjectCreationStart(dcpContainerResource.Kind, dcpContainerResource.Metadata.Name);
 
-            await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, KnownResourceTypes.Container, cr.ModelResource, cr.DcpResource.Metadata.Name)).ConfigureAwait(false);
+            var explicitStartup = cr.ModelResource.TryGetAnnotationsOfType<ExplicitStartupAnnotation>(out _) is true;
+            if (!explicitStartup)
+            {
+                // If explicit startup is configured, we aren't going to start the resource now. A DCP resource WILL be created,
+                // but it will be explicitly set to not start. We don't want to send the BeforeResourceStarted event here as it will
+                // be sent later when the resource is explicitly started via user action or API.
+                await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, KnownResourceTypes.Container, cr.ModelResource, cr.DcpResource.Metadata.Name)).ConfigureAwait(false);
+            }
 
             await ApplyBuildArgumentsAsync(dcpContainerResource, modelContainerResource, _executionContext.ServiceProvider, cancellationToken).ConfigureAwait(false);
 
@@ -1943,7 +1963,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
 
             var serverAuthCertificatesBasePath = $"{certificatesDestination}/private";
 
-            (var configuration, var configException) = await cr.ModelResource.ExecutionConfigurationBuilder()
+            var configuration = await ExecutionConfigurationBuilder.Create(cr.ModelResource)
                 .WithArgumentsConfig()
                 .WithEnvironmentVariablesConfig()
                 .WithCertificateTrustConfig(scope =>
@@ -2093,7 +2113,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IConsoleLogsService, I
                 spec.Command = containerResource.Entrypoint;
             }
 
-            if (failedToApplyRunArgs || configException is not null)
+            if (failedToApplyRunArgs || configuration.Exception is not null)
             {
                 throw new FailedToApplyEnvironmentException();
             }

@@ -57,14 +57,6 @@ resource webstory 'Microsoft.App/containerApps@2025-02-02-preview' = {
           name: 'webstory'
           env: [
             {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
               name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
               value: 'in_memory'
             }
@@ -89,7 +81,7 @@ resource webstory 'Microsoft.App/containerApps@2025-02-02-preview' = {
               secretRef: 'chat-key'
             }
             {
-              name: 'CHAT_MODEL'
+              name: 'CHAT_MODELNAME'
               value: 'openai/gpt-4o-mini'
             }
           ]

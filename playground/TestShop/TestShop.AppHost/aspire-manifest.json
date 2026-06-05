@@ -63,8 +63,6 @@
       "type": "project.v0",
       "path": "../CatalogDb/CatalogDb.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{catalogdbapp.bindings.http.targetPort}",
@@ -75,7 +73,7 @@
         "CATALOGDB_PASSWORD": "{postgres-password.value}",
         "CATALOGDB_URI": "postgresql://postgres:{postgres-password-uri-encoded.value}@{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/catalogdb",
         "CATALOGDB_JDBCCONNECTIONSTRING": "jdbc:postgresql://{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/catalogdb",
-        "CATALOGDB_DATABASE": "catalogdb"
+        "CATALOGDB_DATABASENAME": "catalogdb"
       },
       "bindings": {
         "http": {
@@ -94,8 +92,6 @@
       "type": "project.v0",
       "path": "../CatalogService/CatalogService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{catalogservice.bindings.http.targetPort}",
@@ -106,7 +102,7 @@
         "CATALOGDB_PASSWORD": "{postgres-password.value}",
         "CATALOGDB_URI": "postgresql://postgres:{postgres-password-uri-encoded.value}@{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/catalogdb",
         "CATALOGDB_JDBCCONNECTIONSTRING": "jdbc:postgresql://{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/catalogdb",
-        "CATALOGDB_DATABASE": "catalogdb"
+        "CATALOGDB_DATABASENAME": "catalogdb"
       },
       "bindings": {
         "http": {
@@ -155,8 +151,6 @@
       "type": "project.v0",
       "path": "../BasketService/BasketService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{basketservice.bindings.http.targetPort}",
@@ -189,8 +183,6 @@
       "type": "project.v0",
       "path": "../MyFrontend/MyFrontend.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{frontend.bindings.http.targetPort}",
@@ -222,8 +214,6 @@
       "type": "project.v0",
       "path": "../OrderProcessor/OrderProcessor.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ConnectionStrings__messaging": "{messaging.connectionString}",
         "MESSAGING_HOST": "{messaging.bindings.tcp.host}",

@@ -16,14 +16,14 @@ public sealed class ArgumentEvaluator
                 ServiceProvider = serviceProvider,
             });
 
-        (var executionConfiguration, var exception) = await resource.ExecutionConfigurationBuilder()
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
             .WithArgumentsConfig()
             .BuildAsync(executionContext, NullLogger.Instance, CancellationToken.None)
             .ConfigureAwait(false);
 
-        if (exception is not null)
+        if (executionConfiguration.Exception is not null)
         {
-            ExceptionDispatchInfo.Throw(exception);
+            ExceptionDispatchInfo.Throw(executionConfiguration.Exception);
         }
 
         return executionConfiguration.Arguments.Select(a => a.Value).ToList();

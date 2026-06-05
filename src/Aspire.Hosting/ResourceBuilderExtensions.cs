@@ -275,6 +275,43 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a connection property annotation to the resource being built. Any resource referencing this resource will
+    /// get this connection property included in its environment variables.
+    /// </summary>
+    /// <remarks>Use this method to associate a named connection property with a resource during its
+    /// construction. This is typically used to provide connection-related metadata for resources that require
+    /// environment-specific configuration.</remarks>
+    /// <typeparam name="T">The type of the resource, which must implement IResourceWithEnvironment.</typeparam>
+    /// <param name="builder">The resource builder to which the connection property annotation will be added. Cannot be null.</param>
+    /// <param name="name">The name of the connection property to annotate. Cannot be null.</param>
+    /// <param name="value">The value of the connection property, specified as a reference expression.</param>
+    /// <returns>The same resource builder instance with the connection property annotation applied.</returns>
+    public static IResourceBuilder<T> WithConnectionProperty<T>(this IResourceBuilder<T> builder, string name, ReferenceExpression value) where T : IResourceWithConnectionString
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+
+        return builder.WithAnnotation(new ConnectionPropertyAnnotation(name, value));
+    }
+
+    /// <summary>
+    /// Adds a connection property annotation to the resource being built. Any resource referencing this resource will
+    /// get this connection property included in its environment variables.
+    /// </summary>
+    /// <typeparam name="T">The type of resource that implements the IResourceWithEnvironment interface.</typeparam>
+    /// <param name="builder">The resource builder to which the connection property will be added. Cannot be null.</param>
+    /// <param name="name">The name of the connection property to add. Cannot be null.</param>
+    /// <param name="value">The value to assign to the connection property.</param>
+    /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
+    public static IResourceBuilder<T> WithConnectionProperty<T>(this IResourceBuilder<T> builder, string name, string value) where T : IResourceWithConnectionString
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+
+        return builder.WithAnnotation(new ConnectionPropertyAnnotation(name, ReferenceExpression.Create($"{value}")));
+    }
+
+    /// <summary>
     /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
@@ -497,8 +534,26 @@ public static class ResourceBuilderExtensions
                 };
 
                 SplatConnectionProperties(resource, prefix, context);
+
+                if (resource.TryGetAnnotationsOfType<ConnectionPropertyAnnotation>(out var connectionPropertyAnnotations))
+                {
+                    foreach (var annotation in connectionPropertyAnnotations)
+                    {
+                        context.EnvironmentVariables[$"{prefix}{annotation.Name.ToUpperInvariant()}"] = annotation.Value;
+                    }
+                }
             }
         });
+    }
+
+    private static void SplatConnectionProperties(IResourceWithConnectionString resource, string prefix, EnvironmentCallbackContext context)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        foreach (var connectionProperty in resource.GetConnectionProperties())
+        {
+            context.EnvironmentVariables[$"{prefix}{connectionProperty.Key.ToUpperInvariant()}"] = connectionProperty.Value;
+        }
     }
 
     /// <summary>
@@ -520,16 +575,6 @@ public static class ResourceBuilderExtensions
         }
 
         return ReferenceExpression.Empty;
-    }
-
-    private static void SplatConnectionProperties(IResourceWithConnectionString resource, string prefix, EnvironmentCallbackContext context)
-    {
-        ArgumentNullException.ThrowIfNull(resource);
-
-        foreach (var connectionProperty in resource.GetConnectionProperties())
-        {
-            context.EnvironmentVariables[$"{prefix}{connectionProperty.Key.ToUpperInvariant()}"] = connectionProperty.Value;
-        }
     }
 
     /// <summary>
@@ -3099,7 +3144,7 @@ public static class ResourceBuilderExtensions
     ///     });
     /// </code>
     /// </example>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+    [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Action<ContainerImagePushOptionsCallbackContext> callback)
@@ -3138,7 +3183,7 @@ public static class ResourceBuilderExtensions
     ///     });
     /// </code>
     /// </example>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+    [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Func<ContainerImagePushOptionsCallbackContext, Task> callback)
@@ -3170,7 +3215,7 @@ public static class ResourceBuilderExtensions
     ///     .WithRemoteImageName("myorg/myapp");
     /// </code>
     /// </example>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+    [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public static IResourceBuilder<T> WithRemoteImageName<T>(
         this IResourceBuilder<T> builder,
         string remoteImageName)
@@ -3205,7 +3250,7 @@ public static class ResourceBuilderExtensions
     ///     .WithRemoteImageTag("v1.0.0");
     /// </code>
     /// </example>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+    [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public static IResourceBuilder<T> WithRemoteImageTag<T>(
         this IResourceBuilder<T> builder,
         string remoteImageTag)

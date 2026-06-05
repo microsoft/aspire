@@ -8,10 +8,10 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Gathers command line arguments for resources.
 /// </summary>
-internal class ArgumentsExecutionConfigurationGatherer : IResourceExecutionConfigurationGatherer
+internal class ArgumentsExecutionConfigurationGatherer : IExecutionConfigurationGatherer
 {
     /// <inheritdoc/>
-    public async ValueTask GatherAsync(IResourceExecutionConfigurationGathererContext context, IResource resource, ILogger resourceLogger, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken = default)
+    public async ValueTask GatherAsync(IExecutionConfigurationGathererContext context, IResource resource, ILogger resourceLogger, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken = default)
     {
         if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var callbacks))
         {

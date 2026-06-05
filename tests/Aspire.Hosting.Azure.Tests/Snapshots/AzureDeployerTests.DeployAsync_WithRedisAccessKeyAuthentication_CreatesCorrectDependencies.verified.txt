@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 34
+Total steps defined: 36
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -21,33 +21,35 @@ Steps with no dependencies run first, followed by steps that depend on them.
   5. build
   6. validate-azure-login
   7. create-provisioning-context
-  8. provision-api-identity
-  9. provision-cache-kv
- 10. provision-cache
- 11. provision-cosmos-kv
- 12. provision-cosmos
- 13. provision-env-acr
- 14. provision-env
- 15. provision-pg-kv
- 16. provision-pg
- 17. login-to-acr-env-acr
- 18. push-prereq
- 19. push-api
- 20. provision-api-website
- 21. print-api-summary
- 22. provision-api-roles-cache-kv
- 23. provision-api-roles-cosmos-kv
- 24. provision-api-roles-pg-kv
- 25. provision-azure-bicep-resources
- 26. print-dashboard-url-env
- 27. deploy
- 28. deploy-api
- 29. diagnostics
- 30. publish-prereq
- 31. publish-azure634f9
- 32. publish
- 33. publish-manifest
- 34. push
+  8. check-api-exists
+  9. provision-api-identity
+ 10. provision-cache-kv
+ 11. provision-cache
+ 12. provision-cosmos-kv
+ 13. provision-cosmos
+ 14. provision-env-acr
+ 15. provision-env
+ 16. provision-pg-kv
+ 17. provision-pg
+ 18. login-to-acr-env-acr
+ 19. push-prereq
+ 20. push-api
+ 21. update-api-provisionable-resource
+ 22. provision-api-website
+ 23. print-api-summary
+ 24. provision-api-roles-cache-kv
+ 25. provision-api-roles-cosmos-kv
+ 26. provision-api-roles-pg-kv
+ 27. provision-azure-bicep-resources
+ 28. print-dashboard-url-env
+ 29. deploy
+ 30. deploy-api
+ 31. diagnostics
+ 32. publish-prereq
+ 33. publish-azure634f9
+ 34. publish
+ 35. publish-manifest
+ 36. push
 
 DETAILED STEP ANALYSIS
 ======================
@@ -67,6 +69,11 @@ Step: build-api
 Step: build-prereq
     Description: Prerequisite step that runs before any build operations.
     Dependencies: ✓ process-parameters
+
+Step: check-api-exists
+    Dependencies: ✓ create-provisioning-context
+    Resource: api-website (AzureAppServiceWebSiteResource)
+    Tags: check-website-exists
 
 Step: create-provisioning-context
     Description: Creates the Azure provisioning context for infrastructure deployment.
@@ -138,7 +145,7 @@ Step: provision-api-roles-pg-kv
 
 Step: provision-api-website
     Description: Provisions the Azure Bicep resource api-website using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-cache, ✓ provision-cache-kv, ✓ provision-cosmos, ✓ provision-cosmos-kv, ✓ provision-env, ✓ provision-pg, ✓ provision-pg-kv, ✓ push-api
+    Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-cache, ✓ provision-cache-kv, ✓ provision-cosmos, ✓ provision-cosmos-kv, ✓ provision-env, ✓ provision-pg, ✓ provision-pg-kv, ✓ push-api, ✓ update-api-provisionable-resource
     Resource: api-website (AzureAppServiceWebSiteResource)
     Tags: provision-infra
 
@@ -226,6 +233,11 @@ Step: push-prereq
     Description: Prerequisite step that runs before any push operations.
     Dependencies: ✓ login-to-acr-env-acr
 
+Step: update-api-provisionable-resource
+    Dependencies: ✓ check-api-exists, ✓ create-provisioning-context
+    Resource: api-website (AzureAppServiceWebSiteResource)
+    Tags: update-website-provisionable-resource
+
 Step: validate-azure-login
     Description: Validates Azure CLI authentication before deployment.
     Dependencies: ✓ deploy-prereq
@@ -266,6 +278,16 @@ If targeting 'build-prereq':
     [0] process-parameters
     [1] build-prereq
 
+If targeting 'check-api-exists':
+  Direct dependencies: create-provisioning-context
+  Total steps: 5
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] check-api-exists
+
 If targeting 'create-provisioning-context':
   Direct dependencies: deploy-prereq, validate-azure-login
   Total steps: 4
@@ -277,14 +299,14 @@ If targeting 'create-provisioning-context':
 
 If targeting 'deploy':
   Direct dependencies: build-api, create-provisioning-context, print-api-summary, print-dashboard-url-env, provision-azure-bicep-resources, validate-azure-login
-  Total steps: 26
+  Total steps: 28
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
-    [5] login-to-acr-env-acr | provision-api-roles-cache-kv | provision-api-roles-cosmos-kv | provision-api-roles-pg-kv | provision-cache | provision-cosmos | provision-env | provision-pg (parallel)
+    [4] check-api-exists | provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cache-kv | provision-api-roles-cosmos-kv | provision-api-roles-pg-kv | provision-cache | provision-cosmos | provision-env | provision-pg | update-api-provisionable-resource (parallel)
     [6] push-prereq
     [7] push-api
     [8] provision-api-website
@@ -294,14 +316,14 @@ If targeting 'deploy':
 
 If targeting 'deploy-api':
   Direct dependencies: print-api-summary
-  Total steps: 21
+  Total steps: 23
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
-    [5] login-to-acr-env-acr | provision-cache | provision-cosmos | provision-env | provision-pg (parallel)
+    [4] check-api-exists | provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
+    [5] login-to-acr-env-acr | provision-cache | provision-cosmos | provision-env | provision-pg | update-api-provisionable-resource (parallel)
     [6] push-prereq
     [7] push-api
     [8] provision-api-website
@@ -334,14 +356,14 @@ If targeting 'login-to-acr-env-acr':
 
 If targeting 'print-api-summary':
   Direct dependencies: provision-api-website
-  Total steps: 20
+  Total steps: 22
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
-    [5] login-to-acr-env-acr | provision-cache | provision-cosmos | provision-env | provision-pg (parallel)
+    [4] check-api-exists | provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
+    [5] login-to-acr-env-acr | provision-cache | provision-cosmos | provision-env | provision-pg | update-api-provisionable-resource (parallel)
     [6] push-prereq
     [7] push-api
     [8] provision-api-website
@@ -349,14 +371,14 @@ If targeting 'print-api-summary':
 
 If targeting 'print-dashboard-url-env':
   Direct dependencies: provision-azure-bicep-resources, provision-env
-  Total steps: 24
+  Total steps: 26
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
-    [5] login-to-acr-env-acr | provision-api-roles-cache-kv | provision-api-roles-cosmos-kv | provision-api-roles-pg-kv | provision-cache | provision-cosmos | provision-env | provision-pg (parallel)
+    [4] check-api-exists | provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cache-kv | provision-api-roles-cosmos-kv | provision-api-roles-pg-kv | provision-cache | provision-cosmos | provision-env | provision-pg | update-api-provisionable-resource (parallel)
     [6] push-prereq
     [7] push-api
     [8] provision-api-website
@@ -413,29 +435,29 @@ If targeting 'provision-api-roles-pg-kv':
     [5] provision-api-roles-pg-kv
 
 If targeting 'provision-api-website':
-  Direct dependencies: create-provisioning-context, provision-api-identity, provision-cache, provision-cache-kv, provision-cosmos, provision-cosmos-kv, provision-env, provision-pg, provision-pg-kv, push-api
-  Total steps: 19
+  Direct dependencies: create-provisioning-context, provision-api-identity, provision-cache, provision-cache-kv, provision-cosmos, provision-cosmos-kv, provision-env, provision-pg, provision-pg-kv, push-api, update-api-provisionable-resource
+  Total steps: 21
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
-    [5] login-to-acr-env-acr | provision-cache | provision-cosmos | provision-env | provision-pg (parallel)
+    [4] check-api-exists | provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
+    [5] login-to-acr-env-acr | provision-cache | provision-cosmos | provision-env | provision-pg | update-api-provisionable-resource (parallel)
     [6] push-prereq
     [7] push-api
     [8] provision-api-website
 
 If targeting 'provision-azure-bicep-resources':
   Direct dependencies: create-provisioning-context, deploy-prereq, provision-api-identity, provision-api-roles-cache-kv, provision-api-roles-cosmos-kv, provision-api-roles-pg-kv, provision-api-website, provision-cache, provision-cache-kv, provision-cosmos, provision-cosmos-kv, provision-env, provision-env-acr, provision-pg, provision-pg-kv
-  Total steps: 23
+  Total steps: 25
   Execution order:
     [0] process-parameters
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
-    [5] login-to-acr-env-acr | provision-api-roles-cache-kv | provision-api-roles-cosmos-kv | provision-api-roles-pg-kv | provision-cache | provision-cosmos | provision-env | provision-pg (parallel)
+    [4] check-api-exists | provision-api-identity | provision-cache-kv | provision-cosmos-kv | provision-env-acr | provision-pg-kv (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cache-kv | provision-api-roles-cosmos-kv | provision-api-roles-pg-kv | provision-cache | provision-cosmos | provision-env | provision-pg | update-api-provisionable-resource (parallel)
     [6] push-prereq
     [7] push-api
     [8] provision-api-website
@@ -593,6 +615,17 @@ If targeting 'push-prereq':
     [4] provision-env-acr
     [5] login-to-acr-env-acr
     [6] push-prereq
+
+If targeting 'update-api-provisionable-resource':
+  Direct dependencies: check-api-exists, create-provisioning-context
+  Total steps: 6
+  Execution order:
+    [0] process-parameters
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] check-api-exists
+    [5] update-api-provisionable-resource
 
 If targeting 'validate-azure-login':
   Direct dependencies: deploy-prereq

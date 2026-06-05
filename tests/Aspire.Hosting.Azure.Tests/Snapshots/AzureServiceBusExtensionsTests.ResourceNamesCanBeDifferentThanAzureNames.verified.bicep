@@ -48,4 +48,6 @@ resource rule1 'Microsoft.ServiceBus/namespaces/topics/subscriptions/rules@2024-
 
 output serviceBusEndpoint string = sb.properties.serviceBusEndpoint
 
+output serviceBusHostName string = split(replace(sb.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
 output name string = sb.name

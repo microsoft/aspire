@@ -9,4 +9,6 @@ resource search 'Microsoft.Search/searchServices@2023-11-01' existing = {
 
 output connectionString string = 'Endpoint=https://${existingResourceName}.search.windows.net'
 
+output endpoint string = 'https://${existingResourceName}.search.windows.net'
+
 output name string = search.name

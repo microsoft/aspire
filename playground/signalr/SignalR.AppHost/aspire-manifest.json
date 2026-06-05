@@ -10,12 +10,11 @@
       "type": "project.v0",
       "path": "../SignalRWeb/SignalRWeb.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{webfrontend.bindings.http.targetPort}",
-        "ConnectionStrings__signalrDefault": "{signalrDefault.connectionString}"
+        "ConnectionStrings__signalrDefault": "{signalrDefault.connectionString}",
+        "SIGNALRDEFAULT_URI": "https://{signalrDefault.outputs.hostName}"
       },
       "bindings": {
         "http": {
@@ -41,12 +40,11 @@
       "type": "project.v0",
       "path": "../SignalRServerlessWeb/SignalRServerlessWeb.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{webserverless.bindings.http.targetPort}",
-        "ConnectionStrings__signalrServerless": "{signalrServerless.connectionString}"
+        "ConnectionStrings__signalrServerless": "{signalrServerless.connectionString}",
+        "SIGNALRSERVERLESS_URI": "https://{signalrServerless.outputs.hostName}"
       },
       "bindings": {
         "http": {

@@ -58,4 +58,6 @@ resource app_prop_filter_1 'Microsoft.ServiceBus/namespaces/topics/subscriptions
 
 output serviceBusEndpoint string = sbemulator.properties.serviceBusEndpoint
 
+output serviceBusHostName string = split(replace(sbemulator.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
 output name string = sbemulator.name

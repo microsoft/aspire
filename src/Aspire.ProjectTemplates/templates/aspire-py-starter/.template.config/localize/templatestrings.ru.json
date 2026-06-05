@@ -1,7 +1,7 @@
 ﻿{
   "author": "Майкрософт",
-  "name": "Aspire Starter App (FastAPI/React)",
-  "description": "A project template for creating an Aspire app with a React frontend and a Python backend API service, with optional Redis caching.",
+  "name": "Начальное приложение Aspire (FastAPI/React)",
+  "description": "Шаблон проекта для создания приложения Aspire с интерфейсной частью React и службой API серверной части на Python с необязательным кэшированием Redis.",
   "symbols/UseRedisCache/displayName": "_Использовать Redis для кэширования (требуется поддерживаемая среда выполнения контейнера)",
   "symbols/UseRedisCache/description": "Определяет, указывать ли приложению, что для кэширования следует использовать Redis. Для локального запуска требуется поддерживаемая среда выполнения контейнера. Дополнительные сведения см. на странице https://aka.ms/aspire/containers.",
   "symbols/appHostHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP в файле launchSettings.json проекта AppHost.",

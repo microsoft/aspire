@@ -16,7 +16,7 @@ public class ConnectionPropertiesTests
         var properties = ((IResourceWithConnectionString)resource).GetConnectionProperties().ToArray();
 
         Assert.Collection(
-            properties,
+            properties.OrderBy(p => p.Key),
             property =>
             {
                 Assert.Equal("Host", property.Key);
@@ -24,13 +24,8 @@ public class ConnectionPropertiesTests
             },
             property =>
             {
-                Assert.Equal("Port", property.Key);
-                Assert.Equal("{sql.bindings.tcp.port}", property.Value.ValueExpression);
-            },
-            property =>
-            {
-                Assert.Equal("Username", property.Key);
-                Assert.Equal("sa", property.Value.ValueExpression);
+                Assert.Equal("JdbcConnectionString", property.Key);
+                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};trustServerCertificate=true", property.Value.ValueExpression);
             },
             property =>
             {
@@ -39,33 +34,66 @@ public class ConnectionPropertiesTests
             },
             property =>
             {
-                Assert.Equal("Uri", property.Key);
-                Assert.Equal("mssql://{sql.bindings.tcp.host}:{sql.bindings.tcp.port}", property.Value.ValueExpression);
+                Assert.Equal("Port", property.Key);
+                Assert.Equal("{sql.bindings.tcp.port}", property.Value.ValueExpression);
             },
             property =>
             {
-                Assert.Equal("JdbcConnectionString", property.Key);
-                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};trustServerCertificate=true", property.Value.ValueExpression);
+                Assert.Equal("Uri", property.Key);
+                Assert.Equal("mssql://sa:{password.value}@{sql.bindings.tcp.host}:{sql.bindings.tcp.port}", property.Value.ValueExpression);
+            },
+            property =>
+            {
+                Assert.Equal("Username", property.Key);
+                Assert.Equal("sa", property.Value.ValueExpression);
             });
     }
 
     [Fact]
     public void SqlServerDatabaseResourceGetConnectionPropertiesIncludesDatabaseSpecificValues()
     {
-    var password = new ParameterResource("password", _ => "p@ssw0rd1", secret: true);
+        var password = new ParameterResource("password", _ => "p@ssw0rd1", secret: true);
         var server = new SqlServerServerResource("sql", password);
         var resource = new SqlServerDatabaseResource("sqlDb", "Orders", server);
 
         var properties = ((IResourceWithConnectionString)resource).GetConnectionProperties().ToArray();
 
-        Assert.Contains(properties, property => property.Key == "Host" && property.Value.ValueExpression == "{sql.bindings.tcp.host}");
-        Assert.Contains(properties, property => property.Key == "Port" && property.Value.ValueExpression == "{sql.bindings.tcp.port}");
-        Assert.Contains(properties, property => property.Key == "Username" && property.Value.ValueExpression == "sa");
-        Assert.Contains(properties, property => property.Key == "Password" && property.Value.ValueExpression == "{password.value}");
-        Assert.Contains(properties, property => property.Key == "Database" && property.Value.ValueExpression == "Orders");
-        Assert.Contains(
-            properties,
-            property => property.Key == "JdbcConnectionString" &&
-                        property.Value.ValueExpression == "jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};trustServerCertificate=true;databaseName=Orders");
+        Assert.Collection(
+            properties.OrderBy(p => p.Key),
+            property =>
+            {
+                Assert.Equal("DatabaseName", property.Key);
+                Assert.Equal("Orders", property.Value.ValueExpression);
+            },
+            property =>
+            {
+                Assert.Equal("Host", property.Key);
+                Assert.Equal("{sql.bindings.tcp.host}", property.Value.ValueExpression);
+            },
+            property =>
+            {
+                Assert.Equal("JdbcConnectionString", property.Key);
+                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=Orders;trustServerCertificate=true", property.Value.ValueExpression);
+            },
+            property =>
+            {
+                Assert.Equal("Password", property.Key);
+                Assert.Equal("{password.value}", property.Value.ValueExpression);
+            },
+            property =>
+            {
+                Assert.Equal("Port", property.Key);
+                Assert.Equal("{sql.bindings.tcp.port}", property.Value.ValueExpression);
+            },
+            property =>
+            {
+                Assert.Equal("Uri", property.Key);
+                Assert.Equal("mssql://sa:{password.value}@{sql.bindings.tcp.host}:{sql.bindings.tcp.port}/Orders", property.Value.ValueExpression);
+            },
+            property =>
+            {
+                Assert.Equal("Username", property.Key);
+                Assert.Equal("sa", property.Value.ValueExpression);
+            });
     }
 }

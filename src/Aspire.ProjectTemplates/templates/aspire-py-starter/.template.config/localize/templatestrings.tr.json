@@ -1,7 +1,7 @@
 ﻿{
   "author": "Microsoft",
-  "name": "Aspire Starter App (FastAPI/React)",
-  "description": "A project template for creating an Aspire app with a React frontend and a Python backend API service, with optional Redis caching.",
+  "name": "Aspire Başlangıç Uygulaması (FastAPI/React)",
+  "description": "İsteğe bağlı Redis önbelleğiyle bir React ön uç ve Python arka uç API hizmetini içeren bir Aspire uygulaması oluşturmak için proje şablonu.",
   "symbols/UseRedisCache/displayName": "Önbelleğe alma için Redis’i k_ullan (desteklenen bir kapsayıcı çalışma zamanı gerektirir)",
   "symbols/UseRedisCache/description": "Uygulamanın önbelleğe alma için Redis’i kullanmak üzere ayarlanıp ayarlanmayacağını yapılandırır. Yerel olarak çalıştırmak için desteklenen bir kapsayıcı çalışma zamanı gerektirir. Daha fazla ayrıntı için https://aka.ms/aspire/containers sayfasına bakın.",
   "symbols/appHostHttpPort/description": "AppHost projesinin HTTP uç noktası launchSettings.json bağlantı noktası numarası.",

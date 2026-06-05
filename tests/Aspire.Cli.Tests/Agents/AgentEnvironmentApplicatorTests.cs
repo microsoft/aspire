@@ -50,5 +50,21 @@ public class AgentEnvironmentApplicatorTests
             _ => Task.CompletedTask);
 
         Assert.Equal("My Description", applicator.Description);
+        Assert.Equal(McpInitPromptGroup.AgentEnvironments, applicator.PromptGroup);
+        Assert.Equal(0, applicator.Priority);
+    }
+
+    [Fact]
+    public void Applicator_AllowsCustomPromptGroup()
+    {
+        var applicator = new AgentEnvironmentApplicator(
+            "My Description",
+            _ => Task.CompletedTask,
+            promptGroup: McpInitPromptGroup.AdditionalOptions,
+            priority: 5);
+
+        Assert.Equal("My Description", applicator.Description);
+        Assert.Equal(McpInitPromptGroup.AdditionalOptions, applicator.PromptGroup);
+        Assert.Equal(5, applicator.Priority);
     }
 }

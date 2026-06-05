@@ -9,6 +9,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.ServiceBus;
 using Azure.Provisioning;
+using Azure.Provisioning.Expressions;
 using Azure.Provisioning.ServiceBus;
 using AzureProvisioning = Azure.Provisioning.ServiceBus;
 
@@ -70,6 +71,21 @@ public static class AzureServiceBusExtensions
                 });
 
             infrastructure.Add(new ProvisioningOutput("serviceBusEndpoint", typeof(string)) { Value = serviceBusNamespace.ServiceBusEndpoint.ToBicepExpression() });
+
+            // Extract hostname from endpoint: split(replace(endpoint, 'https://', ''), ':')[0]
+            var replaceExpr = new FunctionCallExpression(
+                new IdentifierExpression("replace"),
+                serviceBusNamespace.ServiceBusEndpoint.Compile(),
+                new StringLiteralExpression("https://"),
+                new StringLiteralExpression(""));
+            var splitExpr = new FunctionCallExpression(
+                new IdentifierExpression("split"),
+                replaceExpr,
+                new StringLiteralExpression(":"));
+            var hostNameExpr = new IndexExpression(splitExpr, new IntLiteralExpression(0));
+
+            // We need the HostName specifically because the Azure SDK client use it instead of the full endpoint.
+            infrastructure.Add(new ProvisioningOutput("serviceBusHostName", typeof(string)) { Value = (BicepValue<string>)hostNameExpr });
 
             // We need to output name to externalize role assignments.
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = serviceBusNamespace.Name.ToBicepExpression() });

@@ -95,7 +95,6 @@ stages:
           preSteps:
             - checkout: self
               fetchDepth: 1
-              clean: true
 
           steps:
             - template: /eng/pipelines/templates/BuildAndTest.yml
@@ -129,7 +128,6 @@ stages:
           preSteps:
             - checkout: self
               fetchDepth: 1
-              clean: true
 
           steps:
             - template: /eng/pipelines/templates/BuildAndTest.yml

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json.schemastore.org/aspire-8.0.json",
+  "resources": {
+    "appconfig": {
+      "type": "azure.bicep.v0",
+      "connectionString": "{appconfig.outputs.appConfigEndpoint}",
+      "path": "appconfig.module.bicep"
+    },
+    "web": {
+      "type": "project.v0",
+      "path": "../AzureAppConfiguration.Web/AzureAppConfiguration.Web.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{web.bindings.http.targetPort}",
+        "ConnectionStrings__appconfig": "{appconfig.connectionString}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "appconfig-roles": {
+      "type": "azure.bicep.v0",
+      "path": "appconfig-roles.module.bicep",
+      "params": {
+        "appconfig_outputs_name": "{appconfig.outputs.name}",
+        "principalType": "",
+        "principalId": ""
+      }
+    }
+  }
+}

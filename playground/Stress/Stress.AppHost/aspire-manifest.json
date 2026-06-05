@@ -19,8 +19,6 @@
       "type": "project.v0",
       "path": "../Stress.ApiService/Stress.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{stress-apiservice.bindings.http.targetPort};{stress-apiservice.bindings.http-5181.targetPort};{stress-apiservice.bindings.http-5182.targetPort};{stress-apiservice.bindings.http-5183.targetPort};{stress-apiservice.bindings.http-5184.targetPort};{stress-apiservice.bindings.http-5185.targetPort};{stress-apiservice.bindings.http-5186.targetPort};{stress-apiservice.bindings.http-5187.targetPort};{stress-apiservice.bindings.http-5188.targetPort};{stress-apiservice.bindings.http-5189.targetPort};{stress-apiservice.bindings.http-5190.targetPort};{stress-apiservice.bindings.http-5191.targetPort};{stress-apiservice.bindings.http-5192.targetPort};{stress-apiservice.bindings.http-5193.targetPort};{stress-apiservice.bindings.http-5194.targetPort};{stress-apiservice.bindings.http-5195.targetPort};{stress-apiservice.bindings.http-5196.targetPort};{stress-apiservice.bindings.http-5197.targetPort};{stress-apiservice.bindings.http-5198.targetPort};{stress-apiservice.bindings.http-5199.targetPort};{stress-apiservice.bindings.http-5200.targetPort};{stress-apiservice.bindings.http-5201.targetPort};{stress-apiservice.bindings.http-5202.targetPort};{stress-apiservice.bindings.http-5203.targetPort};{stress-apiservice.bindings.http-5204.targetPort};{stress-apiservice.bindings.http-5205.targetPort};{stress-apiservice.bindings.http-5206.targetPort};{stress-apiservice.bindings.http-5207.targetPort};{stress-apiservice.bindings.http-5208.targetPort};{stress-apiservice.bindings.http-5209.targetPort};{stress-apiservice.bindings.http-5210.targetPort}",
@@ -252,8 +250,6 @@
       "type": "project.v0",
       "path": "../Stress.TelemetryService/Stress.TelemetryService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory"
       }
     },
@@ -286,8 +282,6 @@
       "type": "project.v0",
       "path": "../Stress.Empty/Stress.Empty.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory"
       }
     },
@@ -295,8 +289,6 @@
       "type": "project.v0",
       "path": "../Stress.Empty/Stress.Empty.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory"
       }
     },
@@ -304,8 +296,6 @@
       "type": "project.v0",
       "path": "../Stress.Empty/Stress.Empty.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory"
       }
     },
@@ -313,8 +303,6 @@
       "type": "project.v0",
       "path": "../Stress.Empty/Stress.Empty.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{empty-profile-1.bindings.http.targetPort}"
@@ -339,8 +327,6 @@
         "arg_from_apphost"
       ],
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{empty-profile-2.bindings.http.targetPort}",

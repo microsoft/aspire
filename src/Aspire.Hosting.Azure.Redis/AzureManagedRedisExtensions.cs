@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Azure.Provisioning;
@@ -161,8 +159,10 @@ public static class AzureManagedRedisExtensions
 
         var azureResource = builder.Resource;
         azureResource.ConnectionStringSecretOutput = keyVaultBuilder.Resource.GetSecret($"connectionstrings--{azureResource.Name}");
+        azureResource.PrimaryAccessKeySecretOutput = keyVaultBuilder.Resource.GetSecret($"primaryaccesskey--{azureResource.Name}");
         // Set the secret owner to this resource
         azureResource.ConnectionStringSecretOutput.SecretOwner = azureResource;
+        azureResource.PrimaryAccessKeySecretOutput.SecretOwner = azureResource;
 
         // remove role assignment annotations when using access key authentication so an empty roles bicep module isn't generated
         var roleAssignmentAnnotations = azureResource.Annotations.OfType<DefaultRoleAssignmentsAnnotation>().ToArray();
@@ -243,6 +243,17 @@ public static class AzureManagedRedisExtensions
                 }
             };
             infrastructure.Add(secret);
+
+            var accessKeySecret = new KeyVaultSecret("primaryAccessKey")
+            {
+                Parent = keyVault,
+                Name = $"primaryaccesskey--{redisResource.Name}",
+                Properties = new SecretProperties
+                {
+                    Value = database.GetKeys().PrimaryKey
+                }
+            };
+            infrastructure.Add(accessKeySecret);
         }
         else
         {

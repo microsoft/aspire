@@ -4,7 +4,7 @@
     <!-- Enabling this rule will cause build failures on undocumented public APIs. -->
     <SkipArcadeNoWarnCS1591>true</SkipArcadeNoWarnCS1591>
     <EnablePackageValidation Condition="'$(EnablePackageValidation)' == ''">true</EnablePackageValidation>
-    <PackageValidationBaselineVersion Condition="'$(EnablePackageValidation)' == 'true' and '$(PackageValidationBaselineVersion)' == ''">13.0.1</PackageValidationBaselineVersion>
+    <PackageValidationBaselineVersion Condition="'$(EnablePackageValidation)' == 'true' and '$(PackageValidationBaselineVersion)' == ''">13.0.2</PackageValidationBaselineVersion>
   </PropertyGroup>
 
   <ItemGroup>

@@ -87,6 +87,25 @@ public static class DockerComposeEnvironmentExtensions
     }
 
     /// <summary>
+    /// Configures the captured environment variables for the Docker Compose environment before they are written to the .env file.
+    /// </summary>
+    /// <param name="builder">The Docker Compose environment resource builder.</param>
+    /// <param name="configure">A method that can be used for customizing the captured environment variables.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// This callback is invoked during the prepare phase, allowing programmatic modification of the environment variables
+    /// that will be written to the .env file adjacent to the Docker Compose file.
+    /// </remarks>
+    public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureEnvFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<IDictionary<string, CapturedEnvironmentVariable>> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        builder.Resource.ConfigureEnvFile += configure;
+        return builder;
+    }
+
+    /// <summary>
     /// Enables the Aspire dashboard for telemetry visualization in this Docker Compose environment.
     /// </summary>
     /// <param name="builder">The Docker Compose environment resource builder.</param>

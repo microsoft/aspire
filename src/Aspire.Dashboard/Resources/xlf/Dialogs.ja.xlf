@@ -382,6 +382,16 @@
         <target state="translated">Aspire MCP API キー</target>
         <note />
       </trans-unit>
+      <trans-unit id="McpServerDialogCliInstructionsAbove">
+        <source>The fastest way to get started is to &lt;a href="{0}" target="_blank"&gt;configure the Aspire MCP using the CLI&lt;/a&gt;</source>
+        <target state="translated">作業を開始する最も簡単な方法は、&lt;a href="{0}" target="_blank"&gt;CLI を使って Aspire MCP を構成する&lt;/a&gt;ことです</target>
+        <note>{0} is a URL</note>
+      </trans-unit>
+      <trans-unit id="McpServerDialogCliInstructionsBelow">
+        <source>The &lt;code&gt;aspire mcp init&lt;/code&gt; command writes MCP JSON to your local workspace. Alternatively, configure your local AI development tools using instructions below.</source>
+        <target state="translated">&lt;code&gt;aspire mcp init&lt;/code&gt; コマンドは、ローカル ワークスペースに MCP JSON を書き込みます。または、以下の手順を使用して、ローカルの AI 開発ツールを構成します。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="McpServerDialogConfigurationHeading">
         <source>Aspire MCP configuration</source>
         <target state="translated">Aspire MCP 構成</target>

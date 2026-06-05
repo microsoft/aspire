@@ -75,7 +75,14 @@ public sealed class GenAIItemPartViewModel
         }
         if (p is ToolCallResponsePart toolCallResponsePart)
         {
-            return new TextVisualizerViewModel(toolCallResponsePart.Response?.ToJsonString() ?? string.Empty, indentText: true);
+            // If a tool response is a string then decode it.
+            // This handles situations where telemetry is reported incorrectly, i.e. a structured JSON response is encoded inside a string.
+            // And it allows possible Markdown content inside the string to be formatted.
+            var toolResponseContent = (toolCallResponsePart.Response?.GetValueKind() == JsonValueKind.String)
+                ? toolCallResponsePart.Response.GetValue<string>()
+                : toolCallResponsePart.Response?.ToJsonString() ?? string.Empty;
+
+            return new TextVisualizerViewModel(toolResponseContent, indentText: true, fallbackFormat: DashboardUIHelpers.MarkdownFormat);
         }
 
         var additionalProperties = p is GenericPart genericPart ? genericPart.AdditionalProperties ?? [] : [];

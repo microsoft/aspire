@@ -5,16 +5,16 @@ param redis_outputs_name string
 
 param principalId string
 
-resource redis 'Microsoft.Cache/redisEnterprise@2025-04-01' existing = {
+resource redis 'Microsoft.Cache/redisEnterprise@2025-07-01' existing = {
   name: redis_outputs_name
 }
 
-resource redis_default 'Microsoft.Cache/redisEnterprise/databases@2025-04-01' existing = {
+resource redis_default 'Microsoft.Cache/redisEnterprise/databases@2025-07-01' existing = {
   name: 'default'
   parent: redis
 }
 
-resource redis_default_contributor 'Microsoft.Cache/redisEnterprise/databases/accessPolicyAssignments@2025-04-01' = {
+resource redis_default_contributor 'Microsoft.Cache/redisEnterprise/databases/accessPolicyAssignments@2025-07-01' = {
   name: guid(redis_default.id, principalId, 'default')
   properties: {
     accessPolicyName: 'default'

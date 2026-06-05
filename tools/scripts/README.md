@@ -135,3 +135,118 @@ All logs saved in current directory with pattern: failed_job_*.log
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [GitHub CLI Documentation](https://cli.github.com/manual/)
 - [.NET File-Based Programs](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/tutorials/file-based-programs)
+
+---
+
+## Heartbeat.cs
+
+A cross-platform system monitoring tool that outputs CPU, memory, network, and Docker stats at regular intervals. Designed to help diagnose GitHub Actions runner hangs during tests.
+
+### What it does
+
+This tool helps diagnose runner communication issues by:
+
+1. **Monitoring CPU usage** - System-wide CPU utilization percentage
+2. **Tracking memory** - Used and total memory with percentage
+3. **Counting network connections** - Established, listening, and TIME_WAIT connections
+4. **Docker stats** - Container count and aggregate CPU/memory usage
+5. **DCP process tracking** - Finds all processes starting with "dcp" and reports their memory usage
+
+### Prerequisites
+
+- .NET 10 SDK or later
+- Docker (optional, for container stats on Linux)
+
+### Usage
+
+Run the tool with an optional interval (default: 5 seconds):
+
+```bash
+# Default 5-second interval
+dotnet tools/scripts/Heartbeat.cs
+
+# Custom 10-second interval
+dotnet tools/scripts/Heartbeat.cs 10
+```
+
+### Output Format
+
+```
+[2025-12-12T10:30:00Z] HEARTBEAT | Starting system monitor (interval: 5s)
+[2025-12-12T10:30:00Z] HEARTBEAT | Platform: Linux 5.15.0-1053-azure
+[2025-12-12T10:30:00Z] HEARTBEAT | CPU: 45.2% | Mem: 4.2/8.0 GB (52%) | Net: 24 est, 12 listen, 5 tw | Docker: 3 containers (CPU: 120.5%, Mem: 45.2%) | DCP: none
+[2025-12-12T10:30:05Z] HEARTBEAT | CPU: 67.8% | Mem: 5.1/8.0 GB (64%) | Net: 28 est, 12 listen, 8 tw | Docker: 3 containers (CPU: 156.2%, Mem: 52.1%) | DCP: 2 procs (245MB) [dcp(1234):120MB, dcp-api(5678):125MB]
+```
+
+### GitHub Actions Integration
+
+Start the heartbeat at the beginning of a workflow and stop it at the end:
+
+**Linux/macOS:**
+```yaml
+- name: Start heartbeat monitor
+  run: |
+    nohup dotnet tools/scripts/Heartbeat.cs > heartbeat.log 2>&1 &
+    echo $! > heartbeat.pid
+
+# ... run tests ...
+
+- name: Stop heartbeat and show logs
+  if: always()
+  run: |
+    if [ -f heartbeat.pid ]; then
+      kill $(cat heartbeat.pid) 2>/dev/null || true
+    fi
+    echo "=== Heartbeat Log ==="
+    cat heartbeat.log 2>/dev/null || echo "No heartbeat log found"
+```
+
+**Windows:**
+```yaml
+- name: Start heartbeat monitor
+  shell: pwsh
+  run: |
+    Start-Process -FilePath "dotnet" -ArgumentList "tools/scripts/Heartbeat.cs" -RedirectStandardOutput "heartbeat.log" -NoNewWindow
+
+# ... run tests ...
+
+- name: Stop heartbeat and show logs
+  if: always()
+  shell: pwsh
+  run: |
+    Get-Process -Name "dotnet" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*Heartbeat*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+    if (Test-Path "heartbeat.log") { Get-Content "heartbeat.log" }
+```
+
+### Platform Support
+
+| Platform | CPU | Memory | Network | Docker | DCP |
+|----------|-----|--------|---------|--------|-----|
+| Linux | `/proc/stat` | `/proc/meminfo` | `netstat` | `docker stats` | `ps aux` |
+| macOS | `top -l 1` | `vm_stat` + `sysctl` | `netstat` | `docker stats` | `ps aux` |
+| Windows | `wmic cpu` | `wmic OS` | `netstat` | `docker stats` | `wmic process` |
+
+### Graceful Shutdown
+
+The heartbeat responds to:
+- `Ctrl+C` (SIGINT)
+- Process termination (SIGTERM)
+- Parent process exit
+
+### Troubleshooting
+
+**CPU shows "calculating..." on first iteration:**
+- This is expected. CPU usage requires two samples to calculate the delta.
+
+**Docker shows "unavailable":**
+- Docker daemon may not be running
+- The user may not have permission to access the Docker socket
+- Docker CLI may not be installed
+
+**Stats show "N/A":**
+- The underlying command may have failed or timed out
+- Check if required tools (netstat, wmic, etc.) are available
+
+**DCP shows "none":**
+- No processes starting with "dcp" are currently running
+- This is expected when Aspire tests are not actively running

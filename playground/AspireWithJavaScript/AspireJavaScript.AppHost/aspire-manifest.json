@@ -4,9 +4,15 @@
     "weatherapi": {
       "type": "project.v0",
       "path": "../AspireJavaScript.MinimalApi/AspireJavaScript.MinimalApi.csproj",
+      "containerFiles": {
+        "reactvite": {
+          "destination": "./wwwroot",
+          "sources": [
+            "/app/dist"
+          ]
+        }
+      },
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{weatherapi.bindings.http.targetPort}"
@@ -33,7 +39,7 @@
         "dockerfile": "../AspireJavaScript.Angular/Dockerfile"
       },
       "env": {
-        "NODE_ENV": "development",
+        "NODE_ENV": "production",
         "WEATHERAPI_HTTP": "{weatherapi.bindings.http.url}",
         "services__weatherapi__http__0": "{weatherapi.bindings.http.url}",
         "WEATHERAPI_HTTPS": "{weatherapi.bindings.https.url}",
@@ -57,7 +63,7 @@
         "dockerfile": "../AspireJavaScript.React/Dockerfile"
       },
       "env": {
-        "NODE_ENV": "development",
+        "NODE_ENV": "production",
         "WEATHERAPI_HTTP": "{weatherapi.bindings.http.url}",
         "services__weatherapi__http__0": "{weatherapi.bindings.http.url}",
         "WEATHERAPI_HTTPS": "{weatherapi.bindings.https.url}",
@@ -82,7 +88,7 @@
         "dockerfile": "../AspireJavaScript.Vue/Dockerfile"
       },
       "env": {
-        "NODE_ENV": "development",
+        "NODE_ENV": "production",
         "WEATHERAPI_HTTP": "{weatherapi.bindings.http.url}",
         "services__weatherapi__http__0": "{weatherapi.bindings.http.url}",
         "WEATHERAPI_HTTPS": "{weatherapi.bindings.https.url}",
@@ -103,10 +109,11 @@
       "type": "container.v1",
       "build": {
         "context": "../AspireJavaScript.Vite",
-        "dockerfile": "reactvite.Dockerfile"
+        "dockerfile": "reactvite.Dockerfile",
+        "buildOnly": true
       },
       "env": {
-        "NODE_ENV": "development",
+        "NODE_ENV": "production",
         "PORT": "{reactvite.bindings.http.targetPort}",
         "WEATHERAPI_HTTP": "{weatherapi.bindings.http.url}",
         "services__weatherapi__http__0": "{weatherapi.bindings.http.url}",
@@ -120,6 +127,26 @@
           "protocol": "tcp",
           "transport": "http",
           "targetPort": 8003,
+          "external": true
+        }
+      }
+    },
+    "node": {
+      "type": "container.v1",
+      "build": {
+        "context": "../AspireJavaScript.NodeApp",
+        "dockerfile": "node.Dockerfile"
+      },
+      "env": {
+        "NODE_ENV": "production",
+        "PORT": "{node.bindings.http.targetPort}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8004,
           "external": true
         }
       }

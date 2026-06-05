@@ -21,6 +21,14 @@ public class AzureBlobStorageResource(string name, AzureStorageResource storage)
     public AzureStorageResource Parent => storage ?? throw new ArgumentNullException(nameof(storage));
 
     /// <summary>
+    /// Gets the connection URI expression for the blob storage service.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>https://{host}:{port}</c> for emulator or <c>{blobEndpoint}</c> for Azure.
+    /// </remarks>
+    public ReferenceExpression ServiceUriExpression => Parent.BlobServiceUriExpression;
+
+    /// <summary>
     /// Gets the connection string template for the manifest for the Azure Blob Storage resource.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
@@ -71,5 +79,15 @@ public class AzureBlobStorageResource(string name, AzureStorageResource storage)
             // be accessible by the Functions host.
             target[$"{AzureStorageResource.BlobsConnectionKeyPrefix}__{connectionName}__ServiceUri"] = Parent.BlobEndpoint;
         }
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        foreach (var property in Parent.GetConnectionProperties())
+        {
+            yield return property;
+        }
+
+        yield return new("Uri", ServiceUriExpression);
     }
 }

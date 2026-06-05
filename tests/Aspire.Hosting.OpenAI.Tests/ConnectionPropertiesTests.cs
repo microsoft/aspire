@@ -52,6 +52,6 @@ public class ConnectionPropertiesTests
         Assert.Contains(properties, property => property.Key == "Endpoint" && property.Value.ValueExpression == "https://contoso.ai/v1");
         Assert.Contains(properties, property => property.Key == "Uri" && property.Value.ValueExpression == "https://contoso.ai/v1");
         Assert.Contains(properties, property => property.Key == "Key" && property.Value.ValueExpression == "{key.value}");
-        Assert.Contains(properties, property => property.Key == "Model" && property.Value.ValueExpression == "gpt-4o-mini");
+        Assert.Contains(properties, property => property.Key == "ModelName" && property.Value.ValueExpression == "gpt-4o-mini");
     }
 }

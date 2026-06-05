@@ -452,8 +452,6 @@ public class WithEndpointTests
               "type": "project.v0",
               "path": "projectpath",
               "env": {
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                 "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                 "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                 "HTTP_PORTS": "{proj.bindings.hp.targetPort};{proj.bindings.hp2.targetPort}",
@@ -519,8 +517,6 @@ public class WithEndpointTests
         var expectedEnv =
             """
             {
-              "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-              "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
               "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
               "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
               "HTTP_PORTS": "{proj.bindings.http.targetPort};{proj.bindings.hp1.targetPort};{proj.bindings.hp2.targetPort};{proj.bindings.hp3.targetPort};{proj.bindings.hp4.targetPort}",
@@ -679,8 +675,6 @@ public class WithEndpointTests
               "type": "project.v0",
               "path": "projectpath",
               "env": {
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                 "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                 "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                 "HTTP_PORTS": "{proj.bindings.http.targetPort}"

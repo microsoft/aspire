@@ -176,24 +176,46 @@
       "type": "project.v0",
       "path": "../BicepSample.ApiService/BicepSample.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{api.bindings.http.targetPort}",
         "ConnectionStrings__db": "{db.connectionString}",
+        "DB_HOST": "{sql.outputs.sqlServerFqdn}",
+        "DB_PORT": "1433",
+        "DB_URI": "mssql://{sql.outputs.sqlServerFqdn}:1433/db",
+        "DB_JDBCCONNECTIONSTRING": "jdbc:sqlserver://{sql.outputs.sqlServerFqdn}:1433;database=db;encrypt=true;trustServerCertificate=false",
+        "DB_DATABASENAME": "db",
         "ConnectionStrings__db2": "{db2.connectionString}",
+        "DB2_HOST": "{postgres2.outputs.hostName}",
+        "DB2_PORT": "5432",
+        "DB2_URI": "postgresql://{administratorLogin.value}:{administratorLoginPassword.value}@{postgres2.outputs.hostName}/db2",
+        "DB2_JDBCCONNECTIONSTRING": "jdbc:postgresql://{postgres2.outputs.hostName}/db2?sslmode=require\u0026authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin",
+        "DB2_USERNAME": "{administratorLogin.value}",
+        "DB2_PASSWORD": "{administratorLoginPassword.value}",
+        "DB2_DATABASENAME": "db2",
         "ConnectionStrings__cosmos": "{cosmos.connectionString}",
+        "COSMOS_URI": "{cosmos.outputs.connectionString}",
         "ConnectionStrings__blob": "{blob.connectionString}",
+        "BLOB_URI": "{storage.outputs.blobEndpoint}",
         "ConnectionStrings__table": "{table.connectionString}",
+        "TABLE_URI": "{storage.outputs.tableEndpoint}",
         "ConnectionStrings__queue": "{queue.connectionString}",
+        "QUEUE_URI": "{storage.outputs.queueEndpoint}",
         "ConnectionStrings__kv3": "{kv3.connectionString}",
+        "KV3_URI": "{kv3.outputs.vaultUri}",
         "ConnectionStrings__appConfig": "{appConfig.connectionString}",
         "APPLICATIONINSIGHTS_CONNECTION_STRING": "{ai.connectionString}",
         "ConnectionStrings__redis": "{redis.connectionString}",
+        "REDIS_HOST": "{redis.outputs.hostName}",
+        "REDIS_PORT": "10000",
+        "REDIS_URI": "rediss://{redis.outputs.hostName}:10000",
         "ConnectionStrings__sb": "{sb.connectionString}",
+        "SB_HOST": "{sb.outputs.serviceBusHostName}",
+        "SB_URI": "{sb.outputs.serviceBusEndpoint}",
         "ConnectionStrings__signalr": "{signalr.connectionString}",
+        "SIGNALR_URI": "https://{signalr.outputs.hostName}",
         "ConnectionStrings__wps": "{wps.connectionString}",
+        "WPS_URI": "{wps.outputs.endpoint}",
         "bicepValue_test": "{test.outputs.test}",
         "bicepValue0": "{test.outputs.val0}",
         "bicepValue1": "{test.outputs.val1}"
@@ -302,6 +324,16 @@
         "principalType": "",
         "principalId": ""
       }
+    },
+    "administratorLogin-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{administratorLogin.value}",
+      "filter": "uri"
+    },
+    "administratorLoginPassword-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{administratorLoginPassword.value}",
+      "filter": "uri"
     }
   }
 }

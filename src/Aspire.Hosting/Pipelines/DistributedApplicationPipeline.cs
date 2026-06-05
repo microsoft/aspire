@@ -1,17 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECOMPUTE001
 #pragma warning disable ASPIRECOMPUTE003
 #pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
+#pragma warning disable ASPIREPIPELINES003
 
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -121,7 +122,6 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 context.Logger.LogInformation("Setting default deploy tag '{Tag}' for compute resource(s).", uniqueDeployTag);
 
                 // Resources that were built, will get this tag unless they have a custom ContainerImagePushOptionsCallbackAnnotation
-#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
                 foreach (var resource in context.Model.GetBuildResources())
                 {
                     if (resource.Annotations.OfType<ContainerImagePushOptionsCallbackAnnotation>().Any())
@@ -134,7 +134,6 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                         context.Options.RemoteImageTag = uniqueDeployTag;
                     }));
                 }
-#pragma warning restore ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             }
         });
 
@@ -168,12 +167,33 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             Name = WellKnownPipelineSteps.PushPrereq,
             Description = "Prerequisite step that runs before any push operations.",
-            Action = context =>
+            Action = async context =>
             {
                 foreach (var resource in context.Model.Resources)
                 {
                     if (!resource.RequiresImageBuildAndPush())
                     {
+                        continue;
+                    }
+
+                    // Check if the resource is configured to save images as archives
+                    // rather than pushing to a registry. These don't require a registry.
+                    var buildOptionsContext = await resource.ProcessContainerBuildOptionsCallbackAsync(
+                        context.Services,
+                        context.Logger,
+                        context.ExecutionContext,
+                        context.CancellationToken).ConfigureAwait(false);
+
+                    // Skip registry validation if Destination is explicitly set to Archive
+                    if (buildOptionsContext.Destination == ContainerImageDestination.Archive)
+                    {
+                        // Ensure OutputPath is set when Destination is Archive
+                        if (string.IsNullOrEmpty(buildOptionsContext.OutputPath))
+                        {
+                            throw new InvalidOperationException(
+                                $"Resource '{resource.Name}' has Destination set to Archive but OutputPath is not configured. " +
+                                $"Please set the OutputPath in the container build options.");
+                        }
                         continue;
                     }
 
@@ -211,8 +231,6 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                             $"Please add a container registry using 'builder.AddContainerRegistry(...)' or specify one with '.WithContainerRegistry(registryBuilder)'.");
                     }
                 }
-
-                return Task.CompletedTask;
             },
         });
 

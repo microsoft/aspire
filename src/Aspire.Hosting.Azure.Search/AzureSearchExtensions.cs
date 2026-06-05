@@ -68,6 +68,11 @@ public static class AzureSearchExtensions
                 Value = BicepFunction.Interpolate($"Endpoint=https://{search.Name}.search.windows.net")
             });
 
+            infrastructure.Add(new ProvisioningOutput("endpoint", typeof(string))
+            {
+                Value = BicepFunction.Interpolate($"https://{search.Name}.search.windows.net")
+            });
+
             // We need to output name to externalize role assignments.
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = search.Name.ToBicepExpression() });
         }

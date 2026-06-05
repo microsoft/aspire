@@ -528,14 +528,14 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <param name="resource">The <see cref="IResource"/> which contains <see cref="EnvironmentCallbackAnnotation"/> annotations.</param>
     public async Task WriteEnvironmentVariablesAsync(IResource resource)
     {
-        (var executionConfiguration, var exception) = await resource.ExecutionConfigurationBuilder()
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
             .WithEnvironmentVariablesConfig()
             .BuildAsync(ExecutionContext, NullLogger.Instance, CancellationToken)
             .ConfigureAwait(false);
 
-        if (exception is not null)
+        if (executionConfiguration.Exception is not null)
         {
-            ExceptionDispatchInfo.Throw(exception);
+            ExceptionDispatchInfo.Throw(executionConfiguration.Exception);
         }
 
         if (!executionConfiguration.EnvironmentVariablesWithUnprocessed.Any())
@@ -566,14 +566,14 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <returns>The <see cref="Task"/> to await for completion.</returns>
     public async Task WriteCommandLineArgumentsAsync(IResource resource)
     {
-        (var executionConfiguration, var exception) = await resource.ExecutionConfigurationBuilder()
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
             .WithArgumentsConfig()
             .BuildAsync(ExecutionContext, NullLogger.Instance, CancellationToken)
             .ConfigureAwait(false);
 
-        if (exception is not null)
+        if (executionConfiguration.Exception is not null)
         {
-            ExceptionDispatchInfo.Throw(exception);
+            ExceptionDispatchInfo.Throw(executionConfiguration.Exception);
         }
 
         if (!executionConfiguration.ArgumentsWithUnprocessed.Any())

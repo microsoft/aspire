@@ -53,7 +53,6 @@ jobs:
         preSteps:
           - checkout: self
             fetchDepth: 1
-            clean: true
 
           # Installing Microbuild plugin fails due to https://github.com/dotnet/arcade/issues/15946#issuecomment-3045780552
           # because of the preview sdk. To fix that `restore` from `global.json` so the above step

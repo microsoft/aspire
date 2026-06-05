@@ -35,6 +35,9 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     ///
     /// This is used when Entra ID authentication is used. The connection string is an output of the bicep template.
     /// </summary>
+    /// <remarks>
+    /// The value is taken from the cosmos.properties.documentEndpoint bicep property and contains an endpoint.
+    /// </remarks>
     public BicepOutputReference ConnectionStringOutput => new("connectionString", this);
 
     /// <summary>
@@ -52,6 +55,13 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     internal IAzureKeyVaultSecretReference? ConnectionStringSecretOutput { get; set; }
 
     /// <summary>
+    /// Gets the "primaryAccessKey" secret reference from the key vault associated with this resource.
+    ///
+    /// This is set when access key authentication is used. The Access Key string is stored in a secret in the Azure Key Vault.
+    /// </summary>
+    internal IAzureKeyVaultSecretReference? PrimaryAccessKeySecretOutput { get; set; }
+
+    /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>
     public BicepOutputReference NameOutputReference => new("name", this);
@@ -60,6 +70,7 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     /// Gets a value indicating whether the resource uses access key authentication.
     /// </summary>
     [MemberNotNullWhen(true, nameof(ConnectionStringSecretOutput))]
+    [MemberNotNullWhen(true, nameof(PrimaryAccessKeySecretOutput))]
     public bool UseAccessKeyAuthentication => ConnectionStringSecretOutput is not null;
 
     /// <summary>
@@ -72,14 +83,40 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
         imageName == $"{CosmosDBEmulatorContainerImageTags.Registry}/{CosmosDBEmulatorContainerImageTags.Image}:{CosmosDBEmulatorContainerImageTags.TagVNextPreview}";
 
     /// <summary>
+    /// Gets the account endpoint URI expression for the Cosmos DB account.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>https://{name}.documents.azure.com:443/</c>.
+    /// </remarks>
+    public ReferenceExpression Uri =>
+        IsEmulator ?
+            IsPreviewEmulator ?
+                ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") :
+                ReferenceExpression.Create($"https://{EmulatorEndpoint.Property(EndpointProperty.IPV4Host)}:{EmulatorEndpoint.Property(EndpointProperty.Port)}") :
+            ReferenceExpression.Create($"{ConnectionStringOutput}");
+
+    /// <summary>
+    /// Gets the account key expression for the Cosmos DB account.
+    /// </summary>
+    /// <remarks>
+    /// This is only available for emulator and access key authentication. For Entra ID authentication, this property will be null.
+    /// </remarks>
+    public ReferenceExpression? AccountKey =>
+        IsEmulator ?
+            ReferenceExpression.Create($"{CosmosConstants.EmulatorAccountKey}") :
+            UseAccessKeyAuthentication ?
+                ReferenceExpression.Create($"{PrimaryAccessKeySecretOutput}") :
+                null;
+
+    /// <summary>
     /// Gets the connection string template for the manifest for the Azure Cosmos DB resource.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
-        IsEmulator
-        ? AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint, IsPreviewEmulator)
-        : UseAccessKeyAuthentication ?
-            ReferenceExpression.Create($"{ConnectionStringSecretOutput}") :
-            ReferenceExpression.Create($"{ConnectionStringOutput}");
+        IsEmulator ?
+            AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint, IsPreviewEmulator) :
+            UseAccessKeyAuthentication ?
+                ReferenceExpression.Create($"{ConnectionStringSecretOutput}") :
+                ReferenceExpression.Create($"{ConnectionStringOutput}");
 
     void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
     {
@@ -119,15 +156,15 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     {
         var bicepIdentifier = this.GetBicepIdentifier();
         var resources = infra.GetProvisionableResources();
-        
+
         // Check if a CosmosDBAccount with the same identifier already exists
         var existingStore = resources.OfType<CosmosDBAccount>().SingleOrDefault(store => store.BicepIdentifier == bicepIdentifier);
-        
+
         if (existingStore is not null)
         {
             return existingStore;
         }
-        
+
         // Create and add new resource if it doesn't exist
         var store = CosmosDBAccount.FromExisting(bicepIdentifier);
 
@@ -179,7 +216,8 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
             }
             else
             {
-                builder.Append($"AccountEndpoint={ConnectionStringExpression}");
+                // The ConnectionString output contains the account endpoint URI.
+                builder.Append($"AccountEndpoint={ConnectionStringOutput}");
             }
 
             if (!string.IsNullOrEmpty(databaseName))
@@ -198,4 +236,19 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
 
     internal static string GetKeyValueSecretName(string resourceName)
         => $"connectionstrings--{resourceName}";
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        yield return new("Uri", ReferenceExpression.Create($"{Uri}"));
+
+        if (AccountKey is not null)
+        {
+            yield return new("AccountKey", AccountKey);
+        }
+
+        if (IsEmulator || UseAccessKeyAuthentication)
+        {
+            yield return new("ConnectionString", ConnectionStringExpression);
+        }
+    }
 }

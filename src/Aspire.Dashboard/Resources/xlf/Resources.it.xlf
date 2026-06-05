@@ -222,6 +222,11 @@
         <target state="translated">Nascondi tipi di risorse</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesNoParameters">
+        <source>No parameters found</source>
+        <target state="translated">Nessun parametro trovato</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesNotFiltered">
         <source>No filters</source>
         <target state="translated">Nessun filtro</target>

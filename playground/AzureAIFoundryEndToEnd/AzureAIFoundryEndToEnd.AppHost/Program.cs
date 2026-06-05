@@ -10,7 +10,7 @@ var foundry = builder.AddAzureAIFoundry("foundry")
 
 var model = foundry.Resource.IsEmulator
     ? AIFoundryModel.Local.Phi4Mini
-    : AIFoundryModel.Microsoft.Phi4MiniInstruct;
+    : AIFoundryModel.OpenAI.Gpt5Mini;
 
 var chat = foundry.AddDeployment("chat", model);
 

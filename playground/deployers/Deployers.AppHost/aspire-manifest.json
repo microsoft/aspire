@@ -1,0 +1,509 @@
+{
+  "$schema": "https://json.schemastore.org/aspire-8.0.json",
+  "resources": {
+    "computeParam": {
+      "type": "parameter.v0",
+      "value": "{computeParam.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "secretParam": {
+      "type": "parameter.v0",
+      "value": "{secretParam.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "parameterWithDefault": {
+      "type": "parameter.v0",
+      "value": "{parameterWithDefault.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "buildVersion": {
+      "type": "parameter.v0",
+      "value": "{buildVersion.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "buildSecret": {
+      "type": "parameter.v0",
+      "value": "{buildSecret.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "aca-env-acr": {
+      "type": "azure.bicep.v0",
+      "path": "aca-env-acr.module.bicep"
+    },
+    "aca-env": {
+      "type": "azure.bicep.v0",
+      "path": "aca-env.module.bicep",
+      "params": {
+        "aca_env_acr_outputs_name": "{aca-env-acr.outputs.name}",
+        "userPrincipalId": ""
+      }
+    },
+    "aas-env-acr": {
+      "type": "azure.bicep.v0",
+      "path": "aas-env-acr.module.bicep"
+    },
+    "aas-env": {
+      "type": "azure.bicep.v0",
+      "path": "aas-env.module.bicep",
+      "params": {
+        "aas_env_acr_outputs_name": "{aas-env-acr.outputs.name}",
+        "userPrincipalId": ""
+      }
+    },
+    "storage": {
+      "type": "azure.bicep.v0",
+      "path": "storage.module.bicep"
+    },
+    "queue": {
+      "type": "value.v0",
+      "connectionString": "{storage.outputs.queueEndpoint}"
+    },
+    "foobarbaz": {
+      "type": "value.v0",
+      "connectionString": "{storage.outputs.blobEndpoint}"
+    },
+    "storage-blobs": {
+      "type": "value.v0",
+      "connectionString": "{storage.outputs.blobEndpoint}"
+    },
+    "myblobcontainer": {
+      "type": "value.v0",
+      "connectionString": "Endpoint={storage.outputs.blobEndpoint};ContainerName=myblobcontainer"
+    },
+    "existingEventHubName": {
+      "type": "parameter.v0",
+      "value": "{existingEventHubName.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "existingEventHubResourceGroup": {
+      "type": "parameter.v0",
+      "value": "{existingEventHubResourceGroup.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "eventhubs": {
+      "type": "azure.bicep.v1",
+      "connectionString": "{eventhubs.outputs.eventHubsEndpoint}",
+      "path": "eventhubs.module.bicep",
+      "params": {
+        "existingEventHubName": "{existingEventHubName.value}"
+      },
+      "scope": {
+        "resourceGroup": "{existingEventHubResourceGroup.value}"
+      }
+    },
+    "myhub": {
+      "type": "value.v0",
+      "connectionString": "Endpoint={eventhubs.outputs.eventHubsEndpoint};EntityPath=myhub"
+    },
+    "messaging": {
+      "type": "azure.bicep.v0",
+      "connectionString": "{messaging.outputs.serviceBusEndpoint}",
+      "path": "messaging.module.bicep"
+    },
+    "myqueue": {
+      "type": "value.v0",
+      "connectionString": "Endpoint={messaging.outputs.serviceBusEndpoint};EntityPath=myqueue"
+    },
+    "cosmosdb": {
+      "type": "azure.bicep.v0",
+      "connectionString": "{cosmosdb.outputs.connectionString}",
+      "path": "cosmosdb.module.bicep"
+    },
+    "mydatabase": {
+      "type": "value.v0",
+      "connectionString": "AccountEndpoint={cosmosdb.outputs.connectionString};Database=mydatabase"
+    },
+    "mycontainer": {
+      "type": "value.v0",
+      "connectionString": "AccountEndpoint={cosmosdb.outputs.connectionString};Database=mydatabase;Container=mycontainer"
+    },
+    "cache": {
+      "type": "container.v1",
+      "connectionString": "{cache.bindings.tcp.host}:{cache.bindings.tcp.port},password={cache-password.value}",
+      "image": "docker.io/library/redis:8.2",
+      "deployment": {
+        "type": "azure.bicep.v0",
+        "path": "cache-containerapp.module.bicep",
+        "params": {
+          "aca_env_outputs_azure_container_apps_environment_default_domain": "{aca-env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
+          "aca_env_outputs_azure_container_apps_environment_id": "{aca-env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
+          "cache_password_value": "{cache-password.value}"
+        }
+      },
+      "entrypoint": "/bin/sh",
+      "args": [
+        "-c",
+        "redis-server --requirepass $REDIS_PASSWORD"
+      ],
+      "env": {
+        "REDIS_PASSWORD": "{cache-password.value}"
+      },
+      "bindings": {
+        "tcp": {
+          "scheme": "tcp",
+          "protocol": "tcp",
+          "transport": "tcp",
+          "targetPort": 6379
+        }
+      }
+    },
+    "functions-api-service": {
+      "type": "project.v1",
+      "path": "../../AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.ApiService/AzureFunctionsEndToEnd.ApiService.csproj",
+      "deployment": {
+        "type": "azure.bicep.v0",
+        "path": "functions-api-service-website.module.bicep",
+        "params": {
+          "aas_env_outputs_azure_container_registry_endpoint": "{aas-env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+          "aas_env_outputs_planid": "{aas-env.outputs.planId}",
+          "aas_env_outputs_azure_container_registry_managed_identity_id": "{aas-env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+          "aas_env_outputs_azure_container_registry_managed_identity_client_id": "{aas-env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_CLIENT_ID}",
+          "functions_api_service_containerimage": "{functions-api-service.containerImage}",
+          "functions_api_service_containerport": "{functions-api-service.containerPort}",
+          "eventhubs_outputs_eventhubsendpoint": "{eventhubs.outputs.eventHubsEndpoint}",
+          "eventhubs_outputs_eventhubshostname": "{eventhubs.outputs.eventHubsHostName}",
+          "messaging_outputs_servicebusendpoint": "{messaging.outputs.serviceBusEndpoint}",
+          "messaging_outputs_servicebushostname": "{messaging.outputs.serviceBusHostName}",
+          "cosmosdb_outputs_connectionstring": "{cosmosdb.outputs.connectionString}",
+          "storage_outputs_queueendpoint": "{storage.outputs.queueEndpoint}",
+          "storage_outputs_blobendpoint": "{storage.outputs.blobEndpoint}",
+          "functions_api_service_identity_outputs_id": "{functions-api-service-identity.outputs.id}",
+          "functions_api_service_identity_outputs_clientid": "{functions-api-service-identity.outputs.clientId}",
+          "aas_env_outputs_azure_app_service_dashboard_uri": "{aas-env.outputs.AZURE_APP_SERVICE_DASHBOARD_URI}",
+          "aas_env_outputs_azure_website_contributor_managed_identity_id": "{aas-env.outputs.AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_ID}",
+          "aas_env_outputs_azure_website_contributor_managed_identity_principal_id": "{aas-env.outputs.AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_PRINCIPAL_ID}"
+        }
+      },
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{functions-api-service.bindings.http.targetPort}",
+        "ConnectionStrings__myhub": "{myhub.connectionString}",
+        "MYHUB_HOST": "{eventhubs.outputs.eventHubsHostName}",
+        "MYHUB_URI": "{eventhubs.outputs.eventHubsEndpoint}",
+        "MYHUB_EVENTHUBNAME": "myhub",
+        "ConnectionStrings__messaging": "{messaging.connectionString}",
+        "MESSAGING_HOST": "{messaging.outputs.serviceBusHostName}",
+        "MESSAGING_URI": "{messaging.outputs.serviceBusEndpoint}",
+        "ConnectionStrings__cosmosdb": "{cosmosdb.connectionString}",
+        "COSMOSDB_URI": "{cosmosdb.outputs.connectionString}",
+        "ConnectionStrings__queue": "{queue.connectionString}",
+        "QUEUE_URI": "{storage.outputs.queueEndpoint}",
+        "ConnectionStrings__foobarbaz": "{foobarbaz.connectionString}",
+        "FOOBARBAZ_URI": "{storage.outputs.blobEndpoint}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "external": true
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http",
+          "external": true
+        }
+      }
+    },
+    "api-service": {
+      "type": "project.v1",
+      "path": "../Deployers.ApiService/Deployers.ApiService.csproj",
+      "deployment": {
+        "type": "azure.bicep.v0",
+        "path": "api-service-website.module.bicep",
+        "params": {
+          "aas_env_outputs_azure_container_registry_endpoint": "{aas-env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+          "aas_env_outputs_planid": "{aas-env.outputs.planId}",
+          "aas_env_outputs_azure_container_registry_managed_identity_id": "{aas-env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+          "aas_env_outputs_azure_container_registry_managed_identity_client_id": "{aas-env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_CLIENT_ID}",
+          "api_service_containerimage": "{api-service.containerImage}",
+          "api_service_containerport": "{api-service.containerPort}",
+          "aas_env_outputs_azure_app_service_dashboard_uri": "{aas-env.outputs.AZURE_APP_SERVICE_DASHBOARD_URI}",
+          "aas_env_outputs_azure_website_contributor_managed_identity_id": "{aas-env.outputs.AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_ID}",
+          "aas_env_outputs_azure_website_contributor_managed_identity_principal_id": "{aas-env.outputs.AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_PRINCIPAL_ID}"
+        }
+      },
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{api-service.bindings.http.targetPort}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "external": true
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http",
+          "external": true
+        }
+      }
+    },
+    "python-app": {
+      "type": "container.v1",
+      "build": {
+        "context": "../Deployers.Dockerfile",
+        "dockerfile": "../Deployers.Dockerfile/Dockerfile",
+        "args": {
+          "BUILD_VERSION": "{buildVersion.value}",
+          "CUSTOM_MESSAGE": "Built with Aspire WithBuildArgs!"
+        },
+        "secrets": {
+          "BUILD_SECRET": {
+            "type": "env",
+            "value": "{buildSecret.value}"
+          }
+        }
+      },
+      "deployment": {
+        "type": "azure.bicep.v0",
+        "path": "python-app-containerapp.module.bicep",
+        "params": {
+          "aca_env_outputs_azure_container_apps_environment_default_domain": "{aca-env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
+          "aca_env_outputs_azure_container_apps_environment_id": "{aca-env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
+          "aca_env_outputs_azure_container_registry_endpoint": "{aca-env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+          "aca_env_outputs_azure_container_registry_managed_identity_id": "{aca-env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+          "python_app_containerimage": "{python-app.containerImage}",
+          "computeparam_value": "{computeParam.value}",
+          "secretparam_value": "{secretParam.value}",
+          "parameterwithdefault_value": "{parameterWithDefault.value}"
+        }
+      },
+      "env": {
+        "P0": "{computeParam.value}",
+        "P1": "{secretParam.value}",
+        "P3": "{parameterWithDefault.value}",
+        "TEST_SCENARIO": "build-args-and-secrets"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 80,
+          "external": true
+        }
+      }
+    },
+    "funcstorage6662c": {
+      "type": "azure.bicep.v0",
+      "path": "funcstorage6662c.module.bicep"
+    },
+    "func-app": {
+      "type": "project.v1",
+      "path": "../../AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj",
+      "deployment": {
+        "type": "azure.bicep.v0",
+        "path": "func-app-containerapp.module.bicep",
+        "params": {
+          "aca_env_outputs_azure_container_apps_environment_default_domain": "{aca-env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
+          "aca_env_outputs_azure_container_apps_environment_id": "{aca-env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
+          "aca_env_outputs_azure_container_registry_endpoint": "{aca-env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+          "aca_env_outputs_azure_container_registry_managed_identity_id": "{aca-env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+          "func_app_containerimage": "{func-app.containerImage}",
+          "func_app_identity_outputs_id": "{func-app-identity.outputs.id}",
+          "funcstorage6662c_outputs_blobendpoint": "{funcstorage6662c.outputs.blobEndpoint}",
+          "funcstorage6662c_outputs_queueendpoint": "{funcstorage6662c.outputs.queueEndpoint}",
+          "funcstorage6662c_outputs_tableendpoint": "{funcstorage6662c.outputs.tableEndpoint}",
+          "eventhubs_outputs_eventhubsendpoint": "{eventhubs.outputs.eventHubsEndpoint}",
+          "messaging_outputs_servicebusendpoint": "{messaging.outputs.serviceBusEndpoint}",
+          "cosmosdb_outputs_connectionstring": "{cosmosdb.outputs.connectionString}",
+          "storage_outputs_blobendpoint": "{storage.outputs.blobEndpoint}",
+          "storage_outputs_queueendpoint": "{storage.outputs.queueEndpoint}",
+          "func_app_identity_outputs_clientid": "{func-app-identity.outputs.clientId}"
+        }
+      },
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+        "AzureFunctionsJobHost__telemetryMode": "OpenTelemetry",
+        "ASPNETCORE_URLS": "http://\u002B:{func-app.bindings.http.targetPort}",
+        "AzureWebJobsStorage__blobServiceUri": "{funcstorage6662c.outputs.blobEndpoint}",
+        "AzureWebJobsStorage__queueServiceUri": "{funcstorage6662c.outputs.queueEndpoint}",
+        "AzureWebJobsStorage__tableServiceUri": "{funcstorage6662c.outputs.tableEndpoint}",
+        "Aspire__Azure__Storage__Blobs__AzureWebJobsStorage__ServiceUri": "{funcstorage6662c.outputs.blobEndpoint}",
+        "Aspire__Azure__Storage__Queues__AzureWebJobsStorage__ServiceUri": "{funcstorage6662c.outputs.queueEndpoint}",
+        "Aspire__Azure__Data__Tables__AzureWebJobsStorage__ServiceUri": "{funcstorage6662c.outputs.tableEndpoint}",
+        "myhub__fullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
+        "Aspire__Azure__Messaging__EventHubs__EventHubProducerClient__myhub__FullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
+        "Aspire__Azure__Messaging__EventHubs__EventHubConsumerClient__myhub__FullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
+        "Aspire__Azure__Messaging__EventHubs__EventProcessorClient__myhub__FullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
+        "Aspire__Azure__Messaging__EventHubs__PartitionReceiver__myhub__FullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
+        "Aspire__Azure__Messaging__EventHubs__EventHubBufferedProducerClient__myhub__FullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
+        "Aspire__Azure__Messaging__EventHubs__EventHubProducerClient__myhub__EventHubName": "myhub",
+        "Aspire__Azure__Messaging__EventHubs__EventHubConsumerClient__myhub__EventHubName": "myhub",
+        "Aspire__Azure__Messaging__EventHubs__EventProcessorClient__myhub__EventHubName": "myhub",
+        "Aspire__Azure__Messaging__EventHubs__PartitionReceiver__myhub__EventHubName": "myhub",
+        "Aspire__Azure__Messaging__EventHubs__EventHubBufferedProducerClient__myhub__EventHubName": "myhub",
+        "messaging__fullyQualifiedNamespace": "{messaging.outputs.serviceBusEndpoint}",
+        "Aspire__Azure__Messaging__ServiceBus__messaging__FullyQualifiedNamespace": "{messaging.outputs.serviceBusEndpoint}",
+        "cosmosdb__accountEndpoint": "{cosmosdb.outputs.connectionString}",
+        "Aspire__Microsoft__EntityFrameworkCore__Cosmos__cosmosdb__AccountEndpoint": "{cosmosdb.outputs.connectionString}",
+        "Aspire__Microsoft__Azure__Cosmos__cosmosdb__AccountEndpoint": "{cosmosdb.outputs.connectionString}",
+        "ConnectionStrings__myblobcontainer": "{myblobcontainer.connectionString}",
+        "MYBLOBCONTAINER_URI": "{storage.outputs.blobEndpoint}",
+        "MYBLOBCONTAINER_BLOBCONTAINERNAME": "myblobcontainer",
+        "foobarbaz__blobServiceUri": "{storage.outputs.blobEndpoint}",
+        "foobarbaz__queueServiceUri": "{storage.outputs.queueEndpoint}",
+        "Aspire__Azure__Storage__Blobs__foobarbaz__ServiceUri": "{storage.outputs.blobEndpoint}",
+        "queue__queueServiceUri": "{storage.outputs.queueEndpoint}",
+        "Aspire__Azure__Storage__Queues__queue__ServiceUri": "{storage.outputs.queueEndpoint}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080,
+          "external": true
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080,
+          "external": true
+        }
+      }
+    },
+    "functions-api-service-identity": {
+      "type": "azure.bicep.v0",
+      "path": "functions-api-service-identity.module.bicep"
+    },
+    "functions-api-service-roles-eventhubs": {
+      "type": "azure.bicep.v1",
+      "path": "functions-api-service-roles-eventhubs.module.bicep",
+      "params": {
+        "existingEventHubName": "{existingEventHubName.value}",
+        "principalId": "{functions-api-service-identity.outputs.principalId}"
+      },
+      "scope": {
+        "resourceGroup": "{existingEventHubResourceGroup.value}"
+      }
+    },
+    "functions-api-service-roles-messaging": {
+      "type": "azure.bicep.v0",
+      "path": "functions-api-service-roles-messaging.module.bicep",
+      "params": {
+        "messaging_outputs_name": "{messaging.outputs.name}",
+        "principalId": "{functions-api-service-identity.outputs.principalId}"
+      }
+    },
+    "functions-api-service-roles-cosmosdb": {
+      "type": "azure.bicep.v0",
+      "path": "functions-api-service-roles-cosmosdb.module.bicep",
+      "params": {
+        "cosmosdb_outputs_name": "{cosmosdb.outputs.name}",
+        "principalId": "{functions-api-service-identity.outputs.principalId}"
+      }
+    },
+    "functions-api-service-roles-storage": {
+      "type": "azure.bicep.v0",
+      "path": "functions-api-service-roles-storage.module.bicep",
+      "params": {
+        "storage_outputs_name": "{storage.outputs.name}",
+        "principalId": "{functions-api-service-identity.outputs.principalId}"
+      }
+    },
+    "func-app-identity": {
+      "type": "azure.bicep.v0",
+      "path": "func-app-identity.module.bicep"
+    },
+    "func-app-roles-funcstorage6662c": {
+      "type": "azure.bicep.v0",
+      "path": "func-app-roles-funcstorage6662c.module.bicep",
+      "params": {
+        "funcstorage6662c_outputs_name": "{funcstorage6662c.outputs.name}",
+        "principalId": "{func-app-identity.outputs.principalId}"
+      }
+    },
+    "func-app-roles-eventhubs": {
+      "type": "azure.bicep.v1",
+      "path": "func-app-roles-eventhubs.module.bicep",
+      "params": {
+        "existingEventHubName": "{existingEventHubName.value}",
+        "principalId": "{func-app-identity.outputs.principalId}"
+      },
+      "scope": {
+        "resourceGroup": "{existingEventHubResourceGroup.value}"
+      }
+    },
+    "func-app-roles-messaging": {
+      "type": "azure.bicep.v0",
+      "path": "func-app-roles-messaging.module.bicep",
+      "params": {
+        "messaging_outputs_name": "{messaging.outputs.name}",
+        "principalId": "{func-app-identity.outputs.principalId}"
+      }
+    },
+    "func-app-roles-cosmosdb": {
+      "type": "azure.bicep.v0",
+      "path": "func-app-roles-cosmosdb.module.bicep",
+      "params": {
+        "cosmosdb_outputs_name": "{cosmosdb.outputs.name}",
+        "principalId": "{func-app-identity.outputs.principalId}"
+      }
+    },
+    "func-app-roles-storage": {
+      "type": "azure.bicep.v0",
+      "path": "func-app-roles-storage.module.bicep",
+      "params": {
+        "storage_outputs_name": "{storage.outputs.name}",
+        "principalId": "{func-app-identity.outputs.principalId}"
+      }
+    },
+    "cache-password": {
+      "type": "parameter.v0",
+      "value": "{cache-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true,
+          "default": {
+            "generate": {
+              "minLength": 22,
+              "special": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

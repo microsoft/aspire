@@ -56,14 +56,6 @@ resource webapp 'Microsoft.Web/sites@2024-11-01' = {
       acrUserManagedIdentityID: infra_outputs_azure_container_registry_managed_identity_client_id
       appSettings: [
         {
-          name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-          value: 'true'
-        }
-        {
-          name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-          value: 'true'
-        }
-        {
           name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
           value: 'in_memory'
         }

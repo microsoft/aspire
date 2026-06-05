@@ -81,9 +81,15 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
 
         var workspaceRoot = new DirectoryInfo(workspaceRootPath);
 
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = ExecutionContext.WorkingDirectory,
+            RepositoryRoot = workspaceRoot
+        };
+
         var applicators = await _interactionService.ShowStatusAsync(
             McpCommandStrings.InitCommand_DetectingAgentEnvironments,
-            async () => await _agentEnvironmentDetector.DetectAsync(ExecutionContext.WorkingDirectory, workspaceRoot, cancellationToken));
+            async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken));
 
         if (applicators.Length == 0)
         {
@@ -91,13 +97,39 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
             return ExitCodeConstants.Success;
         }
 
-        // Present the list of detected agent environments for the user to select
-        var selectedApplicators = await _interactionService.PromptForSelectionsAsync(
-            McpCommandStrings.InitCommand_AgentConfigurationSelectPrompt,
-            applicators,
-            applicator => applicator.Description,
-            cancellationToken);
+        // Group applicators by prompt group and sort by priority
+        var groupedApplicators = applicators
+            .GroupBy(a => a.PromptGroup)
+            .OrderBy(g => g.Key.Priority)
+            .ToList();
 
+        var selectedApplicators = new List<AgentEnvironmentApplicator>();
+
+        // Present each group of prompts in priority order
+        foreach (var group in groupedApplicators)
+        {
+            // Get the prompt text for this group
+            var promptText = group.Key.Name switch
+            {
+                "AgentEnvironments" => McpCommandStrings.InitCommand_AgentConfigurationSelectPrompt,
+                "AdditionalOptions" => McpCommandStrings.InitCommand_AdditionalOptionsSelectPrompt,
+                _ => $"Select {group.Key.Name}:"
+            };
+
+            // Sort applicators within the group by priority
+            var sortedApplicators = group.OrderBy(a => a.Priority).ToArray();
+
+            // Prompt user for selection from this group
+            var selected = await _interactionService.PromptForSelectionsAsync(
+                promptText,
+                sortedApplicators,
+                applicator => applicator.Description,
+                cancellationToken);
+
+            selectedApplicators.AddRange(selected);
+        }
+
+        // Apply all selected applicators
         foreach (var applicator in selectedApplicators)
         {
             await applicator.ApplyAsync(cancellationToken);

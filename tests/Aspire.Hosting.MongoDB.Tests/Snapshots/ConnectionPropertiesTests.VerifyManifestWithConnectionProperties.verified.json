@@ -1,4 +1,4 @@
-﻿{
+{
   "type": "executable.v0",
   "workingDirectory": ".",
   "command": "command",
@@ -19,7 +19,7 @@
     "DB_AUTHENTICATIONDATABASE": "admin",
     "DB_AUTHENTICATIONMECHANISM": "SCRAM-SHA-256",
     "DB_URI": "mongodb://admin:{server-password-uri-encoded.value}@{server.bindings.tcp.host}:{server.bindings.tcp.port}/db%23test?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
-    "DB_DATABASE": "db#test",
+    "DB_DATABASENAME": "db#test",
     "ConnectionStrings__serverWithParameters": "{serverWithParameters.connectionString}",
     "SERVERWITHPARAMETERS_HOST": "{serverWithParameters.bindings.tcp.host}",
     "SERVERWITHPARAMETERS_PORT": "{serverWithParameters.bindings.tcp.port}",
@@ -36,6 +36,6 @@
     "DBWITHPARAMETERS_AUTHENTICATIONDATABASE": "admin",
     "DBWITHPARAMETERS_AUTHENTICATIONMECHANISM": "SCRAM-SHA-256",
     "DBWITHPARAMETERS_URI": "mongodb://{username-uri-encoded.value}:{password-uri-encoded.value}@{serverWithParameters.bindings.tcp.host}:{serverWithParameters.bindings.tcp.port}/db%23test?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
-    "DBWITHPARAMETERS_DATABASE": "db#test"
+    "DBWITHPARAMETERS_DATABASENAME": "db#test"
   }
 }

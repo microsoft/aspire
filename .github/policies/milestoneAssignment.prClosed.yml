@@ -16,16 +16,16 @@ configuration:
           branch: main
       then:
       - addMilestone:
-          milestone: 13.1
+          milestone: 13.2
       description: '[Milestone Assignments] Assign Milestone to PRs merged to the `main` branch'
     - if:
       - payloadType: Pull_Request
       - isAction:
           action: Closed
       - targetsBranch:
-          branch: release/9.4
+          branch: release/13.1
       then:
       - removeMilestone
       - addMilestone:
-          milestone: 9.4.2
-      description: '[Milestone Assignments] Assign Milestone to PRs merged to release/9.4 branch'
+          milestone: 13.1
+      description: '[Milestone Assignments] Assign Milestone to PRs merged to release/13.1 branch'

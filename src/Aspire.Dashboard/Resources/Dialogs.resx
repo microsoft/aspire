@@ -494,4 +494,11 @@
   <data name="GenAIMessageCategoryToolResponse" xml:space="preserve">
     <value>Tool response</value>
   </data>
+  <data name="McpServerDialogCliInstructionsAbove" xml:space="preserve">
+    <value>The fastest way to get started is to &lt;a href="{0}" target="_blank"&gt;configure the Aspire MCP using the CLI&lt;/a&gt;</value>
+    <comment>{0} is a URL</comment>
+  </data>
+  <data name="McpServerDialogCliInstructionsBelow" xml:space="preserve">
+    <value>The &lt;code&gt;aspire mcp init&lt;/code&gt; command writes MCP JSON to your local workspace. Alternatively, configure your local AI development tools using instructions below.</value>
+  </data>
 </root>

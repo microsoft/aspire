@@ -24,4 +24,6 @@ resource device_connection_state_events1234567890_even_longer 'Microsoft.Service
 
 output serviceBusEndpoint string = sb.properties.serviceBusEndpoint
 
+output serviceBusHostName string = split(replace(sb.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
 output name string = sb.name

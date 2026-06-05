@@ -444,6 +444,47 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_SelfUpdate_WithChannelOption_TracksChannelParameter()
+    {
+        // This test verifies that the channel parameter flows through the self-update command.
+        // Full integration testing of SetConfigurationAsync would require creating a valid
+        // tar.gz archive with a working CLI executable, which is complex for a unit test.
+        // The test verifies the channel value is properly captured and would be passed
+        // to configuration service if the extraction succeeds.
+        
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        string? capturedChannel = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (channel, ct) =>
+                {
+                    capturedChannel = channel;
+                    // Create a fake archive file - extraction will fail but channel is captured
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+
+        // Act
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel daily");
+
+        // Note: exitCode will be non-zero because extraction fails, but that's okay for this test
+        await result.InvokeAsync().WaitAsync(CliTestConstants.DefaultTimeout);
+
+        // Assert - verify the channel parameter was correctly passed through
+        Assert.Equal("daily", capturedChannel);
+    }
+
+    [Fact]
     public async Task UpdateCommand_ProjectUpdate_WithChannelOption_DoesNotPromptForChannel()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

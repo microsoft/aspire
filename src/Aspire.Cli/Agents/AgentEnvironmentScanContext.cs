@@ -23,6 +23,38 @@ internal sealed class AgentEnvironmentScanContext
     public required DirectoryInfo RepositoryRoot { get; init; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether an agent instructions applicator has been added.
+    /// This is used to ensure only one applicator for agent instructions is added across all scanners.
+    /// </summary>
+    public bool AgentInstructionsApplicatorAdded { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a Playwright applicator has been added.
+    /// This is used to ensure only one applicator for Playwright is added across all scanners.
+    /// </summary>
+    public bool PlaywrightApplicatorAdded { get; set; }
+
+    /// <summary>
+    /// Stores the Playwright configuration callbacks from each scanner.
+    /// These will be executed if the user selects to configure Playwright.
+    /// </summary>
+    private readonly List<Func<CancellationToken, Task>> _playwrightConfigurationCallbacks = [];
+
+    /// <summary>
+    /// Adds a Playwright configuration callback for a specific environment.
+    /// </summary>
+    /// <param name="callback">The callback to execute if Playwright is configured.</param>
+    public void AddPlaywrightConfigurationCallback(Func<CancellationToken, Task> callback)
+    {
+        _playwrightConfigurationCallbacks.Add(callback);
+    }
+
+    /// <summary>
+    /// Gets all registered Playwright configuration callbacks.
+    /// </summary>
+    public IReadOnlyList<Func<CancellationToken, Task>> PlaywrightConfigurationCallbacks => _playwrightConfigurationCallbacks;
+
+    /// <summary>
     /// Adds an applicator to the collection of detected agent environments.
     /// </summary>
     /// <param name="applicator">The applicator to add.</param>

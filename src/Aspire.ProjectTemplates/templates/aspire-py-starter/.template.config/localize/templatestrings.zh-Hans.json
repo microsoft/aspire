@@ -1,7 +1,7 @@
 ﻿{
   "author": "Microsoft",
-  "name": "Aspire Starter App (FastAPI/React)",
-  "description": "A project template for creating an Aspire app with a React frontend and a Python backend API service, with optional Redis caching.",
+  "name": "Aspire 入门应用(FastAPI/React)",
+  "description": "用于使用 React 前端和 Python 后端 API 服务创建 Aspire 应用的项目模板，可选择使用 Redis 缓存。",
   "symbols/UseRedisCache/displayName": "使用 Redis 进行缓存(需要受支持的容器运行时)(_U)",
   "symbols/UseRedisCache/description": "配置是否将应用程序设置为使用 Redis 进行缓存。需要支持的容器运行时才能在本地运行，有关详细信息，请访问 https://aka.ms/aspire/containers for more details。",
   "symbols/appHostHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTP 终结点。",

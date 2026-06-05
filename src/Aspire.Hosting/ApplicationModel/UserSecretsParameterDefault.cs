@@ -5,7 +5,6 @@
 
 using System.Diagnostics;
 using Aspire.Hosting.Publishing;
-using Aspire.Hosting.UserSecrets;
 
 namespace Aspire.Hosting.ApplicationModel;
 

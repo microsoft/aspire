@@ -13,7 +13,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Callbacks can use this context to access the resource being configured and modify the <see cref="Options"/>
 /// to customize how the container image is named and tagged when pushed to a registry.
 /// </remarks>
-[Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+[Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class ContainerImagePushOptionsCallbackContext
 {
     /// <summary>

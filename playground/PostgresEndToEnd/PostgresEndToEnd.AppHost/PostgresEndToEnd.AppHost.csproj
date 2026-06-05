@@ -17,6 +17,8 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.PostgreSQL" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Python" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.JavaScript" />
 
     <ProjectReference Include="..\PostgresEndToEnd.ApiService\PostgresEndToEnd.ApiService.csproj" />
   </ItemGroup>

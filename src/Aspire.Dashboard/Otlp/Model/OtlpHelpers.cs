@@ -500,6 +500,26 @@ public static class OtlpHelpers
             return false;
         }
     }
+
+    public static string? GetEventName(OtlpLogEntry logEntry)
+    {
+        if (!string.IsNullOrEmpty(logEntry.EventName))
+        {
+            return logEntry.EventName;
+        }
+
+        if (GetValue(logEntry.Attributes, "event.name") is { Length: > 0 } eventName)
+        {
+            return eventName;
+        }
+
+        if (GetValue(logEntry.Attributes, "logrecord.event.name") is { Length: > 0 } logRecordEventName)
+        {
+            return logRecordEventName;
+        }
+
+        return null;
+    }
 }
 
 public enum TelemetryType

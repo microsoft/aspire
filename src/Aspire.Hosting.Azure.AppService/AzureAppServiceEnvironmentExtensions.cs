@@ -288,6 +288,36 @@ public static partial class AzureAppServiceEnvironmentExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Configures the slot to which the Azure App Services should be deployed.
+    /// </summary>
+    /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
+    /// <param name="deploymentSlot">The deployment slot parameter for all App Services in the App Service Environment.</param>
+    /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlot(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, IResourceBuilder<ParameterResource> deploymentSlot)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(deploymentSlot);
+
+        builder.Resource.DeploymentSlotParameter = deploymentSlot.Resource;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the slot to which the Azure App Services should be deployed.
+    /// </summary>
+    /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
+    /// <param name="deploymentSlot">The deployment slot for all App Services in the App Service Environment.</param>
+    /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlot(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, string deploymentSlot)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(deploymentSlot);
+
+        builder.Resource.DeploymentSlot = deploymentSlot;
+        return builder;
+    }
+
     private static AzureContainerRegistryResource CreateDefaultAzureContainerRegistry(IDistributedApplicationBuilder builder, string name)
     {
         var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>

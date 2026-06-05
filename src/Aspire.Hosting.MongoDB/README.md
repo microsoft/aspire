@@ -47,7 +47,7 @@ The MongoDB database resource combines the server properties above and adds the 
 
 | Property Name | Description |
 |---------------|-------------|
-| `Database` | The MongoDB database name |
+| `DatabaseName` | The MongoDB database name |
 
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
 

@@ -23,6 +23,7 @@ public class PlotlyChartTests : DashboardTestContext
     public void Render_NoInstrument_NoPlotlyInvocations()
     {
         // Arrange
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
         MetricsSetupHelpers.SetupPlotlyChart(this);
 
         var model = new InstrumentViewModel();
@@ -49,6 +50,7 @@ public class PlotlyChartTests : DashboardTestContext
     public async Task Render_HasInstrument_InitializeChartInvocation()
     {
         // Arrange
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
         MetricsSetupHelpers.SetupPlotlyChart(this);
 
         var options = new TelemetryLimitOptions();

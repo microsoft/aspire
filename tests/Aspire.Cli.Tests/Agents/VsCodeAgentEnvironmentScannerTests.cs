@@ -24,8 +24,9 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         await scanner.ScanAsync(context, CancellationToken.None);
 
-        Assert.Single(context.Applicators);
-        Assert.Contains("VS Code", context.Applicators[0].Description);
+        // Scanner adds applicators for: Aspire MCP, Playwright MCP, and agent instructions
+        Assert.NotEmpty(context.Applicators);
+        Assert.Contains(context.Applicators, a => a.Description.Contains("VS Code"));
     }
 
     [Fact]
@@ -41,7 +42,9 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         await scanner.ScanAsync(context, CancellationToken.None);
 
-        Assert.Single(context.Applicators);
+        // Scanner adds applicators for: Aspire MCP, Playwright MCP, and agent instructions
+        Assert.NotEmpty(context.Applicators);
+        Assert.Contains(context.Applicators, a => a.Description.Contains("VS Code"));
     }
 
     [Fact]
@@ -71,7 +74,9 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         await scanner.ScanAsync(context, CancellationToken.None);
 
-        Assert.Single(context.Applicators);
+        // Scanner adds applicators for: Aspire MCP, Playwright MCP, and agent instructions
+        Assert.NotEmpty(context.Applicators);
+        Assert.Contains(context.Applicators, a => a.Description.Contains("VS Code"));
     }
 
     [Fact]
@@ -106,10 +111,12 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         
         await scanner.ScanAsync(context, CancellationToken.None);
         
-        Assert.Single(context.Applicators);
+        // Scanner adds applicators for: Aspire MCP, Playwright MCP, and agent instructions
+        Assert.NotEmpty(context.Applicators);
+        var aspireApplicator = context.Applicators.First(a => a.Description.Contains("Aspire MCP"));
         
         // Apply the configuration
-        await context.Applicators[0].ApplyAsync(CancellationToken.None);
+        await aspireApplicator.ApplyAsync(CancellationToken.None);
         
         // Verify the mcp.json was created
         var mcpJsonPath = Path.Combine(parentVsCode.FullName, "mcp.json");
@@ -225,10 +232,11 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         await scanner.ScanAsync(context, CancellationToken.None);
         
-        // Should return an applicator since aspire is not configured yet
-        Assert.Single(context.Applicators);
+        // Should return applicators for Aspire MCP, Playwright MCP, and agent instructions
+        Assert.NotEmpty(context.Applicators);
+        var aspireApplicator = context.Applicators.First(a => a.Description.Contains("Aspire MCP"));
         
-        await context.Applicators[0].ApplyAsync(CancellationToken.None);
+        await aspireApplicator.ApplyAsync(CancellationToken.None);
 
         var content = await File.ReadAllTextAsync(mcpJsonPath);
         var config = JsonNode.Parse(content)?.AsObject();
@@ -243,6 +251,42 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         Assert.NotNull(otherServer);
     }
 
+    [Fact]
+    public async Task ApplyAsync_WithConfigurePlaywrightTrue_AddsPlaywrightServer()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var vsCodeFolder = workspace.CreateDirectory(".vscode");
+        var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var context = CreateScanContext(workspace.WorkspaceRoot);
+
+        await scanner.ScanAsync(context, CancellationToken.None);
+        
+        // Apply both MCP-related applicators (Aspire and Playwright)
+        var aspireApplicator = context.Applicators.First(a => a.Description.Contains("Aspire MCP"));
+        var playwrightApplicator = context.Applicators.First(a => a.Description.Contains("Playwright MCP"));
+        await aspireApplicator.ApplyAsync(CancellationToken.None);
+        await playwrightApplicator.ApplyAsync(CancellationToken.None);
+
+        var mcpJsonPath = Path.Combine(vsCodeFolder.FullName, "mcp.json");
+        var content = await File.ReadAllTextAsync(mcpJsonPath);
+        var config = JsonNode.Parse(content)?.AsObject();
+        Assert.NotNull(config);
+
+        var servers = config["servers"]?.AsObject();
+        Assert.NotNull(servers);
+        
+        // Both aspire and playwright servers should exist
+        Assert.True(servers.ContainsKey("aspire"));
+        Assert.True(servers.ContainsKey("playwright"));
+
+        var playwrightServer = servers["playwright"]?.AsObject();
+        Assert.NotNull(playwrightServer);
+        Assert.Equal("stdio", playwrightServer["type"]?.GetValue<string>());
+        Assert.Equal("npx", playwrightServer["command"]?.GetValue<string>());
+    }
+
     /// <summary>
     /// A fake implementation of <see cref="IVsCodeCliRunner"/> for testing.
     /// </summary>
@@ -251,7 +295,9 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         public Task<SemVersion?> GetVersionAsync(VsCodeRunOptions options, CancellationToken cancellationToken) => Task.FromResult(version);
     }
 
-    private static AgentEnvironmentScanContext CreateScanContext(DirectoryInfo workingDirectory, DirectoryInfo? repositoryRoot = null)
+    private static AgentEnvironmentScanContext CreateScanContext(
+        DirectoryInfo workingDirectory,
+        DirectoryInfo? repositoryRoot = null)
     {
         repositoryRoot ??= workingDirectory;
         return new AgentEnvironmentScanContext

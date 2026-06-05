@@ -191,7 +191,7 @@ jobs:
       - name: Run tests
         run: yarn test
       - name: Package VSIX
-        run: npx @vscode/vsce package --yarn --pre-release -o out/aspire-extension.vsix
+        run: npx @vscode/vsce@3.7.1 package --yarn --pre-release -o out/aspire-extension.vsix
       - name: Upload VSIX
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:

@@ -14,7 +14,6 @@ public class ConnectionPropertiesTests
         var resource = new RedisResource("redis", password);
 
         var properties = ((IResourceWithConnectionString)resource).GetConnectionProperties().ToArray();
-
         Assert.Collection(
             properties,
             property =>

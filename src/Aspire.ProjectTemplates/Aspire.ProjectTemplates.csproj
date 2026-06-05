@@ -82,6 +82,8 @@
       <VersionMajor>$(_VersionBase.Split('.')[0])</VersionMajor>
       <VersionMinor>$(_VersionBase.Split('.')[1])</VersionMinor>
       <VersionMajorMinor>$(VersionMajor).$(VersionMinor)</VersionMajorMinor>
+      <_RspFilePath>$(IntermediateOutputPath)replace-text-args.rsp</_RspFilePath>
+      <_ReplaceTextScriptPath>$(RepoRoot)tools/scripts/replace-text.cs</_ReplaceTextScriptPath>
     </PropertyGroup>
 
     <ItemGroup>
@@ -121,22 +123,25 @@
       <Replacements Include="$(OpenTelemetryInstrumentationRuntimeVersion)" />
     </ItemGroup>
 
-    <PropertyGroup>
-      <SourcesFilesArgs>&quot;@(SourceFiles, '&quot; &quot;')&quot;</SourcesFilesArgs>
-      <ReplacementsArgs>&quot;@(Replacements, '&quot; &quot;')&quot;</ReplacementsArgs>
-    </PropertyGroup>
-
+    <!-- Build the .rsp file content as an item group -->
     <ItemGroup>
-      <CommandArgs Include="dotnet" />
-      <CommandArgs Include="$(RepoRoot)tools/scripts/replace-text.cs" />
-      <CommandArgs Include="--files" />
-      <CommandArgs Include="$(SourcesFilesArgs)" />
-      <!-- Replacement tokens and their values -->
-      <CommandArgs Include="--replacements" />
-      <CommandArgs Include="$(ReplacementsArgs)" />
+      <_RspLines Include="--files" />
+      <_RspLines Include="@(SourceFiles)" />
+      <_RspLines Include="--replacements" />
+      <_RspLines Include="@(Replacements)" />
     </ItemGroup>
 
-    <Exec Command="@(CommandArgs, ' ')" WorkingDirectory="$(MSBuildThisFileDirectory)" StandardOutputImportance="Normal" StandardErrorImportance="Normal" />
+    <!-- Write the .rsp file -->
+    <WriteLinesToFile File="$(_RspFilePath)"
+                      Lines="@(_RspLines)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+
+    <!-- Execute the script with the .rsp file, using double dash to pass arguments directly to the script -->
+    <Exec Command="dotnet &quot;$(_ReplaceTextScriptPath)&quot; -- @&quot;$(_RspFilePath)&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)"
+          StandardOutputImportance="Normal"
+          StandardErrorImportance="Normal" />
   </Target>
 
   <!-- Grabs the contents of the templates folder and copies them to IntermediateOutputPath directory -->

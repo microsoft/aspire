@@ -1,10 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
+    "infra-acr": {
+      "type": "azure.bicep.v0",
+      "path": "infra-acr.module.bicep"
+    },
     "infra": {
       "type": "azure.bicep.v0",
       "path": "infra.module.bicep",
       "params": {
+        "infra_acr_outputs_name": "{infra-acr.outputs.name}",
         "userPrincipalId": ""
       }
     },
@@ -35,10 +40,10 @@
         }
       },
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
-        "ConnectionStrings__testdb": "{testdb.connectionString}"
+        "ConnectionStrings__testdb": "{testdb.connectionString}",
+        "TESTDB_URI": "{kusto.outputs.clusterUri}",
+        "TESTDB_DATABASENAME": "testdb"
       }
     },
     "worker-identity": {

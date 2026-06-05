@@ -11,8 +11,6 @@ config:
     param0: ""
     param2: "default"
   project1:
-    OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES: "true"
-    OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES: "true"
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     MYAPP_HTTP: "http://myapp-service:8080"
     services__myapp__http__0: "http://myapp-service:8080"

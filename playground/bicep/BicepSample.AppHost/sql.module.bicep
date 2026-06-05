@@ -52,4 +52,4 @@ output sqlServerFqdn string = sql.properties.fullyQualifiedDomainName
 
 output name string = sql.name
 
-output sqlServerAdminName string = sqlServerAdminManagedIdentity.name
+output sqlServerAdminName string = sql.properties.administrators.login

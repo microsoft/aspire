@@ -1,9 +1,27 @@
 {
+  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
+    "pass": {
+      "type": "parameter.v0",
+      "value": "{pass.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
     "cache": {
       "type": "container.v0",
-      "connectionString": "{cache.bindings.tcp.host}:{cache.bindings.tcp.port}",
-      "image": "docker.io/library/redis:7.2.4",
+      "connectionString": "{cache.bindings.tcp.host}:{cache.bindings.tcp.port},password={pass.value}",
+      "image": "docker.io/library/redis:8.2",
+      "entrypoint": "/bin/sh",
+      "args": [
+        "-c",
+        "redis-server --requirepass $REDIS_PASSWORD"
+      ],
+      "env": {
+        "REDIS_PASSWORD": "{pass.value}"
+      },
       "bindings": {
         "tcp": {
           "scheme": "tcp",
@@ -17,10 +35,9 @@
       "type": "project.v0",
       "path": "../AspireWithNode.AspNetCoreApi/AspireWithNode.AspNetCoreApi.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
-        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true"
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{weatherapi.bindings.http.targetPort}"
       },
       "bindings": {
         "http": {
@@ -36,14 +53,22 @@
       }
     },
     "frontend": {
-      "type": "dockerfile.v0",
-      "path": "../NodeFrontend/Dockerfile",
-      "context": "../NodeFrontend",
+      "type": "container.v1",
+      "build": {
+        "context": "../NodeFrontend",
+        "dockerfile": "../NodeFrontend/Dockerfile"
+      },
       "env": {
         "NODE_ENV": "production",
+        "WEATHERAPI_HTTP": "{weatherapi.bindings.http.url}",
         "services__weatherapi__http__0": "{weatherapi.bindings.http.url}",
+        "WEATHERAPI_HTTPS": "{weatherapi.bindings.https.url}",
         "services__weatherapi__https__0": "{weatherapi.bindings.https.url}",
         "ConnectionStrings__cache": "{cache.connectionString}",
+        "CACHE_HOST": "{cache.bindings.tcp.host}",
+        "CACHE_PORT": "{cache.bindings.tcp.port}",
+        "CACHE_PASSWORD": "{pass.value}",
+        "CACHE_URI": "redis://:{pass-uri-encoded.value}@{cache.bindings.tcp.host}:{cache.bindings.tcp.port}",
         "PORT": "{frontend.bindings.http.targetPort}"
       },
       "bindings": {
@@ -55,6 +80,11 @@
           "external": true
         }
       }
+    },
+    "pass-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{pass.value}",
+      "filter": "uri"
     }
   }
 }

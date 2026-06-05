@@ -265,7 +265,7 @@ public sealed class GenAIVisualizerDialogViewModel
         var logEntries = GetSpanLogEntries(telemetryRepository, viewModel.Span);
         foreach (var (item, index) in logEntries.OrderBy(i => i.TimeStamp).Select((l, i) => (l, i)))
         {
-            if (!string.IsNullOrEmpty(item.Message) && item.Attributes.GetValue("event.name") is { } name && TryMapEventName(name, out var type))
+            if (!string.IsNullOrEmpty(item.Message) && OtlpHelpers.GetEventName(item) is { } name && TryMapEventName(name, out var type))
             {
                 var parts = DeserializeEventContent(index, type.Value, item.Message);
                 viewModel.Items.Add(CreateMessage(viewModel, currentIndex, type.Value, parts, internalId: item.InternalId));
@@ -634,7 +634,7 @@ public sealed class GenAIVisualizerDialogViewModel
         var logEntries = GetSpanLogEntries(telemetryRepository, viewModel.Span);
         foreach (var logEntry in logEntries)
         {
-            if (logEntry.Attributes.GetValue("event.name") == GenAIHelpers.GenAIEvaluationResultEventName)
+            if (OtlpHelpers.GetEventName(logEntry) == GenAIHelpers.GenAIEvaluationResultEventName)
             {
                 var evaluation = ParseEvaluationFromAttributes(logEntry.Attributes);
                 if (evaluation != null)

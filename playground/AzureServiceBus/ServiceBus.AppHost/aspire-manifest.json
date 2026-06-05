@@ -22,11 +22,16 @@
       "type": "project.v0",
       "path": "../ServiceBusWorker/ServiceBusWorker.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ConnectionStrings__queueOne": "{queueOne.connectionString}",
-        "ConnectionStrings__sub1": "{sub1.connectionString}"
+        "QUEUEONE_HOST": "{sbemulator.outputs.serviceBusHostName}",
+        "QUEUEONE_URI": "{sbemulator.outputs.serviceBusEndpoint}",
+        "QUEUEONE_QUEUENAME": "queue1",
+        "ConnectionStrings__sub1": "{sub1.connectionString}",
+        "SUB1_HOST": "{sbemulator.outputs.serviceBusHostName}",
+        "SUB1_URI": "{sbemulator.outputs.serviceBusEndpoint}",
+        "SUB1_TOPICNAME": "topic1",
+        "SUB1_SUBSCRIPTIONNAME": "sub1"
       }
     },
     "sbemulator-roles": {

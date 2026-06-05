@@ -10,10 +10,11 @@ namespace Aspire.Hosting.Tests.Publishing;
 
 using Aspire.Hosting.ApplicationModel;
 
-public sealed class FakeContainerRuntime(bool shouldFail = false) : IContainerRuntime
+public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning = true) : IContainerRuntime
 {
     public string Name => "fake-runtime";
     public bool WasHealthCheckCalled { get; private set; }
+    public int CheckIfRunningCallCount { get; private set; }
     public bool WasTagImageCalled { get; private set; }
     public bool WasRemoveImageCalled { get; private set; }
     public bool WasPushImageCalled { get; private set; }
@@ -32,7 +33,8 @@ public sealed class FakeContainerRuntime(bool shouldFail = false) : IContainerRu
     public Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken)
     {
         WasHealthCheckCalled = true;
-        return Task.FromResult(!shouldFail);
+        CheckIfRunningCallCount++;
+        return Task.FromResult(isRunning && !shouldFail);
     }
 
     public Task TagImageAsync(string localImageName, string targetImageName, CancellationToken cancellationToken)

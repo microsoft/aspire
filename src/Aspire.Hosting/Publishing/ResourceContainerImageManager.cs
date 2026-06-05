@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIRECOMPUTE001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -29,6 +28,23 @@ public enum ContainerImageFormat
     /// OCI format.
     /// </summary>
     Oci
+}
+
+/// <summary>
+/// Specifies the destination for container images.
+/// </summary>
+[Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public enum ContainerImageDestination
+{
+    /// <summary>
+    /// Image will be pushed to a container registry.
+    /// </summary>
+    Registry,
+
+    /// <summary>
+    /// Image will be saved as an archive file.
+    /// </summary>
+    Archive
 }
 
 /// <summary>
@@ -91,6 +107,11 @@ public class ContainerImageBuildOptions
     public string? Tag { get; init; }
 
     /// <summary>
+    /// Gets the destination for the container image.
+    /// </summary>
+    public ContainerImageDestination? Destination { get; init; }
+
+    /// <summary>
     /// Gets the output path for the container archive.
     /// </summary>
     public string? OutputPath { get; init; }
@@ -151,6 +172,7 @@ internal sealed class ResourceContainerImageManager(
         public string? OutputPath { get; set; }
         public ContainerImageFormat? ImageFormat { get; set; }
         public ContainerTargetPlatform? TargetPlatform { get; set; }
+        public ContainerImageDestination? Destination { get; set; }
         public string LocalImageName { get; set; } = string.Empty;
         public string LocalImageTag { get; set; } = "latest";
     }
@@ -174,6 +196,7 @@ internal sealed class ResourceContainerImageManager(
         options.OutputPath = context.OutputPath;
         options.ImageFormat = context.ImageFormat;
         options.TargetPlatform = context.TargetPlatform;
+        options.Destination = context.Destination;
         options.LocalImageName = context.LocalImageName ?? options.LocalImageName;
         options.LocalImageTag = context.LocalImageTag ?? options.LocalImageTag;
 
@@ -193,8 +216,8 @@ internal sealed class ResourceContainerImageManager(
 
             if (!containerRuntimeHealthy)
             {
-                logger.LogError("Container runtime is not running or is unhealthy. Cannot build container images.");
-                throw new InvalidOperationException("Container runtime is not running or is unhealthy.");
+                logger.LogError("Container runtime '{ContainerRuntimeName}' is not running or is unhealthy. Cannot build container images.", ContainerRuntime.Name);
+                throw new InvalidOperationException($"Container runtime '{ContainerRuntime.Name}' is not running or is unhealthy.");
             }
 
             logger.LogDebug("{ContainerRuntimeName} is healthy", ContainerRuntime.Name);
@@ -214,6 +237,22 @@ internal sealed class ResourceContainerImageManager(
         logger.LogInformation("Building container image for resource {ResourceName}", resource.Name);
 
         var options = await ResolveContainerBuildOptionsAsync(resource, cancellationToken).ConfigureAwait(false);
+
+        // Check if this resource needs a container runtime
+        if (await ResourcesRequireContainerRuntimeAsync([resource], cancellationToken).ConfigureAwait(false))
+        {
+            logger.LogDebug("Checking {ContainerRuntimeName} health", ContainerRuntime.Name);
+
+            var containerRuntimeHealthy = await ContainerRuntime.CheckIfRunningAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!containerRuntimeHealthy)
+            {
+                logger.LogError("Container runtime '{ContainerRuntimeName}' is not running or is unhealthy. Cannot build container image.", ContainerRuntime.Name);
+                throw new InvalidOperationException($"Container runtime '{ContainerRuntime.Name}' is not running or is unhealthy.");
+            }
+
+            logger.LogDebug("{ContainerRuntimeName} is healthy", ContainerRuntime.Name);
+        }
 
         if (resource is ProjectResource)
         {
@@ -479,19 +518,24 @@ internal sealed class ResourceContainerImageManager(
     // .NET Container builds that push OCI images to a local file path do not need a runtime
     private async Task<bool> ResourcesRequireContainerRuntimeAsync(IEnumerable<IResource> resources, CancellationToken cancellationToken)
     {
-        var hasDockerfileResources = resources.Any(resource =>
-            resource.TryGetLastAnnotation<ContainerImageAnnotation>(out _) &&
-            resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _));
-
-        if (hasDockerfileResources)
-        {
-            return true;
-        }
-
-        // Check if any resource uses Docker format or has no output path
         foreach (var resource in resources)
         {
+            // Dockerfile resources always need container runtime
+            if (resource.TryGetLastAnnotation<ContainerImageAnnotation>(out _) &&
+                resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _))
+            {
+                return true;
+            }
+
+            // Check if any resource uses Docker format or has no output path
             var options = await ResolveContainerBuildOptionsAsync(resource, cancellationToken).ConfigureAwait(false);
+
+            // Skip resources that are explicitly configured to save as archives - they don't need Docker
+            if (options.Destination == ContainerImageDestination.Archive)
+            {
+                continue;
+            }
+
             var usesDocker = options.ImageFormat == null || options.ImageFormat == ContainerImageFormat.Docker;
             var hasNoOutputPath = options.OutputPath == null;
 

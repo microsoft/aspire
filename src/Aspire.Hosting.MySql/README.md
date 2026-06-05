@@ -46,9 +46,9 @@ The MySQL database resource combines the server properties above and adds the fo
 
 | Property Name | Description |
 |---------------|-------------|
-| `Database` | The MySQL database name |
-| `Uri` | The database-specific URI, with the format `mysql://root:{Password}@{Host}:{Port}/{Database}` |
-| `JdbcConnectionString` | The database-specific JDBC connection string, with the format `jdbc:mysql://{Host}:{Port}/{Database}`. User and password credentials are provided as separate `Username` and `Password` properties. |
+| `DatabaseName` | The MySQL database name |
+| `Uri` | The database-specific URI, with the format `mysql://root:{Password}@{Host}:{Port}/{DatabaseName}` |
+| `JdbcConnectionString` | The database-specific JDBC connection string, with the format `jdbc:mysql://{Host}:{Port}/{DatabaseName}`. User and password credentials are provided as separate `Username` and `Password` properties. |
 
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
 

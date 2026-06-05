@@ -70,7 +70,10 @@
     <value>Initialize MCP server configuration for detected agent environments.</value>
   </data>
   <data name="InitCommand_AgentConfigurationSelectPrompt" xml:space="preserve">
-    <value>Select agent environments to configure:</value>
+    <value>Which agent environments do you want to configure?</value>
+  </data>
+  <data name="InitCommand_AdditionalOptionsSelectPrompt" xml:space="preserve">
+    <value>Which additional options do you want to enable?</value>
   </data>
   <data name="InitCommand_NoAgentEnvironmentsDetected" xml:space="preserve">
     <value>No agent environments were detected.</value>
@@ -89,5 +92,11 @@
   </data>
   <data name="InitCommand_WorkspaceRootNotFound" xml:space="preserve">
     <value>Directory not found: {0}</value>
+  </data>
+  <data name="InitCommand_CreateAgentInstructionsPrompt" xml:space="preserve">
+    <value>Create agent environment specific instruction files?</value>
+  </data>
+  <data name="InitCommand_ConfigurePlaywrightPrompt" xml:space="preserve">
+    <value>Pre-configure Playwright MCP server?</value>
   </data>
 </root>

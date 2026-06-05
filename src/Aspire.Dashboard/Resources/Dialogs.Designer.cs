@@ -745,6 +745,24 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The fastest way to get started is to &lt;a href=&quot;{0}&quot; target=&quot;_blank&quot;&gt;configure the Aspire MCP using the CLI&lt;/a&gt;.
+        /// </summary>
+        public static string McpServerDialogCliInstructionsAbove {
+            get {
+                return ResourceManager.GetString("McpServerDialogCliInstructionsAbove", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The &lt;code&gt;aspire mcp init&lt;/code&gt; command writes MCP JSON to your local workspace. Alternatively, configure your local AI development tools using instructions below..
+        /// </summary>
+        public static string McpServerDialogCliInstructionsBelow {
+            get {
+                return ResourceManager.GetString("McpServerDialogCliInstructionsBelow", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Aspire MCP configuration.
         /// </summary>
         public static string McpServerDialogConfigurationHeading {

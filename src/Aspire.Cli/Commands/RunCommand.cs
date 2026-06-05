@@ -15,7 +15,6 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using StreamJsonRpc;
@@ -40,6 +39,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly IFeatures _features;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<RunCommand> _logger;
 
     public RunCommand(
         IDotNetCliRunner runner,
@@ -55,6 +55,7 @@ internal sealed class RunCommand : BaseCommand
         IServiceProvider serviceProvider,
         CliExecutionContext executionContext,
         ICliHostEnvironment hostEnvironment,
+        ILogger<RunCommand> logger,
         TimeProvider? timeProvider)
         : base("run", RunCommandStrings.Description, features, updateNotifier, executionContext, interactionService)
     {
@@ -67,6 +68,7 @@ internal sealed class RunCommand : BaseCommand
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(sdkInstaller);
         ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(logger);
 
         _runner = runner;
         _interactionService = interactionService;
@@ -79,6 +81,7 @@ internal sealed class RunCommand : BaseCommand
         _sdkInstaller = sdkInstaller;
         _features = features;
         _hostEnvironment = hostEnvironment;
+        _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
 
         var projectOption = new Option<FileInfo?>("--project");
@@ -532,17 +535,15 @@ internal sealed class RunCommand : BaseCommand
     {
         try
         {
-            var logger = _serviceProvider.GetService<ILogger<RunCommand>>();
-            
             // Connect to the auxiliary backchannel using the new encapsulated class
-            using var backchannel = await AppHostAuxiliaryBackchannel.ConnectAsync(socketPath, logger, cancellationToken).ConfigureAwait(false);
+            using var backchannel = await AppHostAuxiliaryBackchannel.ConnectAsync(socketPath, _logger, cancellationToken).ConfigureAwait(false);
 
             // Get the AppHost information (already retrieved during connection, but we need it)
             var appHostInfo = backchannel.AppHostInfo;
 
             if (appHostInfo is null)
             {
-                InteractionService.DisplayError(RunCommandStrings.RunningInstanceStopFailed);
+                _logger.LogDebug("Failed to stop running instance because appHostInfo was null. This may indicate the backchannel connection was established but no AppHost information was received.");
                 return false;
             }
 
@@ -562,16 +563,14 @@ internal sealed class RunCommand : BaseCommand
             }
             else
             {
-                InteractionService.DisplayError(RunCommandStrings.RunningInstanceStopFailed);
+                _logger.LogDebug("Failed to stop running instance because the process did not terminate within the {TimeoutMs}ms timeout period. The process may still be shutting down.", ProcessTerminationTimeoutMs);
             }
 
             return stopped;
         }
         catch (Exception ex)
         {
-            var logger = _serviceProvider.GetService<ILogger<RunCommand>>();
-            logger?.LogWarning(ex, "Failed to stop running instance");
-            InteractionService.DisplayError(RunCommandStrings.RunningInstanceStopFailed);
+            _logger.LogDebug(ex, "Failed to stop running instance due to an exception. The instance may have already exited or the connection may have been lost.");
             return false;
         }
     }

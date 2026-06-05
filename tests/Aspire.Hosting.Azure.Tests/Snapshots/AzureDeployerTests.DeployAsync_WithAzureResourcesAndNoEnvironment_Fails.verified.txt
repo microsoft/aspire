@@ -1,0 +1,4 @@
+﻿[
+  Step 'provision-sql-roles' failed.,
+  Step 'provision-sql-roles' failed: An Azure principal parameter was not supplied a value. Ensure you are using an environment that supports role assignments, for example AddAzureContainerAppEnvironment.
+]

@@ -23,22 +23,9 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         await scanner.ScanAsync(context, CancellationToken.None);
 
-        Assert.Single(context.Applicators);
-        Assert.Contains("GitHub Copilot CLI", context.Applicators[0].Description);
-    }
-
-    [Fact]
-    public async Task ScanAsync_WhenCopilotCliNotInstalled_ReturnsNoApplicator()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var copilotCliRunner = new FakeCopilotCliRunner(null);
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, executionContext, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        await scanner.ScanAsync(context, CancellationToken.None);
-
-        Assert.Empty(context.Applicators);
+        // Scanner adds applicators for: Aspire MCP, Playwright MCP, and agent instructions
+        Assert.NotEmpty(context.Applicators);
+        Assert.Contains(context.Applicators, a => a.Description.Contains("GitHub Copilot CLI"));
     }
 
     [Fact]
@@ -57,9 +44,11 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         await scanner.ScanAsync(context, CancellationToken.None);
         
-        Assert.Single(context.Applicators);
+        // Scanner adds applicators for: Aspire MCP, Playwright MCP, and agent instructions
+        Assert.NotEmpty(context.Applicators);
+        var aspireApplicator = context.Applicators.First(a => a.Description.Contains("Aspire MCP"));
         
-        await context.Applicators[0].ApplyAsync(CancellationToken.None);
+        await aspireApplicator.ApplyAsync(CancellationToken.None);
 
         var mcpConfigPath = Path.Combine(copilotFolder.FullName, "mcp-config.json");
         Assert.True(File.Exists(mcpConfigPath));
@@ -151,11 +140,19 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
                 ["aspire"] = new JsonObject
                 {
                     ["command"] = "aspire"
+                },
+                ["playwright"] = new JsonObject
+                {
+                    ["command"] = "npx"
                 }
             }
         };
         var mcpConfigPath = Path.Combine(copilotFolder.FullName, "mcp-config.json");
         await File.WriteAllTextAsync(mcpConfigPath, existingConfig.ToJsonString());
+        
+        // Also create the AGENTS.md file to prevent that applicator
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "AGENTS.md"), "# Agent Instructions");
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "AGENTS.aspire.md"), "# Agent Instructions");
 
         var copilotCliRunner = new FakeCopilotCliRunner(new SemVersion(1, 0, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
@@ -164,6 +161,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         await scanner.ScanAsync(context, CancellationToken.None);
 
+        // No applicators should be returned since Aspire MCP, Playwright MCP are configured and AGENTS.md exists
         Assert.Empty(context.Applicators);
     }
 
@@ -178,43 +176,14 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         await scanner.ScanAsync(context, CancellationToken.None);
 
-        Assert.Single(context.Applicators);
-        Assert.Contains("GitHub Copilot CLI", context.Applicators[0].Description);
+        // Scanner adds applicators for: Aspire MCP, Playwright MCP, and agent instructions
+        Assert.NotEmpty(context.Applicators);
+        Assert.Contains(context.Applicators, a => a.Description.Contains("GitHub Copilot"));
         Assert.False(copilotCliRunner.WasCalled); // Verify GetVersionAsync was not called
     }
 
-    [Fact]
-    public async Task ScanAsync_WhenInVSCodeAndAlreadyConfigured_ReturnsNoApplicator()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var copilotFolder = workspace.CreateDirectory(".copilot");
-        
-        // Create an existing mcp-config.json with aspire already configured
-        var existingConfig = new JsonObject
-        {
-            ["mcpServers"] = new JsonObject
-            {
-                ["aspire"] = new JsonObject
-                {
-                    ["command"] = "aspire"
-                }
-            }
-        };
-        var mcpConfigPath = Path.Combine(copilotFolder.FullName, "mcp-config.json");
-        await File.WriteAllTextAsync(mcpConfigPath, existingConfig.ToJsonString());
-
-        var copilotCliRunner = new FakeCopilotCliRunner(null);
-        var executionContext = CreateExecutionContextWithVSCode(workspace.WorkspaceRoot);
-        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, executionContext, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        await scanner.ScanAsync(context, CancellationToken.None);
-
-        Assert.Empty(context.Applicators);
-        Assert.False(copilotCliRunner.WasCalled); // Verify GetVersionAsync was not called
-    }
-
-    private static AgentEnvironmentScanContext CreateScanContext(DirectoryInfo workingDirectory)
+    private static AgentEnvironmentScanContext CreateScanContext(
+        DirectoryInfo workingDirectory)
     {
         return new AgentEnvironmentScanContext
         {

@@ -91,7 +91,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         // Escape quotes in arguments to prevent command injection
         var escapedRegistryServer = registryServer.Replace("\"", "\\\"");
         var escapedUsername = username.Replace("\"", "\\\"");
-        var arguments = $"login \"{escapedRegistryServer}\" --username \"{escapedUsername}\" --password-stdin";
+        var arguments = $"login --username \"{escapedUsername}\" --password-stdin \"{escapedRegistryServer}\"";
 
         var spec = new ProcessSpec(RuntimeExecutable)
         {

@@ -473,7 +473,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesNoResources", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to No parameters found.
+        /// </summary>
+        public static string ResourcesNoParameters {
+            get {
+                return ResourceManager.GetString("ResourcesNoParameters", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to No filters.
         /// </summary>

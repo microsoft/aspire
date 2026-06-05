@@ -222,6 +222,11 @@
         <target state="translated">Skrýt typy prostředků</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesNoParameters">
+        <source>No parameters found</source>
+        <target state="translated">Nenašly se žádné parametry.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesNotFiltered">
         <source>No filters</source>
         <target state="translated">Žádné filtry</target>

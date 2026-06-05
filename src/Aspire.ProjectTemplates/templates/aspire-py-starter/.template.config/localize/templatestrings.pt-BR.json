@@ -1,7 +1,7 @@
 ﻿{
   "author": "Microsoft",
-  "name": "Aspire Starter App (FastAPI/React)",
-  "description": "A project template for creating an Aspire app with a React frontend and a Python backend API service, with optional Redis caching.",
+  "name": "App de Inicialização Aspire (FastAPI/React)",
+  "description": "Um modelo de projeto para criar um aplicativo Aspire com um front-end do React e um serviço de API de back-end do Python, com cache Redis opcional.",
   "symbols/UseRedisCache/displayName": "_Usar o Redis para cache (requer um tempo de execução de contêiner compatível)",
   "symbols/UseRedisCache/description": "Configura se o aplicativo deve usar Redis para cache. Requer um runtime de contêiner com suporte para execução local; confira https://aka.ms/aspire/containers para obter mais detalhes.",
   "symbols/appHostHttpPort/description": "Número da porta a ser usado para o ponto de extremidade HTTP launchSettings.json do projeto AppHost.",

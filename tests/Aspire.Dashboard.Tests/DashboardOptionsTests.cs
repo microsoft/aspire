@@ -259,7 +259,7 @@ public sealed class DashboardOptionsTests
         [
             new("ASPNETCORE_URLS", "http://localhost:8000/"),
             new("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", "http://localhost:4319/"),
-            new(DashboardConfigNames.Legacy.DashboardOtlpSuppressUnsecuredTelemetryMessage.ConfigKey, "true"),
+            new(DashboardConfigNames.Legacy.DashboardOtlpSuppressUnsecuredTelemetryMessageName.ConfigKey, "true"),
         ]));
         var options = app.Services.GetService<IOptionsMonitor<DashboardOptions>>()!;
 

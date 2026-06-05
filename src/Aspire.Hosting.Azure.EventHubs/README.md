@@ -53,6 +53,39 @@ The `WithReference` method passes that connection information into a connection 
 builder.AddAzureEventProcessorClient("eh");
 ```
 
+## Connection Properties
+
+When you reference Azure Event Hubs resources using `WithReference`, the following connection properties are made available to the consuming project:
+
+### Event Hubs namespace
+
+The Event Hubs namespace resource exposes the following connection properties:
+
+| Property Name | Description |
+|---------------|-------------|
+| `Host`        | The hostname of the Event Hubs namespace |
+| `Port`        | The port of the Event Hubs namespace when the emulator is used |
+| `Uri`         | The connection URI for the Event Hubs namespace, with the format `sb://myeventhubs.servicebus.windows.net` on azure and `sb://localhost:62824` for the emulator |
+| `ConnectionString` | **Emulator only.** Includes SAS key material for the local emulator connection. |
+
+### Event Hub
+
+The Event Hub resource inherits all properties from its parent Event Hubs namespace and adds:
+
+| Property Name | Description |
+|---------------|-------------|
+| `EventHubName` | The name of the event hub |
+
+### Event Hub consumer group
+
+The Event Hub consumer group resource inherits all properties from its parent Event Hub and adds:
+
+| Property Name | Description |
+|---------------|-------------|
+| `ConsumerGroupName` | The name of the consumer group |
+
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
+
 ## Additional documentation
 
 * https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/eventhub/Microsoft.Azure.EventHubs/README.md

@@ -7,14 +7,29 @@
         <target state="translated">Verwalten Sie den MCP-Server (Model Context Protocol).</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AdditionalOptionsSelectPrompt">
+        <source>Which additional options do you want to enable?</source>
+        <target state="translated">Welche zusätzlichen Optionen möchten Sie aktivieren?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AgentConfigurationSelectPrompt">
-        <source>Select agent environments to configure:</source>
-        <target state="translated">Wählen Sie die Agentumgebungen aus, die konfiguriert werden sollen:</target>
+        <source>Which agent environments do you want to configure?</source>
+        <target state="translated">Welche Agent-Umgebungen möchten Sie konfigurieren?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationComplete">
         <source>Agent environment configuration complete.</source>
         <target state="translated">Die Konfiguration der Agentumgebung ist abgeschlossen.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigurePlaywrightPrompt">
+        <source>Pre-configure Playwright MCP server?</source>
+        <target state="translated">Playwright MCP-Server vorkonfigurieren?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_CreateAgentInstructionsPrompt">
+        <source>Create agent environment specific instruction files?</source>
+        <target state="translated">Agentenspezifische Anweisungsdateien erstellen?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">

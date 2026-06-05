@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
-        <source>Graph. For an accessible view please navigate to the Table tab</source>
-        <target state="translated">グラフ。アクセス可能なビューについては、[テーブル] タブに移動してください</target>
+        <source>Graph. For an accessible view please navigate to the Resources tab</source>
+        <target state="translated">グラフ。アクセス可能なビューについては、[リソース] タブに移動してください</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -72,14 +72,19 @@
         <target state="translated">カーディナリティ制限が検出されました</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChartContainerParametersTab">
+        <source>Parameters</source>
+        <target state="translated">パラメーター</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">カウントの表示</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
-        <source>Table</source>
-        <target state="translated">テーブル</target>
+        <source>Resources</source>
+        <target state="translated">リソース</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
@@ -335,6 +340,11 @@
       <trans-unit id="PageToolbarLandmark">
         <source>Page toolbar</source>
         <target state="translated">ページ ツール バー</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterValueNotSet">
+        <source>Value not set</source>
+        <target state="translated">値が設定されていません</target>
         <note />
       </trans-unit>
       <trans-unit id="PauseButtonTitle">

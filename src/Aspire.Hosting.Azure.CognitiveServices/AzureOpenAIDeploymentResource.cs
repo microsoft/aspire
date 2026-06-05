@@ -103,6 +103,16 @@ public class AzureOpenAIDeploymentResource : Resource, IResourceWithParent<Azure
     /// </summary>
     public ReferenceExpression ConnectionStringExpression => Parent.GetConnectionString(DeploymentName);
 
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        {
+            yield return property;
+        }
+
+        yield return new("ModelName", ReferenceExpression.Create($"{DeploymentName}"));
+    }
+
     private static string ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(argument, paramName);

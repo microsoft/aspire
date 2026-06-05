@@ -142,6 +142,9 @@ internal sealed class DockerComposePublishingContext(
             // Call the environment's ConfigureComposeFile method to allow for custom modifications
             environment.ConfigureComposeFile?.Invoke(composeFile);
 
+            // Allow mutation of the captured environment variables before writing
+            environment.ConfigureEnvFile?.Invoke(environment.CapturedEnvironmentVariables);
+
             var composeOutput = composeFile.ToYaml();
             var outputFile = Path.Combine(OutputPath, "docker-compose.yaml");
             Directory.CreateDirectory(OutputPath);
@@ -152,11 +155,11 @@ internal sealed class DockerComposePublishingContext(
                 var envFilePath = Path.Combine(OutputPath, ".env");
                 var envFile = EnvFile.Load(envFilePath, logger);
 
-                foreach (var entry in environment.CapturedEnvironmentVariables ?? [])
+                foreach (var entry in environment.CapturedEnvironmentVariables)
                 {
-                    var (key, (description, _, _)) = entry;
+                    var envVar = entry.Value;
 
-                    envFile.Add(key, value: null, description, onlyIfMissing: true);
+                    envFile.Add(entry.Key, value: null, envVar.Description, onlyIfMissing: true);
                 }
 
                 envFile.Save(includeValues: false);

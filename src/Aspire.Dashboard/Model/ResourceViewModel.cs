@@ -44,6 +44,7 @@ public sealed class ResourceViewModel
     public bool SupportsDetailedTelemetry { get; init; }
     public string? IconName { get; init; }
     public IconVariant? IconVariant { get; init; }
+    public bool IsParameter => string.Equals(ResourceType, KnownResourceTypes.Parameter, StringComparison.Ordinal);
 
     /// <summary>
     /// Gets the cached addresses for this resource that can be used for peer matching.

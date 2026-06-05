@@ -301,8 +301,6 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
                   "type": "project.v0",
                   "path": "testproject/TestProject.ServiceA/TestProject.ServiceA.csproj",
                   "env": {
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                     "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                     "HTTP_PORTS": "{servicea.bindings.http.targetPort}"
@@ -324,8 +322,6 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
                   "type": "project.v0",
                   "path": "testproject/TestProject.ServiceB/TestProject.ServiceB.csproj",
                   "env": {
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                     "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                     "HTTP_PORTS": "{serviceb.bindings.http.targetPort}"
@@ -347,8 +343,6 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
                   "type": "project.v0",
                   "path": "testproject/TestProject.ServiceC/TestProject.ServiceC.csproj",
                   "env": {
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                     "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                     "Kestrel__Endpoints__http__Url": "http://*:{servicec.bindings.http.targetPort}"
@@ -372,8 +366,6 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
                   "type": "project.v0",
                   "path": "testproject/TestProject.WorkerA/TestProject.WorkerA.csproj",
                   "env": {
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory"
                   }
                 },
@@ -381,8 +373,6 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
                   "type": "project.v0",
                   "path": "testproject/TestProject.IntegrationServiceA/TestProject.IntegrationServiceA.csproj",
                   "env": {
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                     "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                     "HTTP_PORTS": "{integrationservicea.bindings.http.targetPort}",
@@ -399,7 +389,7 @@ public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
                     "POSTGRESDB_PASSWORD": "{postgres-password.value}",
                     "POSTGRESDB_URI": "postgresql://postgres:{postgres-password-uri-encoded.value}@{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/postgresdb",
                     "POSTGRESDB_JDBCCONNECTIONSTRING": "jdbc:postgresql://{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/postgresdb",
-                    "POSTGRESDB_DATABASE": "postgresdb"
+                    "POSTGRESDB_DATABASENAME": "postgresdb"
                   },
                   "bindings": {
                     "http": {

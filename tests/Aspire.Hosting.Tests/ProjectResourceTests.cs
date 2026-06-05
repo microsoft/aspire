@@ -92,16 +92,6 @@ public class ProjectResourceTests
         Assert.Collection(config,
             env =>
             {
-                Assert.Equal("OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES", env.Key);
-                Assert.Equal("true", env.Value);
-            },
-            env =>
-            {
-                Assert.Equal("OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES", env.Key);
-                Assert.Equal("true", env.Value);
-            },
-            env =>
-            {
                 Assert.Equal("OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY", env.Key);
                 Assert.Equal("in_memory", env.Value);
             },
@@ -508,8 +498,6 @@ public class ProjectResourceTests
               "type": "project.v0",
               "path": "another-path",
               "env": {
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                 "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory"{{fordwardedHeadersEnvVar}},
                 "HTTP_PORTS": "{projectName.bindings.http.targetPort}"
               },
@@ -558,8 +546,6 @@ public class ProjectResourceTests
                 "two"
               ],
               "env": {
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                 "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                 "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                 "HTTP_PORTS": "{projectName.bindings.http.targetPort}"

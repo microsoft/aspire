@@ -222,6 +222,11 @@
         <target state="translated">Ressourcentypen ausblenden</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesNoParameters">
+        <source>No parameters found</source>
+        <target state="translated">Keine Parameter gefunden</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesNotFiltered">
         <source>No filters</source>
         <target state="translated">Keine Filter</target>

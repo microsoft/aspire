@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
@@ -53,6 +54,41 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
     private BicepOutputReference AdminName => new("sqlServerAdminName", this);
 
     /// <summary>
+    /// Gets the host name for the SQL Server.
+    /// </summary>
+    /// <remarks>
+    /// In container mode, resolves to the container's primary endpoint host.
+    /// In Azure mode, resolves to the Azure SQL Server's fully qualified domain name.
+    /// </remarks>
+    public ReferenceExpression HostName =>
+        IsContainer ?
+            ReferenceExpression.Create($"{InnerResource!.PrimaryEndpoint.Property(EndpointProperty.Host)}") :
+            ReferenceExpression.Create($"{FullyQualifiedDomainName}");
+
+    /// <summary>
+    /// Gets the port for the PostgreSQL server.
+    /// </summary>
+    /// <remarks>
+    /// In container mode, resolves to the container's primary endpoint port.
+    /// In Azure mode, resolves to 1433.
+    /// </remarks>
+    public ReferenceExpression Port =>
+        IsContainer ?
+            ReferenceExpression.Create($"{InnerResource.Port}") :
+            ReferenceExpression.Create($"1433");
+
+    /// <summary>
+    /// Gets the connection URI expression for the SQL Server.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>mssql://{host}:{port}</c>.
+    /// </remarks>
+    public ReferenceExpression UriExpression =>
+        IsContainer ?
+            InnerResource.UriExpression :
+            ReferenceExpression.Create($"mssql://{FullyQualifiedDomainName}:1433");
+
+    /// <summary>
     /// Gets the connection template for the manifest for the Azure SQL Server resource.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression
@@ -79,6 +115,12 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
     /// This is set when RunAsContainer is called on the AzureSqlServerResource resource to create a local SQL Server container.
     /// </summary>
     internal SqlServerServerResource? InnerResource { get; private set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the current resource represents a container. If so the actual resource is not running in Azure.
+    /// </summary>
+    [MemberNotNullWhen(true, nameof(InnerResource))]
+    public bool IsContainer => InnerResource is not null;
 
     /// <inheritdoc />
     public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
@@ -117,15 +159,15 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
     {
         var bicepIdentifier = this.GetBicepIdentifier();
         var resources = infra.GetProvisionableResources();
-        
+
         // Check if a SqlServer with the same identifier already exists
         var existingStore = resources.OfType<SqlServer>().SingleOrDefault(store => store.BicepIdentifier == bicepIdentifier);
-        
+
         if (existingStore is not null)
         {
             return existingStore;
         }
-        
+
         // Create and add new resource if it doesn't exist
         var store = SqlServer.FromExisting(bicepIdentifier);
 
@@ -236,5 +278,50 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
 
             infra.Add(scriptResource);
         }
+    }
+
+    internal ReferenceExpression BuildJdbcConnectionString(string? databaseName = null)
+    {
+        var builder = new ReferenceExpressionBuilder();
+        builder.Append($"jdbc:sqlserver://{FullyQualifiedDomainName}:1433;");
+
+        if (!string.IsNullOrEmpty(databaseName))
+        {
+            var databaseNameReference = ReferenceExpression.Create($"{databaseName:uri}");
+            builder.Append($"database={databaseNameReference};");
+        }
+
+        builder.AppendLiteral("encrypt=true;trustServerCertificate=false");
+
+        return builder.Build();
+    }
+
+    /// <summary>
+    /// Gets the JDBC connection string for the server.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>jdbc:sqlserver://{host}:{port};authentication=ActiveDirectoryIntegrated;encrypt=true;trustServerCertificate=true</c>.
+    /// </remarks>
+    public ReferenceExpression JdbcConnectionString =>
+        IsContainer ?
+            InnerResource.JdbcConnectionString :
+            BuildJdbcConnectionString();
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        if (IsContainer)
+        {
+            return ((IResourceWithConnectionString)InnerResource).GetConnectionProperties();
+        }
+
+        var result = new Dictionary<string, ReferenceExpression>(
+        [
+            new ("Host", ReferenceExpression.Create($"{HostName}")),
+            new ("Port", ReferenceExpression.Create($"{Port}")),
+            new ("Uri", UriExpression),
+            new ("JdbcConnectionString", JdbcConnectionString),
+        ]);
+
+        return result;
     }
 }

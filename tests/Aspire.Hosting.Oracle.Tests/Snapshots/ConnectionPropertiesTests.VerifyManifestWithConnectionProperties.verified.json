@@ -17,6 +17,6 @@
     "DB_PASSWORD": "{server-password.value}",
     "DB_URI": "oracle://system:{server-password-uri-encoded.value}@{server.bindings.tcp.host}:{server.bindings.tcp.port}/db%23test",
     "DB_JDBCCONNECTIONSTRING": "jdbc:oracle:thin:@//{server.bindings.tcp.host}:{server.bindings.tcp.port}/db%23test",
-    "DB_DATABASE": "db#test"
+    "DB_DATABASENAME": "db#test"
   }
 }

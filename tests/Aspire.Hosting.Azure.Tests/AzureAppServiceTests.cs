@@ -805,6 +805,69 @@ public class AzureAppServiceTests
               .AppendContentAsFile(bicep, "bicep");
     }
 
+    [Fact]
+    public async Task AddAppServiceWithDeploymentSlot()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureAppServiceEnvironment("env").WithDeploymentSlot("stage");
+
+        // Add project with endpoints but no target port specified
+        var project = builder.AddProject<Project>("project1", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        project.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        // For project resources without explicit target port, should use container port reference
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAppServiceWithDeploymentSlotParameter()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var slotParam = builder.AddParameter("deploymentSlot", "stage");
+        builder.AddAzureAppServiceEnvironment("env").WithDeploymentSlot(slotParam);
+
+        // Add project with endpoints but no target port specified
+        var project = builder.AddProject<Project>("project1", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        project.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        // For project resources without explicit target port, should use container port reference
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
     private static Task<(JsonNode ManifestNode, string BicepText)> GetManifestWithBicep(IResource resource) =>
         AzureManifestUtils.GetManifestWithBicep(resource, skipPreparer: true);
 

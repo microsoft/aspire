@@ -34,7 +34,7 @@ resource script_sql2_db2 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   }
   kind: 'AzurePowerShell'
   properties: {
-    azPowerShellVersion: '10.0'
+    azPowerShellVersion: '14.0'
     retentionInterval: 'PT1H'
     environmentVariables: [
       {

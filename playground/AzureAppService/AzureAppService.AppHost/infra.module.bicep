@@ -5,19 +5,16 @@ param userPrincipalId string = ''
 
 param tags object = { }
 
+param infra_acr_outputs_name string
+
 resource infra_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: take('infra_mi-${uniqueString(resourceGroup().id)}', 128)
   location: location
   tags: tags
 }
 
-resource infra_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
-  name: take('infraacr${uniqueString(resourceGroup().id)}', 50)
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  tags: tags
+resource infra_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
+  name: infra_acr_outputs_name
 }
 
 resource infra_acr_infra_mi_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -30,14 +27,12 @@ resource infra_acr_infra_mi_AcrPull 'Microsoft.Authorization/roleAssignments@202
   scope: infra_acr
 }
 
-resource infra_asplan 'Microsoft.Web/serverfarms@2024-11-01' = {
+resource infra_asplan 'Microsoft.Web/serverfarms@2025-03-01' = {
   name: take('infraasplan-${uniqueString(resourceGroup().id)}', 60)
   location: location
   properties: {
-    elasticScaleEnabled: false
     perSiteScaling: true
     reserved: true
-    maximumElasticWorkerCount: 10
   }
   kind: 'Linux'
   sku: {
@@ -60,7 +55,7 @@ resource infra_ra 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-resource dashboard 'Microsoft.Web/sites@2024-11-01' = {
+resource dashboard 'Microsoft.Web/sites@2025-03-01' = {
   name: take('${toLower('infra')}-${toLower('aspiredashboard')}-${uniqueString(resourceGroup().id)}', 60)
   location: location
   properties: {
@@ -80,7 +75,7 @@ resource dashboard 'Microsoft.Web/sites@2024-11-01' = {
           value: 'Unsecured'
         }
         {
-          name: 'Dashboard__Otlp__SuppressUnsecuredTelemetryMessage'
+          name: 'Dashboard__Otlp__SuppressUnsecuredMessage'
           value: 'true'
         }
         {
@@ -115,8 +110,6 @@ resource dashboard 'Microsoft.Web/sites@2024-11-01' = {
       alwaysOn: true
       http20Enabled: true
       http20ProxyFlag: 1
-      functionAppScaleLimit: 1
-      elasticWebAppScaleLimit: 1
     }
   }
   identity: {

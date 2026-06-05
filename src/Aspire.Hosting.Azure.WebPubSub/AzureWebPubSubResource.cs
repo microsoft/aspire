@@ -37,15 +37,15 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
     {
         var bicepIdentifier = this.GetBicepIdentifier();
         var resources = infra.GetProvisionableResources();
-        
+
         // Check if a WebPubSubService with the same identifier already exists
         var existingStore = resources.OfType<WebPubSubService>().SingleOrDefault(store => store.BicepIdentifier == bicepIdentifier);
-        
+
         if (existingStore is not null)
         {
             return existingStore;
         }
-        
+
         // Create and add new resource if it doesn't exist
         var store = WebPubSubService.FromExisting(bicepIdentifier);
 
@@ -59,5 +59,10 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
 
         infra.Add(store);
         return store;
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        yield return new("Uri", ReferenceExpression.Create($"{Endpoint}"));
     }
 }

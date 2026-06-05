@@ -22,7 +22,7 @@ jobs:
     name: Prepare for CI
     if: ${{ github.repository_owner == 'dotnet' }}
     outputs:
-      skip_workflow: ${{ (steps.check_docs.outputs.no_changes == 'true' || steps.check_docs.outputs.only_changed == 'true') && 'true' || 'false' }}
+      skip_workflow: ${{ (steps.check_for_changes.outputs.no_changes == 'true' || steps.check_for_changes.outputs.only_changed == 'true') && 'true' || 'false' }}
       VERSION_SUFFIX_OVERRIDE: ${{ steps.compute_version_suffix.outputs.VERSION_SUFFIX_OVERRIDE }}
 
     steps:
@@ -33,13 +33,22 @@ jobs:
           fetch-depth: 0
 
       - name: Check for any changes that require CI
-        id: check_docs
+        id: check_for_changes
         if: ${{ github.event_name == 'pull_request' }}
         uses: ./.github/actions/check-changed-files
         with:
+          # Patterns that do NOT require CI to run
           patterns: |
             \.md$
             eng/pipelines/.*
+            \.github/workflows/update-*.yml
+            \.github/workflows/labeler-*.yml
+            \.github/workflows/dogfood-comment.yml
+            \.github/workflows/backport.yml
+            \.github/workflows/generate-api-diffs.yml
+            \.github/workflows/markdownlint*.yml
+            \.github/workflows/refresh-manifests.yml
+            \.github/workflows/apply-test-attributes.yml
 
       - id: compute_version_suffix
         name: Compute version suffix for PRs
@@ -86,6 +95,9 @@ jobs:
     steps:
       - name: Fail if any of the dependent jobs failed
         # Don't fail if the workflow is being skipped.
+        # Check skip_workflow on all declared dependencies. Workflows without
+        # skip_workflow outputs (e.g., tests, build_cli_archives) evaluate to
+        # empty string, so the check still works ('!= true' is true for empty).
         #
         # For others 'skipped' can be when a transitive dependency fails and the dependent job gets
         # 'skipped'. For example, one of setup_* jobs failing and the Integration test jobs getting
@@ -93,6 +105,8 @@ jobs:
         if: >-
           ${{ always() &&
               needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
+              needs.tests.outputs.skip_workflow != 'true' &&
+              needs.build_cli_archives.outputs.skip_workflow != 'true' &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
                contains(needs.*.result, 'skipped')) }}

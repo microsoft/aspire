@@ -127,10 +127,13 @@
     <value>Graph</value>
   </data>
   <data name="ChartContainerTableTab" xml:space="preserve">
-    <value>Table</value>
+    <value>Resources</value>
+  </data>
+  <data name="ChartContainerParametersTab" xml:space="preserve">
+    <value>Parameters</value>
   </data>
   <data name="ChartContainerGraphAccessibleLabel" xml:space="preserve">
-    <value>Graph. For an accessible view please navigate to the Table tab</value>
+    <value>Graph. For an accessible view please navigate to the Resources tab</value>
   </data>
   <data name="EnvironmentVariablesFilterToggleShowSpecOnly" xml:space="preserve">
     <value>Show core properties</value>
@@ -179,6 +182,9 @@
   </data>
   <data name="PropertyGridValueColumnHeader" xml:space="preserve">
     <value>Value</value>
+  </data>
+  <data name="ParameterValueNotSet" xml:space="preserve">
+    <value>Value not set</value>
   </data>
   <data name="StateColumnHeader" xml:space="preserve">
     <value>State</value>

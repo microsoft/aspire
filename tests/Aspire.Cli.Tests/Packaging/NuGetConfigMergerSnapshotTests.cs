@@ -43,7 +43,7 @@ public class NuGetConfigMergerSnapshotTests
 
     private static async Task<FileInfo> WriteConfigAsync(DirectoryInfo dir, string content)
     {
-        var path = Path.Combine(dir.FullName, "NuGet.config");
+        var path = Path.Combine(dir.FullName, "nuget.config");
         await File.WriteAllTextAsync(path, content);
         return new FileInfo(path);
     }
@@ -83,7 +83,7 @@ public class NuGetConfigMergerSnapshotTests
 
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var updated = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
 
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
@@ -145,7 +145,7 @@ public class NuGetConfigMergerSnapshotTests
 
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var updated = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
 
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
@@ -206,7 +206,7 @@ public class NuGetConfigMergerSnapshotTests
 
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var updated = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
 
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
@@ -265,7 +265,7 @@ public class NuGetConfigMergerSnapshotTests
 
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var updated = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
 
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
@@ -329,7 +329,7 @@ public class NuGetConfigMergerSnapshotTests
 
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel);
 
-        var updated = XDocument.Load(Path.Combine(root.FullName, "NuGet.config"));
+        var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
 
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability

@@ -53,6 +53,28 @@ The `WithReference` method passes that connection information into a connection 
 builder.AddAzureOpenAIClient("openai");
 ```
 
+## Connection Properties
+
+When you reference Azure OpenAI resources using `WithReference`, the following connection properties are made available to the consuming project:
+
+### Azure OpenAI resource
+
+The Azure OpenAI resource exposes the following connection properties:
+
+| Property Name | Description |
+|---------------|-------------|
+| `Uri`         | The endpoint URI for the Azure OpenAI resource, typically `https://<resource-name>.openai.azure.com/` |
+
+### Azure OpenAI deployment
+
+The Azure OpenAI deployment resource inherits all properties from its parent Azure OpenAI resource and adds:
+
+| Property Name | Description |
+|---------------|-------------|
+| `ModelName`  | The name of the Azure OpenAI deployment, e.g., `chat` |
+
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `chat` becomes `CHAT_URI`.
+
 ## Additional documentation
 
 * https://learn.microsoft.com/dotnet/api/overview/azure/ai.openai-readme

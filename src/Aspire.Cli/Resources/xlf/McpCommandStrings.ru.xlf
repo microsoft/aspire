@@ -7,14 +7,29 @@
         <target state="translated">Управление сервером MCP (протокол контекста модели).</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AdditionalOptionsSelectPrompt">
+        <source>Which additional options do you want to enable?</source>
+        <target state="translated">Какие дополнительные параметры вы хотите включить?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AgentConfigurationSelectPrompt">
-        <source>Select agent environments to configure:</source>
-        <target state="translated">Выберите среды агента для настройки:</target>
+        <source>Which agent environments do you want to configure?</source>
+        <target state="translated">Какие среды агента вы хотите настроить?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationComplete">
         <source>Agent environment configuration complete.</source>
         <target state="translated">Конфигурация среды агента завершена.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigurePlaywrightPrompt">
+        <source>Pre-configure Playwright MCP server?</source>
+        <target state="translated">Предварительно настроить сервер MCP Playwright?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_CreateAgentInstructionsPrompt">
+        <source>Create agent environment specific instruction files?</source>
+        <target state="translated">Создать файлы инструкций, специфичные для среды агента?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">

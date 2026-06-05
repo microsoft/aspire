@@ -129,7 +129,7 @@ public class StructuredLogsViewModel
 
     public List<TelemetryFilter> GetFilters()
     {
-        var filters = Filters.Cast<TelemetryFilter>().ToList();;
+        var filters = Filters.Cast<TelemetryFilter>().ToList();
         if (!string.IsNullOrWhiteSpace(FilterText))
         {
             filters.Add(new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Message), Condition = FilterCondition.Contains, Value = FilterText });

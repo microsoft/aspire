@@ -222,6 +222,11 @@
         <target state="translated">리소스 종류 숨기기</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesNoParameters">
+        <source>No parameters found</source>
+        <target state="translated">매개 변수를 찾을 수 없음</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesNotFiltered">
         <source>No filters</source>
         <target state="translated">필터 없음</target>

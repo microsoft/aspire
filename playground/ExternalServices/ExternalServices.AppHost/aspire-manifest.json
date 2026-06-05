@@ -30,7 +30,7 @@
         "REVERSEPROXY__CLUSTERS__cluster_external-service__DESTINATIONS__destination1__ADDRESS": "{external-service-url.value}",
         "services__nuget__https__0": "https://api.nuget.org/",
         "services__external-service__default__0": "{external-service-url.value}",
-        "EXTERNAL-SERVICE": "{external-service-url.value}"
+        "EXTERNAL_SERVICE": "{external-service-url.value}"
       },
       "bindings": {
         "http": {
@@ -45,8 +45,6 @@
       "type": "project.v0",
       "path": "../WebFrontEnd/WebFrontEnd.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{frontend.bindings.http.targetPort}",

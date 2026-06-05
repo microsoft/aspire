@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="AspireJsFrontendStarter_Description">
         <source>Starter App (ASP.NET Core/React)</source>
-        <target state="new">Starter App (ASP.NET Core/React)</target>
+        <target state="translated">Aplikacja startowa (ASP.NET Core/React)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireMSTest_Description">
@@ -29,7 +29,7 @@
       </trans-unit>
       <trans-unit id="AspirePyStarter_Description">
         <source>Starter App (FastAPI/React)</source>
-        <target state="new">Starter App (FastAPI/React)</target>
+        <target state="translated">Aplikacja startowa (FastAPI/React)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireServiceDefaults_Description">
@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="AspireStarter_Description">
         <source>Starter App (ASP.NET Core/Blazor)</source>
-        <target state="new">Starter App (ASP.NET Core/Blazor)</target>
+        <target state="translated">Aplikacja startowa (ASP.NET Core/Blazor)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireXUnit_Description">

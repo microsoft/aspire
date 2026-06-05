@@ -7,14 +7,29 @@
         <target state="translated">MCP(모델 컨텍스트 프로토콜) 서버를 관리합니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AdditionalOptionsSelectPrompt">
+        <source>Which additional options do you want to enable?</source>
+        <target state="translated">어떤 추가 옵션을 사용하도록 설정하시겠습니까?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AgentConfigurationSelectPrompt">
-        <source>Select agent environments to configure:</source>
-        <target state="translated">구성할 에이전트 환경 선택:</target>
+        <source>Which agent environments do you want to configure?</source>
+        <target state="translated">어떤 에이전트 환경을 구성하시겠습니까?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationComplete">
         <source>Agent environment configuration complete.</source>
         <target state="translated">에이전트 환경 구성이 완료되었습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ConfigurePlaywrightPrompt">
+        <source>Pre-configure Playwright MCP server?</source>
+        <target state="translated">Playwright MCP 서버를 미리 구성할까요?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_CreateAgentInstructionsPrompt">
+        <source>Create agent environment specific instruction files?</source>
+        <target state="translated">에이전트 환경별 지침 파일을 만드시겠어요?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">

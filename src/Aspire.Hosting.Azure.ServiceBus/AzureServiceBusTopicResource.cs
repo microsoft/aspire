@@ -132,4 +132,14 @@ public class AzureServiceBusTopicResource(string name, string topicName, AzureSe
         ArgumentException.ThrowIfNullOrEmpty(argument, paramName);
         return argument;
     }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        {
+            yield return property;
+        }
+
+        yield return new("TopicName", ReferenceExpression.Create($"{TopicName}"));
+    }
 }

@@ -51,16 +51,32 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
             _logger.LogDebug("Found .vscode folder at: {VsCodeFolder}", vsCodeFolder.FullName);
             
             // Check if the aspire server is already configured
-            if (HasAspireServerConfigured(vsCodeFolder))
+            if (!HasAspireServerConfigured(vsCodeFolder))
             {
-                _logger.LogDebug("Aspire MCP server is already configured in .vscode/mcp.json - skipping");
-                // Already configured, no need to offer an applicator
-                return;
+                // Found a .vscode folder - add an applicator to configure MCP
+                _logger.LogDebug("Adding VS Code applicator for .vscode folder at: {VsCodeFolder}", vsCodeFolder.FullName);
+                context.AddApplicator(CreateAspireApplicator(vsCodeFolder));
+            }
+            else
+            {
+                _logger.LogDebug("Aspire MCP server is already configured in .vscode/mcp.json");
             }
 
-            // Found a .vscode folder - add an applicator to configure MCP
-            _logger.LogDebug("Adding VS Code applicator for .vscode folder at: {VsCodeFolder}", vsCodeFolder.FullName);
-            context.AddApplicator(CreateApplicator(vsCodeFolder));
+            // Register Playwright configuration callback if not already configured
+            if (!HasPlaywrightServerConfigured(vsCodeFolder))
+            {
+                _logger.LogDebug("Registering Playwright MCP configuration callback for .vscode folder");
+                CommonAgentApplicators.AddPlaywrightConfigurationCallback(
+                    context,
+                    ct => ApplyPlaywrightMcpConfigurationAsync(vsCodeFolder, ct));
+            }
+            else
+            {
+                _logger.LogDebug("Playwright MCP server is already configured in .vscode/mcp.json");
+            }
+
+            // Try to add agent instructions applicator (only once across all scanners)
+            CommonAgentApplicators.TryAddAgentInstructionsApplicator(context, context.RepositoryRoot);
         }
         else if (await IsVsCodeAvailableAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -69,7 +85,15 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
             // Use workspace root for new .vscode folder
             var targetVsCodeFolder = new DirectoryInfo(Path.Combine(context.RepositoryRoot.FullName, VsCodeFolderName));
             _logger.LogDebug("Adding VS Code applicator for new .vscode folder at: {VsCodeFolder}", targetVsCodeFolder.FullName);
-            context.AddApplicator(CreateApplicator(targetVsCodeFolder));
+            context.AddApplicator(CreateAspireApplicator(targetVsCodeFolder));
+            
+            // Register Playwright configuration callback
+            CommonAgentApplicators.AddPlaywrightConfigurationCallback(
+                context,
+                ct => ApplyPlaywrightMcpConfigurationAsync(targetVsCodeFolder, ct));
+            
+            // Try to add agent instructions applicator (only once across all scanners)
+            CommonAgentApplicators.TryAddAgentInstructionsApplicator(context, context.RepositoryRoot);
         }
         else
         {
@@ -202,19 +226,56 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     }
 
     /// <summary>
-    /// Creates an applicator for configuring the MCP server in the specified .vscode folder.
+    /// Checks if the Playwright MCP server is already configured in the mcp.json file.
     /// </summary>
-    private static AgentEnvironmentApplicator CreateApplicator(DirectoryInfo vsCodeFolder)
+    private static bool HasPlaywrightServerConfigured(DirectoryInfo vsCodeFolder)
     {
-        return new AgentEnvironmentApplicator(
-            VsCodeAgentEnvironmentScannerStrings.ApplicatorDescription,
-            async cancellationToken => await ApplyMcpConfigurationAsync(vsCodeFolder, cancellationToken));
+        var mcpConfigPath = Path.Combine(vsCodeFolder.FullName, McpConfigFileName);
+        
+        if (!File.Exists(mcpConfigPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var content = File.ReadAllText(mcpConfigPath);
+            var config = JsonNode.Parse(content)?.AsObject();
+            if (config is null)
+            {
+                return false;
+            }
+
+            if (config.TryGetPropertyValue("servers", out var serversNode) && serversNode is JsonObject servers)
+            {
+                return servers.ContainsKey("playwright");
+            }
+
+            return false;
+        }
+        catch (JsonException)
+        {
+            // If the JSON is malformed, assume playwright is not configured
+            return false;
+        }
     }
 
     /// <summary>
-    /// Creates or updates the mcp.json file in the .vscode folder.
+    /// Creates an applicator for configuring the Aspire MCP server in the specified .vscode folder.
     /// </summary>
-    private static async Task ApplyMcpConfigurationAsync(DirectoryInfo vsCodeFolder, CancellationToken cancellationToken)
+    private static AgentEnvironmentApplicator CreateAspireApplicator(DirectoryInfo vsCodeFolder)
+    {
+        return new AgentEnvironmentApplicator(
+            VsCodeAgentEnvironmentScannerStrings.ApplicatorDescription,
+            async cancellationToken => await ApplyAspireMcpConfigurationAsync(vsCodeFolder, cancellationToken));
+    }
+
+    /// <summary>
+    /// Creates or updates the mcp.json file in the .vscode folder with Aspire MCP configuration.
+    /// </summary>
+    private static async Task ApplyAspireMcpConfigurationAsync(
+        DirectoryInfo vsCodeFolder,
+        CancellationToken cancellationToken)
     {
         // Ensure the .vscode folder exists
         if (!vsCodeFolder.Exists)
@@ -245,11 +306,59 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         var servers = config["servers"]!.AsObject();
 
         // Add or update the "aspire" server configuration
-        servers["aspire"] = new JsonObject
+        servers[AspireServerName] = new JsonObject
         {
             ["type"] = "stdio",
             ["command"] = "aspire",
             ["args"] = new JsonArray("mcp", "start")
+        };
+
+        // Write the updated config with indentation using AOT-compatible serialization
+        var jsonContent = JsonSerializer.Serialize(config, JsonSourceGenerationContext.Default.JsonObject);
+        await File.WriteAllTextAsync(mcpConfigPath, jsonContent, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates or updates the mcp.json file in the .vscode folder with Playwright MCP configuration.
+    /// </summary>
+    private static async Task ApplyPlaywrightMcpConfigurationAsync(
+        DirectoryInfo vsCodeFolder,
+        CancellationToken cancellationToken)
+    {
+        // Ensure the .vscode folder exists
+        if (!vsCodeFolder.Exists)
+        {
+            vsCodeFolder.Create();
+        }
+
+        var mcpConfigPath = Path.Combine(vsCodeFolder.FullName, McpConfigFileName);
+        JsonObject config;
+
+        // Read existing config or create new
+        if (File.Exists(mcpConfigPath))
+        {
+            var existingContent = await File.ReadAllTextAsync(mcpConfigPath, cancellationToken);
+            config = JsonNode.Parse(existingContent)?.AsObject() ?? new JsonObject();
+        }
+        else
+        {
+            config = new JsonObject();
+        }
+
+        // Ensure "servers" object exists
+        if (!config.ContainsKey("servers") || config["servers"] is not JsonObject)
+        {
+            config["servers"] = new JsonObject();
+        }
+
+        var servers = config["servers"]!.AsObject();
+
+        // Add Playwright MCP server configuration
+        servers["playwright"] = new JsonObject
+        {
+            ["type"] = "stdio",
+            ["command"] = "npx",
+            ["args"] = new JsonArray("-y", "@playwright/mcp@latest")
         };
 
         // Write the updated config with indentation using AOT-compatible serialization
