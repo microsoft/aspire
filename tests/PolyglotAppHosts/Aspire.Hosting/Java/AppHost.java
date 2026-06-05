@@ -283,13 +283,13 @@ void main() throws Exception {
 
             var regionInput = interactionService.createChoiceInput(
                 "region",
-                new CreateChoiceInputOptions().choices(Map.of("us", "United States", "eu", "Europe")));
+                new CreateChoiceInputOptions().choices(new InteractionChoiceOption[] { opt("us", "United States"), opt("eu", "Europe") }));
 
             var zoneInput = interactionService.createChoiceInput("zone").withDynamicLoading((loadContext) -> {
                 var region = loadContext.getInputValue("region");
-                Map<String, String> zones = "eu".equals(region)
-                    ? Map.of("eu-west", "EU West", "eu-north", "EU North")
-                    : Map.of("us-east", "US East", "us-west", "US West");
+                InteractionChoiceOption[] zones = "eu".equals(region)
+                    ? new InteractionChoiceOption[] { opt("eu-west", "EU West"), opt("eu-north", "EU North") }
+                    : new InteractionChoiceOption[] { opt("us-east", "US East"), opt("us-west", "US West") };
                 loadContext.setChoiceOptions(zones);
             });
 
@@ -365,11 +365,11 @@ void main() throws Exception {
             var choiceExtras = new CreateInteractionInputOptions();
             choiceExtras.setAllowCustomChoice(true);
             var choiceInput = interactionService.createChoiceInput("color",
-                new CreateChoiceInputOptions().choices(Map.of("r", "Red", "g", "Green")).options(choiceExtras));
+                new CreateChoiceInputOptions().choices(new InteractionChoiceOption[] { opt("r", "Red"), opt("g", "Green") }).options(choiceExtras));
 
             var presetInput = interactionService.createTextInput("greeting").withValue("hello");
             var sizeInput = interactionService.createChoiceInput("size")
-                .withChoiceOptions(Map.of("s", "Small", "l", "Large"));
+                .withChoiceOptions(new InteractionChoiceOption[] { opt("s", "Small"), opt("l", "Large") });
 
             var dynamicLoadingOptions = new DynamicLoadingOptions();
             dynamicLoadingOptions.setAlwaysLoadOnStart(true);
@@ -377,9 +377,9 @@ void main() throws Exception {
             var dependentInput = interactionService.createChoiceInput("shade").withDynamicLoading((loadContext) -> {
                 var inputName = loadContext.getInputName();
                 var color = loadContext.getInputValue("color");
-                Map<String, String> shades = "r".equals(color)
-                    ? Map.of("crimson", "Crimson", "scarlet", "Scarlet")
-                    : Map.of("lime", "Lime", "forest", "Forest");
+                InteractionChoiceOption[] shades = "r".equals(color)
+                    ? new InteractionChoiceOption[] { opt("crimson", "Crimson"), opt("scarlet", "Scarlet") }
+                    : new InteractionChoiceOption[] { opt("lime", "Lime"), opt("forest", "Forest") };
                 loadContext.setChoiceOptions(shades);
                 loadContext.setValue(inputName);
             }, dynamicLoadingOptions);
@@ -440,4 +440,11 @@ void main() throws Exception {
         container.withHttpCommand("/api/reset", "Reset", httpCmdOptions);
         var app = builder.build();
         app.run();
+    }
+
+    InteractionChoiceOption opt(String value, String label) {
+        var option = new InteractionChoiceOption();
+        option.setValue(value);
+        option.setLabel(label);
+        return option;
     }

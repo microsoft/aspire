@@ -960,6 +960,14 @@ export interface InputsInteractionResult {
     inputs?: InteractionInput[];
 }
 
+/** A single selectable option for a choice input. Options are presented in the order supplied. */
+export interface InteractionChoiceOption {
+    /** Gets or sets the value submitted when this option is selected. */
+    value?: string;
+    /** Gets or sets the label displayed for this option. */
+    label?: string;
+}
+
 /** Options for inputs dialog prompts. */
 export interface InteractionInputsDialogOptions {
     /** Gets or sets the primary button text. */
@@ -1391,8 +1399,8 @@ export interface CopyOptions {
 }
 
 export interface CreateChoiceInputOptions {
-    /** The available choices, keyed by submitted value. */
-    choices?: Record<string, string>;
+    /** The available choices, in display order. Each option pairs a submitted value with a display label. */
+    choices?: InteractionChoiceOption[];
     /** Optional configuration for the input. */
     options?: CreateInteractionInputOptions;
 }
@@ -5502,10 +5510,10 @@ export interface InteractionInputBuilder {
     toJSON(): MarshalledHandle;
     /**
      * Sets the choice options for the input.
-     * @param choices The available choices, keyed by submitted value.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
      * @returns The same builder handle.
      */
-    withChoiceOptions(choices: Record<string, string>): InteractionInputBuilderPromise;
+    withChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputBuilderPromise;
     /**
      * Sets the value of the input.
      * @param value The value to assign.
@@ -5524,10 +5532,10 @@ export interface InteractionInputBuilder {
 export interface InteractionInputBuilderPromise extends PromiseLike<InteractionInputBuilder> {
     /**
      * Sets the choice options for the input.
-     * @param choices The available choices, keyed by submitted value.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
      * @returns The same builder handle.
      */
-    withChoiceOptions(choices: Record<string, string>): InteractionInputBuilderPromise;
+    withChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputBuilderPromise;
     /**
      * Sets the value of the input.
      * @param value The value to assign.
@@ -5561,7 +5569,7 @@ class InteractionInputBuilderImpl implements InteractionInputBuilder {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     /** @internal */
-    async _withChoiceOptionsInternal(choices: Record<string, string>): Promise<InteractionInputBuilder> {
+    async _withChoiceOptionsInternal(choices: InteractionChoiceOption[]): Promise<InteractionInputBuilder> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, choices };
         const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
             'Aspire.Hosting.Ats/withChoiceOptions',
@@ -5572,10 +5580,10 @@ class InteractionInputBuilderImpl implements InteractionInputBuilder {
 
     /**
      * Sets the choice options for the input.
-     * @param choices The available choices, keyed by submitted value.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
      * @returns The same builder handle.
      */
-    withChoiceOptions(choices: Record<string, string>): InteractionInputBuilderPromise {
+    withChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputBuilderPromise {
         return new InteractionInputBuilderPromiseImpl(this._withChoiceOptionsInternal(choices), this._client);
     }
 
@@ -5641,7 +5649,7 @@ class InteractionInputBuilderPromiseImpl implements InteractionInputBuilderPromi
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    withChoiceOptions(choices: Record<string, string>): InteractionInputBuilderPromise {
+    withChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputBuilderPromise {
         return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.withChoiceOptions(choices)), this._client);
     }
 
@@ -5675,9 +5683,9 @@ export interface InteractionInputLoadContext {
     getInputValue(inputName: string): Promise<string>;
     /**
      * Sets the choice options for the loading input.
-     * @param choices The available choices, keyed by submitted value.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
      */
-    setChoiceOptions(choices: Record<string, string>): InteractionInputLoadContextPromise;
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputLoadContextPromise;
     /**
      * Sets the value of the loading input.
      * @param value The value to assign.
@@ -5699,9 +5707,9 @@ export interface InteractionInputLoadContextPromise extends PromiseLike<Interact
     getInputValue(inputName: string): Promise<string>;
     /**
      * Sets the choice options for the loading input.
-     * @param choices The available choices, keyed by submitted value.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
      */
-    setChoiceOptions(choices: Record<string, string>): InteractionInputLoadContextPromise;
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputLoadContextPromise;
     /**
      * Sets the value of the loading input.
      * @param value The value to assign.
@@ -5746,7 +5754,7 @@ class InteractionInputLoadContextImpl implements InteractionInputLoadContext {
     }
 
     /** @internal */
-    async _setChoiceOptionsInternal(choices: Record<string, string>): Promise<InteractionInputLoadContext> {
+    async _setChoiceOptionsInternal(choices: InteractionChoiceOption[]): Promise<InteractionInputLoadContext> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, choices };
         await this._client.invokeCapability<void>(
             'Aspire.Hosting.Ats/setChoiceOptions',
@@ -5757,9 +5765,9 @@ class InteractionInputLoadContextImpl implements InteractionInputLoadContext {
 
     /**
      * Sets the choice options for the loading input.
-     * @param choices The available choices, keyed by submitted value.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
      */
-    setChoiceOptions(choices: Record<string, string>): InteractionInputLoadContextPromise {
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputLoadContextPromise {
         return new InteractionInputLoadContextPromiseImpl(this._setChoiceOptionsInternal(choices), this._client);
     }
 
@@ -5806,7 +5814,7 @@ class InteractionInputLoadContextPromiseImpl implements InteractionInputLoadCont
         return this._promise.then(obj => obj.getInputValue(inputName));
     }
 
-    setChoiceOptions(choices: Record<string, string>): InteractionInputLoadContextPromise {
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputLoadContextPromise {
         return new InteractionInputLoadContextPromiseImpl(this._promise.then(obj => obj.setChoiceOptions(choices)), this._client);
     }
 
@@ -11368,7 +11376,7 @@ class InteractionServiceImpl implements InteractionService {
     }
 
     /** @internal */
-    async _createChoiceInputInternal(name: string, choices?: Record<string, string>, options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
+    async _createChoiceInputInternal(name: string, choices?: InteractionChoiceOption[], options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
         const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
         if (choices !== undefined) rpcArgs.choices = choices;
         if (options !== undefined) rpcArgs.options = options;

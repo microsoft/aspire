@@ -802,6 +802,24 @@ impl HttpsCertificateExecutionConfigurationExportData {
     }
 }
 
+/// InteractionChoiceOption
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InteractionChoiceOption {
+    #[serde(rename = "Value")]
+    pub value: String,
+    #[serde(rename = "Label")]
+    pub label: String,
+}
+
+impl InteractionChoiceOption {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("Value".to_string(), serde_json::to_value(&self.value).unwrap_or(Value::Null));
+        map.insert("Label".to_string(), serde_json::to_value(&self.label).unwrap_or(Value::Null));
+        map
+    }
+}
+
 /// CreateInteractionInputOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateInteractionInputOptions {
@@ -11077,7 +11095,7 @@ impl IInteractionService {
     }
 
     /// Creates a choice input that selects from a list of options.
-    pub fn create_choice_input(&self, name: &str, choices: Option<HashMap<String, String>>, options: Option<CreateInteractionInputOptions>) -> Result<InteractionInputBuilder, Box<dyn std::error::Error>> {
+    pub fn create_choice_input(&self, name: &str, choices: Option<Vec<InteractionChoiceOption>>, options: Option<CreateInteractionInputOptions>) -> Result<InteractionInputBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("interactionService".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
@@ -11989,7 +12007,7 @@ impl InteractionInputBuilder {
     }
 
     /// Sets the choice options for the input.
-    pub fn with_choice_options(&self, choices: HashMap<String, String>) -> Result<InteractionInputBuilder, Box<dyn std::error::Error>> {
+    pub fn with_choice_options(&self, choices: Vec<InteractionChoiceOption>) -> Result<InteractionInputBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("choices".to_string(), serde_json::to_value(&choices).unwrap_or(Value::Null));
@@ -12100,7 +12118,7 @@ impl InteractionInputLoadContext {
     }
 
     /// Sets the choice options for the loading input.
-    pub fn set_choice_options(&self, choices: HashMap<String, String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn set_choice_options(&self, choices: Vec<InteractionChoiceOption>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("choices".to_string(), serde_json::to_value(&choices).unwrap_or(Value::Null));

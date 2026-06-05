@@ -602,14 +602,14 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		}
 
 		regionInput := interactionService.CreateChoiceInput("region", &aspire.CreateChoiceInputOptions{
-			Choices: map[string]string{"us": "United States", "eu": "Europe"},
+			Choices: []*aspire.InteractionChoiceOption{{Value: "us", Label: "United States"}, {Value: "eu", Label: "Europe"}},
 		})
 
 		zoneInput := interactionService.CreateChoiceInput("zone").WithDynamicLoading(func(loadContext aspire.InteractionInputLoadContext) {
 			region, _ := loadContext.GetInputValue("region")
-			zones := map[string]string{"us-east": "US East", "us-west": "US West"}
+			zones := []*aspire.InteractionChoiceOption{{Value: "us-east", Label: "US East"}, {Value: "us-west", Label: "US West"}}
 			if region == "eu" {
-				zones = map[string]string{"eu-west": "EU West", "eu-north": "EU North"}
+				zones = []*aspire.InteractionChoiceOption{{Value: "eu-west", Label: "EU West"}, {Value: "eu-north", Label: "EU North"}}
 			}
 			_ = loadContext.SetChoiceOptions(zones)
 		})
@@ -694,17 +694,17 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			Options: &aspire.CreateInteractionInputOptions{Value: "1"},
 		})
 		choiceInput := interactionService.CreateChoiceInput("color", &aspire.CreateChoiceInputOptions{
-			Choices: map[string]string{"r": "Red", "g": "Green"},
+			Choices: []*aspire.InteractionChoiceOption{{Value: "r", Label: "Red"}, {Value: "g", Label: "Green"}},
 			Options: &aspire.CreateInteractionInputOptions{AllowCustomChoice: aspire.BoolPtr(true)},
 		})
 		presetInput := interactionService.CreateTextInput("greeting").WithValue("hello")
-		sizeInput := interactionService.CreateChoiceInput("size").WithChoiceOptions(map[string]string{"s": "Small", "l": "Large"})
+		sizeInput := interactionService.CreateChoiceInput("size").WithChoiceOptions([]*aspire.InteractionChoiceOption{{Value: "s", Label: "Small"}, {Value: "l", Label: "Large"}})
 		dependentInput := interactionService.CreateChoiceInput("shade").WithDynamicLoading(func(loadContext aspire.InteractionInputLoadContext) {
 			inputName, _ := loadContext.GetInputName()
 			color, _ := loadContext.GetInputValue("color")
-			shades := map[string]string{"lime": "Lime", "forest": "Forest"}
+			shades := []*aspire.InteractionChoiceOption{{Value: "lime", Label: "Lime"}, {Value: "forest", Label: "Forest"}}
 			if color == "r" {
-				shades = map[string]string{"crimson": "Crimson", "scarlet": "Scarlet"}
+				shades = []*aspire.InteractionChoiceOption{{Value: "crimson", Label: "Crimson"}, {Value: "scarlet", Label: "Scarlet"}}
 			}
 			_ = loadContext.SetChoiceOptions(shades)
 			_ = loadContext.SetValue(inputName)

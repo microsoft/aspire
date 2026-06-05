@@ -392,6 +392,20 @@ func (d *HttpsCertificateExecutionConfigurationExportData) ToMap() map[string]an
 	return m
 }
 
+// InteractionChoiceOption represents InteractionChoiceOption.
+type InteractionChoiceOption struct {
+	Value string `json:"Value,omitempty"`
+	Label string `json:"Label,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *InteractionChoiceOption) ToMap() map[string]any {
+	m := map[string]any{}
+	m["Value"] = serializeValue(d.Value)
+	m["Label"] = serializeValue(d.Label)
+	return m
+}
+
 // CreateInteractionInputOptions represents CreateInteractionInputOptions.
 type CreateInteractionInputOptions struct {
 	Label string `json:"Label,omitempty"`
@@ -15973,7 +15987,7 @@ func (s *inputsDialogValidationContext) Inputs() InteractionInputCollection {
 // InteractionInputBuilder is the public interface for handle type InteractionInputBuilder.
 type InteractionInputBuilder interface {
 	handleReference
-	WithChoiceOptions(choices map[string]string) InteractionInputBuilder
+	WithChoiceOptions(choices []*InteractionChoiceOption) InteractionInputBuilder
 	WithDynamicLoading(callback func(arg InteractionInputLoadContext), options ...*WithDynamicLoadingOptions) InteractionInputBuilder
 	WithValue(value string) InteractionInputBuilder
 	Err() error
@@ -15990,7 +16004,7 @@ func newInteractionInputBuilderFromHandle(h *handle, c *client) InteractionInput
 }
 
 // WithChoiceOptions sets the choice options for the input.
-func (s *interactionInputBuilder) WithChoiceOptions(choices map[string]string) InteractionInputBuilder {
+func (s *interactionInputBuilder) WithChoiceOptions(choices []*InteractionChoiceOption) InteractionInputBuilder {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -16076,7 +16090,7 @@ type InteractionInputLoadContext interface {
 	handleReference
 	GetInputName() (string, error)
 	GetInputValue(inputName string) (string, error)
-	SetChoiceOptions(choices map[string]string) error
+	SetChoiceOptions(choices []*InteractionChoiceOption) error
 	SetValue(value string) error
 	Err() error
 }
@@ -16123,7 +16137,7 @@ func (s *interactionInputLoadContext) GetInputValue(inputName string) (string, e
 }
 
 // SetChoiceOptions sets the choice options for the loading input.
-func (s *interactionInputLoadContext) SetChoiceOptions(choices map[string]string) error {
+func (s *interactionInputLoadContext) SetChoiceOptions(choices []*InteractionChoiceOption) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -26795,7 +26809,7 @@ func (o *CreateNumberInputOptions) ToMap() map[string]any {
 
 // CreateChoiceInputOptions carries optional parameters for CreateChoiceInput.
 type CreateChoiceInputOptions struct {
-	Choices map[string]string `json:"choices,omitempty"`
+	Choices []*InteractionChoiceOption `json:"choices,omitempty"`
 	Options *CreateInteractionInputOptions `json:"options,omitempty"`
 }
 

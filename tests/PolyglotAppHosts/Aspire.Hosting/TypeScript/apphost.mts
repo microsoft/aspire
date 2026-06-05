@@ -15,7 +15,7 @@ import {
     ResourceCommandState,
     refExpr,
 } from './.aspire/modules/aspire.mjs';
-import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext } from './.aspire/modules/aspire.mjs';
+import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext, InteractionChoiceOption } from './.aspire/modules/aspire.mjs';
 import { fileURLToPath } from 'node:url';
 
 const builder = await createBuilder();
@@ -761,7 +761,7 @@ await container.withCommand("pick-zone", "Pick Zone", async (ctx) => {
     }
 
     const regionInput = await interactionService.createChoiceInput("region", {
-        choices: { "us": "United States", "eu": "Europe" }
+        choices: [{ value: "us", label: "United States" }, { value: "eu", label: "Europe" }]
     });
 
     const zoneInput = await interactionService
@@ -769,9 +769,9 @@ await container.withCommand("pick-zone", "Pick Zone", async (ctx) => {
         .withDynamicLoading(async (loadContext) => {
             const region = await loadContext.getInputValue("region");
 
-            const zones: Record<string, string> = region === "eu"
-                ? { "eu-west": "EU West", "eu-north": "EU North" }
-                : { "us-east": "US East", "us-west": "US West" };
+            const zones: InteractionChoiceOption[] = region === "eu"
+                ? [{ value: "eu-west", label: "EU West" }, { value: "eu-north", label: "EU North" }]
+                : [{ value: "us-east", label: "US East" }, { value: "us-west", label: "US West" }];
 
             await loadContext.setChoiceOptions(zones);
         });
@@ -831,13 +831,13 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
     const booleanInput = await interactionService.createBooleanInput("enabled", { value: "true" });
     const numberInput = await interactionService.createNumberInput("count", { value: "1" });
     const choiceInput = await interactionService.createChoiceInput("color", {
-        choices: { "r": "Red", "g": "Green" },
+        choices: [{ value: "r", label: "Red" }, { value: "g", label: "Green" }],
         options: { allowCustomChoice: true }
     });
     const presetInput = await interactionService.createTextInput("greeting").withValue("hello");
     const sizeInput = await interactionService
         .createChoiceInput("size")
-        .withChoiceOptions({ "s": "Small", "l": "Large" });
+        .withChoiceOptions([{ value: "s", label: "Small" }, { value: "l", label: "Large" }]);
     const dependentInput = await interactionService
         .createChoiceInput("shade")
         .withDynamicLoading(async (loadContext) => {
@@ -845,8 +845,8 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
             const color = await loadContext.getInputValue("color");
 
             await loadContext.setChoiceOptions(color === "r"
-                ? { "crimson": "Crimson", "scarlet": "Scarlet" }
-                : { "lime": "Lime", "forest": "Forest" });
+                ? [{ value: "crimson", label: "Crimson" }, { value: "scarlet", label: "Scarlet" }]
+                : [{ value: "lime", label: "Lime" }, { value: "forest", label: "Forest" }]);
             await loadContext.setValue(inputName);
         }, {
             alwaysLoadOnStart: true,

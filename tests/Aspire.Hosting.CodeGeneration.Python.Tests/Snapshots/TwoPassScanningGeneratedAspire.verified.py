@@ -1863,6 +1863,10 @@ class InputsInteractionResult(typing.TypedDict, total=False):
     Canceled: bool
     Inputs: typing.Iterable[InteractionInput]
 
+class InteractionChoiceOption(typing.TypedDict, total=False):
+    Value: str
+    Label: str
+
 class InteractionInput(typing.TypedDict, total=False):
     Name: str
     Label: str | None
@@ -3034,7 +3038,7 @@ class AbstractInteractionService:
         )
         return typing.cast(InteractionInputBuilder, result)
 
-    def create_choice_input(self, name: str, *, choices: typing.Mapping[str, str] | None = None, options: CreateInteractionInputOptions | None = None) -> InteractionInputBuilder:
+    def create_choice_input(self, name: str, *, choices: typing.Iterable[InteractionChoiceOption] | None = None, options: CreateInteractionInputOptions | None = None) -> InteractionInputBuilder:
         """Creates a choice input that selects from a list of options."""
         rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
         rpc_args['name'] = name
@@ -5161,7 +5165,7 @@ class InteractionInputBuilder:
         """The underlying object reference handle."""
         return self._handle
 
-    def with_choice_options(self, choices: typing.Mapping[str, str]) -> InteractionInputBuilder:
+    def with_choice_options(self, choices: typing.Iterable[InteractionChoiceOption]) -> InteractionInputBuilder:
         """Sets the choice options for the input."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['choices'] = choices
@@ -5253,7 +5257,7 @@ class InteractionInputLoadContext:
         )
         return result
 
-    def set_choice_options(self, choices: typing.Mapping[str, str]) -> None:
+    def set_choice_options(self, choices: typing.Iterable[InteractionChoiceOption]) -> None:
         """Sets the choice options for the loading input."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['choices'] = choices

@@ -448,14 +448,14 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
 
         region_input = interaction_service.create_choice_input(
             "region",
-            choices={"us": "United States", "eu": "Europe"}
+            choices=[{"Value": "us", "Label": "United States"}, {"Value": "eu", "Label": "Europe"}]
         )
 
         def load_zones(load_context):
             region = load_context.get_input_value("region")
-            zones = ({"eu-west": "EU West", "eu-north": "EU North"}
+            zones = ([{"Value": "eu-west", "Label": "EU West"}, {"Value": "eu-north", "Label": "EU North"}]
                      if region == "eu"
-                     else {"us-east": "US East", "us-west": "US West"})
+                     else [{"Value": "us-east", "Label": "US East"}, {"Value": "us-west", "Label": "US West"}])
             load_context.set_choice_options(zones)
 
         zone_input = interaction_service.create_choice_input("zone").with_dynamic_loading(load_zones)
@@ -524,19 +524,19 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         number_input = interaction_service.create_number_input("count", options={"Value": "1"})
         choice_input = interaction_service.create_choice_input(
             "color",
-            choices={"r": "Red", "g": "Green"},
+            choices=[{"Value": "r", "Label": "Red"}, {"Value": "g", "Label": "Green"}],
             options={"AllowCustomChoice": True}
         )
         preset_input = interaction_service.create_text_input("greeting").with_value("hello")
-        size_input = interaction_service.create_choice_input("size").with_choice_options({"s": "Small", "l": "Large"})
+        size_input = interaction_service.create_choice_input("size").with_choice_options([{"Value": "s", "Label": "Small"}, {"Value": "l", "Label": "Large"}])
 
         def load_shade(load_context):
             input_name = load_context.get_input_name()
             color = load_context.get_input_value("color")
             load_context.set_choice_options(
-                {"crimson": "Crimson", "scarlet": "Scarlet"}
+                [{"Value": "crimson", "Label": "Crimson"}, {"Value": "scarlet", "Label": "Scarlet"}]
                 if color == "r"
-                else {"lime": "Lime", "forest": "Forest"}
+                else [{"Value": "lime", "Label": "Lime"}, {"Value": "forest", "Label": "Forest"}]
             )
             load_context.set_value(input_name)
 

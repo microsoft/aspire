@@ -6826,11 +6826,11 @@ import java.util.function.*;
 
 /** Options for CreateChoiceInput. */
 public final class CreateChoiceInputOptions {
-    private Map<String, String> choices;
+    private InteractionChoiceOption[] choices;
     private CreateInteractionInputOptions options;
 
-    public Map<String, String> getChoices() { return choices; }
-    public CreateChoiceInputOptions choices(Map<String, String> value) {
+    public InteractionChoiceOption[] getChoices() { return choices; }
+    public CreateChoiceInputOptions choices(InteractionChoiceOption[] value) {
         this.choices = value;
         return this;
     }
@@ -14039,7 +14039,7 @@ public class IInteractionService extends HandleWrapperBase {
     }
 
     /** Creates a choice input that selects from a list of options. */
-    private InteractionInputBuilder createChoiceInputImpl(String name, Map<String, String> choices, CreateInteractionInputOptions options) {
+    private InteractionInputBuilder createChoiceInputImpl(String name, InteractionChoiceOption[] choices, CreateInteractionInputOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
@@ -14942,6 +14942,42 @@ public class InputsInteractionResult implements JsonSerializable {
     }
 }
 
+// ===== InteractionChoiceOption.java =====
+// InteractionChoiceOption.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** InteractionChoiceOption DTO. */
+public class InteractionChoiceOption implements JsonSerializable {
+    private String value;
+    private String label;
+
+    public String getValue() { return value; }
+    public void setValue(String value) { this.value = value; }
+    public String getLabel() { return label; }
+    public void setLabel(String value) { this.label = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InteractionChoiceOption fromMap(Map<String, Object> map) {
+        var value = new InteractionChoiceOption();
+        var valueValue = map.get("Value");
+        value.setValue((String) valueValue);
+        var labelValue = map.get("Label");
+        value.setLabel((String) labelValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Value", AspireClient.serializeValue(value));
+        map.put("Label", AspireClient.serializeValue(label));
+        return map;
+    }
+}
+
 // ===== InteractionInput.java =====
 // InteractionInput.java - GENERATED CODE - DO NOT EDIT
 
@@ -15053,7 +15089,7 @@ public class InteractionInputBuilder extends HandleWrapperBase {
     }
 
     /** Sets the choice options for the input. */
-    public InteractionInputBuilder withChoiceOptions(Map<String, String> choices) {
+    public InteractionInputBuilder withChoiceOptions(InteractionChoiceOption[] choices) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("choices", AspireClient.serializeValue(choices));
@@ -15151,7 +15187,7 @@ public class InteractionInputLoadContext extends HandleWrapperBase {
     }
 
     /** Sets the choice options for the loading input. */
-    public void setChoiceOptions(Map<String, String> choices) {
+    public void setChoiceOptions(InteractionChoiceOption[] choices) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("choices", AspireClient.serializeValue(choices));
@@ -26946,6 +26982,7 @@ public final class WithVolumeOptions {
 .aspire/modules/InputType.java
 .aspire/modules/InputsDialogValidationContext.java
 .aspire/modules/InputsInteractionResult.java
+.aspire/modules/InteractionChoiceOption.java
 .aspire/modules/InteractionInput.java
 .aspire/modules/InteractionInputBuilder.java
 .aspire/modules/InteractionInputCollection.java

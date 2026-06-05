@@ -217,10 +217,10 @@ internal static class InteractionExports
     /// </summary>
     /// <param name="interactionService">The interaction service.</param>
     /// <param name="name">The name of the input.</param>
-    /// <param name="choices">The available choices, keyed by submitted value.</param>
+    /// <param name="choices">The available choices, in display order. Each option pairs a submitted value with a display label.</param>
     /// <param name="options">Optional configuration for the input.</param>
     [AspireExport]
-    public static InteractionInputBuilder CreateChoiceInput(this IInteractionService interactionService, string name, IReadOnlyDictionary<string, string>? choices = null, CreateInteractionInputOptions? options = null)
+    public static InteractionInputBuilder CreateChoiceInput(this IInteractionService interactionService, string name, IReadOnlyList<InteractionChoiceOption>? choices = null, CreateInteractionInputOptions? options = null)
     {
         var builder = InteractionInputBuilder.Create(name, InputType.Choice, options);
         if (choices is { Count: > 0 })
@@ -232,12 +232,14 @@ internal static class InteractionExports
     }
 #pragma warning restore IDE0060 // Remove unused parameter
 
-    internal static IReadOnlyList<KeyValuePair<string, string>> ToOptionList(IReadOnlyDictionary<string, string> choices)
+    // Preserve the caller-specified order: the native Options list is ordered, and the order is user-visible in the
+    // rendered dropdown. Materialize a copy so a caller-held list cannot mutate the input after the fact.
+    internal static IReadOnlyList<KeyValuePair<string, string>> ToOptionList(IReadOnlyList<InteractionChoiceOption> choices)
     {
         var list = new List<KeyValuePair<string, string>>(choices.Count);
         foreach (var choice in choices)
         {
-            list.Add(KeyValuePair.Create(choice.Key, choice.Value));
+            list.Add(KeyValuePair.Create(choice.Value, choice.Label));
         }
 
         return list;
@@ -311,10 +313,10 @@ internal sealed class InteractionInputBuilder
     /// <summary>
     /// Sets the choice options for the input.
     /// </summary>
-    /// <param name="choices">The available choices, keyed by submitted value.</param>
+    /// <param name="choices">The available choices, in display order. Each option pairs a submitted value with a display label.</param>
     /// <returns>The same builder handle.</returns>
     [AspireExport]
-    public InteractionInputBuilder WithChoiceOptions(IReadOnlyDictionary<string, string> choices)
+    public InteractionInputBuilder WithChoiceOptions(IReadOnlyList<InteractionChoiceOption> choices)
     {
         ArgumentNullException.ThrowIfNull(choices);
 
@@ -398,9 +400,9 @@ internal sealed class InteractionInputLoadContext
     /// <summary>
     /// Sets the choice options for the loading input.
     /// </summary>
-    /// <param name="choices">The available choices, keyed by submitted value.</param>
+    /// <param name="choices">The available choices, in display order. Each option pairs a submitted value with a display label.</param>
     [AspireExport]
-    public void SetChoiceOptions(IReadOnlyDictionary<string, string> choices)
+    public void SetChoiceOptions(IReadOnlyList<InteractionChoiceOption> choices)
     {
         ArgumentNullException.ThrowIfNull(choices);
 
@@ -419,6 +421,23 @@ internal sealed class InteractionInputLoadContext
         _inner.CancellationToken.ThrowIfCancellationRequested();
         _inner.Input.Value = value;
     }
+}
+
+/// <summary>
+/// A single selectable option for a choice input. Options are presented in the order supplied.
+/// </summary>
+[AspireDto]
+internal sealed class InteractionChoiceOption
+{
+    /// <summary>
+    /// Gets or sets the value submitted when this option is selected.
+    /// </summary>
+    public string Value { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the label displayed for this option.
+    /// </summary>
+    public string Label { get; set; } = string.Empty;
 }
 
 /// <summary>
