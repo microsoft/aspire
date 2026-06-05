@@ -129,6 +129,41 @@ internal sealed class RunCommand
                 "local cli",
                 "No artifacts/bin/Aspire.Cli/**/aspire found. Run ./build.sh first."));
         }
+
+        // dotnet dev-certs probe — the embedded NuGet proxy listens over
+        // HTTPS so consumers (the Aspire CLI's NuGet plumbing) don't have
+        // to flip allowInsecureConnections=true on the source. That only
+        // works if `dotnet dev-certs https --trust` has been run; surface
+        // a clear remediation hint otherwise.
+        v.UpdateDevCert(EnvironmentProbeResult.Running("dev cert"));
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("dotnet")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add("dev-certs");
+            psi.ArgumentList.Add("https");
+            psi.ArgumentList.Add("--check");
+            psi.ArgumentList.Add("--trust");
+            using var proc = System.Diagnostics.Process.Start(psi)!;
+            await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            // Exit code 0 here means: a valid dev cert exists AND it is in
+            // the trust store. --trust without --check would attempt to add
+            // it, which we never want to do silently from a TUI.
+            v.UpdateDevCert(proc.ExitCode == 0
+                ? EnvironmentProbeResult.Ok("dev cert", "ASP.NET Core HTTPS dev cert is trusted.")
+                : EnvironmentProbeResult.Failed(
+                    "dev cert",
+                    "ASP.NET Core HTTPS dev cert not trusted. Run `dotnet dev-certs https --trust`."));
+        }
+        catch (Exception ex)
+        {
+            v.UpdateDevCert(EnvironmentProbeResult.Failed("dev cert", $"Probe failed: {ex.Message}"));
+        }
     }
 
     private static async Task<string?> TryRunCaptureAsync(string fileName, IReadOnlyList<string> args, CancellationToken cancellationToken)

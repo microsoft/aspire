@@ -177,12 +177,21 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
 
         var app = builder.Build();
         _app = app;
-        // Bind to a 127.0.0.1 ephemeral port via WebApplication.Urls (the
-        // CreateSlimBuilder's IWebHostBuilder shape doesn't expose the legacy
-        // UseUrls extension). The bound port is read back from
-        // IServerAddressesFeature after StartAsync since :0 doesn't surface
-        // the chosen value any other way.
-        app.Urls.Add("http://127.0.0.1:0");
+        // Bind to a 127.0.0.1 ephemeral HTTPS port. We deliberately use
+        // https rather than http because dotnet 9's CLI feed plumbing
+        // requires `allowInsecureConnections="true"` on any cleartext
+        // package source registered via the standalone CLI config — a flag
+        // the Aspire CLI's own ConfigureNuGetSourcesAsync path does not
+        // currently set. Falling back to HTTPS sidesteps the whole gate.
+        //
+        // Kestrel's default certificate provider auto-resolves the
+        // `dotnet dev-certs https` cert from the user store, so this works
+        // out of the box once the user has run `dotnet dev-certs https
+        // --trust` (a normal dev-loop prerequisite that the
+        // EnvironmentValidationScreen checks for separately). The bound
+        // port is read back from IServerAddressesFeature after StartAsync
+        // since :0 doesn't surface the chosen value any other way.
+        app.Urls.Add("https://127.0.0.1:0");
 
         _upstreamClient = new HttpClient
         {
