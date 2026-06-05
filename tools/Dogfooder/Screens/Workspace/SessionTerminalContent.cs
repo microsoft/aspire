@@ -79,7 +79,8 @@ internal static class SessionTerminalContent
             // without leaving the terminal.
             h.SplitButton()
                 .PrimaryAction("Open in Code", _ => TryLaunchEditor("code", workspaceRoot))
-                .SecondaryAction("Open in Code Insiders", _ => TryLaunchEditor("code-insiders", workspaceRoot)),
+                .SecondaryAction("Open in Code Insiders", _ => TryLaunchEditor("code-insiders", workspaceRoot))
+                .SecondaryAction($"Reveal in {FileManagerLabel}", _ => TryRevealInFileManager(workspaceRoot)),
         ]);
     }
 
@@ -108,6 +109,65 @@ internal static class SessionTerminalContent
         // Show only the trailing 8 chars (the unique randomness) with a
         // leading ellipsis. e.g. "…X9aB1cD2".
         return "…" + name[^8..];
+    }
+
+    /// <summary>
+    /// Platform-specific label for the OS file manager so the menu item
+    /// reads naturally on each host (Finder on macOS, Explorer on Windows,
+    /// the generic "file manager" on Linux because the actual app varies
+    /// between desktop environments — Nautilus / Dolphin / Thunar / …).
+    /// </summary>
+    private static string FileManagerLabel =>
+        System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX) ? "Finder"
+        : System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows) ? "Explorer"
+        : "File Manager";
+
+    private static void TryRevealInFileManager(string? workspaceRoot)
+    {
+        if (string.IsNullOrEmpty(workspaceRoot))
+        {
+            return;
+        }
+        try
+        {
+            // Each OS exposes "show this folder" as a different binary:
+            // - macOS: `open <dir>` opens the directory in Finder.
+            // - Windows: `explorer.exe <dir>` opens the folder window.
+            // - Linux: `xdg-open <dir>` defers to whichever file manager
+            //   the user's desktop environment has registered for the
+            //   inode/directory MIME type. This is the freedesktop.org
+            //   standard launcher; absent it, no portable Linux command
+            //   exists for the equivalent of Finder/Explorer.
+            //   See https://www.freedesktop.org/wiki/Software/xdg-utils/
+            string fileName;
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX))
+            {
+                fileName = "open";
+            }
+            else if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            {
+                fileName = "explorer.exe";
+            }
+            else
+            {
+                fileName = "xdg-open";
+            }
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = fileName,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add(workspaceRoot);
+            System.Diagnostics.Process.Start(psi)?.Dispose();
+        }
+        catch
+        {
+            // No file-manager helper available (e.g. headless Linux box
+            // with no xdg-utils). Swallow for the same reason as the
+            // editor launch — no toast surface in the render path.
+        }
     }
 
     private static void TryLaunchEditor(string command, string? workspaceRoot)
