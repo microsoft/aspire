@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Tests.Shared.Telemetry;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
