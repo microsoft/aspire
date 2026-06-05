@@ -179,32 +179,28 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
         {
             $"/p:VersionSuffix={request.VersionSuffix}",
             // NU5104 ("stable release should not have a prerelease
-            // dependency") is a publish-time gate: nuget.org would reject
-            // such a package because it would force consumers onto a
-            // prerelease at restore time. For dogfooding we are NEVER
-            // publishing — every .nupkg this build produces lives at most
-            // inside our local DogfoodingNuGetServer overlay — so this gate
-            // is just blocking us from reproducing released-style stable
-            // packages while transitive Azure.Provisioning / Milvus / etc.
-            // dependencies are still in -beta. Suppress here so dogfood
-            // packs succeed for scenarios like repro-vcurrent-local; the
-            // real release pipeline never sets VersionSuffix='' until those
-            // deps are promoted, so the upstream gate is unchanged.
-            // NU5125 (missing readme) is a separate dogfood-irrelevant gate.
+            // dependency") and NU5125 (missing readme) are pack-time
+            // warnings that get promoted to errors by the repo-wide
+            // TreatWarningsAsErrors=true. Both are publish-gate concerns —
+            // dogfood .nupkgs never leave the in-process
+            // DogfoodingNuGetServer overlay — so demote them here.
+            //
+            // We deliberately use WarningsNotAsErrors instead of NoWarn:
+            // /p:NoWarn=... becomes an MSBuild global property which
+            // *replaces* every project's '<NoWarn>$(NoWarn),1573,1591,...
+            // </NoWarn>' (global properties can't be overridden in a csproj
+            // PropertyGroup without TreatAsLocalProperty), wiping the
+            // per-project CS1591/CS1573 suppressions and producing tens of
+            // thousands of unrelated XML-doc and nullable errors across
+            // tests/ and analyzers/. WarningsNotAsErrors only demotes the
+            // listed codes from error back to warning and leaves NoWarn
+            // untouched.
+            //
             // ';' inside a /p: value must be escaped as %3B; MSBuild's
-            // command-line parser splits on raw semicolons otherwise and
+            // command-line parser otherwise splits on raw semicolons and
             // reports MSB1006 'Property is not valid' against the second
-            // half ('NU5125').
-            "/p:NoWarn=NU5104%3BNU5125",
-            // Arcade flips TreatWarningsAsErrors on whenever VersionSuffix is
-            // empty (the "stable release" code path), which then escalates
-            // CS1591/CS1573/CS8629/etc. into 20k+ errors across the
-            // repo — including under tests/ which the regular CI pack
-            // doesn't gate on. Dogfood packages never leave the in-process
-            // proxy, so the strict gate is pure noise here. Disable it so
-            // repro-vcurrent-local (and any other VersionSuffix='' scenario)
-            // can actually finish packing.
-            "/p:TreatWarningsAsErrors=false",
+            // half.
+            "/p:WarningsNotAsErrors=NU5104%3BNU5125",
         };
         if (!request.IncludeNativeBuild)
         {
