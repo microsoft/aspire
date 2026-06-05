@@ -22,12 +22,12 @@ parameters:
       - staging
       - daily
   # When true, the notify_failure and notify_success stages run in dry-run
-  # mode: they log the GitHub REST calls they would make to file/update/close
+  # mode: they log the `gh` CLI commands they would run to file/update/close
   # the ci-broken issue, but do not actually mutate anything on
   # microsoft/aspire. Use this when validating pipeline plumbing changes
   # without spamming issues.
   - name: notifyOnFailureDryRun
-    displayName: 'Notify on failure: dry-run (log REST calls, do not mutate)'
+    displayName: 'Notify on failure: dry-run (log gh commands, do not mutate)'
     type: boolean
     default: false
 

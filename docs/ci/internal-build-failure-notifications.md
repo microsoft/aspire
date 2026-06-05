@@ -19,7 +19,8 @@ Two stages run at the end of every non-PR internal build:
 - `notify_success` — closes any open `ci-broken` issue for the branch
   when all three upstream stages end with `Succeeded` or
   `SucceededWithIssues` (`prepare_installers` may also legitimately
-  `Skip` on stable GA release builds — that is accepted as success).
+  end with `Skipped` on stable GA release builds — that is accepted
+  as success).
 
 Both stages gate on the branch being either:
 
@@ -117,10 +118,10 @@ the import entirely.
 ## Disabling for a single run
 
 Queue the pipeline manually and set `Notify on failure: dry-run` to true.
-In dry-run mode, both stages log the REST calls they *would* make without
-mutating anything on GitHub. This applies to both the failure and success
-paths — a green-build dry-run will not accidentally close real open
-issues.
+In dry-run mode, both stages log the `gh` CLI commands they *would* run
+without mutating anything on GitHub. This applies to both the failure
+and success paths — a green-build dry-run will not accidentally close
+real open issues.
 
 Dry-run mode is fully decoupled from the aspire-repo-bot credentials:
 the wrapper omits the `ASPIRE_BOT_APP_ID` / `ASPIRE_BOT_PRIVATE_KEY` env

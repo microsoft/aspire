@@ -422,11 +422,15 @@ try {
             Write-NotifyWarning "Failed to mint installation token. Skipping notification."
             Exit-NotifyScript
         }
-        # Mark the token as a secret pipeline variable so any incidental
-        # log echo in this script or downstream tasks gets redacted by AzDO.
-        # Get-AspireBotInstallationToken.ps1 prints the token to stdout for
-        # caller capture; this is the AzDO-side hardening.
-        Write-Host "##vso[task.setvariable variable=__notifyGhToken;issecret=true]$token"
+        # Register the token with AzDO so any incidental log echo in this
+        # script or downstream tasks gets redacted. Using task.setsecret
+        # rather than task.setvariable;issecret=true so the token isn't
+        # also persisted as a job-scoped variable that other tasks could
+        # accidentally reference via $(__notifyGhToken) — we only need
+        # the log-masking effect. The token is consumed by `gh` through
+        # the GH_TOKEN process env var set below.
+        # https://learn.microsoft.com/azure/devops/pipelines/scripts/logging-commands#setsecret-register-a-value-as-a-secret
+        Write-Host "##vso[task.setsecret]$token"
         # gh reads its auth token from GH_TOKEN (process env var, not
         # persisted to gh's config file). Set here so every subsequent
         # `gh` call in this process authenticates as aspire-repo-bot.
