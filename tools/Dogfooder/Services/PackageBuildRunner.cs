@@ -46,9 +46,27 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
             psi.ArgumentList.Add(a);
         }
 
+        // Scrub ASPIRE_CLI_* identity overrides from the child build's
+        // environment. The build must run as if it were a normal repo build
+        // — never as a "dogfooded" process. If the user launched the
+        // Dogfooder from a shell that already had these set (e.g. from a
+        // prior dogfood session), inheriting them could:
+        //   * point a NuGet restore at our half-started local proxy (the
+        //     proxy is only started AFTER the build completes — but the env
+        //     could still be set from a stale shell),
+        //   * cause Arcade's version-stamping helpers to disagree with the
+        //     suffix we pass on the command line.
+        // We always clear the full identity surface (Channel/Version/Commit/
+        // NuGetServiceIndex) so the build sees a pristine environment.
+        foreach (var name in Aspire.Shared.AspireCliIdentityEnvVars.IdentityEnvVarNames)
+        {
+            psi.Environment.Remove(name);
+        }
+
         // Some build steps look at HOME / USERPROFILE; we deliberately do not
-        // override the process environment so the script uses whatever toolchain
-        // the user has authenticated for (e.g. dnceng feed credentials).
+        // override the rest of the process environment so the script uses
+        // whatever toolchain the user has authenticated for (e.g. dnceng
+        // feed credentials).
 
         var sw = Stopwatch.StartNew();
         using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
