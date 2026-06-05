@@ -1034,6 +1034,22 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithDtoCallbackOptions_MarshalsNestedCallbackProperties()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
+
+        Assert.Contains("const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback", aspireTs);
+        Assert.Contains("const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;", aspireTs);
+        Assert.Contains("const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };", aspireTs);
+        Assert.Contains("const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback", aspireTs);
+        Assert.Contains("const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback", aspireTs);
+        Assert.Contains("__optionsForRpcData[\"commandOptions\"] = ____optionsForRpcCommandOptionsForRpc;", aspireTs);
+    }
+
+    [Fact]
     public void Scanner_AzureProvisioningCallbacks_ExposeTypedCustomizationProperties()
     {
         var capabilities = ScanCapabilitiesFromAzureAssemblies();

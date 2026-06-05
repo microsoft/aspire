@@ -769,7 +769,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private string GetRpcArgumentExpressionForParam(AtsParameterInfo param, string localParameterName, bool useRegisteredCallback = true)
     {
-        if (TryGetDtoCallbackProperties(param.Type, out _))
+        if (TryGetDtoCallbackMarshallingProperties(param.Type, out _))
         {
             return GetDtoRpcLocalName(localParameterName);
         }
@@ -777,9 +777,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         return GetRpcArgumentExpression(param, localParameterName, useRegisteredCallback);
     }
 
-    private bool TryGetDtoCallbackProperties(AtsTypeRef? typeRef, out List<AtsDtoPropertyInfo> callbackProperties)
+    private bool TryGetDtoCallbackMarshallingProperties(AtsTypeRef? typeRef, out List<AtsDtoPropertyInfo> marshallingProperties)
     {
-        callbackProperties = [];
+        marshallingProperties = [];
 
         if (typeRef?.Category != AtsTypeCategory.Dto ||
             !_dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoType))
@@ -787,8 +787,35 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             return false;
         }
 
-        callbackProperties = dtoType.Properties.Where(static p => p.IsCallback).ToList();
-        return callbackProperties.Count > 0;
+        marshallingProperties = dtoType.Properties
+            .Where(p => p.IsCallback || RequiresDtoCallbackMarshalling(p.Type))
+            .ToList();
+
+        return marshallingProperties.Count > 0;
+    }
+
+    private bool RequiresDtoCallbackMarshalling(AtsTypeRef? typeRef, HashSet<string>? visitedDtoTypeIds = null)
+    {
+        if (typeRef?.Category != AtsTypeCategory.Dto ||
+            !_dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoType))
+        {
+            return false;
+        }
+
+        visitedDtoTypeIds ??= new(StringComparer.Ordinal);
+        if (!visitedDtoTypeIds.Add(typeRef.TypeId))
+        {
+            return false;
+        }
+
+        try
+        {
+            return dtoType.Properties.Any(p => p.IsCallback || RequiresDtoCallbackMarshalling(p.Type, visitedDtoTypeIds));
+        }
+        finally
+        {
+            visitedDtoTypeIds.Remove(typeRef.TypeId);
+        }
     }
 
     private static string GetDtoRpcLocalName(string localParameterName) => $"__{localParameterName}ForRpc";
@@ -2436,25 +2463,31 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         foreach (var param in parameters)
         {
-            if (!TryGetDtoCallbackProperties(param.Type, out var callbackProperties))
+            if (!TryGetDtoCallbackMarshallingProperties(param.Type, out var marshallingProperties))
+            {
+                continue;
+            }
+
+            if (param.Type is not { TypeId: var dtoTypeId })
             {
                 continue;
             }
 
             var localParameterName = useSafeOptionalLocalNames ? GetLocalParameterName(param) : param.Name;
             var dtoRpcLocalName = GetDtoRpcLocalName(localParameterName);
+            var visitedDtoTypeIds = new HashSet<string>(StringComparer.Ordinal) { dtoTypeId };
             if (param.IsOptional || param.IsNullable)
             {
                 WriteLine($"{indent}const {dtoRpcLocalName} = {localParameterName} === undefined || {localParameterName} === null ? {localParameterName} : {{ ...{localParameterName} }};");
                 WriteLine($"{indent}if ({dtoRpcLocalName} !== undefined && {dtoRpcLocalName} !== null) {{");
-                GenerateDtoCallbackPropertyAssignments(dtoRpcLocalName, callbackProperties, $"{indent}    ", clientExpression);
+                GenerateDtoCallbackPropertyAssignments(dtoRpcLocalName, marshallingProperties, visitedDtoTypeIds, $"{indent}    ", clientExpression);
                 WriteLine($"{indent}}}");
             }
             else
             {
                 WriteLine($"{indent}const {dtoRpcLocalName} = {localParameterName} === null ? {localParameterName} : {{ ...{localParameterName} }};");
                 WriteLine($"{indent}if ({dtoRpcLocalName} !== null) {{");
-                GenerateDtoCallbackPropertyAssignments(dtoRpcLocalName, callbackProperties, $"{indent}    ", clientExpression);
+                GenerateDtoCallbackPropertyAssignments(dtoRpcLocalName, marshallingProperties, visitedDtoTypeIds, $"{indent}    ", clientExpression);
                 WriteLine($"{indent}}}");
             }
         }
@@ -2462,22 +2495,66 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private void GenerateDtoCallbackPropertyAssignments(
         string dtoRpcLocalName,
-        IReadOnlyList<AtsDtoPropertyInfo> callbackProperties,
+        IReadOnlyList<AtsDtoPropertyInfo> marshallingProperties,
+        HashSet<string> visitedDtoTypeIds,
         string indent,
         string clientExpression)
     {
         var dtoDataLocalName = $"{dtoRpcLocalName}Data";
         WriteLine($"{indent}const {dtoDataLocalName} = {dtoRpcLocalName} as Record<string, unknown>;");
 
-        foreach (var callbackProperty in callbackProperties)
+        foreach (var marshallingProperty in marshallingProperties)
         {
-            var propertyName = ToCamelCase(callbackProperty.Name);
-            var callbackLocalName = GetDtoCallbackLocalName(dtoRpcLocalName, callbackProperty.Name);
-            WriteLine($"{indent}const {callbackLocalName} = {dtoRpcLocalName}.{propertyName};");
-            WriteLine($"{indent}if ({callbackLocalName} !== undefined) {{");
-            GenerateCallbackRegistration(CreateCallbackParameter(callbackProperty, callbackLocalName), $"{indent}    ", clientExpression);
-            WriteLine($"{indent}    {dtoDataLocalName}[\"{propertyName}\"] = {callbackLocalName}Id;");
+            if (marshallingProperty.IsCallback)
+            {
+                var propertyName = ToCamelCase(marshallingProperty.Name);
+                var callbackLocalName = GetDtoCallbackLocalName(dtoRpcLocalName, marshallingProperty.Name);
+                WriteLine($"{indent}const {callbackLocalName} = {dtoRpcLocalName}.{propertyName};");
+                WriteLine($"{indent}if ({callbackLocalName} !== undefined) {{");
+                GenerateCallbackRegistration(CreateCallbackParameter(marshallingProperty, callbackLocalName), $"{indent}    ", clientExpression);
+                WriteLine($"{indent}    {dtoDataLocalName}[\"{propertyName}\"] = {callbackLocalName}Id;");
+                WriteLine($"{indent}}}");
+                continue;
+            }
+
+            GenerateNestedDtoCallbackPropertyAssignments(dtoRpcLocalName, dtoDataLocalName, marshallingProperty, visitedDtoTypeIds, indent, clientExpression);
+        }
+    }
+
+    private void GenerateNestedDtoCallbackPropertyAssignments(
+        string dtoRpcLocalName,
+        string dtoDataLocalName,
+        AtsDtoPropertyInfo dtoProperty,
+        HashSet<string> visitedDtoTypeIds,
+        string indent,
+        string clientExpression)
+    {
+        if (!TryGetDtoCallbackMarshallingProperties(dtoProperty.Type, out var nestedMarshallingProperties))
+        {
+            return;
+        }
+
+        var propertyName = ToCamelCase(dtoProperty.Name);
+        var dtoPropertyLocalName = GetDtoCallbackLocalName(dtoRpcLocalName, dtoProperty.Name);
+        var nestedDtoRpcLocalName = $"{dtoPropertyLocalName}ForRpc";
+
+        if (!visitedDtoTypeIds.Add(dtoProperty.Type.TypeId))
+        {
+            return;
+        }
+
+        try
+        {
+            WriteLine($"{indent}const {dtoPropertyLocalName} = {dtoRpcLocalName}.{propertyName};");
+            WriteLine($"{indent}if ({dtoPropertyLocalName} !== undefined && {dtoPropertyLocalName} !== null) {{");
+            WriteLine($"{indent}    const {nestedDtoRpcLocalName} = {{ ...{dtoPropertyLocalName} }};");
+            GenerateDtoCallbackPropertyAssignments(nestedDtoRpcLocalName, nestedMarshallingProperties, visitedDtoTypeIds, $"{indent}    ", clientExpression);
+            WriteLine($"{indent}    {dtoDataLocalName}[\"{propertyName}\"] = {nestedDtoRpcLocalName};");
             WriteLine($"{indent}}}");
+        }
+        finally
+        {
+            visitedDtoTypeIds.Remove(dtoProperty.Type.TypeId);
         }
     }
 
@@ -2486,6 +2563,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             Name = callbackLocalName,
             Type = callbackProperty.Type,
+            IsOptional = callbackProperty.IsOptional,
+            IsNullable = callbackProperty.Type.IsNullable == true,
             IsCallback = true,
             CallbackParameters = callbackProperty.CallbackParameters,
             CallbackReturnType = callbackProperty.CallbackReturnType
