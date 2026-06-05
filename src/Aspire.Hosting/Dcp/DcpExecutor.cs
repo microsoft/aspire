@@ -830,12 +830,12 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
     // Returns null if a public port cannot be inferred from the annotation.
     private static int? GetPublicPortFromEndpointDefinition(IResource resource, EndpointAnnotation endpoint)
     {
-        // Use this when deciding whether DCP should bind a public port. Container endpoints
-        // distinguish host/public ports from container target ports, while non-container
-        // proxyless endpoints intentionally allow Port to default from TargetPort.
-        return resource.IsContainer()
-            ? endpoint.SpecifiedPort
-            : endpoint.Port;
+        // Containers differentiate between Port (client-facing, host interface port) and TargetPort
+        // (the port used by process inside the container), so we want to return 
+        // what was passed to Port property setter ONLY.
+        // For Executables Port and TargetPort are effectively the same, so we rely on the Port property getter
+        // that unifies them.
+        return resource.IsContainer() ? endpoint.SpecifiedPort : endpoint.Port;
     }
 
     private int? TryGetPersistedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
