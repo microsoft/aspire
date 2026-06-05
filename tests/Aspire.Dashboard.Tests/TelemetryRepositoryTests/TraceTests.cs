@@ -208,6 +208,44 @@ public class TraceTests
     }
 
     [Fact]
+    public void GetTelemetryGraphEdges_RejectedTraceFromFullBuffer_DoesNotAddEdge()
+    {
+        var peerResource = ModelTestHelpers.CreateResource("postgres", displayName: "postgres");
+        var peerResolver = new TestOutgoingPeerResolver(_ => ("postgres", peerResource));
+        var repository = CreateRepository(maxTraceCount: 1, outgoingPeerResolvers: [peerResolver]);
+        AddTrace(repository, traceId: "2", startTime: s_testTime.AddMinutes(2));
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api", instanceId: "api-def"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                kind: Span.Types.SpanKind.Client,
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(2),
+                                attributes: [new KeyValuePair<string, string>("server.address", "localhost")])
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+        Assert.Empty(repository.GetTelemetryGraphEdges());
+    }
+
+    [Fact]
     public void AddTraces_SelfParent_Reject()
     {
         // Arrange

@@ -1763,6 +1763,7 @@ public sealed partial class TelemetryRepository : IDisposable
                         // We need to ensure traces are in the correct order if we're:
                         // 1. Adding a new trace.
                         // 2. The first span of the trace has changed.
+                        var traceRetained = true;
                         if (newTrace)
                         {
                             var added = false;
@@ -1778,6 +1779,10 @@ public sealed partial class TelemetryRepository : IDisposable
                             }
                             if (!added)
                             {
+                                // CircularBuffer<T>.Insert(0, item) rejects the new item when the buffer is full.
+                                // In that case the incoming trace was older than every retained trace, so don't
+                                // update derived indexes such as telemetry graph edges for a trace we didn't keep.
+                                traceRetained = !_traces.IsFull;
                                 _traces.Insert(0, trace);
                             }
                         }
@@ -1819,10 +1824,13 @@ public sealed partial class TelemetryRepository : IDisposable
                             _tracePropertyKeys.Add((resourceView.Resource, kvp.Key));
                         }
 
-                        // Newly added or updated trace should always been in the collection.
-                        Debug.Assert(_traces.Contains(trace), "Trace not found in traces collection.");
+                        // Derived indexes should only track traces retained by the circular buffer.
+                        Debug.Assert(!traceRetained || _traces.Contains(trace), "Trace not found in traces collection.");
 
-                        updatedTraces[trace.Key] = trace;
+                        if (traceRetained)
+                        {
+                            updatedTraces[trace.Key] = trace;
+                        }
 
                         // Collect span for push-based streaming (lazy init to avoid allocation when no watchers)
                         addedSpans ??= new List<OtlpSpan>();
