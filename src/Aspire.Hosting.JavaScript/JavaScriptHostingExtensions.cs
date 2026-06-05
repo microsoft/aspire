@@ -20,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting;
@@ -1888,21 +1889,28 @@ public static class JavaScriptHostingExtensions
             packageFilesSourcePattern += " pnpm-workspace.yaml";
         }
 
-        resource
-            .WithAnnotation(new JavaScriptPackageManagerAnnotation("pnpm", runScriptCommand: "run", cacheMount: "/pnpm/store")
+        var pmAnnotation = new JavaScriptPackageManagerAnnotation("pnpm", runScriptCommand: "run", cacheMount: "/pnpm/store")
+        {
+            PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
+            // pnpm does not strip the -- separator and passes it to the script, causing Vite to ignore subsequent arguments.
+            CommandSeparator = null,
+            // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
+            InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
+            InitializeDockerRuntimeStage = stage =>
             {
-                PackageFilesPatterns = [new CopyFilePattern(packageFilesSourcePattern, "./"), .. (hasPnpmWorkspace ? GetPnpmPatchedDependenciesFilePatterns(pnpmWorkspacePath) : [])],
-                // pnpm does not strip the -- separator and passes it to the script, causing Vite to ignore subsequent arguments.
-                CommandSeparator = null,
-                // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
-                InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
-                InitializeDockerRuntimeStage = stage =>
-                {
-                    // Corepack's shim is not enough by itself: without invoking pnpm during the image build,
-                    // the first container start can try to download pnpm before running the app.
-                    stage.Run("corepack enable pnpm && pnpm --version");
-                },
-            })
+                // Corepack's shim is not enough by itself: without invoking pnpm during the image build,
+                // the first container start can try to download pnpm before running the app.
+                stage.Run("corepack enable pnpm && pnpm --version");
+            },
+        };
+
+        if (hasPnpmWorkspace)
+        {
+            pmAnnotation.PackageFilesPatterns.AddRange(GetPnpmPatchedDependenciesFilePatterns(pnpmWorkspacePath));
+        }
+
+        resource
+            .WithAnnotation(pmAnnotation)
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--prod"
@@ -2436,9 +2444,18 @@ public static class JavaScriptHostingExtensions
     /// <returns>An enumerable of <see cref="CopyFilePattern"/> representing the patched dependencies.</returns>
     private static IEnumerable<CopyFilePattern> GetPnpmPatchedDependenciesFilePatterns(string pnpmWorkspacePath)
     {
-        using var reader = new StreamReader(pnpmWorkspacePath);
-        var pnpmWorkspaceYaml = new Deserializer().Deserialize(reader);
-        var copyPatterns = new Dictionary<string, string>(); // key: distination path, value: patch file path
+        object? pnpmWorkspaceYaml = null;
+        var copyPatterns = new Dictionary<string, List<string>>(); // key: destination path, value: patch files path
+
+        try
+        {
+            using var reader = new StreamReader(pnpmWorkspacePath);
+            pnpmWorkspaceYaml = new Deserializer().Deserialize(reader);
+        }
+        catch (Exception ex) when (ex is IOException or YamlException)
+        {
+            // logger.LogWarning(ex, "Failed to parse pnpm workspace file");
+        }
 
         if (pnpmWorkspaceYaml is Dictionary<object, object> yamlDict &&
             yamlDict.TryGetValue("patchedDependencies", out var patchedDependenciesObj) &&
@@ -2452,18 +2469,18 @@ public static class JavaScriptHostingExtensions
                     var dirIdx = sourcePath.LastIndexOf('/');
                     var destDir = dirIdx >= 0 ? sourcePath[..dirIdx] : ".";
 
-                    if (copyPatterns.ContainsKey(destDir))
+                    if (copyPatterns.TryGetValue(destDir, out var files))
                     {
-                        copyPatterns[destDir] += $" {sourcePath}";
+                        files.Add(sourcePath);
                     }
                     else
                     {
-                        copyPatterns[destDir] = sourcePath;
+                        copyPatterns[destDir] = [sourcePath];
                     }
                 }
             }
         }
 
-        return copyPatterns.Select(kvp => new CopyFilePattern(kvp.Value, kvp.Key));
+        return copyPatterns.Select(kvp => new CopyFilePattern(string.Join(' ', kvp.Value), kvp.Key));
     }
 }
