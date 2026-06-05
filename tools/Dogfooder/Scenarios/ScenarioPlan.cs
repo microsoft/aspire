@@ -48,6 +48,12 @@ namespace Aspire.Dogfooder.Scenarios;
 /// Manual override for <c>ASPIRE_CLI_NUGET_SERVICE_INDEX</c> when not using
 /// the local proxy. Most scenarios leave this null.
 /// </param>
+/// <param name="PackageVersionPrefix">
+/// Optional explicit <c>/p:VersionPrefix=</c> override for the build. Used
+/// by the "Reproduce vCurrent" scenarios to stamp the local debug build
+/// with the actually-shipped version rather than the in-development
+/// version that <c>eng/Versions.props</c> on the current branch reports.
+/// </param>
 internal sealed record ScenarioPlan(
     ChannelKind Channel,
     int? PrNumber,
@@ -58,4 +64,5 @@ internal sealed record ScenarioPlan(
     bool IncludeNativeBuild,
     bool UseLocalNuGetProxy,
     string? LocalPackageSourceDir,
-    string? NuGetServiceIndexOverride);
+    string? NuGetServiceIndexOverride,
+    string? PackageVersionPrefix = null);

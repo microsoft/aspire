@@ -87,4 +87,13 @@ internal sealed class DogfoodSession
     /// staring at a blank black rectangle.
     /// </summary>
     public string? TerminalCrashMessage { get; set; }
+
+    /// <summary>
+    /// Per-session scratch workspace owning every file the run produces
+    /// (build log, copied <c>.nupkg</c> packages, NuGet global-packages
+    /// cache, terminal cwd, <c>dogfood.json</c> manifest). Created by the
+    /// preparer at the start of <c>PrepareAsync</c>. Null until the user
+    /// hits Continue for the first time.
+    /// </summary>
+    public SessionWorkspace? Workspace { get; set; }
 }

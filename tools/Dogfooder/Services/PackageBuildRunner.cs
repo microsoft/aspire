@@ -27,21 +27,30 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
         // Arcade emits packages under artifacts/packages/{Configuration}/{Shipping|NonShipping}.
         // Dogfood builds are always Debug + Shipping today; if we ever want
         // Release dogfood packages we'd extend the request shape.
-        var packagesDir = Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping");
+        var arcadePackagesDir = Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping");
 
         var (fileName, args) = BuildCommandLine(repoRoot, request);
 
-        // Mirror every line written to onLine into an on-disk log file so the
-        // user has something to grep after the TUI exits. Placed under the
-        // repo's artifacts/log/dogfooder/ directory because that is git-
-        // ignored and lives alongside the rest of the build's artifacts; one
-        // file per invocation so concurrent dogfooder runs in different
-        // worktrees don't stomp each other.
-        var logDir = Path.Combine(repoRoot, "artifacts", "log", "dogfooder");
-        Directory.CreateDirectory(logDir);
-        var logPath = Path.Combine(
-            logDir,
-            $"build-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}.log");
+        // Routing the build log into the session workspace when one is
+        // supplied keeps every artifact from a single dogfood run together
+        // in one place (the user gets a single directory they can hand to
+        // a bug report). Falling back to artifacts/log/dogfooder/ preserves
+        // the original git-ignored location for callers that don't have a
+        // workspace yet (e.g. ad-hoc command-line invocations).
+        string logPath;
+        if (request.BuildLogPath is { Length: > 0 } explicitPath)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(explicitPath)!);
+            logPath = explicitPath;
+        }
+        else
+        {
+            var logDir = Path.Combine(repoRoot, "artifacts", "log", "dogfooder");
+            Directory.CreateDirectory(logDir);
+            logPath = Path.Combine(
+                logDir,
+                $"build-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}.log");
+        }
         // Use a StreamWriter with AutoFlush so a crash mid-build still leaves
         // a partial-but-readable log on disk. The file is closed in the
         // finally block below.
@@ -156,16 +165,47 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
 
             sw.Stop();
 
-            var nupkgs = Directory.Exists(packagesDir)
-                ? Directory.EnumerateFiles(packagesDir, "*.nupkg", SearchOption.TopDirectoryOnly).ToList()
-                : (IReadOnlyList<string>)Array.Empty<string>();
+            var arcadeNupkgs = Directory.Exists(arcadePackagesDir)
+                ? Directory.EnumerateFiles(arcadePackagesDir, "*.nupkg", SearchOption.TopDirectoryOnly).ToList()
+                : new List<string>();
+
+            // When the caller (DogfoodSessionPreparer) gave us a per-session
+            // packages dir, copy every produced .nupkg there so the local
+            // NuGet proxy is overlaying session-owned bytes rather than
+            // whatever happens to be sitting in the shared arcade output
+            // dir (which could be stale from a prior run with a different
+            // VersionPrefix/Suffix). The copy is small — single-digit
+            // hundreds of MB at the high end — and the alternative
+            // (pointing the proxy directly at arcadePackagesDir) leaks
+            // state between sessions in a way that's confusing to debug.
+            IReadOnlyList<string> producedNupkgs;
+            string effectivePackagesDir;
+            if (request.OutputPackagesDir is { Length: > 0 } outDir && arcadeNupkgs.Count > 0)
+            {
+                Directory.CreateDirectory(outDir);
+                var copied = new List<string>(arcadeNupkgs.Count);
+                foreach (var src in arcadeNupkgs)
+                {
+                    var dst = Path.Combine(outDir, Path.GetFileName(src));
+                    File.Copy(src, dst, overwrite: true);
+                    copied.Add(dst);
+                }
+                producedNupkgs = copied;
+                effectivePackagesDir = outDir;
+                Tee($"# Copied {copied.Count} .nupkg files to {outDir}");
+            }
+            else
+            {
+                producedNupkgs = arcadeNupkgs;
+                effectivePackagesDir = arcadePackagesDir;
+            }
 
             Tee($"# Exit {proc.ExitCode} in {sw.Elapsed.TotalSeconds:F1}s. Log: {logPath}");
 
             return new PackageBuildResult(
                 Success: proc.ExitCode == 0,
-                PackagesDirectory: packagesDir,
-                ProducedNupkgPaths: nupkgs,
+                PackagesDirectory: effectivePackagesDir,
+                ProducedNupkgPaths: producedNupkgs,
                 ExitCode: proc.ExitCode,
                 Elapsed: sw.Elapsed);
         }
@@ -220,6 +260,18 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
             // produces NuGet packages for the hosting/components, which is all
             // we need for proxy overlay scenarios.
             props.Add("/p:SkipNativeBuild=true");
+        }
+
+        // VersionPrefix is honoured by Arcade's versioning pipeline as the
+        // major.minor.patch portion of every produced package version.
+        // We use it so a local debug build of the in-development branch can
+        // be stamped with whatever the actually-shipped vCurrent is
+        // (eng/Versions.props on the branch carries the *next* version,
+        // not the current one). When unset Arcade falls back to the value
+        // from eng/Versions.props as usual.
+        if (request.VersionPrefix is { Length: > 0 } prefix)
+        {
+            props.Add($"/p:VersionPrefix={prefix}");
         }
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

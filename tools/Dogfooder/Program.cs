@@ -32,6 +32,12 @@ internal static class Program
         builder.Services.AddSingleton<IGitHubAuthProbe, GitHubAuthProbe>();
         builder.Services.AddSingleton<ILocalAspireCliLocator, LocalAspireCliLocator>();
         builder.Services.AddSingleton<IPackageBuildRunner, PackageBuildRunner>();
+        // The vCurrent resolver is registered as both the interface and the
+        // concrete VCurrentVersionResolver so the same instance can be
+        // disposed (it owns an HttpClient + SemaphoreSlim) when the host
+        // shuts down; the registry consumes the interface.
+        builder.Services.AddSingleton<VCurrentVersionResolver>();
+        builder.Services.AddSingleton<IVCurrentVersionResolver>(sp => sp.GetRequiredService<VCurrentVersionResolver>());
         builder.Services.AddSingleton<IDogfoodSessionPreparer, DogfoodSessionPreparer>();
         builder.Services.AddSingleton<Scenarios.DogfoodScenarioRegistry>();
 
@@ -42,6 +48,16 @@ internal static class Program
 
         using var host = builder.Build();
         await host.StartAsync().ConfigureAwait(false);
+
+        // Kick the vCurrent probe early so by the time the user clicks
+        // Continue on a "Reproduce vCurrent" scenario the resolver's
+        // LatestStableOrNull snapshot is populated and the build is stamped
+        // with the actual released version rather than the in-development
+        // fallback from eng/Versions.props. Fire-and-forget is fine: the
+        // resolver caches the result and the scenario falls back when the
+        // probe hasn't completed yet (or failed offline).
+        _ = host.Services.GetRequiredService<IVCurrentVersionResolver>()
+            .GetLatestStableAsync(host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
 
         try
         {

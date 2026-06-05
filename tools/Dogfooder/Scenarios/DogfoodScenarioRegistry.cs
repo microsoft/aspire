@@ -18,7 +18,7 @@ namespace Aspire.Dogfooder.Scenarios;
 /// </remarks>
 internal sealed class DogfoodScenarioRegistry
 {
-    public DogfoodScenarioRegistry()
+    public DogfoodScenarioRegistry(Services.IVCurrentVersionResolver vCurrentResolver)
     {
         // Cache the repo version once. Scenarios that depend on it (most of
         // them) close over this instance so they reflect the repo's version
@@ -28,7 +28,7 @@ internal sealed class DogfoodScenarioRegistry
 
         Scenarios = new IDogfoodScenario[]
         {
-            new ReproVCurrentLocalScenario(repoVersion),
+            new ReproVCurrentLocalScenario(repoVersion, vCurrentResolver),
             new ReproVCurrentPublishedScenario(repoVersion),
             new VNextMinorStableLocalScenario(repoVersion),
             new VNextHotfixStableLocalScenario(repoVersion),

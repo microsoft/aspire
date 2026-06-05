@@ -74,6 +74,15 @@ internal static class SessionTerminalContent
                 {
                     opts.Arguments.Add(a);
                 }
+                // Drop the shell into the per-session workspace so anything
+                // the user runs (`aspire new`, `dotnet new`, etc.) lands in
+                // a clean directory alongside the build log, packages, and
+                // dogfood.json manifest — keeping every artifact from one
+                // dogfood run in one place that the user can hand to a bug
+                // report. Falls back to the parent cwd when preparation
+                // hasn't run yet (shouldn't happen — terminal only opens
+                // after preparation succeeds — but defensive).
+                opts.WorkingDirectory = session.Workspace?.Root;
                 // Intentionally do NOT set opts.Environment here. The
                 // dogfooding overrides are applied by typing shell commands
                 // after launch so they are visible in the terminal scrollback.

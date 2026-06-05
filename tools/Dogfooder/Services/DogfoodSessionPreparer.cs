@@ -86,11 +86,24 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
         var scenarioPlan = scenario.Build(session.Config.Inputs);
         session.ScenarioPlan = scenarioPlan;
 
+        // Create the per-session workspace FIRST so every downstream phase
+        // can route its outputs (build log, copied packages, NuGet global-
+        // packages cache, eventual dogfood.json) into one place. The
+        // workspace persists across re-runs of the same session — if the
+        // user closes and reopens the session window we keep using the
+        // same temp dir so the inspection-after-the-fact UX is consistent.
+        var workspace = session.Workspace ??= SessionWorkspace.Create();
+        prep.Append($"# Workspace: {workspace.Root}");
+
         prep.Append($"# Scenario: {scenario.DisplayName} ({scenario.Id})");
         prep.Append($"#   Channel: {scenarioPlan.Channel}{(scenarioPlan.PrNumber is int n ? $" #{n}" : "")}");
         if (!string.IsNullOrWhiteSpace(scenarioPlan.VersionOverride))
         {
             prep.Append($"#   Version override: {scenarioPlan.VersionOverride}");
+        }
+        if (!string.IsNullOrWhiteSpace(scenarioPlan.PackageVersionPrefix))
+        {
+            prep.Append($"#   Build VersionPrefix: {scenarioPlan.PackageVersionPrefix}");
         }
         if (scenarioPlan.BuildPackagesBeforeLaunch)
         {
@@ -98,22 +111,28 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
         }
         if (scenarioPlan.UseLocalNuGetProxy)
         {
-            prep.Append($"#   Local NuGet proxy: ON (overlay {scenarioPlan.LocalPackageSourceDir ?? "default packages dir"})");
+            prep.Append($"#   Local NuGet proxy: ON (overlay {workspace.PackagesDir})");
         }
 
         // Phase 1: optional package build.
         if (scenarioPlan.BuildPackagesBeforeLaunch)
         {
             prep.SetPhase(SessionPreparationState.Phase.Building);
-            // Empty suffix means "no -suffix appended" — produces e.g. 13.5.0
-            // packages rather than 13.5.0-dogfood.x. Build runner accepts an
+            // Empty suffix means "no -suffix appended" — produces e.g. 13.4.2
+            // packages rather than 13.4.2-dogfood.x. Build runner accepts an
             // empty string for this case.
             var suffix = scenarioPlan.PackageVersionSuffix ?? "";
 
             try
             {
+                var buildLogPath = Path.Combine(workspace.LogsDir, "build.log");
                 var buildResult = await _buildRunner.RunAsync(
-                    new PackageBuildRequest(suffix, scenarioPlan.IncludeNativeBuild),
+                    new PackageBuildRequest(
+                        VersionSuffix: suffix,
+                        IncludeNativeBuild: scenarioPlan.IncludeNativeBuild,
+                        VersionPrefix: scenarioPlan.PackageVersionPrefix,
+                        OutputPackagesDir: workspace.PackagesDir,
+                        BuildLogPath: buildLogPath),
                     prep.Append,
                     cancellationToken).ConfigureAwait(false);
                 prep.Append($"# Build exited {buildResult.ExitCode} in {buildResult.Elapsed.TotalSeconds:F1}s, {buildResult.ProducedNupkgPaths.Count} .nupkg files in {buildResult.PackagesDirectory}");
@@ -137,8 +156,12 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
         if (scenarioPlan.UseLocalNuGetProxy)
         {
             prep.SetPhase(SessionPreparationState.Phase.StartingProxy);
-            var dir = scenarioPlan.LocalPackageSourceDir
-                ?? Path.Combine(FindRepoRootOrCwd(), "artifacts", "packages", "Debug", "Shipping");
+            // Always overlay the session-local packages dir. If the scenario
+            // requested a custom dir we honour it (e.g. the user manually
+            // dropped some .nupkg files), but the default is the workspace
+            // packages dir so the proxy serves the bytes we just built into
+            // this session.
+            var dir = scenarioPlan.LocalPackageSourceDir ?? workspace.PackagesDir;
             prep.Append($"# Starting DogfoodingNuGetServer with local overrides from {dir}");
 
             try
@@ -150,13 +173,8 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
                 serviceIndexUrl = server.ServiceIndexUri!.ToString();
                 prep.Append($"# Listening on {serviceIndexUrl} ({server.LocalPackageIdCount} ids, {server.LocalPackageCount} versions)");
 
-                // Wire the server's events into the per-session traffic
-                // state so the NuGet analyzer tab updates live. The session
-                // owns the state object so it survives across renders.
                 var traffic = session.NuGetTraffic ??= new NuGetTrafficState();
                 traffic.Backfill(server.RecentEvents);
-                // Paired (request + response) event eliminates the fragile
-                // id-rematch dance the prior version performed.
                 server.TrafficObserved += traffic.Append;
             }
             catch (Exception ex)
@@ -174,13 +192,32 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
         // Phase 3: compute environment plan. Service-index URL from the
         // started server takes precedence over the manual scenario override —
         // we want the proxy to be used when the scenario opted in.
-        var plan = BuildPlan(scenarioPlan, serviceIndexUrl);
+        var plan = BuildPlan(scenarioPlan, serviceIndexUrl, workspace);
         session.Plan = plan;
+
+        // Phase 4: write the dogfood.json manifest. Best-effort; failure is
+        // logged but doesn't fail the session because the manifest is
+        // documentation, not a hard input downstream.
+        var manifest = new DogfoodManifest(
+            CreatedAt: DateTimeOffset.UtcNow,
+            ScenarioId: scenario.Id,
+            ScenarioDisplayName: scenario.DisplayName,
+            Inputs: session.Config.Inputs,
+            ResolvedVCurrentVersion: scenarioPlan.VersionOverride,
+            PackageVersionStamp: scenarioPlan.PackageVersionPrefix
+                ?? (scenarioPlan.PackageVersionSuffix is { Length: > 0 } s ? $"(suffix: {s})" : null),
+            WorkspaceRoot: workspace.Root,
+            LogsDir: workspace.LogsDir,
+            NuGetCacheDir: workspace.NuGetCacheDir,
+            PackagesDir: workspace.PackagesDir);
+        workspace.WriteManifest(manifest);
+        prep.Append($"# Wrote manifest: {workspace.DogfoodJsonPath}");
+
         prep.SetPhase(SessionPreparationState.Phase.Complete);
         return new PreparationResult(true, plan, server);
     }
 
-    private SessionEnvironmentPlan BuildPlan(ScenarioPlan scenarioPlan, string? nugetServiceIndexFromServer)
+    private SessionEnvironmentPlan BuildPlan(ScenarioPlan scenarioPlan, string? nugetServiceIndexFromServer, SessionWorkspace workspace)
     {
         var overrides = new List<KeyValuePair<string, string>>();
 
@@ -224,23 +261,18 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
             overrides.Add(new(AspireCliIdentityEnvVars.NuGetServiceIndex, nugetIndex));
         }
 
-        return new SessionEnvironmentPlan(overrides, _cliLocator.CliDirectory);
-    }
+        // Point NuGet's global-packages cache at the per-session workspace
+        // so the CLI's restore path can never satisfy a request from bytes
+        // the user already has cached machine-wide. Without this the proxy
+        // looks like it's serving every request but NuGet quietly hits its
+        // existing cache for any package id that was already downloaded
+        // from nuget.org — which defeats the whole point of overlaying
+        // session-local packages with the same id/version. Cold cache per
+        // session is a few extra MB on disk but eliminates an entire class
+        // of "but I built it, why isn't it being used" confusion.
+        // See https://learn.microsoft.com/nuget/consume-packages/managing-the-global-packages-and-cache-folders
+        overrides.Add(new("NUGET_PACKAGES", workspace.NuGetCacheDir));
 
-    private static string FindRepoRootOrCwd()
-    {
-        // Mirrors PackageBuildRunner.FindRepoRoot's walk-up-for-global.json,
-        // duplicated here because making it public on the locator would
-        // widen the API surface for a single internal use.
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "global.json")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        return Environment.CurrentDirectory;
+        return new SessionEnvironmentPlan(overrides, _cliLocator.CliDirectory);
     }
 }
