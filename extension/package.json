@@ -1014,7 +1014,7 @@
     "tree-sitter-c-sharp": "0.23.5",
     "vscode-jsonrpc": "8.2.1",
     "web-tree-sitter": "0.26.9",
-    "ws": "8.20.0"
+    "ws": "8.21.0"
   },
   "resolutions": {
     "braces": "3.0.3",
@@ -1028,6 +1028,10 @@
     "underscore": "1.13.8",
     "postcss": "8.5.10",
     "uuid": "14.0.0",
-    "tmp": "0.2.6"
+    "tmp": "0.2.6",
+    "@nevware21/ts-utils": "0.14.0",
+    "fast-uri": "3.1.2",
+    "qs": "6.15.2",
+    "ws": "8.21.0"
   }
 }
