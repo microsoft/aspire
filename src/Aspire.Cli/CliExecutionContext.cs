@@ -14,12 +14,11 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
 
     /// <summary>
     /// Gets the hive label baked into the <strong>running CLI binary</strong>:
-    /// one of <c>local</c>, <c>stable</c>, <c>staging</c>, <c>daily</c>, the
-    /// per-PR label <c>pr-&lt;N&gt;</c> (for example <c>pr-16820</c>), or the
-    /// run-scoped label <c>run-&lt;N&gt;</c>. The value is sourced from
-    /// <c>[AssemblyMetadata("AspireCliChannel", "...")]</c> and is consumed
-    /// verbatim by the packaging service to select the matching hive directory
-    /// for this CLI process.
+    /// one of <c>local</c>, <c>stable</c>, <c>staging</c>, <c>daily</c>, or the
+    /// per-PR label <c>pr-&lt;N&gt;</c> (for example <c>pr-16820</c>). The value
+    /// is sourced from <c>[AssemblyMetadata("AspireCliChannel", "...")]</c> and
+    /// is consumed verbatim by the packaging service to select the matching
+    /// hive directory for this CLI process.
     /// </summary>
     /// <remarks>
     /// <para>

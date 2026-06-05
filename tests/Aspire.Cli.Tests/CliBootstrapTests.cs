@@ -20,6 +20,8 @@ namespace Aspire.Cli.Tests;
 /// </summary>
 public class CliBootstrapTests(ITestOutputHelper outputHelper)
 {
+    private static readonly string[] s_fixedChannels = ["stable", "staging", "daily", "local"];
+
     private static async Task<IHost> BuildHostAsync()
     {
         var loggingOptions = Program.ParseLoggingOptions([]);
@@ -51,10 +53,10 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         // Test host can be built with /p:AspireCliChannel=<anything in the accepted set>;
         // assert shape, not a single literal, so this test stops being an accidental
-        // regression for non-default builds (including pr-<N> and run-<N> CI builds).
+        // regression for non-default builds (including pr-<N> when the test host is a PR build).
         Assert.True(
-            IdentityChannelReader.IsValidChannel(channel),
-            $"Unexpected channel '{channel}'; expected one of stable|staging|daily|local|pr-<N>|run-<N>.");
+            s_fixedChannels.Contains(channel) || channel.StartsWith("pr-", StringComparison.Ordinal),
+            $"Unexpected channel '{channel}'; expected one of stable|staging|daily|local|pr-<N>.");
     }
 
     [Fact]
@@ -95,7 +97,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         // reads Assembly.GetEntryAssembly() directly and the comparison works because
         // Aspire.Cli.csproj and the test csproj forward the same $(AspireCliChannel) MSBuild
         // property — keeping both assemblies in lockstep regardless of the build configuration
-        // (so this test is also correct on /p:AspireCliChannel=stable, pr-<N>, or run-<N> CI builds).
+        // (so this test is also correct on /p:AspireCliChannel=stable or pr-<N> CI builds).
         var bakedChannel = GetBakedEntryAssemblyChannel();
 
         using var host = await BuildHostAsync();

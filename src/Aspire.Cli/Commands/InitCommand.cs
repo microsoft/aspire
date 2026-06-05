@@ -297,14 +297,14 @@ internal sealed class InitCommand : BaseCommand
         // had a `profiles` section. Use the SAME ports for apphost.run.json so the two
         // files always agree on dashboard / OTLP / resource service endpoints.
         //
-        // Persist the running CLI's identity channel (e.g. `daily`, `staging`, `pr-<N>`, `run-<N>`)
+        // Persist the running CLI's identity channel (e.g. `daily`, `staging`, `pr-<N>`)
         // so subsequent commands like `aspire add` resolve packages against the matching
         // channel. Resolve through PackagingService and only persist when the identity
         // matches a registered Explicit channel — mirrors `NewCommand.cs:316-402`.
         //
         // `ResolvePersistableChannelNameAsync` filters out identities that aren't
         // registered as channels on this CLI install (e.g. `local`, `staging` on a CLI
-        // without the staging feature flag, stale `pr-<N>`/`run-<N>` after the hive is gone),
+        // without the staging feature flag, stale `pr-<N>` after the hive is gone),
         // the Implicit `default` channel that no CLI identity ever has, and `stable`
         // because the public-feed behavior is already the default. Non-default
         // Explicit channels are persisted so subsequent commands can match a PSM rule.
@@ -348,7 +348,7 @@ internal sealed class InitCommand : BaseCommand
         // outright.
         //
         // Source: CliExecutionContext.IdentityChannel (stable / staging / daily / pr-<N> /
-        // run-<N> / local). NuGetConfigMerger underneath creates a new file or merges missing
+        // local). NuGetConfigMerger underneath creates a new file or merges missing
         // sources into an existing one, so adding hives later is handled the same way as
         // for templates. Mirrors what DropCSharpSingleFileSkeletonAsync already does for
         // the apphost.cs path on every channel.
@@ -369,8 +369,8 @@ internal sealed class InitCommand : BaseCommand
 
         // Resolve the channel-aware template package version + feed mapping. The running
         // CLI binary's identity channel (CliExecutionContext.IdentityChannel — stable, staging,
-        // daily, pr-<N>, run-<N>, or local) drives the selection so a developer scaffolding with a
-        // hive-backed CLI gets a project wired to the matching hive. Hive packages are
+        // daily, pr-<N>, or local) drives the selection so a developer scaffolding with a
+        // pr-<N> CLI gets a project wired to the matching pr-<N> hive. PR hives are
         // intentionally excluded — init should produce the same template on every machine
         // for a given CLI build.
         TemplatePackageSelection selection;

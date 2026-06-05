@@ -24,18 +24,12 @@ on:
             {"os": "windows-latest", "runner": "windows-11-arm", "rids": "win-arm64"},
             {"os": "macos-latest", "runner": "macos-latest", "rids": "osx-arm64"}
           ]
-    outputs:
-      cliChannel:
-        description: The Aspire CLI identity channel baked into the archive.
-        value: ${{ jobs.build_cli_archives.outputs.cliChannel }}
 
 jobs:
 
   build_cli_archives:
     name: Build CLI (${{ matrix.targets.rids }})
     runs-on: ${{ matrix.targets.runner }}
-    outputs:
-      cliChannel: ${{ steps.compute_cli_channel.outputs.cliChannel }}
     strategy:
       matrix:
         targets: ${{ fromJson(inputs.targets) }}
@@ -45,7 +39,7 @@ jobs:
     #   pull_request          -> pr-<PR_NUMBER>
     #   refs/heads/release/*  -> staging
     #   refs/heads/internal/release/* -> staging
-    #   refs/heads/main      -> run-<GITHUB_RUN_ID>
+    #   refs/heads/main      -> local
     #   anything else (schedule, workflow_dispatch on other refs) -> daily
     # The AzDO 'stable' branch (DotNetFinalVersionKind == 'release') is
     # intentionally omitted: stable archives are produced only by the AzDO
@@ -54,18 +48,9 @@ jobs:
     # CLI's IdentityChannelReader can return the channel verbatim, with no
     # separate parse of the version suffix at runtime.
     env:
-      ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || github.ref == 'refs/heads/main' && format('run-{0}', github.run_id) || 'daily' }}
+      ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || github.ref == 'refs/heads/main' && 'local' || 'daily' }}
 
     steps:
-      - name: Record CLI channel
-        id: compute_cli_channel
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($Env:ASPIRE_CLI_CHANNEL)) {
-            throw "ASPIRE_CLI_CHANNEL was not computed."
-          }
-          "cliChannel=$Env:ASPIRE_CLI_CHANNEL" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append -Encoding utf8
-
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 

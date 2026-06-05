@@ -352,7 +352,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
                 // When no --channel was passed, prefer the channel whose name matches the running
                 // CLI's identity (CliExecutionContext.IdentityChannel — stable, staging, daily,
-                // local, pr-<N>, or run-<N>) over the Implicit (nuget.org) channel. This keeps the
+                // local, or pr-<N>) over the Implicit (nuget.org) channel. This keeps the
                 // resolved template package and the channel pinned into aspire.config.json
                 // mutually satisfiable: a daily CLI scaffolds a daily-channel project whose
                 // prerelease SDK version is reachable through the daily channel's Package Source

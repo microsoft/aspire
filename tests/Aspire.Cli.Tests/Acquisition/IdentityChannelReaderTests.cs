@@ -103,11 +103,6 @@ public class IdentityChannelReaderTests
     [InlineData("pr-0", true)]                                  // zero is permitted; build pipeline never emits it but the reader does not gate on positivity
     [InlineData("pr-99999999999999999999", true)]               // arbitrarily long digit run is accepted; range check is not the reader's job
     [InlineData("pr-0123", true)]                               // leading zeros are permitted; locks in the "any ASCII-digit run" contract
-    [InlineData("run-1", true)]
-    [InlineData("run-12345", true)]
-    [InlineData("run-0", true)]
-    [InlineData("run-99999999999999999999", true)]
-    [InlineData("run-0123", true)]
     [InlineData("pr", false)]                                   // legacy literal — the change this test guards against regressing
     [InlineData("pr-", false)]
     [InlineData("pr-abc", false)]
@@ -120,13 +115,6 @@ public class IdentityChannelReaderTests
     [InlineData("pr-١", false)]                                 // Arabic-Indic digit U+0661 — ASCII-only contract, not Unicode-digit
     [InlineData("Pr-12345", false)]                             // case-sensitive prefix
     [InlineData("PR-12345", false)]
-    [InlineData("run", false)]
-    [InlineData("run-", false)]
-    [InlineData("run-abc", false)]
-    [InlineData("run-12a", false)]
-    [InlineData("run-12.34", false)]
-    [InlineData("Run-12345", false)]
-    [InlineData("RUN-12345", false)]
     [InlineData("Stable", false)]                               // literals are case-sensitive (ordinal)
     [InlineData("STABLE", false)]
     [InlineData("Local", false)]

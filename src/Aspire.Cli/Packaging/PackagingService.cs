@@ -25,8 +25,8 @@ internal interface IPackagingService
     /// synthesized for the running CLI, or <see langword="null"/> when staging IS available.
     /// </summary>
     /// <remarks>
-    /// On a CLI whose baked <c>AspireCliChannel</c> identity is <c>daily</c>, <c>local</c>,
-    /// <c>pr-&lt;N&gt;</c>, or <c>run-&lt;N&gt;</c>, there is no deterministic way to produce a real staging feed:
+    /// On a CLI whose baked <c>AspireCliChannel</c> identity is <c>daily</c>, <c>local</c>, or
+    /// <c>pr-&lt;N&gt;</c>, there is no deterministic way to produce a real staging feed:
     /// those identities are not officially published release-branch builds, so no SHA-specific
     /// darc feed (<c>darc-pub-microsoft-aspire-&lt;hash&gt;</c>) carries their packages, and
     /// falling back to the shared daily feed silently resolves daily packages instead of staging
@@ -143,7 +143,7 @@ internal class PackagingService : IPackagingService
             new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
         }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", logger: _logger);
 
-        var hivePackageChannels = new List<PackageChannel>();
+        var prPackageChannels = new List<PackageChannel>();
 
         // Cannot use HiveDirectory.Exists here because it blows up on the
         // intermediate directory structure which may not exist in some
@@ -154,7 +154,7 @@ internal class PackagingService : IPackagingService
             var prHives = _executionContext.HivesDirectory.GetDirectories();
             foreach (var prHive in prHives)
             {
-                hivePackageChannels.Add(CreateLocalHiveChannel(prHive.Name, new DirectoryInfo(Path.Combine(prHive.FullName, "packages"))));
+                prPackageChannels.Add(CreateLocalHiveChannel(prHive.Name, new DirectoryInfo(Path.Combine(prHive.FullName, "packages"))));
             }
         }
 
@@ -162,8 +162,8 @@ internal class PackagingService : IPackagingService
         {
             // The install-prefix hive belongs to the running PR CLI. Prefer it over a same-named
             // default hive so a stale ~/.aspire/hives/pr-<N> cannot mask the co-installed packages.
-            hivePackageChannels.RemoveAll(c => string.Equals(c.Name, _executionContext.IdentityChannel, StringComparisons.ChannelName));
-            hivePackageChannels.Add(CreateLocalHiveChannel(_executionContext.IdentityChannel, prInstallPackagesDirectory));
+            prPackageChannels.RemoveAll(c => string.Equals(c.Name, _executionContext.IdentityChannel, StringComparisons.ChannelName));
+            prPackageChannels.Add(CreateLocalHiveChannel(_executionContext.IdentityChannel, prInstallPackagesDirectory));
         }
 
         var channels = new List<PackageChannel>([defaultChannel, stableChannel]);
@@ -224,9 +224,9 @@ internal class PackagingService : IPackagingService
             }
         }
 
-        // Add daily and local hive-backed channels after staging.
+        // Add daily and PR channels after staging
         channels.Add(dailyChannel);
-        channels.AddRange(hivePackageChannels);
+        channels.AddRange(prPackageChannels);
 
         return Task.FromResult<IEnumerable<PackageChannel>>(channels);
     }
@@ -418,7 +418,7 @@ internal class PackagingService : IPackagingService
     private PackageChannel? CreateStagingChannel(PackageChannelQuality defaultQuality)
     {
         // Refuse to synthesize a staging channel on CLI identities that cannot produce a real
-        // staging feed (daily, local, pr-<N>, run-<N>). Silently falling back to the shared daily feed or
+        // staging feed (daily, local, pr-<N>). Silently falling back to the shared daily feed or
         // a non-existent SHA-specific darc feed is the bug tracked by
         // https://github.com/microsoft/aspire/issues/16652. The escape hatches (explicit
         // overrideStagingFeed, or the StagingChannelEnabled feature flag) are honored inside
@@ -559,7 +559,7 @@ internal class PackagingService : IPackagingService
         //     stable release branch commit baked into the CLI.
         //   - staging: dogfoods staging packages (see #17155 which auto-registers the staging
         //     channel for the staging CLI identity).
-        // For daily, local, pr-<N>, and run-<N> identities, falling back to either the SHA feed (no real
+        // For daily, local, and pr-<N> identities, falling back to either the SHA feed (no real
         // darc feed exists) or the shared daily feed silently resolves daily packages — the
         // exact bug tracked by https://github.com/microsoft/aspire/issues/16652.
         return string.Equals(GetEffectiveIdentityChannel(), PackageChannelNames.Stable, StringComparisons.ChannelName)
