@@ -286,10 +286,18 @@
                         EndsWith('.symbols.nupkg') filter) and routes it
                         to SymbolUploadHelper for MSDL ingestion.
 
-    AfterTargets=PackDotnetTool runs both targets on the same per-RID
-    build agent that produced the ILC native output, so the canonical
-    $(ArtifactsBinDir)Aspire.Cli/... layout exists and $(CliRuntime) /
-    $(Version) are fully resolved.
+    AfterTargets=PackDotnetTool runs both targets after the per-RID tool
+    nupkg has been packed, so $(CliRuntime) / $(Version) are fully resolved.
+
+    Both targets gate on Exists($(_NativeOutputDir)aspire[.exe]) — the
+    publish binary itself — so they silently no-op in flows that invoke
+    PackDotnetTool without first running PublishToDisk (notably
+    eng/AfterSigning.targets' _PackCliDotnetToolAfterPack on
+    build-packages.yml runners, where the archive is consumed via
+    _ExtractNativeBinaryFromArchive but the ILC native output isn't
+    regenerated locally). When the publish binary IS present, the Errors
+    inside each target catch the real "ILC ran but the symbol file isn't
+    where we expect" failure mode.
 
     See docs/ci/cli-native-symbols.md for the operating doctrine.
   -->
@@ -310,7 +318,7 @@
 
   <Target Name="_PackNativeAotSymbolsWindows"
           AfterTargets="PackDotnetTool"
-          Condition="'$(CliRuntime)' != '' and $(CliRuntime.StartsWith('win-'))">
+          Condition="'$(CliRuntime)' != '' and $(CliRuntime.StartsWith('win-')) and Exists('$(_NativeOutputDir)aspire.exe')">
     <PropertyGroup>
       <_AspireNativePdbPath>$([MSBuild]::NormalizePath($(_NativeOutputDir), 'aspire.pdb'))</_AspireNativePdbPath>
     </PropertyGroup>
@@ -329,7 +337,7 @@
 
   <Target Name="_PackNativeAotSymbolsUnix"
           AfterTargets="PackDotnetTool"
-          Condition="'$(CliRuntime)' != '' and !$(CliRuntime.StartsWith('win-'))">
+          Condition="'$(CliRuntime)' != '' and !$(CliRuntime.StartsWith('win-')) and Exists('$(_NativeOutputDir)aspire')">
     <PropertyGroup>
       <_NativeSymbolsScratchDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'native-symbols-pack'))</_NativeSymbolsScratchDir>
 
