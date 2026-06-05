@@ -21,7 +21,9 @@ internal static class MenuBarBuilder
         AppState state,
         IDogfoodSessionPreparer preparer,
         SessionWindowRegistry windowRegistry,
-        SessionTerminalRegistry terminalRegistry)
+        SessionTerminalRegistry terminalRegistry,
+        DogfoodingNuGetServerRegistry nuGetRegistry,
+        Scenarios.DogfoodScenarioRegistry scenarioRegistry)
     {
         return ctx.MenuBar(m =>
         [
@@ -29,31 +31,25 @@ internal static class MenuBarBuilder
             [
                 m.MenuItem("New Session").OnActivated(e =>
                 {
-                    // Create the session up front with a placeholder name so
-                    // the user can immediately edit it in the opened window.
-                    // The session lives in the store from this moment on;
-                    // pressing Cancel inside the window removes it again.
                     var ordinal = state.Sessions.Sessions.Count + 1;
                     var session = state.Sessions.Add(
                         name: $"session-{ordinal}",
-                        config: DogfoodSessionConfig.Empty);
+                        config: DogfoodSessionConfig.ForScenario(scenarioRegistry.Default.Id));
                     SessionWindowOpener.OpenOrFocus(
                         e.Windows,
                         session,
                         state,
                         preparer,
                         windowRegistry,
-                        terminalRegistry);
+                        terminalRegistry,
+                        nuGetRegistry,
+                        scenarioRegistry);
                 }),
                 m.Separator(),
                 m.MenuItem("Quit").OnActivated(e => e.Context.RequestStop()),
             ]),
             m.Menu("Sessions", m =>
             {
-                // Build the submenu dynamically from the store. We can't
-                // hand the menu builder an empty list (it would render an
-                // unclickable header), so when there are no sessions we
-                // show a disabled-looking placeholder item.
                 var sessions = state.Sessions.Sessions;
                 if (sessions.Count == 0)
                 {
@@ -71,7 +67,9 @@ internal static class MenuBarBuilder
                             state,
                             preparer,
                             windowRegistry,
-                            terminalRegistry)))
+                            terminalRegistry,
+                            nuGetRegistry,
+                            scenarioRegistry)))
                     .ToArray();
             }),
             m.Menu("Help", m =>

@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
+using Aspire.Dogfooder.Scenarios;
 using Aspire.Dogfooder.Services;
 using Aspire.Dogfooder.State;
 using Hex1b;
@@ -11,123 +11,128 @@ namespace Aspire.Dogfooder.Screens.Workspace;
 
 /// <summary>
 /// Builds the window-body widget for a session in its <em>configuration</em>
-/// state: a form for the channel/version/commit/NuGet-index overrides plus a
-/// Continue button that commits the plan and triggers a content swap to the
-/// terminal body on the next render pass.
+/// state: pick a scenario from the catalog, fill in whichever inputs that
+/// scenario declares, then Continue to kick off async preparation. The
+/// content lambda in <see cref="SessionWindowOpener"/> swaps to the
+/// preparation log on the next render pass.
 /// </summary>
 internal static class SessionConfigContent
 {
-    // Display order for the channel toggle. The numeric position is what
-    // ToggleSwitch reports back via SelectedIndex, so this array is the
-    // single source of truth for both rendering and round-tripping into a
-    // ChannelKind enum value.
-    private static readonly (string Label, ChannelKind Kind)[] s_channels =
-    [
-        ("Stable", ChannelKind.Stable),
-        ("Staging", ChannelKind.Staging),
-        ("Daily", ChannelKind.Daily),
-        ("PR", ChannelKind.Pr),
-        ("Local", ChannelKind.Local),
-    ];
-
     public static Hex1bWidget Build(
         WindowContentContext<Hex1bWidget> ctx,
         DogfoodSession session,
         AppState state,
-        IDogfoodSessionPreparer preparer)
+        IDogfoodSessionPreparer preparer,
+        DogfoodingNuGetServerRegistry nuGetRegistry,
+        DogfoodScenarioRegistry scenarioRegistry)
     {
-        var channelLabels = s_channels.Select(c => c.Label).ToArray();
-        var initialChannelIndex = IndexOf(session.Config.Channel);
+        var scenarios = scenarioRegistry.Scenarios;
+        var currentScenario = scenarioRegistry.GetOrDefault(session.Config.ScenarioId);
+        var currentIndex = IndexOf(scenarios, currentScenario.Id);
 
         return ctx.VStack(v =>
         [
             v.Text(""),
-            v.Text("  Configure dogfooding identity overrides:"),
+            v.Text("  Pick a scenario, fill in any required inputs, and Continue."),
             v.Text(""),
             v.Form(form =>
-            [
-                form.TextField("Name")
-                    .InitialValue(session.Name)
-                    // OnTextChanged mutates the session in place. We do NOT
-                    // notify on every keystroke — Hex1b drives the text field
-                    // re-render itself, and we don't want to thrash the rest
-                    // of the workspace on every character.
-                    .OnTextChanged(e => session.Name = e.NewText),
+            {
+                var fields = new List<Hex1bWidget>
+                {
+                    form.TextField("Name")
+                        .InitialValue(session.Name)
+                        .OnTextChanged(e => session.Name = e.NewText),
 
-                // Channel + PR-number row. The toggle owns the channel kind;
-                // the PR-number FormTextField sits beside it and is enabled
-                // only when the toggle is on "PR". We use the FormContext
-                // (closed over from the outer form lambda) to register the
-                // PR-number field so it participates in the form's field
-                // registry and EnableWhen re-evaluation pipeline; the HStack
-                // is just visual grouping.
-                form.HStack(h =>
-                [
-                    h.Text(" Channel  "),
-                    h.ToggleSwitch(channelLabels, initialChannelIndex)
-                        .OnSelectionChanged(e =>
-                        {
-                            var picked = s_channels[e.SelectedIndex].Kind;
-                            // Clear PrNumber when leaving the Pr branch so a
-                            // stale number from a prior selection can't leak
-                            // into the env-var when the user clicks Continue
-                            // without re-entering the PR field.
-                            session.Config = picked == ChannelKind.Pr
-                                ? session.Config with { Channel = ChannelKind.Pr }
-                                : session.Config with { Channel = picked, PrNumber = null };
-                            // Tickle the render loop so EnableWhen on the PR
-                            // field re-evaluates and lights/dims it.
-                            state.Notifier.Notify();
-                        }),
-                    h.Text("   PR # "),
-                    form.TextField("")
-                        .InitialValue(session.Config.PrNumber?.ToString(CultureInfo.InvariantCulture) ?? "")
-                        .MinWidth(8)
-                        .EnableWhen(() => session.Config.Channel == ChannelKind.Pr)
-                        .OnTextChanged(e =>
-                        {
-                            session.Config = session.Config with
+                    // Scenario picker. We render scenarios as a vertical menu
+                    // (one row per scenario) rather than a toggle because the
+                    // 7+ scenarios won't all fit on a single line at common
+                    // window widths.
+                    form.Text(""),
+                    form.Text("  Scenario:"),
+                };
+                for (var i = 0; i < scenarios.Count; i++)
+                {
+                    var scenario = scenarios[i];
+                    var selected = i == currentIndex;
+                    var prefix = selected ? "  (*) " : "  ( ) ";
+                    fields.Add(form.HStack(h =>
+                    [
+                        h.Button($"{prefix}{scenario.DisplayName}")
+                            .OnClick(_ =>
                             {
-                                PrNumber = int.TryParse(e.NewText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
-                                    ? n
-                                    : null,
-                            };
-                        }),
-                ]),
+                                // Replace the scenario id and reset inputs —
+                                // input keys are per-scenario, so a stale
+                                // PR number from a prior selection would just
+                                // be dead weight.
+                                session.Config = new DogfoodSessionConfig(
+                                    scenario.Id,
+                                    new Dictionary<string, string?>(StringComparer.Ordinal));
+                                state.Notifier.Notify();
+                            }),
+                    ]));
+                }
 
-                form.TextField("ASPIRE_CLI_VERSION (optional)")
-                    .InitialValue(session.Config.VersionOverride ?? "")
-                    .OnTextChanged(e => session.Config = session.Config with
+                // Description for the selected scenario. TextBlockWidget
+                // doesn't word-wrap, so the description is expected to fit
+                // on a single line at typical workspace widths; longer prose
+                // belongs in tooltips/help, not the form.
+                fields.Add(form.Text(""));
+                fields.Add(form.Text("  " + currentScenario.Description));
+
+                // Per-scenario inputs. Each input gets a TextField keyed by
+                // ScenarioInputSpec.Key; OnTextChanged writes back into the
+                // session config's input dictionary as a fresh dict (the
+                // record is intentionally immutable on the surface so swaps
+                // are atomic).
+                if (currentScenario.Inputs.Count > 0)
+                {
+                    fields.Add(form.Text(""));
+                    fields.Add(form.Text("  Inputs:"));
+                    foreach (var spec in currentScenario.Inputs)
                     {
-                        VersionOverride = NullIfEmpty(e.NewText),
-                    }),
-                form.TextField("ASPIRE_CLI_COMMIT (optional)")
-                    .InitialValue(session.Config.CommitOverride ?? "")
-                    .OnTextChanged(e => session.Config = session.Config with
-                    {
-                        CommitOverride = NullIfEmpty(e.NewText),
-                    }),
-                form.TextField("ASPIRE_CLI_NUGET_SERVICE_INDEX (optional)")
-                    .InitialValue(session.Config.NuGetServiceIndexOverride ?? "")
-                    .OnTextChanged(e => session.Config = session.Config with
-                    {
-                        NuGetServiceIndexOverride = NullIfEmpty(e.NewText),
-                    }),
-            ]),
+                        var capturedKey = spec.Key;
+                        var existing = session.Config.Inputs.TryGetValue(capturedKey, out var v0) ? v0 ?? "" : "";
+                        var label = spec.Required ? $"{spec.Label} (required)" : spec.Label;
+                        var placeholder = spec.Placeholder;
+                        // FormTextFieldWidget has no placeholder API; bake
+                        // the hint into the label so it's still visible.
+                        if (!string.IsNullOrEmpty(placeholder))
+                        {
+                            label = $"{label} [{placeholder}]";
+                        }
+                        var field = form.TextField(label).InitialValue(existing);
+                        field = field.OnTextChanged(e =>
+                        {
+                            // Copy-and-swap: builds a fresh dictionary so the
+                            // record's `Inputs` reference is stable per-render
+                            // (any consumer comparing by reference sees a
+                            // change).
+                            var next = new Dictionary<string, string?>(session.Config.Inputs, StringComparer.Ordinal)
+                            {
+                                [capturedKey] = string.IsNullOrEmpty(e.NewText) ? null : e.NewText,
+                            };
+                            session.Config = session.Config with { Inputs = next };
+                        });
+                        fields.Add(field);
+                    }
+                }
+
+                return fields.ToArray();
+            }),
             v.Text(""),
             v.HStack(h =>
             [
                 h.Text("  "),
-                h.Button("Continue →").OnClick(_ =>
+                h.Button("Continue →").OnClick((Action<Hex1b.Events.ButtonClickedEventArgs>)(ev =>
                 {
-                    // Stamping the Plan is the trigger for the window's
-                    // content lambda to switch from this form to the
-                    // terminal body. The Notifier wakes Hex1b's render loop;
-                    // the window then re-evaluates its content callback and
-                    // picks up the new branch.
-                    session.Plan = preparer.BuildPlan(session.Config);
-                    state.SetStatus($"Launching terminal for '{session.Name}' …");
-                }),
+                    // Kick off async preparation. The window's content lambda
+                    // observes session.Status / session.Plan to decide which
+                    // body to render on the next frame.
+                    _ = ev;
+                    session.Status = SessionStatus.Preparing;
+                    state.SetStatus($"Preparing '{session.Name}' …");
+                    _ = RunPreparationAsync(session, state, preparer, nuGetRegistry);
+                })),
                 h.Text("  "),
                 h.Button("Cancel").OnClick(ev =>
                 {
@@ -142,18 +147,53 @@ internal static class SessionConfigContent
         ]);
     }
 
-    private static int IndexOf(ChannelKind kind)
+    private static async Task RunPreparationAsync(
+        DogfoodSession session,
+        AppState state,
+        IDogfoodSessionPreparer preparer,
+        DogfoodingNuGetServerRegistry nuGetRegistry)
     {
-        for (var i = 0; i < s_channels.Length; i++)
+        try
         {
-            if (s_channels[i].Kind == kind)
+            var result = await preparer.PrepareAsync(session, CancellationToken.None).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                // Leave the session in Preparing with the failure message
+                // visible in the preparation log so the user can act on it.
+                state.SetStatus($"Preparation failed: {session.Name}");
+                state.Notifier.Notify();
+                return;
+            }
+
+            if (result.NuGetServer is not null)
+            {
+                nuGetRegistry.Register(session.Id, result.NuGetServer);
+            }
+
+            // Plan is already stamped onto the session by the preparer; clear
+            // Preparing so the window swaps to the terminal body on the next
+            // render pass.
+            session.Status = SessionStatus.Idle;
+            state.SetStatus($"Launching terminal for '{session.Name}' …");
+            state.Notifier.Notify();
+        }
+        catch (Exception ex)
+        {
+            session.Preparation?.SetPhase(SessionPreparationState.Phase.Failed, ex.Message);
+            state.SetStatus($"Preparation crashed: {session.Name} — {ex.Message}");
+            state.Notifier.Notify();
+        }
+    }
+
+    private static int IndexOf(IReadOnlyList<IDogfoodScenario> scenarios, string id)
+    {
+        for (var i = 0; i < scenarios.Count; i++)
+        {
+            if (string.Equals(scenarios[i].Id, id, StringComparison.Ordinal))
             {
                 return i;
             }
         }
         return 0;
     }
-
-    private static string? NullIfEmpty(string value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value;
 }

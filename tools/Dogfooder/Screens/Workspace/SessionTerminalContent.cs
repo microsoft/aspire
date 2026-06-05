@@ -17,15 +17,23 @@ namespace Aspire.Dogfooder.Screens.Workspace;
 /// </summary>
 internal static class SessionTerminalContent
 {
-    public static Hex1bWidget Build(
-        WindowContentContext<Hex1bWidget> ctx,
+    public static Hex1bWidget Build<TParent>(
+        WidgetContext<TParent> ctx,
         DogfoodSession session,
         SessionTerminalRegistry terminals)
+        where TParent : Hex1bWidget
     {
         _ = ctx; // window context not currently needed for the terminal body.
 
         var entry = GetOrCreateTerminal(session, terminals);
-        return new TerminalWidget(entry.Handle);
+        // .Fill() forces the TerminalNode to take the full bounds of its
+        // parent container (window body or tab content area). Without it the
+        // widget defaults to its content size (the 80x24 we pass to
+        // WithDimensions), leaving blank chrome around it and — critically —
+        // not resizing the PTY when the window grows. TerminalNode.Arrange
+        // resizes the underlying handle to match its layout bounds, so
+        // .Fill() is both the visual and the PTY-size fix.
+        return new TerminalWidget(entry.Handle).Fill();
     }
 
     private static SessionTerminalRegistry.Entry GetOrCreateTerminal(

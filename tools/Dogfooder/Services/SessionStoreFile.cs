@@ -10,15 +10,25 @@ namespace Aspire.Dogfooder.Services;
 /// <summary>
 /// JSON-file implementation of <see cref="ISessionStoreFile"/>.
 /// Stores sessions at <c>~/.aspire/dogfooder/sessions.json</c> in a versioned
-/// envelope so Phase 2+ additions (preparer scripts, scenario IDs, recording
-/// paths) can extend the schema without breaking older installs.
+/// envelope so future additions (scenario inputs, recording paths, etc.) can
+/// extend the schema without breaking older installs.
 /// </summary>
 /// <remarks>
+/// Schema evolution:
+/// <list type="bullet">
+///   <item>v1: original Channel/PrNumber/Version/Commit/NuGet bag.</item>
+///   <item>v2: added Build/Suffix/PackageSourceDir/UseProxy/IncludeNative knobs.</item>
+///   <item>v3: collapsed to (ScenarioId, Inputs); per-scenario plan is recomputed at launch
+///       from the registry so we don't persist denormalised plan fields.</item>
+/// </list>
+/// v1/v2 records load as the <c>repro-vcurrent-published</c> scenario with no
+/// inputs — the closest no-op equivalent (no rebuild, no proxy) so existing
+/// sessions stay openable rather than vanishing on upgrade.
+///
 /// Writes go through a temp-file + atomic-rename dance: corruption from a
 /// crash mid-write would orphan sessions, so we always write the complete
 /// JSON to a sibling <c>.tmp</c> file and then <see cref="File.Move(string, string, bool)"/>
-/// over the real one. On a non-existent target the load returns an empty
-/// list (first-run case), not an error.
+/// over the real one.
 /// </remarks>
 internal sealed class SessionStoreFile : ISessionStoreFile
 {
@@ -28,6 +38,10 @@ internal sealed class SessionStoreFile : ISessionStoreFile
     }
 
     private readonly string _path;
+
+    // The scenario id used as the fallback when loading a v1/v2 envelope or a
+    // v3 record whose ScenarioId is unknown. Keep in sync with the catalog.
+    private const string FallbackScenarioId = "repro-vcurrent-published";
 
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
@@ -58,16 +72,23 @@ internal sealed class SessionStoreFile : ISessionStoreFile
             return Array.Empty<DogfoodSession>();
         }
 
-        // Older versions are forward-compatible: unknown future fields are
-        // simply ignored by the deserializer. If we ever ship a v2 with
-        // breaking semantics we'll branch on envelope.Version here.
         return envelope.Sessions
-            .Select(s => new DogfoodSession(s.Id, s.Name, new DogfoodSessionConfig(
-                Channel: s.Channel,
-                PrNumber: s.PrNumber,
-                VersionOverride: s.VersionOverride,
-                CommitOverride: s.CommitOverride,
-                NuGetServiceIndexOverride: s.NuGetServiceIndexOverride)))
+            .Select(s =>
+            {
+                // v3 stores ScenarioId + Inputs. v1/v2 records have neither,
+                // and we deliberately discard the old denormalised fields:
+                // the corresponding scenarios in the new catalog don't map
+                // 1:1 (e.g. "Channel=Stable + Version=13.5.0" could be
+                // either repro-vcurrent or vnext-minor). Falling back to a
+                // safe no-op is more honest than guessing.
+                var scenarioId = string.IsNullOrEmpty(s.ScenarioId)
+                    ? FallbackScenarioId
+                    : s.ScenarioId;
+                var inputs = s.Inputs is { Count: > 0 }
+                    ? new Dictionary<string, string?>(s.Inputs, StringComparer.Ordinal)
+                    : new Dictionary<string, string?>(StringComparer.Ordinal);
+                return new DogfoodSession(s.Id, s.Name, new DogfoodSessionConfig(scenarioId, inputs));
+            })
             .ToList();
     }
 
@@ -81,16 +102,13 @@ internal sealed class SessionStoreFile : ISessionStoreFile
 
         var envelope = new SessionFileEnvelope
         {
-            Version = 1,
+            Version = 3,
             Sessions = sessions.Select(s => new PersistedSession
             {
                 Id = s.Id,
                 Name = s.Name,
-                Channel = s.Config.Channel,
-                PrNumber = s.Config.PrNumber,
-                VersionOverride = s.Config.VersionOverride,
-                CommitOverride = s.Config.CommitOverride,
-                NuGetServiceIndexOverride = s.Config.NuGetServiceIndexOverride,
+                ScenarioId = s.Config.ScenarioId,
+                Inputs = s.Config.Inputs.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal),
             }).ToList(),
         };
 
@@ -103,10 +121,10 @@ internal sealed class SessionStoreFile : ISessionStoreFile
         }
 
         // File.Move overwrite=true is atomic on POSIX and best-effort on
-        // Windows (rename-via-MOVEFILE_REPLACE_EXISTING); both are safer than
-        // overwriting in place because a crash mid-Serialize would otherwise
-        // leave a truncated sessions.json that fails to deserialize on next
-        // launch.
+        // Windows (rename-via-MOVEFILE_REPLACE_EXISTING); both are safer
+        // than overwriting in place because a crash mid-Serialize would
+        // otherwise leave a truncated sessions.json that fails to
+        // deserialize on next launch.
         File.Move(tempPath, _path, overwrite: true);
     }
 
@@ -120,10 +138,9 @@ internal sealed class SessionStoreFile : ISessionStoreFile
     {
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
-        public ChannelKind Channel { get; set; }
-        public int? PrNumber { get; set; }
-        public string? VersionOverride { get; set; }
-        public string? CommitOverride { get; set; }
-        public string? NuGetServiceIndexOverride { get; set; }
+
+        // v3 fields.
+        public string? ScenarioId { get; set; }
+        public Dictionary<string, string?>? Inputs { get; set; }
     }
 }

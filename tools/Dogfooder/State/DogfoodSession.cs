@@ -54,4 +54,27 @@ internal sealed class DogfoodSession
     /// same shell commands consistently if the user re-selects the session.
     /// </summary>
     public Services.SessionEnvironmentPlan? Plan { get; set; }
+
+    /// <summary>
+    /// Cached scenario plan produced by the chosen <c>IDogfoodScenario</c>
+    /// for this session's inputs. Set alongside <see cref="Plan"/> by the
+    /// preparer so window-level dispatch (which tabs to show, etc.) can
+    /// consult the same values that drove preparation.
+    /// </summary>
+    public Scenarios.ScenarioPlan? ScenarioPlan { get; set; }
+
+    /// <summary>
+    /// Live preparation log while the preparer is running (build script
+    /// output + NuGet server startup). Created lazily when Continue is
+    /// clicked; remains accessible after preparation finishes so the user
+    /// can review the log even after the terminal has launched.
+    /// </summary>
+    public SessionPreparationState? Preparation { get; set; }
+
+    /// <summary>
+    /// Live <c>DogfoodingNuGetServer</c> traffic snapshot powering the NuGet
+    /// analyzer tab. Null when the session was started without
+    /// <c>UseLocalNuGetProxy</c>.
+    /// </summary>
+    public NuGetTrafficState? NuGetTraffic { get; set; }
 }

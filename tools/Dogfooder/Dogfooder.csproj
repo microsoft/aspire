@@ -30,6 +30,19 @@
 
   <ItemGroup>
     <!--
+      Pulled in for DogfoodingNuGetServer: an in-process Kestrel + Minimal API
+      host per dogfood session that overlays locally-built .nupkg files on top
+      of nuget.org responses. We stay on Microsoft.NET.Sdk (rather than switch
+      to the Web SDK) because Dogfooder is fundamentally a console TUI; the
+      framework reference is sufficient to get WebApplication / Kestrel without
+      the implicit Web-SDK build conventions (wwwroot, appsettings) we don't
+      need.
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
       Linked from src/Shared so Dogfooder can author ASPIRE_CLI_* identity
       override env vars using the same constants the CLI reads. We deliberately
       avoid a ProjectReference on Aspire.Cli: it's an AOT-published executable

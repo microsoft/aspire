@@ -22,13 +22,14 @@ internal sealed class RunCommand
         AppState state,
         IGitHubAuthProbe ghProbe,
         IDogfoodSessionPreparer preparer,
-        ILocalAspireCliLocator cliLocator)
+        ILocalAspireCliLocator cliLocator,
+        Scenarios.DogfoodScenarioRegistry scenarioRegistry)
     {
         _state = state;
         _ghProbe = ghProbe;
         _preparer = preparer;
         _cliLocator = cliLocator;
-        _workspace = new WorkspaceScreen(state, preparer);
+        _workspace = new WorkspaceScreen(state, preparer, scenarioRegistry);
     }
 
     private readonly AppState _state;
@@ -49,6 +50,8 @@ internal sealed class RunCommand
         _ = Task.Run(() => RunValidationProbesAsync(cancellationToken), cancellationToken);
 
         Hex1bApp? capturedApp = null;
+
+        await using var workspaceDisposables = _workspace.Disposables;
 
         await using var terminal = Hex1bTerminal.CreateBuilder()
             .WithMouse(true)

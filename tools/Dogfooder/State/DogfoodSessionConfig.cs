@@ -27,32 +27,34 @@ internal enum ChannelKind
 }
 
 /// <summary>
-/// Immutable snapshot of the overrides the user has selected for a single
-/// dogfooding session. Persisted to <c>~/.aspire/dogfooder/sessions.json</c>
-/// and converted to an env-var dictionary by
-/// <c>IDogfoodSessionPreparer.PrepareAsync</c> when the embedded terminal
-/// launches.
+/// Persisted snapshot of the user's scenario choice for a single dogfooding
+/// session. The session no longer carries the bazillion knobs (channel,
+/// version, build toggle, proxy toggle, …) directly — they are derived from
+/// the scenario at preparation time. This record carries only what we need
+/// to round-trip: the scenario id and any user-supplied inputs the scenario
+/// declared (e.g. PR number).
 /// </summary>
-/// <param name="Channel">Which channel persona the CLI should report.</param>
-/// <param name="PrNumber">For <see cref="ChannelKind.Pr"/>, the GH PR number. Null otherwise.</param>
-/// <param name="VersionOverride">Optional <c>ASPIRE_CLI_VERSION</c> value.</param>
-/// <param name="CommitOverride">Optional <c>ASPIRE_CLI_COMMIT</c> value.</param>
-/// <param name="NuGetServiceIndexOverride">
-/// Optional substitute for the <c>https://api.nuget.org/v3/index.json</c> URL
-/// the CLI writes into generated <c>NuGet.config</c> files. Use this when
-/// pointing the CLI at a local NuGet pass-through proxy.
+/// <param name="ScenarioId">
+/// Stable id of the chosen <c>IDogfoodScenario</c>. The
+/// <c>DogfoodScenarioRegistry</c> looks the scenario up at preparation time
+/// and falls back to its <c>Default</c> when an id no longer resolves
+/// (older session JSON, removed/renamed scenarios).
+/// </param>
+/// <param name="Inputs">
+/// User-supplied values for the scenario's declared inputs, keyed by
+/// <c>ScenarioInputSpec.Key</c>. Values may be null/empty when the user has
+/// not filled them in yet; scenarios are responsible for defending against
+/// that.
 /// </param>
 internal sealed record DogfoodSessionConfig(
-    ChannelKind Channel,
-    int? PrNumber,
-    string? VersionOverride,
-    string? CommitOverride,
-    string? NuGetServiceIndexOverride)
+    string ScenarioId,
+    IReadOnlyDictionary<string, string?> Inputs)
 {
-    public static DogfoodSessionConfig Empty { get; } = new(
-        Channel: ChannelKind.Stable,
-        PrNumber: null,
-        VersionOverride: null,
-        CommitOverride: null,
-        NuGetServiceIndexOverride: null);
+    /// <summary>
+    /// Convenience for callers that want to construct a session with no
+    /// inputs yet. The scenario id must be valid for the registry; see
+    /// <c>DogfoodScenarioRegistry.Default.Id</c> for the conventional default.
+    /// </summary>
+    public static DogfoodSessionConfig ForScenario(string scenarioId) =>
+        new(scenarioId, new Dictionary<string, string?>(StringComparer.Ordinal));
 }

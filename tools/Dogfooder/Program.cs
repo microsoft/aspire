@@ -33,8 +33,10 @@ internal static class Program
         // Services.
         builder.Services.AddSingleton<IGitHubAuthProbe, GitHubAuthProbe>();
         builder.Services.AddSingleton<ILocalAspireCliLocator, LocalAspireCliLocator>();
+        builder.Services.AddSingleton<IPackageBuildRunner, PackageBuildRunner>();
         builder.Services.AddSingleton<IDogfoodSessionPreparer, DogfoodSessionPreparer>();
         builder.Services.AddSingleton<IPrCatalog, StubPrCatalog>();
+        builder.Services.AddSingleton<Scenarios.DogfoodScenarioRegistry>();
 
         // Commands themselves are DI'd so they can pull resolved services
         // without manual root-container plumbing.
