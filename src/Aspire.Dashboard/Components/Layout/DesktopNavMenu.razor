@@ -11,19 +11,19 @@
             IconRest="ResourcesIcon()"
             IconActive="ResourcesIcon(active: true)"
             Text="@Loc[nameof(Layout.NavMenuResourcesTab)]" />
-        @if (IsResourceGraphEnabled)
-        {
-            <FluentAppBarItem
-                Href="@DashboardUrls.GraphUrl()"
-                Match="@(_isGraph ? NavLinkMatch.Prefix : NavLinkMatch.All)"
-                IconRest="GraphIcon()"
-                IconActive="GraphIcon(active: true)"
-                Text="@Loc[nameof(Layout.NavMenuGraphTab)]" />
-        }
         <FluentAppBarItem Href="@DashboardUrls.ConsoleLogsUrl()"
             IconRest="ConsoleLogsIcon()"
             IconActive="ConsoleLogsIcon(active: true)"
             Text="@Loc[nameof(Layout.NavMenuConsoleLogsTab)]" />
+    }
+    @if (IsResourceGraphEnabled)
+    {
+        <FluentAppBarItem
+            Href="@DashboardUrls.GraphUrl()"
+            Match="@(_isGraph ? NavLinkMatch.Prefix : NavLinkMatch.All)"
+            IconRest="GraphIcon()"
+            IconActive="GraphIcon(active: true)"
+            Text="@Loc[nameof(Layout.NavMenuGraphTab)]" />
     }
     <FluentAppBarItem Href="@DashboardUrls.StructuredLogsUrl()"
         IconRest="StructuredLogsIcon()"

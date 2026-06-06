@@ -312,6 +312,9 @@
   <data name="ResourcesGraphModeTelemetry" xml:space="preserve">
     <value>Telemetry flow</value>
   </data>
+  <data name="ResourcesGraphTelemetryResourceType" xml:space="preserve">
+    <value>Telemetry</value>
+  </data>
   <data name="ResourcesHideTypes" xml:space="preserve">
     <value>Hide resource types</value>
   </data>

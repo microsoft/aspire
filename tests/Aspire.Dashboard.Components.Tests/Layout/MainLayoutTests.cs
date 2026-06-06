@@ -184,6 +184,31 @@ public partial class MainLayoutTests : DashboardTestContext
         }
     }
 
+    [Fact]
+    public void DesktopNavMenu_StandaloneDashboard_ShowsGraph()
+    {
+        SetupMainLayoutServices();
+
+        var cut = RenderComponent<DesktopNavMenu>();
+
+        Assert.Contains("Graph", cut.Markup);
+        Assert.DoesNotContain("Resources", cut.Markup);
+    }
+
+    [Fact]
+    public void DesktopNavMenu_StandaloneDashboard_GraphDisabled_HidesGraph()
+    {
+        SetupMainLayoutServices(configureOptions: o =>
+        {
+            o.UI.DisableResourceGraph = true;
+        });
+
+        var cut = RenderComponent<DesktopNavMenu>();
+
+        Assert.DoesNotContain("Graph", cut.Markup);
+        Assert.DoesNotContain("Resources", cut.Markup);
+    }
+
     private void SetupMainLayoutServices(TestLocalStorage? localStorage = null, MessageService? messageService = null, Action<DashboardOptions>? configureOptions = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage, messageService: messageService);

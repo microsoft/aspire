@@ -228,7 +228,10 @@
                                                           Orientation="Orientation.Horizontal"
                                                           @bind-Value="@PageViewModel.SelectedGraphMode"
                                                           @bind-Value:after="OnGraphModeChangedAsync">
-                                            <FluentRadio Value="@ResourceGraphMode.Relationships">@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphModeRelationships)]</FluentRadio>
+                                            @if (DashboardClient.IsEnabled)
+                                            {
+                                                <FluentRadio Value="@ResourceGraphMode.Relationships">@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphModeRelationships)]</FluentRadio>
+                                            }
                                             <FluentRadio Value="@ResourceGraphMode.Telemetry">@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphModeTelemetry)]</FluentRadio>
                                         </FluentRadioGroup>
                                         <FluentButton Appearance="Appearance.Stealth"

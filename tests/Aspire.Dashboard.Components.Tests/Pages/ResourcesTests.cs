@@ -392,6 +392,91 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task GraphRoute_StandaloneDashboard_UsesTelemetryResources()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var dashboardClient = new TestDashboardClient(isEnabled: false);
+        ResourceSetupHelpers.SetupResourcesPage(
+            this,
+            viewport,
+            dashboardClient);
+
+        var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        var initializeGraphInvocationHandler = resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
+        initializeGraphInvocationHandler.SetVoidResult();
+        var updateGraphInvocationHandler = resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
+        resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true);
+
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        var addContext = new AddContext();
+        var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        telemetryRepository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = TelemetryTestHelpers.CreateResource(name: "frontend", instanceId: "frontend-abc"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope(),
+                        Spans =
+                        {
+                            TelemetryTestHelpers.CreateSpan(traceId: "1", spanId: "1-1", kind: Span.Types.SpanKind.Client, startTime: testTime.AddMinutes(1), endTime: testTime.AddMinutes(2))
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = TelemetryTestHelpers.CreateResource(name: "api", instanceId: "api-def"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope(),
+                        Spans =
+                        {
+                            TelemetryTestHelpers.CreateSpan(traceId: "1", spanId: "1-2", parentSpanId: "1-1", kind: Span.Types.SpanKind.Server, startTime: testTime.AddMinutes(1), endTime: testTime.AddMinutes(2))
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.GraphUrl(graphMode: "Relationships"));
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Graph, cut.Instance.PageViewModel.SelectedViewKind);
+        Assert.Equal(Components.Pages.Resources.ResourceGraphMode.Telemetry, cut.Instance.PageViewModel.SelectedGraphMode);
+        cut.Render();
+
+        Assert.NotEmpty(initializeGraphInvocationHandler.Invocations);
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() => updateGraphInvocationHandler.Invocations.Count > 0, "Resource graph updated");
+
+        var graphResources = Assert.IsAssignableFrom<IEnumerable<ResourceDto>>(updateGraphInvocationHandler.Invocations.Last().Arguments[0]).OrderBy(r => r.Name).ToList();
+        Assert.Collection(graphResources,
+            r =>
+            {
+                Assert.Equal("api-def", r.Name);
+                Assert.Equal("Telemetry", r.ResourceType);
+                Assert.Empty(r.ReferencedNames);
+            },
+            r =>
+            {
+                Assert.Equal("frontend-abc", r.Name);
+                Assert.Equal("Telemetry", r.ResourceType);
+                var referencedName = Assert.Single(r.ReferencedNames);
+                Assert.Equal("api-def", referencedName);
+            });
+    }
+
+    [Fact]
     public void ResourceFilters_ApplyExistingFiltersOnInitialRender()
     {
         // Arrange

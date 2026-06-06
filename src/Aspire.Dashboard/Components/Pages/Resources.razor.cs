@@ -224,24 +224,27 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     protected override async Task OnInitializedAsync()
     {
-        if (!DashboardClient.IsEnabled)
+        if (!DashboardClient.IsEnabled && !IsGraphPage)
         {
             // Should never reach here.
             throw new InvalidOperationException("Unable to display the resources page because the dashboard client is not enabled.");
         }
 
         TelemetryContextProvider.Initialize(TelemetryContext);
-        _aiContext = AIContextProvider.AddNew(nameof(Resources), c =>
+        if (DashboardClient.IsEnabled)
         {
-            c.BuildIceBreakers = (builder, context) =>
+            _aiContext = AIContextProvider.AddNew(nameof(Resources), c =>
             {
-                var hasUnhealthyResources = _resourceByName.Values
-                    .Where(r => !r.IsResourceHidden(_showHiddenResources))
-                    .Any(r => r.KnownState != KnownResourceState.Running || r.HealthStatus is HealthStatus.Unhealthy or HealthStatus.Degraded);
+                c.BuildIceBreakers = (builder, context) =>
+                {
+                    var hasUnhealthyResources = _resourceByName.Values
+                        .Where(r => !r.IsResourceHidden(_showHiddenResources))
+                        .Any(r => r.KnownState != KnownResourceState.Running || r.HealthStatus is HealthStatus.Unhealthy or HealthStatus.Degraded);
 
-                builder.Resources(context, hasUnhealthyResources);
-            };
-        });
+                    builder.Resources(context, hasUnhealthyResources);
+                };
+            });
+        }
 
         (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlsStringsLoc);
 
@@ -263,7 +266,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         PageViewModel = new ResourcesViewModel
         {
-            SelectedViewKind = IsGraphPage && !_hideResourceGraph ? ResourceViewKind.Graph : ResourceViewKind.Table
+            SelectedViewKind = IsGraphPage && !_hideResourceGraph ? ResourceViewKind.Graph : ResourceViewKind.Table,
+            SelectedGraphMode = DashboardClient.IsEnabled ? ResourceGraphMode.Relationships : ResourceGraphMode.Telemetry
         };
 
         _resourceUnviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
@@ -281,32 +285,39 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
         UpdateMenuButtons();
 
-        // Must wait until after the dashboard is connected so the application name is correct.
-        await DashboardClient.WhenConnected;
-        _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
-
-        var collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
-        if (collapsedResult.Success)
+        if (DashboardClient.IsEnabled)
         {
-            foreach (var resourceName in collapsedResult.Value)
+            // Must wait until after the dashboard is connected so the application name is correct.
+            await DashboardClient.WhenConnected;
+            _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
+
+            var collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
+            if (collapsedResult.Success)
             {
-                _collapsedResourceNames.Add(resourceName);
+                foreach (var resourceName in collapsedResult.Value)
+                {
+                    _collapsedResourceNames.Add(resourceName);
+                }
             }
+
+            await SubscribeResourcesAsync();
+
+            _logsSubscription = TelemetryRepository.OnNewLogs(null, SubscriptionType.Other, async () =>
+            {
+                var newResourceUnviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
+
+                // Only update UI if the error counts have changed.
+                if (ResourceErrorCountsChanged(newResourceUnviewedErrorCounts))
+                {
+                    _resourceUnviewedErrorCounts = newResourceUnviewedErrorCounts;
+                    await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+                }
+            });
         }
-
-        await SubscribeResourcesAsync();
-
-        _logsSubscription = TelemetryRepository.OnNewLogs(null, SubscriptionType.Other, async () =>
+        else
         {
-            var newResourceUnviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
-
-            // Only update UI if the error counts have changed.
-            if (ResourceErrorCountsChanged(newResourceUnviewedErrorCounts))
-            {
-                _resourceUnviewedErrorCounts = newResourceUnviewedErrorCounts;
-                await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
-            }
-        });
+            _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(nameof(Resources));
+        }
 
         UpdateGraphTracesSubscription();
 
@@ -445,28 +456,23 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         var activeResources = _resourceByName.Values.Where(Filter).OrderBy(e => e.ResourceType).ThenBy(e => e.Name).ToList();
-        var telemetryGraphResources = PageViewModel.SelectedGraphMode == ResourceGraphMode.Telemetry
-            ? TelemetryGraphResources.Create(activeResources, TelemetryRepository.GetTelemetryGraphEdgeKeys())
-            : null;
-        if (telemetryGraphResources is not null)
+        if (PageViewModel.SelectedGraphMode == ResourceGraphMode.Telemetry)
         {
-            activeResources = activeResources.Where(r => telemetryGraphResources.ResourceNames.Contains(r.Name)).ToList();
+            var telemetryResources = TelemetryGraphResources.CreateResourceDtos(
+                activeResources,
+                TelemetryRepository.GetTelemetryGraphEdgeKeys(),
+                _resourceByName,
+                ColumnsLoc,
+                Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphTelemetryResourceType)],
+                _showHiddenResources,
+                IconResolver);
+            await _jsModule.InvokeVoidAsync("updateResourcesGraph", telemetryResources);
+            return;
         }
 
-        var resources = activeResources.Select(r =>
-        {
-            IEnumerable<string>? referencedNames = null;
-            if (telemetryGraphResources is not null)
-            {
-                // In telemetry mode, a visible resource can have only incoming calls. Pass an explicit
-                // empty reference list for those nodes so they don't fall back to model relationships.
-                referencedNames = telemetryGraphResources.ReferencedNames.TryGetValue(r.Name, out var telemetryReferencedNames)
-                    ? telemetryReferencedNames
-                    : Array.Empty<string>();
-            }
-
-            return ResourceGraphMapper.MapResource(r, _resourceByName, ColumnsLoc, _showHiddenResources, IconResolver, referencedNames);
-        }).ToList();
+        var resources = activeResources
+            .Select(r => ResourceGraphMapper.MapResource(r, _resourceByName, ColumnsLoc, _showHiddenResources, IconResolver))
+            .ToList();
         await _jsModule.InvokeVoidAsync("updateResourcesGraph", resources);
     }
 
@@ -1020,6 +1026,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 graphMode is ResourceGraphMode gm)
             {
                 viewModel.SelectedGraphMode = gm;
+            }
+
+            if (!DashboardClient.IsEnabled)
+            {
+                viewModel.SelectedGraphMode = ResourceGraphMode.Telemetry;
             }
 
             return Task.CompletedTask;

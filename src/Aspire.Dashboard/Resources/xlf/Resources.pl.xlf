@@ -242,6 +242,11 @@
         <target state="translated">Resetuj</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesGraphTelemetryResourceType">
+        <source>Telemetry</source>
+        <target state="new">Telemetry</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesGraphZoomInButton">
         <source>Zoom in</source>
         <target state="translated">Powiększ</target>

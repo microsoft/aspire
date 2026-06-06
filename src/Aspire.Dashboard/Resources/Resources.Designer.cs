@@ -475,6 +475,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Telemetry.
+        /// </summary>
+        public static string ResourcesGraphTelemetryResourceType {
+            get {
+                return ResourceManager.GetString("ResourcesGraphTelemetryResourceType", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Graph.
         /// </summary>
         public static string ResourcesGraphHeader {

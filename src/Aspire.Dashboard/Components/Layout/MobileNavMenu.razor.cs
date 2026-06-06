@@ -52,21 +52,21 @@ public partial class MobileNavMenu : ComponentBase
                 LinkMatchRegex: new Regex($"^{DashboardUrls.ResourcesUrl()}(\\?.*)?$")
             );
 
-            if (IsResourceGraphEnabled)
-            {
-                yield return new MobileNavMenuEntry(
-                    Loc[nameof(Resources.Layout.NavMenuGraphTab)],
-                    () => NavigateToAsync(DashboardUrls.GraphUrl()),
-                    DesktopNavMenu.GraphIcon(),
-                    LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.GraphUrl())
-                );
-            }
-
             yield return new MobileNavMenuEntry(
                 Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)],
                 () => NavigateToAsync(DashboardUrls.ConsoleLogsUrl()),
                 DesktopNavMenu.ConsoleLogsIcon(),
                 LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.ConsoleLogsUrl())
+            );
+        }
+
+        if (IsResourceGraphEnabled)
+        {
+            yield return new MobileNavMenuEntry(
+                Loc[nameof(Resources.Layout.NavMenuGraphTab)],
+                () => NavigateToAsync(DashboardUrls.GraphUrl()),
+                DesktopNavMenu.GraphIcon(),
+                LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.GraphUrl())
             );
         }
 
