@@ -85,6 +85,17 @@ jobs:
   build_cli_archive_macos_x64:
     name: Build native CLI archive (macOS x64)
     uses: ./.github/workflows/build-cli-native-archives.yml
+    # The Intel Mac (osx-x64) archive is consumed only by
+    # prepare_homebrew_installer_artifacts (which combines arm64 + x64 into a
+    # universal Homebrew cask). No test job needs the osx-x64 artifact
+    # directly. The macos-15-intel runner is the slowest in the matrix
+    # (~17 min vs ~7 min for other archive builds), and after iters 1 + 2
+    # this job is what gates the PR critical path via Homebrew prep at +20.1.
+    #
+    # Skipping on PRs moves Intel-Mac Homebrew validation from "every PR" to
+    # "push to main" + scheduled runs, same shape as the existing macOS
+    # Templates PR skip. See docs/ci/pr-ci-wallclock-investigation.md (iter 3).
+    if: ${{ github.event_name != 'pull_request' }}
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "macos-15-intel", "runner": "macos-15-intel", "rids": "osx-x64"}]'
@@ -102,6 +113,11 @@ jobs:
   prepare_homebrew_installer_artifacts:
     name: Prepare Homebrew installer artifacts
     uses: ./.github/workflows/prepare-installer-artifacts.yml
+    # Homebrew installer prep combines both macOS archives (arm64 + x64) into a
+    # universal cask. Since build_cli_archive_macos_x64 is PR-skipped (iter 3),
+    # this prep is auto-PR-skipped too. Gating on event_name keeps the dependency
+    # graph honest and avoids a phantom in-flight state.
+    if: ${{ github.event_name != 'pull_request' }}
     needs: [
       build_cli_archive_macos,
       build_cli_archive_macos_x64,
@@ -613,6 +629,8 @@ jobs:
         #   Aspire CLI, or the extension E2E workflow wiring.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
         #   expected to be skipped for other workflow events.
+        # - build_cli_archive_macos_x64 + prepare_homebrew_installer_artifacts: PR-skipped (iter 3
+        #   of docs/ci/pr-ci-wallclock-investigation.md). Required on push to main.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
         if: >-
           ${{ always() &&
@@ -625,9 +643,7 @@ jobs:
                  needs.cli_starter_validation_windows.result == 'skipped' ||
                  needs.typescript_sdk_tests.result == 'skipped' ||
                  needs.typescript_api_compat.result == 'skipped' ||
-                 needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  needs.prepare_winget_installer_artifacts.result == 'skipped' ||
-                 needs.prepare_homebrew_installer_artifacts.result == 'skipped' ||
                  needs.tests_no_nugets.result == 'skipped' ||
                  needs.tests_requires_nugets_linux.result == 'skipped' ||
                  needs.tests_requires_nugets_windows.result == 'skipped' ||

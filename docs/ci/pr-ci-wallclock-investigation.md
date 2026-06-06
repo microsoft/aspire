@@ -113,32 +113,28 @@ methodology.
 
 ### Iteration 1 — measurement
 
-PR #17973, run [27055927499](https://github.com/microsoft/aspire/actions/runs/27055927499).
+PR #17973, run [27055927499](https://github.com/microsoft/aspire/actions/runs/27055927499)
+(first attempt; iter 2 was added in a follow-up commit before iter 1
+could be re-measured in isolation).
 
-| Run | Total wall | Conclusion | New gate (excl. flake) | Delta vs baseline | Notes |
-|---|---:|---|---|---:|---|
-| 27055927499 (initial) | 30.7 min | failure | `Cli.EndToEnd-TypeScriptCodegenValidationTests` hung 18.1 min (baseline 9.6 min) | n/a | one flake; not caused by this change |
-| 27055927499 (rerun-failed) | _running_ | _tbd_ | _tbd_ | _tbd_ | rerun the 1 flaky test job |
+| Attempt | Total | Conclusion | Notes |
+|---|---:|---|---|
+| 1 | 30.7 min | failure | `Cli.EndToEnd-TypeScriptCodegenValidationTests` hung 18.1 min (baseline 9.6 min) — unrelated flake |
+| 2 (rerun) | — | failure | Codegen passed (8.6 min) but `Final Test Results` gate failed due to GH Actions rerun-of-matrix-child quirk |
 
-**Measurement modulo the flake:** if the flaky job had completed at its baseline ~9.6 min,
-the new gating job would have been `Aspire CLI Starter Validation (Windows ARM64)` at
-**+21.1 min**, plus `Final Test Results` (~1.1 min) + `Final Results` (~0.1 min), for a
-total wall of **~22.5 min** (vs 26.5 min baseline = **~4 min saved, ~15%**).
+**Measured (excluding the flake):** had Codegen completed in baseline
+time, the next-latest gating job was `Aspire CLI Starter Validation (Windows ARM64)`
+at **+21.1**, plus `Final Test Results` (~1.1 min) + `Final Results`
+(~0.1 min) → **wall ~22.5 min** (vs 26.5 baseline = **~4 min saved, ~15%**).
 
 **Validation of the change itself:**
-- All 12 Templates jobs ran on Linux only (no Windows variants — iter 1 working as
-  designed).
-- `Templates-NewUpAndBuildStandaloneTemplateTests` on Linux: 7.1 min, ended at +13.4
-  (vs the baseline Windows variant at 13.2 min ending at +24.4 — confirms the 2x
-  Linux-vs-Windows delta).
-- No non-Templates jobs were affected.
+- 12 Templates jobs scheduled, all on Linux only — no Windows variants.
+- `Templates-NewUpAndBuildStandaloneTemplateTests` on Linux: 7.1 min,
+  ending at +13.4 (vs the baseline Windows variant at 13.2 min ending
+  at +24.4 — confirms the 2x Linux-vs-Windows delta).
+- No non-Templates jobs affected.
 
-**Flake note:** `Cli.EndToEnd-TypeScriptCodegenValidationTests` hung (caught by MTP
-`--hangdump-timeout 10m`). No matching open issue in microsoft/aspire. This is the
-same class iter 5 plans to split — its size and high fixed-cost setup may contribute
-to flakiness. Not caused by iter 1.
-
-### Iteration 2 — decouple `build_cli_e2e_image` from `setup_for_tests`
+### Iteration 2 — applied: decouple `build_cli_e2e_image` from `setup_for_tests`
 
 **Change:** in `.github/workflows/tests.yml`, replace
 
@@ -158,36 +154,56 @@ build_cli_e2e_image:
 ```
 
 **Why it's safe:** `tests_matrix_requires_cli_archive` is non-empty iff
-`IncludeCliE2ETests=true`, and `tests.yml`'s `enumerate-tests` action sets
-`IncludeCliE2ETests=${{ github.event_name == 'pull_request' }}`. The
-event-name gate is **logically equivalent** to the matrix-output gate,
-without serializing behind `setup_for_tests` to read its output. The
-`results:` job still has `setup_for_tests` in its `needs:`, so the
-existing matrix-output check in the `if:` of the final fail-step
-continues to work without changes.
+`IncludeCliE2ETests=true`, and `tests.yml`'s `enumerate-tests` action
+sets `IncludeCliE2ETests=${{ github.event_name == 'pull_request' }}`.
+The event-name gate is **logically equivalent** to the matrix-output
+gate, without serializing behind `setup_for_tests` to read its output.
+The `results:` job still has `setup_for_tests` in its `needs:`, so the
+matrix-output check in its `if:` continues to work without changes.
 
-**Predicted delta:** `build_cli_e2e_image` currently starts at +4.5 min
-(after `setup_for_tests`) and ends at +12 min. With the gate removed it
-starts at ~+1.3 min (alongside `build_packages`, archives) and ends at
-~+8.5 min. The downstream `tests_requires_cli_archive` lane is gated by
-the latest of `setup_for_tests` (+4.5), `build_packages` (+4.8),
-`build_cli_archive_linux` (+7.0), `build_cli_e2e_image` (+8.5 after iter 2)
-— so its earliest-start drops from +12.6 to +8.5, a **~4 min** shift.
+**Predicted delta:** image build starts at ~+1.3 (parallel with
+`build_packages` and CLI archives) instead of ~+4.5 (after
+`setup_for_tests`). The downstream `tests_requires_cli_archive` lane
+shifts ~4 min earlier. Combined with iter 1, predicted wall ~21.6 min.
 
-After iter 1 + iter 2, `Cli.EndToEnd-TypeScriptPolyglotTests` would end at
-~+18.3 min (down from +22.3 in the baseline). But the **new gate** then
-becomes `Prepare Homebrew cask` at **+20.1** (1.3 min after the 17-min
-`build_cli_archive_macos_x64` finishes), because the `results:` job
-requires `prepare_homebrew_installer_artifacts`. Predicted wall after
-iter 1 + iter 2 is therefore **~22 min**, not ~20 min — about
-**~4.5 min saved** from the 26.5 baseline (~17%).
+### Iteration 1 + Iteration 2 — measurement
 
-To go below ~22 min wall, iteration 3 needs to either skip
-`build_cli_archive_macos_x64` on PRs (and its dependent Homebrew prep)
-or remove those from the `results:` PR-required set. That is now the
-next candidate hypothesis.
+PR #17973, run [27057356440](https://github.com/microsoft/aspire/actions/runs/27057356440).
 
-### Iteration 3 (queued) — skip `build_cli_archive_macos_x64` and Homebrew prep on PRs
+| Run | Total | Gating job (excl. flake) | Delta vs baseline |
+|---|---:|---|---:|
+| 27057356440 | (cancelled — see below) | `Aspire CLI Starter Validation (Windows ARM64)` at +20.8 or `Prepare Homebrew cask` at +20.6 | **~22 min wall**, -4.5 min (~17%) |
+
+**Iteration 2 effect — confirmed:**
+
+| Job | Baseline (run 27052863313) | Iter 1+2 (run 27057356440) | Delta |
+|---|---|---|---:|
+| `Build CLI E2E Docker image` (start → end) | +5.1 → +12.2 (dur 7.2) | **+1.2 → +8.6 (dur 7.4)** | start **-3.9 min** |
+| `Cli.EndToEnd-TypeScriptPolyglotTests` (start → end) | +12.6 → +22.3 (dur 9.8) | **+8.9 → +18.3 (dur 9.3)** | start **-3.7 min**, end **-4.0 min** |
+| `Cli.EndToEnd-TypeScriptCodegenValidationTests` | +12.6 → +22.2 (dur 9.6) | **+9.0 → +17.8 (dur 8.9)** | start **-3.6 min** |
+
+This confirms iter 2 worked as designed: the gate dependency between
+`build_cli_e2e_image` and `setup_for_tests` was the only thing
+holding the CLI E2E image build off `t=0`; removing it shifts the
+whole `tests_requires_cli_archive` lane ~4 min earlier.
+
+**Flake interfering with run-status:**
+`Aspire CLI Starter Validation (Windows)` (Windows x64 matrix instance)
+hung for 20 min and was cancelled by the per-job `timeout-minutes: 15`
+guard (baseline duration ~4.3 min — a 4-5x hang). The whole workflow
+rolled up to `cancelled` status. This is unrelated to iter 1 / iter 2
+(neither change touches `cli_starter_validation_windows`); it's the
+same class of CI infra intermittent that affected
+`Cli.EndToEnd-TypeScriptCodegenValidationTests` on the iter 1 run.
+The 313 other jobs all succeeded, including all iter 2-affected jobs.
+
+**Wall after iter 1 + iter 2 (using the longest legitimately-completed
+leaf):** `Aspire CLI Starter Validation (Windows ARM64)` at +20.8, then
+`Final Test Results` (~1.1 min) + `Final Results` (~0.1 min) ≈
+**~22 min** vs the 26.5 min baseline median (**~4.5 min saved, ~17%**).
+Matches the predicted ~21.6 min within measurement noise.
+
+### Iteration 3 — applied: skip `build_cli_archive_macos_x64` and Homebrew prep on PRs
 
 After iter 1 + iter 2 the critical-path gate moves to
 `prepare_homebrew_installer_artifacts` at +20.1, which is gated by
@@ -196,20 +212,28 @@ That archive is consumed **only** by the Homebrew universal-cask
 preparation (which combines arm64 + x64); no test job needs the
 osx-x64 artifact directly.
 
-**Change:** gate `build_cli_archive_macos_x64` and
-`prepare_homebrew_installer_artifacts` on `github.event_name != 'pull_request'`,
-and remove their `'skipped' == failure` entries from the `results:`
-final-fail check's PR list (`tests.yml` lines ~459-460).
+**Change:** in `.github/workflows/tests.yml`:
+- Add `if: ${{ github.event_name != 'pull_request' }}` to
+  `build_cli_archive_macos_x64`.
+- Add the same `if:` to `prepare_homebrew_installer_artifacts`
+  (its `needs:` includes `build_cli_archive_macos_x64`, so it would
+  auto-skip; the explicit `if:` declares the intent).
+- Remove `build_cli_archive_macos_x64` and
+  `prepare_homebrew_installer_artifacts` from the PR fail-on-skip
+  list in the `results:` final-fail gate. Both stay in the non-PR
+  list so push-to-main behavior is unchanged.
 
-**Predicted delta:** removes ~17 min macOS Intel job + 1.3 min Homebrew
-prep from the PR critical path. New gate becomes
-`Cli.EndToEnd-TypeScriptPolyglotTests` at +18.3 (after iter 2), giving
-total wall **~20 min** (savings ~6.5 min from baseline, ~25%).
+**Predicted delta:** removes the ~17 min Intel-Mac archive + 1.3 min
+Homebrew prep from the PR critical path. New gate becomes
+`Aspire CLI Starter Validation (Windows ARM64)` at +20.8 OR
+`Cli.EndToEnd-TypeScriptPolyglotTests` at +18.3 (whichever finishes
+later for a given run; usually starter-validation). Total wall
+**~20-21 min** (savings ~5-6 min from baseline, ~22%).
 
 **Tradeoff:** Intel-Mac Homebrew validation moves from "every PR" to
-"push to main". Same shape as the macOS Templates skip already in the
-codebase. Apple Intel hardware is also being phased out, so the
-end-user impact is bounded.
+"push to main" + scheduled runs. Same shape as the existing macOS
+Templates PR skip. Apple Intel hardware is being phased out, so the
+user-facing impact is bounded.
 
 ### Iteration 4 (on deck) — skip `build_cli_archive_windows_arm64` and WinGet prep on PRs
 
@@ -248,9 +272,6 @@ risk than iter 1 / iter 2 / iter 3.
 | # | Step | Change | Predicted delta |
 |---|---|---|---:|
 | H2 | `build_cli_archive_windows` | Larger Windows runner (if org has 4/8-core windows pool) | -2 to -4 min |
-| H3 | `build_cli_archive_macos_x64` | Skip on PRs (Homebrew installer prep skipped too) | 0 min wall, ~17 min runner savings |
-| H4 | `build_cli_archive_windows_arm64` | Skip on PRs (WinGet installer prep skipped too) | 0 min wall, ~12 min runner savings |
-| H5 | `Cli.EndToEnd-TypeScript*` tests | Investigate ~9-10 min duration; possibly split or remove from PR | -2 to -3 min if they become the new gate |
 | H6 | NuGet restore cache (`actions/cache`) on `tests_*` jobs | Save 30-60s/job × many jobs | <1 min wall (parallel), large runner savings |
 
 ## How to read this doc
