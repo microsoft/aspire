@@ -112,8 +112,17 @@ jobs:
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
     uses: ./.github/workflows/build-cli-e2e-image.yml
-    needs: setup_for_tests
-    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null }}
+    # The image is only consumed by tests_requires_cli_archive (Aspire.Cli.EndToEnd.Tests),
+    # which itself runs only when IncludeCliE2ETests=true. tests.yml's enumerate-tests
+    # step sets IncludeCliE2ETests=${{ github.event_name == 'pull_request' }}, so the
+    # image is needed exactly when the workflow runs on a pull_request event.
+    #
+    # Previously this job used `needs: setup_for_tests` + a matrix-output `if:` purely
+    # to read whether the cli archive bucket was non-empty. That delayed the image
+    # build's start by ~3-4 minutes (setup_for_tests wall) for no work reason; the
+    # event-name gate gives the same scheduling outcome without serializing behind
+    # setup_for_tests. See docs/ci/pr-ci-wallclock-investigation.md (iteration 2).
+    if: ${{ github.event_name == 'pull_request' }}
 
   tests_no_nugets:
     name: ${{ matrix.shortname }}
