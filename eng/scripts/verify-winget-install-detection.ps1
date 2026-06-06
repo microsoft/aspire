@@ -78,13 +78,34 @@ function Invoke-DoctorPriming {
     # Belt-and-suspenders against future regressions where the --self fast-path
     # diverges from the discovery path and the first-run probe (which writes the
     # sidecar) and bundle extraction stop firing on `aspire doctor --self`. A
-    # plain `aspire doctor` runs both unambiguously. Output is discarded; non-zero
-    # exit is treated as a hard failure because every subsequent assertion in
-    # this script depends on the probe + extract having run.
+    # plain `aspire doctor` runs both unambiguously.
+    #
+    # The exit code is intentionally NOT treated as a failure. `aspire doctor`
+    # runs environment checks (dev certs, container runtime, .NET SDK, etc.)
+    # and exits 1 when any of them report Fail. Those checks are unrelated to
+    # install-route detection, and the route-detection side effects we care
+    # about — the first-run probe writing the sidecar and BundleService
+    # extracting under the winget directory — run BEFORE any environment
+    # check, so a Fail there does not invalidate priming. The subsequent
+    # assertions in this script (route, sidecar, bundle colocation) are the
+    # authoritative signal.
+    #
+    # We capture stdout + stderr and always echo them to the CI log so that
+    # if priming does behave unexpectedly, the operator can see what doctor
+    # reported instead of a bare non-zero exit. PSNativeCommandUseErrorActionPreference
+    # is disabled inside the script block so a non-zero exit from aspire.exe
+    # does not throw before we get to print the output.
     Write-Host "Priming: aspire doctor"
-    $primingOutput = aspire doctor 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "Priming 'aspire doctor' exited $LASTEXITCODE; output: $primingOutput"
+    $primingOutput = & {
+        $PSNativeCommandUseErrorActionPreference = $false
+        aspire doctor 2>&1
+    }
+    $primingExit = $LASTEXITCODE
+    Write-Host "Priming 'aspire doctor' exit code: $primingExit"
+    if ($primingOutput) {
+        Write-Host '--- Priming output (begin) ---'
+        $primingOutput | ForEach-Object { Write-Host $_ }
+        Write-Host '--- Priming output (end) ---'
     }
 }
 
