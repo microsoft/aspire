@@ -39,9 +39,9 @@ Before starting, verify:
 
 Before building the PR body, check whether the diff includes **non-trivial UI changes** to any of these areas:
 
-- **Dashboard** (`src/Aspire.Dashboard/`): changes to `.razor`, `.razor.cs`, `.css`, or `.js` files that alter layout, add/remove components, change interactive behavior, or modify visual appearance beyond minor text or spacing tweaks.
+- **Dashboard** (`src/Aspire.Dashboard/`): changes to `.razor`, `.razor.cs`, `.css`, `.js`, or UI assets under `src/Aspire.Dashboard/wwwroot/` (e.g., `img/**`, `favicon.ico`) that alter layout, add/remove components, change interactive behavior, or modify visual appearance beyond minor text or spacing tweaks.
 - **CLI** (`src/Aspire.Cli/`): changes to command output formatting, interactive prompts, table/list rendering, spinners, progress indicators, or colored output beyond simple message text changes.
-- **VS Code Extension** (`extension/src/`): changes to webview panels, tree views, status bar items, quick pick UIs, editor decorations, or other visual elements beyond minor label text changes.
+- **VS Code Extension** (`extension/`): changes to webview panels, tree views, status bar items, quick pick UIs, editor decorations, contributed view configuration (`package.json`), or UI assets (`resources/**`) beyond minor label text changes.
 
 A change is **non-trivial** if it does more than:
 - Fix a typo or update a string literal without altering layout
