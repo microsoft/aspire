@@ -138,7 +138,16 @@ function Get-MatchingArtifacts {
         $response = Invoke-RestMethod -Uri $listUrl -Headers @{ Authorization = "Bearer $AccessToken" } -Method Get
     }
     catch {
-        throw "Failed to list build artifacts from $listUrl. $_"
+        # Construct the throw message from $_.Exception.Message + status code only,
+        # not the full ErrorRecord. The ErrorRecord's string form can include the
+        # request's Authorization header on some Invoke-RestMethod failure modes
+        # (notably proxied 4xx with a body). AzDO log scrubbing masks
+        # $(System.AccessToken), but the -AccessToken parameter is also designed
+        # for non-AzDO use where nothing scrubs.
+        $status = $null
+        try { $status = $_.Exception.Response.StatusCode } catch { }
+        $statusPart = if ($null -ne $status) { " (HTTP $status)" } else { "" }
+        throw "Failed to list build artifacts from $listUrl$statusPart`: $($_.Exception.Message)"
     }
 
     $all = @($response.value)
@@ -190,8 +199,13 @@ $DownloadOneArtifact = {
     }
     catch {
         # Preserve $tempZip on failure (do NOT remove it) so a developer can
-        # inspect partial download contents.
-        throw "Download failed for '$ArtifactName' from $DownloadUrl. Temp file (may be partial): $tempZip. $_"
+        # inspect partial download contents. See Get-MatchingArtifacts above
+        # for why the throw message is constructed from $_.Exception.Message
+        # rather than the full ErrorRecord (token-leak hardening).
+        $status = $null
+        try { $status = $_.Exception.Response.StatusCode } catch { }
+        $statusPart = if ($null -ne $status) { " (HTTP $status)" } else { "" }
+        throw "Download failed for '$ArtifactName' from $DownloadUrl$statusPart. Temp file (may be partial): $tempZip. $($_.Exception.Message)"
     }
     $downloadMs = $sw.ElapsedMilliseconds
 

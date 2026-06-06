@@ -105,6 +105,7 @@ steps:
       displayName: 🟣Build
 
   - ${{ if ne(parameters.runAsPublic, 'true') }}:
+    - ${{ if eq(parameters.validateNpmPackageSignatures, true) }}:
       - pwsh: |
           & "$(Build.SourcesDirectory)/eng/scripts/validate-npm-package-signatures.ps1" `
             -ShippingDir '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping'
