@@ -318,30 +318,27 @@ public sealed class ReleasePublishNugetPipelineTests
     [Fact]
     public async Task NpmSignatureSidecarsAreContentSanityChecked()
     {
+        // release-publish-nuget.yml inlines a content sanity check on every
+        // microsoft-aspire-cli*.tgz.sig sidecar. The check exists to catch
+        // the most likely silent failure mode in Arcade/ESRP signing: the
+        // sidecar file gets emitted (so a file-existence check passes) but
+        // the content is empty or garbage. A real PGP signature is hundreds
+        // of bytes and starts with either the ASCII-armored header
+        // `-----BEGIN PGP SIGNATURE-----` (RFC 9580 §6) or an OpenPGP binary
+        // signature packet (tag 2: old-format 0x88..0x8B or new-format 0xC2,
+        // RFC 9580 §4.3 / §5.2).
+        //
+        // Behavioral coverage of the same logic in eng/scripts/validate-npm-package-signatures.ps1
+        // lives in ValidateNpmPackageSignaturesTests; if release-publish-nuget.yml
+        // is ever refactored to call that script instead of inlining the
+        // bytes, assert the script invocation here and drop these literal
+        // marker assertions.
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-        var buildAndTest = await ReadRepoFileAsync("eng/pipelines/templates/BuildAndTest.yml");
 
-        // The earlier validation only checked that the `.tgz.sig` files
-        // EXIST. If Arcade SignTool silently produced an empty or garbage
-        // sidecar (signing service hiccup, plugin misconfiguration), the
-        // release would publish a tarball whose sidecar is unverifiable
-        // and nothing in CI would catch it. Full PGP verification would
-        // require importing the LinuxSign500180PGP public key and running
-        // gpg on every agent. As a low-risk middle ground, both source
-        // build (BuildAndTest.yml) and release pipeline assert each
-        // `.sig` is non-empty AND contains an OpenPGP signature marker
-        // (ASCII-armored "-----BEGIN PGP SIGNATURE-----" per RFC 9580 §6,
-        // OR a binary OpenPGP signature packet — tag 2, RFC 9580 §4.3
-        // / §5.2 — starting with 0x88-0x8B (old format) or 0xC2 (new
-        // format)).
         Assert.Contains("'-----BEGIN PGP SIGNATURE-----'", pipeline);
-        Assert.Contains("'-----BEGIN PGP SIGNATURE-----'", buildAndTest);
         Assert.Contains("0x8B", pipeline);
-        Assert.Contains("0x8B", buildAndTest);
         Assert.Contains("0xC2", pipeline);
-        Assert.Contains("0xC2", buildAndTest);
         Assert.Contains("content sanity check", pipeline);
-        Assert.Contains("content sanity check", buildAndTest);
     }
 
     [Fact]
