@@ -46,6 +46,13 @@ public sealed class ProcessCommandResultContext
     /// named-payload clients are mapped by <see cref="InteractionInput.Name"/>.
     /// </para>
     /// </remarks>
+    /// <example>
+    /// Read a declared command argument when producing a custom result:
+    /// <code>
+    /// GetCommandResult = context =>
+    ///     Task.FromResult(CommandResults.Success("received", context.Arguments.GetString("message")!));
+    /// </code>
+    /// </example>
     public InteractionInputCollection Arguments { get; init; } = new([]);
 
     /// <summary>
