@@ -80,10 +80,12 @@ public partial class TextVisualizerDialog : ComponentBase
             if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.JsonFormat)
             {
                 EnabledOptions.Add(DashboardUIHelpers.JsonFormat);
+                EnabledOptions.Remove(DashboardUIHelpers.MarkdownFormat);
             }
             else if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.XmlFormat)
             {
                 EnabledOptions.Add(DashboardUIHelpers.XmlFormat);
+                EnabledOptions.Remove(DashboardUIHelpers.MarkdownFormat);
             }
         }
     }
