@@ -82,6 +82,11 @@
         <target state="translated">콘솔</target>
         <note />
       </trans-unit>
+      <trans-unit id="NavMenuGraphTab">
+        <source>Graph</source>
+        <target state="new">Graph</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NavMenuMetricsTab">
         <source>Metrics</source>
         <target state="translated">메트릭</target>

@@ -1,4 +1,5 @@
 ﻿@page "/"
+@page "/graph"
 @using Aspire.Dashboard.Components.ResourcesGridColumns
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
@@ -7,7 +8,7 @@
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
 @inject IStringLocalizer<Columns> ColumnsLoc
 
-<PageTitle><ApplicationName ResourceName="@nameof(Dashboard.Resources.Resources.ResourcesPageTitle)" Loc="@Loc" /></PageTitle>
+<PageTitle><ApplicationName ResourceName="@(IsGraphPage ? nameof(Dashboard.Resources.Resources.ResourcesGraphPageTitle) : nameof(Dashboard.Resources.Resources.ResourcesPageTitle))" Loc="@Loc" /></PageTitle>
 
 @{
     var showDetailsView = SelectedResource is not null;
@@ -16,7 +17,7 @@
 <div class="page-content-container">
     <AspirePageContentLayout @ref="@_contentLayout" IsSummaryDetailsViewOpen="@showDetailsView">
         <PageTitleSection>
-            <h1 class="page-header">@Loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]</h1>
+            <h1 class="page-header">@(IsGraphPage ? Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphHeader)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)])</h1>
         </PageTitleSection>
 
         <ToolbarSection>
@@ -93,12 +94,12 @@
                                 OnResize="@(r => _manager.SetWidthFraction(r.Orientation == Orientation.Horizontal ? r.Panel1Fraction : 1))">
                 <Summary>
                     <div id="resources-summary-layout-id" class="resources-summary-layout">
-                        <div class="@(!_hideResourceGraph ? "resource-tabs" : string.Empty)">
+                        <div class="resource-tabs">
                             @*
                                 Tab content isn't nested inside FluentTab elements. The tab control is just used to display the tabs.
                                 Content is located in manually created divs so they can be placed in their own CSS grid row.
                             *@
-                            @if (!_hideResourceGraph)
+                            @if (!IsGraphPage)
                             {
                                 <FluentTabs Class="resources-tab-header" ActiveTabId="@($"tab-{PageViewModel.SelectedViewKind}")" OnTabChange="@OnTabChangeAsync" Size="null">
                                     <FluentTab LabelClass="tab-label"
@@ -110,12 +111,6 @@
                                                Id="@($"tab-{ResourceViewKind.Parameters}")"
                                                Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerParametersTab)]"
                                                Icon="@(new Icons.Regular.Size24.Key())">
-                                    </FluentTab>
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-{ResourceViewKind.Graph}")"
-                                               aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]"
-                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphTab)]"
-                                               Icon="@(new Icons.Regular.Size24.ShareAndroid())">
                                     </FluentTab>
                                 </FluentTabs>
                             }

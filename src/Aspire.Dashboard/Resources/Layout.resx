@@ -147,6 +147,9 @@
   <data name="NavMenuResourcesTab" xml:space="preserve">
     <value>Resources</value>
   </data>
+  <data name="NavMenuGraphTab" xml:space="preserve">
+    <value>Graph</value>
+  </data>
   <data name="NavMenuConsoleLogsTab" xml:space="preserve">
     <value>Console</value>
   </data>

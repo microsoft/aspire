@@ -81,9 +81,24 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     [Inject]
     public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
 
-    public string BasePath => DashboardUrls.ResourcesBasePath;
-    public string SessionStorageKey => BrowserStorageKeys.ResourcesPageState;
+    // Resources and Graph share this component because the graph needs the same resource
+    // subscription, filtering, details panel, and command plumbing as the table. Keep
+    // their route/session identities separate so restoring one page doesn't redirect
+    // the other to a different top-level navigation item.
+    public string BasePath => IsGraphPage ? DashboardUrls.GraphBasePath : DashboardUrls.ResourcesBasePath;
+    public string SessionStorageKey => IsGraphPage ? BrowserStorageKeys.GraphPageState : BrowserStorageKeys.ResourcesPageState;
     public ResourcesViewModel PageViewModel { get; set; } = null!;
+
+    internal bool IsGraphPage
+    {
+        get
+        {
+            var relativePath = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+            var queryStart = relativePath.IndexOf('?');
+            var path = queryStart >= 0 ? relativePath[..queryStart] : relativePath;
+            return string.Equals(path.TrimEnd('/'), DashboardUrls.GraphBasePath, StringComparisons.UrlPath);
+        }
+    }
 
     [Parameter]
     [SupplyParameterFromQuery(Name = "view")]
@@ -248,7 +263,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         PageViewModel = new ResourcesViewModel
         {
-            SelectedViewKind = ResourceViewKind.Table
+            SelectedViewKind = IsGraphPage && !_hideResourceGraph ? ResourceViewKind.Graph : ResourceViewKind.Table
         };
 
         _resourceUnviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
@@ -608,6 +623,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     protected override async Task OnParametersSetAsync()
     {
+        if (IsGraphPage && _hideResourceGraph)
+        {
+            NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
+            return;
+        }
+
         if (await this.InitializeViewModelAsync())
         {
             return;
@@ -991,16 +1012,34 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     public Task UpdateViewModelFromQueryAsync(ResourcesViewModel viewModel)
     {
-        // Don't allow the view to be updated from the query string if the resource graph is disabled.
-        if (!_hideResourceGraph && Enum.TryParse(typeof(ResourceViewKind), ViewKindName, out var view) && view is ResourceViewKind vk)
+        if (IsGraphPage)
+        {
+            viewModel.SelectedViewKind = _hideResourceGraph ? ResourceViewKind.Table : ResourceViewKind.Graph;
+            if (viewModel.SelectedViewKind == ResourceViewKind.Graph &&
+                Enum.TryParse(typeof(ResourceGraphMode), GraphModeName, out var graphMode) &&
+                graphMode is ResourceGraphMode gm)
+            {
+                viewModel.SelectedGraphMode = gm;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        if (!_hideResourceGraph && Enum.TryParse(typeof(ResourceViewKind), ViewKindName, out var view) && view is ResourceViewKind.Graph)
+        {
+            NavigationManager.NavigateTo(DashboardUrls.GraphUrl(
+                graphMode: GraphModeName,
+                hiddenTypes: HiddenTypes,
+                hiddenStates: HiddenStates,
+                hiddenHealthStates: HiddenHealthStates), new NavigationOptions { ReplaceHistoryEntry = true });
+            return Task.CompletedTask;
+        }
+
+        if (Enum.TryParse(typeof(ResourceViewKind), ViewKindName, out view) &&
+            view is ResourceViewKind vk &&
+            vk != ResourceViewKind.Graph)
         {
             viewModel.SelectedViewKind = vk;
-        }
-        if (viewModel.SelectedViewKind == ResourceViewKind.Graph &&
-            Enum.TryParse(typeof(ResourceGraphMode), GraphModeName, out var graphMode) &&
-            graphMode is ResourceGraphMode gm)
-        {
-            viewModel.SelectedGraphMode = gm;
         }
 
         return Task.CompletedTask;
@@ -1008,9 +1047,17 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     public string GetUrlFromSerializableViewModel(ResourcesPageState serializable)
     {
+        if (IsGraphPage)
+        {
+            return DashboardUrls.GraphUrl(
+                graphMode: serializable.GraphMode,
+                hiddenTypes: SerializeFiltersToString(serializable.ResourceTypesToVisibility),
+                hiddenStates: SerializeFiltersToString(serializable.ResourceStatesToVisibility),
+                hiddenHealthStates: SerializeFiltersToString(serializable.ResourceHealthStatusesToVisibility));
+        }
+
         return DashboardUrls.ResourcesUrl(
-            view: serializable.ViewKind,
-            graphMode: serializable.ViewKind == ResourceViewKind.Graph.ToString() ? serializable.GraphMode : null,
+            view: serializable.ViewKind == ResourceViewKind.Graph.ToString() ? null : serializable.ViewKind,
             // add resource?
             hiddenTypes: SerializeFiltersToString(serializable.ResourceTypesToVisibility),
             hiddenStates: SerializeFiltersToString(serializable.ResourceStatesToVisibility),
@@ -1027,7 +1074,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         return new ResourcesPageState
         {
-            ViewKind = PageViewModel.SelectedViewKind != ResourceViewKind.Table ? PageViewModel.SelectedViewKind.ToString() : null,
+            ViewKind = IsGraphPage
+                ? ResourceViewKind.Graph.ToString()
+                : PageViewModel.SelectedViewKind != ResourceViewKind.Table ? PageViewModel.SelectedViewKind.ToString() : null,
             GraphMode = PageViewModel.SelectedViewKind == ResourceViewKind.Graph && PageViewModel.SelectedGraphMode != ResourceGraphMode.Relationships ? PageViewModel.SelectedGraphMode.ToString() : null,
             ResourceTypesToVisibility = PageViewModel.ResourceTypesToVisibility,
             ResourceStatesToVisibility = PageViewModel.ResourceStatesToVisibility,

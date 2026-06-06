@@ -203,7 +203,7 @@ public partial class ResourcesTests : DashboardTestContext
         var initializeGraphInvocationHandler = resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
+        navigationManager.NavigateTo(DashboardUrls.GraphUrl());
 
         // Act
         var cut = RenderComponent<Components.Pages.Resources>(builder =>
@@ -216,6 +216,46 @@ public partial class ResourcesTests : DashboardTestContext
         // Assert
         Assert.Single(initializeGraphInvocationHandler.Invocations);
         Assert.DoesNotContain("resource-graph-telemetry", cut.Find("svg.resource-graph").ClassList);
+    }
+
+    [Fact]
+    public void GraphRoute_SelectsGraphView()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource(
+                "Resource1",
+                "Type1",
+                "Running",
+                ImmutableArray.Create(new HealthReportViewModel("Null", null, "Description1", null))),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(
+            this,
+            viewport,
+            dashboardClient);
+
+        var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
+        resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
+        resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true);
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.GraphUrl(graphMode: "Telemetry"));
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        Assert.True(cut.Instance.IsGraphPage);
+        Assert.Equal(DashboardUrls.GraphBasePath, cut.Instance.BasePath);
+        Assert.Equal(BrowserStorageKeys.GraphPageState, cut.Instance.SessionStorageKey);
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Graph, cut.Instance.PageViewModel.SelectedViewKind);
+        Assert.Equal(Components.Pages.Resources.ResourceGraphMode.Telemetry, cut.Instance.PageViewModel.SelectedGraphMode);
+        Assert.Equal("Graph", cut.Find("h1").TextContent);
+        Assert.DoesNotContain("tab-Graph", cut.Markup);
     }
 
     [Fact]
@@ -242,7 +282,7 @@ public partial class ResourcesTests : DashboardTestContext
         resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true);
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph", graphMode: "Telemetry"));
+        navigationManager.NavigateTo(DashboardUrls.GraphUrl(graphMode: "Telemetry"));
 
         var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
         var cut = RenderComponent<Components.Pages.Resources>(builder =>
@@ -323,7 +363,7 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(0, addContext.FailureCount);
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
-        navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph", graphMode: "Telemetry"));
+        navigationManager.NavigateTo(DashboardUrls.GraphUrl(graphMode: "Telemetry"));
 
         var cut = RenderComponent<Components.Pages.Resources>(builder =>
         {
@@ -426,6 +466,47 @@ public partial class ResourcesTests : DashboardTestContext
                 Assert.Equal("Healthy", kvp.Key);
                 Assert.True(kvp.Value);
             });
+    }
+
+    [Fact]
+    public void ResourcesRoute_StaleGraphSessionState_DoesNotRedirectToGraph()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("Resource1", "Type1", "Running", null),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var sessionStorage = (TestSessionStorage)Services.GetRequiredService<ISessionStorage>();
+        sessionStorage.OnGetAsync = key =>
+        {
+            if (key is BrowserStorageKeys.ResourcesPageState)
+            {
+                return (true,
+                    new Components.Pages.Resources.ResourcesPageState
+                    {
+                        ResourceTypesToVisibility = new Dictionary<string, bool> { { "Type1", true } },
+                        ResourceStatesToVisibility = new Dictionary<string, bool> { { "Running", true } },
+                        ResourceHealthStatusesToVisibility = new Dictionary<string, bool>(),
+                        ViewKind = Components.Pages.Resources.ResourceViewKind.Graph.ToString(),
+                        GraphMode = Components.Pages.Resources.ResourceGraphMode.Telemetry.ToString(),
+                    });
+            }
+
+            return (false, null);
+        };
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ResourcesUrl());
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder => { builder.AddCascadingValue(viewport); });
+
+        Assert.False(cut.Instance.IsGraphPage);
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Table, cut.Instance.PageViewModel.SelectedViewKind);
+        Assert.Equal("/", new Uri(navigationManager.Uri).PathAndQuery);
     }
 
     private static void AssertResourceFilterListEquals(IRenderedComponent<Components.Pages.Resources> cut, IEnumerable<KeyValuePair<string, bool>> types, IEnumerable<KeyValuePair<string, bool>> states, IEnumerable<KeyValuePair<string, bool>> healthStates)

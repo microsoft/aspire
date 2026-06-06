@@ -17,6 +17,7 @@ internal static class BrowserStorageKeys
     public const string MetricsPageState = "Aspire_PageState_Metrics";
     public const string ConsoleLogsPageState = "Aspire_PageState_ConsoleLogs";
     public const string ResourcesPageState = "Resources_PageState";
+    public const string GraphPageState = "Aspire_PageState_Graph";
     public const string ConsoleLogConsoleSettings = "Aspire_ConsoleLog_ConsoleSettings";
     public const string ConsoleLogFilters = "Aspire_ConsoleLog_Filters";
     public const string TextVisualizerDialogSettings = "Aspire_TextVisualizerDialog_TextVisualizerDialogSettings";

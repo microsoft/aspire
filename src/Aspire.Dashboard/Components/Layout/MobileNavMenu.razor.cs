@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -23,10 +25,15 @@ public partial class MobileNavMenu : ComponentBase
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
 
     [Inject]
+    public required IOptionsMonitor<DashboardOptions> DashboardOptions { get; init; }
+
+    [Inject]
     public required IStringLocalizer<Resources.AIAssistant> AIAssistantLoc { get; init; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
+
+    private bool IsResourceGraphEnabled => DashboardOptions.CurrentValue.UI.DisableResourceGraph != true;
 
     private Task NavigateToAsync(string url)
     {
@@ -44,6 +51,16 @@ public partial class MobileNavMenu : ComponentBase
                 DesktopNavMenu.ResourcesIcon(),
                 LinkMatchRegex: new Regex($"^{DashboardUrls.ResourcesUrl()}(\\?.*)?$")
             );
+
+            if (IsResourceGraphEnabled)
+            {
+                yield return new MobileNavMenuEntry(
+                    Loc[nameof(Resources.Layout.NavMenuGraphTab)],
+                    () => NavigateToAsync(DashboardUrls.GraphUrl()),
+                    DesktopNavMenu.GraphIcon(),
+                    LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.GraphUrl())
+                );
+            }
 
             yield return new MobileNavMenuEntry(
                 Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)],
@@ -126,4 +143,3 @@ public partial class MobileNavMenu : ComponentBase
         return new Regex($"^({pageRelativeBasePath}|{pageRelativeBasePath}/.+)$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     }
 }
-

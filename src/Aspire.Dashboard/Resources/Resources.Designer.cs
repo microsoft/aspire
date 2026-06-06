@@ -473,6 +473,24 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesGraphModeTelemetry", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Graph.
+        /// </summary>
+        public static string ResourcesGraphHeader {
+            get {
+                return ResourceManager.GetString("ResourcesGraphHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} graph.
+        /// </summary>
+        public static string ResourcesGraphPageTitle {
+            get {
+                return ResourceManager.GetString("ResourcesGraphPageTitle", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Zoom in.

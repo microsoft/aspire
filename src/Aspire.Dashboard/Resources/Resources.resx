@@ -121,8 +121,15 @@
     <value>{0} resources</value>
     <comment>{0} is an application name</comment>
   </data>
+  <data name="ResourcesGraphPageTitle" xml:space="preserve">
+    <value>{0} graph</value>
+    <comment>{0} is an application name</comment>
+  </data>
   <data name="ResourcesHeader" xml:space="preserve">
     <value>Resources</value>
+  </data>
+  <data name="ResourcesGraphHeader" xml:space="preserve">
+    <value>Graph</value>
   </data>
   <data name="ResourcesNotFiltered" xml:space="preserve">
     <value>No filters</value>

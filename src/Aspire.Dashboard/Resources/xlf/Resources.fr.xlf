@@ -212,6 +212,11 @@
         <target state="translated">A des filtres</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesGraphHeader">
+        <source>Graph</source>
+        <target state="new">Graph</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesGraphModeLabel">
         <source>Graph mode</source>
         <target state="new">Graph mode</target>
@@ -226,6 +231,11 @@
         <source>Telemetry flow</source>
         <target state="new">Telemetry flow</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourcesGraphPageTitle">
+        <source>{0} graph</source>
+        <target state="new">{0} graph</target>
+        <note>{0} is an application name</note>
       </trans-unit>
       <trans-unit id="ResourcesGraphResetButton">
         <source>Reset</source>

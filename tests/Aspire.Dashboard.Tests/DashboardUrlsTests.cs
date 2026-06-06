@@ -84,6 +84,12 @@ public class DashboardUrlsTests
     }
 
     [Fact]
+    public void GraphUrl_WithGraphMode_AppendsQueryParameter()
+    {
+        Assert.Equal("/graph?graphMode=Telemetry", DashboardUrls.GraphUrl(graphMode: "Telemetry"));
+    }
+
+    [Fact]
     public void SetLanguagesUrl_HtmlValues_CorrectlyEscaped()
     {
         Assert.Equal("/api/set-language?language=fr-FR&redirectUrl=%2Fhi", DashboardUrls.SetLanguageUrl("fr-FR", "/hi"));
