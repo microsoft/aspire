@@ -93,6 +93,13 @@ const infrastructureNetworkFailureLogOverridePatterns = [
     /expected 'packfile'/i,
     /\bRPC failed\b/i,
     /\bRecv failure\b/i,
+    // Corepack / npm registry CDN integrity check failure. Emitted when the package
+    // tarball SHA doesn't match the expected digest — usually a stale or partially
+    // served CDN response that succeeds on retry. Format observed in CI logs:
+    //   "    digest-mismatch: error"
+    // (repeated for each tarball attempt). Persistent mismatches caused by a tampered
+    // package would re-fail on retry, so allow-listing this is safe.
+    /\bdigest-mismatch:\s+error\b/i,
 ];
 
 function matchesAny(value, patterns) {

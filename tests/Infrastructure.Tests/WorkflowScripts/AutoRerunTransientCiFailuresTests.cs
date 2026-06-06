@@ -237,6 +237,27 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task AllowsLogBasedOverrideForCorepackDigestMismatchOnVsCodeExtensionE2E()
+    {
+        // Sample log fragment captured from a real VS Code extension E2E failure
+        // (corepack tarball SHA mismatch from the npm registry CDN). Repeats N times
+        // when the failure persists across retry attempts:
+        //   2026-06-06T10:21:47.7767159Z   digest-mismatch: error
+        WorkflowJob job = CreateJob(failedSteps: ["Run extension E2E tests"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "Process completed with exit code 1.",
+            "2026-06-06T10:21:47.7767159Z   digest-mismatch: error\n2026-06-06T10:21:48.3116385Z   digest-mismatch: error");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal(
+            "Failed step 'Run extension E2E tests' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/\\bdigest-mismatch:\\s+error\\b/i`.",
+            result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task UsesLongerMarkdownFenceWhenMatchedPatternContainsBackticks()
     {
         string result = await InvokeHarnessAsync<string>(
