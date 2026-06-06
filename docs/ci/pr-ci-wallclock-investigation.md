@@ -235,6 +235,59 @@ later for a given run; usually starter-validation). Total wall
 Templates PR skip. Apple Intel hardware is being phased out, so the
 user-facing impact is bounded.
 
+### Iteration 1 + Iteration 2 + Iteration 3 — measurement
+
+PR #17973, run [27058240036](https://github.com/microsoft/aspire/actions/runs/27058240036).
+
+**Verification of iter 3 itself:**
+- `Build native CLI archive (macOS x64)`: **skipped** ✓
+- `Prepare Homebrew installer artifacts`: **skipped** (auto-skipped via
+  needs) ✓
+- `Build CLI E2E Docker image`: start=+1.1, end=+8.5 (iter 2 still
+  working) ✓
+- 12 Templates jobs all on Linux only (iter 1 still working) ✓
+
+**Wall (legitimate, excluding flake — see below):**
+
+| Top finishing jobs | End time |
+|---|---:|
+| VS Code extension E2E (Windows, debug-…) | +19.4 |
+| `Cli.EndToEnd-TypeScriptPolyglotTests` | +19.1 |
+| `Aspire CLI Starter Validation (Windows ARM64)` | +18.9 |
+| `Cli.EndToEnd-TypeScriptCodegenValidationTests` | +17.7 |
+| `Prepare WinGet installer artifacts` | +16.0 |
+
+Final Test Results (~1.1) + Final Results (~0.1) → **wall ~20.5 min**
+vs the 26.5 min baseline (**~6 min saved, ~23%**).
+
+For PRs that **don't** touch the VS Code extension (the common case),
+the gate falls back to `Cli.EndToEnd-TypeScriptPolyglotTests` at +19.1
+→ **wall ~20.3 min**. The extension E2E lane only runs when the PR
+modifies `extension/**`, `src/Aspire.Cli/**`, or
+`.github/workflows/extension-*.yml`; for everything else it's skipped.
+This PR's diff touches `.github/workflows/tests.yml` which triggers
+the extension E2E lane, so the measured wall here is the slightly
+higher worst-case figure.
+
+| Iteration | Predicted wall | Measured wall | Notes |
+|---|---:|---:|---|
+| baseline | — | 26.5 min | median of 3 baseline runs |
+| iter 1 | ~22.5 min | ~22.5 min (modulo flake) | Templates Win → skipped |
+| iter 1+2 | ~21.6 min | **~22 min** | build_cli_e2e_image starts at t=0 |
+| iter 1+2+3 | ~20-21 min | **~20.5 min** | macOS x64 + Homebrew prep PR-skipped |
+
+**Cumulative saving: ~6 min off the median PR wall (~23%).**
+
+**Flake interfering with run-status:** `Hosting-1 (windows-latest)`
+hung for 47 min and triggered the per-job timeout, rolling the whole
+workflow to `failure`. This is the **3rd different unrelated test
+flake** in 3 CI runs of this PR (Codegen on iter 1, Starter Validation
+Windows on iter 1+2, Hosting-1 on iter 1+2+3 — none related to the
+perf changes; the pattern is Windows-runner intermittent hangs). The
+311 other jobs all succeeded, including all iter 1/2/3-affected jobs.
+The flake should be filed as a separate issue for the windows-runner
+pool / hang-detection thresholds.
+
 ### Iteration 4 (on deck) — skip `build_cli_archive_windows_arm64` and WinGet prep on PRs
 
 Symmetric to iter 3: `build_cli_archive_windows_arm64` (12.2 min) gates
