@@ -1,4 +1,4 @@
-# Azure AI Foundry hosting integration
+# Microsoft Foundry hosting integration
 
 Use this integration to model, configure, and orchestrate Microsoft Foundry in an Aspire solution.
 
