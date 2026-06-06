@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Documentation-only change: updates hosting integration README files to focus on Aspire CLI and polyglot AppHost patterns. No code changes.",
+  "mergedAt": "2026-06-06T14:35:27Z",
+  "number": 17954,
+  "runDate": "2026-06-06T18:25:33Z",
+  "status": "excluded",
+  "title": "Update hosting READMEs for polyglot AppHosts"
+}
