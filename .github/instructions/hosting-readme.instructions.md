@@ -138,6 +138,7 @@ See [Local Azure Provisioning](https://aspire.dev/integrations/cloud/azure/local
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/
+{Specific hosting integration docs URL from aspire docs search, when available}
 {Links to relevant Microsoft Learn documentation}
 {Links to technology-specific documentation}
 ```
@@ -146,6 +147,7 @@ https://aspire.dev/integrations/gallery/
 
 - Include links to relevant aspire.dev documentation
 - Include `https://aspire.dev/integrations/gallery/`
+- Use `aspire docs search "{Technology}"` to find and include the specific hosting integration docs page when one exists
 - Include links to official technology documentation
 - Use the format: `https://aspire.dev/...`
 - For multiple links, use a bulleted list with `*` prefix (hosting READMEs) or separate lines (simpler hosting READMEs)
@@ -224,6 +226,7 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/databases/postgres/postgres-host/
 https://www.postgresql.org/docs/
 
 ## Feedback & contributing
@@ -272,6 +275,7 @@ When reviewing or creating a hosting integration README.md:
 - [ ] Usage example includes C# and TypeScript AppHost samples when the API is exported for TypeScript
 - [ ] Usage example uses appropriate variable names and resource names
 - [ ] "Additional documentation" section includes `https://aspire.dev/integrations/gallery/`
+- [ ] "Additional documentation" section links to the specific hosting integration docs page found with `aspire docs search` when one exists
 - [ ] "Feedback & contributing" section is present at the end
 - [ ] Trademark notices are included if applicable
 - [ ] No consuming-app setup or dependency-injection details

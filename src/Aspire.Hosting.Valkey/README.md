@@ -54,6 +54,7 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/caching/valkey/valkey-host/
 * https://valkey.io
 * https://github.com/valkey-io/valkey/blob/unstable/README.md
 * https://valkey.io/docs/

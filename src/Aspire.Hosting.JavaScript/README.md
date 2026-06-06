@@ -39,7 +39,9 @@ await builder.build().run();
 ```
 
 ## Additional documentation
+
 https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/frameworks/javascript/
 https://github.com/microsoft/aspire-samples/tree/main/samples/aspire-with-javascript
 https://github.com/microsoft/aspire-samples/tree/main/samples/aspire-with-node
 

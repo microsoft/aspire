@@ -116,6 +116,7 @@ var taskHub = scheduler.AddTaskHub("taskhub").WithTaskHubName(taskHubName);
 ## Additional documentation
 
 - https://aspire.dev/integrations/gallery/
+- https://aspire.dev/integrations/cloud/azure/azure-functions/azure-functions-host/
 - https://learn.microsoft.com/azure/azure-functions
 - https://learn.microsoft.com/azure/azure-functions/durable/durable-task-scheduler/durable-task-scheduler
 

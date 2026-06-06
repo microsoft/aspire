@@ -97,6 +97,7 @@ builder.AddProject<Projects.MyApp>("myapp")
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/cloud/azure/azure-key-vault/azure-key-vault-host/
 
 ## Feedback & contributing
 

@@ -64,9 +64,9 @@ The SQL Server database resource inherits all properties from its parent `SqlSer
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
 
 ## Additional documentation
+
 https://aspire.dev/integrations/gallery/
-https://aspire.dev/integrations/databases/sql-server/
-https://aspire.dev/integrations/databases/efcore/sql-server/
+https://aspire.dev/integrations/databases/sql-server/sql-server-host/
 
 ## Feedback & contributing
 

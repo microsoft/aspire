@@ -60,6 +60,7 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-data-explorer/
 * https://learn.microsoft.com/en-us/kusto/
 * https://learn.microsoft.com/en-us/kusto/api/
 * https://learn.microsoft.com/en-us/azure/data-explorer/kusto-emulator-overview

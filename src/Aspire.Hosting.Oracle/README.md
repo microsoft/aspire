@@ -66,7 +66,7 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/
-https://aspire.dev/integrations/databases/oracle/
+https://aspire.dev/integrations/databases/efcore/oracle/oracle-host/
 
 ## Feedback & contributing
 

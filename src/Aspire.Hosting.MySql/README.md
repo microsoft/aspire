@@ -66,7 +66,7 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
-* https://aspire.dev/integrations/databases/mysql/
+* https://aspire.dev/integrations/databases/mysql/mysql-host/
 
 ## Feedback & contributing
 

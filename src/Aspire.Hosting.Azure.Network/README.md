@@ -183,6 +183,7 @@ storage.ConfigureInfrastructure(infra =>
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-virtual-network/
 * https://learn.microsoft.com/azure/virtual-network/
 * https://learn.microsoft.com/azure/nat-gateway/
 * https://learn.microsoft.com/azure/private-link/

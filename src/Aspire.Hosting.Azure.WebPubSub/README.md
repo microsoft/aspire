@@ -51,6 +51,7 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-web-pubsub/azure-web-pubsub-host/
 * https://learn.microsoft.com/azure/azure-web-pubsub/overview
 
 ## Feedback & contributing

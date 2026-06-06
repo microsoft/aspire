@@ -49,6 +49,7 @@ var myService = builder.AddProject<Projects.MyService>()
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-log-analytics/
 * https://learn.microsoft.com/azure/azure-monitor/logs/log-analytics-workspace-overview
 
 ## Feedback & contributing

@@ -249,6 +249,7 @@ Similarly you can use `PublishAsMigrationScript()` if you also want a raw SQL sc
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/databases/efcore/migrations/
 https://learn.microsoft.com/ef/core/managing-schemas/migrations/
 
 ## Feedback & contributing

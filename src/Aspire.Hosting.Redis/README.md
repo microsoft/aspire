@@ -54,9 +54,7 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
-* https://aspire.dev/integrations/caching/redis/
-* https://aspire.dev/integrations/caching/redis-output/
-* https://aspire.dev/integrations/caching/redis-distributed/
+* https://aspire.dev/integrations/caching/redis/redis-host/
 
 ## Feedback & contributing
 

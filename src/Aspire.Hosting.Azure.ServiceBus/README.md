@@ -98,6 +98,7 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-service-bus/azure-service-bus-host/
 * https://learn.microsoft.com/azure/service-bus-messaging/service-bus-messaging-overview
 
 ## Feedback & contributing

@@ -88,6 +88,7 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-cosmos-db/azure-cosmos-db-host/
 * https://learn.microsoft.com/azure/cosmos-db/nosql/
 
 ## Feedback & contributing

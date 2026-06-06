@@ -44,6 +44,7 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/aks/
 * https://learn.microsoft.com/azure/aks/
 
 ## Feedback & contributing

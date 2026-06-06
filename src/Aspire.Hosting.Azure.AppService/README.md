@@ -117,6 +117,7 @@ var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env")
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-app-service/azure-app-service-host/
 * https://learn.microsoft.com/azure/app-service/
 
 ## Feedback & contributing

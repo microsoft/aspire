@@ -55,6 +55,7 @@ await builder.addNodeApp("frontend", "../orleans-frontend", "server.js")
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/frameworks/orleans/
 https://learn.microsoft.com/dotnet/orleans/
 
 ## Feedback & contributing

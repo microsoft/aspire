@@ -41,6 +41,7 @@ aspire publish -o k8s-artifacts
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/compute/kubernetes/
 
 ## Feedback & contributing
 

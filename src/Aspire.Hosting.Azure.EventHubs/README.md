@@ -89,6 +89,7 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-event-hubs/azure-event-hubs-host/
 * https://learn.microsoft.com/azure/event-hubs/event-hubs-about
 
 ## Feedback & contributing

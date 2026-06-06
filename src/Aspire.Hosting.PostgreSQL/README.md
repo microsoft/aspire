@@ -79,8 +79,7 @@ for database exploration, query execution, index tuning, and health checks.
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/
-https://aspire.dev/integrations/databases/postgres/postgres-get-started/
-https://aspire.dev/integrations/databases/efcore/postgresql/
+https://aspire.dev/integrations/databases/postgres/postgres-host/
 
 ## Feedback & contributing
 
