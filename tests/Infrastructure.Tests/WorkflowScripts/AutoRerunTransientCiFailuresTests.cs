@@ -1422,6 +1422,51 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task AnalyzeFailedJobsWithLiveConfigRetriesTestExecFailureOnAzureContainerRegistryConnectionRefused()
+    {
+        // Sample fragment captured from a real push-to-main failure burst on
+        // run 27046149398 (2026-06-05) where 10 parallel test jobs (StackExchange.Redis,
+        // Npgsql.EFCore.PostgreSQL, NATS.Net, MongoDB.*, Qdrant.Client, etc.) all hit the
+        // same ACR transient at the same second:
+        //   Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError,
+        //   response={"message":"Get \"https://netaspireci.azurecr.io/v2/\": dial tcp 20.150.241.14:443:
+        //   connect: connection refused"}
+        WorkflowJob job = CreateJob(id: 1, failedSteps: ["Run tests (Linux/macOS)"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code 1." },
+            new Dictionary<string, string> { ["1"] = "Docker.DotNet.DockerApiException : Get \"https://netaspireci.azurecr.io/v2/\": dial tcp 20.150.241.14:443: connect: connection refused" },
+            retryPatternsConfig: await LoadLiveRetryPatternsConfigAsync());
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("Azure Container Registry connection refused", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeFailedJobsWithLiveConfigRetriesTestExecFailureOnCorepackDigestMismatch()
+    {
+        // Sample fragment captured from a real test-execution failure where a Templates /
+        // Polyglot / Cli.EndToEnd test happens to invoke corepack (e.g. through aspire init
+        // for a TypeScript apphost) and hits the same digest-mismatch CDN transient that
+        // affects VS Code extension E2E. Step is "Run tests" (test execution), so the
+        // hardcoded JS infrastructureNetworkFailureLogOverridePatterns path doesn't fire
+        // for it — only the configurable jobFailurePatterns can rescue it.
+        WorkflowJob job = CreateJob(id: 1, failedSteps: ["Run tests (Linux/macOS)"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code 1." },
+            new Dictionary<string, string> { ["1"] = "  digest-mismatch: error\n  digest-mismatch: error" },
+            retryPatternsConfig: await LoadLiveRetryPatternsConfigAsync());
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("corepack/npm registry CDN digest mismatch", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task AnalyzeFailedJobsWithConfigSkipsWhenJobLogDoesNotMatchPattern()
     {
         WorkflowJob job = CreateJob(id: 1, failedSteps: ["Run tests"]);
@@ -2107,6 +2152,15 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     private Task<string> ReadRepoFileAsync(string relativePath)
         => File.ReadAllTextAsync(Path.Combine(_repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+    // Loads eng/test-retry-patterns.json as a generic object the harness can serialize back to JS,
+    // so tests can validate that real-world failure-log fragments match the patterns
+    // actually shipped to CI (not synthetic patterns invented for the test).
+    private async Task<object> LoadLiveRetryPatternsConfigAsync()
+    {
+        string configJson = await ReadRepoFileAsync("eng/test-retry-patterns.json");
+        return JsonSerializer.Deserialize<JsonElement>(configJson);
+    }
 
     private sealed class HarnessRequest
     {
