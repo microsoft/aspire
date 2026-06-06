@@ -59,7 +59,6 @@ public partial class TextVisualizerDialog : ComponentBase
     {
         EnabledOptions.Clear();
         EnabledOptions.Add(DashboardUIHelpers.PlaintextFormat);
-        EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
 
         _options = [
             new SelectViewModel<string> { Id = DashboardUIHelpers.PlaintextFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogPlaintextFormat)] },
@@ -80,12 +79,14 @@ public partial class TextVisualizerDialog : ComponentBase
             if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.JsonFormat)
             {
                 EnabledOptions.Add(DashboardUIHelpers.JsonFormat);
-                EnabledOptions.Remove(DashboardUIHelpers.MarkdownFormat);
             }
             else if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.XmlFormat)
             {
                 EnabledOptions.Add(DashboardUIHelpers.XmlFormat);
-                EnabledOptions.Remove(DashboardUIHelpers.MarkdownFormat);
+            }
+            else
+            {
+                EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
             }
         }
     }
