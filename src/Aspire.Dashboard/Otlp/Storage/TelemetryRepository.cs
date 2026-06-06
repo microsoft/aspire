@@ -1907,7 +1907,7 @@ public sealed partial class TelemetryRepository : IDisposable
 
     public OtlpResource? GetPeerResource(OtlpSpan span)
     {
-        var peer = ResolveUninstrumentedPeerResource(span, _outgoingPeerResolvers);
+        var peer = ResolveUninstrumentedPeerResource(span, _outgoingPeerResolvers, _logger);
         if (peer == null)
         {
             return null;
@@ -1942,7 +1942,7 @@ public sealed partial class TelemetryRepository : IDisposable
             // instead of also creating a synthetic peer from the client's peer attributes.
             var hasPeerService = OtlpHelpers.GetPeerAddress(span.Attributes) != null;
             var hasUninstrumentedPeer = hasPeerService && !(spanIdsWithChildren ??= GetSpanIdsWithChildren(trace)).Contains(span.SpanId);
-            var uninstrumentedPeer = hasUninstrumentedPeer ? ResolveUninstrumentedPeerResource(span, _outgoingPeerResolvers) : null;
+            var uninstrumentedPeer = hasUninstrumentedPeer ? ResolveUninstrumentedPeerResource(span, _outgoingPeerResolvers, _logger) : null;
 
             if (uninstrumentedPeer != null)
             {
@@ -2095,14 +2095,24 @@ public sealed partial class TelemetryRepository : IDisposable
 
     private readonly record struct TelemetryGraphSpanDestination(string SourceSpanId, ResourceKey Destination);
 
-    private static ResourceViewModel? ResolveUninstrumentedPeerResource(OtlpSpan span, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+    private static ResourceViewModel? ResolveUninstrumentedPeerResource(OtlpSpan span, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers, ILogger logger)
     {
         // Attempt to resolve uninstrumented peer to a friendly name from the span.
         foreach (var resolver in outgoingPeerResolvers)
         {
-            if (resolver.TryResolvePeer(span.Attributes, out _, out var matchedResourced))
+            try
             {
-                return matchedResourced;
+                if (resolver.TryResolvePeer(span.Attributes, out _, out var matchedResourced))
+                {
+                    return matchedResourced;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Peer resolvers parse loosely structured OTLP attributes such as:
+                //   server.address: bad-peer, server.port: not-a-port
+                // Treat resolver failures as bad span data so one malformed outbound span doesn't abort ingestion.
+                logger.LogInformation(ex, "Error resolving uninstrumented peer resource.");
             }
         }
 

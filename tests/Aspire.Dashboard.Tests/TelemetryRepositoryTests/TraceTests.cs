@@ -208,6 +208,165 @@ public class TraceTests
     }
 
     [Fact]
+    public void GetTelemetryGraphEdges_MalformedOtelTrace_DoesNotCrash()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = new OpenTelemetry.Proto.Resource.V1.Resource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "bad-trace",
+                                spanId: string.Empty,
+                                kind: Span.Types.SpanKind.Client,
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(2),
+                                attributes:
+                                [
+                                    new KeyValuePair<string, string>("server.address", string.Empty),
+                                    new KeyValuePair<string, string>("server.port", "not-a-port")
+                                ]),
+                            CreateSpan(
+                                traceId: "bad-trace",
+                                spanId: "orphan-server",
+                                parentSpanId: "missing-parent",
+                                kind: Span.Types.SpanKind.Server,
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(2)),
+                            CreateSpan(
+                                traceId: "bad-trace",
+                                spanId: "negative-duration",
+                                parentSpanId: "another-missing-parent",
+                                kind: Span.Types.SpanKind.Unspecified,
+                                startTime: s_testTime.AddMinutes(3),
+                                endTime: s_testTime.AddMinutes(2))
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+        Assert.Empty(repository.GetTelemetryGraphEdges());
+
+        var trace = Assert.Single(repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).PagedResult.Items);
+        Assert.Equal(3, trace.Spans.Count);
+        Assert.Equal(new ResourceKey("unknown_service", null), trace.FirstSpan.Source.ResourceKey);
+    }
+
+    [Fact]
+    public void GetTelemetryGraphEdges_MissingResourceServiceName_UsesFallbackResourceKey()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = new OpenTelemetry.Proto.Resource.V1.Resource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                kind: Span.Types.SpanKind.Client,
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(2))
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api", instanceId: "api-def"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-2",
+                                parentSpanId: "1-1",
+                                kind: Span.Types.SpanKind.Server,
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(2))
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+        var edge = Assert.Single(repository.GetTelemetryGraphEdges());
+        Assert.Equal(new ResourceKey("unknown_service", null), edge.Key.Source);
+        Assert.Equal(new ResourceKey("api", "api-def"), edge.Key.Destination);
+        Assert.Equal(1, edge.Value);
+    }
+
+    [Fact]
+    public void GetTelemetryGraphEdges_PeerResolverThrows_DoesNotCrash()
+    {
+        var testSink = new TestSink();
+        var factory = LoggerFactory.Create(b => b.AddProvider(new TestLoggerProvider(testSink)));
+        var peerResolver = new TestOutgoingPeerResolver(_ => throw new FormatException("Bad peer address."));
+        var repository = CreateRepository(loggerFactory: factory, outgoingPeerResolvers: [peerResolver]);
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api", instanceId: "api-def"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                kind: Span.Types.SpanKind.Client,
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(2),
+                                attributes: [new KeyValuePair<string, string>("server.address", "bad-peer")])
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+        Assert.Empty(repository.GetTelemetryGraphEdges());
+        var write = Assert.Single(testSink.Writes, w => w.Message == "Error resolving uninstrumented peer resource.");
+        Assert.IsType<FormatException>(write.Exception);
+    }
+
+    [Fact]
     public void GetTelemetryGraphEdges_ClearTraces_RemovesEdges()
     {
         var repository = CreateRepository();
