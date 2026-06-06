@@ -1040,7 +1040,10 @@ public class AtsTypeScriptCodeGeneratorTests
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.mts"];
+        var processCommandExportOptions = Assert.Single(atsContext.DtoTypes, dto => dto.Name == "ProcessCommandExportOptions");
+        var createProcessSpec = Assert.Single(processCommandExportOptions.Properties, property => property.Name == "CreateProcessSpec");
 
+        Assert.True(createProcessSpec.IsOptional);
         Assert.Contains("const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback", aspireTs);
         Assert.Contains("createProcessSpec?: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>;", aspireTs);
         Assert.Contains("const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback", aspireTs);

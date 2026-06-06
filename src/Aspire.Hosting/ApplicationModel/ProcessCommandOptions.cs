@@ -128,7 +128,7 @@ internal sealed class ProcessCommandExportOptions
     /// <summary>
     /// A callback that creates the local process specification when the command is invoked.
     /// </summary>
-    public Func<ExecuteCommandContext, Task<ProcessCommandSpecExportData>>? CreateProcessSpec { get; set; }
+    public Func<ExecuteCommandContext, Task<ProcessCommandSpecExportData>>? CreateProcessSpec { get; init; }
 
     /// <summary>
     /// Optional command configuration.

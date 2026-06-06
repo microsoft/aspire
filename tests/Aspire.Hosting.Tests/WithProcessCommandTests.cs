@@ -18,6 +18,7 @@ namespace Aspire.Hosting.Tests;
 
 #pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
 #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
+#pragma warning disable CS0618 // Tests intentionally cover the deprecated TypeScript withProcessCommandFactory export.
 
 [Trait("Partition", "6")]
 public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
