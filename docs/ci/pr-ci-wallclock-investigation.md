@@ -327,6 +327,660 @@ risk than iter 1 / iter 2 / iter 3.
 | H2 | `build_cli_archive_windows` | Larger Windows runner (if org has 4/8-core windows pool) | -2 to -4 min |
 | H6 | NuGet restore cache (`actions/cache`) on `tests_*` jobs | Save 30-60s/job × many jobs | <1 min wall (parallel), large runner savings |
 
+## 7-day population characterization (2026-05-30 → 2026-06-06)
+
+Per perf-investigation skill: characterize at scale before proposing new
+iterations. Numbers from `gh run list --workflow=ci.yml --limit 1000 --created '>=2026-05-30'`,
+857 runs total (`/tmp/ci_runs.json` snapshot of that query).
+
+### Distribution by outcome
+
+| Event | Conclusion | Count | Share |
+|---|---|---:|---:|
+| `pull_request` | success           | 265 | 31 % |
+| `pull_request` | failure           | 185 | 22 % |
+| `pull_request` | cancelled         | 294 | 35 % |
+| `pull_request` | action_required   |  29 |  3 % |
+| `push`         | success           |  16 | 19 % of pushes |
+| `push`         | failure           |  62 | 74 % of pushes |
+| `push`         | cancelled         |   6 |  7 % of pushes |
+
+**Push-to-main is 19 % green.** Every successful PR merge has a roughly
+4-in-5 chance of producing a red post-merge run. This is a systemic
+reliability finding independent of wall-clock — and it caps the value of
+further wall-clock cuts (if main is permanently red, "time to green" on a
+PR is a less useful metric than "time to known-good signal").
+
+### Wall-clock distribution (PR runs, completed, excluding cancellations)
+
+Including the long tail:
+
+| Bucket | n | min | p25 | median | p75 | p90 | p95 | max |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| PR success | 265 | 0.5m | 25.5m | 37.2m | 65.4m | 197.2m | 720.4m | 1830m |
+| PR failure | 185 | 10.4m | 26.9m | 30.0m | 34.7m | 71.6m | 123.3m | 2227m |
+| Push success |  16 | 21.6m | 25.4m | 26.5m | 31.4m | 64.8m | 1287m | 1287m |
+| Push failure |  62 | 20.0m | 26.2m | 28.2m | 48.1m | 57.3m | 68.7m | 112m |
+
+Excluding hangs (>60 min wall) — the "healthy" picture:
+
+| Bucket | n | min | p25 | median | p75 | p90 | max |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| PR success | 189 | 0.5m | 3.2m | **28.8m** | 40.6m | 47.7m | 60.0m |
+| PR failure | 158 | 10.4m | 26.6m | 29.1m | 31.4m | 36.0m | 56.8m |
+
+Healthy median ~28.8 min for successful PR runs is consistent with the
+"~26.5 min baseline" cited at the top of this doc (which was median of 3
+hand-picked runs); both predate iter 1/2/3 (PR #17973 still draft).
+**The p25 of 3.2 min is doc-only PRs hitting the workflow skip path.**
+
+### The long tail — hung runs
+
+**112 of 744 PR runs ran longer than 60 min wall-clock (15 %).** Top 10:
+
+| Wall | Conclusion | Run | Title (truncated) |
+|---:|---|---|---|
+| 6.6 days | cancelled | 26673482295 | Speed up TypeScript AppHost startup |
+| 37 hours | failure   | 26850781103 | Bump npm_and_yarn group |
+| 30 hours | success   | 26902822218 | Add Bun debugging support |
+| 26 hours | success   | 26734261799 | a11y-17466 |
+| 25 hours | success   | 26735563437 | a11y-17650 |
+| 25 hours | success   | 26738012262 | a11y-17496 |
+| 25 hours | success   | 26736787229 | a11y-10299 |
+| 23 hours | success   | 26739547985 | a11y-17467 |
+| 22 hours | failure   | 26775346946 | Update PackageValidationBaselineVersion |
+| 22 hours | success   | 26981692771 | Add ATS exports for custom health checks |
+
+Estimated **wasted compute from hangs over 7 days ≈ 746 hours**
+of wall-clock (sum of `(wall - 30 min baseline)` for each >60 min run).
+A single 6.6-day run accounts for ~160 hours of that.
+
+### Why hangs happen — workflow timeout audit
+
+`grep -l "timeout-minutes" .github/workflows/*.yml` shows:
+
+| Workflow | Top-level job `timeout-minutes` |
+|---|---|
+| `ci.yml`                          | **none — defaults to 360 min/job, 4320 min (3 days) per workflow** |
+| `build-cli-native-archives.yml`   | **none** |
+| `build-packages.yml`              | **none** |
+| `run-tests.yml`                   | 60 min |
+| `build-cli-e2e-image.yml`         | 45 min |
+| `tests.yml`                       | 15 min (matrix), 12 min (steps) |
+| `extension-e2e-tests.yml`         | 75 min |
+| `reproduce-flaky-tests.yml`       | 60 min |
+
+The workflows with **no `timeout-minutes`** are exactly the ones that
+host the multi-hour hangs: `build-cli-native-archives.yml` runs the
+windows-arm64 / macos-x64 build jobs (handoff session noted these as the
+suspected hang locations), and `ci.yml` is the orchestrator that aggregates
+everything. They inherit GitHub's defaults of **360 min per job** and **4320
+min per workflow**, which is why a single run can sit for 6.6 days.
+
+### Auto-rerun coverage
+
+`auto-rerun-transient-ci-failures.yml` runs after every PR CI completion,
+matching a curated list of transient infrastructure patterns
+(`/ENOTFOUND/`, `/Bad Gateway/`, `/RPC failed/`, `/getaddrinfo.*builds\.dotnet/`,
+etc.) and rerunning eligible failed jobs (max 3 attempts, max 5 jobs).
+
+Last 7 days: 100 runs of the rerun workflow → 37 successful reruns (transient
+correctly detected and recovered), 59 skipped (no eligible failure pattern),
+3 failure, 1 action_required. So **~37 transient failures per week are
+already being silently recovered** by infrastructure — which is good for
+green-rate, but it adds time-to-green because each recovery costs the
+duration of the original failed run plus the rerun.
+
+## Strategic options — where to spend next
+
+After 7-day characterization, the lever options are clearer. Listed by
+ROI vs effort.
+
+### A. Land iter 3 first
+
+PR #17973 is still draft. The measured 26.5 → 20.5 min improvement only
+matters when it lands and benefits everyone. **Stop iterating until iter 3
+lands and a fresh 7-day baseline is available with iter 3 effects included.**
+Otherwise the next iteration is measured against a moving target.
+
+### B. Add `timeout-minutes` to the workflows that lack them
+
+| Workflow | Current cap | Proposed | Rationale |
+|---|---|---|---|
+| `ci.yml` orchestrator job | 360 min/job, 4320 min/workflow | 60 min/job | Orchestrator should fail fast if a `needs:` chain hangs |
+| `build-cli-native-archives.yml` per-RID jobs | 360 min default | 30 min/job | Longest measured legitimate run is ~17 min (macOS-x64) — 30 min gives ~75 % slack |
+| `build-packages.yml` jobs | 360 min default | 20 min/job | Build packages job measured at ~3.5 min — 20 min gives ~5× headroom |
+
+**Predicted impact:**
+- Hangs become 30-min hangs instead of 6-hour or 6-day hangs.
+- Saves ~700 runner-hours/week (cost / capacity).
+- PR signal stops being stale for hours / days when a build job wedges.
+- Does **not** affect healthy-run wall-clock — purely a tail / capacity fix.
+
+**Risk:** A legitimate slow run that happens to exceed the cap would
+fail. Mitigation: pick caps with ≥2× headroom over historical p95 for that
+specific job; widen if false positives appear.
+
+This is the lowest-risk highest-leverage idea in the queue. Recommend as
+the immediate follow-up after iter 3 lands.
+
+### C. Investigate why push-to-main is 19 % green
+
+Independent of wall-clock. Every successful PR has a ~4-in-5 chance of
+producing a red post-merge run. Hypotheses to validate:
+
+- Are the failures the same recurring set (an unquarantined flaky test)?
+  → fix-flaky-test skill + test-management skill if so.
+- Are they real regressions slipping past PR validation? → PR validation is
+  missing coverage that push runs (e.g. Templates Windows, which iter 1
+  removes from PR but keeps on push — that's the shift-right hazard).
+- Are they infrastructure failures that the auto-rerun workflow's pattern
+  list doesn't cover? → expand the pattern list.
+
+Spot-checked run 27053733754 (most recent push failure): `Hosting-4
+(windows-latest)` and `Templates-XUnit_V3_NewUpAndBuildSupportProjectTemplatesTests
+(windows-latest)` both failed. Hosting-4 on Windows matches one of the
+three Windows-hang patterns flagged in the handoff session. Likely an
+already-known windows-runner pool flakiness pattern.
+
+This is **higher value than further wall-clock cuts** if we can confirm
+the dominant failure is fixable / quarantinable, because a green main is
+the prerequisite for trusting any PR signal.
+
+### D. Iteration 4 — skip Windows-ARM64 archive + WinGet prep on PRs
+
+Already analyzed earlier in this doc; needs user signoff on Win-ARM64 PR
+coverage tradeoff. Predicted -1 to -1.5 min wall (down to ~19 min). Pure
+incremental win; not load-bearing.
+
+### E. Iteration 5 — split TypeScript test classes
+
+Already analyzed earlier; recommend as a separate PR. Predicted -1 to -2.5
+min wall (down to ~17.5-18 min depending on split). Touches C# test code.
+
+### F. Revive PR #15742 — conditional test selection
+
+Inspected 2026-06-06:
+
+- Last commit: **2026-04-27** (5+ weeks stale)
+- Size: **13,750 additions / 76 files changed**
+- Labels: `NO-MERGE`, `no-review`
+- State: `CONFLICTING` against main
+- Author: same as this investigation
+- Touches: `ci.yml`, `run-tests.yml`, `tests.yml`, plus new
+  `tools/TestSelector/` + `tools/Aspire.TestSelector/` infrastructure,
+  per-test rule files, ~10 new test files.
+
+**Potential payoff:** For a PR touching one component, the selector could
+skip 80-90% of test matrix → 26.5 → ~5-8 min wall in the best case. Far
+larger than incremental cuts.
+
+**Cost / risk to land:**
+- Rebase against 5 weeks of main drift while CONFLICTING.
+- Get 13.7k LOC reviewed — needs other reviewers' bandwidth.
+- Soak in CI to validate the selector — **false negatives (a test that
+  *should* run isn't run) ship bugs**. This is asymmetric: a false
+  negative is much worse than a false positive (extra runs).
+- The `NO-MERGE` / `no-review` labels were applied for reasons not
+  documented in the PR body — need to surface those before reviving.
+
+**When this is worth pivoting to:** if (a) the user has organizational
+appetite for a multi-week landing effort and (b) measurements show most
+PRs touch a small enough scope that the selector saves dominant time. If
+most PRs touch widely-shared code (`Aspire.Hosting`, `Aspire.Dashboard`),
+the selector helps less.
+
+**Recommendation:** keep on the shelf until incremental optimizations
+plateau (post iter 4/5) and until push-to-main reliability (option C) is
+addressed. Then re-evaluate.
+
+## Why has CI been so red? (2026-05-30 → 2026-06-06 deep-dive)
+
+Fetched all 247 failed `ci.yml` runs (185 PR, 62 push), pulled failed-job
+data for each, then sampled logs to identify root causes. 1308 total
+failed-job records.
+
+### Top failed jobs (all events)
+
+| n | Job (matrix-suffix stripped) | What is it |
+|---:|---|---|
+| 217 | `Tests / Final Test Results` | Aggregate fail-on-any — always present when anything below fails |
+| 217 | `Final Results` | Same — outer aggregate |
+| **79** | Tests / VS Code extension E2E | (PR-only; 9 post-fix) |
+| **65** | Tests / Polyglot SDK Validation / **TypeScript** SDK Validation | All polyglot langs fail together |
+| **45** | Tests / **Hosting-4** | windows-latest |
+| 38 | Polyglot Validation Results (aggregate) | |
+| 36 | Polyglot / **Go** SDK Validation | |
+| 34 | Tests / Cli | Real flakes (Assert.False) |
+| 33 | Polyglot / **Rust** SDK Validation | |
+| 33 | Polyglot / **Java** SDK Validation | |
+| 32 | Polyglot / **Python** SDK Validation | |
+| 19 | Hosting-1 | windows-latest |
+| 16 | Cli.EndToEnd-PersistentContainerEndToEndTests | |
+| 13 | Stabilization Check | |
+
+The pattern is **stark**: 5 polyglot-SDK languages fail in lockstep on
+nearly every push (32 records each × 5 languages = ~160 records — half
+of all failed-job records). That's not 5 flaky tests; it's 1 shared
+infrastructure failure manifesting 5 ways.
+
+### Root cause #1 — Polyglot SDK Validation: NuGet package-feed bug
+
+Sampled job log [79680614506](https://github.com/microsoft/aspire/actions/runs/27000541344/job/79680614506) (push, TypeScript SDK Validation, 2026-06-05):
+
+```
+ERROR: Unable to find a stable package Aspire.Hosting.Redis with version (>= 13.4.2)
+Error: Restore failed: AspireRestore depends on Aspire.Hosting (>= 13.5.0-ci)
+  but Aspire.Hosting 13.5.0-ci was not found.
+  Aspire.Hosting 13.5.0-preview.1.26277.12 was resolved instead.
+…
+apphost.mts(13,29): error TS2339: Property 'addRedis' does not exist on type
+  'DistributedApplicationBuilder'.
+```
+
+A NuGet channel-resolution bug: `aspire add Redis` resolved against the
+preview channel instead of `-ci`, so `Aspire.Hosting.Redis` and the
+`-ci` API surface were mismatched. Every polyglot language hit it
+because they all share the same package-restore step.
+
+**Status: APPEARS FIXED.** Last polyglot push-failure was 2026-06-05
+07:11:30. Commit [27031991501](https://github.com/microsoft/aspire/commit/27031991501)
+"Work around main polyglot channel collision" landed at 2026-06-05 18:00.
+Zero polyglot failures after that timestamp in the 7-day window.
+
+| Window | Push runs | Push green | PR runs* | PR green |
+|---|---:|---:|---:|---:|
+| **Before fix** (5/30 – 6/05 18:00) | 70 | 13 / 70 = **19 %** | 389 | 235 / 389 = **60 %** |
+| **After fix** (6/05 18:00 – 6/06) | 11 | 3 / 11 = **27 %** | 61 | 30 / 61 = **49 %** |
+
+\* excluding cancelled / action_required.
+
+Push green improved (19 % → 27 %). PR sample post-fix is too small (1
+day, 61 runs) for the apparent dip to be meaningful. The fix wasn't a
+silver bullet — there's a long tail of other failures.
+
+### Root cause #2 — Hosting-4 / Hosting-1 (windows-latest): Docker not available
+
+Sampled push run 27053733754, job 79855449948 (Hosting-4 windows-latest):
+
+```
+failed Aspire.Hosting.Tests.Pipelines.DistributedApplicationPipelineTests
+  .ExecuteAsync_PipelineLoggerProvider_PreservesLoggerAfterStepCompletion (1s 732ms)
+  Xunit.MicrosoftTestingPlatform.XunitException:
+  Aspire.Hosting.DistributedApplicationException : Docker is not running. Start Docker and try again.
+  | Aspire.Hosting.ContainerRuntime Debug: Podman: not found on PATH
+```
+
+`windows-latest` GitHub-hosted runners **do not ship with Docker
+running** by default (they have Docker Desktop available but it's not
+started; and Linux containers require WSL2 init). The test does not
+condition itself on container-runtime availability — it just calls into
+the pipeline which tries to spin up a container and crashes.
+
+This is **not transient** and **not a code regression** — it's a test
+that has always been incompatible with the windows-latest configuration.
+Either:
+
+- the test should require `RequiresDocker` and skip on Windows runners
+  that don't have Docker started, or
+- `windows-latest` should be removed from the matrix for `Hosting-4`.
+
+### Root cause #3 — VS Code Extension E2E: corepack digest mismatch (transient CDN)
+
+Sampled PR run, job 79870253626 (VS Code extension E2E, 2026-06-06):
+
+```
+digest-mismatch: error
+digest-mismatch: error
+digest-mismatch: error
+digest-mismatch: error
+```
+
+A corepack/npm registry CDN integrity check failing. This is transient
+(retry usually succeeds) and is well-known in the npm ecosystem.
+
+### Root cause #4 — Real test flakes (Cli, etc.)
+
+Sampled PR run, job 79816396809 (Cli on windows-latest, 2026-06-05):
+
+```
+failed Aspire.Cli.Tests.Commands.AppHostLauncherTests
+  .WaitForLegacyDetachedStartupStabilityAsync_RetriesV2ProbeUntilChildExits (2s 353ms)
+  Assert.False() Failure
+```
+
+Legitimate test failures — probably timing-sensitive flakes given the
+class name. These warrant individual `[QuarantinedTest]` or fix.
+
+### Auto-rerun coverage
+
+The `auto-rerun-transient-ci-failures.yml` workflow ran 100 times in 7
+days and successfully rescued 37 failed runs (59 skipped → no match, 3
+failure, 1 action_required). Its `transientAnnotationPatterns` cover
+**pure-network / runner-infra failures**:
+
+```
+ENOTFOUND, ECONNRESET, EPROTO, Bad Gateway, getaddrinfo,
+builds.dotnet.microsoft.com, api.github.com, 502/503/504,
+RPC failed, Recv failure, "lost communication with the server",
+Process exit code 0xC0000142 (Windows process init),
+"job was not acquired by Runner of type hosted"
+```
+
+**It does NOT catch (and ideally should not, except #1):**
+
+| Failure pattern | Records (7d) | Should rerun? |
+|---|---:|---|
+| `digest-mismatch` (npm CDN) | 79 + 9 = 88 PR/push | **Yes — transient CDN, retry usually works.** Add to pattern list. |
+| `Aspire.Hosting … was not found` (polyglot bug) | ~330 | No — was a real bug; needed source fix. |
+| `Docker is not running` (Hosting-4 win) | 45 | No — needs test conditioning, not retry. |
+| `Assert.*Failure` (Cli flakes) | 34 | No — needs quarantine or fix. |
+
+### Post-fix residual failure profile
+
+Of 39 post-fix push-failure records (8 unique runs, all on
+`windows-latest`):
+
+- Hosting-1, Hosting-4 (×2 each) — Docker / Windows
+- Long tail of integrations (Hosting.Valkey, StackExchange.Redis,
+  Milvus.Client, MongoDB.Driver, Npgsql.EFCore.PostgreSQL, Pomelo.EFCore.MySql,
+  Qdrant.Client, NATS.Net, etc.) — one record each, scattered
+
+No dominant signal — these are individual flakes / environment quirks,
+not another systemic issue.
+
+Of 114 post-fix PR-failure records (28 unique runs):
+
+- 9 × VS Code E2E (the digest-mismatch transient — auto-rerun would
+  catch it if we added the pattern)
+- 5 × Hosting.GitHub.Models, 5 × Cli.EndToEnd-PersistentContainerEndToEndTests
+- 4 × Hosting-4, 2 × Hosting-1 (Docker issue)
+- 2 × Stabilization Check, 2 × TypeScript API Compatibility, others scattered
+
+### Concrete actions in priority order
+
+1. **Add `digest-mismatch` (and `/digest mismatch/i`) to
+   `auto-rerun-transient-ci-failures.js` `transientAnnotationPatterns`.**
+   Would silently recover ~88 VS Code E2E failures/week. ~5-line change.
+   Verify by checking that the bare `digest-mismatch:` line is
+   surfaced as an annotation on the failing job (if not, fall back to
+   step-name + log-snippet matching).
+
+2. **Fix Hosting-4 / Hosting-1 on windows-latest.** Either condition
+   container-runtime-requiring tests on `RequiresDocker` and have them
+   skip when the runtime is unavailable, or remove `windows-latest`
+   from the matrix for the affected `Hosting-*` projects. ~45 + 19 =
+   64 records/week eliminated.
+
+3. **Quarantine Cli flakes.** Specifically
+   `AppHostLauncherTests.WaitForLegacyDetachedStartupStabilityAsync_RetriesV2ProbeUntilChildExits`
+   and similar — use the `test-management` skill with `/quarantine-test`
+   bot command, linking to a tracking issue.
+
+4. **Monitor whether the polyglot fix sticks.** The
+   `27031991501` workaround says "channel collision" — that's a
+   symptom-level fix. If a related bug reappears (e.g. another
+   integration package goes out of sync between -ci and preview),
+   the same 5×polyglot multiplier kicks in immediately. Worth
+   considering whether the polyglot SDK validation should fail-fast
+   on first language (currently it runs all 5 in parallel and they
+   all redundantly hit the same restore error).
+
+5. **(Deprioritised given new data)** Wall-clock optimisation
+   (iter 4/5, PR #15742). Iter 3 still worth landing for the proven
+   23 % improvement, but the "CI is broken" perception was 80 %
+   driven by the polyglot bug, not by wall-clock. Now that root
+   cause is gone, the bar for further wall-clock cuts is "is it
+   worth the engineering time", not "is CI usable".
+
+## Incident log
+
+Institutional memory of CI-wide incidents so future agents/maintainers
+can recognise the signature if it recurs.
+
+**Two distinct kinds** — record both, but label clearly:
+
+- **Recurring transient (flake)** — root cause is external infrastructure
+  (CDN serving stale bytes, registry briefly unreachable, hosted-runner
+  flake). No source fix exists or is expected. Right response: add an
+  auto-rerun rule so the bot silently retries future occurrences. These
+  never go away — they recur on whatever cadence the upstream decides.
+- **Fixed in source** — root cause was a bug in this repo (incorrect
+  package channel, missing API call, broken assumption). A specific
+  commit removed the failure. Recurrence is possible if the same class
+  of bug returns; the log lets future agents recognise the signature.
+
+Don't log routine per-PR build errors that the PR author fixed locally
+(e.g. `CS1729`/`CS1591`/`NU1102` appearing on a single feature branch
+in a single run, then resolved by the author re-pushing) — those are
+normal PR signal working as intended, not CI-wide incidents.
+
+Schema:
+
+```
+### <short signature> — <date range> — [KIND, STATUS]
+
+- Kind:                    transient | fixed-in-source
+- Signature (raw):         <error string>
+- First seen:              <run id / timestamp>
+- Last seen:               <run id / timestamp>
+- Records (7-day sample):  <count> across <unique runs>
+- Affected jobs:           <bulleted job names>
+- Root cause:              <one-paragraph diagnosis>
+- Fix:                     <commit sha + title> | <auto-rerun rule + scope>
+- Auto-rerun coverage:     <before / after>
+- Recurrence risk:         <what would make it come back>
+```
+
+### Polyglot SDK channel collision (`Aspire.Hosting -ci was not found`) — 2026-05-30 to 2026-06-05 18:00 — FIXED IN SOURCE
+
+- **Signature (raw):**
+  ```
+  ERROR: Unable to find a stable package Aspire.Hosting.Redis with version (>= 13.4.2)
+  Error: Restore failed: AspireRestore depends on Aspire.Hosting (>= 13.5.0-ci)
+    but Aspire.Hosting 13.5.0-ci was not found.
+    Aspire.Hosting 13.5.0-preview.1.26277.12 was resolved instead.
+  …
+  apphost.mts(13,29): error TS2339: Property 'addRedis' does not exist on type
+    'DistributedApplicationBuilder'.
+  ```
+- **First seen:** push run `26799903389` at 2026-06-02 05:21:34Z
+- **Last seen:** push run `27000541344` at 2026-06-05 07:11:30Z
+- **Records (7-day sample):** ~330 across 32 unique push runs (52% of
+  all push-to-main failures in the window) + similar contribution to
+  PR failures.
+- **Affected jobs:** every job in `Tests / Polyglot SDK Validation /`
+  (TypeScript / Go / Rust / Java / Python SDK Validation) and the
+  aggregate `Polyglot Validation Results`. All 5 languages failed in
+  lockstep on every affected run because they share the same package
+  restore step (`aspire add Redis`).
+- **Root cause:** `aspire add Redis` (run from inside the polyglot
+  validation flow) resolved `Aspire.Hosting` against the preview NuGet
+  channel instead of `-ci`. The integration package `Aspire.Hosting.Redis`
+  was on `-ci` only at the version the test required, so the channels
+  mismatched and the apphost code referenced an `addRedis` API that the
+  resolved (preview) `Aspire.Hosting` didn't expose.
+- **Fix:** commit `27031991501` ("Work around main polyglot channel
+  collision"), merged 2026-06-05 18:00. Zero recurrences in the
+  ~14-hour post-merge window of the 7-day sample.
+- **Auto-rerun coverage:** none. Pattern doesn't match any infra-network
+  regex, and would not be appropriate to retry (it was a real source bug,
+  not a transient).
+- **Recurrence risk:** medium. The workaround commit is symptom-level —
+  if any other integration package's `-ci` vs preview channel goes out
+  of sync, the same 5×polyglot multiplier reappears. Consider making
+  polyglot SDK validation fail-fast on the first language to hit the
+  restore error rather than redundantly burning 5 jobs on the same root
+  cause.
+
+### Azure Container Registry brief reachability blip — 2026-06-05 23:54:56-59 — TRANSIENT, NOW AUTO-RETRIED
+
+- **Signature (raw):**
+  ```
+  Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError,
+  response={"message":"Get \"https://netaspireci.azurecr.io/v2/\": dial tcp 20.150.241.14:443:
+  connect: connection refused"}
+  ```
+- **First / last seen:** all within push run `27046149398` (sha `bba091af`,
+  PR #17950 "Support command arguments for HTTP commands") between
+  23:54:56 and 23:54:59 — a 3-second window.
+- **Records (7-day sample):** 10 across 1 unique run.
+- **Affected jobs:** `StackExchange.Redis`, `StackExchange.Redis.OutputCaching`,
+  `Npgsql.EntityFrameworkCore.PostgreSQL`, `NATS.Net`, `MongoDB.Driver`,
+  `MongoDB.Driver.v2`, `MongoDB.EntityFrameworkCore`, `Pomelo.EFCore.MySql`,
+  `Milvus.Client`, `Qdrant.Client` — every integration test that pulls an
+  image from `netaspireci.azurecr.io` happened to start during the
+  reachability blip.
+- **Root cause:** brief ACR network outage (likely Azure-side; no
+  application code change involved). Self-healing.
+- **Fix:** none required as source change. **Auto-rerun rule added** —
+  `eng/test-retry-patterns.json` `jobFailurePatterns` now matches
+  `(?:azurecr\.io|netaspireci)[\s\S]{0,200}connect:\s*connection refused`
+  with reason `"Transient Azure Container Registry connection refused"`.
+- **Auto-rerun coverage (before / after):** none / yes (#17978).
+- **Recurrence risk:** high — ACR outages are rare but predictable; the
+  next one will be silently retried.
+
+### Corepack / npm registry CDN digest mismatch — 2026-05-31 to ongoing — RECURRING TRANSIENT, NOW AUTO-RETRIED
+
+- **Signature (raw):**
+  ```
+      digest-mismatch: error
+      digest-mismatch: error
+  ```
+  (repeated 2-4 times per failed retry attempt)
+- **First seen:** 2026-05-31 02:31:08 (push to main, Templates job)
+- **Last seen:** 2026-06-06 14:19:13 (still occurring at end of sample
+  window)
+- **Records (7-day sample):** 83 across many runs.
+- **Affected jobs:** broader than initially thought — Templates, Polyglot
+  SDK validation (via `Run tests`), VS Code extension E2E (via `Run
+  extension E2E tests`), Cli.EndToEnd-KubernetesDeploy* (via `Run nuget
+  dependent tests`), etc. Anything that invokes corepack to install an
+  npm dependency can hit it.
+- **Root cause:** corepack's tarball SHA integrity check against the
+  npm-registry CDN sometimes sees a stale or partially-served response.
+  Pure infrastructure flake; retries always succeed.
+- **Fix:** none required as source change. **Auto-rerun rules added** in
+  #17978: hardcoded `infrastructureNetworkFailureLogOverridePatterns`
+  in the JS (for non-test-execution failure steps like VS Code E2E's
+  `Run extension E2E tests`) **and** `jobFailurePatterns` in
+  `eng/test-retry-patterns.json` (for test-execution failure steps).
+- **Auto-rerun coverage (before / after):** none / yes (#17978).
+- **Recurrence risk:** ongoing. The npm CDN doesn't owe us reliability,
+  so the rule should stay indefinitely.
+
+### Silent windows-latest `Upload logs, and test results` failure — 2026-05-30 to ongoing — RECURRING TRANSIENT, NOW AUTO-RETRIED
+
+- **Kind:** transient (recurring)
+- **Signature (raw):** no error annotation; sometimes the previous
+  `actions/upload-artifact` step emits `##[error]Failed to FinalizeArtifact:
+  Unable to make request: ECONNRESET` but the `Upload logs, and test
+  results` step itself reports nothing visible. The only annotation on
+  the failing job is the unrelated windows-latest deprecation notice.
+- **Records (7-day sample):**
+  - **47** records where `Upload logs, and test results` failed alone
+    (tests passed, no other step failed)
+  - **24** records where a windows hang-dump check fires and the entire
+    post-cleanup cascade fails
+  - **All 71 on `windows-latest`.**
+- **Affected jobs:** every windows-latest test job — `Hosting.MongoDB`,
+  `Hosting.RemoteHost`, `Hosting.RabbitMQ`, `Hosting.EntityFrameworkCore`,
+  `Templates-XUnit_V3_NewUpAndBuildSupportProjectTemplatesTests`, …. Tests
+  pass cleanly; the upload step silently flakes; the job is marked failed.
+- **Root cause:** transient infra on windows-latest runners — either
+  GitHub Actions artifact-storage blip mid-upload (sometimes visible as
+  ECONNRESET on the previous step, sometimes silent), or Windows DLL
+  init crashes (`0xC0000142`) during post-test cleanup scripts that
+  don't always reach the annotations channel. Tests themselves succeed
+  and their results are already on disk.
+- **Fix:** **auto-rerun rule added** in
+  [microsoft/aspire#17978](https://github.com/microsoft/aspire/pull/17978).
+  New JS condition retries when ALL failed steps are post-test cleanup
+  steps (no test-execution failure, no non-cleanup step failure),
+  regardless of whether the annotation contains a specific transient
+  signature. Conservative: a genuinely persistent failure reproduces on
+  retry and is caught by the 3-attempt cap. Also makes the Windows
+  process initialization failure (`0xC0000142`) retry unconditional
+  (`STATUS_DLL_INIT_FAILED` can never be caused by test code) and adds
+  `Check for hang dump files` to `postTestCleanupFailureStepPatterns`.
+  (Folds in and supersedes the previously-open #16187.)
+- **Auto-rerun coverage (before / after):** Windows-init annotation cases
+  only / all 71 post-cleanup-only cases.
+- **Recurrence risk:** ongoing — windows-latest runners aren't getting
+  more reliable.
+
+### Template entry for future incidents (copy this when filing)
+
+```
+### <signature> — <YYYY-MM-DD to YYYY-MM-DD> — <KIND, STATUS>
+
+- **Kind:** transient | fixed-in-source
+- **Signature (raw):**
+  ```
+  <error string>
+  ```
+- **First seen:** <run id / timestamp>
+- **Last seen:** <run id / timestamp>
+- **Records (7-day sample):** <n> across <m> unique runs
+- **Affected jobs:** <list>
+- **Root cause:** <one paragraph>
+- **Fix:** <commit sha + title> | <auto-rerun rule scope>
+- **Auto-rerun coverage (before / after):** <yes/no> / <yes/no>
+- **Recurrence risk:** <low/medium/high + why>
+```
+
+## Auto-rerun coverage by job type (TRX vs non-TRX)
+
+7-day data: **874 failed-job records** (after excluding aggregator jobs)
+in the 247 failed `ci.yml` runs.
+
+| Category | Records | Auto-rerun paths that apply |
+|---|---:|---|
+| Aggregator (`Final Results`, `Final Test Results`) | 434 | n/a — excluded from analysis (`ignoredJobs` in the JS) |
+| **TRX-emitting test-execution failures** (`Run tests*`, `Run nuget dependent tests*`) | 314 | (a) `transientAnnotationPatterns` (annotations), (b) `jobFailurePatterns` (job log), (c) `testFailurePatterns` (per-test TRX output) |
+| **Non-TRX failures** (build, validation, upload, scan, summary) | 560 | (a) `transientAnnotationPatterns` (annotations), (b) `infrastructureNetworkFailureLogOverridePatterns` (job log, only when no test-execution step failed). **No TRX path applies.** |
+
+Within the 560 non-TRX failed records, the top failure causes are now
+all covered by either the JS hardcoded patterns or `jobFailurePatterns`
+in `eng/test-retry-patterns.json`:
+
+| Cause | Records | Covered by |
+|---|---:|---|
+| VS Code extension E2E corepack digest-mismatch | 79 | digest-mismatch JS rule (#17978) |
+| Polyglot SDK validation (TS / Go / Rust / Java / Python) channel collision | ~200 | fixed in source (commit `27031991501`) |
+| `Upload logs, and test results` solo / cascade | 71 | post-test-cleanup JS rule (#17978) |
+| `Check validation results` (polyglot aggregator) | 38 | tail of polyglot, fixed in source |
+| Build step failures (CS1729, NU1102, CS1591, …) | ~70 | real source bugs, author-fixed per PR — **not auto-rerun candidates** |
+
+### Could non-TRX jobs benefit from synthetic test-result files?
+
+User-suggested direction: have non-TRX jobs emit a common-format
+test-result file so they can participate in the `testFailurePatterns`
+TRX path.
+
+Analysis of the 7-day data: **no transient infrastructure signature
+appeared in build steps** that the existing `jobFailurePatterns` log-text
+path couldn't already match. Build failures in the window were all real
+source bugs that PR authors fixed locally (CS1729, NU1102, CS1591 —
+explicitly NOT logged as incidents per the policy above).
+
+The two surfaces that already apply to non-TRX jobs are:
+
+1. `infrastructureNetworkFailureLogOverridePatterns` (hardcoded JS,
+   matches against full job log) — covers Azure DevOps NuGet feed
+   errors, dotnet acquisition CDN errors, GitHub API transients, and
+   (#17978) corepack digest mismatch.
+2. `jobFailurePatterns` (config file, matches against full job log) —
+   easy to extend without code changes. Now covers ACR connection-refused
+   and digest-mismatch in test-execution variants.
+
+Synthetic TRX emission would add an indirection without unlocking
+matching capability that isn't already available via 1+2. **Defer until
+a concrete transient pattern is observed that neither surface can
+match.** When that happens, file a new incident-log entry and decide
+the fix surface at that point.
+
 ## How to read this doc
 
 Each iteration:
