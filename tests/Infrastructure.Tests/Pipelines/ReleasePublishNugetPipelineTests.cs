@@ -7,7 +7,7 @@ namespace Infrastructure.Tests;
 
 public sealed class ReleasePublishNugetPipelineTests
 {
-    private readonly string _repoRoot = FindRepoRoot();
+    private readonly string _repoRoot = RepoRoot.Path;
 
     [Fact]
     public async Task ValidatesNpmPublishPreconditionsBeforeNuGetPublish()
@@ -499,21 +499,4 @@ public sealed class ReleasePublishNugetPipelineTests
 
     private Task<string> ReadRepoFileAsync(string relativePath)
         => File.ReadAllTextAsync(Path.Combine(_repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
-
-    private static string FindRepoRoot()
-    {
-        string? current = AppContext.BaseDirectory;
-
-        while (current is not null)
-        {
-            if (File.Exists(Path.Combine(current, "Aspire.slnx")))
-            {
-                return current;
-            }
-
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not find repository root containing Aspire.slnx");
-    }
 }
