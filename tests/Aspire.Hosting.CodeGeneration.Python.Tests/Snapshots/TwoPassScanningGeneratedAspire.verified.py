@@ -1882,6 +1882,7 @@ class ProcessCommandExportOptions(typing.TypedDict, total=False):
     InheritEnvironmentVariables: bool | None
     StandardInputContent: str | None
     KillEntireProcessTree: bool | None
+    CreateProcessSpec: typing.Callable
     CommandOptions: CommandOptions
     MaxOutputLineCount: int | None
     DisplayImmediately: bool | None
