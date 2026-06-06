@@ -137,6 +137,69 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithProcessCommandExport_CreateProcessSpecReceivesExecutionContextAndArguments()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["options-callback-line"]);
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        ExecuteCommandContext? capturedContext = null;
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommandExport(
+                "options-callback-command",
+                "Run options callback command",
+                new ProcessCommandExportOptions
+                {
+                    CreateProcessSpec = context =>
+                    {
+                        capturedContext = context;
+                        var message = context.Arguments.GetString("message") ?? string.Empty;
+
+                        return Task.FromResult(new ProcessCommandSpecExportData
+                        {
+                            ExecutablePath = "options-callback-executable",
+                            Arguments = ["--message", message]
+                        });
+                    },
+                    CommandOptions = new CommandOptions
+                    {
+                        Arguments =
+                        [
+                            new InteractionInput
+                            {
+                                Name = "message",
+                                InputType = InputType.Text
+                            }
+                        ]
+                    }
+                });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "hello-from-options-callback"
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "options-callback-command", arguments).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Contains("options-callback-line", result.Data?.Value);
+        Assert.NotNull(capturedContext);
+        Assert.Equal("hello-from-options-callback", capturedContext.Arguments.GetString("message"));
+
+        var processSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal("options-callback-executable", processSpec.ExecutablePath);
+        Assert.Equal(["--message", "hello-from-options-callback"], processSpec.ArgumentList);
+    }
+
+    [Fact]
     public async Task WithProcessCommandFactoryExport_ProcessFactoryReceivesExecutionContextAndArguments()
     {
         var processRunner = new TestProcessRunner();

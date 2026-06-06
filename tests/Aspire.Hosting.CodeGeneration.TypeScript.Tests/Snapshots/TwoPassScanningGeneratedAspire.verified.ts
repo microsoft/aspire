@@ -944,6 +944,8 @@ export interface ProcessCommandExportOptions {
     standardInputContent?: string | null;
     /** A value indicating whether the entire process tree should be killed when the process is disposed. */
     killEntireProcessTree?: boolean | null;
+    /** A callback that creates the local process specification when the command is invoked. */
+    createProcessSpec?: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>;
     /** Optional command configuration. */
     commandOptions?: CommandOptions;
     /** The maximum number of stdout and stderr output lines returned as command result data. */
@@ -12786,6 +12788,15 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -16659,6 +16670,15 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -20409,6 +20429,15 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -24217,6 +24246,15 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -27859,6 +27897,15 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -30355,6 +30402,15 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -32375,6 +32431,15 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -35517,6 +35582,15 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -39930,6 +40004,15 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -44583,6 +44666,15 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -49347,6 +49439,15 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -52252,6 +52353,15 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };

@@ -1042,6 +1042,9 @@ public class AtsTypeScriptCodeGeneratorTests
         var aspireTs = files["aspire.mts"];
 
         Assert.Contains("const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback", aspireTs);
+        Assert.Contains("createProcessSpec?: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>;", aspireTs);
+        Assert.Contains("const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback", aspireTs);
+        Assert.Contains("__optionsForRpcData[\"createProcessSpec\"] = ____optionsForRpcCreateProcessSpecId;", aspireTs);
         Assert.Contains("const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;", aspireTs);
         Assert.Contains("const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };", aspireTs);
         Assert.Contains("const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback", aspireTs);

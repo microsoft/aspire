@@ -3240,6 +3240,21 @@ public static class ResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        if (options.CreateProcessSpec is { } createProcessSpec)
+        {
+            return builder.WithProcessCommand(
+                commandName,
+                displayName,
+                async context =>
+                {
+                    var processCommandSpec = await createProcessSpec(context).ConfigureAwait(false)
+                        ?? throw new InvalidOperationException("The process command specification factory returned null.");
+
+                    return CreateProcessCommandSpec(processCommandSpec);
+                },
+                CreateProcessCommandOptions(options));
+        }
+
         return builder.WithProcessCommand(
             commandName,
             displayName,
