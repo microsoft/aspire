@@ -13,8 +13,19 @@
     ".github/actions/**",
     ".github/instructions/**",
     ".github/skills/**",
+    ".github/extensions/**",
+    ".github/policies/**",
+    ".github/aw/**",
+    ".agents/**",
+    ".vscode/**",
+    ".mcp.json",
+    "localhive.sh",
+    "localhive.ps1",
     "tests/agent-scenarios/**",
-    "eng/scripts/test-selection-rules.schema.json"
+    "eng/scripts/test-selection-rules.schema.json",
+    "eng/scripts/debug-*.ps1",
+    "eng/scripts/debug-*.sh",
+    "eng/scripts/cli-starter-validation*.ps1"
   ],
 
   "triggerAllPaths": [
@@ -78,6 +89,82 @@
     {
       "source": "global.json",
       "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+
+    {
+      "source": "tests/Infrastructure.Tests/**",
+      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+    },
+    {
+      "source": "tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**",
+      "test": "tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests.csproj"
+    },
+
+    {
+      "source": "eng/Publishing.props",
+      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+    },
+    {
+      "source": "eng/Signing.props",
+      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+    },
+    {
+      "source": "eng/scripts/pack-cli-npm-package.ps1",
+      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+    },
+    {
+      "source": "eng/scripts/stage-native-cli-tool-packages.ps1",
+      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+    },
+    {
+      "source": "eng/scripts/verify-cli-npm-package.ps1",
+      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+    },
+    {
+      "source": "eng/scripts/validate-cli-symbols.ps1",
+      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+    },
+    {
+      "source": "tools/TypeScriptApiCompat/**",
+      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+    },
+
+    {
+      "source": "eng/scripts/get-aspire-cli.ps1",
+      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+    },
+    {
+      "source": "eng/scripts/get-aspire-cli.sh",
+      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+    },
+    {
+      "source": "eng/scripts/get-aspire-cli-pr.ps1",
+      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+    },
+    {
+      "source": "eng/scripts/get-aspire-cli-pr.sh",
+      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+    },
+    {
+      "source": "eng/scripts/verify-cli-archive.ps1",
+      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+    },
+    {
+      "source": "eng/homebrew/**",
+      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+    },
+    {
+      "source": "eng/winget/**",
+      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+    },
+
+    {
+      "source": "eng/scripts/update-aspire-skills-bundle.ps1",
+      "test": "tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj"
+    },
+    {
+      "source": "eng/scripts/verify-aspire-skills-bundle.ps1",
+      "test": "tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj"
     }
   ],
 
@@ -106,7 +193,15 @@
       "description": "Polyglot SDK validation tests",
       "triggerPaths": [
         ".github/workflows/polyglot-validation/**",
-        ".github/workflows/polyglot-validation.yml"
+        ".github/workflows/polyglot-validation.yml",
+        "tests/PolyglotAppHosts/**",
+        "src/Aspire.Hosting.JavaScript/**",
+        "src/Aspire.Hosting.TypeScript/**",
+        "src/Aspire.Hosting.Python/**",
+        "src/Aspire.Hosting.Go/**",
+        "src/Aspire.Hosting.Java/**",
+        "src/Aspire.Hosting.Rust/**",
+        "src/Aspire.Hosting.CodeGeneration*/**"
       ]
     },
 
