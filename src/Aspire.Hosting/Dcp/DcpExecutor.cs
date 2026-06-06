@@ -653,19 +653,14 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             .Where(sp => sp.Endpoints.Any())
             .ToArray();
 
+        // Resolve endpoint behavior and exclude known public ports before any dynamic allocation can claim them.
         foreach (var sp in serviceProducers)
         {
             foreach (var endpoint in sp.Endpoints)
             {
                 endpoint.SetResolvedIsProxied(GetEffectiveIsProxied(sp.ModelResource, endpoint, _options.Value.RandomizePorts));
                 ValidateEndpointBeforeDynamicPublicPortAllocation(sp.ModelResource, endpoint);
-            }
-        }
 
-        foreach (var sp in serviceProducers)
-        {
-            foreach (var endpoint in sp.Endpoints)
-            {
                 if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
                 {
                     _proxylessEndpointPortAllocator.ExcludePort(fixedPublicPort);
@@ -678,6 +673,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             }
         }
 
+        // Create DCP services after known ports are excluded, allocating missing proxyless public ports as needed.
         foreach (var sp in serviceProducers)
         {
             var endpoints = sp.Endpoints;
@@ -693,7 +689,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                 var svc = Service.Create(serviceName);
 
-                AllocateUndefinedProxylessEndpointPort(sp.ModelResource, endpoint);
+                EnsureProxylessEndpointPort(sp.ModelResource, endpoint);
 
                 if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
                 {
@@ -800,39 +796,38 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         return false;
     }
 
-    private void AllocateUndefinedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
+    private void EnsureProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
     {
         if (!NeedsPublicPort(resource, endpoint))
         {
             return;
         }
 
+        int publicPort;
         if (TryGetPersistedProxylessEndpointPort(resource, endpoint) is int persistedPort)
         {
-            endpoint.Port = persistedPort;
-            if (!resource.IsContainer())
-            {
-                endpoint.TargetPort = persistedPort;
-            }
+            publicPort = persistedPort;
             _logger.LogDebug("Using persisted public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'.", persistedPort, endpoint.Name, resource.Name);
-            return;
+        }
+        else
+        {
+            publicPort = _proxylessEndpointPortAllocator.AllocatePort(endpoint);
+            _logger.LogDebug("Allocated public port {Port} for proxyless endpoint '{EndpointName}' on resource '{ResourceName}'.", publicPort, endpoint.Name, resource.Name);
+
+            if (resource.HasPersistentLifetime())
+            {
+                var secretKey = GetPersistedProxylessEndpointPortKey(resource, endpoint);
+                if (!_userSecretsManager.TrySetSecret(secretKey, publicPort.ToString(CultureInfo.InvariantCulture)))
+                {
+                    _logger.LogWarning("Failed to persist public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'. Enable user secrets, set a fixed public port, or configure the endpoint to use a proxy to avoid recreating the persistent resource each run.", publicPort, endpoint.Name, resource.Name);
+                }
+            }
         }
 
-        var allocatedPort = _proxylessEndpointPortAllocator.AllocatePort(endpoint);
-        endpoint.Port = allocatedPort;
+        endpoint.Port = publicPort;
         if (!resource.IsContainer())
         {
-            endpoint.TargetPort = allocatedPort;
-        }
-        _logger.LogDebug("Allocated public port {Port} for proxyless endpoint '{EndpointName}' on resource '{ResourceName}'.", allocatedPort, endpoint.Name, resource.Name);
-
-        if (resource.HasPersistentLifetime())
-        {
-            var secretKey = GetPersistedProxylessEndpointPortKey(resource, endpoint);
-            if (!_userSecretsManager.TrySetSecret(secretKey, allocatedPort.ToString(CultureInfo.InvariantCulture)))
-            {
-                _logger.LogWarning("Failed to persist public port {Port} for proxyless endpoint '{EndpointName}' on persistent resource '{ResourceName}'. Enable user secrets, set a fixed public port, or configure the endpoint to use a proxy to avoid recreating the persistent resource each run.", allocatedPort, endpoint.Name, resource.Name);
-            }
+            endpoint.TargetPort = publicPort;
         }
     }
 
