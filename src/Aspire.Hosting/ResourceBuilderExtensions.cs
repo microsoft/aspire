@@ -3463,6 +3463,7 @@ public static class ResourceBuilderExtensions
                 ResourceName = context.ResourceName,
                 Logger = context.Logger,
                 CancellationToken = context.CancellationToken,
+                Arguments = context.Arguments,
                 ProcessCommandSpec = processCommandSpec,
                 ExitCode = processResult.ExitCode,
                 Output = processResult.ProcessOutput,

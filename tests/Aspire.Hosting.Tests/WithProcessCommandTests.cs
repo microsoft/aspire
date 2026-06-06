@@ -1,12 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using AuxiliaryBackchannelRpcTarget = Aspire.Hosting.Backchannel.AuxiliaryBackchannelRpcTarget;
+using ExecuteResourceCommandRequest = Aspire.Hosting.Backchannel.ExecuteResourceCommandRequest;
 
 namespace Aspire.Hosting.Tests;
 
@@ -325,6 +331,70 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
 
         var processSpec = Assert.Single(processRunner.ProcessSpecs);
         Assert.Equal(["hello-from-argument"], processSpec.ArgumentList);
+    }
+
+    [Fact]
+    public async Task WithProcessCommand_BackchannelNamedArgumentsFlowToProcessFactoryAndResultContext()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["hello-from-backchannel"]);
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        ProcessCommandResultContext? capturedResultContext = null;
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommand(
+                "echo-argument",
+                "Echo argument",
+                context =>
+                {
+                    var message = context.Arguments.GetString("message");
+                    return CreateProcessCommandSpec(arguments: ["--message", message ?? string.Empty]);
+                },
+                new ProcessCommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "message",
+                            InputType = InputType.Text
+                        }
+                    ],
+                    GetCommandResult = resultContext =>
+                    {
+                        capturedResultContext = resultContext;
+                        return Task.FromResult(CommandResults.Success("received argument", resultContext.Arguments.GetString("message")!));
+                    }
+                });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = resource.Resource.Name,
+            CommandName = "echo-argument",
+            Arguments = JsonSerializer.SerializeToNode(new
+            {
+                message = "hello-from-backchannel"
+            })
+        }).DefaultTimeout();
+
+        Assert.True(response.Success, response.Message);
+        Assert.Equal("received argument", response.Message);
+        Assert.Equal("hello-from-backchannel", response.Value?.Value);
+
+        var processSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal(["--message", "hello-from-backchannel"], processSpec.ArgumentList);
+
+        Assert.NotNull(capturedResultContext);
+        Assert.Equal("hello-from-backchannel", capturedResultContext.Arguments.GetString("message"));
     }
 
     [Fact]
