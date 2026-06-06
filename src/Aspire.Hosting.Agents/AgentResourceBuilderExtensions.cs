@@ -6,11 +6,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Agents;
 
-#pragma warning disable ASPIREINTERACTION001 // IInteractionService is used to prompt for dashboard command input.
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
 
 /// <summary>
 /// Provides extension methods for configuring resources as agents.
@@ -48,6 +47,7 @@ public static class AgentResourceBuilderExtensions
     private const string DefaultA2AHttpJsonV03StreamingMessagePath = "/v1/message:stream";
     private const string A2AProtocolBindingJsonRpc = "JSONRPC";
     private const string A2AProtocolBindingHttpJson = "HTTP+JSON";
+    private const string AgentMessageArgumentName = "message";
 
     private static readonly JsonSerializerOptions s_indentedJsonOptions = new() { WriteIndented = true };
 
@@ -237,6 +237,7 @@ public static class AgentResourceBuilderExtensions
                 IconName = "ChatSparkle",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
+                Arguments = [CreateMessageArgument("What is the weather in Seattle?")],
                 EndpointSelector = () => endpoint,
                 PrepareRequest = PrepareA2ARequestAsync,
                 GetCommandResult = GetAgentCommandResultAsync
@@ -259,6 +260,7 @@ public static class AgentResourceBuilderExtensions
                 IconName = "ChatSparkle",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
+                Arguments = [CreateMessageArgument("Hello, what can you do?")],
                 EndpointSelector = () => endpoint,
                 PrepareRequest = ctx => PrepareResponsesRequestAsync(ctx, builder.Resource.Name),
                 GetCommandResult = GetAgentCommandJsonResultAsync
@@ -281,6 +283,7 @@ public static class AgentResourceBuilderExtensions
                 IconName = "ChatSparkle",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
+                Arguments = [CreateMessageArgument("What is the weather in Seattle?")],
                 EndpointSelector = () => endpoint,
                 PrepareRequest = PrepareAgUiRequestAsync,
                 GetCommandResult = GetAgentCommandTextResultAsync
@@ -303,6 +306,7 @@ public static class AgentResourceBuilderExtensions
                 IconName = "ChatSparkle",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = shouldHighlightCommand(),
+                Arguments = [CreateMessageArgument("Hello, what can you do?")],
                 EndpointSelector = () => endpoint,
                 PrepareRequest = ctx => PrepareAcpRunRequestAsync(ctx, agentName),
                 GetCommandResult = GetAgentCommandJsonResultAsync
@@ -326,11 +330,7 @@ public static class AgentResourceBuilderExtensions
         var cardUri = ctx.Request.RequestUri ?? throw new InvalidOperationException("Could not determine the A2A agent card URL.");
         var invocation = await ResolveA2AInvocationAsync(ctx, cardUri).ConfigureAwait(true);
 
-        var message = await PromptForAgentMessageAsync(
-            ctx,
-            title: "A2A Agent",
-            message: "Enter a message to send to the agent.",
-            placeHolder: "What is the weather in Seattle?").ConfigureAwait(true);
+        var message = GetAgentMessage(ctx.Arguments);
 
         ctx.Request.Method = HttpMethod.Post;
         ctx.Request.RequestUri = invocation.RequestUri;
@@ -513,13 +513,9 @@ public static class AgentResourceBuilderExtensions
         return builder.Uri;
     }
 
-    private static async Task PrepareResponsesRequestAsync(HttpCommandRequestContext ctx, string agentName)
+    private static Task PrepareResponsesRequestAsync(HttpCommandRequestContext ctx, string agentName)
     {
-        var message = await PromptForAgentMessageAsync(
-            ctx,
-            title: "Responses API",
-            message: "Enter a message to send to the agent.",
-            placeHolder: "Hello, what can you do?").ConfigureAwait(true);
+        var message = GetAgentMessage(ctx.Arguments);
 
         ctx.Request.Content = new StringContent(
             new JsonObject
@@ -540,15 +536,13 @@ public static class AgentResourceBuilderExtensions
             }.ToString(),
             Encoding.UTF8,
             "application/json");
+
+        return Task.CompletedTask;
     }
 
-    private static async Task PrepareAgUiRequestAsync(HttpCommandRequestContext ctx)
+    private static Task PrepareAgUiRequestAsync(HttpCommandRequestContext ctx)
     {
-        var message = await PromptForAgentMessageAsync(
-            ctx,
-            title: "AG-UI Agent",
-            message: "Enter a message to send to the agent.",
-            placeHolder: "What is the weather in Seattle?").ConfigureAwait(true);
+        var message = GetAgentMessage(ctx.Arguments);
 
         ctx.Request.Headers.Accept.ParseAdd("text/event-stream");
         ctx.Request.Content = new StringContent(
@@ -568,15 +562,13 @@ public static class AgentResourceBuilderExtensions
             }.ToString(),
             Encoding.UTF8,
             "application/json");
+
+        return Task.CompletedTask;
     }
 
-    private static async Task PrepareAcpRunRequestAsync(HttpCommandRequestContext ctx, string agentName)
+    private static Task PrepareAcpRunRequestAsync(HttpCommandRequestContext ctx, string agentName)
     {
-        var message = await PromptForAgentMessageAsync(
-            ctx,
-            title: "ACP Agent",
-            message: "Enter a message to send to the agent.",
-            placeHolder: "Hello, what can you do?").ConfigureAwait(true);
+        var message = GetAgentMessage(ctx.Arguments);
 
         ctx.Request.Content = new StringContent(
             new JsonObject
@@ -601,25 +593,27 @@ public static class AgentResourceBuilderExtensions
             }.ToString(),
             Encoding.UTF8,
             "application/json");
+
+        return Task.CompletedTask;
     }
 
-    private static async Task<string> PromptForAgentMessageAsync(HttpCommandRequestContext ctx, string title, string message, string placeHolder)
+    private static InteractionInput CreateMessageArgument(string placeholder)
     {
-        var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
-        var result = await interactionService.PromptInputAsync(
-            title: title,
-            message: message,
-            inputLabel: "Message",
-            placeHolder: placeHolder,
-            cancellationToken: ctx.CancellationToken).ConfigureAwait(true);
-
-        if (result.Canceled || string.IsNullOrWhiteSpace(result.Data.Value))
+        return new InteractionInput
         {
-            ctx.HttpClient.CancelPendingRequests();
-            throw new OperationCanceledException("User canceled the input prompt.");
-        }
+            Name = AgentMessageArgumentName,
+            Label = "Message",
+            Description = "Message to send to the agent.",
+            InputType = InputType.Text,
+            Required = true,
+            Placeholder = placeholder
+        };
+    }
 
-        return result.Data.Value;
+    private static string GetAgentMessage(InteractionInputCollection arguments)
+    {
+        return arguments.GetString(AgentMessageArgumentName)
+            ?? throw new InvalidOperationException("Agent command message argument is required.");
     }
 
     private static async Task<ExecuteCommandResult> GetAgentCommandJsonResultAsync(HttpCommandResultContext ctx)

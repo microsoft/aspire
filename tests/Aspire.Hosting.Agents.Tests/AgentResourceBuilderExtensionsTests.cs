@@ -12,7 +12,7 @@ using System.Text.Json.Nodes;
 
 namespace Aspire.Hosting.Agents.Tests;
 
-#pragma warning disable ASPIREINTERACTION001 // IInteractionService is used to test dashboard command input.
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to test dashboard command arguments.
 
 [Trait("Partition", "5")]
 public class AgentResourceBuilderExtensionsTests
@@ -31,7 +31,12 @@ public class AgentResourceBuilderExtensionsTests
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
         Assert.DoesNotContain(commands, c => c.Name == "agent-a2a-agent-card");
-        Assert.Contains(commands, c => c.Name == "agent-a2a-send-message" && c.DisplayName == "Invoke A2A" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
+        var command = Assert.Single(commands, c => c.Name == "agent-a2a-send-message");
+        Assert.Equal("Invoke A2A", command.DisplayName);
+        Assert.Equal("ChatSparkle", command.IconName);
+        Assert.Equal(IconVariant.Regular, command.IconVariant);
+        Assert.True(command.IsHighlighted);
+        AssertMessageArgument(command);
         Assert.Single(commands, c => c.IsHighlighted);
     }
 
@@ -96,8 +101,19 @@ public class AgentResourceBuilderExtensionsTests
         Assert.Contains(annotations, a => a.Protocol == AgentProtocol.Acp);
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
-        Assert.Contains(commands, c => c.Name == "agent-ag-ui-send-message" && c.DisplayName == "Invoke AG-UI" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
-        Assert.Contains(commands, c => c.Name == "agent-acp-run" && c.DisplayName == "Invoke ACP" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && !c.IsHighlighted);
+        var agUiCommand = Assert.Single(commands, c => c.Name == "agent-ag-ui-send-message");
+        Assert.Equal("Invoke AG-UI", agUiCommand.DisplayName);
+        Assert.Equal("ChatSparkle", agUiCommand.IconName);
+        Assert.Equal(IconVariant.Regular, agUiCommand.IconVariant);
+        Assert.True(agUiCommand.IsHighlighted);
+        AssertMessageArgument(agUiCommand);
+
+        var acpCommand = Assert.Single(commands, c => c.Name == "agent-acp-run");
+        Assert.Equal("Invoke ACP", acpCommand.DisplayName);
+        Assert.Equal("ChatSparkle", acpCommand.IconName);
+        Assert.Equal(IconVariant.Regular, acpCommand.IconVariant);
+        Assert.False(acpCommand.IsHighlighted);
+        AssertMessageArgument(acpCommand);
         Assert.Single(commands, c => c.IsHighlighted);
     }
 
@@ -132,7 +148,6 @@ public class AgentResourceBuilderExtensionsTests
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var handler = new A2ACommandHandler(protocolBinding, protocolVersion, streaming, interfaceUrl);
-        builder.Services.AddSingleton<IInteractionService>(new TestAgentInteractionService("hello"));
         builder.Services.AddHttpClient(string.Empty)
             .ConfigurePrimaryHttpMessageHandler(() => handler);
 
@@ -143,7 +158,7 @@ public class AgentResourceBuilderExtensionsTests
         await app.StartAsync().DefaultTimeout();
 
         await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-a2a-send-message");
-        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-a2a-send-message").DefaultTimeout();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-a2a-send-message", CreateMessageArgument("hello")).DefaultTimeout();
 
         Assert.True(result.Success);
         Assert.Equal(new Uri(expectedUrl), handler.InvocationRequest?.RequestUri);
@@ -158,14 +173,39 @@ public class AgentResourceBuilderExtensionsTests
             Assert.Equal(expectedJsonRpcMethod, body?["method"]?.GetValue<string>());
             Assert.Equal(expectedRole, body?["params"]?["message"]?["role"]?.GetValue<string>());
             Assert.NotNull(body?["params"]?["message"]?[expectedPartsPropertyName]);
+            Assert.Equal("hello", body?["params"]?["message"]?[expectedPartsPropertyName]?[0]?["text"]?.GetValue<string>());
             Assert.Equal("application/json", handler.InvocationRequest?.Content?.Headers.ContentType?.MediaType);
         }
         else
         {
             Assert.Equal(expectedRole, body?["message"]?["role"]?.GetValue<string>());
             Assert.NotNull(body?["message"]?[expectedPartsPropertyName]);
+            Assert.Equal("hello", body?["message"]?[expectedPartsPropertyName]?[0]?["text"]?.GetValue<string>());
             Assert.Equal("application/a2a+json", handler.InvocationRequest?.Content?.Headers.ContentType?.MediaType);
         }
+    }
+
+    [Fact]
+    public async Task InvokeA2ARequiresMessageArgument()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var handler = new A2ACommandHandler("JSONRPC", "1.0", streaming: false, "http://localhost:8080/a2a");
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+
+        var agent = CreateResourceWithAllocatedEndpoint(builder, "agent")
+            .AsAgent(AgentProtocol.A2A);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, agent.Resource, "agent-a2a-send-message");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "agent-a2a-send-message").DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal("Command argument validation failed.", result.Message);
+        Assert.Null(handler.InvocationRequest);
     }
 
     [Fact]
@@ -285,45 +325,28 @@ public class AgentResourceBuilderExtensionsTests
 
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource, IResourceWithWaitSupport;
 
-    private sealed class TestAgentInteractionService(string testMessage) : IInteractionService
+    private static InteractionInputCollection CreateMessageArgument(string message)
     {
-        public bool IsAvailable => true;
-
-        public Task<InteractionResult<bool>> PromptConfirmationAsync(string title, string message, MessageBoxInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<InteractionResult<InteractionInput>> PromptInputAsync(string title, string? message, string inputLabel, string placeHolder, InputsDialogInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(InteractionResult.Ok(new InteractionInput
+        return new InteractionInputCollection(
+        [
+            new InteractionInput
             {
                 Name = "message",
                 InputType = InputType.Text,
-                Label = inputLabel,
-                Value = testMessage
-            }));
-        }
+                Value = message
+            }
+        ]);
+    }
 
-        public Task<InteractionResult<InteractionInput>> PromptInputAsync(string title, string? message, InteractionInput input, InputsDialogInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<InteractionResult<InteractionInputCollection>> PromptInputsAsync(string title, string? message, IReadOnlyList<InteractionInput> inputs, InputsDialogInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<InteractionResult<bool>> PromptNotificationAsync(string title, string message, NotificationInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<InteractionResult<bool>> PromptMessageBoxAsync(string title, string message, MessageBoxInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
+    private static void AssertMessageArgument(ResourceCommandAnnotation command)
+    {
+        var argument = Assert.Single(command.Arguments);
+        Assert.Equal("message", argument.Name);
+        Assert.Equal("Message", argument.Label);
+        Assert.Equal("Message to send to the agent.", argument.Description);
+        Assert.Equal(InputType.Text, argument.InputType);
+        Assert.True(argument.Required);
+        Assert.False(string.IsNullOrWhiteSpace(argument.Placeholder));
     }
 
     private sealed class A2ACommandHandler(string protocolBinding, string protocolVersion, bool streaming, string interfaceUrl) : HttpMessageHandler
