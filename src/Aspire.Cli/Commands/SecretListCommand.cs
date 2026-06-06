@@ -3,11 +3,9 @@
 
 using System.CommandLine;
 using System.Text.Json.Nodes;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Secrets;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Shared.UserSecrets;
 using Spectre.Console;
@@ -27,13 +25,9 @@ internal sealed class SecretListCommand : BaseCommand
     private readonly SecretStoreResolver _secretStoreResolver;
 
     public SecretListCommand(
-        IInteractionService interactionService,
         SecretStoreResolver secretStoreResolver,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry)
-        : base("list", SecretCommandStrings.ListDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("list", SecretCommandStrings.ListDescription, services)
     {
         _secretStoreResolver = secretStoreResolver;
 

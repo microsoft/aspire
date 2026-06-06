@@ -103,6 +103,11 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ output: 'hello from validation app host' }));
     return;
   }
+  if (req.url === '/invocations') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ response: 'hello from validation app host' }));
+    return;
+  }
   res.writeHead(404);
   res.end();
 });
@@ -115,7 +120,8 @@ await hostedAgent.asHostedAgent(project, {
     cpu: 1,
     memory: 2,
     metadata: { scenario: 'validation' },
-    environmentVariables: { VALIDATION_MODE: 'true' }
+    environmentVariables: { VALIDATION_MODE: 'true' },
+    protocols: [{ protocol: 'invocations', version: '1.0.0' }]
 });
 
 const api = await builder.addContainer('api', 'nginx');

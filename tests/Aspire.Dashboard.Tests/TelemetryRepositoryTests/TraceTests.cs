@@ -78,7 +78,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -136,7 +136,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -190,7 +190,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -244,7 +244,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -314,7 +314,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -390,7 +390,7 @@ public class TraceTests
 
         var traces1 = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -431,7 +431,7 @@ public class TraceTests
 
         var traces2 = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -485,7 +485,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -553,7 +553,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -629,7 +629,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -718,7 +718,7 @@ public class TraceTests
 
         var traces1 = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -733,7 +733,7 @@ public class TraceTests
 
         var traces2 = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -800,7 +800,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -851,7 +851,7 @@ public class TraceTests
         AddTrace(repository, "1", s_testTime);
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -922,7 +922,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1028,7 +1028,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1097,7 +1097,7 @@ public class TraceTests
         var resourceKey = new ResourceKey("resource1", InstanceId: null);
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1160,7 +1160,7 @@ public class TraceTests
         // Act 1
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1178,7 +1178,7 @@ public class TraceTests
         // Act 2
         traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1196,7 +1196,7 @@ public class TraceTests
         // Act 3
         traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1248,7 +1248,7 @@ public class TraceTests
         // Act 1
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1263,7 +1263,7 @@ public class TraceTests
         // Act 2
         traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1317,7 +1317,7 @@ public class TraceTests
         // intentionally comes from all matching traces, not just the returned page.
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = new ResourceKey("resource1", InstanceId: null),
+            ResourceKeys = [new ResourceKey("resource1", InstanceId: null)],
             StartIndex = 1,
             Count = 1,
             Filters =
@@ -1376,7 +1376,7 @@ public class TraceTests
         // Duration filter "> 50ms" should match because trace duration is 100ms.
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.GreaterThan, Value = "50" }]
@@ -1388,7 +1388,7 @@ public class TraceTests
         // even though the child span is only 5ms.
         traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.LessThan, Value = "10" }]
@@ -1425,7 +1425,7 @@ public class TraceTests
         // Act - filter for key1 != "other_value" should return the trace since key1 is "value1"
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = new ResourceKey("resource1", InstanceId: null),
+            ResourceKeys = [new ResourceKey("resource1", InstanceId: null)],
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1448,7 +1448,7 @@ public class TraceTests
         var repository = CreateRepository();
         var request = new GetTracesRequest
         {
-            ResourceKey = new ResourceKey("TestService", "TestId"),
+            ResourceKeys = [new ResourceKey("TestService", "TestId")],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1650,7 +1650,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resource.ResourceKey,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1767,7 +1767,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1845,7 +1845,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1950,7 +1950,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2041,7 +2041,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2113,7 +2113,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = uninstrumentedPeerApp.ResourceKey,
+            ResourceKeys = [uninstrumentedPeerApp.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2191,7 +2191,7 @@ public class TraceTests
 
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2232,7 +2232,7 @@ public class TraceTests
 
         traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = uninstrumentedPeerApp.ResourceKey,
+            ResourceKeys = [uninstrumentedPeerApp.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2327,7 +2327,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -2368,7 +2368,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2409,7 +2409,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2450,7 +2450,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2508,7 +2508,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = serviceA.ResourceKey,
+            ResourceKeys = [serviceA.ResourceKey],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -2550,7 +2550,7 @@ public class TraceTests
         // Act - filter for spans with duration >= 100000ms (100s)
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters =
@@ -2598,7 +2598,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2640,7 +2640,7 @@ public class TraceTests
         // Act - get second page (skip 1, take 1)
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 1,
             Count = 1,
             Filters = []
@@ -2682,7 +2682,7 @@ public class TraceTests
         // Act - filter for error spans with "example.com" text
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2704,7 +2704,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -2743,7 +2743,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = ResourceKey.Create("nonexistent", "unknown"),
+            ResourceKeys = [ResourceKey.Create("nonexistent", "unknown")],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -2789,7 +2789,7 @@ public class TraceTests
         // Act
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [],
@@ -2828,7 +2828,7 @@ public class TraceTests
         // Enabled filter matches span name containing "span1", disabled filter would exclude everything
         var result = repository.GetSpans(new GetSpansRequest
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters =

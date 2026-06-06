@@ -16,7 +16,6 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -68,21 +67,17 @@ internal sealed class InitCommand : BaseCommand
     public InitCommand(
         ILanguageService languageService,
         ISolutionLocator solutionLocator,
-        AspireCliTelemetry telemetry,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
         AgentInitCommand agentInitCommand,
         IDotNetCliRunner runner,
         ICertificateService certificateService,
         IScaffoldingService scaffoldingService,
         ILanguageDiscovery languageDiscovery,
         TemplateNuGetConfigService templateNuGetConfigService,
-        IPackagingService packagingService)
-        : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        IPackagingService packagingService,
+        CommonCommandServices services)
+        : base("init", InitCommandStrings.Description, services)
     {
-        _executionContext = executionContext;
+        _executionContext = services.ExecutionContext;
         _languageService = languageService;
         _solutionLocator = solutionLocator;
         _agentInitCommand = agentInitCommand;

@@ -10,81 +10,81 @@ namespace Aspire.Hosting
 {
     public static partial class AzureNatGatewayExtensions
     {
-        [AspireExport(Description = "Adds an Azure NAT Gateway resource to the application model.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureNatGatewayResource> AddNatGateway(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Associates an Azure Public IP Address resource with an Azure NAT Gateway resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureNatGatewayResource> WithPublicIPAddress(this ApplicationModel.IResourceBuilder<Azure.AzureNatGatewayResource> builder, ApplicationModel.IResourceBuilder<Azure.AzurePublicIPAddressResource> publicIPAddress) { throw null; }
     }
 
     public static partial class AzureNetworkSecurityGroupExtensions
     {
-        [AspireExport(Description = "Adds an Azure Network Security Group resource to the application model.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureNetworkSecurityGroupResource> AddNetworkSecurityGroup(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds a security rule to an Azure Network Security Group resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureNetworkSecurityGroupResource> WithSecurityRule(this ApplicationModel.IResourceBuilder<Azure.AzureNetworkSecurityGroupResource> builder, Azure.AzureSecurityRule rule) { throw null; }
     }
 
     public static partial class AzureNetworkSecurityPerimeterExtensions
     {
-        [AspireExport(Description = "Adds an Azure Network Security Perimeter resource to the application model.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureNetworkSecurityPerimeterResource> AddNetworkSecurityPerimeter(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds an access rule to an Azure Network Security Perimeter resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureNetworkSecurityPerimeterResource> WithAccessRule(this ApplicationModel.IResourceBuilder<Azure.AzureNetworkSecurityPerimeterResource> builder, Azure.AzureNspAccessRule rule) { throw null; }
 
-        [AspireExport("associateWithNetworkSecurityPerimeter", MethodName = "withNetworkSecurityPerimeter", Description = "Associates an Azure PaaS resource with a Network Security Perimeter.")]
+        [AspireExport("associateWithNetworkSecurityPerimeter", MethodName = "withNetworkSecurityPerimeter")]
         public static ApplicationModel.IResourceBuilder<T> WithNetworkSecurityPerimeter<T>(this ApplicationModel.IResourceBuilder<T> target, ApplicationModel.IResourceBuilder<Azure.AzureNetworkSecurityPerimeterResource> nsp, global::Azure.Provisioning.Network.NetworkSecurityPerimeterAssociationAccessMode accessMode = global::Azure.Provisioning.Network.NetworkSecurityPerimeterAssociationAccessMode.Enforced, string? associationName = null)
             where T : ApplicationModel.IResource, Azure.IAzureNspAssociationTarget { throw null; }
     }
 
     public static partial class AzurePrivateEndpointExtensions
     {
-        [AspireExport(Description = "Adds an Azure Private Endpoint resource to an Azure subnet resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePrivateEndpointResource> AddPrivateEndpoint(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> subnet, ApplicationModel.IResourceBuilder<Azure.IAzurePrivateEndpointTarget> target) { throw null; }
     }
 
     public static partial class AzurePublicIPAddressExtensions
     {
-        [AspireExport(Description = "Adds an Azure Public IP Address resource to the application model.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePublicIPAddressResource> AddPublicIPAddress(this IDistributedApplicationBuilder builder, string name) { throw null; }
     }
 
     public static partial class AzureVirtualNetworkExtensions
     {
-        [AspireExport("addAzureVirtualNetworkFromParameter", MethodName = "addAzureVirtualNetwork", Description = "Adds an Azure Virtual Network resource to the application model with a parameterized address prefix.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> AddAzureVirtualNetwork(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> addressPrefix) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Virtual Network resource to the application model.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> AddAzureVirtualNetwork(this IDistributedApplicationBuilder builder, string name, string? addressPrefix = null) { throw null; }
 
-        [AspireExport("addSubnetFromParameter", MethodName = "addSubnet", Description = "Adds an Azure subnet resource with a parameterized address prefix to an Azure Virtual Network resource.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> AddSubnet(this ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> addressPrefix, string? subnetName = null) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure subnet resource to an Azure Virtual Network resource.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> AddSubnet(this ApplicationModel.IResourceBuilder<Azure.AzureVirtualNetworkResource> builder, string name, string addressPrefix, string? subnetName = null) { throw null; }
 
-        [AspireExport(Description = "Adds an inbound allow rule to the Azure subnet resource's Network Security Group.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> AllowInbound(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, string? port = null, string? from = null, string? to = null, global::Azure.Provisioning.Network.SecurityRuleProtocol? protocol = null, int? priority = null, string? name = null) { throw null; }
 
-        [AspireExport(Description = "Adds an outbound allow rule to the Azure subnet resource's Network Security Group.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> AllowOutbound(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, string? port = null, string? from = null, string? to = null, global::Azure.Provisioning.Network.SecurityRuleProtocol? protocol = null, int? priority = null, string? name = null) { throw null; }
 
-        [AspireExport(Description = "Adds an inbound deny rule to the Azure subnet resource's Network Security Group.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> DenyInbound(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, string? port = null, string? from = null, string? to = null, global::Azure.Provisioning.Network.SecurityRuleProtocol? protocol = null, int? priority = null, string? name = null) { throw null; }
 
-        [AspireExport(Description = "Adds an outbound deny rule to the Azure subnet resource's Network Security Group.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> DenyOutbound(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, string? port = null, string? from = null, string? to = null, global::Azure.Provisioning.Network.SecurityRuleProtocol? protocol = null, int? priority = null, string? name = null) { throw null; }
 
-        [AspireExport("withSubnetDelegatedSubnet", MethodName = "withDelegatedSubnet", Description = "Associates a delegated Azure subnet resource with an Azure resource that supports subnet delegation.")]
+        [AspireExport("withSubnetDelegatedSubnet", MethodName = "withDelegatedSubnet")]
         public static ApplicationModel.IResourceBuilder<T> WithDelegatedSubnet<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> subnet)
             where T : Azure.IAzureDelegatedSubnetResource { throw null; }
 
-        [AspireExport(Description = "Associates an Azure NAT Gateway resource with an Azure subnet resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> WithNatGateway(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureNatGatewayResource> natGateway) { throw null; }
 
-        [AspireExport(Description = "Associates an Azure Network Security Group resource with an Azure subnet resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> WithNetworkSecurityGroup(this ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureNetworkSecurityGroupResource> nsg) { throw null; }
     }
 }
@@ -127,21 +127,21 @@ namespace Aspire.Hosting.Azure
     [AspireDto]
     public sealed partial class AzureNspAccessRule
     {
-        public System.Collections.Generic.List<string> AddressPrefixes { get { throw null; } }
+        public System.Collections.Generic.List<string> AddressPrefixes { get { throw null; } init { } }
 
-        public System.Collections.Generic.List<ApplicationModel.ReferenceExpression> AddressPrefixReferences { get { throw null; } }
+        public System.Collections.Generic.List<ApplicationModel.ReferenceExpression> AddressPrefixReferences { get { throw null; } init { } }
 
         public required global::Azure.Provisioning.Network.NetworkSecurityPerimeterAccessRuleDirection Direction { get { throw null; } set { } }
 
-        public System.Collections.Generic.List<ApplicationModel.ReferenceExpression> FullyQualifiedDomainNameReferences { get { throw null; } }
+        public System.Collections.Generic.List<ApplicationModel.ReferenceExpression> FullyQualifiedDomainNameReferences { get { throw null; } init { } }
 
-        public System.Collections.Generic.List<string> FullyQualifiedDomainNames { get { throw null; } }
+        public System.Collections.Generic.List<string> FullyQualifiedDomainNames { get { throw null; } init { } }
 
         public required string Name { get { throw null; } set { } }
 
-        public System.Collections.Generic.List<ApplicationModel.ReferenceExpression> SubscriptionReferences { get { throw null; } }
+        public System.Collections.Generic.List<ApplicationModel.ReferenceExpression> SubscriptionReferences { get { throw null; } init { } }
 
-        public System.Collections.Generic.List<string> Subscriptions { get { throw null; } }
+        public System.Collections.Generic.List<string> Subscriptions { get { throw null; } init { } }
     }
 
     public partial class AzurePrivateEndpointResource : AzureProvisioningResource

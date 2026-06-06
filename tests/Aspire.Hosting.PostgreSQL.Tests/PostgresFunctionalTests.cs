@@ -813,4 +813,15 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(ConnectionState.Open, conn.State);
         }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Postgres_WithPersistentLifetime_ReusesContainerWithDefaults()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddPostgres("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
 }

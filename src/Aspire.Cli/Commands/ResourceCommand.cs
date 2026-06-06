@@ -10,12 +10,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -24,7 +20,6 @@ internal sealed class ResourceCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ResourceManagement;
 
-    private readonly IInteractionService _interactionService;
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
     private readonly IProjectLocator _projectLocator;
     private readonly AppHostConnectionResolver _connectionResolver;
@@ -79,20 +74,15 @@ internal sealed class ResourceCommand : BaseCommand
     };
 
     public ResourceCommand(
-        IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IProjectLocator projectLocator,
         ILogger<ResourceCommand> logger,
-        AspireCliTelemetry telemetry)
-        : base("resource", ResourceCommandStrings.CommandDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("resource", ResourceCommandStrings.CommandDescription, services)
     {
-        _interactionService = interactionService;
         _backchannelMonitor = backchannelMonitor;
         _projectLocator = projectLocator;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
         _logger = logger;
 
         Arguments.Add(s_resourceArgument);
@@ -138,7 +128,7 @@ internal sealed class ResourceCommand : BaseCommand
 
         if (!result.Success)
         {
-            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, CliExitCodes.FailedToFindProject));
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, InteractionService, CliExitCodes.FailedToFindProject));
         }
 
         var connection = result.Connection!;
@@ -161,7 +151,7 @@ internal sealed class ResourceCommand : BaseCommand
         {
             return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteResourceCommandAsync(
                 connection,
-                _interactionService,
+                InteractionService,
                 _logger,
                 resourceName,
                 commandName,
@@ -174,7 +164,7 @@ internal sealed class ResourceCommand : BaseCommand
 
         return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteGenericCommandAsync(
             connection,
-            _interactionService,
+            InteractionService,
             _logger,
             resourceName,
             commandName,
@@ -670,7 +660,7 @@ internal sealed class ResourceCommand : BaseCommand
                 return await ResolveExplicitConnectionForAvailableCommandsAsync(appHostProjectFile, cancellationToken).ConfigureAwait(false);
             }
 
-            var inScopeConnections = await command._interactionService.ShowStatusAsync(
+            var inScopeConnections = await command.InteractionService.ShowStatusAsync(
                 SharedCommandStrings.ScanningForRunningAppHosts,
                 async () =>
                 {
@@ -706,7 +696,7 @@ internal sealed class ResourceCommand : BaseCommand
             }
 
             var targetPath = Path.GetFullPath(selectedAppHostProjectFile.FullName);
-            var matchingConnections = await command._interactionService.ShowStatusAsync(
+            var matchingConnections = await command.InteractionService.ShowStatusAsync(
                 SharedCommandStrings.ScanningForRunningAppHosts,
                 async () =>
                 {

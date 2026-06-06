@@ -397,7 +397,10 @@ jobs:
                 echo ""
                 echo "$ENTRY"
                 echo ""
-                tail -n +2 "$CHANGELOG"
+                # The changelog starts with a title followed by a blank line. The
+                # new entry already ends with its own separator, so strip only the
+                # leading blank lines from the old body before appending it.
+                tail -n +2 "$CHANGELOG" | sed '/[^[:space:]]/,$!d'
               } > "${CHANGELOG}.tmp"
             else
               echo "⚠️ CHANGELOG.md does not start with a Markdown header. Prepending entry at the top."

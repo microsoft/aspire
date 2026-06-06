@@ -24,7 +24,7 @@ internal static class VersionHelper
     }
 
     /// <summary>
-    /// Finds the candidate that exactly matches the current CLI/SDK version when running against local build channels or hives.
+    /// Finds the candidate that exactly matches the current CLI/SDK version when a channel has already been selected or local hives are present.
     /// </summary>
     public static bool TryGetCurrentCliVersionMatch<T>(
         IEnumerable<T> candidates,
@@ -36,7 +36,7 @@ internal static class VersionHelper
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(versionSelector);
 
-        if (!hasPrHives && !IsLocalBuildChannel(channelName))
+        if (!hasPrHives && string.IsNullOrWhiteSpace(channelName))
         {
             match = default;
             return false;

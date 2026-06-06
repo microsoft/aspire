@@ -10,25 +10,25 @@ namespace Aspire.Hosting
 {
     public static partial class AzureEventHubsExtensions
     {
-        [AspireExport(Description = "Adds an Azure Event Hubs namespace resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> AddAzureEventHubs(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Event Hub consumer group resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubConsumerGroupResource> AddConsumerGroup(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubResource> builder, string name, string? groupName = null) { throw null; }
 
         [System.Obsolete("This method is obsolete because it has the wrong return type and will be removed in a future version. Use AddHub instead to add an Azure Event Hub.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> AddEventHub(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Event Hub resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubResource> AddHub(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> builder, string name, string? hubName = null) { throw null; }
 
-        [AspireExport(Description = "Configures the Azure Event Hubs resource to run with the local emulator", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource>>? configureContainer = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Action<JsonNode> callbacks are not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> WithConfiguration(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> builder, System.Action<System.Text.Json.Nodes.JsonNode> configJson) { throw null; }
 
-        [AspireExport(Description = "Sets the emulator configuration file path")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> WithConfigurationFile(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> builder, string path) { throw null; }
 
         [System.Obsolete("This method is obsolete because it doesn't work as intended and will be removed in a future version.")]
@@ -40,10 +40,10 @@ namespace Aspire.Hosting
         [System.Obsolete("Use WithHostPort instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> WithGatewayPort(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> builder, int? port) { throw null; }
 
-        [AspireExport(Description = "Sets the host port for the Event Hubs emulator endpoint")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> WithHostPort(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> builder, int? port) { throw null; }
 
-        [AspireExport(Description = "Configures properties of an Azure Event Hub", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubResource> WithProperties(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubResource> builder, System.Action<Azure.AzureEventHubResource> configure) { throw null; }
 
         [AspireExportIgnore(Reason = "EventHubsBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureEventHubsRole-based overload instead.")]
