@@ -86,6 +86,8 @@ public partial class TextVisualizerDialog : ComponentBase
             }
             else
             {
+                // Markdown can't be reliably detected from content, so enable it when the format is
+                // unknown to let users switch to markdown rendering if they want.
                 EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
             }
         }
