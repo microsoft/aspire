@@ -28,6 +28,19 @@
     <!-- run on macOS in GitHub Actions, but only outside of pull requests -->
     <RunOnGithubActionsMacOS Condition=" '$(IsGitHubActionsRunner)' == 'true' and '$(IsGithubPullRequest)' != 'true' ">true</RunOnGithubActionsMacOS>
 
+    <!--
+      Skip Windows on pull requests.
+
+      Per docs/ci/pr-ci-wallclock-investigation.md the same Templates test class
+      runs roughly 2x slower on windows-latest than on ubuntu-latest (windows-latest
+      is a 2-core runner with higher per-template dotnet new/build overhead). For
+      example, NewUpAndBuildStandaloneTemplateTests measures at ~12.7min on Windows
+      vs ~6.7min on Linux, and the Windows shard is the gating job for the entire
+      PR CI critical path. Coverage for Windows templates is preserved on
+      push-to-main runs (where this property reverts to its true default).
+    -->
+    <RunOnGithubActionsWindows Condition=" '$(IsGithubPullRequest)' == 'true' ">false</RunOnGithubActionsWindows>
+
     <!-- Timeout configuration -->
     <TestSessionTimeout>20m</TestSessionTimeout>
     <TestHangTimeout>15m</TestHangTimeout>
