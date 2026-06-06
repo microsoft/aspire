@@ -14,6 +14,9 @@ public static class ResourceGraphMapper
 {
     public static ResourceDto MapResource(ResourceViewModel r, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver, IEnumerable<string>? referencedNames = null)
     {
+        // Null means relationship mode should derive edges from the app model. An empty collection is
+        // meaningful in telemetry mode for resources that only have incoming calls, so keep those as
+        // explicit "no outgoing telemetry edges" instead of falling back to relationships.
         var resolvedNames = referencedNames?.ToList() ?? ResolveRelationshipNames(r, resourcesByName, showHiddenResources);
 
         var endpoint = ResourceUrlHelpers.GetUrls(r, includeInternalUrls: false, includeNonEndpointUrls: false).FirstOrDefault()

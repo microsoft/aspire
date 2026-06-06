@@ -1039,6 +1039,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph && PageViewModel.SelectedGraphMode == ResourceGraphMode.Telemetry)
         {
+            // Trace notifications can be high volume. Only subscribe while telemetry graph mode is
+            // visible so table and relationship graph views don't pay for graph remapping on every span.
             _graphTracesSubscription ??= TelemetryRepository.OnNewTraces(null, SubscriptionType.Other, async () =>
             {
                 await InvokeAsync(async () =>

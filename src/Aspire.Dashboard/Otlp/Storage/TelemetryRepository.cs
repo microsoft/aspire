@@ -69,6 +69,9 @@ public sealed partial class TelemetryRepository : IDisposable
     // Not explicitly capped per add — bounded only by the sum of span links across in-buffer traces.
     // Cleaned up on trace eviction and clear, so growth is limited by the circular buffer capacity.
     private readonly List<OtlpSpanLink> _spanLinks = new();
+    // Derived telemetry graph state is intentionally bounded by the retained trace buffer instead of
+    // a separate cache limit. The per-trace counts let trace eviction, replacement, and clear subtract
+    // exactly the edges they contributed while all mutations stay under _tracesLock.
     private readonly Dictionary<TelemetryGraphEdge, int> _telemetryGraphEdges = new();
     private readonly Dictionary<OtlpTrace, Dictionary<TelemetryGraphEdge, int>> _telemetryGraphEdgesByTrace = new();
     private readonly List<IDisposable> _peerResolverSubscriptions = new();
@@ -1838,7 +1841,9 @@ public sealed partial class TelemetryRepository : IDisposable
                             _tracePropertyKeys.Add((resourceView.Resource, kvp.Key));
                         }
 
-                        // Derived indexes should only track traces retained by the circular buffer.
+                        // CircularBuffer.Insert can reject an older incoming trace when the buffer is
+                        // full. Derived indexes must only track retained traces, otherwise a dropped
+                        // trace would leave telemetry graph edges that eviction can never subtract.
                         Debug.Assert(!traceRetained || _traces.Contains(trace), "Trace not found in traces collection.");
 
                         if (traceRetained)
@@ -1862,8 +1867,9 @@ public sealed partial class TelemetryRepository : IDisposable
                     AssertSpanLinks();
                 }
 
-                // After spans are updated, loop through traces and their spans and update uninstrumented peer values.
-                // These can change
+                // Re-evaluate peers after all spans in the batch are applied. A client/producer span can
+                // arrive before its child server/consumer span, and we only want a synthetic peer edge
+                // when the destination resource is genuinely uninstrumented.
                 foreach (var (_, updatedTrace) in updatedTraces)
                 {
                     CalculateTraceUninstrumentedPeers(updatedTrace);
@@ -2040,6 +2046,11 @@ public sealed partial class TelemetryRepository : IDisposable
             }
             else
             {
+                // OpenTelemetry uses client/producer spans for outbound work and server/consumer child
+                // spans for the receiving side:
+                // https://opentelemetry.io/docs/specs/otel/trace/api/#spankind
+                // Store outbound spans by id and resolve instrumented destinations in one child-span
+                // pass instead of scanning all children once per source span.
                 sourceSpansById ??= new Dictionary<string, OtlpSpan>(trace.Spans.Count, StringComparers.OtlpSpanId);
                 sourceSpansById.Add(span.SpanId, span);
             }
