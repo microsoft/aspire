@@ -73,6 +73,7 @@ const postTestCleanupFailureStepPatterns = [
     /^Upload CLI E2E recordings$/i,
     /^Generate test results summary$/i,
     /^Post Checkout code$/i,
+    /^Check for hang dump files$/i,
 ];
 
 const windowsProcessInitializationFailurePatterns = [
@@ -395,6 +396,24 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}
             retryable: true,
             failedSteps,
             reason: `Post-test cleanup steps '${failedStepText}' matched the Windows process initialization failure override allowlist.`,
+        };
+    }
+
+    if (hasOnlyPostTestCleanupFailures) {
+        // The test process ran to completion (no test-execution step failed) and the only
+        // failures are in post-test cleanup (artifact upload, hang-dump check, results
+        // summary generation, repo cleanup). The test results are already on disk; these
+        // steps are dominated by transient infra (artifact storage blips, GitHub API
+        // hiccups, ephemeral filesystem locks on Windows runners) and frequently fail
+        // with no error annotation at all. A genuinely persistent failure (malformed
+        // results, disk full) will reproduce on retry and be caught by the existing
+        // 3-attempt cap. Observed signature in 7-day CI data: 47 windows-latest jobs/week
+        // where 'Upload logs, and test results' fails alone with no error annotation
+        // (tests passed, subsequent artifact-upload steps also passed).
+        return {
+            retryable: true,
+            failedSteps,
+            reason: `Failed steps '${failedStepText}' are all post-test cleanup steps; the test process itself ran to completion. Retrying to re-run the upload/cleanup.`,
         };
     }
 

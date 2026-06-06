@@ -165,6 +165,73 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task RetriesWhenOnlyPostTestCleanupStepFailsWithNoErrorAnnotation()
+    {
+        // Real signature from 7-day CI sample: 47 windows-latest jobs/week where the
+        // tests pass cleanly, then 'Upload logs, and test results' fails alone with
+        // NO error annotation (the only annotation is the windows-latest deprecation
+        // notice), and the subsequent artifact-upload / summary steps all succeed.
+        // Example: actions/runs/27072649810/job/79882215855 (Hosting.MongoDB).
+        WorkflowJob job = CreateJob(failedSteps: ["Upload logs, and test results"]);
+
+        // Annotation text the auto-rerun bot would actually see — no error signal,
+        // just the unrelated platform-deprecation notice.
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "NOTICE: windows-latest requests are being redirected to windows-2025-vs2026 by June 15, 2026");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("post-test cleanup", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RetriesWhenAllPostTestCleanupStepsCascadeFailureIsTheOnlyFailure()
+    {
+        // Real signature from 7-day CI sample: 24 records where a Windows hang-dump
+        // check fires (-1073741502 / 0xC0000142 during Get-ChildItem) and the cascade
+        // takes down every subsequent post-test step. Both the new (no-annotation) rule
+        // and the existing Windows-init annotation rule cover this — verify the new
+        // rule retries the cascade even when the annotation is missing.
+        WorkflowJob job = CreateJob(failedSteps:
+        [
+            "Check for hang dump files",
+            "Upload logs, and test results",
+            "Copy CLI E2E recordings for upload",
+            "Upload CLI E2E recordings",
+            "Generate test results summary",
+            "Post Checkout code"
+        ]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "NOTICE: windows-latest requests are being redirected to windows-2025-vs2026 by June 15, 2026");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("post-test cleanup", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotRetryPostTestCleanupWhenOtherNonCleanupStepAlsoFailed()
+    {
+        // Safety: even with 'Upload logs, and test results' failing, if a non-cleanup,
+        // non-test-execution step also failed (e.g. some build or setup step), the
+        // "all post-test cleanup" rule must NOT fire — that's a different failure mode.
+        WorkflowJob job = CreateJob(failedSteps:
+        [
+            "Some custom validation step",
+            "Upload logs, and test results"
+        ]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code 1.");
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task AllowsNarrowLogBasedOverrideForDncengFeedServiceIndexFailuresInIgnoredBuildSteps()
     {
         WorkflowJob job = CreateJob(failedSteps: ["Build test project"]);
