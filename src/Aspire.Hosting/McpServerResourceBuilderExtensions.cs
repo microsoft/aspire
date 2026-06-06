@@ -20,6 +20,8 @@ namespace Aspire.Hosting;
 public static class McpServerResourceBuilderExtensions
 {
     private static readonly string[] s_httpSchemes = ["https", "http"];
+    private const string McpToolArgumentName = "tool";
+    private const string McpToolArgumentsArgumentName = "arguments";
 
     /// <summary>
     /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
@@ -165,8 +167,8 @@ public static class McpServerResourceBuilderExtensions
     private static void AddMcpInvokeCommandIfMissing<T>(IResourceBuilder<T> builder, string? path, string? endpointName, bool isHighlighted)
         where T : IResourceWithEndpoints
     {
-        var commandName = $"{builder.Resource.Name}-mcp-call-tool";
-        if (builder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Any(c => string.Equals(c.Name, commandName, StringComparison.Ordinal)))
+        var interactiveCommandName = $"{builder.Resource.Name}-mcp-call-tool-interactive";
+        if (builder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Any(c => string.Equals(c.Name, interactiveCommandName, StringComparison.Ordinal)))
         {
             return;
         }
@@ -175,7 +177,7 @@ public static class McpServerResourceBuilderExtensions
             path ?? string.Empty,
             "Invoke MCP",
             endpointSelector: () => GetMcpEndpoint(builder.Resource, endpointName),
-            commandName: commandName,
+            commandName: interactiveCommandName,
             commandOptions: new HttpCommandOptions
             {
                 Method = HttpMethod.Post,
@@ -183,7 +185,31 @@ public static class McpServerResourceBuilderExtensions
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = isHighlighted,
                 PrepareRequest = PrepareMcpToolCallRequestAsync,
-                GetCommandResult = GetMcpCommandResultAsync
+                GetCommandResult = GetMcpCommandResultAsync,
+                Visibility = ResourceCommandVisibility.UI
+            });
+
+        var commandWithArgumentsName = $"{builder.Resource.Name}-mcp-call-tool";
+        if (builder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Any(c => string.Equals(c.Name, commandWithArgumentsName, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        builder.WithHttpCommand(
+            path ?? string.Empty,
+            "Invoke MCP",
+            endpointSelector: () => GetMcpEndpoint(builder.Resource, endpointName),
+            commandName: commandWithArgumentsName,
+            commandOptions: new HttpCommandOptions
+            {
+                Method = HttpMethod.Post,
+                Description = "Invoke an MCP tool by name with JSON arguments.",
+                IconName = "ChatSparkle",
+                IconVariant = IconVariant.Regular,
+                Arguments = [CreateMcpToolArgument(), CreateMcpArgumentsArgument()],
+                PrepareRequest = PrepareMcpToolCallRequestAsync,
+                GetCommandResult = GetMcpCommandResultAsync,
+                Visibility = ResourceCommandVisibility.Api
             });
     }
 
@@ -207,8 +233,7 @@ public static class McpServerResourceBuilderExtensions
             throw new InvalidOperationException("MCP server did not return any tools.");
         }
 
-        var selectedTool = await PromptForMcpToolAsync(ctx, tools).ConfigureAwait(true);
-        var arguments = await PromptForMcpToolArgumentsAsync(ctx, selectedTool).ConfigureAwait(true);
+        var (selectedTool, arguments) = await GetMcpToolCallAsync(ctx, tools).ConfigureAwait(true);
 
         ConfigureMcpRequest(
             ctx.Request,
@@ -220,6 +245,33 @@ public static class McpServerResourceBuilderExtensions
                     ["arguments"] = arguments
                 }),
             sessionId);
+    }
+
+    private static InteractionInput CreateMcpToolArgument()
+    {
+        return new InteractionInput
+        {
+            Name = McpToolArgumentName,
+            Label = "Tool",
+            Description = "Name of the MCP tool to invoke.",
+            InputType = InputType.Text,
+            Required = true,
+            Placeholder = "get_weather"
+        };
+    }
+
+    private static InteractionInput CreateMcpArgumentsArgument()
+    {
+        return new InteractionInput
+        {
+            Name = McpToolArgumentsArgumentName,
+            Label = "Arguments JSON",
+            Description = "JSON object to pass as the MCP tool arguments.",
+            InputType = InputType.Text,
+            Required = false,
+            Value = "{}",
+            Placeholder = "{ \"location\": \"Seattle\" }"
+        };
     }
 
     private static async Task<ExecuteCommandResult> GetMcpCommandResultAsync(HttpCommandResultContext ctx)
@@ -370,12 +422,54 @@ public static class McpServerResourceBuilderExtensions
         return result;
     }
 
+    private static McpTool GetSelectedMcpTool(InteractionInputCollection arguments, IReadOnlyList<McpTool> tools)
+    {
+        var toolName = GetMcpArgumentValue(arguments, McpToolArgumentName)
+            ?? throw new InvalidOperationException("MCP tool argument is required.");
+        var selectedTool = tools.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal));
+        if (selectedTool is not null)
+        {
+            return selectedTool;
+        }
+
+        var availableTools = string.Join(", ", tools.Select(tool => tool.Name));
+        throw new InvalidOperationException($"MCP server did not return a tool named '{toolName}'. Available tools: {availableTools}.");
+    }
+
+    private static JsonObject GetMcpToolArguments(InteractionInputCollection arguments)
+    {
+        var value = GetMcpArgumentValue(arguments, McpToolArgumentsArgumentName);
+        return string.IsNullOrWhiteSpace(value)
+            ? []
+            : TryParseJsonObject(value, out var result)
+                ? result
+                : throw new InvalidOperationException("MCP tool arguments must be a valid JSON object.");
+    }
+
+    private static async Task<(McpTool Tool, JsonObject Arguments)> GetMcpToolCallAsync(HttpCommandRequestContext ctx, IReadOnlyList<McpTool> tools)
+    {
+        var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
+        if (!string.IsNullOrWhiteSpace(GetMcpArgumentValue(ctx.Arguments, McpToolArgumentName)) || !interactionService.IsAvailable)
+        {
+            var selectedTool = GetSelectedMcpTool(ctx.Arguments, tools);
+            return (selectedTool, GetMcpToolArguments(ctx.Arguments));
+        }
+
+        var promptedTool = await PromptForMcpToolAsync(ctx, tools).ConfigureAwait(true);
+        return (promptedTool, await PromptForMcpToolArgumentsAsync(ctx, promptedTool).ConfigureAwait(true));
+    }
+
+    private static string? GetMcpArgumentValue(InteractionInputCollection arguments, string name)
+    {
+        return arguments.TryGetByName(name, out var input) ? input.Value : null;
+    }
+
     private static async Task<McpTool> PromptForMcpToolAsync(HttpCommandRequestContext ctx, IReadOnlyList<McpTool> tools)
     {
         var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
         var toolInput = new InteractionInput
         {
-            Name = "tool",
+            Name = McpToolArgumentName,
             Label = "Tool",
             InputType = InputType.Choice,
             Required = true,
@@ -474,7 +568,7 @@ public static class McpServerResourceBuilderExtensions
         var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
         var argumentsInput = new InteractionInput
         {
-            Name = "arguments",
+            Name = McpToolArgumentsArgumentName,
             Label = "Arguments JSON",
             InputType = InputType.Text,
             Required = true,
@@ -492,7 +586,7 @@ public static class McpServerResourceBuilderExtensions
             {
                 ValidationCallback = context =>
                 {
-                    var arguments = context.Inputs["arguments"];
+                    var arguments = context.Inputs[McpToolArgumentsArgumentName];
                     if (!TryParseJsonObject(arguments.Value, out _))
                     {
                         context.AddValidationError(arguments, "Arguments must be a valid JSON object.");
