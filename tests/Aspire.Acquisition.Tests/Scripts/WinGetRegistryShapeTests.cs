@@ -4,7 +4,6 @@
 #if NET
 using System.Diagnostics;
 using System.IO.Compression;
-using System.Net;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
@@ -109,10 +108,12 @@ public sealed class WinGetRegistryShapeTests(ITestOutputHelper testOutput)
         // InternetOpenUrl(), which only supports http/https/ftp (not file://). See
         // Start-LocalArchiveServer in eng/winget/dogfood.ps1 for the same workaround.
         // Loopback prefixes don't require admin / netsh urlacl reservation.
-        using var server = LoopbackArchiveServer.Start(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            [archiveName] = archivePath,
-        });
+        using var server = LoopbackHttpFileServer.Start(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [archiveName] = archivePath,
+            },
+            contentType: "application/octet-stream");
         _testOutput.WriteLine($"loopback: {server.BaseUrl}");
 
         // PackageLocale is required by the singleton schema's top-level "required" array; the
@@ -142,7 +143,7 @@ public sealed class WinGetRegistryShapeTests(ITestOutputHelper testOutput)
             UpgradeBehavior: uninstallPrevious
             Installers:
             - Architecture: {{(RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "arm64" : "x64")}}
-              InstallerUrl: {{server.BaseUrl}}{{archiveName}}
+              InstallerUrl: {{server.BaseUrl}}/{{archiveName}}
               InstallerSha256: {{archiveSha256.ToUpperInvariant()}}
             ManifestType: singleton
             ManifestVersion: 1.6.0
@@ -335,118 +336,6 @@ public sealed class WinGetRegistryShapeTests(ITestOutputHelper testOutput)
     }
 
     private sealed record ProcessResult(int ExitCode, string Stdout, string Stderr);
-
-    private sealed class LoopbackArchiveServer : IDisposable
-    {
-        private readonly HttpListener _listener;
-        private readonly CancellationTokenSource _cts;
-        private readonly Task _loop;
-
-        public string BaseUrl { get; }
-
-        private LoopbackArchiveServer(HttpListener listener, string baseUrl, IReadOnlyDictionary<string, string> fileMap)
-        {
-            _listener = listener;
-            BaseUrl = baseUrl;
-            _cts = new CancellationTokenSource();
-            _loop = Task.Run(() => ServeAsync(fileMap, _cts.Token));
-        }
-
-        public static LoopbackArchiveServer Start(IReadOnlyDictionary<string, string> fileMap)
-        {
-            // Pick a free loopback port. Loopback bindings don't require admin / netsh urlacl
-            // — that restriction only applies to non-loopback prefixes. See dogfood.ps1
-            // Start-LocalArchiveServer for the same rationale.
-            for (var attempt = 1; attempt <= 5; attempt++)
-            {
-                var port = GetFreeLoopbackPort();
-                var prefix = $"http://127.0.0.1:{port}/";
-                var listener = new HttpListener();
-                listener.Prefixes.Add(prefix);
-                try
-                {
-                    listener.Start();
-                    return new LoopbackArchiveServer(listener, prefix, fileMap);
-                }
-                catch (HttpListenerException) when (attempt < 5)
-                {
-                    // The port may have been grabbed between GetFreeLoopbackPort releasing
-                    // the TcpListener and HttpListener.Start binding it. Retry with a fresh
-                    // port.
-                    listener.Close();
-                }
-            }
-
-            throw new InvalidOperationException("Could not bind a loopback HttpListener after 5 attempts.");
-        }
-
-        private async Task ServeAsync(IReadOnlyDictionary<string, string> fileMap, CancellationToken ct)
-        {
-            while (!ct.IsCancellationRequested && _listener.IsListening)
-            {
-                HttpListenerContext context;
-                try
-                {
-                    context = await _listener.GetContextAsync();
-                }
-                catch (HttpListenerException)
-                {
-                    return;
-                }
-                catch (ObjectDisposedException)
-                {
-                    return;
-                }
-
-                try
-                {
-                    var name = Path.GetFileName(Uri.UnescapeDataString(context.Request.Url!.AbsolutePath));
-                    if (fileMap.TryGetValue(name, out var filePath) && File.Exists(filePath))
-                    {
-                        var bytes = await File.ReadAllBytesAsync(filePath, ct);
-                        context.Response.ContentType = "application/octet-stream";
-                        context.Response.ContentLength64 = bytes.LongLength;
-                        await context.Response.OutputStream.WriteAsync(bytes, ct);
-                    }
-                    else
-                    {
-                        context.Response.StatusCode = 404;
-                    }
-                }
-                catch
-                {
-                    try { context.Response.StatusCode = 500; } catch { }
-                }
-                finally
-                {
-                    try { context.Response.Close(); } catch { }
-                }
-            }
-        }
-
-        private static int GetFreeLoopbackPort()
-        {
-            var tcp = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-            tcp.Start();
-            try
-            {
-                return ((System.Net.IPEndPoint)tcp.LocalEndpoint).Port;
-            }
-            finally
-            {
-                tcp.Stop();
-            }
-        }
-
-        public void Dispose()
-        {
-            try { _cts.Cancel(); } catch { }
-            try { _listener.Stop(); } catch { }
-            try { _loop.Wait(TimeSpan.FromSeconds(2)); } catch { }
-            try { _listener.Close(); } catch { }
-            _cts.Dispose();
-        }
-    }
 }
 
 /// <summary>
