@@ -206,7 +206,7 @@ internal class ConfigureDefaultDcpOptions(
         }
 
         // Terminal Host path resolution (same pattern as Dashboard)
-        var configTerminalHostPath = configuration["ASPIRE_TERMINAL_HOST_PATH"];
+        var configTerminalHostPath = configuration[BundleDiscovery.TerminalHostPathEnvVar];
         if (!string.IsNullOrEmpty(configTerminalHostPath))
         {
             options.TerminalHostPath = configTerminalHostPath;
@@ -221,7 +221,7 @@ internal class ConfigureDefaultDcpOptions(
         }
 
         // Terminal Host invocation args (used when the binary is the multi-mode aspire-managed exe in the bundle).
-        var configTerminalHostInvocationArgs = configuration["ASPIRE_TERMINAL_HOST_INVOCATION_ARGS"];
+        var configTerminalHostInvocationArgs = configuration[BundleDiscovery.TerminalHostInvocationArgsEnvVar];
         if (!string.IsNullOrEmpty(configTerminalHostInvocationArgs))
         {
             options.TerminalHostInvocationArgs = configTerminalHostInvocationArgs;

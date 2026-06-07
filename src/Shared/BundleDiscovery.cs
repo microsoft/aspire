@@ -43,6 +43,23 @@ internal static class BundleDiscovery
     public const string ManagedPathEnvVar = "ASPIRE_MANAGED_PATH";
 
     /// <summary>
+    /// Environment variable for the terminal host binary path. Read by Aspire.Hosting
+    /// to resolve the binary that backs <c>WithTerminal()</c> resources. Injected by
+    /// the CLI at launch time pointing at the bundle's <c>aspire-managed</c> exe.
+    /// </summary>
+    public const string TerminalHostPathEnvVar = "ASPIRE_TERMINAL_HOST_PATH";
+
+    /// <summary>
+    /// Environment variable for the invocation args prepended when launching the
+    /// terminal host binary. Set to <c>"terminalhost"</c> when the binary is the
+    /// multi-mode <c>aspire-managed</c> exe so the dispatcher routes to the
+    /// terminal host subcommand. Treated as a pair with
+    /// <see cref="TerminalHostPathEnvVar"/>: callers that synthesize one without
+    /// the other can produce a launch failure.
+    /// </summary>
+    public const string TerminalHostInvocationArgsEnvVar = "ASPIRE_TERMINAL_HOST_INVOCATION_ARGS";
+
+    /// <summary>
     /// Environment variable containing the leased version directory for bundle-owned child processes.
     /// </summary>
     public const string BundleVersionDirectoryEnvVar = "ASPIRE_BUNDLE_VERSION_DIR";
