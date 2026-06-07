@@ -1,0 +1,7 @@
+{
+  "name": "aspirejavascript-pnpm-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "description": "pnpm workspace sample for Aspire JavaScript hosting",
+  "packageManager": "pnpm@10.24.0"
+}

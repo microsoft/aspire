@@ -1,0 +1,47 @@
+.app-shell {
+  display: grid;
+  gap: 2rem;
+  margin: 0 auto;
+  max-width: 960px;
+  padding: 2rem;
+}
+
+.hero,
+.card {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 1rem;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.35);
+  padding: 1.5rem;
+}
+
+.eyebrow {
+  color: #7dd3fc;
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin-top: 0;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  padding: 0.75rem;
+  text-align: left;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
