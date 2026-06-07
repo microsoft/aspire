@@ -43,7 +43,8 @@ public class TestSelectorConfigTests
         Assert.Equal(2, config.IgnorePaths.Count);
         Assert.Contains("**/*.md", config.IgnorePaths);
         Assert.Single(config.SourceToTestMappings);
-        Assert.Equal("src/Components/{name}/**", config.SourceToTestMappings[0].Source);
+        Assert.Single(config.SourceToTestMappings[0].Source);
+        Assert.Equal("src/Components/{name}/**", config.SourceToTestMappings[0].Source[0]);
         Assert.Equal("tests/{name}.Tests/", config.SourceToTestMappings[0].Test);
         Assert.Single(config.SourceToTestMappings[0].Exclude);
         Assert.Equal(2, config.Categories.Count);
@@ -183,6 +184,55 @@ public class TestSelectorConfigTests
         Assert.Equal(3, config.SourceToTestMappings.Count);
         Assert.Equal("tests/{name}.Tests/", config.SourceToTestMappings[0].Test);
         Assert.Equal("tests/Aspire.Hosting.{name}.Tests/", config.SourceToTestMappings[1].Test);
+    }
+
+    [Fact]
+    public void LoadFromJson_SourceAsArray_CollectsAllPatterns()
+    {
+        // The 'source' field accepts either a single string or an array of strings.
+        // Use the array form to collapse N entries that map to the same test project
+        // into a single mapping. Both shapes must produce identical resolution behavior.
+        var json = """
+        {
+            "sourceToTestMappings": [
+                {
+                    "source": [
+                        "eng/Publishing.props",
+                        "eng/Signing.props",
+                        "eng/scripts/pack-cli-npm-package.ps1"
+                    ],
+                    "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+                }
+            ]
+        }
+        """;
+
+        var config = TestSelectorConfig.LoadFromJson(json);
+
+        Assert.Single(config.SourceToTestMappings);
+        Assert.Equal(3, config.SourceToTestMappings[0].Source.Count);
+        Assert.Equal("eng/Publishing.props", config.SourceToTestMappings[0].Source[0]);
+        Assert.Equal("eng/Signing.props", config.SourceToTestMappings[0].Source[1]);
+        Assert.Equal("eng/scripts/pack-cli-npm-package.ps1", config.SourceToTestMappings[0].Source[2]);
+        Assert.Equal("tests/Infrastructure.Tests/Infrastructure.Tests.csproj", config.SourceToTestMappings[0].Test);
+    }
+
+    [Fact]
+    public void LoadFromJson_SourceAsString_NormalizesToSingleElementList()
+    {
+        var json = """
+        {
+            "sourceToTestMappings": [
+                {"source": "src/Aspire.ProjectTemplates/**", "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"}
+            ]
+        }
+        """;
+
+        var config = TestSelectorConfig.LoadFromJson(json);
+
+        Assert.Single(config.SourceToTestMappings);
+        Assert.Single(config.SourceToTestMappings[0].Source);
+        Assert.Equal("src/Aspire.ProjectTemplates/**", config.SourceToTestMappings[0].Source[0]);
     }
 
     [Fact]

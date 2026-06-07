@@ -15,18 +15,18 @@ public class ProjectMappingResolverTests
         {
             new()
             {
-                Source = "src/Components/{name}/**",
+                Source = ["src/Components/{name}/**"],
                 Test = "tests/{name}.Tests/"
             },
             new()
             {
-                Source = "src/Aspire.Hosting.{name}/**",
+                Source = ["src/Aspire.Hosting.{name}/**"],
                 Test = "tests/Aspire.Hosting.{name}.Tests/",
                 Exclude = ["src/Aspire.Hosting.Testing/**"]
             },
             new()
             {
-                Source = "tests/{name}.Tests/**",
+                Source = ["tests/{name}.Tests/**"],
                 Test = "tests/{name}.Tests/"
             }
         };
@@ -162,7 +162,7 @@ public class ProjectMappingResolverTests
         {
             new()
             {
-                Source = "playground/**",
+                Source = ["playground/**"],
                 Test = "tests/Aspire.EndToEnd.Tests/"
             }
         };
@@ -182,12 +182,12 @@ public class ProjectMappingResolverTests
         {
             new()
             {
-                Source = "src/**/*.cs",
+                Source = ["src/**/*.cs"],
                 Test = "tests/Unit.Tests/"
             },
             new()
             {
-                Source = "src/Components/{name}/**",
+                Source = ["src/Components/{name}/**"],
                 Test = "tests/{name}.Tests/"
             }
         };
@@ -199,6 +199,60 @@ public class ProjectMappingResolverTests
         Assert.Equal(2, results.Count);
         Assert.Contains("tests/Unit.Tests/", results);
         Assert.Contains("tests/Aspire.Redis.Tests/", results);
+    }
+
+    [Theory]
+    [InlineData("eng/Publishing.props")]
+    [InlineData("eng/Signing.props")]
+    [InlineData("eng/scripts/pack-cli-npm-package.ps1")]
+    [InlineData("eng/scripts/validate-cli-symbols.ps1")]
+    public void ResolveTestProjects_ArraySource_AllPatternsMapToSameProject(string changedFile)
+    {
+        // A single mapping with N source patterns must resolve any matched file
+        // to the same test project — equivalent to N mappings sharing a test value.
+        var mappings = new List<SourceToTestMapping>
+        {
+            new()
+            {
+                Source =
+                [
+                    "eng/Publishing.props",
+                    "eng/Signing.props",
+                    "eng/scripts/pack-cli-npm-package.ps1",
+                    "eng/scripts/validate-cli-symbols.ps1"
+                ],
+                Test = "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+            }
+        };
+
+        var resolver = new ProjectMappingResolver(mappings);
+
+        var results = resolver.ResolveTestProjects(changedFile);
+
+        Assert.Single(results);
+        Assert.Equal("tests/Infrastructure.Tests/Infrastructure.Tests.csproj", results[0]);
+    }
+
+    [Fact]
+    public void ResolveTestProjects_ArraySource_ExcludeAppliesToAllPatterns()
+    {
+        // exclude is applied uniformly across every source pattern in the mapping.
+        var mappings = new List<SourceToTestMapping>
+        {
+            new()
+            {
+                Source = ["src/Aspire.Hosting.{name}/**", "src/Components/{name}/**"],
+                Test = "tests/{name}.Tests/",
+                Exclude = ["**/*.md", "**/*.designer.cs"]
+            }
+        };
+
+        var resolver = new ProjectMappingResolver(mappings);
+
+        Assert.Empty(resolver.ResolveTestProjects("src/Aspire.Hosting.Azure/README.md"));
+        Assert.Empty(resolver.ResolveTestProjects("src/Components/Aspire.Redis/Resources.designer.cs"));
+        Assert.Single(resolver.ResolveTestProjects("src/Aspire.Hosting.Azure/Client.cs"));
+        Assert.Single(resolver.ResolveTestProjects("src/Components/Aspire.Redis/Client.cs"));
     }
 
     [Theory]

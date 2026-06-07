@@ -51,119 +51,58 @@
       "test": "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"
     },
     {
-      "source": "src/Aspire.ProjectTemplates/**",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
-    },
-    {
-      "source": "tests/Aspire.Templates.Tests/**",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
-    },
-    {
-      "source": "tests/Shared/**",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
-    },
-    {
-      "source": "tests/workloads.proj",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
-    },
-    {
-      "source": "tests/Directory.Build.props",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
-    },
-    {
-      "source": "tests/Directory.Build.targets",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
-    },
-    {
-      "source": "Directory.Build.props",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
-    },
-    {
-      "source": "Directory.Build.targets",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
-    },
-    {
-      "source": "eng/Versions.props",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
-    },
-    {
-      "source": "global.json",
+      "source": [
+        "src/Aspire.ProjectTemplates/**",
+        "tests/Aspire.Templates.Tests/**",
+        "tests/Shared/**",
+        "tests/workloads.proj",
+        "tests/Directory.Build.props",
+        "tests/Directory.Build.targets",
+        "Directory.Build.props",
+        "Directory.Build.targets",
+        "eng/Versions.props",
+        "global.json"
+      ],
       "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
     },
 
-    {
-      "source": "tests/Infrastructure.Tests/**",
-      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
-    },
     {
       "source": "tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**",
       "test": "tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests.csproj"
     },
 
     {
-      "source": "eng/Publishing.props",
-      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
-    },
-    {
-      "source": "eng/Signing.props",
-      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
-    },
-    {
-      "source": "eng/scripts/pack-cli-npm-package.ps1",
-      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
-    },
-    {
-      "source": "eng/scripts/stage-native-cli-tool-packages.ps1",
-      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
-    },
-    {
-      "source": "eng/scripts/verify-cli-npm-package.ps1",
-      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
-    },
-    {
-      "source": "eng/scripts/validate-cli-symbols.ps1",
-      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
-    },
-    {
-      "source": "tools/TypeScriptApiCompat/**",
+      "source": [
+        "tests/Infrastructure.Tests/**",
+        "eng/Publishing.props",
+        "eng/Signing.props",
+        "eng/scripts/pack-cli-npm-package.ps1",
+        "eng/scripts/stage-native-cli-tool-packages.ps1",
+        "eng/scripts/verify-cli-npm-package.ps1",
+        "eng/scripts/validate-cli-symbols.ps1",
+        "tools/TypeScriptApiCompat/**"
+      ],
       "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
     },
 
     {
-      "source": "eng/scripts/get-aspire-cli.ps1",
-      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
-    },
-    {
-      "source": "eng/scripts/get-aspire-cli.sh",
-      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
-    },
-    {
-      "source": "eng/scripts/get-aspire-cli-pr.ps1",
-      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
-    },
-    {
-      "source": "eng/scripts/get-aspire-cli-pr.sh",
-      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
-    },
-    {
-      "source": "eng/scripts/verify-cli-archive.ps1",
-      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
-    },
-    {
-      "source": "eng/homebrew/**",
-      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
-    },
-    {
-      "source": "eng/winget/**",
+      "source": [
+        "eng/scripts/get-aspire-cli.ps1",
+        "eng/scripts/get-aspire-cli.sh",
+        "eng/scripts/get-aspire-cli-pr.ps1",
+        "eng/scripts/get-aspire-cli-pr.sh",
+        "eng/scripts/verify-cli-archive.ps1",
+        "eng/homebrew/**",
+        "eng/winget/**"
+      ],
       "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
     },
 
     {
-      "source": "eng/scripts/update-aspire-skills-bundle.ps1",
-      "test": "tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj"
-    },
-    {
-      "source": "eng/scripts/verify-aspire-skills-bundle.ps1",
+      "source": [
+        "eng/scripts/update-aspire-skills-bundle.ps1",
+        "eng/scripts/verify-aspire-skills-bundle.ps1"
+      ],
       "test": "tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj"
     }
   ],

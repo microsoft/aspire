@@ -96,6 +96,26 @@ Source-to-test mappings automatically discover which test projects to run based 
 
 The `{name}` placeholder captures part of the path and substitutes it into the test pattern.
 
+When several source patterns all map to the same test project, pass an array to `source` so they share one entry instead of duplicating the `test` field:
+
+```json
+{
+  "sourceToTestMappings": [
+    {
+      "source": [
+        "eng/Publishing.props",
+        "eng/Signing.props",
+        "eng/scripts/pack-cli-npm-package.ps1",
+        "eng/scripts/validate-cli-symbols.ps1"
+      ],
+      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+    }
+  ]
+}
+```
+
+The array and string forms are interchangeable — a single string is equivalent to a one-element array. `exclude` (when present) is applied uniformly to every source pattern in the mapping.
+
 ### Test Project Patterns
 
 Use `testProjectPatterns` to configure how test projects are identified from dotnet-affected output:

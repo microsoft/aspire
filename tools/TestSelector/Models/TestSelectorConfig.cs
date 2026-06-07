@@ -96,17 +96,20 @@ public sealed class IncludeExcludePatterns
 }
 
 /// <summary>
-/// A mapping from source file patterns to test project patterns.
+/// A mapping from source file patterns to a test project pattern.
 /// Supports {name} capture group substitution for flexible mapping.
 /// </summary>
 public sealed class SourceToTestMapping
 {
     /// <summary>
-    /// Glob pattern for matching source files. Can include {name} capture group.
-    /// Example: "src/Components/{name}/**"
+    /// Glob pattern(s) for matching source files. Can include {name} capture group.
+    /// In JSON, accepts either a single string or an array of strings; both shapes are
+    /// normalized to this list. Example single source: <c>src/Components/{name}/**</c>;
+    /// example multi-source: <c>["eng/Publishing.props", "eng/Signing.props"]</c>.
     /// </summary>
     [JsonPropertyName("source")]
-    public string Source { get; set; } = "";
+    [JsonConverter(typeof(StringOrStringArrayConverter))]
+    public List<string> Source { get; set; } = [];
 
     /// <summary>
     /// Pattern for the corresponding test project path. Uses {name} substitution.
@@ -116,10 +119,63 @@ public sealed class SourceToTestMapping
     public string Test { get; set; } = "";
 
     /// <summary>
-    /// Glob patterns to exclude from this mapping.
+    /// Glob patterns to exclude from this mapping. Applied to every entry in <see cref="Source"/>.
     /// </summary>
     [JsonPropertyName("exclude")]
     public List<string> Exclude { get; set; } = [];
+}
+
+/// <summary>
+/// Accepts either a JSON string or an array of strings and normalizes to a
+/// <see cref="List{T}"/> of <see cref="string"/>. Used by <see cref="SourceToTestMapping.Source"/>
+/// so the rules file can collapse N entries that map to the same test project into a single
+/// entry with an array of source patterns.
+/// </summary>
+internal sealed class StringOrStringArrayConverter : JsonConverter<List<string>>
+{
+    public override List<string> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var single = reader.GetString();
+            return string.IsNullOrEmpty(single) ? [] : [single];
+        }
+
+        if (reader.TokenType == JsonTokenType.StartArray)
+        {
+            var list = new List<string>();
+            while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+            {
+                if (reader.TokenType != JsonTokenType.String)
+                {
+                    throw new JsonException("Expected string elements in source array");
+                }
+
+                var value = reader.GetString();
+                if (!string.IsNullOrEmpty(value))
+                {
+                    list.Add(value);
+                }
+            }
+
+            return list;
+        }
+
+        throw new JsonException("Expected 'source' to be a string or array of strings");
+    }
+
+    public override void Write(Utf8JsonWriter writer, List<string> value, JsonSerializerOptions options)
+    {
+        // Round-trip: emit as array (the more general form). The reader still accepts both shapes
+        // on the way back in.
+        writer.WriteStartArray();
+        foreach (var item in value)
+        {
+            writer.WriteStringValue(item);
+        }
+
+        writer.WriteEndArray();
+    }
 }
 
 /// <summary>

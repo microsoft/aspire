@@ -126,24 +126,16 @@ public sealed class ProjectMappingResolver
 
     private sealed class CompiledMapping
     {
-        private readonly Regex _sourceRegex;
-        private readonly string _sourcePattern;
+        private readonly CompiledSourcePattern[] _sources;
         private readonly string _testPattern;
         private readonly Matcher _excludeMatcher;
-        private readonly bool _hasCapture;
 
         public CompiledMapping(SourceToTestMapping mapping)
         {
-            _sourcePattern = mapping.Source;
             _testPattern = mapping.Test;
-            _hasCapture = mapping.Source.Contains("{name}");
+            _sources = mapping.Source.Select(s => new CompiledSourcePattern(s)).ToArray();
 
-            // Convert glob pattern with {name} to regex
-            // e.g., "src/Components/{name}/**" -> "^src/Components/(?<name>[^/]+)/.*$"
-            var regexPattern = ConvertGlobToRegex(mapping.Source);
-            _sourceRegex = new Regex(regexPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-            // Build exclude matcher
+            // Build exclude matcher (applied to every source pattern in this mapping).
             _excludeMatcher = new Matcher();
             foreach (var exclude in mapping.Exclude)
             {
@@ -159,25 +151,29 @@ public sealed class ProjectMappingResolver
                 return null;
             }
 
-            var match = _sourceRegex.Match(filePath);
-            if (!match.Success)
+            foreach (var src in _sources)
             {
-                return null;
-            }
-
-            if (_hasCapture)
-            {
-                var nameGroup = match.Groups["name"];
-                if (!nameGroup.Success)
+                var match = src.Regex.Match(filePath);
+                if (!match.Success)
                 {
-                    return null;
+                    continue;
                 }
 
-                // Substitute {name} in test pattern
-                return _testPattern.Replace("{name}", nameGroup.Value);
+                if (src.HasCapture)
+                {
+                    var nameGroup = match.Groups["name"];
+                    if (!nameGroup.Success)
+                    {
+                        continue;
+                    }
+
+                    return _testPattern.Replace("{name}", nameGroup.Value);
+                }
+
+                return _testPattern;
             }
 
-            return _testPattern;
+            return null;
         }
 
         public ProjectMappingMatch? TryMatchWithDetails(string filePath)
@@ -188,39 +184,44 @@ public sealed class ProjectMappingResolver
                 return null;
             }
 
-            var match = _sourceRegex.Match(filePath);
-            if (!match.Success)
+            foreach (var src in _sources)
             {
-                return null;
-            }
-
-            string testProject;
-            string? capturedName = null;
-
-            if (_hasCapture)
-            {
-                var nameGroup = match.Groups["name"];
-                if (!nameGroup.Success)
+                var match = src.Regex.Match(filePath);
+                if (!match.Success)
                 {
-                    return null;
+                    continue;
                 }
 
-                capturedName = nameGroup.Value;
-                testProject = _testPattern.Replace("{name}", capturedName);
-            }
-            else
-            {
-                testProject = _testPattern;
+                string testProject;
+                string? capturedName = null;
+
+                if (src.HasCapture)
+                {
+                    var nameGroup = match.Groups["name"];
+                    if (!nameGroup.Success)
+                    {
+                        continue;
+                    }
+
+                    capturedName = nameGroup.Value;
+                    testProject = _testPattern.Replace("{name}", capturedName);
+                }
+                else
+                {
+                    testProject = _testPattern;
+                }
+
+                return new ProjectMappingMatch
+                {
+                    SourceFile = filePath,
+                    SourcePattern = src.Pattern,
+                    TestPattern = _testPattern,
+                    TestProject = testProject,
+                    CapturedName = capturedName
+                };
             }
 
-            return new ProjectMappingMatch
-            {
-                SourceFile = filePath,
-                SourcePattern = _sourcePattern,
-                TestPattern = _testPattern,
-                TestProject = testProject,
-                CapturedName = capturedName
-            };
+            return null;
         }
 
         public bool Matches(string filePath)
@@ -231,7 +232,15 @@ public sealed class ProjectMappingResolver
                 return false;
             }
 
-            return _sourceRegex.IsMatch(filePath);
+            foreach (var src in _sources)
+            {
+                if (src.Regex.IsMatch(filePath))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static string ConvertGlobToRegex(string globPattern)
@@ -258,6 +267,20 @@ public sealed class ProjectMappingResolver
             pattern = pattern.Replace("\\?", ".");
 
             return "^" + pattern + "$";
+        }
+
+        private sealed class CompiledSourcePattern
+        {
+            public CompiledSourcePattern(string pattern)
+            {
+                Pattern = pattern;
+                HasCapture = pattern.Contains("{name}");
+                Regex = new Regex(ConvertGlobToRegex(pattern), RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            }
+
+            public string Pattern { get; }
+            public bool HasCapture { get; }
+            public Regex Regex { get; }
         }
     }
 }

@@ -67,8 +67,11 @@
       "description": "Maps source paths to test projects using pattern substitution",
       "properties": {
         "source": {
-          "type": "string",
-          "description": "Glob pattern with {name} placeholder for source files"
+          "description": "Glob pattern (or array of glob patterns) with optional {name} placeholder for source files. Use the array form to map multiple source patterns to a single test project.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          ]
         },
         "test": {
           "type": "string",
