@@ -14,6 +14,7 @@
   <ItemGroup>
     <Compile Remove="tools\**\*.cs" />
     <Compile Include="$(SharedDir)BicepFormattingHelpers.cs" LinkBase="Shared\BicepFormattingHelpers.cs" />
+    <Compile Include="$(SharedDir)GeneratedContainerRegistryAnnotation.cs" LinkBase="Shared\GeneratedContainerRegistryAnnotation.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessResult.cs" Link="Process\ProcessResult.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessSpec.cs" Link="Process\ProcessSpec.cs" />

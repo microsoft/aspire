@@ -182,13 +182,7 @@ public class AzureContainerAppEnvironmentResource :
             return;
         }
 
-        // Remove the default container registry from the model if an explicit registry is configured
-        if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
-            DefaultContainerRegistry is not null)
-        {
-            appModel.Resources.Remove(DefaultContainerRegistry);
-            DefaultContainerRegistry = null;
-        }
+        RemoveGeneratedContainerRegistryIfReplaced(appModel);
 
         var logger = services.GetRequiredService<ILogger<AzureContainerAppEnvironmentResource>>();
         var options = services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
@@ -321,10 +315,8 @@ public class AzureContainerAppEnvironmentResource :
     internal Dictionary<string, (IResource resource, ContainerMountAnnotation volume, int index, BicepOutputReference outputReference)> VolumeNames { get; } = [];
 
     /// <summary>
-    /// Gets the default container registry for this environment.
+    /// Gets the configured container registry for this environment.
     /// </summary>
-    internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
-
     ReferenceExpression IContainerRegistry.Name => GetContainerRegistry()?.Name ?? ReferenceExpression.Create($"{ContainerRegistryName}");
 
     ReferenceExpression IContainerRegistry.Endpoint => GetContainerRegistry()?.Endpoint ?? ReferenceExpression.Create($"{ContainerRegistryUrl}");
@@ -339,8 +331,24 @@ public class AzureContainerAppEnvironmentResource :
             return annotation.Registry;
         }
 
-        // Fall back to default container registry
-        return DefaultContainerRegistry;
+        return null;
+    }
+
+    private void RemoveGeneratedContainerRegistryIfReplaced(DistributedApplicationModel appModel)
+    {
+        if (!this.TryGetLastAnnotation<GeneratedContainerRegistryAnnotation>(out var generatedRegistryAnnotation))
+        {
+            return;
+        }
+
+        if (this.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var currentRegistryAnnotation) &&
+            ReferenceEquals(currentRegistryAnnotation.Registry, generatedRegistryAnnotation.Registry))
+        {
+            return;
+        }
+
+        appModel.Resources.Remove(generatedRegistryAnnotation.Registry);
+        Annotations.Remove(generatedRegistryAnnotation);
     }
 
     /// <summary>

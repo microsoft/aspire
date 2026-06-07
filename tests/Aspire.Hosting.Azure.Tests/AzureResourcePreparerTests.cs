@@ -210,7 +210,7 @@ public class AzureResourcePreparerTests
     }
 
     [Fact]
-    public async Task DeferredRoleAssignmentAnnotation_PublishMode_CreatesRoleResourcesForAggregateOwner()
+    public async Task RoleAssignmentAnnotation_PublishMode_CreatesRoleResourcesForAggregateOwner()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddAzureContainerAppEnvironment("env");
@@ -222,10 +222,10 @@ public class AzureResourcePreparerTests
         var aggregate = new TestProvisioningResource("aggregate");
         aggregate.Annotations.Add(new AppIdentityAnnotation(identity.Resource));
         aggregate.Annotations.Add(new RoleAssignmentAnnotation(
-            () => storage.Resource,
+            storage.Resource,
             CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
         aggregate.Annotations.Add(new RoleAssignmentAnnotation(
-            () => keyVault.Resource,
+            keyVault.Resource,
             CreateKeyVaultRoleDefinitions(KeyVaultBuiltInRole.KeyVaultSecretsUser)));
         builder.AddResource(aggregate);
 
@@ -249,7 +249,7 @@ public class AzureResourcePreparerTests
     }
 
     [Fact]
-    public async Task DeferredRoleAssignmentAnnotation_PublishMode_CreatesRoleResourcesWithoutComputeEnvironmentWhenTargetedAssignmentsSupported()
+    public async Task RoleAssignmentAnnotation_PublishMode_CreatesRoleResourcesWithoutComputeEnvironmentWhenTargetedAssignmentsSupported()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
@@ -260,7 +260,7 @@ public class AzureResourcePreparerTests
         var aggregate = new TestProvisioningResource("aggregate");
         aggregate.Annotations.Add(new AppIdentityAnnotation(identity.Resource));
         aggregate.Annotations.Add(new RoleAssignmentAnnotation(
-            () => storage.Resource,
+            storage.Resource,
             CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
         builder.AddResource(aggregate);
 
@@ -277,7 +277,7 @@ public class AzureResourcePreparerTests
     }
 
     [Fact]
-    public async Task DeferredRoleAssignmentAnnotation_PublishMode_ThrowsForAggregateOwnerWhenTargetedAssignmentsUnsupported()
+    public async Task RoleAssignmentAnnotation_PublishMode_ThrowsForAggregateOwnerWhenTargetedAssignmentsUnsupported()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -285,7 +285,7 @@ public class AzureResourcePreparerTests
 
         var aggregate = new TestProvisioningResource("aggregate");
         aggregate.Annotations.Add(new RoleAssignmentAnnotation(
-            () => storage.Resource,
+            storage.Resource,
             CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
         builder.AddResource(aggregate);
 
@@ -295,94 +295,7 @@ public class AzureResourcePreparerTests
     }
 
     [Fact]
-    public async Task DeferredRoleAssignmentAnnotation_PublishMode_SkipsNullTarget()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
-
-        var identity = builder.AddAzureUserAssignedIdentity("aggregate-identity");
-
-        var aggregate = new TestProvisioningResource("aggregate");
-        aggregate.Annotations.Add(new AppIdentityAnnotation(identity.Resource));
-        aggregate.Annotations.Add(new RoleAssignmentAnnotation(
-            () => null,
-            CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
-        builder.AddResource(aggregate);
-
-        using var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        await ExecuteBeforeStartHooksAsync(app, default);
-
-        Assert.DoesNotContain(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.OwnerResource == aggregate);
-        Assert.Empty(aggregate.Annotations.OfType<DeploymentPrerequisitesAnnotation>());
-    }
-
-    [Fact]
-    public async Task DeferredRoleAssignmentAnnotation_PublishMode_DoesNotCacheNullTarget()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
-
-        var identity = builder.AddAzureUserAssignedIdentity("aggregate-identity");
-        var storage = builder.AddAzureStorage("storage");
-
-        AzureProvisioningResource? target = null;
-        var roleAssignmentAnnotation = new RoleAssignmentAnnotation(
-            () => target,
-            CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader));
-
-        Assert.Throws<InvalidOperationException>(() => roleAssignmentAnnotation.Target);
-        target = storage.Resource;
-
-        var aggregate = new TestProvisioningResource("aggregate");
-        aggregate.Annotations.Add(new AppIdentityAnnotation(identity.Resource));
-        aggregate.Annotations.Add(roleAssignmentAnnotation);
-        builder.AddResource(aggregate);
-
-        using var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        await ExecuteBeforeStartHooksAsync(app, default);
-
-        var roleAssignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "aggregate-roles-storage");
-        Assert.Same(storage.Resource, roleAssignment.TargetAzureResource);
-        Assert.Same(aggregate, roleAssignment.OwnerResource);
-        Assert.Same(identity.Resource, roleAssignment.IdentityResource);
-    }
-
-    [Fact]
-    public async Task DeferredRoleAssignmentAnnotation_PublishMode_CachesFirstNonNullTarget()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
-
-        var identity = builder.AddAzureUserAssignedIdentity("aggregate-identity");
-        var storage = builder.AddAzureStorage("storage");
-        var keyVault = builder.AddAzureKeyVault("keyvault");
-
-        AzureProvisioningResource? target = storage.Resource;
-        var roleAssignmentAnnotation = new RoleAssignmentAnnotation(
-            () => target,
-            CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader));
-
-        Assert.Same(storage.Resource, roleAssignmentAnnotation.Target);
-        target = keyVault.Resource;
-
-        var aggregate = new TestProvisioningResource("aggregate");
-        aggregate.Annotations.Add(new AppIdentityAnnotation(identity.Resource));
-        aggregate.Annotations.Add(roleAssignmentAnnotation);
-        builder.AddResource(aggregate);
-
-        using var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        await ExecuteBeforeStartHooksAsync(app, default);
-
-        var roleAssignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "aggregate-roles-storage");
-        Assert.Same(storage.Resource, roleAssignment.TargetAzureResource);
-        Assert.DoesNotContain(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "aggregate-roles-keyvault");
-    }
-
-    [Fact]
-    public async Task DeferredRoleAssignmentAnnotation_PublishMode_DeduplicatesRolesForAggregateOwner()
+    public async Task RoleAssignmentAnnotation_PublishMode_DeduplicatesRolesForAggregateOwner()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
@@ -396,7 +309,7 @@ public class AzureResourcePreparerTests
             storage.Resource,
             CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
         aggregate.Annotations.Add(new RoleAssignmentAnnotation(
-            () => storage.Resource,
+            storage.Resource,
             CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
         builder.AddResource(aggregate);
 
@@ -414,7 +327,7 @@ public class AzureResourcePreparerTests
     }
 
     [Fact]
-    public async Task DeferredRoleAssignmentAnnotation_PublishMode_CreatesIdentityForAggregateOwnerWithoutAppIdentity()
+    public async Task RoleAssignmentAnnotation_PublishMode_CreatesIdentityForAggregateOwnerWithoutAppIdentity()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
@@ -423,7 +336,7 @@ public class AzureResourcePreparerTests
 
         var aggregate = new TestProvisioningResource("aggregate");
         aggregate.Annotations.Add(new RoleAssignmentAnnotation(
-            () => storage.Resource,
+            storage.Resource,
             CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
         builder.AddResource(aggregate);
 
@@ -441,7 +354,7 @@ public class AzureResourcePreparerTests
     }
 
     [Fact]
-    public async Task DeferredRoleAssignmentAnnotation_RunMode_DoesNotCreateGlobalRoleAssignmentForAggregateOwnedTargetWithoutDirectReference()
+    public async Task RoleAssignmentAnnotation_RunMode_DoesNotCreateGlobalRoleAssignmentForAggregateOwnedTargetWithoutDirectReference()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
@@ -450,7 +363,7 @@ public class AzureResourcePreparerTests
 
         var aggregate = new TestProvisioningResource("aggregate");
         aggregate.Annotations.Add(new RoleAssignmentAnnotation(
-            () => storage.Resource,
+            storage.Resource,
             CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
 
         builder.AddResource(aggregate);

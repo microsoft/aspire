@@ -13,6 +13,7 @@
     <Compile Include="$(SharedDir)BicepFormattingHelpers.cs" LinkBase="Shared\BicepFormattingHelpers.cs" />
     <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared\ComputeEnvironmentEndpointResolver.cs" />
     <Compile Include="$(SharedDir)ContainerRegistryInfrastructure.cs" LinkBase="Shared\ContainerRegistryInfrastructure.cs" />
+    <Compile Include="$(SharedDir)GeneratedContainerRegistryAnnotation.cs" LinkBase="Shared\GeneratedContainerRegistryAnnotation.cs" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" LinkBase="Shared\ResourceNameComparer.cs" />
   </ItemGroup>
 

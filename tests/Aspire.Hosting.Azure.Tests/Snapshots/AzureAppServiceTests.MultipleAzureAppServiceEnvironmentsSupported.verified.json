@@ -1,4 +1,4 @@
-{
+﻿{
   "resources": {
     "env1-acr": {
       "type": "azure.bicep.v0",
