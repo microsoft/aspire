@@ -433,7 +433,7 @@ public class AzureFunctionsTests
     }
 
     [Fact]
-    public void AddAzureFunctionsApp_ConfiguresNodeDebugEndpoint()
+    public void AddAzureFunctionsApp_DoesNotModelNodeDebugEndpoint()
     {
         using var tempDir = new TestTempDirectory();
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -441,12 +441,7 @@ public class AzureFunctionsTests
         builder.AddAzureFunctionsApp("funcapp", tempDir.Path, AzureFunctionsLanguage.TypeScript);
 
         var functionsResource = Assert.Single(builder.Resources.OfType<AzureFunctionsAppResource>());
-        var endpoint = Assert.Single(functionsResource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "debug");
-
-        Assert.Equal(9229, endpoint.Port);
-        Assert.Equal(9229, endpoint.TargetPort);
-        Assert.False(endpoint.IsProxied);
-        Assert.True(endpoint.ExcludeReferenceEndpoint);
+        Assert.DoesNotContain(functionsResource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "debug");
     }
 
     [Fact]

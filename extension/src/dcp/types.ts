@@ -107,7 +107,6 @@ export interface AzureFunctionsNodeLaunchConfiguration extends ExecutableLaunchC
     type: "azure-functions-node";
     app_directory: string;
     command: string;
-    debug_port: string;
     language: "typescript" | "javascript";
     worker_runtime: "node";
 }

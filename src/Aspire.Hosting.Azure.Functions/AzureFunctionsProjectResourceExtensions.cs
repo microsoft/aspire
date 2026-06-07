@@ -19,7 +19,6 @@ public static class AzureFunctionsProjectResourceExtensions
 {
     private const string AzureFunctionsCoreToolsHelpLink = "https://learn.microsoft.com/azure/azure-functions/functions-run-local#install-the-azure-functions-core-tools";
     private const string NodeFunctionsLaunchConfigurationType = "azure-functions-node";
-    private const int DefaultNodeInspectorPort = 9229;
     private const int AzureFunctionsNodeContainerPort = 80;
     private const string AzureFunctionsScriptRoot = "/home/site/wwwroot";
 
@@ -287,7 +286,6 @@ public static class AzureFunctionsProjectResourceExtensions
                 Mode = mode,
                 AppDirectory = resource.AppDirectory,
                 Command = resource.Command,
-                DebugPort = GetDebugPort(resource),
                 Language = GetLanguageName(resource.Language),
                 WorkerRuntime = resource.WorkerRuntime
             }, NodeFunctionsLaunchConfigurationType);
@@ -311,7 +309,6 @@ public static class AzureFunctionsProjectResourceExtensions
             })
             .WithOtlpExporter()
             .WithFunctionsAppHttpEndpoint()
-            .WithFunctionsNodeDebugEndpoint()
             .PublishAsAzureFunctionsNodeDockerFile();
     }
 
@@ -425,18 +422,6 @@ public static class AzureFunctionsProjectResourceExtensions
             context.Args.Add("--port");
             context.Args.Add(targetEndpoint.Property(EndpointProperty.TargetPort));
         });
-    }
-
-    private static IResourceBuilder<AzureFunctionsAppResource> WithFunctionsNodeDebugEndpoint(this IResourceBuilder<AzureFunctionsAppResource> builder)
-    {
-        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            return builder;
-        }
-
-        return builder
-            .WithEndpoint(port: DefaultNodeInspectorPort, targetPort: DefaultNodeInspectorPort, scheme: "tcp", name: "debug", isProxied: false, isExternal: false)
-            .WithEndpoint("debug", endpoint => endpoint.ExcludeReferenceEndpoint = true);
     }
 
     private static IResourceBuilder<AzureFunctionsAppResource> PublishAsAzureFunctionsNodeDockerFile(this IResourceBuilder<AzureFunctionsAppResource> builder)
@@ -732,19 +717,6 @@ public static class AzureFunctionsProjectResourceExtensions
         _ => throw new ArgumentOutOfRangeException(nameof(language))
     };
 
-    private static string GetDebugPort(AzureFunctionsAppResource resource)
-    {
-        var endpoint = resource.GetEndpoint("debug").EndpointAnnotation;
-        var port = endpoint.TargetPort ?? endpoint.Port;
-
-        if (port is null)
-        {
-            throw new InvalidOperationException($"The Azure Functions resource '{resource.Name}' must define a target port for the 'debug' endpoint.");
-        }
-
-        return port.Value.ToString(CultureInfo.InvariantCulture);
-    }
-
     private static string CreateDefaultStorageName(this IDistributedApplicationBuilder builder)
     {
         // Use ProjectNameSha256 for stable naming across deployments regardless of path
@@ -833,9 +805,6 @@ public static class AzureFunctionsProjectResourceExtensions
 
         [JsonPropertyName("command")]
         public string Command { get; set; } = string.Empty;
-
-        [JsonPropertyName("debug_port")]
-        public string DebugPort { get; set; } = string.Empty;
 
         [JsonPropertyName("language")]
         public string Language { get; set; } = string.Empty;
