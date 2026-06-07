@@ -181,6 +181,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const switchToGlobalViewRegistration = registerInstrumentedCommand('aspire-vscode.switchToGlobalView', 'tree', () => dataRepository.setViewMode('global'));
   const switchToWorkspaceViewRegistration = registerInstrumentedCommand('aspire-vscode.switchToWorkspaceView', 'tree', () => dataRepository.setViewMode('workspace'));
   const openDashboardRegistration = registerInstrumentedCommand('aspire-vscode.openDashboard', 'tree', (element) => appHostTreeProvider.openDashboard(element));
+  const openDashboardToSideRegistration = registerInstrumentedCommand('aspire-vscode.openDashboardToSide', 'tree', (element) => appHostTreeProvider.openDashboardToSide(element));
   const openAppHostSourceRegistration = registerInstrumentedCommand('aspire-vscode.openAppHostSource', 'tree', (element) => appHostTreeProvider.openAppHostSource(element));
   const stopAppHostRegistration = registerInstrumentedCommand('aspire-vscode.stopAppHost', 'tree', (element) => appHostTreeProvider.stopAppHost(element));
   const runAppHostRegistration = registerInstrumentedCommand('aspire-vscode.runAppHost', 'tree', (element) => appHostTreeProvider.runAppHost(element, true));
@@ -209,7 +210,35 @@ export async function activate(context: vscode.ExtensionContext) {
   // Activate the data repository. Workspace describe watching and global polling begin when the panel is visible.
   dataRepository.activate();
 
-  context.subscriptions.push(appHostTreeView, globalRefreshAppHostsRegistration, refreshAppHostsRegistration, switchToGlobalViewRegistration, switchToWorkspaceViewRegistration, openDashboardRegistration, openAppHostSourceRegistration, stopAppHostRegistration, runAppHostRegistration, debugAppHostRegistration, stopResourceRegistration, startResourceRegistration, restartResourceRegistration, viewResourceLogsRegistration, executeResourceCommandRegistration, executeResourceCommandItemRegistration, copyEndpointUrlRegistration, openInExternalBrowserRegistration, openInIntegratedBrowserRegistration, copyResourceNameRegistration, copyAppHostPathRegistration, viewAppHostSourceRegistration, viewAppHostLogFileRegistration, copyLogFilePathRegistration, expandAllRegistration, debugSessionRefreshRegistration, { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
+  context.subscriptions.push(
+    appHostTreeView,
+    globalRefreshAppHostsRegistration,
+    refreshAppHostsRegistration,
+    switchToGlobalViewRegistration,
+    switchToWorkspaceViewRegistration,
+    openDashboardRegistration,
+    openDashboardToSideRegistration,
+    openAppHostSourceRegistration,
+    stopAppHostRegistration,
+    runAppHostRegistration,
+    debugAppHostRegistration,
+    stopResourceRegistration,
+    startResourceRegistration,
+    restartResourceRegistration,
+    viewResourceLogsRegistration,
+    executeResourceCommandRegistration,
+    executeResourceCommandItemRegistration,
+    copyEndpointUrlRegistration,
+    openInExternalBrowserRegistration,
+    openInIntegratedBrowserRegistration,
+    copyResourceNameRegistration,
+    copyAppHostPathRegistration,
+    viewAppHostSourceRegistration,
+    viewAppHostLogFileRegistration,
+    copyLogFilePathRegistration,
+    expandAllRegistration,
+    debugSessionRefreshRegistration,
+    { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
 
   // CodeLens provider — shows Debug on pipeline steps, resource state on resources
   const codeLensProvider = new AspireCodeLensProvider(appHostTreeProvider, dataRepository);

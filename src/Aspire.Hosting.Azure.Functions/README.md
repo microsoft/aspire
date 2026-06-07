@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.Functions library
+# Azure Functions hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Azure Functions resources.
+Use this integration to model, configure, and orchestrate Azure Functions apps in an Aspire solution.
 
 ## Getting started
 
@@ -10,25 +10,19 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 * An Azure Functions app. .NET isolated worker apps can be referenced as projects. TypeScript and JavaScript apps can be referenced by directory.
 * Azure Functions Core Tools for local JavaScript Functions apps. TypeScript Functions apps normally reference `azure-functions-core-tools` from `devDependencies` and run it through an npm script.
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Azure Functions Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.Functions` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.Functions
+```bash
+aspire add Aspire.Hosting.Azure.Functions
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add an Azure Functions resource and consume Azure resources using the following methods.
+In the AppHost, add an Azure Functions app resource and reference Azure resources with either C# or TypeScript.
 
-For a .NET isolated worker Functions project, add a project reference:
-
-```dotnetcli
-dotnet add reference ..\Company.FunctionApp\Company.FunctionApp.csproj
-```
-
-Then use `AddAzureFunctionsProject`:
+**C# - .NET isolated worker project**
 
 ```csharp
 using Aspire.Hosting.Azure;
@@ -47,7 +41,7 @@ builder.AddAzureFunctionsProject<Projects.Company_FunctionApp>("functions")
 builder.Build().Run();
 ```
 
-For a TypeScript or JavaScript Functions app, use `AddAzureFunctionsApp` with the app directory and language:
+**C# - TypeScript or JavaScript app directory**
 
 ```csharp
 using Aspire.Hosting.Azure;
@@ -62,6 +56,22 @@ builder.AddAzureFunctionsApp("functions", "../functions", AzureFunctionsLanguage
     .WithReference(blob);
 
 builder.Build().Run();
+```
+
+**TypeScript**
+
+```typescript
+import { AzureFunctionsLanguage, createBuilder } from "./.aspire/modules/aspire.mjs";
+
+const builder = await createBuilder();
+
+const storage = await builder.addAzureStorage("storage").runAsEmulator();
+const blob = await storage.addBlobs("blob");
+
+await builder.addAzureFunctionsApp("functions", "../functions", AzureFunctionsLanguage.TypeScript)
+    .withReference(blob);
+
+await builder.build().run();
 ```
 
 ## TypeScript and JavaScript Functions apps
@@ -116,9 +126,9 @@ TypeScript debugging assumes the standard Azure Functions TypeScript output unde
 
 ## Durable Task Scheduler (Durable Functions)
 
-The Azure Functions hosting library also provides resource APIs for using the Durable Task Scheduler (DTS) with Durable Functions.
+The Azure Functions hosting integration also provides resource APIs for using the Durable Task Scheduler (DTS) with Durable Functions.
 
-In the _AppHost.cs_ file of `AppHost`, add a Scheduler resource, create one or more Task Hubs, and pass the connection string and hub name to your Functions project:
+In the AppHost, add a Scheduler resource, create one or more Task Hubs, and pass the connection string and hub name to your Functions app resource:
 
 ```csharp
 using Aspire.Hosting.Azure;
@@ -168,6 +178,8 @@ var taskHub = scheduler.AddTaskHub("taskhub").WithTaskHubName(taskHubName);
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-functions/azure-functions-host/
 * https://learn.microsoft.com/azure/azure-functions
 * https://learn.microsoft.com/azure/azure-functions/functions-reference-node
 * https://learn.microsoft.com/azure/azure-functions/functions-how-to-custom-container
