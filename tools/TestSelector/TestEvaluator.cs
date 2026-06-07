@@ -226,35 +226,38 @@ internal static class TestEvaluator
     }
 
     /// <summary>
-    /// Checks ignored files against category triggerPaths and rescues any that match,
-    /// so that categories like polyglot (whose triggerPaths are under .github/workflows/**)
-    /// are not silently dropped by the blanket ignorePaths filter.
+    /// Checks ignored files against each category's full trigger/exclude rules and rescues
+    /// any that *would actually fire* a category, so categories like polyglot (whose
+    /// triggerPaths are under .github/workflows/**) are not silently dropped by the blanket
+    /// ignorePaths filter.
     /// </summary>
+    /// <remarks>
+    /// Honors per-category <see cref="CategoryConfig.ExcludePaths"/> by passing the real
+    /// category dictionary to <see cref="CategoryMapper"/>. Without this, an ignored file
+    /// that textually matches some category's triggerPath glob but is excluded from that
+    /// category would still be rescued and then fall through to fallback/RunAll — which is
+    /// strictly worse than leaving it ignored.
+    /// </remarks>
     private static List<string> RescueCategoryTriggerFiles(
         DiagnosticLogger logger,
         TestSelectorConfig config,
         List<string> ignoredFiles)
     {
         var rescued = new List<string>();
-        var allCategoryTriggerPatterns = config.Categories.Values
-            .SelectMany(c => c.TriggerPaths)
-            .Distinct()
-            .ToList();
 
-        if (allCategoryTriggerPatterns.Count == 0)
+        if (config.Categories.Count == 0)
         {
             return rescued;
         }
 
-        var matcher = new CategoryMapper(new Dictionary<string, CategoryConfig>
-        {
-            ["_rescue"] = new CategoryConfig { TriggerPaths = allCategoryTriggerPatterns }
-        });
+        // Use the real category dictionary so excludePaths are honored. CategoryMapper
+        // builds CompiledCategory instances that check excludes before triggers.
+        var matcher = new CategoryMapper(config.Categories);
 
         foreach (var file in ignoredFiles)
         {
             var result = matcher.GetCategoriesWithDetails([file]);
-            if (result.CategoryStatus.GetValueOrDefault("_rescue"))
+            if (result.CategoryStatus.Values.Any(triggered => triggered))
             {
                 rescued.Add(file);
             }

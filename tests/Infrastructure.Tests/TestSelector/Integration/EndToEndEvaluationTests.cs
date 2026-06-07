@@ -1022,6 +1022,150 @@ public class EndToEndEvaluationTests
         Assert.True(result.Categories["integrations"]);
     }
 
+    [Fact]
+    public async Task Evaluate_RescueRespectsCategoryExcludePaths_FileStaysIgnored()
+    {
+        // Regression: previously the rescue logic took the *union* of all category
+        // triggerPaths without consulting per-category excludePaths. A file that
+        // textually matched a category's triggerPath glob — but was excluded from
+        // that category — would still be rescued from ignorePaths and then fall
+        // through to fallback_unmatched / RunAll, which is strictly worse than
+        // leaving it ignored. Rescue must only fire when at least one category
+        // *would actually trigger* on the file (triggerPath match AND no
+        // excludePath match).
+        var configJson = """
+        {
+            "ignorePaths": ["**/*.md"],
+            "triggerAllPaths": [],
+            "categories": {
+                "integrations": {
+                    "description": "Integrations sweep",
+                    "triggerPaths": ["tests/Aspire.*.Tests/**"],
+                    "excludePaths": ["**/*.md"]
+                }
+            },
+            "sourceToTestMappings": []
+        }
+        """;
+
+        var config = TestSelectorConfig.LoadFromJson(configJson);
+
+        var result = await TestEvaluator.EvaluateAsync(
+            config,
+            ["tests/Aspire.Foo.Tests/README.md"],
+            solution: "Aspire.slnx",
+            fromRef: null,
+            toRef: null,
+            workingDir: Directory.GetCurrentDirectory(),
+            ciEnvironment: "github-actions",
+            verbose: false);
+
+        Assert.False(result.RunAllTests);
+        Assert.Equal("all_ignored", result.Reason);
+        Assert.False(result.Categories["integrations"]);
+    }
+
+    [Fact]
+    public async Task Evaluate_RescueStillBringsBackFilesThatActuallyFireACategory()
+    {
+        // Inverse of the previous test: when an ignored file matches a category's
+        // triggerPath AND is NOT in that category's excludePaths, it must still be
+        // rescued back to active. This is the original motivating case — the
+        // polyglot validation workflow file lives under .github/workflows/** (the
+        // blanket workflow ignore) but is the entire trigger surface for the
+        // polyglot category, so it must rescue.
+        var configJson = """
+        {
+            "ignorePaths": [".github/workflows/**"],
+            "triggerAllPaths": [],
+            "categories": {
+                "polyglot": {
+                    "description": "Polyglot validation",
+                    "triggerPaths": [".github/workflows/polyglot-validation.yml"]
+                }
+            },
+            "sourceToTestMappings": []
+        }
+        """;
+
+        var config = TestSelectorConfig.LoadFromJson(configJson);
+
+        var result = await TestEvaluator.EvaluateAsync(
+            config,
+            [".github/workflows/polyglot-validation.yml"],
+            solution: "Aspire.slnx",
+            fromRef: null,
+            toRef: null,
+            workingDir: Directory.GetCurrentDirectory(),
+            ciEnvironment: "github-actions",
+            verbose: false);
+
+        Assert.True(result.Categories["polyglot"]);
+        Assert.NotEqual("all_ignored", result.Reason);
+    }
+
+    [Fact]
+    public void Evaluate_TriggerAllPaths_BareFilename_MatchesNestedPaths()
+    {
+        // Bare-filename rule: patterns like "Directory.Build.props" or "global.json"
+        // (no path separator) match the file by name at any depth, not just at the
+        // repo root. The user-facing rule intent is that touching ANY
+        // Directory.Build.props (root, src/, tests/, src/Aspire.Foo/) trips
+        // trigger-all. Raw FileSystemGlobbing.Matcher only matches root-level by
+        // default, so the analyzers must normalize bare-filename patterns by
+        // prefixing "**/" before handing them to the Matcher.
+        var configJson = """
+        {
+            "ignorePaths": [],
+            "triggerAllPaths": ["global.json", "Directory.Build.props", "Directory.Packages.props", "*.slnx"],
+            "categories": {},
+            "sourceToTestMappings": []
+        }
+        """;
+
+        var config = TestSelectorConfig.LoadFromJson(configJson);
+        var criticalDetector = new CriticalFileDetector(config.TriggerAllPaths);
+
+        Assert.True(criticalDetector.IsCriticalFile("global.json", out _));
+        Assert.True(criticalDetector.IsCriticalFile("Directory.Build.props", out _));
+        Assert.True(criticalDetector.IsCriticalFile("Aspire.slnx", out _));
+
+        Assert.True(criticalDetector.IsCriticalFile("src/Directory.Build.props", out _));
+        Assert.True(criticalDetector.IsCriticalFile("tests/Directory.Build.props", out _));
+        Assert.True(criticalDetector.IsCriticalFile("tests/Directory.Packages.props", out _));
+        Assert.True(criticalDetector.IsCriticalFile("src/Aspire.Hosting/Directory.Build.props", out _));
+        Assert.True(criticalDetector.IsCriticalFile("some/very/deep/path/global.json", out _));
+
+        Assert.False(criticalDetector.IsCriticalFile("src/SomeFile.cs", out _));
+        Assert.False(criticalDetector.IsCriticalFile("global-config.txt", out _));
+    }
+
+    [Fact]
+    public void Evaluate_IgnorePaths_BareFilename_MatchesNestedPaths()
+    {
+        // Same bare-filename rule applies to ignorePaths: a pattern like
+        // ".editorconfig" should ignore that file anywhere in the tree, not just
+        // at the repo root.
+        var configJson = """
+        {
+            "ignorePaths": [".editorconfig", ".gitignore", "*.sln"],
+            "categories": {},
+            "sourceToTestMappings": []
+        }
+        """;
+
+        var config = TestSelectorConfig.LoadFromJson(configJson);
+        var filter = new IgnorePathFilter(config.IgnorePaths);
+
+        Assert.True(filter.ShouldIgnore(".editorconfig"));
+        Assert.True(filter.ShouldIgnore("src/.editorconfig"));
+        Assert.True(filter.ShouldIgnore("tests/Aspire.Cli.Tests/.editorconfig"));
+        Assert.True(filter.ShouldIgnore("Aspire.sln"));
+        Assert.True(filter.ShouldIgnore("tools/Other.sln"));
+
+        Assert.False(filter.ShouldIgnore("src/Foo.cs"));
+    }
+
     private static string FindRepoRoot()
     {
         var dir = AppContext.BaseDirectory;

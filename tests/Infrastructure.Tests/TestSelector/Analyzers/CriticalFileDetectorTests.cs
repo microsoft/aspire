@@ -13,7 +13,11 @@ public class CriticalFileDetectorTests
     [InlineData("eng/**", "eng/pipelines/ci.yml", true)]
     [InlineData("eng/**", "src/file.cs", false)]
     [InlineData("Directory.Build.props", "Directory.Build.props", true)]
-    [InlineData("Directory.Build.props", "src/Directory.Build.props", false)]
+    // Bare-filename rule: patterns without a path separator are treated as "**/<name>"
+    // by PatternNormalization, so they match at any depth — matching the user
+    // intent that touching ANY Directory.Build.props triggers all tests.
+    [InlineData("Directory.Build.props", "src/Directory.Build.props", true)]
+    [InlineData("Directory.Build.props", "tests/Directory.Build.props", true)]
     [InlineData("**/Directory.Build.props", "src/Directory.Build.props", true)]
     public void IsCriticalFile_WithTriggerPattern_ReturnsExpected(string pattern, string filePath, bool expected)
     {

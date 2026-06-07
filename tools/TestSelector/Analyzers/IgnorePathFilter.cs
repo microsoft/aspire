@@ -22,11 +22,12 @@ public sealed class IgnorePathFilter
 
         foreach (var pattern in _ignorePatterns)
         {
-            _matcher.AddInclude(pattern);
+            var normalized = PatternNormalization.NormalizeGlob(pattern);
+            _matcher.AddInclude(normalized);
 
             // Create individual matchers for detailed diagnostics
             var singleMatcher = new Matcher();
-            singleMatcher.AddInclude(pattern);
+            singleMatcher.AddInclude(normalized);
             _individualMatchers[pattern] = singleMatcher;
         }
     }

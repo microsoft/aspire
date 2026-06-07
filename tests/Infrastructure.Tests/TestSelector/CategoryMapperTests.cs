@@ -499,7 +499,12 @@ public class CategoryMapperTests
         Assert.True(mapper.FileTriggersCategory("global.json", "config"));
         Assert.True(mapper.FileTriggersCategory("Directory.Build.props", "config"));
         Assert.True(mapper.FileTriggersCategory("NuGet.config", "config"));
-        Assert.False(mapper.FileTriggersCategory("src/global.json", "config")); // Different path
+
+        // Bare-filename rule: patterns without a path separator match at any depth.
+        // This matches user intent — "global.json" in a category triggerPath is
+        // shorthand for "any global.json in the tree", same as triggerAllPaths.
+        Assert.True(mapper.FileTriggersCategory("src/global.json", "config"));
+        Assert.True(mapper.FileTriggersCategory("tests/Directory.Build.props", "config"));
     }
 
     [Fact]

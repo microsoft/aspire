@@ -139,7 +139,7 @@ public sealed class ProjectMappingResolver
             _excludeMatcher = new Matcher();
             foreach (var exclude in mapping.Exclude)
             {
-                _excludeMatcher.AddInclude(exclude);
+                _excludeMatcher.AddInclude(PatternNormalization.NormalizeGlob(exclude));
             }
         }
 
@@ -275,7 +275,7 @@ public sealed class ProjectMappingResolver
             {
                 Pattern = pattern;
                 HasCapture = pattern.Contains("{name}");
-                Regex = new Regex(ConvertGlobToRegex(pattern), RegexOptions.IgnoreCase | RegexOptions.Compiled);
+                Regex = new Regex(ConvertGlobToRegex(PatternNormalization.NormalizeGlob(pattern)), RegexOptions.IgnoreCase | RegexOptions.Compiled);
             }
 
             public string Pattern { get; }

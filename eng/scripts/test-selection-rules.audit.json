@@ -25,7 +25,8 @@
     "eng/scripts/test-selection-rules.schema.json",
     "eng/scripts/debug-*.ps1",
     "eng/scripts/debug-*.sh",
-    "eng/scripts/cli-starter-validation*.ps1"
+    "eng/scripts/cli-starter-validation*.ps1",
+    "**/api/*.txt"
   ],
 
   "triggerAllPaths": [
@@ -93,7 +94,8 @@
         "eng/scripts/get-aspire-cli-pr.sh",
         "eng/scripts/verify-cli-archive.ps1",
         "eng/homebrew/**",
-        "eng/winget/**"
+        "eng/winget/**",
+        "tests/Aspire.Acquisition.Tests/**"
       ],
       "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
     },
@@ -118,6 +120,9 @@
         "src/Aspire.Cli/**",
         "eng/clipack/**",
         "tests/Aspire.Cli.EndToEnd.Tests/**"
+      ],
+      "excludePaths": [
+        "**/api/*.txt"
       ]
     },
 
@@ -125,6 +130,9 @@
       "description": "VS Code extension tests",
       "triggerPaths": [
         "extension/**"
+      ],
+      "excludePaths": [
+        "**/api/*.txt"
       ]
     },
 
@@ -141,6 +149,9 @@
         "src/Aspire.Hosting.Java/**",
         "src/Aspire.Hosting.Rust/**",
         "src/Aspire.Hosting.CodeGeneration*/**"
+      ],
+      "excludePaths": [
+        "**/api/*.txt"
       ]
     },
 
@@ -161,7 +172,11 @@
         "src/Aspire.Hosting/**",
         "tests/Aspire.Templates.Tests/**",
         "tests/Aspire.Cli.EndToEnd.Tests/**",
-        "tests/Aspire.EndToEnd.Tests/**"
+        "tests/Aspire.EndToEnd.Tests/**",
+        "tests/Aspire.Acquisition.Tests/**",
+        "tests/Infrastructure.Tests/**",
+        "**/*.md",
+        "**/api/*.txt"
       ]
     }
   }

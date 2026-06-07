@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using TestSelector.Models;
+using TestSelector.Analyzers;
 using Microsoft.Extensions.FileSystemGlobbing;
 
 namespace TestSelector;
@@ -167,18 +168,19 @@ public sealed class CategoryMapper
             _triggerMatcher = new Matcher();
             foreach (var pattern in config.TriggerPaths)
             {
-                _triggerMatcher.AddInclude(pattern);
+                var normalized = PatternNormalization.NormalizeGlob(pattern);
+                _triggerMatcher.AddInclude(normalized);
 
                 // Cache individual pattern matchers for GetMatchingPattern
                 var patternMatcher = new Matcher();
-                patternMatcher.AddInclude(pattern);
+                patternMatcher.AddInclude(normalized);
                 _patternMatchers[pattern] = patternMatcher;
             }
 
             _excludeMatcher = new Matcher();
             foreach (var pattern in config.ExcludePaths)
             {
-                _excludeMatcher.AddInclude(pattern);
+                _excludeMatcher.AddInclude(PatternNormalization.NormalizeGlob(pattern));
             }
         }
 

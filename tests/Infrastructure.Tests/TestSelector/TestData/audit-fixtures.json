@@ -1,0 +1,894 @@
+[
+  {
+    "prNumber": 17971,
+    "title": "Update create-pr skill to detect UI changes and prompt for screenshots",
+    "url": "https://github.com/microsoft/aspire/pull/17971",
+    "changedFiles": [
+      ".agents/skills/create-pr/SKILL.md"
+    ],
+    "scenarioTag": "skip",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "skip",
+      "categories": [],
+      "mappedTestProjects": [],
+      "comment": "Pure skill-markdown update; no test should fire."
+    }
+  },
+  {
+    "prNumber": 17869,
+    "title": "Allow release gh-aw workflows for bot events",
+    "url": "https://github.com/microsoft/aspire/pull/17869",
+    "changedFiles": [
+      ".github/workflows/release-notes-generate.lock.yml",
+      ".github/workflows/release-notes-generate.md",
+      ".github/workflows/release-update-support-mdx.lock.yml",
+      ".github/workflows/release-update-support-mdx.md"
+    ],
+    "scenarioTag": "skip",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "skip",
+      "categories": [],
+      "mappedTestProjects": [],
+      "comment": "gh-aw workflow .md + .lock.yml; all ignored."
+    }
+  },
+  {
+    "prNumber": 17530,
+    "title": "Update contribution guide",
+    "url": "https://github.com/microsoft/aspire/pull/17530",
+    "changedFiles": [
+      "docs/contributing.md"
+    ],
+    "scenarioTag": "skip",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "skip",
+      "categories": [],
+      "mappedTestProjects": [],
+      "comment": "Docs-only contribution-guide change."
+    }
+  },
+  {
+    "prNumber": 17672,
+    "title": "[Automated] Update ATS API Surface Area",
+    "url": "https://github.com/microsoft/aspire/pull/17672",
+    "changedFiles": [
+      "src/Aspire.Hosting.Foundry/api/Aspire.Hosting.Foundry.ats.txt",
+      "src/Aspire.Hosting/api/Aspire.Hosting.ats.txt"
+    ],
+    "scenarioTag": "skip",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "skip",
+      "categories": [],
+      "mappedTestProjects": [],
+      "comment": "Automated ATS API surface update under src/*/api/*.txt; should skip per Decision 2 (api/*.txt in ignorePaths + rescue honors per-category excludes)."
+    }
+  },
+  {
+    "prNumber": 17534,
+    "title": "Move repository skills to .agents",
+    "url": "https://github.com/microsoft/aspire/pull/17534",
+    "changedFiles": [
+      ".agents/skills/api-review/SKILL.md",
+      ".agents/skills/backport-pr/SKILL.md",
+      ".agents/skills/ci-test-failures/SKILL.md",
+      ".agents/skills/cli-e2e-testing/SKILL.md",
+      ".agents/skills/code-review/SKILL.md",
+      ".agents/skills/connection-properties/SKILL.md",
+      ".agents/skills/create-pr/SKILL.md",
+      ".agents/skills/dashboard-testing/SKILL.md",
+      ".agents/skills/dependency-update/.editorconfig",
+      ".agents/skills/dependency-update/Directory.Packages.props",
+      ".agents/skills/dependency-update/MigratePackage.cs",
+      ".agents/skills/dependency-update/SKILL.md",
+      ".agents/skills/deployment-e2e-testing/SKILL.md",
+      ".agents/skills/fix-flaky-test/SKILL.md",
+      ".agents/skills/fix-flaky-test/run-test-repeatedly.ps1",
+      ".agents/skills/fix-flaky-test/run-test-repeatedly.sh",
+      ".agents/skills/hex1b/SKILL.md",
+      ".agents/skills/pr-testing/SKILL.md",
+      ".agents/skills/reviewing-aspire-architecture/SKILL.md",
+      ".agents/skills/startup-perf/SKILL.md",
+      ".agents/skills/test-management/SKILL.md",
+      ".agents/skills/update-container-images/.editorconfig",
+      ".agents/skills/update-container-images/Directory.Packages.props",
+      ".agents/skills/update-container-images/SKILL.md",
+      ".agents/skills/update-container-images/UpdateImageTags.cs",
+      ".github/workflows/pr-docs-check.md",
+      "AGENTS.md",
+      "docs/contributing.md",
+      "eng/testing/github-ci-trigger-patterns.txt",
+      "tests/Aspire.Deployment.EndToEnd.Tests/README.md"
+    ],
+    "scenarioTag": "skip",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "skip",
+      "categories": [],
+      "mappedTestProjects": [],
+      "comment": "Move skills to .agents/. All files now ignored: .agents/** + AGENTS.md + workflow .md + tests/.../README.md (Decisions 1+3)."
+    }
+  },
+  {
+    "prNumber": 17805,
+    "title": "Update PackageValidationBaselineVersion to 13.4.0",
+    "url": "https://github.com/microsoft/aspire/pull/17805",
+    "changedFiles": [
+      "src/Aspire.Hosting.JavaScript/CompatibilitySuppressions.xml",
+      "src/Directory.Build.props"
+    ],
+    "scenarioTag": "trigger_all",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "trigger_all",
+      "categories": [],
+      "mappedTestProjects": [],
+      "comment": "PackageValidationBaselineVersion bump in Directory.Build.props; trigger_all by design."
+    }
+  },
+  {
+    "prNumber": 17889,
+    "title": "Upgrade Foundry Local to 1.1.0",
+    "url": "https://github.com/microsoft/aspire/pull/17889",
+    "changedFiles": [
+      "Directory.Packages.props",
+      "src/Aspire.Hosting.Foundry/FoundryDeploymentResource.cs",
+      "src/Aspire.Hosting.Foundry/FoundryExtensions.cs",
+      "src/Aspire.Hosting.Foundry/FoundryLocalHealthCheck.cs",
+      "src/Aspire.Hosting.Foundry/FoundryLocalService.cs",
+      "src/Aspire.Hosting.Foundry/LocalModelHealthCheck.cs",
+      "tests/Aspire.Hosting.Azure.Tests/FoundryExtensionsTests.cs"
+    ],
+    "scenarioTag": "trigger_all",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "trigger_all",
+      "categories": [],
+      "mappedTestProjects": [],
+      "comment": "Foundry Local upgrade \u2014 touches Directory.Packages.props."
+    }
+  },
+  {
+    "prNumber": 17484,
+    "title": "Eliminate Unknown CLI E2E test results in PR comment",
+    "url": "https://github.com/microsoft/aspire/pull/17484",
+    "changedFiles": [
+      "tests/Aspire.Cli.EndToEnd.Tests/Helpers/CliE2ETestHelpers.cs",
+      "tests/Shared/Hex1bTestHelpers.cs"
+    ],
+    "scenarioTag": "trigger_all",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "trigger_all",
+      "categories": [],
+      "mappedTestProjects": [],
+      "comment": "tests/Shared/Hex1bTestHelpers.cs change; trigger_all because Shared is global."
+    }
+  },
+  {
+    "prNumber": 17879,
+    "title": "Refine dynamic endpoint allocation",
+    "url": "https://github.com/microsoft/aspire/pull/17879",
+    "changedFiles": [
+      "src/Aspire.Hosting/ApplicationModel/EndpointReference.cs",
+      "src/Aspire.Hosting/Dcp/DcpExecutor.cs",
+      "src/Aspire.Hosting/Dcp/DcpModelUtilities.cs",
+      "tests/Aspire.Hosting.RabbitMQ.Tests/RabbitMQFunctionalTests.cs",
+      "tests/Aspire.Hosting.Redis.Tests/RedisFunctionalTests.cs",
+      "tests/Aspire.Hosting.Tests/Dcp/DcpExecutorTests.cs",
+      "tests/Aspire.Hosting.Tests/EndpointReferenceTests.cs",
+      "tests/Aspire.Hosting.Tests/Utils/PersistentContainerTestHelpers.cs"
+    ],
+    "scenarioTag": "trigger_all",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "trigger_all",
+      "categories": [],
+      "mappedTestProjects": [],
+      "comment": "Hosting-core change (ApplicationModel/EndpointReference + Dcp). Pin Decision 6b: src/Aspire.Hosting/** stays in triggerAllPaths."
+    }
+  },
+  {
+    "prNumber": 17969,
+    "title": "Prepare VS Code extension release v1.14.0",
+    "url": "https://github.com/microsoft/aspire/pull/17969",
+    "changedFiles": [
+      "extension/CHANGELOG.md",
+      "extension/package.json"
+    ],
+    "scenarioTag": "selective:extension",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "extension"
+      ],
+      "mappedTestProjects": [],
+      "comment": "Pure extension release prep \u2014 only extension category."
+    }
+  },
+  {
+    "prNumber": 17848,
+    "title": "Add Bun debugging support",
+    "url": "https://github.com/microsoft/aspire/pull/17848",
+    "changedFiles": [
+      "extension/loc/xlf/aspire-vscode.xlf",
+      "extension/package.nls.json",
+      "extension/src/capabilities.ts",
+      "extension/src/dcp/types.ts",
+      "extension/src/debugger/debuggerExtensions.ts",
+      "extension/src/debugger/languages/bun.ts",
+      "extension/src/debugger/languages/javascriptRuntime.ts",
+      "extension/src/debugger/languages/node.ts",
+      "extension/src/loc/strings.ts",
+      "extension/src/test/bunDebugger.test.ts",
+      "extension/src/test/javascriptRuntime.test.ts",
+      "extension/src/test/nodeDebugger.test.ts",
+      "src/Aspire.Hosting.JavaScript/JavaScriptHostingExtensions.cs",
+      "src/Aspire.Hosting.JavaScript/JavaScriptLaunchConfiguration.cs",
+      "src/Aspire.Hosting.JavaScript/NodeLaunchConfiguration.cs",
+      "tests/Aspire.Hosting.JavaScript.Tests/AddBunAppTests.cs",
+      "tests/Aspire.Hosting.JavaScript.Tests/AddNodeAppTests.cs"
+    ],
+    "scenarioTag": "selective:extension+integrations",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "extension",
+        "integrations",
+        "polyglot"
+      ],
+      "mappedTestProjects": [],
+      "comment": "Bun debugging \u2014 extension + hosting source files."
+    }
+  },
+  {
+    "prNumber": 17486,
+    "title": "test(cli): quarantine ResourceCommand_FailsWhenInteractionServiceIsRequired (#17485)",
+    "url": "https://github.com/microsoft/aspire/pull/17486",
+    "changedFiles": [
+      "tests/Aspire.Cli.EndToEnd.Tests/ResourceCommandTests.cs"
+    ],
+    "scenarioTag": "selective:cli_e2e",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "cli_e2e"
+      ],
+      "mappedTestProjects": [],
+      "comment": "Quarantine a CLI E2E test; only cli_e2e expected."
+    }
+  },
+  {
+    "prNumber": 17948,
+    "title": "Work around main polyglot channel collision",
+    "url": "https://github.com/microsoft/aspire/pull/17948",
+    "changedFiles": [
+      ".github/workflows/build-cli-native-archives.yml",
+      ".github/workflows/polyglot-validation.yml",
+      ".github/workflows/polyglot-validation/setup-local-cli.sh"
+    ],
+    "scenarioTag": "selective:polyglot",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "polyglot"
+      ],
+      "mappedTestProjects": [],
+      "comment": "Polyglot channel-collision workaround in polyglot-validation.yml (canonical polyglot fixture)."
+    }
+  },
+  {
+    "prNumber": 17914,
+    "title": "Add Keycloak persistent lifetime coverage",
+    "url": "https://github.com/microsoft/aspire/pull/17914",
+    "changedFiles": [
+      "playground/keycloak/Keycloak.AppHost/Properties/launchSettings.json",
+      "tests/Aspire.Hosting.Keycloak.Tests/KeycloakFunctionalTests.cs"
+    ],
+    "scenarioTag": "selective:integrations",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "integrations"
+      ],
+      "mappedTestProjects": [
+        "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"
+      ],
+      "comment": "Keycloak persistent-lifetime coverage; integrations only."
+    }
+  },
+  {
+    "prNumber": 17404,
+    "title": "Fix proxyless container endpoint tests",
+    "url": "https://github.com/microsoft/aspire/pull/17404",
+    "changedFiles": [
+      "tests/Aspire.Hosting.Tests/DistributedApplicationTests.cs"
+    ],
+    "scenarioTag": "selective:integrations",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "integrations"
+      ],
+      "mappedTestProjects": [],
+      "comment": "Fix proxyless container endpoint test in Aspire.Hosting.Tests; integrations only."
+    }
+  },
+  {
+    "prNumber": 17881,
+    "title": "Improve parameter display in VS Code extension",
+    "url": "https://github.com/microsoft/aspire/pull/17881",
+    "changedFiles": [
+      "extension/loc/xlf/aspire-vscode.xlf",
+      "extension/package.nls.json",
+      "extension/src/editor/AspireCodeLensProvider.ts",
+      "extension/src/editor/resourceConstants.ts",
+      "extension/src/loc/strings.ts",
+      "extension/src/test/appHostTreeView.test.ts",
+      "extension/src/test/aspireCodeLensProvider.test.ts",
+      "extension/src/test/codeLens.test.ts",
+      "extension/src/utils/resourceDisplay.ts",
+      "extension/src/views/AppHostDataRepository.ts",
+      "extension/src/views/AspireAppHostTreeProvider.ts",
+      "src/Aspire.Cli/Backchannel/ResourceSnapshotMapper.cs",
+      "src/Shared/Model/Serialization/ResourceJson.cs",
+      "tests/Aspire.Cli.Tests/Backchannel/ResourceSnapshotMapperTests.cs"
+    ],
+    "scenarioTag": "selective:multi",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "cli_e2e",
+        "extension",
+        "integrations"
+      ],
+      "mappedTestProjects": [],
+      "comment": "Parameter display in VS Code: cli_e2e + extension + integrations."
+    }
+  },
+  {
+    "prNumber": 17698,
+    "title": "Display resource commands in VS Code extension tree view",
+    "url": "https://github.com/microsoft/aspire/pull/17698",
+    "changedFiles": [
+      ".github/workflows/extension-e2e-tests.yml",
+      "extension/CHANGELOG.md",
+      "extension/loc/xlf/aspire-vscode.xlf",
+      "extension/package.json",
+      "extension/package.nls.json",
+      "extension/scripts/run-e2e.js",
+      "extension/src/commands/do.ts",
+      "extension/src/commands/openSettings.ts",
+      "extension/src/debugger/languages/cli.ts",
+      "extension/src/editor/AspireCodeLensProvider.ts",
+      "extension/src/extension.ts",
+      "extension/src/loc/strings.ts",
+      "extension/src/test-e2e/appHostTree.e2e.test.ts",
+      "extension/src/test-e2e/debugDashboard.e2e.test.ts",
+      "extension/src/test-e2e/helpers/assertions.ts",
+      "extension/src/test-e2e/helpers/fixtures.ts",
+      "extension/src/test-e2e/helpers/process.ts",
+      "extension/src/test-e2e/helpers/vscode.ts",
+      "extension/src/test-e2e/packageSurface.e2e.test.ts",
+      "extension/src/test-e2e/treeActions.e2e.test.ts",
+      "extension/src/test-e2e/zeroToRunning.e2e.test.ts",
+      "extension/src/test/appHostDataRepository.test.ts",
+      "extension/src/test/appHostTreeView.test.ts",
+      "extension/src/test/aspireCodeLensProvider.test.ts",
+      "extension/src/test/aspireTerminalProvider.test.ts",
+      "extension/src/test/cliSpawn.test.ts",
+      "extension/src/test/configInfoProvider.test.ts",
+      "extension/src/test/e2eLaunchProfile.test.ts",
+      "extension/src/test/packageManifest.test.ts",
+      "extension/src/types/configInfo.ts",
+      "extension/src/types/extensionApi.ts",
+      "extension/src/utils/AspireTerminalProvider.ts",
+      "extension/src/utils/configInfoProvider.ts",
+      "extension/src/views/AppHostDataRepository.ts",
+      "extension/src/views/AspireAppHostTreeProvider.ts",
+      "src/Aspire.Cli/Backchannel/ResourceSnapshotMapper.cs",
+      "src/Aspire.Cli/Commands/DescribeCommand.cs",
+      "src/Aspire.Cli/Utils/ExtensionHelper.cs",
+      "src/Shared/Model/Serialization/ResourceJson.cs",
+      "tests/Aspire.Cli.Tests/Backchannel/ResourceSnapshotMapperTests.cs"
+    ],
+    "scenarioTag": "selective:multi",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "cli_e2e",
+        "extension",
+        "integrations"
+      ],
+      "mappedTestProjects": [],
+      "comment": "Display resource commands in extension tree view; large multi-area (40 files)."
+    }
+  },
+  {
+    "prNumber": 17772,
+    "title": "Add VS Code extension E2E test architecture",
+    "url": "https://github.com/microsoft/aspire/pull/17772",
+    "changedFiles": [
+      ".agents/skills/cli-e2e-testing/SKILL.md",
+      ".agents/skills/vscode-extension/SKILL.md",
+      ".github/agents/agentic-workflows.agent.md",
+      ".github/workflows/extension-changelog.md",
+      ".github/workflows/extension-e2e-tests.yml",
+      ".github/workflows/milestone-changelog.md",
+      ".github/workflows/release-notes-generate.md",
+      ".github/workflows/tests.yml",
+      ".gitignore",
+      "AGENTS.md",
+      "extension/.mocharc.e2e.js",
+      "extension/.vscodeignore",
+      "extension/CONTRIBUTING.md",
+      "extension/loc/xlf/aspire-vscode.xlf",
+      "extension/package.json",
+      "extension/schemas/aspire-config.schema.json",
+      "extension/schemas/aspire-global-settings.schema.json",
+      "extension/schemas/aspire-settings.schema.json",
+      "extension/scripts/e2e-mocha-reporter.cjs",
+      "extension/scripts/generate-schema.js",
+      "extension/scripts/run-e2e.js",
+      "extension/scripts/validate-lockfile-registry.cjs",
+      "extension/src/AspireExtensionContext.ts",
+      "extension/src/commands/openSettings.ts",
+      "extension/src/debugger/AspireDebugSession.ts",
+      "extension/src/debugger/debuggerExtensions.ts",
+      "extension/src/extension.ts",
+      "extension/src/loc/strings.ts",
+      "extension/src/server/AspireRpcServer.ts",
+      "extension/src/server/interactionService.ts",
+      "extension/src/services/AppHostLaunchService.ts",
+      "extension/src/test-e2e/appHostTree.e2e.test.ts",
+      "extension/src/test-e2e/commandPalette.e2e.test.ts",
+      "extension/src/test-e2e/debugDashboard.e2e.test.ts",
+      "extension/src/test-e2e/discoveryConfiguration.e2e.test.ts",
+      "extension/src/test-e2e/edgeCases.e2e.test.ts",
+      "extension/src/test-e2e/helpers/assertions.ts",
+      "extension/src/test-e2e/helpers/extester.ts",
+      "extension/src/test-e2e/helpers/fixtures.ts",
+      "extension/src/test-e2e/helpers/paths.ts",
+      "extension/src/test-e2e/helpers/process.ts",
+      "extension/src/test-e2e/helpers/vscode.ts",
+      "extension/src/test-e2e/packageSurface.e2e.test.ts",
+      "extension/src/test-e2e/settingsFiles.e2e.test.ts",
+      "extension/src/test-e2e/treeActions.e2e.test.ts",
+      "extension/src/test-e2e/zeroToRunning.e2e.test.ts",
+      "extension/src/test/appHostDataRepository.test.ts",
+      "extension/src/test/appHostDiscovery.test.ts",
+      "extension/src/test/appHostLaunchService.test.ts",
+      "extension/src/test/appHostTreeView.test.ts",
+      "extension/src/test/aspireDebugSession.test.ts",
+      "extension/src/test/aspireTerminalProvider.test.ts",
+      "extension/src/test/cliPath.test.ts",
+      "extension/src/test/configInfoProvider.test.ts",
+      "extension/src/test/e2eLaunchProfile.test.ts",
+      "extension/src/test/e2eMochaReporter.test.ts",
+      "extension/src/test/extensionApi.test.ts",
+      "extension/src/test/rpc/e2eServerTests.test.ts",
+      "extension/src/test/rpc/interactionServiceTests.test.ts",
+      "extension/src/types/extensionApi.ts",
+      "extension/src/utils/AspireTerminalProvider.ts",
+      "extension/src/utils/appHostDiscovery.ts",
+      "extension/src/utils/cliPath.ts",
+      "extension/src/utils/configInfoProvider.ts",
+      "extension/src/utils/environment.ts",
+      "extension/src/utils/telemetry.ts",
+      "extension/src/views/AppHostDataRepository.ts",
+      "extension/src/views/AspireAppHostTreeProvider.ts",
+      "extension/test-e2e/settings.json",
+      "extension/tsconfig.e2e.json",
+      "extension/yarn.lock",
+      "src/Aspire.Cli/Commands/BaseCommand.cs",
+      "src/Aspire.Cli/Interaction/ExtensionInteractionService.cs",
+      "src/Aspire.Cli/Program.cs",
+      "src/Aspire.Cli/Utils/ProcessCaptureRunner.cs",
+      "tests/Aspire.Cli.Tests/Acquisition/PeerInstallProbeTests.cs",
+      "tests/Aspire.Cli.Tests/Commands/RunCommandTests.cs",
+      "tests/Aspire.Cli.Tests/Interaction/ExtensionInteractionServiceTests.cs",
+      "tests/Aspire.Cli.Tests/Projects/ExtensionGuestLauncherTests.cs",
+      "tests/Aspire.Cli.Tests/Telemetry/ProfilingTelemetryTests.cs",
+      "tests/Aspire.Cli.Tests/TestServices/TestExtensionInteractionService.cs"
+    ],
+    "scenarioTag": "selective:multi",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "cli_e2e",
+        "extension",
+        "integrations"
+      ],
+      "mappedTestProjects": [],
+      "comment": "VS Code extension E2E test architecture (81 files); cli_e2e + extension + integrations."
+    }
+  },
+  {
+    "prNumber": 16447,
+    "title": "Fix interactive C# aspire init config collision",
+    "url": "https://github.com/microsoft/aspire/pull/16447",
+    "changedFiles": [
+      "src/Aspire.Cli/Commands/InitCommand.cs",
+      "src/Aspire.Cli/Projects/ILanguageService.cs",
+      "src/Aspire.Cli/Projects/LanguageService.cs",
+      "src/Aspire.ProjectTemplates/templates/aspire-apphost-singlefile/aspire.config.json",
+      "tests/Aspire.Cli.EndToEnd.Tests/CSharpInitTests.cs",
+      "tests/Aspire.Cli.Tests/Commands/InitCommandTests.cs",
+      "tests/Aspire.Cli.Tests/TestServices/TestLanguageService.cs"
+    ],
+    "scenarioTag": "high-cost:templates+cli_e2e",
+    "previouslyFallback": false,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "cli_e2e",
+        "integrations"
+      ],
+      "mappedTestProjects": [
+        "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+      ],
+      "comment": "Templates mapping coverage (out-of-window PR). Pins the Aspire.Templates.Tests.csproj mapping firing from src/Aspire.ProjectTemplates/templates/**, and cli_e2e firing from src/Aspire.Cli/**."
+    }
+  },
+  {
+    "prNumber": 17567,
+    "title": "infra: publish Aspire CLI native AOT symbols (Win + Linux + macOS) to MSDL",
+    "url": "https://github.com/microsoft/aspire/pull/17567",
+    "changedFiles": [
+      "docs/ci/cli-native-symbols.md",
+      "eng/Publishing.props",
+      "eng/clipack/Aspire.Cli.NativeSymbols.proj",
+      "eng/clipack/Common.projitems",
+      "eng/pipelines/azure-pipelines-unofficial.yml",
+      "eng/pipelines/azure-pipelines.yml",
+      "eng/pipelines/templates/build_sign_native.yml",
+      "eng/pipelines/templates/download_native_symbols.yml",
+      "eng/scripts/validate-cli-symbols.ps1"
+    ],
+    "scenarioTag": "high-cost:cli-native-build",
+    "previouslyFallback": true,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "cli_e2e"
+      ],
+      "mappedTestProjects": [
+        "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+      ],
+      "comment": "Publish CLI native AOT symbols (eng/Publishing.props + validate-cli-symbols.ps1). Exercises cli_e2e category + Infrastructure.Tests mapping; canary for the 5-RID native AOT build chain."
+    }
+  },
+  {
+    "prNumber": 17517,
+    "title": "fix(acquisition): use GitHub releases for stable CLI versions",
+    "url": "https://github.com/microsoft/aspire/pull/17517",
+    "changedFiles": [
+      "eng/scripts/get-aspire-cli.ps1",
+      "eng/scripts/get-aspire-cli.sh",
+      "tests/Aspire.Acquisition.Tests/Scripts/ReleaseScriptFunctionTests.cs",
+      "tests/Aspire.Acquisition.Tests/Scripts/ReleaseScriptPSFunctionTests.cs"
+    ],
+    "scenarioTag": "regression-canary:cli_e2e",
+    "previouslyFallback": true,
+    "expected": {
+      "outcome": "selective",
+      "categories": [],
+      "mappedTestProjects": [
+        "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+      ],
+      "comment": "fix(acquisition): GitHub releases for stable CLI versions. v1 RunAll because get-aspire-cli.{ps1,sh} were unmatched; now maps \u2192 Acquisition.Tests + self-mapping covers tests/Aspire.Acquisition.Tests/**."
+    }
+  },
+  {
+    "prNumber": 17545,
+    "title": "Update Foundry hosted agent builder APIs",
+    "url": "https://github.com/microsoft/aspire/pull/17545",
+    "changedFiles": [
+      "playground/FoundryAgentEnterprise/FoundryAgentEnterprise.AppHost/AppHost.cs",
+      "playground/FoundryAgents/FoundryAgents.AppHost/AppHost.cs",
+      "src/Aspire.Hosting.Foundry/FoundryExtensions.cs",
+      "src/Aspire.Hosting.Foundry/HostedAgent/HostedAgentBuilderExtension.cs",
+      "src/Aspire.Hosting.Foundry/HostedAgent/HostedAgentOptions.cs",
+      "src/Aspire.Hosting.Foundry/Project/ProjectBuilderExtension.cs",
+      "src/Aspire.Hosting.Foundry/Project/ProjectResource.cs",
+      "src/Aspire.Hosting.Foundry/PromptAgent/PromptAgentBuilderExtensions.cs",
+      "src/Aspire.Hosting.Foundry/README.md",
+      "src/Aspire.Hosting.Foundry/api/Aspire.Hosting.Foundry.ats.txt",
+      "src/Aspire.Hosting.Foundry/api/Aspire.Hosting.Foundry.cs",
+      "tests/Aspire.Deployment.EndToEnd.Tests/FoundryHostedAgentDeploymentTests.cs",
+      "tests/Aspire.Hosting.Azure.Tests/AzureDeployerTests.cs",
+      "tests/Aspire.Hosting.Azure.Tests/FoundryExtensionsTests.cs",
+      "tests/Aspire.Hosting.Azure.Tests/Snapshots/FoundryExtensionsTests.AddProject_GeneratesEndpointFromParentFoundryApiEndpoint.verified.bicep",
+      "tests/Aspire.Hosting.Foundry.Tests/HostedAgentExtensionTests.cs",
+      "tests/Aspire.Hosting.Foundry.Tests/ProjectResourceTests.cs",
+      "tests/Aspire.Hosting.Foundry.Tests/PromptAgentTests.cs",
+      "tests/PolyglotAppHosts/Aspire.Hosting.Foundry/Go/apphost.go",
+      "tests/PolyglotAppHosts/Aspire.Hosting.Foundry/Java/AppHost.java",
+      "tests/PolyglotAppHosts/Aspire.Hosting.Foundry/Python/apphost.py",
+      "tests/PolyglotAppHosts/Aspire.Hosting.Foundry/TypeScript/apphost.mts"
+    ],
+    "scenarioTag": "regression-canary:polyglot+integrations",
+    "previouslyFallback": true,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "integrations",
+        "polyglot"
+      ],
+      "mappedTestProjects": [
+        "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"
+      ],
+      "comment": "Foundry hosted-agent APIs. v1 RunAll (PolyglotAppHosts/Foundry/*); fires polyglot via new triggerPath + integrations from src/Aspire.Hosting.Foundry."
+    }
+  },
+  {
+    "prNumber": 17777,
+    "title": "Default release npm contacts",
+    "url": "https://github.com/microsoft/aspire/pull/17777",
+    "changedFiles": [
+      "eng/pipelines/release-publish-nuget.yml",
+      "tests/Infrastructure.Tests/Pipelines/NpmCliPackageTests.cs",
+      "tests/Infrastructure.Tests/Pipelines/ReleasePublishNugetPipelineTests.cs"
+    ],
+    "scenarioTag": "regression-canary:Infrastructure",
+    "previouslyFallback": true,
+    "expected": {
+      "outcome": "selective",
+      "categories": [],
+      "mappedTestProjects": [
+        "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+      ],
+      "comment": "Default release npm contacts. v1 RunAll (Infrastructure.Tests/Pipelines/Npm*); now maps \u2192 Infrastructure.Tests."
+    }
+  },
+  {
+    "prNumber": 17297,
+    "title": "Add Aspire CLI npm package release integration",
+    "url": "https://github.com/microsoft/aspire/pull/17297",
+    "changedFiles": [
+      ".github/workflows/build-cli-native-archives.yml",
+      "docs/release-process.md",
+      "docs/specs/npm-cli-package.md",
+      "eng/Publishing.props",
+      "eng/Signing.props",
+      "eng/clipack/Common.projitems",
+      "eng/clipack/npm/aspire.js",
+      "eng/pipelines/azure-pipelines-unofficial.yml",
+      "eng/pipelines/azure-pipelines.yml",
+      "eng/pipelines/common-variables.yml",
+      "eng/pipelines/release-publish-nuget.yml",
+      "eng/pipelines/templates/BuildAndTest.yml",
+      "eng/pipelines/templates/build_sign_native.yml",
+      "eng/pipelines/templates/npm-cli-install-validation-steps.yml",
+      "eng/pipelines/templates/prepare-npm-cli-packages.yml",
+      "eng/scripts/pack-cli-npm-package.ps1",
+      "eng/scripts/stage-native-cli-tool-packages.ps1",
+      "eng/scripts/verify-cli-npm-package.ps1",
+      "src/Aspire.Cli/Commands/UpdateCommand.cs",
+      "src/Aspire.Cli/Resources/UpdateCommandStrings.Designer.cs",
+      "src/Aspire.Cli/Resources/UpdateCommandStrings.resx",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.cs.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.de.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.es.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.fr.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.it.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.ja.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.ko.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.pl.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.pt-BR.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.ru.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.tr.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.zh-Hans.xlf",
+      "src/Aspire.Cli/Resources/xlf/UpdateCommandStrings.zh-Hant.xlf",
+      "src/Aspire.Cli/Utils/CliUpdateNotifier.cs",
+      "src/Aspire.Cli/Utils/NpmInstallDetection.cs",
+      "tests/Aspire.Cli.Tests/Commands/UpdateCommandTests.cs",
+      "tests/Aspire.Cli.Tests/Npm/AspireJsLauncherTests.cs",
+      "tests/Aspire.Cli.Tests/Utils/CliUpdateNotificationServiceTests.cs",
+      "tests/Aspire.Cli.Tests/Utils/NpmInstallDetectionTests.cs",
+      "tests/Infrastructure.Tests/Pipelines/NpmCliPackageTests.cs",
+      "tests/Infrastructure.Tests/Pipelines/ReleasePublishNugetPipelineTests.cs",
+      "tests/Infrastructure.Tests/PowerShellScripts/StageNativeCliToolPackagesTests.cs"
+    ],
+    "scenarioTag": "regression-canary:Infrastructure",
+    "previouslyFallback": true,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "cli_e2e",
+        "integrations"
+      ],
+      "mappedTestProjects": [
+        "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+      ],
+      "comment": "Aspire CLI npm package release. v1 RunAll (Publishing/Signing props + scripts); now maps all \u2192 Infrastructure.Tests."
+    }
+  },
+  {
+    "prNumber": 17405,
+    "title": "Switch Aspire Homebrew cask to upstream autobump + harden the validation gauntlet",
+    "url": "https://github.com/microsoft/aspire/pull/17405",
+    "changedFiles": [
+      ".github/workflows/prepare-installer-artifacts.yml",
+      "docs/release-process.md",
+      "eng/homebrew/README.md",
+      "eng/homebrew/aspire.rb.template",
+      "eng/homebrew/dogfood.sh",
+      "eng/homebrew/generate-cask.sh",
+      "eng/homebrew/prepare-cask-artifact.sh",
+      "eng/homebrew/validate-cask-artifact.sh",
+      "eng/pipelines/azure-pipelines-unofficial.yml",
+      "eng/pipelines/azure-pipelines.yml",
+      "eng/pipelines/common-variables.yml",
+      "eng/pipelines/release-publish-nuget.yml",
+      "eng/pipelines/templates/prepare-homebrew-cask.yml",
+      "eng/pipelines/templates/publish-homebrew.yml",
+      "tests/Aspire.Acquisition.Tests/Scripts/PRScriptInstallerModeTests.cs"
+    ],
+    "scenarioTag": "regression-canary:Acquisition",
+    "previouslyFallback": true,
+    "expected": {
+      "outcome": "selective",
+      "categories": [],
+      "mappedTestProjects": [
+        "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+      ],
+      "comment": "Homebrew cask upstream autobump. v1 RunAll (eng/homebrew/**); maps \u2192 Acquisition.Tests including the new tests/Aspire.Acquisition.Tests/** self-mapping (Decision 1)."
+    }
+  },
+  {
+    "prNumber": 17323,
+    "title": "Migrate Aspire skills to external bundle",
+    "url": "https://github.com/microsoft/aspire/pull/17323",
+    "changedFiles": [
+      ".agents/skills/aspire-deployment/SKILL.md",
+      ".agents/skills/aspire-deployment/references/aws.md",
+      ".agents/skills/aspire-deployment/references/azure.md",
+      ".agents/skills/aspire-deployment/references/cicd.md",
+      ".agents/skills/aspire-deployment/references/docker-compose.md",
+      ".agents/skills/aspire-deployment/references/github-actions-azure-csharp.yml",
+      ".agents/skills/aspire-deployment/references/github-actions-azure-typescript.yml",
+      ".agents/skills/aspire-deployment/references/javascript.md",
+      ".agents/skills/aspire-deployment/references/kubernetes.md",
+      ".agents/skills/aspire-deployment/references/preflight.md",
+      ".agents/skills/aspire/SKILL.md",
+      ".agents/skills/aspire/evals/evals.json",
+      ".agents/skills/aspire/references/agent-workflows.md",
+      ".agents/skills/aspire/references/app-commands.md",
+      ".agents/skills/aspire/references/csharp-apphosts.md",
+      ".agents/skills/aspire/references/deployment.md",
+      ".agents/skills/aspire/references/monitoring.md",
+      ".agents/skills/aspire/references/playwright-handoff.md",
+      ".agents/skills/aspire/references/resource-management.md",
+      ".agents/skills/aspire/references/tools-and-configuration.md",
+      ".agents/skills/aspire/references/typescript-apphosts.md",
+      ".agents/skills/aspireify/SKILL.md",
+      ".agents/skills/aspireify/references/apphost-wiring.md",
+      ".agents/skills/aspireify/references/docker-compose.md",
+      ".agents/skills/aspireify/references/full-solution-apphosts.md",
+      ".agents/skills/aspireify/references/javascript-apps.md",
+      ".agents/skills/aspireify/references/opentelemetry.md",
+      "eng/scripts/cli-starter-validation.ps1",
+      "eng/scripts/verify-cli-archive.ps1",
+      "src/Aspire.Cli/Agents/AspireSkills/AspireSkillsBundle.cs",
+      "src/Aspire.Cli/Agents/AspireSkills/AspireSkillsInstallResult.cs",
+      "src/Aspire.Cli/Agents/AspireSkills/AspireSkillsInstaller.cs",
+      "src/Aspire.Cli/Agents/AspireSkills/GitHubArtifactAttestationVerifier.cs",
+      "src/Aspire.Cli/Agents/AspireSkills/IAspireSkillsInstaller.cs",
+      "src/Aspire.Cli/Agents/AspireSkills/SkillBundleManifest.cs",
+      "src/Aspire.Cli/Agents/CommonAgentApplicators.cs",
+      "src/Aspire.Cli/Agents/EmbeddedSkillResourceLoader.cs",
+      "src/Aspire.Cli/Agents/SkillAssetFile.cs",
+      "src/Aspire.Cli/Agents/SkillDefinition.cs",
+      "src/Aspire.Cli/Aspire.Cli.csproj",
+      "src/Aspire.Cli/Commands/AgentInitCommand.cs",
+      "src/Aspire.Cli/Commands/McpInitCommand.cs",
+      "src/Aspire.Cli/Program.cs",
+      "src/Aspire.Cli/Resources/AgentCommandStrings.Designer.cs",
+      "src/Aspire.Cli/Resources/AgentCommandStrings.resx",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.cs.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.de.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.es.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.fr.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.it.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.ja.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.ko.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.pl.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.pt-BR.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.ru.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.tr.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.zh-Hans.xlf",
+      "src/Aspire.Cli/Resources/xlf/AgentCommandStrings.zh-Hant.xlf",
+      "tests/Aspire.Cli.EndToEnd.Tests/AgentCommandTests.cs",
+      "tests/Aspire.Cli.EndToEnd.Tests/LogLevelTests.cs",
+      "tests/Aspire.Cli.EndToEnd.Tests/NewWithAgentInitTests.cs",
+      "tests/Aspire.Cli.EndToEnd.Tests/PlaywrightCliInstallTests.cs",
+      "tests/Aspire.Cli.Tests/Acquisition/PeerInstallProbeTests.cs",
+      "tests/Aspire.Cli.Tests/Agents/AspireSkillsBundleTests.cs",
+      "tests/Aspire.Cli.Tests/Agents/AspireSkillsInstallerTests.cs",
+      "tests/Aspire.Cli.Tests/Agents/CommonAgentApplicatorsTests.cs",
+      "tests/Aspire.Cli.Tests/Commands/AgentInitCommandTests.cs",
+      "tests/Aspire.Cli.Tests/TestServices/FakePlaywrightServices.cs",
+      "tests/Aspire.Cli.Tests/Utils/CliTestHelper.cs"
+    ],
+    "scenarioTag": "regression-canary:cli_e2e+integrations",
+    "previouslyFallback": true,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "cli_e2e",
+        "integrations"
+      ],
+      "mappedTestProjects": [
+        "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+      ],
+      "comment": "Aspire skills external bundle. v1 RunAll (.agents/** + cli-starter-validation.ps1); now ignorePaths both."
+    }
+  },
+  {
+    "prNumber": 17413,
+    "title": "Revert parser-backed AppHost resource parsing",
+    "url": "https://github.com/microsoft/aspire/pull/17413",
+    "changedFiles": [
+      ".vscode/launch.json",
+      ".vscode/tasks.json",
+      "extension/.npmrc",
+      "extension/.vscode/launch.json",
+      "extension/.vscode/tasks.json",
+      "extension/package-lock.json",
+      "extension/package.json",
+      "extension/src/editor/AppHostFilePresenceWatcher.ts",
+      "extension/src/editor/AspireCodeLensProvider.ts",
+      "extension/src/editor/AspireGutterDecorationProvider.ts",
+      "extension/src/editor/parsers/AppHostResourceParser.ts",
+      "extension/src/editor/parsers/csharpAppHostParser.ts",
+      "extension/src/editor/parsers/jsTsAppHostParser.ts",
+      "extension/src/editor/parsers/parserUtils.ts",
+      "extension/src/test/appHostFilePresenceWatcher.test.ts",
+      "extension/src/test/aspireCodeLensProvider.test.ts",
+      "extension/src/test/parsers.test.ts",
+      "extension/src/test/vscodeWorkspaceConfig.test.ts",
+      "extension/src/types/web-tree-sitter.d.ts",
+      "extension/webpack.config.js",
+      "extension/yarn.lock"
+    ],
+    "scenarioTag": "regression-canary:integrations",
+    "previouslyFallback": true,
+    "expected": {
+      "outcome": "selective",
+      "categories": [
+        "extension"
+      ],
+      "mappedTestProjects": [],
+      "comment": "Revert parser-backed AppHost parsing. v1 RunAll (.vscode/{launch,tasks}.json); now ignorePaths .vscode/**."
+    }
+  },
+  {
+    "prNumber": 16659,
+    "title": "Remove Aspire MCP repo configuration",
+    "url": "https://github.com/microsoft/aspire/pull/16659",
+    "changedFiles": [
+      ".mcp.json"
+    ],
+    "scenarioTag": "skip",
+    "previouslyFallback": true,
+    "expected": {
+      "outcome": "skip",
+      "categories": [],
+      "mappedTestProjects": [],
+      "comment": "Remove Aspire MCP repo config. v1 RunAll (.mcp.json); now ignorePaths it \u2192 outcome is skip."
+    }
+  }
+]

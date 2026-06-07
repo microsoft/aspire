@@ -40,6 +40,13 @@
 
   <ItemGroup>
     <Content Include="CITimeline\TestData\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The output folder already contains a "TestSelector" Mach-O binary (Infrastructure.Tests
+         references TestSelector.csproj, whose apphost lands as plain "TestSelector"), so we
+         can't place a TestSelector/ folder next to it. Land the fixture under TestSelectorData/
+         instead via Link, and AuditFixtureTests looks there. -->
+    <Content Include="TestSelector\TestData\*.json"
+             CopyToOutputDirectory="PreserveNewest"
+             Link="TestSelectorData\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

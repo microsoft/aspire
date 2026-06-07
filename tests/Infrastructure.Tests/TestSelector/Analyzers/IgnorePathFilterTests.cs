@@ -16,7 +16,12 @@ public class IgnorePathFilterTests
     [InlineData("docs/**", "docs/api/reference.md", true)]
     [InlineData("docs/**", "src/docs/file.cs", false)]
     [InlineData("*.md", "README.md", true)]
-    [InlineData("*.md", "docs/guide.md", false)]
+    // Bare-filename rule: patterns without a path separator (including "*.md")
+    // are treated as "**/<pattern>" by PatternNormalization, so they ignore the
+    // file at any depth — matching user intent that *.md is shorthand for
+    // "any markdown file anywhere".
+    [InlineData("*.md", "docs/guide.md", true)]
+    [InlineData("*.md", "src/nested/deep/README.md", true)]
     public void ShouldIgnore_WithGlobPattern_ReturnsExpected(string pattern, string filePath, bool expected)
     {
         var filter = new IgnorePathFilter([pattern]);

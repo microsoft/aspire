@@ -20,7 +20,7 @@ public sealed class CriticalFileDetector
         _triggerMatcher = new Matcher();
         foreach (var pattern in _triggerAllPatterns)
         {
-            _triggerMatcher.AddInclude(pattern);
+            _triggerMatcher.AddInclude(PatternNormalization.NormalizeGlob(pattern));
         }
     }
 
