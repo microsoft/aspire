@@ -152,7 +152,7 @@ internal sealed class TelemetryGraphResources
             {
                 Path = ResourceGraphMapper.GetIconPathData(resourceIcon),
                 Color = ColorGenerator.Instance.GetColorVariableByKey(name),
-                Tooltip = resourceKey.GetCompositeName()
+                Tooltip = telemetryResourceType
             },
             StateIcon = null,
             ReferencedNames = referencedNames.Distinct(StringComparers.ResourceName).Order(StringComparers.ResourceName).ToImmutableArray(),

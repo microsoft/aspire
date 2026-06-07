@@ -190,6 +190,7 @@ public class ResourceGraphMapperTests
                 Assert.Equal("api-def456", r.Name);
                 Assert.Equal("Telemetry", r.ResourceType);
                 Assert.Equal("api", r.DisplayName);
+                Assert.Equal("Telemetry", r.ResourceIcon.Tooltip);
                 Assert.Null(r.StateIcon);
                 Assert.Null(r.EndpointUrl);
                 Assert.Null(r.EndpointText);
@@ -200,6 +201,7 @@ public class ResourceGraphMapperTests
                 Assert.Equal("frontend-abc123", r.Name);
                 Assert.Equal("Telemetry", r.ResourceType);
                 Assert.Equal("frontend", r.DisplayName);
+                Assert.Equal("Telemetry", r.ResourceIcon.Tooltip);
                 Assert.Null(r.StateIcon);
                 Assert.Null(r.EndpointUrl);
                 Assert.Null(r.EndpointText);
