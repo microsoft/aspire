@@ -12,7 +12,7 @@ namespace Aspire.Seq;
 internal sealed class SeqHealthCheck(string seqUri) : IHealthCheck
 {
     private readonly HttpClient _client = new(new SocketsHttpHandler { ActivityHeadersPropagator = null }) { BaseAddress = new Uri(seqUri) };
-    private readonly Uri _healthUri = new(new Uri(seqUri), "/health");
+    private readonly string _displayHealthUri = new Uri(new Uri(seqUri), "/health").GetComponents(UriComponents.HttpRequestUrl, UriFormat.Unescaped);
 
     /// <summary>
     /// Checks the health of a Seq server by calling its <a href="https://docs.datalust.co/docs/using-the-http-api#checking-health">health</a> endpoint.
@@ -26,23 +26,23 @@ internal sealed class SeqHealthCheck(string seqUri) : IHealthCheck
 
             return response.IsSuccessStatusCode
                 ? HealthCheckResult.Healthy()
-                : HealthCheckResult.Unhealthy($"Request to {_healthUri} returned {(int)response.StatusCode} {response.StatusCode}");
+                : HealthCheckResult.Unhealthy($"Request to {_displayHealthUri} returned {(int)response.StatusCode} {response.StatusCode}");
         }
         catch (TaskCanceledException tce) when (!cancellationToken.IsCancellationRequested)
         {
-            return HealthCheckResult.Unhealthy($"Request to {_healthUri} timed out", tce);
+            return HealthCheckResult.Unhealthy($"Request to {_displayHealthUri} timed out", tce);
         }
         catch (TaskCanceledException tce) when (cancellationToken.IsCancellationRequested)
         {
-            return HealthCheckResult.Unhealthy($"Health check for {_healthUri} was canceled", tce);
+            return HealthCheckResult.Unhealthy($"Health check for {_displayHealthUri} was canceled", tce);
         }
         catch (HttpRequestException hre)
         {
-            return HealthCheckResult.Unhealthy($"Failed to connect to {_healthUri}", hre);
+            return HealthCheckResult.Unhealthy($"Failed to connect to {_displayHealthUri}", hre);
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy($"Health check failed for {_healthUri}", ex);
+            return HealthCheckResult.Unhealthy($"Health check failed for {_displayHealthUri}", ex);
         }
     }
 }
