@@ -43,6 +43,24 @@ public sealed class ValidateNpmPackageSignaturesTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
+    public async Task FailsWhenShippingDirectoryIsAFile()
+    {
+        // Pointing -ShippingDir at a file used to slip past Test-Path and fail
+        // later inside Get-ChildItem with a less actionable message. The script
+        // now rejects non-container paths up front (Test-Path -PathType
+        // Container) and reports the same "not found (or not a directory)"
+        // error so callers get one clear failure mode.
+        var filePath = Path.Combine(_tempDir.Path, "not-a-directory.txt");
+        File.WriteAllText(filePath, "hi");
+
+        var result = await RunScript(filePath);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Shipping packages directory not found", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
     public async Task FailsWhenNoNpmTarballsFound()
     {
         var shipping = CreateShipping();

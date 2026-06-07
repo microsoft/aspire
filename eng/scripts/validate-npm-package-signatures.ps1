@@ -23,8 +23,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if (!(Test-Path $ShippingDir)) {
-  Write-Error "Shipping packages directory not found: $ShippingDir"
+if (!(Test-Path -LiteralPath $ShippingDir -PathType Container)) {
+  Write-Error "Shipping packages directory not found (or not a directory): $ShippingDir"
   exit 1
 }
 

@@ -11,10 +11,11 @@
     slice. For 7 native_archives_* artifacts that adds ~100 s wasted on the
     Assemble critical path.
 
-    This script fetches each artifact's zip ONCE over its container `downloadUrl`,
-    opens the zip in-memory, and writes only the entries matching the archive /
-    nupkg / npm-tgz shape to the configured target directories. Downloads
-    run in parallel via Start-ThreadJob.
+    This script fetches each artifact's zip ONCE over its container `downloadUrl`
+    to a temp file, opens it with [System.IO.Compression.ZipFile]::OpenRead, and
+    extracts only the entries matching the archive / nupkg / npm-tgz shape to
+    the configured target directories. Downloads run in parallel via
+    Start-ThreadJob.
 
     Layout on disk after a successful run:
         <ArchivesTargetDir>/<artifactName>/<inner path>/aspire-cli-*.{zip,tar.gz}
@@ -304,12 +305,16 @@ function Invoke-ParallelDownloads {
 
     # The cmdlet shipped under the bare name `ThreadJob` in PS 7.0-7.3 and was
     # renamed to `Microsoft.PowerShell.ThreadJob` (as a bundled module) in PS
-    # 7.4+. Try the new name first, then the old name, then install on demand
-    # from PSGallery as a last resort. This lets the script run on any of the
-    # mixed-vintage Windows/Linux/macOS agent images AzDO can route us to —
-    # the previous unconditional `Import-Module ThreadJob -ErrorAction Stop`
-    # failed on 1es-ubuntu-2204 (PS 7.4) where the module ships under the new
-    # name only (build 2988632).
+    # 7.4+. Try the new name first, then the old name. Both names ship with
+    # PowerShell 7 on every AzDO image we run on, so missing both signals a
+    # broken / locked-down image rather than something a runtime PSGallery
+    # install would paper over — and on 1ES agents without internet egress the
+    # install would itself fail with a more confusing error. Fail fast with an
+    # actionable message instead.
+    #
+    # Context: the previous unconditional `Import-Module ThreadJob -ErrorAction
+    # Stop` failed on 1es-ubuntu-2204 (PS 7.4) where the module ships under the
+    # new name only (build 2988632).
     $threadJobLoaded = $false
     foreach ($candidate in @('Microsoft.PowerShell.ThreadJob', 'ThreadJob')) {
         if (Get-Module -ListAvailable -Name $candidate -ErrorAction SilentlyContinue) {
@@ -320,9 +325,7 @@ function Invoke-ParallelDownloads {
         }
     }
     if (-not $threadJobLoaded) {
-        Write-Host "Neither Microsoft.PowerShell.ThreadJob nor ThreadJob found on PSModulePath. Installing ThreadJob from PSGallery..."
-        Install-Module -Name ThreadJob -Scope CurrentUser -Force -AllowClobber -Repository PSGallery -ErrorAction Stop
-        Import-Module ThreadJob -ErrorAction Stop
+        throw "Neither 'Microsoft.PowerShell.ThreadJob' (PS 7.4+) nor 'ThreadJob' (PS 7.0-7.3) is available on PSModulePath. Both ship with PowerShell 7; if neither is present the agent image is missing a built-in module. PowerShell version: $($PSVersionTable.PSVersion). PSModulePath: $env:PSModulePath"
     }
 
     $startedAt = Get-Date
