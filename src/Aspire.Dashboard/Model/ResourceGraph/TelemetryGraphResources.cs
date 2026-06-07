@@ -146,7 +146,7 @@ internal sealed class TelemetryGraphResources
         {
             Name = name,
             ResourceType = telemetryResourceType,
-            DisplayName = name,
+            DisplayName = resourceKey.Name,
             Uid = name,
             ResourceIcon = new IconDto
             {

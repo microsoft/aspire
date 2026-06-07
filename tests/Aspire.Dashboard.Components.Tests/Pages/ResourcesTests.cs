@@ -557,6 +557,7 @@ public partial class ResourcesTests : DashboardTestContext
             {
                 Assert.Equal("api-def", r.Name);
                 Assert.Equal("Telemetry", r.ResourceType);
+                Assert.Equal("api", r.DisplayName);
                 Assert.Null(r.StateIcon);
                 Assert.Null(r.EndpointUrl);
                 Assert.Null(r.EndpointText);
@@ -566,6 +567,7 @@ public partial class ResourcesTests : DashboardTestContext
             {
                 Assert.Equal("frontend-abc", r.Name);
                 Assert.Equal("Telemetry", r.ResourceType);
+                Assert.Equal("frontend", r.DisplayName);
                 Assert.Null(r.StateIcon);
                 Assert.Null(r.EndpointUrl);
                 Assert.Null(r.EndpointText);
