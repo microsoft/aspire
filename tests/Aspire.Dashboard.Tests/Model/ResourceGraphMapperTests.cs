@@ -139,13 +139,19 @@ public class ResourceGraphMapperTests
     }
 
     [Fact]
-    public void TelemetryGraphResources_Create_MapsActiveTelemetryEdges()
+    public void TelemetryGraphResources_CreateResourceDtos_MapsActiveTelemetryEdges()
     {
         var frontend = ModelTestHelpers.CreateResource("frontend-abc123", displayName: "frontend", relationships: ImmutableArray<RelationshipViewModel>.Empty);
         var api = ModelTestHelpers.CreateResource("api-def456", displayName: "api", relationships: ImmutableArray<RelationshipViewModel>.Empty);
         var database = ModelTestHelpers.CreateResource("database-ghi789", displayName: "database", relationships: ImmutableArray<RelationshipViewModel>.Empty);
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            [frontend.Name] = frontend,
+            [api.Name] = api,
+            [database.Name] = database,
+        };
 
-        var graphResources = TelemetryGraphResources.Create(
+        var graphResources = TelemetryGraphResources.CreateResourceDtos(
             [frontend, api, database],
             [
                 new TelemetryGraphEdge(ResourceKey.Create("frontend", "frontend-abc123"), ResourceKey.Create("api", "api-def456")),
@@ -153,21 +159,36 @@ public class ResourceGraphMapperTests
                 new TelemetryGraphEdge(ResourceKey.Create("frontend", "frontend-abc123"), ResourceKey.Create("api", "api-def456")),
                 new TelemetryGraphEdge(ResourceKey.Create("api", "api-def456"), ResourceKey.Create("api", "api-def456")),
                 new TelemetryGraphEdge(ResourceKey.Create("frontend", "frontend-abc123"), new ResourceKey("missing", null))
-            ]);
+            ],
+            resources,
+            new TestStringLocalizer<Columns>(),
+            "Telemetry",
+            showHiddenResources: false,
+            _iconResolver);
 
-        Assert.Collection(graphResources.ReferencedNames.OrderBy(kvp => kvp.Key, StringComparers.ResourceName),
-            kvp =>
+        Assert.Collection(graphResources.OrderBy(r => r.Name, StringComparers.ResourceName),
+            r =>
             {
-                Assert.Equal("api-def456", kvp.Key);
-                Assert.Equal(["database-ghi789"], kvp.Value.Order(StringComparers.ResourceName));
+                Assert.Equal("api-def456", r.Name);
+                Assert.Equal(["database-ghi789"], r.ReferencedNames);
             },
-            kvp =>
+            r =>
             {
-                Assert.Equal("frontend-abc123", kvp.Key);
-                Assert.Equal(["api-def456"], kvp.Value.Order(StringComparers.ResourceName));
+                Assert.Equal("database-ghi789", r.Name);
+                Assert.Empty(r.ReferencedNames);
+            },
+            r =>
+            {
+                Assert.Equal("frontend-abc123", r.Name);
+                Assert.Equal(["api-def456", "missing"], r.ReferencedNames);
+            },
+            r =>
+            {
+                Assert.Equal("missing", r.Name);
+                Assert.Equal("Telemetry", r.ResourceType);
+                Assert.Equal("missing", r.DisplayName);
+                Assert.Null(r.StateIcon);
             });
-
-        Assert.Equal(["api-def456", "database-ghi789", "frontend-abc123"], graphResources.ResourceNames.Order(StringComparers.ResourceName));
     }
 
     [Fact]
