@@ -33,7 +33,7 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         var result = await healthCheckService.CheckHealthAsync(
             registration => registration.Name == healthCheckKey,
-            cts.Token);
+            cts.Token).DefaultTimeout();
 
         // Verify we got the unhealthy result for our health check
         Assert.Contains(healthCheckKey, result.Entries.Keys);
@@ -73,7 +73,7 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         var result = await healthCheckService.CheckHealthAsync(
             registration => registration.Name == healthCheckKey,
-            cts.Token);
+            cts.Token).DefaultTimeout();
 
         // Verify we got the unhealthy result for our health check
         Assert.Contains(healthCheckKey, result.Entries.Keys);

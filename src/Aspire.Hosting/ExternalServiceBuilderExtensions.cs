@@ -317,7 +317,7 @@ internal static class HttpHealthCheckHelpers
     // infrastructure cancels the same CancellationToken for both its own timeout and explicit
     // caller cancellation, so IsCancellationRequested is true in both cases. A truly reliable
     // distinction would require a separate internal timeout CTS, but the added complexity
-    // isn't warranted — both messages are user-friendly and actionable.
+    // isn't warranted; both messages are user-friendly and actionable.
     public static string GetFriendlyErrorMessage(Uri uri, Exception exception, CancellationToken cancellationToken)
     {
         var sanitizedUri = SanitizeUri(uri);
@@ -473,7 +473,7 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
 }
 
 /// <summary>
-/// HTTP health check that resolves its URI lazily and provides friendly error messages.
+/// HTTP health check that resolves its URI lazily.
 /// </summary>
 internal sealed class DeferredUriHealthCheck : IHealthCheck
 {
