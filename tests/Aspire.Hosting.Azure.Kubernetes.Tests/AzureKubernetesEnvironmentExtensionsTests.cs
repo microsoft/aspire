@@ -292,9 +292,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-        Assert.True(aks.Resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation));
-        var registryResource = Assert.IsAssignableFrom<IResource>(annotation.Registry);
-        Assert.Equal("aks-acr", registryResource.Name);
+        Assert.NotNull(aks.Resource.DefaultContainerRegistry);
+        Assert.Equal("aks-acr", aks.Resource.DefaultContainerRegistry.Name);
     }
 
     [Fact]
@@ -308,8 +307,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
 
         aks.WithContainerRegistry(explicitAcr);
 
-        // Default registry should be removed from the model when an explicit registry replaces it.
-        Assert.DoesNotContain(builder.Resources, resource => resource.Name == "aks-acr");
+        // Default registry should be removed
+        Assert.Null(aks.Resource.DefaultContainerRegistry);
 
         // Explicit registry should be set via annotation
         Assert.True(aks.Resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation));
@@ -329,10 +328,11 @@ public class AzureKubernetesEnvironmentExtensionsTests
         await ExecuteBeforeStartHooksAsync(app, default);
 
         Assert.True(aks.Resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var aksAnnotation));
+        Assert.Same(aks.Resource.DefaultContainerRegistry, aksAnnotation.Registry);
 
         Assert.True(aks.Resource.KubernetesEnvironment
             .TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation));
-        Assert.Same(aksAnnotation.Registry, annotation.Registry);
+        Assert.Same(aks.Resource.DefaultContainerRegistry, annotation.Registry);
     }
 
     [Fact]
