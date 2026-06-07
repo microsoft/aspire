@@ -664,7 +664,7 @@
                 },
                 "tenant": {
                   "type": "string",
-                  "description": "The tenant scope to deploy the resource to."
+                  "description": "The current tenant scope to deploy the resource to. Only \"current\" is supported."
                 }
               }
             }

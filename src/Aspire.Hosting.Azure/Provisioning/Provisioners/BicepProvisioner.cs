@@ -132,13 +132,19 @@ internal sealed class BicepProvisioner(
             resourceGroup = response.Value;
         }
 
+        var isTenantScoped = BicepUtilities.IsTenantScoped(resource);
+        var isSubscriptionScoped = !isTenantScoped &&
+            BicepUtilities.GetExistingSubscription(resource) is not null &&
+            BicepUtilities.GetExistingResourceGroup(resource) is null;
+        var resourceGroupName = isTenantScoped || isSubscriptionScoped ? null : resourceGroup.Id.Name;
+
         await notificationService.PublishUpdateAsync(resource, state => state with
         {
             ResourceType = resource.GetType().Name,
             State = new("Starting", KnownResourceStateStyles.Info),
             Properties = state.Properties.SetResourcePropertyRange([
                 new("azure.subscription.id", subscription.Id.Name),
-                new("azure.resource.group", resourceGroup.Id.Name),
+                new("azure.resource.group", resourceGroupName),
                 new("azure.tenant.domain", context.Tenant.DefaultDomain),
                 new("azure.location", context.Location.ToString()),
             ])
@@ -185,10 +191,6 @@ internal sealed class BicepProvisioner(
         var deploymentTargetName = GetDeploymentTargetName(resource, subscription, resourceGroup);
         resourceLogger.LogInformation("Deploying {Name} to {DeploymentTarget}", resource.Name, deploymentTargetName);
         logger.LogDebug("Starting deployment of resource {ResourceName} to {DeploymentTarget}", resource.Name, deploymentTargetName);
-
-        var isTenantScoped = BicepUtilities.IsTenantScoped(resource);
-        var isSubscriptionScoped = BicepUtilities.GetExistingSubscription(resource) is not null &&
-            BicepUtilities.GetExistingResourceGroup(resource) is null;
 
         var deployments = isTenantScoped
             ? context.Tenant.GetArmDeployments()

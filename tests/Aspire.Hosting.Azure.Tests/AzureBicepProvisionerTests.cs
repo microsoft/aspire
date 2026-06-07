@@ -171,6 +171,7 @@ public class AzureBicepProvisionerTests
         Assert.False(tenant.Deployments.WasCreateOrUpdateCalled);
         Assert.Equal(AzureLocation.WestUS2.Name, subscription.Deployments.Content!.Location?.Name);
         Assert.StartsWith("subscriptionScoped-", subscription.Deployments.DeploymentName);
+        AssertResourceGroupPropertyIsNull(services, resource.Name);
     }
 
     [Fact]
@@ -205,6 +206,7 @@ public class AzureBicepProvisionerTests
         Assert.False(deploymentResourceGroup.Deployments.WasCreateOrUpdateCalled);
         Assert.Equal(AzureLocation.WestUS2.Name, tenant.Deployments.Content!.Location?.Name);
         Assert.StartsWith("tenantScoped-", tenant.Deployments.DeploymentName);
+        AssertResourceGroupPropertyIsNull(services, resource.Name);
     }
 
     [Fact]
@@ -302,6 +304,7 @@ public class AzureBicepProvisionerTests
         Assert.False(tenant.Deployments.WasCreateOrUpdateCalled);
         Assert.Equal(AzureLocation.WestUS2.Name, subscription.Deployments.Content!.Location?.Name);
         Assert.Equal("subscriptionScoped", subscription.Deployments.DeploymentName);
+        AssertResourceGroupPropertyIsNull(services, resource.Name);
     }
 
     [Fact]
@@ -374,6 +377,17 @@ public class AzureBicepProvisionerTests
         // Assert
         Assert.Equal("mock-token", token.Token);
         Assert.True(token.ExpiresOn > DateTimeOffset.UtcNow);
+    }
+
+    private static void AssertResourceGroupPropertyIsNull(IServiceProvider services, string resourceName)
+    {
+        var notificationService = services.GetRequiredService<ResourceNotificationService>();
+        var resourceEvent = notificationService.TryGetCurrentState(resourceName, out var currentState)
+            ? currentState
+            : throw new InvalidOperationException($"Expected current state for resource '{resourceName}'.");
+        var property = Assert.Single(resourceEvent.Snapshot.Properties, p => p.Name == "azure.resource.group");
+
+        Assert.Null(property.Value);
     }
 
     private static BicepProvisioner CreateProvisioner(IServiceProvider services, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)
