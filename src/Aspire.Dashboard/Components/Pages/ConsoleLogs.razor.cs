@@ -1182,7 +1182,20 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // the dropdown stays in sync with whatever JS knows how to handle.
         if (_terminalSizePresets.Count == 0 && _terminalViewRef is not null)
         {
-            _terminalSizePresets = await _terminalViewRef.GetSizePresetsAsync();
+            // The JS side ships labels as English string literals (it has no
+            // localization stack of its own). Numeric labels like "80×24" are
+            // language-neutral and pass through unchanged, but "Auto" is an
+            // English word and must come from the dashboard's .resx so it
+            // matches the rest of the terminal toolbar in every supported
+            // culture. Apply the localized label here, where we still have
+            // access to IStringLocalizer<Resources.ConsoleLogs>, before
+            // handing the list to FluentSelect.
+            var presets = await _terminalViewRef.GetSizePresetsAsync();
+            _terminalSizePresets = presets
+                .Select(p => p.Value == "auto"
+                    ? p with { Label = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)] }
+                    : p)
+                .ToList();
         }
 
         StateHasChanged();

@@ -503,6 +503,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // Terminal host binary path resolution (WithTerminal)
             _innerBuilder.Services.TryAddEventingSubscriber<TerminalHostEventingSubscriber>();
+
+            // Terminal host failure diagnostics (WithTerminal): unhides the failed host
+            // resource and writes an actionable diagnostic to its console log when a
+            // terminal host transitions to a terminal-failure state. Most common cause is
+            // a CLI/AppHost version mismatch (old bundled aspire-managed without the
+            // 'terminalhost' subcommand). See TerminalHostFailureDiagnosticService.
+            _innerBuilder.Services.AddHostedService<TerminalHostFailureDiagnosticService>();
         }
 
         ConfigureProfilingTelemetry();

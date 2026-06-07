@@ -230,15 +230,40 @@ public class WithTerminalTests
             Assert.NotEmpty(annotation.TerminalHosts);
 
             // BeforeStartEvent should have written the production metadata sidecar.
-            var metadataPaths = annotation.TerminalHosts.Select(h => h.Layout.MetadataPath).ToArray();
-            foreach (var path in metadataPaths)
+            // The three .sock files are normally created at runtime by DCP / the
+            // terminal-host process (neither runs here), so we synthesise empty
+            // placeholders so the cleanup glob ({replicaId}.*) has the full set of
+            // four files to match against — that is the contract the cleanup must
+            // honour in production. A regression that narrowed the glob (e.g. only
+            // deleting *.metadata.json) would otherwise slip past this test and
+            // leak stale sockets, which causes UDS bind failures on the next run.
+            var allPaths = annotation.TerminalHosts
+                .SelectMany(h => new[]
+                {
+                    h.Layout.MetadataPath,
+                    h.Layout.ProducerUdsPath,
+                    h.Layout.ConsumerUdsPath,
+                    h.Layout.ControlUdsPath,
+                })
+                .ToArray();
+
+            foreach (var host in annotation.TerminalHosts)
             {
-                Assert.True(File.Exists(path), $"Metadata sidecar '{path}' should exist after BeforeStartEvent.");
+                Assert.True(
+                    File.Exists(host.Layout.MetadataPath),
+                    $"Metadata sidecar '{host.Layout.MetadataPath}' should exist after BeforeStartEvent.");
+
+                // Touch the three socket-shaped files so the cleanup glob has to
+                // delete them too. These are regular files (not real UDS) — the
+                // cleanup path treats every {replicaId}.* match the same way.
+                File.WriteAllText(host.Layout.ProducerUdsPath, string.Empty);
+                File.WriteAllText(host.Layout.ConsumerUdsPath, string.Empty);
+                File.WriteAllText(host.Layout.ControlUdsPath, string.Empty);
             }
 
             await app.StopAsync(CancellationToken.None);
 
-            foreach (var path in metadataPaths)
+            foreach (var path in allPaths)
             {
                 Assert.False(File.Exists(path), $"Expected '{path}' to be deleted after ApplicationStopped.");
             }

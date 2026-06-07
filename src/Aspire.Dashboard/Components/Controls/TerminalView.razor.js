@@ -149,6 +149,13 @@ const MIN_FONT_PX = 4;
 const MAX_FONT_PX = 72;
 const DEFAULT_FONT_PX = 13;
 const SIZE_PRESETS = [
+    // NOTE: The "Auto" label is overridden on the .NET side in
+    // ConsoleLogs.razor.cs (OnTerminalToolbarStateChangedAsync) using the
+    // dashboard's localized resource (ConsoleLogs.resx →
+    // TerminalToolbarGridSizeAuto). The English string here is only a
+    // fallback for the rare case where someone consumes the SIZE_PRESETS
+    // list directly from JS without going through GetSizePresetsAsync —
+    // we never bind it to the UI as-is.
     { value: "auto",   label: "Auto",   cols: 0,   rows: 0  },
     { value: "80x24",  label: "80×24",  cols: 80,  rows: 24 },
     { value: "80x30",  label: "80×30",  cols: 80,  rows: 30 },

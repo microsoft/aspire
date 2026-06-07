@@ -195,6 +195,9 @@
   <data name="TerminalToolbarGridSize" xml:space="preserve">
     <value>Terminal grid size</value>
   </data>
+  <data name="TerminalToolbarGridSizeAuto" xml:space="preserve">
+    <value>Auto</value>
+  </data>
   <data name="TerminalToolbarCurrentGrid" xml:space="preserve">
     <value>Current terminal grid</value>
   </data>

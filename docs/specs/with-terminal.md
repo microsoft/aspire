@@ -145,8 +145,7 @@ when the executable (or container) spec carries a populated `terminal` block:
 process owns the listener). The dimensions are the initial PTY size; both
 sides exchange resize frames over HMP afterwards.
 
-Desktop PTY support is implemented across all three platforms (ConPTY on
-Windows; Unix98 `/dev/ptmx` on Linux and macOS). Container PTYs are tracked
+Desktop PTY support is implemented across all three platforms (Unix98 `/dev/ptmx` on Linux and macOS; ConPTY on Windows). Container PTYs are tracked
 as a Phase 3 follow-up on the parent issue.
 
 ## Files of interest

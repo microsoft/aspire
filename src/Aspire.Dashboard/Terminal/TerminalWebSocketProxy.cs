@@ -88,7 +88,7 @@ internal static class TerminalWebSocketProxy
         }).RequireAuthorization(FrontendAuthorizationDefaults.PolicyName);
     }
 
-    private static async Task HandleAsync(HttpContext context,
+    internal static async Task HandleAsync(HttpContext context,
                                           ITerminalConnectionResolver resolver,
                                           ILogger logger,
                                           string connectionId)

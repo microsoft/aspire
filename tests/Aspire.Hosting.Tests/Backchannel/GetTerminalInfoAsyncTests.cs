@@ -92,6 +92,22 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
             ConsumerUdsPath = "host-claim-r0",
             IsAlive = true,
             ProducerConnected = true,
+            RestartCount = 3,
+            // Populated so the mapping in QueryReplicaAsync (Current{Columns,Rows}
+            // / AttachedPeerCount / Peers -> ConvertPeers) is actually exercised.
+            // A silent drop of any of these mappings — including swapping the
+            // Cols/Rows pair or breaking ConvertPeers' null/empty handling —
+            // should fail this test.
+            CurrentColumns = 120,
+            CurrentRows = 42,
+            AttachedPeerCount = 2,
+            Peers = new[]
+            {
+                new TerminalHostPeerInfo { PeerId = "peer-a", DisplayName = "aspire-cli:1234" },
+                // Second peer omits DisplayName so the nullable-pass-through in
+                // ConvertPeers gets covered.
+                new TerminalHostPeerInfo { PeerId = "peer-b", DisplayName = null },
+            },
         }).DefaultTimeout();
 
         var fakeHost1 = await StartFakeControlHostAsync(new TerminalHostSessionInfo
@@ -126,6 +142,18 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         Assert.Equal(hosts[0].Layout.ConsumerUdsPath, result.Replicas[0].ConsumerUdsPath);
         Assert.True(result.Replicas[0].IsAlive);
         Assert.Null(result.Replicas[0].ExitCode);
+        Assert.True(result.Replicas[0].ProducerConnected);
+        Assert.Equal(3, result.Replicas[0].RestartCount);
+        // The Cols/Rows pair is easy to swap by accident; pin both ends of the round-trip.
+        Assert.Equal(120, result.Replicas[0].CurrentColumns);
+        Assert.Equal(42, result.Replicas[0].CurrentRows);
+        Assert.Equal(2, result.Replicas[0].AttachedPeerCount);
+        Assert.NotNull(result.Replicas[0].Peers);
+        Assert.Equal(2, result.Replicas[0].Peers!.Length);
+        Assert.Equal("peer-a", result.Replicas[0].Peers![0].PeerId);
+        Assert.Equal("aspire-cli:1234", result.Replicas[0].Peers![0].DisplayName);
+        Assert.Equal("peer-b", result.Replicas[0].Peers![1].PeerId);
+        Assert.Null(result.Replicas[0].Peers![1].DisplayName);
 
         Assert.Equal(1, result.Replicas[1].ReplicaIndex);
         Assert.Equal("replica 1", result.Replicas[1].Label);
@@ -164,6 +192,68 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         Assert.False(result.Replicas[1].IsAlive);
         Assert.Equal(hosts[0].Layout.ConsumerUdsPath, result.Replicas[0].ConsumerUdsPath);
         Assert.Equal(hosts[1].Layout.ConsumerUdsPath, result.Replicas[1].ConsumerUdsPath);
+    }
+
+    [Fact]
+    public async Task ListTerminalsAsync_AllUnreachable_KeepsDegradedReplicaShape()
+    {
+        // Regression: ListTerminalsAsync used to drop the per-replica array when no
+        // host responded ("Replicas = anyHostReachable ? replicas : null"), which
+        // made `aspire terminal ps --format json` blanker in the failure case than
+        // in the success case — exactly when users need replica indexes / consumer
+        // UDS paths to diagnose attach. The fix: always emit the degraded shape so
+        // the JSON consumer sees "host unreachable but here are the slots" rather
+        // than "host unreachable, you get nothing".
+        var (model, hosts) = BuildModel(replicaCount: 2, controlListeners: null);
+
+        var target = CreateTarget(model);
+
+        var result = await target.ListTerminalsAsync(
+            new ListTerminalsRequest()).DefaultTimeout(TimeSpan.FromSeconds(15));
+
+        var summary = Assert.Single(result.Terminals);
+        Assert.False(summary.IsHostReachable);
+        Assert.NotNull(summary.Replicas);
+        Assert.Equal(2, summary.Replicas!.Length);
+        for (var i = 0; i < 2; i++)
+        {
+            Assert.Equal(i, summary.Replicas[i].ReplicaIndex);
+            Assert.False(summary.Replicas[i].IsAlive);
+            Assert.Equal(hosts[i].Layout.ConsumerUdsPath, summary.Replicas[i].ConsumerUdsPath);
+        }
+    }
+
+    [Fact]
+    public async Task ListTerminalsAsync_MixedReachability_ReturnsAllReplicas()
+    {
+        // One host up, one host down. The summary's IsHostReachable flag aggregates
+        // to true (anyHostReachable), but both replicas must surface so callers can
+        // tell which slot is the unhealthy one.
+        var fakeHost0 = await StartFakeControlHostAsync(new TerminalHostSessionInfo
+        {
+            ProducerUdsPath = "host-claim-p0",
+            ConsumerUdsPath = "host-claim-r0",
+            IsAlive = true,
+            ProducerConnected = true,
+        }).DefaultTimeout();
+
+        var (model, hosts) = BuildModel(
+            replicaCount: 2,
+            controlListeners: [fakeHost0, null]);
+
+        var target = CreateTarget(model);
+
+        var result = await target.ListTerminalsAsync(
+            new ListTerminalsRequest()).DefaultTimeout(TimeSpan.FromSeconds(15));
+
+        var summary = Assert.Single(result.Terminals);
+        Assert.True(summary.IsHostReachable);
+        Assert.NotNull(summary.Replicas);
+        Assert.Equal(2, summary.Replicas!.Length);
+        Assert.True(summary.Replicas[0].IsAlive);
+        Assert.False(summary.Replicas[1].IsAlive);
+        Assert.Equal(hosts[0].Layout.ConsumerUdsPath, summary.Replicas[0].ConsumerUdsPath);
+        Assert.Equal(hosts[1].Layout.ConsumerUdsPath, summary.Replicas[1].ConsumerUdsPath);
     }
 
     [Fact]

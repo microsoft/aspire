@@ -22,6 +22,13 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
     private readonly CancellationTokenSource _disposeCts = new();
     private readonly List<JsonRpc> _activeRpcs = new();
     private readonly object _gate = new();
+    // Reservation counter for connections that have been accepted by the loop
+    // but whose ServeClientAsync task has not yet run far enough to add its
+    // JsonRpc instance to _activeRpcs. Without this, two fast back-to-back
+    // accepts could both observe _activeRpcs.Count == 0 under the lock and
+    // both be served, defeating the documented single-client invariant.
+    // Counted under _gate alongside _activeRpcs.
+    private int _pendingClients;
     private bool _disposed;
 
     public TerminalHostControlListener(
@@ -130,22 +137,41 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
             }
 
             // The control protocol is documented as a single AppHost client (lifecycle,
-            // shutdown, stats). If we already have an active session, the new socket is
-            // either an accidental retry from the same AppHost or a hostile second
-            // dialer; in either case it is safer to refuse it than to fan out unbounded
-            // concurrent JsonRpc instances (each allocates a NetworkStream + a header-
-            // delimited message handler and adds three RPC registrations). The 0600 perm
-            // on the UDS already restricts to the owning user, but defence in depth.
+            // shutdown, stats). If we already have an active session — or one being set
+            // up on a worker task that hasn't reached _activeRpcs.Add yet — the new
+            // socket is either an accidental retry from the same AppHost or a hostile
+            // second dialer; in either case it is safer to refuse it than to fan out
+            // unbounded concurrent JsonRpc instances (each allocates a NetworkStream + a
+            // header-delimited message handler and adds three RPC registrations). The
+            // 0600 perm on the UDS already restricts to the owning user, but defence in
+            // depth.
+            //
+            // The reservation is taken under _gate at the accept site so two fast
+            // back-to-back connects can't both pass the empty-slot check before either
+            // has reached its ServeClientAsync. ServeClientAsync converts the
+            // reservation to an _activeRpcs entry under the same lock.
+            bool reserved;
             lock (_gate)
             {
-                if (_activeRpcs.Count >= 1)
+                if (_activeRpcs.Count + _pendingClients >= 1)
                 {
                     _logger.LogWarning(
-                        "Refusing additional control connection - {Count} session(s) already active.",
-                        _activeRpcs.Count);
-                    try { client.Dispose(); } catch { }
-                    continue;
+                        "Refusing additional control connection - {Active} active session(s), {Pending} pending.",
+                        _activeRpcs.Count,
+                        _pendingClients);
+                    reserved = false;
                 }
+                else
+                {
+                    _pendingClients++;
+                    reserved = true;
+                }
+            }
+
+            if (!reserved)
+            {
+                try { client.Dispose(); } catch { }
+                continue;
             }
 
             _ = Task.Run(() => ServeClientAsync(client, cancellationToken), cancellationToken);
@@ -154,37 +180,48 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
 
     private async Task ServeClientAsync(Socket client, CancellationToken cancellationToken)
     {
-        await using var stream = new NetworkStream(client, ownsSocket: true);
-
-        var formatter = new SystemTextJsonFormatter();
-        var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
-
-        var rpc = new JsonRpc(handler);
-        rpc.AddLocalRpcMethod(
-            TerminalHostControlProtocol.GetSessionMethod,
-            _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.GetSessionAsync))!,
-            _target);
-        rpc.AddLocalRpcMethod(
-            TerminalHostControlProtocol.GetInfoMethod,
-            _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.GetInfoAsync))!,
-            _target);
-        rpc.AddLocalRpcMethod(
-            TerminalHostControlProtocol.ShutdownMethod,
-            _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.ShutdownAsync))!,
-            _target);
-
-        lock (_gate)
-        {
-            if (_disposed)
-            {
-                rpc.Dispose();
-                return;
-            }
-            _activeRpcs.Add(rpc);
-        }
-
+        // Tracks whether we still owe a _pendingClients-- decrement. Set to false
+        // as soon as the reservation is converted to an _activeRpcs entry (or the
+        // listener is already disposed). The outer finally releases any leftover
+        // reservation if anything between accept and the conversion lock throws.
+        var reservationOwned = true;
+        JsonRpc? rpc = null;
         try
         {
+            await using var stream = new NetworkStream(client, ownsSocket: true);
+
+            var formatter = new SystemTextJsonFormatter();
+            var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
+
+            rpc = new JsonRpc(handler);
+            rpc.AddLocalRpcMethod(
+                TerminalHostControlProtocol.GetSessionMethod,
+                _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.GetSessionAsync))!,
+                _target);
+            rpc.AddLocalRpcMethod(
+                TerminalHostControlProtocol.GetInfoMethod,
+                _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.GetInfoAsync))!,
+                _target);
+            rpc.AddLocalRpcMethod(
+                TerminalHostControlProtocol.ShutdownMethod,
+                _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.ShutdownAsync))!,
+                _target);
+
+            // Convert the accept-site reservation to an _activeRpcs entry under
+            // the same lock, or release the reservation if we're already
+            // disposing. After this point the slot accounting moves to
+            // _activeRpcs and the finally releases via _activeRpcs.Remove.
+            lock (_gate)
+            {
+                _pendingClients--;
+                reservationOwned = false;
+                if (_disposed)
+                {
+                    return;
+                }
+                _activeRpcs.Add(rpc);
+            }
+
             rpc.StartListening();
             await rpc.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -197,11 +234,25 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
         }
         finally
         {
-            lock (_gate)
+            // If we never reached the conversion lock (e.g. NetworkStream/JsonRpc
+            // setup threw), the slot is still reserved as pending. Release it so
+            // the listener can accept future connections.
+            if (reservationOwned)
             {
-                _activeRpcs.Remove(rpc);
+                lock (_gate)
+                {
+                    _pendingClients--;
+                }
             }
-            rpc.Dispose();
+            else if (rpc is not null)
+            {
+                lock (_gate)
+                {
+                    _activeRpcs.Remove(rpc);
+                }
+            }
+
+            rpc?.Dispose();
         }
     }
 

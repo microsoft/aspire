@@ -606,7 +606,14 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 ConfiguredColumns = terminalAnnotation.Options.Columns,
                 ConfiguredRows = terminalAnnotation.Options.Rows,
                 IsHostReachable = anyHostReachable,
-                Replicas = anyHostReachable ? replicas : null,
+                // Always emit the per-replica array, even when no host is reachable.
+                // CollectReplicaInfosAsync returns one entry per replica with AppHost-known
+                // ReplicaIndex / ConsumerUdsPath populated and IsAlive=false on degraded
+                // entries. Dropping the array on aggregate failure would make `aspire
+                // terminal ps` blanker in the failure case than in the success case —
+                // exactly when users need the diagnostic shape — and would diverge from
+                // GetTerminalInfoAsync, which keeps the degraded per-replica shape.
+                Replicas = replicas,
             });
         }
 

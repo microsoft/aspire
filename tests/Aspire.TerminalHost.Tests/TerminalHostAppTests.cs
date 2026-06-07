@@ -121,6 +121,89 @@ public class TerminalHostAppTests
     }
 
     [Fact]
+    public async Task ConcurrentControlConnectsAreRefusedDownToOne()
+    {
+        // The control protocol is documented as a single AppHost client (lifecycle,
+        // shutdown, stats). Regression for the accept-loop race where two fast
+        // back-to-back connects could both observe an empty slot before either
+        // ServeClientAsync had registered into _activeRpcs, ending up with two
+        // concurrently-served sessions instead of one. The reservation counter
+        // increment must happen synchronously under _gate at the accept site.
+        var (args, tmp, control) = BuildArgs();
+        using var disp = tmp;
+
+        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+        using var hostCts = new CancellationTokenSource();
+        var hostTask = app.RunAsync(hostCts.Token);
+
+        try
+        {
+            await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
+
+            // Open many concurrent sockets to maximise the chance of two reaching
+            // the accept loop's reservation check at the same time. Whatever the
+            // scheduling, exactly one must end up usable for an RPC; the rest
+            // must fail (server-closed before the request returns or no response).
+            const int concurrency = 8;
+            var rawSockets = new Socket[concurrency];
+            var connectTasks = new Task[concurrency];
+            for (var i = 0; i < concurrency; i++)
+            {
+                rawSockets[i] = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                connectTasks[i] = rawSockets[i].ConnectAsync(new UnixDomainSocketEndPoint(control));
+            }
+
+            try
+            {
+                await Task.WhenAll(connectTasks).WaitAsync(TimeSpan.FromSeconds(10));
+
+                // Drive an RPC over each socket and count the survivors. Refused
+                // sockets either close immediately (read returns 0) or fail the
+                // header-delimited read; the StreamJsonRpc completion task surfaces
+                // either as a ConnectionLostException / IOException.
+                var results = await Task.WhenAll(rawSockets.Select(TryGetInfoAsync));
+
+                var successes = results.Count(static r => r);
+                Assert.Equal(1, successes);
+            }
+            finally
+            {
+                foreach (var s in rawSockets)
+                {
+                    try { s.Dispose(); } catch { }
+                }
+            }
+        }
+        finally
+        {
+            app.RequestShutdown();
+            hostCts.Cancel();
+            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        static async Task<bool> TryGetInfoAsync(Socket socket)
+        {
+            // Each candidate gets a short window to either ack a GetInfo or be
+            // refused. The refused side observes a zero-length read on its
+            // NetworkStream which StreamJsonRpc raises as a ConnectionLostException.
+            try
+            {
+                var stream = new NetworkStream(socket, ownsSocket: false);
+                using var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, new SystemTextJsonFormatter()));
+                rpc.StartListening();
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                _ = await rpc.InvokeAsync<TerminalHostInfoResponse>(TerminalHostControlProtocol.GetInfoMethod).WaitAsync(cts.Token);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    [Fact]
     public async Task SnapshotSessionReportsConfiguredPaths()
     {
         var (args, tmp, control) = BuildArgs();

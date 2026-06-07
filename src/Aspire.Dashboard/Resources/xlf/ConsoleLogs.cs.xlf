@@ -147,6 +147,11 @@
         <target state="new">Terminal grid size</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalToolbarGridSizeAuto">
+        <source>Auto</source>
+        <target state="new">Auto</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalToolbarIncreaseFontSize">
         <source>Increase font size</source>
         <target state="new">Increase font size</target>

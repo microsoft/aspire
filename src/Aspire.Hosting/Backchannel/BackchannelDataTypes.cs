@@ -1495,12 +1495,16 @@ internal sealed class ResourceLogLine
 /// <summary>
 /// Request for getting terminal information for a resource.
 /// </summary>
-internal sealed class GetTerminalInfoRequest
+internal sealed class GetTerminalInfoRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the resource name.
     /// </summary>
     public required string ResourceName { get; init; }
+
+    /// <inheritdoc />
+    public override GetTerminalInfoRequest WithTraceContext(BackchannelTraceContext traceContext)
+        => new() { ResourceName = ResourceName, TraceContext = traceContext };
 }
 
 /// <summary>
@@ -1646,15 +1650,20 @@ internal sealed class GetTerminalInfoResponse
 /// already knows which resources have a <c>TerminalAnnotation</c>. Gated on the
 /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
 /// </summary>
-internal sealed class ListTerminalsRequest
+internal sealed class ListTerminalsRequest : BackchannelRequest
 {
+    /// <inheritdoc />
+    public override ListTerminalsRequest WithTraceContext(BackchannelTraceContext traceContext)
+        => new() { TraceContext = traceContext };
 }
 
 /// <summary>
 /// One entry per <c>WithTerminal</c>-enabled resource. Returned inside
 /// <see cref="ListTerminalsResponse.Terminals"/>. Replica details (current size, attached peers)
 /// are only populated when the host process is reachable; otherwise <see cref="IsHostReachable"/>
-/// is false and <see cref="Replicas"/> is null.
+/// is false and the per-replica entries are degraded (<see cref="TerminalReplicaInfo.IsAlive"/> =
+/// false, AppHost-known <see cref="TerminalReplicaInfo.ConsumerUdsPath"/>), but the array shape
+/// stays consistent so diagnostics stay legible.
 /// </summary>
 internal sealed class TerminalSummary
 {
@@ -1689,7 +1698,12 @@ internal sealed class TerminalSummary
     public required bool IsHostReachable { get; init; }
 
     /// <summary>
-    /// Gets the per-replica details, or null when <see cref="IsHostReachable"/> is false.
+    /// Gets the per-replica details. One entry per configured replica, in replica index order.
+    /// Replicas whose host wasn't reachable when the snapshot was taken still appear here with
+    /// <see cref="TerminalReplicaInfo.IsAlive"/> = false and the AppHost-known
+    /// <see cref="TerminalReplicaInfo.ConsumerUdsPath"/> populated, so the diagnostic shape
+    /// stays consistent regardless of host reachability. Null only when the producer didn't
+    /// supply any replica info (older AppHost predating per-replica fan-out).
     /// </summary>
     public TerminalReplicaInfo[]? Replicas { get; init; }
 }

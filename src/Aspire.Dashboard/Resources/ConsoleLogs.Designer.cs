@@ -195,6 +195,12 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        public static string TerminalToolbarGridSizeAuto {
+            get {
+                return ResourceManager.GetString("TerminalToolbarGridSizeAuto", resourceCulture);
+            }
+        }
+        
         public static string TerminalToolbarCurrentGrid {
             get {
                 return ResourceManager.GetString("TerminalToolbarCurrentGrid", resourceCulture);
