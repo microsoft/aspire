@@ -280,9 +280,10 @@ public static partial class AzureAppServiceEnvironmentExtensions
             // identity must exist in the model before the module Bicep is generated. The AcrPull role
             // itself is declared as a deferred RoleAssignmentAnnotation so the preparer can emit it as a
             // correctly scoped role-assignment module after WithAzureContainerRegistry has had a chance
-            // to replace the default registry. Keeping the role assignment outside the environment module
-            // is what allows existing registries in another resource group to work with Bicep's extension
-            // resource scope rules.
+            // to replace the default registry. Resolving the target here would grant AcrPull on the
+            // default registry even when the environment later points at a caller-supplied registry.
+            // Keeping the role assignment outside the environment module is what allows existing
+            // registries in another resource group to work with Bicep's extension resource scope rules.
             var acrPullIdentity = CreateDefaultAcrPullIdentity(builder, name);
             resource.Annotations.Add(new AzureAppServiceEnvironmentAcrPullIdentityAnnotation(acrPullIdentity, assignAcrPullRole: true));
             resource.Annotations.Add(new AppIdentityAnnotation(acrPullIdentity));
@@ -574,7 +575,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
         }
 
         // Resolve the registry late because WithAzureContainerRegistry can replace the default registry
-        // after AddAzureAppServiceEnvironment creates the annotation.
+        // after AddAzureAppServiceEnvironment creates the annotation. If we captured the default
+        // registry up front, the generated identity would receive AcrPull on a registry it no longer uses.
         return GetContainerRegistryForAcrPullRole(environment);
     }
 

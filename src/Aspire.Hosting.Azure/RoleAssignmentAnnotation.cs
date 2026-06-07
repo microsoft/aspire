@@ -48,7 +48,9 @@ public class RoleAssignmentAnnotation : IResourceAnnotation
     /// <para>
     /// Use this overload when a resource owns role assignments for internal Azure resources whose final target can be
     /// changed by later builder calls. For example, a compute environment can create its ACR-pull role annotation
-    /// before a later <c>WithAzureContainerRegistry</c> call swaps the default registry for an explicit registry.
+    /// before a later <c>WithAzureContainerRegistry</c> call swaps the default registry for an explicit registry;
+    /// resolving the target immediately would grant <c>AcrPull</c> on the default registry instead of the registry
+    /// that will actually be used for image pulls.
     /// </para>
     /// <para>
     /// Returning <see langword="null"/> intentionally skips materialization. The first non-null target is cached so
