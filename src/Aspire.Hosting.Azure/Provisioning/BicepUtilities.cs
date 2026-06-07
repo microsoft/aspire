@@ -121,7 +121,9 @@ internal static class BicepUtilities
             var parameters = JsonNode.Parse(jsonString)?.AsObject();
             var scope = section["Scope"] is string scopeString
                 ? JsonNode.Parse(scopeString)?.AsObject()
-                : null;
+                : GetExistingResourceScope(resource) is not null
+                    ? new JsonObject()
+                    : null;
 
             if (parameters is null)
             {

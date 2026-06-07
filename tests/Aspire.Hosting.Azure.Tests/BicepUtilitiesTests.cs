@@ -493,6 +493,39 @@ public class BicepUtilitiesTests
         Assert.NotEmpty(result);
     }
 
+    [Fact]
+    public async Task GetCurrentChecksumAsync_UsesCurrentScopeWhenSavedScopeIsMissing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var bicep = builder.AddBicepTemplateString("test", "param name string")
+            .WithParameter("key", "value")
+            .Resource;
+
+        var legacyParameters = new JsonObject();
+        await BicepUtilities.SetParametersAsync(legacyParameters, bicep);
+        var legacyChecksum = BicepUtilities.GetChecksum(bicep, legacyParameters, scope: null);
+
+        bicep.Scope = AzureBicepResourceScope.ForSubscription("12345678-1234-1234-1234-123456789012");
+
+        var configurationBuilder = new ConfigurationBuilder();
+        configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Parameters"] = legacyParameters.ToJsonString()
+        });
+        var config = configurationBuilder.Build();
+
+        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, config);
+
+        var currentParameters = new JsonObject();
+        var currentScope = new JsonObject();
+        await BicepUtilities.SetParametersAsync(currentParameters, bicep, skipKnownValues: true);
+        await BicepUtilities.SetScopeAsync(currentScope, bicep);
+        var expected = BicepUtilities.GetChecksum(bicep, currentParameters, currentScope);
+
+        Assert.Equal(expected, result);
+        Assert.NotEqual(legacyChecksum, result);
+    }
+
     /// <summary>
     /// Ensures that known parameters are not overwritten when calculating the checksum.
     /// This is important because if these known parameters are overwritten, it means the "roles"
