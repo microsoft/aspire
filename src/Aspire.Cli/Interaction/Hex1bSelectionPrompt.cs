@@ -6,30 +6,32 @@ using Hex1b;
 using Hex1b.Composition;
 using Hex1b.Flow;
 using Hex1b.Input;
-using Hex1b.Theming;
 using Hex1b.Widgets;
 
 namespace Aspire.Cli.Interaction;
 
 /// <summary>
-/// Spike replacement for Spectre.Console's <c>SelectionPrompt&lt;T&gt;.EnableSearch()</c>.
-/// Renders a single-line text input over a <see cref="ListWidget"/> whose visible items
-/// are filtered (not just highlighted) by the typed text using the same fuzzy scorer
-/// that <see cref="Commands.IntegrationPackageSearchService"/> uses when an integration
-/// argument is supplied on the command line. The first time the user types, the list
-/// collapses to the matches in score-descending order; clearing the box restores the
-/// original order. Enter activates the highlighted item; Ctrl+C cancels.
+/// Hex1b-backed replacement for Spectre.Console's
+/// <c>SelectionPrompt&lt;T&gt;.EnableSearch()</c>. Renders a single-line text input
+/// over a <see cref="ListWidget{T}"/> whose visible items are filtered (not just
+/// highlighted) by the typed text using the same fuzzy scorer that
+/// <see cref="Commands.IntegrationPackageSearchService"/> uses when an integration
+/// argument is supplied on the command line. The first time the user types, the
+/// list collapses to the matches in score-descending order; clearing the box
+/// restores the original order. Enter activates the highlighted item; Ctrl+C
+/// cancels.
 /// </summary>
 internal static class Hex1bSelectionPrompt
 {
     // Same threshold as Commands.IntegrationPackageSearchService.FuzzyMatchThreshold.
-    // Keeping the value local avoids exposing that internal constant just for the spike.
+    // Keeping the value local avoids exposing that internal constant just for the
+    // prompt.
     private const double FuzzyMatchThreshold = 0.3;
 
-    // Page-size analogue of Spectre's SelectionPrompt.PageSize(10): cap the visible
-    // list height so very long catalogues (the integration list is hundreds of items)
-    // don't push the rest of the screen off when nothing is filtered yet.
-    private const int MaxVisibleRows = 10;
+    // Page-size analogue of Spectre's SelectionPrompt.PageSize(10): the list pane
+    // is sized to this many rows so the prompt frame stays a constant height even
+    // as the filter narrows the visible list.
+    private const int VisibleRows = 10;
 
     public static async Task<T> RunAsync<T>(
         string promptText,
@@ -43,21 +45,20 @@ internal static class Hex1bSelectionPrompt
 
         if (choices.Count == 0)
         {
-            // Caller is expected to guard against this, but mirror Spectre's behaviour
-            // so we don't render an empty prompt that can never complete.
+            // Caller is expected to guard against this — mirror Spectre's behaviour
+            // so we never render an empty prompt that can't be completed.
             throw new InvalidOperationException("Hex1bSelectionPrompt requires at least one choice.");
         }
 
-        // Pre-compute the formatted, markup-stripped string for each choice once.
-        // The displayed label keeps any Spectre markup (the surrounding console still
-        // renders Spectre markup elsewhere — preserving it keeps visual parity with
-        // the rest of the CLI output). The score key is the stripped form so e.g.
-        // "[bold]Redis[/] (Aspire.Hosting.Redis)" scores naturally on "redis".
-        var rows = new ChoiceRow[choices.Count];
+        // Pre-compute a (value, display) pair per choice once. The display text
+        // is the formatter output with any Spectre markup ([bold]…[/]) stripped:
+        // Hex1b's text widget renders bracketed runs literally so we need a clean
+        // string for the visible row, and using the same string as the fuzzy
+        // score key keeps "what you see is what you score" semantics.
+        var allChoices = new Choice<T>[choices.Count];
         for (var i = 0; i < choices.Count; i++)
         {
-            var label = choiceFormatter(choices[i]);
-            rows[i] = new ChoiceRow(i, label, StripMarkup(label));
+            allChoices[i] = new Choice<T>(choices[i], choiceFormatter(choices[i]).RemoveSpectreFormatting());
         }
 
         var result = new ResultBox<T>();
@@ -68,29 +69,24 @@ internal static class Hex1bSelectionPrompt
         // Note: not `await using` — disposing the terminal emits the alternate-screen
         // exit sequence which would clear the inline prompt area. Letting it go out
         // of scope keeps any post-prompt scrollback (the echoSelected line) sitting
-        // naturally beneath the completed step. This mirrors the pattern used in
-        // FancyFlowDemo's orchestrator.
+        // naturally beneath the completed step. This mirrors the FancyFlowDemo
+        // orchestrator pattern.
         var terminal = Hex1bTerminal.CreateBuilder()
             .WithScrollback()
             .WithHex1bFlow(async flow =>
             {
                 var step = flow.Step(
-                    flowCtx =>
-                    {
-                        // Capture the live FlowStep handle so the body widget's
-                        // event handlers (text-changed, item-activated, ctrl+C)
-                        // can invalidate/complete without depending on a separate
-                        // context. The body widget itself is rebuilt every render
-                        // pass; we want one stable Step reference threaded through.
-                        return new SelectionPromptBody<T>(
-                            promptText,
-                            choices,
-                            rows,
-                            flowCtx.Step,
-                            OnChosen: chosen => result.Set(chosen),
-                            OnCancelled: () => cancelled = true);
-                    },
-                    opts => opts.MaxHeight = MaxVisibleRows + 4);
+                    flowCtx => new SelectionPromptBody<T>(
+                        promptText,
+                        allChoices,
+                        // Capture the live FlowStep handle here so the body widget's
+                        // event handlers can invalidate / complete without us having
+                        // to thread FlowStepContext through every layer (the body
+                        // widget is rebuilt on every render pass; the Step is stable).
+                        flowCtx.Step,
+                        OnChosen: chosen => result.Set(chosen),
+                        OnCancelled: () => cancelled = true),
+                    opts => opts.MaxHeight = VisibleRows + 4);
                 await step.WaitForCompletionAsync().ConfigureAwait(false);
             },
             options =>
@@ -120,23 +116,16 @@ internal static class Hex1bSelectionPrompt
     private static Hex1bWidget BuildPromptBody<T>(
         CompositionContext ctx,
         string promptText,
-        IReadOnlyList<T> choices,
-        IReadOnlyList<ChoiceRow> rows,
+        IReadOnlyList<Choice<T>> allChoices,
         FlowStep step,
         Action<T> onChosen,
         Action onCancelled) where T : notnull
     {
         var state = ctx.UseState(() => new FilterState());
 
-        // Recompute the visible-row → original-choice index map every render. Cheap
-        // for the integration list (hundreds of items) and keeps the widget purely
-        // a function of FilterState.CurrentText, which is the invariant we want.
-        var visibleIndices = ComputeVisibleIndices(rows, state.CurrentText);
-        var labels = new string[visibleIndices.Count];
-        for (var i = 0; i < visibleIndices.Count; i++)
-        {
-            labels[i] = rows[visibleIndices[i]].DisplayLabel;
-        }
+        // Recomputed every render — cheap for a few hundred items and keeps the
+        // widget a pure function of state.CurrentText.
+        var visible = FilterChoices(allChoices, state.CurrentText);
 
         var textBox = ctx.TextBox(state.CurrentText)
             .OnTextChanged(e =>
@@ -146,38 +135,45 @@ internal static class Hex1bSelectionPrompt
             })
             .OnSubmit(_ =>
             {
-                // Enter from the textbox always selects the current top match —
-                // mirrors Spectre.Console's SelectionPrompt where typing then Enter
-                // commits without first tabbing into the list. With no matches we
-                // do nothing so the user can correct the filter in place.
-                var visible = ComputeVisibleIndices(rows, state.CurrentText);
-                if (visible.Count == 0)
+                // Enter from the textbox commits the current top match — mirrors
+                // Spectre's SelectionPrompt where typing then Enter selects without
+                // first tabbing into the list. With no matches we do nothing so the
+                // user can correct the filter in place.
+                var current = FilterChoices(allChoices, state.CurrentText);
+                if (current.Count == 0)
                 {
                     return;
                 }
-                onChosen(choices[visible[0]]);
+                onChosen(current[0].Value);
                 step.Complete();
             })
             .FillWidth();
 
-        Hex1bWidget body = visibleIndices.Count == 0
-            ? ctx.ThemePanel(
-                t => t.Set(GlobalTheme.ForegroundColor, Hex1bColor.FromRgb(140, 130, 160)),
-                ctx.Text($"No matches for '{state.CurrentText}'."))
-            : ctx.List(labels)
-                .OnItemActivated(e =>
-                {
-                    var originalIndex = visibleIndices[e.ActivatedIndex];
-                    onChosen(choices[originalIndex]);
-                    step.Complete();
-                })
-                .FixedHeight(Math.Min(labels.Length, MaxVisibleRows) + 1);
+        // Typed ListWidget<Choice<T>>: ItemKey gives each row stable identity so
+        // the cursor follows the same logical item as the filter narrows or
+        // expands; ItemTemplate owns the per-row chrome (focus marker) and the
+        // Empty builder handles the no-matches state without a sibling
+        // conditional panel.
+        var list = ctx.List(visible)
+            .ItemKey(c => c.Display)
+            .ItemTemplate(itemCtx =>
+            {
+                var marker = itemCtx.IsFocused ? "▸ " : "  ";
+                return itemCtx.Text(marker + itemCtx.Item.Display);
+            })
+            .OnItemActivated(e =>
+            {
+                onChosen(e.ActivatedItem.Value);
+                step.Complete();
+            })
+            .Empty(emptyCtx => emptyCtx.Text($"  No matches for '{state.CurrentText}'."))
+            .FixedHeight(VisibleRows);
 
         var content = ctx.VStack(v =>
         [
             v.Text(promptText),
             textBox,
-            body,
+            list,
             v.Text("(type to filter, ↑/↓ to move, Enter to select, Ctrl+C to cancel)"),
         ]);
 
@@ -192,46 +188,38 @@ internal static class Hex1bSelectionPrompt
     }
 
     /// <summary>
-    /// Returns the original-choice indices that survive the filter, in display order:
-    /// empty filter ⇒ original order; non-empty ⇒ score-descending then original-order
-    /// tie-break, with a minimum score equal to <see cref="FuzzyMatchThreshold"/> (the
-    /// same threshold used by <c>IntegrationPackageSearchService</c>).
+    /// Returns the choices that survive the filter, in display order:
+    /// empty filter ⇒ original order; non-empty ⇒ score-descending then
+    /// original-order tie-break, with a minimum score equal to
+    /// <see cref="FuzzyMatchThreshold"/> (the same threshold used by
+    /// <c>IntegrationPackageSearchService</c>).
     /// </summary>
-    private static IReadOnlyList<int> ComputeVisibleIndices(IReadOnlyList<ChoiceRow> rows, string filterText)
+    private static IReadOnlyList<Choice<T>> FilterChoices<T>(IReadOnlyList<Choice<T>> choices, string filterText)
+        where T : notnull
     {
         if (string.IsNullOrEmpty(filterText))
         {
-            var all = new int[rows.Count];
-            for (var i = 0; i < rows.Count; i++)
-            {
-                all[i] = i;
-            }
-            return all;
+            return choices;
         }
 
-        var scored = new List<(int Index, double Score)>(rows.Count);
-        for (var i = 0; i < rows.Count; i++)
+        var scored = new List<(int Index, Choice<T> Choice, double Score)>(choices.Count);
+        for (var i = 0; i < choices.Count; i++)
         {
-            var score = StringUtils.CalculateFuzzyScore(filterText, rows[i].ScoreKey);
+            var score = StringUtils.CalculateFuzzyScore(filterText, choices[i].Display);
             if (score > FuzzyMatchThreshold)
             {
-                scored.Add((i, score));
+                scored.Add((i, choices[i], score));
             }
         }
 
-        // Stable sort by score descending; List<T>.Sort is not stable so use OrderBy.
+        // List<T>.Sort is not stable, so OrderBy is used to preserve the original
+        // order for score ties (matches the behaviour of GetIntegrationSearchMatches).
         return scored
             .OrderByDescending(p => p.Score)
             .ThenBy(p => p.Index)
-            .Select(p => p.Index)
+            .Select(p => p.Choice)
             .ToArray();
     }
-
-    /// <summary>
-    /// Stripped form used for fuzzy scoring only — the displayed label keeps its
-    /// Spectre markup so the visible prompt looks identical to today's UX.
-    /// </summary>
-    private static string StripMarkup(string label) => label.RemoveSpectreFormatting();
 
     private static int SafeGetCursorRow()
     {
@@ -243,7 +231,7 @@ internal static class Hex1bSelectionPrompt
         {
             // Some environments (redirected stdout, certain CI shells) throw when
             // querying cursor position. The flow runner handles a missing initial
-            // row gracefully; returning 0 keeps the spike resilient there.
+            // row gracefully; returning 0 keeps the prompt resilient there.
             return 0;
         }
     }
@@ -262,14 +250,13 @@ internal static class Hex1bSelectionPrompt
     /// </summary>
     private sealed record SelectionPromptBody<T>(
         string PromptText,
-        IReadOnlyList<T> Choices,
-        IReadOnlyList<ChoiceRow> Rows,
+        IReadOnlyList<Choice<T>> AllChoices,
         FlowStep Step,
         Action<T> OnChosen,
         Action OnCancelled) : Hex1bWidget where T : notnull
     {
         protected override Hex1bWidget Build(CompositionContext ctx) =>
-            BuildPromptBody(ctx, PromptText, Choices, Rows, Step, OnChosen, OnCancelled);
+            BuildPromptBody(ctx, PromptText, AllChoices, Step, OnChosen, OnCancelled);
     }
 
     private sealed class ResultBox<T>
@@ -284,5 +271,10 @@ internal static class Hex1bSelectionPrompt
         }
     }
 
-    private readonly record struct ChoiceRow(int OriginalIndex, string DisplayLabel, string ScoreKey);
+    /// <summary>
+    /// Bound to the typed <see cref="ListWidget{T}"/> as its item type so the
+    /// widget carries the original choice value alongside its pre-stripped
+    /// display string — no index-map indirection on activation.
+    /// </summary>
+    private readonly record struct Choice<T>(T Value, string Display) where T : notnull;
 }
