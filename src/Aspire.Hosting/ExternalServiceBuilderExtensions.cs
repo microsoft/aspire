@@ -5,7 +5,6 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
-using HealthChecks.Uris;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -208,7 +207,7 @@ public static class ExternalServiceBuilderExtensions
     /// </para>
     /// <para>
     /// When the external service URL is a static <see cref="ExternalServiceResource.Uri"/>, the health check is registered
-    /// with <c>AddUrlGroup</c> at configuration time and the HTTP or HTTPS scheme is validated when this method is called.
+    /// at configuration time and the HTTP or HTTPS scheme is validated when this method is called.
     /// </para>
     /// <para>
     /// When the URL comes from a <see cref="ExternalServiceResource.UrlParameter"/>, the final address is not known at
@@ -310,14 +309,13 @@ public static class ExternalServiceBuilderExtensions
 /// </summary>
 internal static class HttpHealthCheckHelpers
 {
+    private static readonly TimeSpan s_defaultHttpTimeout = TimeSpan.FromSeconds(10);
+
     /// <summary>
     /// Gets a friendly error message for the given exception.
     /// </summary>
-    // NOTE: The timeout vs. cancellation distinction here is best-effort. The health check
-    // infrastructure cancels the same CancellationToken for both its own timeout and explicit
-    // caller cancellation, so IsCancellationRequested is true in both cases. A truly reliable
-    // distinction would require a separate internal timeout CTS, but the added complexity
-    // isn't warranted; both messages are user-friendly and actionable.
+    // HTTP probes use a separate internal timeout token. If the caller's token is canceled,
+    // treat the failure as explicit cancellation; otherwise an operation cancellation is a timeout.
     public static string GetFriendlyErrorMessage(Uri uri, Exception exception, CancellationToken cancellationToken)
     {
         var sanitizedUri = SanitizeUri(uri);
@@ -343,6 +341,25 @@ internal static class HttpHealthCheckHelpers
             ? uri.ToString()
             : new UriBuilder(uri) { UserName = string.Empty, Password = string.Empty }.Uri.ToString();
     }
+
+    public static async Task<HealthCheckResult> CheckUriAsync(Uri uri, int expectedStatusCode, Func<HttpClient> httpClientFactory, HealthCheckContext context, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeoutSource = new CancellationTokenSource(s_defaultHttpTimeout);
+            using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(timeoutSource.Token, cancellationToken);
+            using var response = await httpClientFactory().GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, linkedSource.Token).ConfigureAwait(false);
+
+            return (int)response.StatusCode == expectedStatusCode
+                ? HealthCheckResult.Healthy()
+                : new HealthCheckResult(context.Registration.FailureStatus, $"Request to {SanitizeUri(uri)} returned {(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (Exception ex)
+        {
+            var friendlyMessage = GetFriendlyErrorMessage(uri, ex, cancellationToken);
+            return new HealthCheckResult(context.Registration.FailureStatus, friendlyMessage, ex);
+        }
+    }
 }
 
 /// <summary>
@@ -351,43 +368,20 @@ internal static class HttpHealthCheckHelpers
 internal sealed class StaticUriHealthCheck : IHealthCheck
 {
     private readonly Uri _uri;
-    private readonly UriHealthCheck _uriHealthCheck;
+    private readonly int _expectedStatusCode;
+    private readonly Func<HttpClient> _httpClientFactory;
 
     public StaticUriHealthCheck(Uri uri, int expectedStatusCode, Func<HttpClient> httpClientFactory)
     {
         ArgumentNullException.ThrowIfNull(uri);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
         _uri = uri;
-        var options = new UriHealthCheckOptions();
-        options.AddUri(uri, setup => setup.ExpectHttpCode(expectedStatusCode));
-        _uriHealthCheck = new UriHealthCheck(options, httpClientFactory);
+        _expectedStatusCode = expectedStatusCode;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var result = await _uriHealthCheck.CheckHealthAsync(context, cancellationToken).ConfigureAwait(false);
-
-            // Wrap unhealthy results from UriHealthCheck with friendly messages.
-            // When UriHealthCheck gets a non-matching status code it sets Description
-            // (not Exception), so preserve that description when available.
-            if (result.Status == HealthStatus.Unhealthy)
-            {
-                var friendlyMessage = result.Exception is not null
-                    ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, result.Exception, cancellationToken)
-                    : result.Description ?? $"Health check failed for {_uri}";
-                return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception, result.Data);
-            }
-
-            return result;
-        }
-        catch (Exception ex)
-        {
-            var friendlyMessage = HttpHealthCheckHelpers.GetFriendlyErrorMessage(_uri, ex, cancellationToken);
-            return HealthCheckResult.Unhealthy(friendlyMessage, ex);
-        }
-    }
+        => await HttpHealthCheckHelpers.CheckUriAsync(_uri, _expectedStatusCode, _httpClientFactory, context, cancellationToken).ConfigureAwait(false);
 }
 
 /// <summary>
@@ -439,25 +433,7 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
 
             targetUri = uri;
 
-            // Create fresh options and health check for each invocation to avoid duplicate URIs
-            var options = new UriHealthCheckOptions();
-            options.AddUri(uri, setup => setup.ExpectHttpCode(_expectedStatusCode));
-            var uriHealthCheck = new UriHealthCheck(options, _httpClientFactory);
-
-            var result = await uriHealthCheck.CheckHealthAsync(context, cancellationToken).ConfigureAwait(false);
-
-            // Wrap unhealthy results from UriHealthCheck with friendly messages.
-            // When UriHealthCheck gets a non-matching status code it sets Description
-            // (not Exception), so preserve that description when available.
-            if (result.Status == HealthStatus.Unhealthy)
-            {
-                var friendlyMessage = result.Exception is not null
-                    ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(targetUri, result.Exception, cancellationToken)
-                    : result.Description ?? $"Health check failed for {targetUri}";
-                return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception, result.Data);
-            }
-
-            return result;
+            return await HttpHealthCheckHelpers.CheckUriAsync(targetUri, _expectedStatusCode, _httpClientFactory, context, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -500,21 +476,7 @@ internal sealed class DeferredUriHealthCheck : IHealthCheck
 
         try
         {
-            var options = new UriHealthCheckOptions();
-            options.AddUri(uri, setup => setup.ExpectHttpCode(_expectedStatusCode));
-            var uriHealthCheck = new UriHealthCheck(options, _httpClientFactory);
-
-            var result = await uriHealthCheck.CheckHealthAsync(context, cancellationToken).ConfigureAwait(false);
-
-            if (result.Status == HealthStatus.Unhealthy)
-            {
-                var friendlyMessage = result.Exception is not null
-                    ? HttpHealthCheckHelpers.GetFriendlyErrorMessage(uri, result.Exception, cancellationToken)
-                    : result.Description ?? $"Health check failed for {uri}";
-                return HealthCheckResult.Unhealthy(friendlyMessage, result.Exception, result.Data);
-            }
-
-            return result;
+            return await HttpHealthCheckHelpers.CheckUriAsync(uri, _expectedStatusCode, _httpClientFactory, context, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

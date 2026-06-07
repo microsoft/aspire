@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -127,6 +130,36 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
     }
 
     [Fact]
+    public async Task StaticUriHealthCheck_ReturnsStatusCodeMessage()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var endpoint = new Uri($"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/");
+        using var serverCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var serverTask = WriteResponseAsync(listener, HttpStatusCode.NotFound, serverCts.Token);
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var externalService = builder.AddExternalService("test", endpoint.ToString())
+            .WithHttpHealthCheck(statusCode: 200);
+
+        using var app = builder.Build();
+        var healthCheckService = app.Services.GetRequiredService<HealthCheckService>();
+
+        Assert.True(externalService.Resource.TryGetAnnotationsOfType<HealthCheckAnnotation>(out var healthCheckAnnotations));
+        var healthCheckKey = healthCheckAnnotations.First(hc => hc.Key.StartsWith($"{externalService.Resource.Name}_external")).Key;
+
+        var result = await healthCheckService.CheckHealthAsync(
+            registration => registration.Name == healthCheckKey,
+            CancellationToken.None).DefaultTimeout();
+        Assert.Contains(healthCheckKey, result.Entries.Keys);
+        var entry = result.Entries[healthCheckKey];
+
+        Assert.Equal(HealthStatus.Unhealthy, entry.Status);
+        Assert.Equal($"Request to {endpoint} returned 404 NotFound", entry.Description);
+        await serverTask.DefaultTimeout();
+    }
+
+    [Fact]
     public void GetFriendlyErrorMessage_StripsCredentialsFromUri()
     {
         var uri = new Uri("http://user:secret@example.com:8080/");
@@ -184,5 +217,15 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
 
         Assert.Contains("404", message);
         Assert.Contains("NotFound", message);
+    }
+
+    private static async Task WriteResponseAsync(TcpListener listener, HttpStatusCode statusCode, CancellationToken cancellationToken)
+    {
+        using var client = await listener.AcceptTcpClientAsync(cancellationToken);
+        await using var stream = client.GetStream();
+
+        var response = Encoding.ASCII.GetBytes(
+            $"HTTP/1.1 {(int)statusCode} {statusCode}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        await stream.WriteAsync(response, cancellationToken);
     }
 }
