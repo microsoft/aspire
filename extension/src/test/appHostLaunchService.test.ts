@@ -7,8 +7,14 @@ import { AppHostLaunchService } from '../services/AppHostLaunchService';
 suite('AppHostLaunchService', () => {
     let service: AppHostLaunchService;
     let startDebuggingStub: sinon.SinonStub;
+    let onDidTerminateDebugSessionStub: sinon.SinonStub;
+    let onDidTerminateDebugSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
 
     setup(() => {
+        onDidTerminateDebugSessionStub = sinon.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(callback => {
+            onDidTerminateDebugSessionCallback = callback;
+            return new vscode.Disposable(() => { });
+        });
         service = new AppHostLaunchService();
         startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
     });
@@ -16,6 +22,8 @@ suite('AppHostLaunchService', () => {
     teardown(() => {
         service.dispose();
         startDebuggingStub.restore();
+        onDidTerminateDebugSessionStub.restore();
+        onDidTerminateDebugSessionCallback = undefined;
     });
 
     test('isLaunching returns false before launch', () => {
@@ -135,5 +143,47 @@ suite('AppHostLaunchService', () => {
         await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), /boom/);
 
         assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
+    });
+
+    test('terminated run sessions include appHostPath and command in termination event', () => {
+        let terminationEvent: { appHostPath: string; command?: string } | undefined;
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvent = event;
+        });
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback({
+            configuration: {
+                type: 'aspire',
+                program: '/repo/AppHost.csproj',
+                command: 'run',
+            },
+        } as unknown as vscode.DebugSession);
+
+        assert.deepStrictEqual(terminationEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: 'run',
+        });
+    });
+
+    test('terminated non-run sessions still raise termination events with command', () => {
+        let terminationEvent: { appHostPath: string; command?: string } | undefined;
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvent = event;
+        });
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback({
+            configuration: {
+                type: 'aspire',
+                program: '/repo/AppHost.csproj',
+                command: 'publish',
+            },
+        } as unknown as vscode.DebugSession);
+
+        assert.deepStrictEqual(terminationEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: 'publish',
+        });
     });
 });

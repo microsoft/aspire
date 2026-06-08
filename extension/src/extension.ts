@@ -164,7 +164,13 @@ export async function activate(context: vscode.ExtensionContext) {
   appHostTreeView.onDidChangeVisibility(e => {
     dataRepository.setPanelVisible(e.visible);
   });
-  const debugSessionRefreshRegistration = appHostLaunchService.onDidTerminateAppHostDebugSession(appHostPath => appHostTreeProvider.notifyAppHostStopping(appHostPath));
+  const debugSessionRefreshRegistration = appHostLaunchService.onDidTerminateAppHostDebugSession(event => {
+    // Only "run" session termination implies that an AppHost instance might be stopping.
+    // Commands like "publish" are short-lived and can execute alongside a running AppHost.
+    if (!event.command || event.command === 'run') {
+      appHostTreeProvider.notifyAppHostStopping(event.appHostPath);
+    }
+  });
 
   // Also drive data sources based on whether an AppHost file is currently visible in any editor.
   // This makes resource code-lens decorations on a fresh AppHost file work without first opening the panel.
@@ -618,7 +624,7 @@ function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, appHostTreeProvider, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, appHostTreeProvider, appHostLaunchService, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', result };
           }
           else {
@@ -718,6 +724,7 @@ function getE2eErrorMessage(error: unknown): string {
 async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
   appHostTreeProvider: AspireAppHostTreeProvider,
+  appHostLaunchService: AppHostLaunchService,
   command: AspireExtensionE2EControlCommand,
   markStarted: () => void
 ): Promise<unknown> {
@@ -766,12 +773,56 @@ async function executeE2eControlCommand(
       markStarted();
       return await commandPromise;
     }
+    case 'publishAppHost': {
+      const appHostPath = getAppHostPath(appHostTreeProvider, command.appHostPath);
+      markStarted();
+      const terminated = waitForAspireDebugSessionTermination(appHostPath, 'publish');
+      await appHostLaunchService.launch(appHostPath, 'publish', true);
+      await terminated;
+      return undefined;
+    }
     case 'openAppHostSource': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.openAppHostSource', element);
       markStarted();
       await commandPromise;
       return getActiveEditorInfo();
+    }
+
+    function getAppHostPath(appHostTreeProvider: AspireAppHostTreeProvider, appHostPath: string | undefined): string {
+      const element = getAppHostElement(appHostTreeProvider, appHostPath) as { appHostPath?: string };
+      if (!element.appHostPath) {
+        throw new Error('No AppHost path is available for the E2E control command.');
+      }
+
+      return element.appHostPath;
+    }
+
+    function waitForAspireDebugSessionTermination(appHostPath: string, command: string, timeoutMs = 60000): Promise<void> {
+      return new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          subscription.dispose();
+          reject(new Error(`Timed out waiting for Aspire ${command} debug session termination for '${appHostPath}'.`));
+        }, timeoutMs);
+
+        const subscription = vscode.debug.onDidTerminateDebugSession(session => {
+          if (session.configuration?.type !== 'aspire') {
+            return;
+          }
+
+          if (session.configuration?.command !== command) {
+            return;
+          }
+
+          if (!isMatchingAppHostPath(session.configuration?.program, appHostPath)) {
+            return;
+          }
+
+          clearTimeout(timeout);
+          subscription.dispose();
+          resolve();
+        });
+      });
     }
     case 'viewAppHostSource': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);

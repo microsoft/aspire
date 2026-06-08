@@ -14,6 +14,11 @@ export interface AppHostLaunchRequestedEvent {
     executionSuppressed: boolean;
 }
 
+export interface AppHostDebugSessionTerminatedEvent {
+    appHostPath: string;
+    command?: AspireCommandType;
+}
+
 /**
  * Centralizes all Aspire AppHost launch operations that require a resolved
  * AppHost path. Both the editor command provider (which discovers the path)
@@ -29,7 +34,7 @@ export class AppHostLaunchService implements vscode.Disposable {
     private readonly _onDidChangeLaunchingState = new vscode.EventEmitter<void>();
     readonly onDidChangeLaunchingState = this._onDidChangeLaunchingState.event;
 
-    private readonly _onDidTerminateAppHostDebugSession = new vscode.EventEmitter<string>();
+    private readonly _onDidTerminateAppHostDebugSession = new vscode.EventEmitter<AppHostDebugSessionTerminatedEvent>();
     readonly onDidTerminateAppHostDebugSession = this._onDidTerminateAppHostDebugSession.event;
 
     private readonly _onDidRequestLaunch = new vscode.EventEmitter<AppHostLaunchRequestedEvent>();
@@ -47,7 +52,10 @@ export class AppHostLaunchService implements vscode.Disposable {
                 if (this._launchingPaths.delete(key)) {
                     this._onDidChangeLaunchingState.fire();
                 }
-                this._onDidTerminateAppHostDebugSession.fire(appHostPath);
+                this._onDidTerminateAppHostDebugSession.fire({
+                    appHostPath,
+                    command: session.configuration.command,
+                });
             }
         });
     }

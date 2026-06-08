@@ -123,6 +123,38 @@ suite('Aspire debug dashboard E2E', function () {
         }
     });
 
+    test('publish session completion does not mark a running AppHost as stopping', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
+
+        const beforeDebug = getCommandInvocationCount('aspire-vscode.debugAppHost');
+        await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, beforeDebug);
+        await waitForDebugSessionStartup(appHostPath);
+        await waitForRunningAppHost();
+
+        await setShowStatusDelayForE2E(2500);
+        try {
+            await executeE2eControlCommand({ name: 'publishAppHost', appHostPath }, { waitFor: 'started' });
+            await waitForExtensionState(
+                file =>
+                    file.state.debugSessions.some(session => session.appHostPath !== undefined && isSamePath(session.appHostPath, appHostPath) && session.startupCompleted) &&
+                    !file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
+                `AppHost '${appHostPath}' to remain running without entering stopping state after publish`,
+                30000);
+        } finally {
+            await setShowStatusDelayForE2E(undefined);
+        }
+
+        await executeE2eControlCommand({ name: 'stopDebugging' });
+        await waitForNoDebugSessions();
+        await waitForNoRunningAppHost(120000, appHostPath);
+    });
+
     test('keeps AppHost build diagnostics in the debug console when the CLI exits after a build failure', async function () {
         if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true') {
             return;
