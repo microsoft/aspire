@@ -193,6 +193,17 @@ public class AddParameterTests
         Assert.Equal("A parameter value is required when publishValueAsDefault is true. (Parameter 'publishValueAsDefault')", ex.Message);
     }
 
+    [Fact]
+    public void AddParameterForPolyglotWithBothPublishValueAsDefaultAndSecretFails()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            ParameterResourceBuilderExtensions.AddParameterForPolyglot(appBuilder, "pass", "SomeSecret", publishValueAsDefault: true, secret: true));
+
+        Assert.Equal("A parameter cannot be both secret and published as a default value. (Parameter 'secret')", ex.Message);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
