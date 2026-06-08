@@ -3107,19 +3107,77 @@ public static class JavaScriptHostingExtensions
         // reads the same member set instead of walking the filesystem a second time.
         var workspaceInfo = workspace.GetWorkspaceInfo(packageManager.ExecutableName);
 
+        // The package-manager defaults already seed a copy pattern for the root manifests
+        // (e.g. npm's "package*.json", pnpm's "package.json pnpm-lock.yaml pnpm-workspace.yaml").
+        // Re-adding those exact files would emit redundant COPY lines, so skip any root file/dir
+        // already covered by an existing pattern. The member package.json files added last are never
+        // covered by the defaults — they are the whole reason this manifest layer exists.
+        var existingSourceTokens = packageManager.PackageFilesPatterns
+            .SelectMany(p => p.Source.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .ToArray();
+
         foreach (var file in workspaceInfo.RootFiles)
         {
-            packageManager.PackageFilesPatterns.Add(new CopyFilePattern(file, $"./{file}"));
+            if (!IsCoveredBySourceToken(existingSourceTokens, file))
+            {
+                packageManager.PackageFilesPatterns.Add(new CopyFilePattern(file, $"./{file}"));
+            }
         }
         foreach (var dir in workspaceInfo.RootDirs)
         {
-            packageManager.PackageFilesPatterns.Add(new CopyFilePattern(dir, $"./{dir}/"));
+            if (!IsCoveredBySourceToken(existingSourceTokens, dir))
+            {
+                packageManager.PackageFilesPatterns.Add(new CopyFilePattern(dir, $"./{dir}/"));
+            }
         }
 
         foreach (var dir in workspaceInfo.WorkspaceDirs)
         {
             packageManager.PackageFilesPatterns.Add(new CopyFilePattern($"{dir}/package.json", $"./{dir}/package.json"));
         }
+    }
+
+    // Returns true when <paramref name="candidate"/> (a root-level file or directory name) is already
+    // copied by one of the existing pattern source tokens. Tokens are either literal names or the
+    // single-'*' glob the npm default uses ("package*.json"). Matching mirrors Docker COPY / Go
+    // filepath.Match semantics where '*' does NOT cross a '/': that is critical so a root glob like
+    // "package*.json" is never treated as covering a member manifest such as "packages/api/package.json"
+    // (which would silently drop it from the cache-stable layer). Any shape we don't model returns
+    // false, erring toward an explicit (harmless) COPY rather than dropping a file.
+    private static bool IsCoveredBySourceToken(IReadOnlyList<string> sourceTokens, string candidate)
+    {
+        foreach (var token in sourceTokens)
+        {
+            if (string.Equals(token, candidate, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var starIndex = token.IndexOf('*', StringComparison.Ordinal);
+            if (starIndex < 0 || token.IndexOf('*', starIndex + 1) >= 0)
+            {
+                // No star, or more than one star: not a shape we evaluate.
+                continue;
+            }
+
+            var prefix = token[..starIndex];
+            var suffix = token[(starIndex + 1)..];
+            if (candidate.Length < prefix.Length + suffix.Length ||
+                !candidate.StartsWith(prefix, StringComparison.Ordinal) ||
+                !candidate.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // The span the '*' stands in for must not cross a directory separator.
+            var middle = candidate[prefix.Length..(candidate.Length - suffix.Length)];
+            if (!middle.Contains('/'))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
