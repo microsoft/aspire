@@ -128,6 +128,15 @@ public static class RedisBuilderExtensions
                     additionalArgs.Add(persistenceAnnotation.KeysChangedThreshold.ToString(CultureInfo.InvariantCulture));
                 }
 
+                if (redis.TryGetAnnotationsOfType<RedisModuleAnnotation>(out var moduleAnnotations))
+                {
+                    foreach (var moduleAnnotation in moduleAnnotations)
+                    {
+                        additionalArgs.Add("--loadmodule");
+                        additionalArgs.Add(moduleAnnotation.Path);
+                    }
+                }
+
                 // This is a temporary workaround to allow the args list to be expanded dynamically at run time with additional server certificate arguments.
                 if (context.ExecutionContext.IsRunMode)
                 {
@@ -521,6 +530,40 @@ public static class RedisBuilderExtensions
     }
 
     /// <summary>
+    /// Configures the Redis resource to use the specified native Redis module.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="nativeModule">The well-known, pre-installed Redis module to load.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport]
+    public static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, RedisNativeModule nativeModule) =>
+        builder.WithAnnotation(
+            annotation: new RedisNativeModuleAnnotation(nativeModule),
+            behavior: ResourceAnnotationMutationBehavior.Append
+        );
+
+    /// <summary>
+    /// Configures the Redis resource to use the specified Redis module by providing the path to the module's <c>.so</c> file on the container.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="path">The path to the Redis module <c>.so</c> file on the container. This should be an absolute path.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport]
+    public static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, string path) =>
+        builder.WithAnnotation(
+            annotation: new RedisModuleAnnotation(path),
+            behavior: ResourceAnnotationMutationBehavior.Append
+        );
+
+    private record RedisModuleAnnotation(
+        string Path
+    ) : IResourceAnnotation;
+
+    private sealed record RedisNativeModuleAnnotation(
+        RedisNativeModule NativeModule
+    ) : RedisModuleAnnotation(NativeModule.Path);
+
+    /// <summary>
     /// Adds a named volume for the data folder to a Redis Insight container resource.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
@@ -584,5 +627,49 @@ public static class RedisBuilderExtensions
             endpoint.Port = port;
         });
 
+    }
+}
+
+/// <summary>
+/// Well-known Redis modules that are included in the Redis container image from version 8 and above.
+/// </summary>
+/// <remarks>
+/// See https://redis.io/blog/redis-8-ga/
+/// </remarks>
+public enum RedisNativeModule
+{
+    /// <summary>
+    /// Redis JSON module for storing, updating, and querying JSON documents in Redis.
+    /// </summary>
+    Json,
+
+    /// <summary>
+    /// Redis Search module for secondary indexing and querying of data stored in Redis.
+    /// </summary>
+    Search,
+
+    /// <summary>
+    /// Redis Bloom Filter module for probabilistic data structures including Bloom filters, Cuckoo filters, Count-Min Sketches, and Top-K filters.
+    /// </summary>
+    BloomFilter,
+
+    /// <summary>
+    /// Redis TimeSeries module for efficient storage and querying of time series data in Redis.
+    /// </summary>
+    TimeSeries,
+}
+
+internal static class RedisNativeModuleExtensions
+{
+    extension(RedisNativeModule nativeModule)
+    {
+        public string Path => nativeModule switch
+        {
+            RedisNativeModule.Search => "/usr/local/lib/redis/modules/redisearch.so",
+            RedisNativeModule.Json => "/usr/local/lib/redis/modules/rejson.so",
+            RedisNativeModule.BloomFilter => "/usr/local/lib/redis/modules/redisbloom.so",
+            RedisNativeModule.TimeSeries => "/usr/local/lib/redis/modules/redistimeseries.so",
+            _ => throw new NotSupportedException($"The Redis native module '{nativeModule}' is not supported."),
+        };
     }
 }
