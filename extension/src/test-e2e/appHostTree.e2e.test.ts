@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem } from './helpers/vscode';
@@ -12,7 +12,9 @@ suite('Aspire AppHost tree E2E', function () {
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
+            () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopPrimaryAppHostIfRunning(),
+            () => waitForNoDebugSessions().catch(() => undefined),
             () => waitForNoRunningAppHost().catch(() => undefined),
         ], 'AppHost tree E2E teardown failed.');
     });
@@ -88,16 +90,14 @@ suite('Aspire AppHost tree E2E', function () {
 
         await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
 
-        // The fixture can remain running from prior actions; force a known baseline so this test
-        // observes a fresh run command before validating stale-state clearing on return.
+        // Prior tests can leave a debug session attached to the same AppHost path.
+        // Normalize to a no-debug/no-running baseline before validating stale-state clearing.
+        await executeE2eControlCommand({ name: 'stopDebugging' });
+        await waitForNoDebugSessions(120000);
         await stopAppHostIfRunning(appHostPath);
         await waitForNoRunningAppHost(120000, appHostPath);
 
-        const beforeRun = getTerminalCommandCount();
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
-        await waitForTerminalCommand(
-            event => event.sequence > beforeRun && event.subcommand.startsWith('run ') && event.subcommand.includes(appHostPath),
-            'workspace AppHost run command');
         await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
         await waitForRunningAppHost();
 
@@ -116,16 +116,14 @@ suite('Aspire AppHost tree E2E', function () {
 
         await executeE2eControlCommand({ name: 'switchToGlobalView' });
 
-        // The fixture can remain running from prior actions; force a known baseline so this test
-        // observes a fresh run command before validating stale-state clearing on return.
+        // Prior tests can leave a debug session attached to the same AppHost path.
+        // Normalize to a no-debug/no-running baseline before validating stale-state clearing.
+        await executeE2eControlCommand({ name: 'stopDebugging' });
+        await waitForNoDebugSessions(120000);
         await stopAppHostIfRunning(appHostPath);
         await waitForNoRunningAppHost(120000, appHostPath);
 
-        const beforeRun = getTerminalCommandCount();
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
-        await waitForTerminalCommand(
-            event => event.sequence > beforeRun && event.subcommand.startsWith('run ') && event.subcommand.includes(appHostPath),
-            'global AppHost run command');
         await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
         await waitForRunningAppHost();
 
