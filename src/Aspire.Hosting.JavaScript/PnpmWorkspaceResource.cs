@@ -14,6 +14,6 @@ public sealed class PnpmWorkspaceResource(string name, string workingDirectory)
     : JavaScriptWorkspaceResource(name, workingDirectory)
 {
     /// <inheritdoc />
-    public override IReadOnlyList<string> GetRunScriptCommand(string projectName, string scriptName, IReadOnlyList<string> scriptArgs)
-        => WorkspaceCommandFactories.Pnpm(projectName, scriptName, scriptArgs);
+    public override IReadOnlyList<string> GetRunScriptCommand(string workspaceProjectName, string scriptName, IReadOnlyList<string> scriptArgs)
+        => WorkspaceCommandFactories.Pnpm(workspaceProjectName, scriptName, scriptArgs);
 }
