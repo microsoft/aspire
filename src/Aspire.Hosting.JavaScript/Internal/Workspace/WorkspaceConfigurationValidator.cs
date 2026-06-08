@@ -176,20 +176,41 @@ internal static class WorkspaceConfigurationValidator
         var hasBunLock = File.Exists(Path.Combine(root, "bun.lock")) ||
                          File.Exists(Path.Combine(root, "bun.lockb"));
 
-        var lockfilePm = (hasNpmLock, hasYarnLock, hasPnpmLock, hasBunLock) switch
+        // Collect every lockfile family present at the root. We distinguish two failure shapes:
+        //   - Multiple families coexist (e.g. pnpm-lock.yaml + yarn.lock): ambiguous regardless of the
+        //     configured package manager. The install/build would behave differently depending on which
+        //     lockfile the package manager honors, and the manifest layer would copy the wrong file set.
+        //   - Exactly one family is present but it disagrees with the configured package manager.
+        var presentLockfilePms = new List<string>();
+        if (hasNpmLock)
         {
-            (true, false, false, false) => "npm",
-            (false, true, false, false) => "yarn",
-            (false, false, true, false) => "pnpm",
-            (false, false, false, true) => "bun",
-            _ => null,
-        };
+            presentLockfilePms.Add("npm");
+        }
+        if (hasYarnLock)
+        {
+            presentLockfilePms.Add("yarn");
+        }
+        if (hasPnpmLock)
+        {
+            presentLockfilePms.Add("pnpm");
+        }
+        if (hasBunLock)
+        {
+            presentLockfilePms.Add("bun");
+        }
 
-        if (lockfilePm is not null && !string.Equals(lockfilePm, configuredPm, StringComparison.Ordinal))
+        // Fail only when NONE of the present lockfiles belong to the configured package manager. That is a
+        // genuine mismatch: a frozen/reproducible install would have no matching lockfile to honor. Extra
+        // lockfiles alongside the matching one are tolerated — the configured PM is explicit (it came from
+        // Add<Pm>Workspace) and ignores foreign lockfiles at install time. The extras are still copied into
+        // the manifest layer, which is inert but slightly noisy; that is not worth failing the build over.
+        if (presentLockfilePms.Count > 0 && !presentLockfilePms.Contains(configuredPm))
         {
-            diagnostics.Add(
-                $"Workspace root '{root}' has a {lockfilePm} lockfile, but the workspace is configured to use {configuredPm}. " +
-                $"Either call Add{Capitalize(lockfilePm)}Workspace instead of Add{Capitalize(configuredPm)}Workspace, or remove the {lockfilePm} lockfile.");
+            diagnostics.Add(presentLockfilePms.Count == 1
+                ? $"Workspace root '{root}' has a {presentLockfilePms[0]} lockfile, but the workspace is configured to use {configuredPm}. " +
+                  $"Either call Add{Capitalize(presentLockfilePms[0])}Workspace instead of Add{Capitalize(configuredPm)}Workspace, or remove the {presentLockfilePms[0]} lockfile."
+                : $"Workspace root '{root}' has lockfiles for {string.Join(", ", presentLockfilePms)}, but none match the configured package manager {configuredPm}. " +
+                  $"Run the {configuredPm} install at the workspace root to produce its lockfile, or switch to the matching Add*Workspace.");
         }
 
         // pnpm-workspace.yaml is pnpm-specific; its presence under a non-pnpm workspace is a misconfiguration.
