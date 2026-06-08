@@ -36,7 +36,7 @@ jobs:
 
       - name: Install dotnet-affected
         if: ${{ github.event_name == 'pull_request' }}
-        run: ./dotnet.sh tool install --global dotnet-affected --version 6.2.0-preview-1
+        run: ./dotnet.sh tool install --global dotnet-affected --version 6.2.0
 
       - name: Evaluate changed paths (active selector)
         id: detect_active_raw

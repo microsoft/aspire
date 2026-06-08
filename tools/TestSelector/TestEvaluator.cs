@@ -211,6 +211,14 @@ internal static class TestEvaluator
         var allTestProjects = FilterAndCombineTestProjects(
             logger, config, affectedResult.AffectedProjects, mappedProjects);
 
+        // Step 9b: Conservative guard for the "matched-but-zero" gap (see CheckMatchedButZeroProjects).
+        var matchedButZeroResult = CheckMatchedButZeroProjects(
+            logger, config, pathTriggeredCategories, affectedResult.AffectedProjects, allTestProjects, activeFiles, ignoredFiles);
+        if (matchedButZeroResult is not null)
+        {
+            return matchedButZeroResult;
+        }
+
         // Step 10: Detect NuGet-dependent tests
         var nugetInfo = DetectNuGetDependentTests(
             logger, config, affectedResult.AffectedProjects, activeFiles, workingDir);
@@ -557,6 +565,61 @@ internal static class TestEvaluator
 
         logger.LogSuccess("All files are accounted for");
         return null;
+    }
+
+    /// <summary>
+    /// Conservative guard for the "matched-but-zero" gap: integration-relevant files were
+    /// matched (the <c>integrations</c> category fired) but the build graph attributed the
+    /// change to no project at all, so zero integration test projects were selected.
+    /// Returns a run-all result in that case, otherwise <see langword="null"/>.
+    /// </summary>
+    /// <remarks>
+    /// The usual cause is a changed file that is not an MSBuild input of any project (for
+    /// example a file under a project that sets <c>EnableDefaultItems=false</c>, or one that
+    /// is otherwise outside the default item globs), so dotnet-affected's reverse-dependency
+    /// walk returns nothing. Selecting no tests there would silently skip coverage for a
+    /// source area we know changed, so we fall back to running everything.
+    /// <para>
+    /// Scoped to the <c>integrations</c> category on purpose: the boolean-driven categories
+    /// (cli_e2e, extension, polyglot) gate their own jobs via <c>run_&lt;category&gt;</c>
+    /// regardless of the affected-projects matrix, so an empty matrix is expected and correct
+    /// for them. Requiring <paramref name="affectedProjects"/> to be empty keeps this from
+    /// firing when dotnet-affected <em>did</em> see the change but it resolved only to a
+    /// restricted opt-out project (see <see cref="RestrictedProjectFilter"/>) or a source
+    /// project with no dependent test — those are deliberate outcomes, not blind spots.
+    /// </para>
+    /// </remarks>
+    internal static TestSelectionResult? CheckMatchedButZeroProjects(
+        DiagnosticLogger logger,
+        TestSelectorConfig config,
+        Dictionary<string, bool> pathTriggeredCategories,
+        List<string> affectedProjects,
+        List<string> allTestProjects,
+        List<string> activeFiles,
+        List<string> ignoredFiles)
+    {
+        logger.LogStep("Check Matched-But-Zero Projects");
+
+        // "integrations" is the contract name of the category whose coverage is driven by
+        // the affected_test_projects matrix (see TestSelectionResult.WriteGitHubOutput).
+        if (!pathTriggeredCategories.GetValueOrDefault("integrations")
+            || allTestProjects.Count > 0
+            || affectedProjects.Count > 0)
+        {
+            logger.LogSuccess("No matched-but-zero gap detected");
+            return null;
+        }
+
+        logger.LogWarning("Integrations category matched but the change resolved to zero projects");
+        logger.LogDecision("Run ALL tests", "Integration-relevant change not attributable to any project (likely a non-MSBuild-input file)");
+
+        var result = TestSelectionResult.RunAll(
+            "Integration-relevant files matched but resolved to zero test projects (change not seen by dotnet-affected; likely a non-MSBuild-input file)");
+        result.ChangedFiles = activeFiles;
+        result.IgnoredFiles = ignoredFiles;
+        InitializeCategories(result, config, allEnabled: true);
+        logger.LogSummary(true, "integrations_matched_zero_projects", 0, []);
+        return result;
     }
 
     private static async Task<(List<string> AffectedProjects, TestSelectionResult? FallbackResult)> RunDotnetAffectedAsync(

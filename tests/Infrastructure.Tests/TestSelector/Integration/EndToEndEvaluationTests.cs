@@ -1181,4 +1181,104 @@ public class EndToEndEvaluationTests
     }
 
     #endregion
+
+    #region Matched-But-Zero Guard Tests
+
+    // The "matched-but-zero" guard runs all tests when the integrations category matched a
+    // change but dotnet-affected attributed it to no project at all (e.g. a non-MSBuild-input
+    // file under a covered source area). Without it, that change would silently select zero
+    // integration test projects. These tests drive CheckMatchedButZeroProjects directly because
+    // forcing real dotnet-affected to return an empty set would require a non-input-file git
+    // fixture, which is fragile and slow.
+
+    private const string MatchedButZeroConfigJson = """
+    {
+        "ignorePaths": [],
+        "categories": {
+            "integrations": { "triggerPaths": ["src/**"] },
+            "polyglot": { "triggerPaths": [".github/workflows/polyglot-validation.yml"] }
+        },
+        "sourceToTestMappings": []
+    }
+    """;
+
+    [Fact]
+    public void CheckMatchedButZeroProjects_IntegrationsMatchedZeroProjects_RunsAll()
+    {
+        var config = TestSelectorConfig.LoadFromJson(MatchedButZeroConfigJson);
+        var logger = new DiagnosticLogger(false);
+        var categories = new Dictionary<string, bool> { ["integrations"] = true, ["polyglot"] = false };
+
+        var result = TestEvaluator.CheckMatchedButZeroProjects(
+            logger, config, categories,
+            affectedProjects: [],
+            allTestProjects: [],
+            activeFiles: ["src/Aspire.Hosting.Redis/non-input-asset.txt"],
+            ignoredFiles: []);
+
+        Assert.NotNull(result);
+        Assert.True(result.RunAllTests);
+        Assert.True(result.Categories["integrations"]);
+        Assert.True(result.Categories["polyglot"]);
+        Assert.Contains("src/Aspire.Hosting.Redis/non-input-asset.txt", result.ChangedFiles);
+    }
+
+    [Fact]
+    public void CheckMatchedButZeroProjects_AffectedProjectsPresent_DoesNotRunAll()
+    {
+        // dotnet-affected saw the change but it resolved to no test project (e.g. it only
+        // pulled in a restricted opt-out project, or a source project with no dependent
+        // test). That is a deliberate outcome, not a blind spot, so the guard must not fire.
+        var config = TestSelectorConfig.LoadFromJson(MatchedButZeroConfigJson);
+        var logger = new DiagnosticLogger(false);
+        var categories = new Dictionary<string, bool> { ["integrations"] = true, ["polyglot"] = false };
+
+        var result = TestEvaluator.CheckMatchedButZeroProjects(
+            logger, config, categories,
+            affectedProjects: ["src/Aspire.Hosting.Redis/Aspire.Hosting.Redis.csproj"],
+            allTestProjects: [],
+            activeFiles: ["src/Aspire.Hosting.Redis/RedisBuilderExtensions.cs"],
+            ignoredFiles: []);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void CheckMatchedButZeroProjects_OnlyBooleanCategoryMatched_DoesNotRunAll()
+    {
+        // A polyglot-only change (e.g. its workflow file) runs the polyglot job via its
+        // run_polyglot boolean; an empty affected-projects matrix is expected there, so the
+        // guard must not over-run by forcing run-all.
+        var config = TestSelectorConfig.LoadFromJson(MatchedButZeroConfigJson);
+        var logger = new DiagnosticLogger(false);
+        var categories = new Dictionary<string, bool> { ["integrations"] = false, ["polyglot"] = true };
+
+        var result = TestEvaluator.CheckMatchedButZeroProjects(
+            logger, config, categories,
+            affectedProjects: [],
+            allTestProjects: [],
+            activeFiles: [".github/workflows/polyglot-validation.yml"],
+            ignoredFiles: []);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void CheckMatchedButZeroProjects_TestProjectsResolved_DoesNotRunAll()
+    {
+        var config = TestSelectorConfig.LoadFromJson(MatchedButZeroConfigJson);
+        var logger = new DiagnosticLogger(false);
+        var categories = new Dictionary<string, bool> { ["integrations"] = true, ["polyglot"] = false };
+
+        var result = TestEvaluator.CheckMatchedButZeroProjects(
+            logger, config, categories,
+            affectedProjects: ["src/Aspire.Hosting.Redis/Aspire.Hosting.Redis.csproj"],
+            allTestProjects: ["tests/Aspire.Hosting.Redis.Tests/Aspire.Hosting.Redis.Tests.csproj"],
+            activeFiles: ["src/Aspire.Hosting.Redis/RedisBuilderExtensions.cs"],
+            ignoredFiles: []);
+
+        Assert.Null(result);
+    }
+
+    #endregion
 }
