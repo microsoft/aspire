@@ -537,10 +537,7 @@ public static class RedisBuilderExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport]
     public static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, RedisNativeModule nativeModule) =>
-        builder.WithAnnotation(
-            annotation: new RedisNativeModuleAnnotation(nativeModule),
-            behavior: ResourceAnnotationMutationBehavior.Append
-        );
+        builder.WithAnnotation(new RedisNativeModuleAnnotation(nativeModule));
 
     /// <summary>
     /// Configures the Redis resource to use the specified Redis module by providing the path to the module's <c>.so</c> file on the container.
@@ -550,10 +547,7 @@ public static class RedisBuilderExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport]
     public static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, string path) =>
-        builder.WithAnnotation(
-            annotation: new RedisModuleAnnotation(path),
-            behavior: ResourceAnnotationMutationBehavior.Append
-        );
+        builder.WithAnnotation(new RedisModuleAnnotation(path));
 
     private record RedisModuleAnnotation(
         string Path
@@ -631,7 +625,7 @@ public static class RedisBuilderExtensions
 }
 
 /// <summary>
-/// Well-known Redis modules that are included in the Redis container image from version 8 and above.
+/// Well-known Redis modules that are included in the Redis container image from version 8 onward.
 /// </summary>
 /// <remarks>
 /// See https://redis.io/blog/redis-8-ga/
