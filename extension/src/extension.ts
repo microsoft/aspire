@@ -774,12 +774,13 @@ async function executeE2eControlCommand(
       return await commandPromise;
     }
     case 'publishAppHost': {
-      const appHostPath = getAppHostPath(appHostTreeProvider, command.appHostPath);
+      const element = getAppHostElement(appHostTreeProvider, command.appHostPath) as { appHostPath?: string };
+      if (!element.appHostPath) {
+        throw new Error('No AppHost path is available for the E2E control command.');
+      }
+      const commandPromise = appHostLaunchService.launch(element.appHostPath, 'publish', true);
       markStarted();
-      const terminated = waitForAspireDebugSessionTermination(appHostPath, 'publish');
-      await appHostLaunchService.launch(appHostPath, 'publish', true);
-      await terminated;
-      return undefined;
+      return await commandPromise;
     }
     case 'openAppHostSource': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
@@ -789,41 +790,6 @@ async function executeE2eControlCommand(
       return getActiveEditorInfo();
     }
 
-    function getAppHostPath(appHostTreeProvider: AspireAppHostTreeProvider, appHostPath: string | undefined): string {
-      const element = getAppHostElement(appHostTreeProvider, appHostPath) as { appHostPath?: string };
-      if (!element.appHostPath) {
-        throw new Error('No AppHost path is available for the E2E control command.');
-      }
-
-      return element.appHostPath;
-    }
-
-    function waitForAspireDebugSessionTermination(appHostPath: string, command: string, timeoutMs = 60000): Promise<void> {
-      return new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          subscription.dispose();
-          reject(new Error(`Timed out waiting for Aspire ${command} debug session termination for '${appHostPath}'.`));
-        }, timeoutMs);
-
-        const subscription = vscode.debug.onDidTerminateDebugSession(session => {
-          if (session.configuration?.type !== 'aspire') {
-            return;
-          }
-
-          if (session.configuration?.command !== command) {
-            return;
-          }
-
-          if (!isMatchingAppHostPath(session.configuration?.program, appHostPath)) {
-            return;
-          }
-
-          clearTimeout(timeout);
-          subscription.dispose();
-          resolve();
-        });
-      });
-    }
     case 'viewAppHostSource': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.viewAppHostSource', element);
