@@ -56,6 +56,59 @@ public class WorkspaceValidationTests
     }
 
     [Fact]
+    public async Task PublishToleratesExtraLockfileWhenConfiguredManagerMatches()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        // A pnpm workspace whose root also carries a stray yarn.lock. The configured PM (pnpm) has its own
+        // matching lockfile, so the extra one is tolerated: pnpm ignores yarn.lock at install time.
+        var root = Path.Combine(tempDir.Path, "ws");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root" }""");
+        File.WriteAllText(Path.Combine(root, "pnpm-workspace.yaml"), "packages:\n  - \"packages/*\"\n");
+        File.WriteAllText(Path.Combine(root, "pnpm-lock.yaml"), string.Empty);
+        File.WriteAllText(Path.Combine(root, "yarn.lock"), string.Empty);
+        var webDir = Path.Combine(root, "packages", "web");
+        Directory.CreateDirectory(webDir);
+        File.WriteAllText(Path.Combine(webDir, "package.json"), """{ "name": "web", "scripts": { "build": "vite build" } }""");
+
+        var workspace = builder.AddPnpmWorkspace("ws", root);
+        var app = workspace.AddJavaScriptApp("web", "web", "packages/web").WithBuildScript("build");
+
+        // Should not throw — validation passes because the configured pnpm lockfile is present.
+        var manifest = await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+        Assert.NotNull(manifest);
+    }
+
+    [Fact]
+    public async Task PublishFlagsLockfilesWhenNoneMatchConfiguredManager()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        // A pnpm workspace whose only lockfiles are yarn.lock + bun.lock — neither matches the configured
+        // pnpm manager, so a --frozen-lockfile install would have no valid lockfile to honor.
+        var root = Path.Combine(tempDir.Path, "ws");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root" }""");
+        File.WriteAllText(Path.Combine(root, "pnpm-workspace.yaml"), "packages:\n  - \"packages/*\"\n");
+        File.WriteAllText(Path.Combine(root, "yarn.lock"), string.Empty);
+        File.WriteAllText(Path.Combine(root, "bun.lock"), string.Empty);
+        var webDir = Path.Combine(root, "packages", "web");
+        Directory.CreateDirectory(webDir);
+        File.WriteAllText(Path.Combine(webDir, "package.json"), """{ "name": "web", "scripts": { "build": "vite build" } }""");
+
+        var workspace = builder.AddPnpmWorkspace("ws", root);
+        var app = workspace.AddJavaScriptApp("web", "web", "packages/web").WithBuildScript("build");
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+
+        Assert.Contains("none match the configured package manager", ex.Message);
+        Assert.Contains("pnpm", ex.Message);
+    }
+
+    [Fact]
     public async Task PublishFlagsMissingScript()
     {
         using var tempDir = new TestTempDirectory();
