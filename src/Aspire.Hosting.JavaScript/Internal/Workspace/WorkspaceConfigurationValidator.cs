@@ -43,12 +43,12 @@ internal static class WorkspaceConfigurationValidator
 
         // Idempotency: a single workspace is shared by all its member apps (one installer, one Docker
         // context). Each member's publish callback / the single BeforeStart handler would otherwise
-        // re-run the same checks; mark the workspace validated after the first pass.
+        // re-run the same checks; mark the workspace validated after the first *successful* pass (see
+        // the end of this method) so a pass that threw still re-validates if the host is retried in-process.
         if (workspace.TryGetLastAnnotation<WorkspaceValidatedAnnotation>(out _))
         {
             return;
         }
-        workspace.Annotations.Add(new WorkspaceValidatedAnnotation());
 
         var root = workspace.WorkingDirectory;
         var configuredPm = workspace.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pm)
@@ -149,6 +149,10 @@ internal static class WorkspaceConfigurationValidator
         }
 
         ThrowIfAny(workspace.Name, diagnostics);
+
+        // Reaching here means no diagnostics were raised (ThrowIfAny aborts otherwise), so the workspace
+        // is validated. Mark it only now — on success — so a failed pass does not suppress a later retry.
+        workspace.Annotations.Add(new WorkspaceValidatedAnnotation());
     }
 
     private static IReadOnlyList<string> ReadDeclaredPatterns(string root, string packageManagerExecutable)

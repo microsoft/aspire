@@ -32,6 +32,9 @@ public abstract class JavaScriptWorkspaceResource(string name, string workingDir
     /// <param name="packageManagerExecutable">The package-manager executable name ("npm", "yarn", "pnpm", or "bun").</param>
     /// <returns>The discovered <see cref="WorkspaceInfo"/> for this workspace root.</returns>
     internal WorkspaceInfo GetWorkspaceInfo(string packageManagerExecutable)
+        // The cache key is implicit: a workspace resource has one fixed package manager (its concrete
+        // type), so every call passes the same executable and the first-call result stays valid. If a
+        // resource could ever switch package managers, this cache would need to key on the executable.
         => _workspaceInfo ??= WorkspaceMemberDiscovery.Discover(WorkingDirectory, packageManagerExecutable);
 
     /// <summary>
