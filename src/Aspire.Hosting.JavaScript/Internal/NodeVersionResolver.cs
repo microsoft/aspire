@@ -62,23 +62,25 @@ internal static class NodeVersionResolver
     /// toolchain pin is found.
     /// </summary>
     /// <remarks>
-    /// In workspace mode the workspace root is checked first because the dominant convention is
-    /// to pin Node version at the monorepo root with <c>.nvmrc</c> / <c>.tool-versions</c>; only
-    /// a minority of repos pin per-app. The app directory is checked second so that an explicit
-    /// per-app override still wins.
+    /// The app directory is checked first so that an explicit per-app pin always wins. In workspace
+    /// mode the workspace root is checked second as a fallback because the dominant convention is to
+    /// pin the Node version once at the monorepo root with <c>.nvmrc</c> / <c>.tool-versions</c>
+    /// rather than per-app.
     /// </remarks>
     public static string ResolveNodeVersion(string workingDirectory, ILogger logger, string? workspaceRoot = null)
     {
+        if (TryDetectPinnedNodeVersion(workingDirectory, logger, out var pinnedNodeVersion))
+        {
+            return pinnedNodeVersion;
+        }
+
+        // Fall back to a root-level pin for workspace members that do not pin per-app. Guard against
+        // re-reading the same directory when the workspace root equals the working directory.
         if (workspaceRoot is not null &&
             !string.Equals(Path.GetFullPath(workspaceRoot), Path.GetFullPath(workingDirectory), StringComparison.Ordinal) &&
             TryDetectPinnedNodeVersion(workspaceRoot, logger, out var rootPinned))
         {
             return rootPinned;
-        }
-
-        if (TryDetectPinnedNodeVersion(workingDirectory, logger, out var pinnedNodeVersion))
-        {
-            return pinnedNodeVersion;
         }
 
         logger.LogDebug("No Node.js version detected, using default version {DefaultVersion}", DefaultNodeVersion);

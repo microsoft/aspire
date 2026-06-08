@@ -15,12 +15,14 @@
 //          https://pnpm.io/filtering — the trailing "..." selects <name> AND
 //          its workspace dependencies in topological order, so building a
 //          target also builds the workspace libraries it depends on.
-//   bun  : bun --filter <name> run <script> [args...]
-//          https://bun.com/docs/cli/run#run-scripts-in-workspaces
+//   bun  : bun --filter=<name> run <script> [args...]
+//          https://bun.com/docs/cli/run#run-scripts-in-workspaces — the attached
+//          "--filter=<name>" form is required: the space-separated "--filter <name>"
+//          form fails to match the member once "run" follows (observed on bun 1.3.14).
 //
-// These delegates are stored on JavaScriptPackageManagerAnnotation so the
-// Dockerfile generator and the run-mode wiring don't have to switch on
-// executable name in multiple places.
+// The per-workspace-resource GetRunScriptCommand overrides delegate to these
+// factories so the Dockerfile generator and the run-mode wiring don't have to
+// switch on executable name in multiple places.
 
 namespace Aspire.Hosting.JavaScript.Internal.Workspace;
 
@@ -66,7 +68,12 @@ internal static class WorkspaceCommandFactories
     public static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> Bun =
         static (workspaceName, scriptName, scriptArgs) =>
         {
-            var argv = new List<string> { "bun", "--filter", workspaceName, "run", scriptName };
+            // Use the attached form "--filter=<name>" rather than the space-separated "--filter <name>".
+            // With the space-separated form, bun (observed on 1.3.14) fails to associate the value with
+            // the flag once the "run" subcommand follows and reports "error: No packages matched the
+            // filter", even though `bun pm ls` lists the member. The "--filter=<name>" form parses
+            // correctly in both orderings and matches npm's "--workspace=<name>" attached-value style.
+            var argv = new List<string> { "bun", $"--filter={workspaceName}", "run", scriptName };
             argv.AddRange(scriptArgs);
             return argv;
         };
