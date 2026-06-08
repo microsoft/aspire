@@ -10,7 +10,7 @@ namespace Aspire.Hosting.JavaScript;
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="workingDirectory">The working directory of the workspace.</param>
-public class YarnWorkspaceResource(string name, string workingDirectory)
+public sealed class YarnWorkspaceResource(string name, string workingDirectory)
     : JavaScriptWorkspaceResource(name, workingDirectory)
 {
     /// <inheritdoc />
