@@ -17,19 +17,6 @@ on:
   schedule:
     - cron: '0 2 * * *'  # Daily at 02:00 UTC
 
-  # Re-enabled with narrow paths filter scoped to key workflow files that
-  # orchestrate this pipeline. Changes to downstream workflows (e.g.
-  # build-packages.yml) are validated by the regular CI and don't need to
-  # re-trigger the full quarantine/outerloop run.
-  # Previously disabled (#12143) due to broad paths filter causing disk
-  # space issues on every CI/eng change.
-  pull_request:
-    paths:
-      - '.github/workflows/tests-outerloop.yml'
-      - '.github/workflows/specialized-test-runner.yml'
-      - '.github/workflows/run-tests.yml'
-      - '.github/workflows/build-cli-e2e-image.yml'
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

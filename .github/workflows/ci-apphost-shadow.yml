@@ -1,0 +1,272 @@
+name: CI AppHost Pipeline Shadow
+
+on:
+  workflow_dispatch:
+    inputs:
+      quality:
+        description: 'Install quality for daily smoke tests (dev, staging, release)'
+        required: false
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - release
+  pull_request:
+    paths:
+      - 'eng/ci/pipelines/apphost/**'
+      - '.github/workflows/ci-apphost-shadow.yml'
+      - '.github/workflows/typescript-sdk-tests.yml'
+      - '.github/workflows/build-packages.yml'
+      - '.github/workflows/verify-aspire-skills-bundle.yml'
+      - '.github/workflows/markdownlint.yml'
+      - '.github/workflows/build-cli-e2e-image.yml'
+      - '.github/workflows/tests-daily-smoke.yml'
+
+permissions:
+  actions: read
+  contents: read
+  attestations: read
+
+env:
+  ASPIRE_CLI_QUALITY: dev
+  ASPIRE_E2E_QUALITY: ${{ inputs.quality || 'dev' }}
+
+jobs:
+  apphost_pipeline:
+    name: AppHost pipeline (${{ matrix.step }})
+    runs-on: ${{ matrix.runner }}
+    if: ${{ github.repository_owner == 'microsoft' }}
+    continue-on-error: true
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - step: ci-fast
+            runner: ubuntu-latest
+          - step: ci-pack
+            runner: 8-core-ubuntu-latest
+          - step: ci-docs
+            runner: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+
+      - name: Install Aspire CLI
+        run: ./eng/scripts/get-aspire-cli.sh --quality "$ASPIRE_CLI_QUALITY"
+
+      - name: Show Aspire CLI version
+        run: aspire --version
+
+      - name: Prepare AppHost
+        working-directory: eng/ci/pipelines/apphost
+        run: aspire restore --apphost apphost.mts --non-interactive
+
+      - name: Add Markdownlint problem matcher
+        if: ${{ matrix.step == 'ci-docs' }}
+        run: echo "::add-matcher::.github/workflows/markdownlint-problem-matcher.json"
+
+      - name: List AppHost pipeline steps
+        run: >
+          aspire do ${{ matrix.step }}
+          --apphost eng/ci/pipelines/apphost/apphost.mts
+          --list-steps
+          --non-interactive
+
+      - name: Run AppHost pipeline step
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          aspire do ${{ matrix.step }}
+          --apphost eng/ci/pipelines/apphost/apphost.mts
+          --non-interactive
+
+      - name: Upload built NuGets
+        if: ${{ always() && matrix.step == 'ci-pack' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: apphost-built-nugets
+          path: artifacts/packages
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: apphost-${{ matrix.step }}-logs
+          path: artifacts/log
+          if-no-files-found: ignore
+          retention-days: 5
+
+  apphost_cli_e2e_image:
+    name: AppHost CLI E2E image
+    runs-on: ${{ github.repository_owner == 'microsoft' && '8-core-ubuntu-latest' || 'ubuntu-latest' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
+    continue-on-error: true
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+
+      - name: Install Aspire CLI
+        run: ./eng/scripts/get-aspire-cli.sh --quality "$ASPIRE_CLI_QUALITY"
+
+      - name: Show Aspire CLI version
+        run: aspire --version
+
+      - name: Prepare AppHost
+        working-directory: eng/ci/pipelines/apphost
+        run: aspire restore --apphost apphost.mts --non-interactive
+
+      - name: Export GitHub Actions cache runtime
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            for (const name of ['ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RUNTIME_URL', 'ACTIONS_CACHE_URL', 'ACTIONS_RESULTS_URL']) {
+              const value = process.env[name];
+              if (value) {
+                core.setSecret(value);
+                core.exportVariable(name, value);
+              }
+            }
+
+      - name: List AppHost pipeline steps
+        run: >
+          aspire do ci-cli-e2e-image
+          --apphost eng/ci/pipelines/apphost/apphost.mts
+          --list-steps
+          --non-interactive
+
+      - name: Run AppHost CLI E2E image pipeline
+        env:
+          CLI_E2E_INCLUDE_POLYGLOT_IMAGES: 'false'
+        run: >
+          aspire do ci-cli-e2e-image
+          --apphost eng/ci/pipelines/apphost/apphost.mts
+          --non-interactive
+
+      - name: Upload CLI E2E .NET Docker image
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: apphost-cli-e2e-dotnet-image
+          path: artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: apphost-ci-cli-e2e-image-logs
+          path: artifacts/log
+          if-no-files-found: ignore
+          retention-days: 5
+
+  apphost_daily_smoke:
+    name: AppHost daily CLI smoke
+    needs: apphost_cli_e2e_image
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    continue-on-error: true
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Install Aspire CLI
+        run: ./eng/scripts/get-aspire-cli.sh --quality "$ASPIRE_CLI_QUALITY"
+
+      - name: Show Aspire CLI version
+        run: aspire --version
+
+      - name: Prepare AppHost
+        working-directory: eng/ci/pipelines/apphost
+        run: aspire restore --apphost apphost.mts --non-interactive
+
+      - name: Download prebuilt CLI E2E Docker image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: apphost-cli-e2e-dotnet-image
+          path: ${{ github.workspace }}/cli-e2e-image
+
+      - name: List AppHost pipeline steps
+        run: >
+          aspire do ci-daily-smoke
+          --apphost eng/ci/pipelines/apphost/apphost.mts
+          --list-steps
+          --non-interactive
+
+      - name: Run AppHost daily smoke pipeline
+        env:
+          CLI_E2E_IMAGE_DIR: ${{ github.workspace }}/cli-e2e-image
+          ASPIRE_E2E_QUALITY: ${{ env.ASPIRE_E2E_QUALITY }}
+          ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR: ${{ github.workspace }}/testresults/cli-versions
+        run: >
+          aspire do ci-daily-smoke
+          --apphost eng/ci/pipelines/apphost/apphost.mts
+          --non-interactive
+
+      - name: Upload logs and test results
+        id: upload-logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: apphost-smoke-test-results-${{ env.ASPIRE_E2E_QUALITY }}
+          path: |
+            testresults/**
+            **/TestResults/**/*.log
+            **/TestResults/recordings/**
+            artifacts/log/**
+          if-no-files-found: ignore
+          retention-days: 5
+
+      - name: Generate test results summary
+        if: always()
+        continue-on-error: true
+        env:
+          SMOKE_TEST_RESULTS_ARTIFACT_URL: ${{ steps.upload-logs.outputs.artifact-url }}
+        run: |
+          if [ -d "${{ github.workspace }}/testresults" ]; then
+            summary_args=(
+              run
+              --project
+              "${{ github.workspace }}/tools/GenerateTestSummary/GenerateTestSummary.csproj"
+              --
+              "${{ github.workspace }}/testresults"
+            )
+
+            artifact_url="${SMOKE_TEST_RESULTS_ARTIFACT_URL:-}"
+            if [ -n "$artifact_url" ]; then
+              summary_args+=("-u" "$artifact_url")
+            fi
+
+            dotnet "${summary_args[@]}"
+          fi
