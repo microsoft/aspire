@@ -158,6 +158,8 @@ internal static class CliTestHelper
         services.AddSingleton(options.AspireSkillsInstallerFactory);
         services.AddSingleton(options.PlaywrightCliRunnerFactory);
         services.AddSingleton<PlaywrightCliInstaller>();
+        services.AddSingleton<Aspire.Cli.Agents.Hooks.ITelemetryHookInstaller, Aspire.Cli.Agents.Hooks.TelemetryHookInstaller>();
+        services.AddSingleton<Aspire.Cli.Agents.Hooks.ITelemetryHookConfigurator, Aspire.Cli.Agents.Hooks.TelemetryHookConfigurator>();
         services.AddSingleton(options.ScaffoldingServiceFactory);
         services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();

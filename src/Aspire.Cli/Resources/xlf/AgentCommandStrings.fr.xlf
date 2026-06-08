@@ -147,6 +147,11 @@
         <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_NoTelemetryHooksOptionDescription">
+        <source>Skip installing the agent telemetry hooks that record Aspire skill and tool usage.</source>
+        <target state="new">Skip installing the agent telemetry hooks that record Aspire skill and tool usage.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
@@ -160,6 +165,26 @@
       <trans-unit id="InitCommand_SkillsOptionDescription">
         <source>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</source>
         <target state="new">Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
+        <source>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</source>
+        <target state="new">Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_TelemetryHookSkippedUnexpectedShape">
+        <source>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</source>
+        <target state="new">Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_TelemetryHookWriteFailed">
+        <source>Skipped the telemetry hook for {0} because its configuration could not be written.</source>
+        <target state="new">Skipped the telemetry hook for {0} because its configuration could not be written.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_TelemetryHooksInstalled">
+        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_AGENT_TELEMETRY_OPTOUT=true, or re-run with --no-telemetry-hooks to remove the install step.</source>
+        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_AGENT_TELEMETRY_OPTOUT=true, or re-run with --no-telemetry-hooks to remove the install step.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">

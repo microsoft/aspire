@@ -250,6 +250,51 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Skip installing the agent telemetry hooks that record Aspire skill and tool usage..
+        /// </summary>
+        internal static string InitCommand_NoTelemetryHooksOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_NoTelemetryHooksOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Installed Aspire agent telemetry hooks for: {0}. ....
+        /// </summary>
+        internal static string InitCommand_TelemetryHooksInstalled {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHooksInstalled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped the telemetry hook for {0} because its configuration file contains malformed JSON..
+        /// </summary>
+        internal static string InitCommand_TelemetryHookSkippedMalformedConfig {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHookSkippedMalformedConfig", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped the telemetry hook for {0} because its configuration has an unexpected shape..
+        /// </summary>
+        internal static string InitCommand_TelemetryHookSkippedUnexpectedShape {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHookSkippedUnexpectedShape", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped the telemetry hook for {0} because its configuration could not be written..
+        /// </summary>
+        internal static string InitCommand_TelemetryHookWriteFailed {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHookWriteFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Aspire CLI commands and workflows for distributed apps.
         /// </summary>
         internal static string SkillDescription_Aspire {
