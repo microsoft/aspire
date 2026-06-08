@@ -24,7 +24,7 @@
 // those must remain tolerated because pnpm, not Aspire, owns their semantics.
 //
 // All glob semantics (recursive, negated, non-trailing star) are handled by
-// callers (see WorkspacePatternValidator and WorkspacePatternMatcher).
+// callers (see WorkspacePatternValidator).
 
 using YamlDotNet.Serialization;
 
