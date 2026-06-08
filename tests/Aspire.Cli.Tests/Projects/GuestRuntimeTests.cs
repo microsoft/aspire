@@ -203,7 +203,6 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var call = Assert.Single(launcher.Calls);
         Assert.Equal("npx", call.Command);
         Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName], call.Args);
-        Assert.DoesNotContain(launcher.Calls, recordedCall => recordedCall.Args.Contains("tsc"));
     }
 
     [Fact]
@@ -439,7 +438,6 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var call = Assert.Single(launcher.Calls);
         Assert.Equal("npx", call.Command);
         Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName, "--operation", "publish"], call.Args);
-        Assert.DoesNotContain(launcher.Calls, recordedCall => recordedCall.Args.Contains("tsc"));
     }
 
     [Fact]
