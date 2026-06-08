@@ -6,14 +6,14 @@ using Aspire.Hosting.JavaScript.Internal.Workspace;
 namespace Aspire.Hosting.JavaScript;
 
 /// <summary>
-/// A resource that represents a Yarn workspace.
+/// A resource that represents a Bun workspace.
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="workingDirectory">The working directory of the workspace.</param>
-public class YarnWorkspaceResource(string name, string workingDirectory)
+public class BunWorkspaceResource(string name, string workingDirectory)
     : JavaScriptWorkspaceResource(name, workingDirectory)
 {
     /// <inheritdoc />
     public override IReadOnlyList<string> GetRunScriptCommand(string projectName, string scriptName, IReadOnlyList<string> scriptArgs)
-        => WorkspaceCommandFactories.Yarn(projectName, scriptName, scriptArgs);
+        => WorkspaceCommandFactories.Bun(projectName, scriptName, scriptArgs);
 }
