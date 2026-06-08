@@ -31,7 +31,7 @@
 //   }
 //
 // All glob semantics (recursive, negated, non-trailing star) are handled by
-// callers (see WorkspacePatternValidator and WorkspacePatternMatcher) — this
+// callers (see WorkspacePatternValidator) — this
 // parser just extracts the strings.
 
 using System.Text.Json;
