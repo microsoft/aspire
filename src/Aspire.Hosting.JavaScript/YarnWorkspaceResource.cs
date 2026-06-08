@@ -14,6 +14,6 @@ public sealed class YarnWorkspaceResource(string name, string workingDirectory)
     : JavaScriptWorkspaceResource(name, workingDirectory)
 {
     /// <inheritdoc />
-    public override IReadOnlyList<string> GetRunScriptCommand(string projectName, string scriptName, IReadOnlyList<string> scriptArgs)
-        => WorkspaceCommandFactories.Yarn(projectName, scriptName, scriptArgs);
+    public override IReadOnlyList<string> GetRunScriptCommand(string workspaceProjectName, string scriptName, IReadOnlyList<string> scriptArgs)
+        => WorkspaceCommandFactories.Yarn(workspaceProjectName, scriptName, scriptArgs);
 }
