@@ -23,9 +23,7 @@
 //   python 3.12
 
 using System.Globalization;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.JavaScript.Internal;
 
