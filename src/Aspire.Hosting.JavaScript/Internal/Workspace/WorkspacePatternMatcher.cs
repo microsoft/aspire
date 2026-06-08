@@ -8,32 +8,35 @@
 // Supported shapes (validated by WorkspacePatternValidator, replicated here for
 // the matcher's benefit):
 // - Literal: "apps/web" matches exactly "apps/web" (after trimming "./" and
-// trailing "/")
-// - Trailing single-star: "packages/\*" matches "packages/" where
-//  does not start with '.' (dotted directories like ".git" are
-// excluded by convention to mirror minimatch / pnpm matcher defaults).
+//   trailing "/")
+// - Trailing single-star: "packages/*" matches "packages/<name>" where <name>
+//   does not start with '.' (dotted directories like ".git" are excluded by
+//   convention to mirror minimatch / pnpm matcher defaults).
 //
 // Pattern-level validation should be performed by the caller before invoking
 // this matcher; the matcher returns false for unsupported shapes rather than
 // throwing.
+
 namespace Aspire.Hosting.JavaScript.Internal.Workspace;
 
 internal static class WorkspacePatternMatcher
 {
-    ///
-    /// Returns  when
-    /// (a forward-slash relative path) matches .
-    ///
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="candidatePath"/>
+    /// (a forward-slash relative path) matches <paramref name="pattern"/>.
+    /// </summary>
     public static bool IsMatch(string pattern, string candidatePath)
     {
         ArgumentNullException.ThrowIfNull(pattern);
         ArgumentNullException.ThrowIfNull(candidatePath);
+
         var normalizedPattern = Normalize(pattern);
         var normalizedCandidate = Normalize(candidatePath);
         if (normalizedPattern.Length == 0 || normalizedCandidate.Length == 0)
         {
             return false;
         }
+
         var lastSlash = normalizedPattern.LastIndexOf('/');
         var lastSegment = lastSlash < 0 ? normalizedPattern : normalizedPattern[(lastSlash + 1)..];
         if (lastSegment == "*")
@@ -46,15 +49,19 @@ internal static class WorkspacePatternMatcher
             {
                 return false;
             }
+
             return string.Equals(candidateParent, parent, StringComparison.Ordinal);
         }
+
         if (normalizedPattern.Contains('*', StringComparison.Ordinal))
         {
             // Validator should have rejected this; treat as no-match.
             return false;
         }
+
         return string.Equals(normalizedPattern, normalizedCandidate, StringComparison.Ordinal);
     }
+
     private static string Normalize(string path)
     {
         var normalized = path.Replace('\\', '/');
@@ -62,10 +69,12 @@ internal static class WorkspacePatternMatcher
         {
             normalized = normalized[2..];
         }
+
         if (normalized.EndsWith('/'))
         {
             normalized = normalized[..^1];
         }
+
         return normalized;
     }
 }
