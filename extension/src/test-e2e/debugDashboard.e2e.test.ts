@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCommandInvocationCount, getTreeAppHostLabel, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugSessionStartup, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
+import { getCommandInvocationCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
@@ -57,6 +57,70 @@ suite('Aspire debug dashboard E2E', function () {
 
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
+    });
+
+    test('workspace debug stop removes running apphost', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
+
+        const beforeDebug = getCommandInvocationCount('aspire-vscode.debugAppHost');
+        await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, beforeDebug);
+        await waitForDebugSessionStartup(appHostPath);
+        await waitForRunningAppHost();
+
+        await setShowStatusDelayForE2E(2500);
+        try {
+            await executeE2eControlCommand({ name: 'stopDebugging' });
+            await waitForExtensionState(
+                file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
+                `AppHost '${appHostPath}' to enter stopping state`,
+                120000);
+            await waitForNoDebugSessions();
+            await waitForNoRunningAppHost(120000, appHostPath);
+            await waitForExtensionState(
+                file => !file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
+                `AppHost '${appHostPath}' to leave stopping state`,
+                120000);
+        } finally {
+            await setShowStatusDelayForE2E(undefined);
+        }
+    });
+
+    test('global debug stop removes running apphost', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        await executeE2eControlCommand({ name: 'switchToGlobalView' });
+
+        const beforeDebug = getCommandInvocationCount('aspire-vscode.debugAppHost');
+        await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, beforeDebug);
+        await waitForDebugSessionStartup(appHostPath);
+        await waitForRunningAppHost();
+
+        await setShowStatusDelayForE2E(2500);
+        try {
+            await executeE2eControlCommand({ name: 'stopDebugging' });
+            await waitForExtensionState(
+                file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
+                `AppHost '${appHostPath}' to enter stopping state`,
+                120000);
+            await waitForNoDebugSessions();
+            await waitForNoRunningAppHost(120000, appHostPath);
+            await waitForExtensionState(
+                file => !file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
+                `AppHost '${appHostPath}' to leave stopping state`,
+                120000);
+        } finally {
+            await setShowStatusDelayForE2E(undefined);
+        }
     });
 
     test('keeps AppHost build diagnostics in the debug console when the CLI exits after a build failure', async function () {

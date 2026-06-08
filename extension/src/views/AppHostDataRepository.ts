@@ -122,6 +122,8 @@ interface GlobalDescribeStream {
  */
 export class AppHostDataRepository {
     private static readonly _processShutdownGracePeriodMs = 5000;
+    private static readonly _appHostStopRefreshDelayMs = 400;
+    private static readonly _resumePsFollowPollDelayMs = 50;
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
@@ -130,6 +132,7 @@ export class AppHostDataRepository {
     private _viewMode: ViewMode = 'workspace';
     private _panelVisible = false;
     private _appHostFileOpen = false;
+    private _hasEverBeenDataActive = false;
 
     // ── Workspace mode state (describe --follow) ──
     private _workspaceResources: Map<string, ResourceJson> = new Map();
@@ -160,6 +163,8 @@ export class AppHostDataRepository {
     private _psFetchVersion = 0;
     private _supportsPsFollow = true;
     private _fetchInProgress = false;
+    private _postStopRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+    private _resumePsFollowTimer: ReturnType<typeof setTimeout> | undefined;
 
     // ── Global mode per-AppHost describe streams ──
     // In global mode `ps` only returns AppHost-level data, so to populate
@@ -303,8 +308,14 @@ export class AppHostDataRepository {
         if (this._panelVisible === visible) {
             return;
         }
+        const wasDataActive = this._dataActive;
         this._panelVisible = visible;
-        this._syncPolling();
+        const becameDataActive = !wasDataActive && this._dataActive;
+        const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
+        if (this._dataActive) {
+            this._hasEverBeenDataActive = true;
+        }
+        this._syncPolling(resumedFromInactive);
     }
 
     /**
@@ -318,8 +329,14 @@ export class AppHostDataRepository {
         if (this._appHostFileOpen === open) {
             return;
         }
+        const wasDataActive = this._dataActive;
         this._appHostFileOpen = open;
-        this._syncPolling();
+        const becameDataActive = !wasDataActive && this._dataActive;
+        const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
+        if (this._dataActive) {
+            this._hasEverBeenDataActive = true;
+        }
+        this._syncPolling(resumedFromInactive);
     }
 
     refresh(): void {
@@ -338,8 +355,36 @@ export class AppHostDataRepository {
             this._startDescribeWatch();
         }
         if (this._shouldPoll) {
-            this._fetchAppHosts();
+            if (this._supportsPsFollow) {
+                this._restartPsWithAuthoritativeSnapshot();
+            } else {
+                this._fetchAppHosts();
+            }
         }
+    }
+
+    requestAppHostStopRefresh(_appHostPath: string): void {
+        if (this._disposed || !this._shouldPoll) {
+            return;
+        }
+
+        if (this._postStopRefreshTimer) {
+            clearTimeout(this._postStopRefreshTimer);
+        }
+
+        this._postStopRefreshTimer = setTimeout(() => {
+            this._postStopRefreshTimer = undefined;
+            if (this._disposed || !this._shouldPoll) {
+                return;
+            }
+
+            if (this._supportsPsFollow) {
+                this._restartPsWithAuthoritativeSnapshot();
+            } else {
+                this._fetchAppHosts();
+            }
+        }, AppHostDataRepository._appHostStopRefreshDelayMs);
+        (this._postStopRefreshTimer as { unref?: () => void }).unref?.();
     }
 
     activate(): void {
@@ -349,6 +394,14 @@ export class AppHostDataRepository {
 
     dispose(): void {
         this._disposed = true;
+        if (this._postStopRefreshTimer) {
+            clearTimeout(this._postStopRefreshTimer);
+            this._postStopRefreshTimer = undefined;
+        }
+        if (this._resumePsFollowTimer) {
+            clearTimeout(this._resumePsFollowTimer);
+            this._resumePsFollowTimer = undefined;
+        }
         this._stopPolling();
         this._stopDescribeWatch();
         this._stopAllGlobalDescribes();
@@ -390,7 +443,7 @@ export class AppHostDataRepository {
         return this._workspaceAppHostDiscoveryComplete && this._workspaceAppHostPath !== undefined;
     }
 
-    private _syncPolling(): void {
+    private _syncPolling(refreshBeforeFollowOnResume = false): void {
         if (this._disposed) {
             return;
         }
@@ -406,7 +459,15 @@ export class AppHostDataRepository {
         }
 
         if (this._shouldPoll) {
-            this._startPsPolling();
+            const pollingActive = this._pollingInterval !== undefined
+                || this._psProcesses.size > 0
+                || this._fetchInProgress
+                || this._resumePsFollowTimer !== undefined;
+            if (refreshBeforeFollowOnResume && !pollingActive && this._supportsPsFollow) {
+                this._restartPsWithAuthoritativeSnapshot();
+            } else {
+                this._startPsPolling();
+            }
         } else {
             this._stopPolling();
         }
@@ -1071,6 +1132,10 @@ export class AppHostDataRepository {
     private _stopPolling(): void {
         this._psFetchVersion++;
         this._fetchInProgress = false;
+        if (this._resumePsFollowTimer) {
+            clearTimeout(this._resumePsFollowTimer);
+            this._resumePsFollowTimer = undefined;
+        }
         if (this._pollingInterval) {
             clearInterval(this._pollingInterval);
             this._pollingInterval = undefined;
@@ -1197,6 +1262,44 @@ export class AppHostDataRepository {
             }
             this._fetchInProgress = false;
         });
+    }
+
+    private _restartPsWithAuthoritativeSnapshot(): void {
+        this._stopPolling();
+        if (!this._shouldPoll) {
+            return;
+        }
+
+        this._fetchAppHosts();
+        this._scheduleFollowResumeAfterSnapshot();
+    }
+
+    private _scheduleFollowResumeAfterSnapshot(): void {
+        if (!this._supportsPsFollow) {
+            return;
+        }
+
+        if (this._resumePsFollowTimer) {
+            clearTimeout(this._resumePsFollowTimer);
+            this._resumePsFollowTimer = undefined;
+        }
+
+        const resumeWhenReady = () => {
+            if (this._disposed || !this._shouldPoll) {
+                return;
+            }
+
+            if (this._fetchInProgress) {
+                this._resumePsFollowTimer = setTimeout(resumeWhenReady, AppHostDataRepository._resumePsFollowPollDelayMs);
+                (this._resumePsFollowTimer as { unref?: () => void }).unref?.();
+                return;
+            }
+
+            this._startPsPolling();
+        };
+
+        this._resumePsFollowTimer = setTimeout(resumeWhenReady, 0);
+        (this._resumePsFollowTimer as { unref?: () => void }).unref?.();
     }
 
     private _isCurrentPsFetch(fetchVersion: number): boolean {

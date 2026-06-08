@@ -1,8 +1,8 @@
 import * as assert from 'assert';
-import { getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, clickTreeItem, openAspireView, waitForTreeItem } from './helpers/vscode';
+import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem } from './helpers/vscode';
 
 suite('Aspire AppHost tree E2E', function () {
     this.timeout(240000);
@@ -79,4 +79,61 @@ suite('Aspire AppHost tree E2E', function () {
         await stopPrimaryAppHostIfRunning();
         await waitForNoRunningAppHost();
     });
+
+    test('workspace view return clears stale stopped AppHost after returning to Aspire view', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
+
+        // The fixture can remain running from prior actions; force a known baseline so this test
+        // observes a fresh run command before validating stale-state clearing on return.
+        await stopAppHostIfRunning(appHostPath);
+        await waitForNoRunningAppHost(120000, appHostPath);
+
+        const beforeRun = getTerminalCommandCount();
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForTerminalCommand(
+            event => event.sequence > beforeRun && event.subcommand.startsWith('run ') && event.subcommand.includes(appHostPath),
+            'workspace AppHost run command');
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
+        await waitForRunningAppHost();
+
+        await executeCommandFromPalette('workbench.view.explorer');
+        await stopAppHostIfRunning(appHostPath);
+
+        await openAspireView();
+        await waitForNoRunningAppHost(120000, appHostPath);
+    });
+
+    test('global view return clears stale stopped AppHost after returning to Aspire view', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        await executeE2eControlCommand({ name: 'switchToGlobalView' });
+
+        // The fixture can remain running from prior actions; force a known baseline so this test
+        // observes a fresh run command before validating stale-state clearing on return.
+        await stopAppHostIfRunning(appHostPath);
+        await waitForNoRunningAppHost(120000, appHostPath);
+
+        const beforeRun = getTerminalCommandCount();
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForTerminalCommand(
+            event => event.sequence > beforeRun && event.subcommand.startsWith('run ') && event.subcommand.includes(appHostPath),
+            'global AppHost run command');
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
+        await waitForRunningAppHost();
+
+        await executeCommandFromPalette('workbench.view.explorer');
+        await stopAppHostIfRunning(appHostPath);
+
+        await openAspireView();
+        await waitForNoRunningAppHost(120000, appHostPath);
+    });
+
 });

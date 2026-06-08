@@ -694,6 +694,18 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         return this._findStoppingAppHostKey(appHostPath) !== undefined;
     }
 
+    private _isKnownRunningAppHost(appHostPath: string | undefined): boolean {
+        if (!appHostPath) {
+            return false;
+        }
+
+        if (this._repository.workspaceAppHost?.appHostPath && isMatchingAppHostPath(this._repository.workspaceAppHost.appHostPath, appHostPath)) {
+            return true;
+        }
+
+        return this._repository.appHosts.some(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath));
+    }
+
     private _findStoppingAppHostKey(appHostPath: string | undefined): string | undefined {
         if (!appHostPath) {
             return undefined;
@@ -1300,6 +1312,18 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
+    notifyAppHostStopping(appHostPath: string): void {
+        if (!appHostPath) {
+            return;
+        }
+
+        if (this._isKnownRunningAppHost(appHostPath)) {
+            this._trackStoppingAppHost(appHostPath);
+        }
+        (this._repository as { requestAppHostStopRefresh?: (path: string) => void }).requestAppHostStopRefresh?.(appHostPath);
+        this._onDidChangeTreeData.fire();
+    }
+
     async stopAppHost(element: AppHostItem | WorkspaceResourcesItem | WorkspaceAppHostItem): Promise<void> {
         const appHostPath = element instanceof AppHostItem ? element.appHost.appHostPath : element.appHostPath;
         if (!appHostPath) {
@@ -1307,8 +1331,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        this._trackStoppingAppHost(appHostPath);
-        this._onDidChangeTreeData.fire();
+        this.notifyAppHostStopping(appHostPath);
         try {
             await this._terminalProvider.sendAspireCommandToAspireTerminal(['stop', '--apphost', shellArg(appHostPath)]);
         } catch (err) {

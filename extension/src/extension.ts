@@ -164,7 +164,7 @@ export async function activate(context: vscode.ExtensionContext) {
   appHostTreeView.onDidChangeVisibility(e => {
     dataRepository.setPanelVisible(e.visible);
   });
-  const debugSessionRefreshRegistration = appHostLaunchService.onDidTerminateAppHostDebugSession(() => dataRepository.refresh());
+  const debugSessionRefreshRegistration = appHostLaunchService.onDidTerminateAppHostDebugSession(appHostPath => appHostTreeProvider.notifyAppHostStopping(appHostPath));
 
   // Also drive data sources based on whether an AppHost file is currently visible in any editor.
   // This makes resource code-lens decorations on a fresh AppHost file work without first opening the panel.

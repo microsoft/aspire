@@ -425,6 +425,94 @@ suite('AspireAppHostTreeProvider', () => {
         provider.dispose();
     });
 
+    test('global stop notification requests refresh and marks stopping for running apphosts', () => {
+        const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const requestAppHostStopRefresh = sandbox.stub();
+        const repository = {
+            viewMode: 'global' as ViewMode,
+            appHosts: [makeAppHost({ appHostPath })],
+            workspaceResources: [],
+            workspaceAppHostPath: undefined,
+            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostName: undefined,
+            workspaceAppHostDescription: undefined,
+            requestAppHostStopRefresh,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        provider.notifyAppHostStopping(appHostPath);
+
+        const [stoppingItem] = provider.getChildren();
+        assert.strictEqual(stoppingItem.contextValue, 'appHost:stopping');
+        assert.strictEqual(stoppingItem.description, 'Stopping...');
+        assert.strictEqual(requestAppHostStopRefresh.callCount, 1);
+        assert.deepStrictEqual(requestAppHostStopRefresh.firstCall.args, [appHostPath]);
+        provider.dispose();
+    });
+
+    test('workspace stop notification requests refresh and marks stopping for running apphosts', () => {
+        const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const requestAppHostStopRefresh = sandbox.stub();
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHost: makeAppHost({ appHostPath, resources: [] }),
+            workspaceAppHostPath: appHostPath,
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostName: 'Store',
+            workspaceAppHostDescription: undefined,
+            requestAppHostStopRefresh,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        provider.notifyAppHostStopping(appHostPath);
+
+        const [stoppingItem] = provider.getChildren();
+        assert.strictEqual(stoppingItem.contextValue, 'workspaceResources:stopping');
+        assert.strictEqual(stoppingItem.description, 'Stopping...');
+        assert.strictEqual(requestAppHostStopRefresh.callCount, 1);
+        assert.deepStrictEqual(requestAppHostStopRefresh.firstCall.args, [appHostPath]);
+        provider.dispose();
+    });
+
+    test('stop notification does not mark non-running apphosts as stopping', () => {
+        const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
+        const unknownAppHostPath = path.resolve('workspace', 'apps', 'Billing', 'AppHost.csproj');
+        const requestAppHostStopRefresh = sandbox.stub();
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHost: undefined,
+            workspaceAppHostPath: appHostPath,
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostName: 'Store',
+            workspaceAppHostDescription: undefined,
+            requestAppHostStopRefresh,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        provider.notifyAppHostStopping(appHostPath);
+        provider.notifyAppHostStopping(unknownAppHostPath);
+
+        const [groupItem] = provider.getChildren();
+        const [candidateItem] = provider.getChildren(groupItem);
+        assert.strictEqual(candidateItem.contextValue, 'workspaceAppHost');
+        assert.notStrictEqual(candidateItem.description, 'Stopping...');
+        assert.strictEqual(provider.stoppingPaths.length, 0);
+        assert.strictEqual(requestAppHostStopRefresh.callCount, 2);
+        assert.deepStrictEqual(requestAppHostStopRefresh.firstCall.args, [appHostPath]);
+        assert.deepStrictEqual(requestAppHostStopRefresh.secondCall.args, [unknownAppHostPath]);
+        provider.dispose();
+    });
+
     test('workspace AppHost shows stopping state immediately after stop command', () => {
         const commands: AspireSubcommand[] = [];
         const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
@@ -461,14 +549,15 @@ suite('AspireAppHostTreeProvider', () => {
     test('workspace AppHost candidate shows stopping state immediately after stop command', () => {
         const commands: AspireSubcommand[] = [];
         const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
+        const alternateCandidatePath = path.resolve('workspace', 'apps', 'Billing', 'AppHost.csproj');
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,
-            appHosts: [],
+            appHosts: [makeAppHost({ appHostPath, resources: [] })],
             workspaceResources: [],
             workspaceAppHost: undefined,
             workspaceAppHostPath: appHostPath,
-            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostCandidatePaths: [appHostPath, alternateCandidatePath],
             workspaceAppHostName: 'Store',
             workspaceAppHostDescription: undefined,
             onDidChangeData,
@@ -484,11 +573,11 @@ suite('AspireAppHostTreeProvider', () => {
 
         provider.stopAppHost(item as any);
 
-        const [stoppingGroupItem] = provider.getChildren();
-        const [stoppingItem] = provider.getChildren(stoppingGroupItem);
-        assert.strictEqual(stoppingItem.contextValue, 'workspaceAppHostStopping');
-        assert.strictEqual(stoppingItem.description, 'Stopping...');
-        assert.strictEqual((stoppingItem.iconPath as vscode.ThemeIcon).id, 'loading~spin');
+        const [updatedGroupItem] = provider.getChildren();
+        const [updatedItem] = provider.getChildren(updatedGroupItem);
+        assert.strictEqual(updatedItem.contextValue, 'workspaceResources:stopping');
+        assert.strictEqual(updatedItem.description, 'Stopping...');
+        assert.strictEqual((updatedItem.iconPath as vscode.ThemeIcon).id, 'loading~spin');
         assert.deepStrictEqual(commands, [['stop', '--apphost', shellArg(appHostPath)]]);
         provider.dispose();
     });
