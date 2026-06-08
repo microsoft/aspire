@@ -139,7 +139,7 @@ suite('Aspire debug dashboard E2E', function () {
 
         await setShowStatusDelayForE2E(2500);
         try {
-            await executeE2eControlCommand({ name: 'publishAppHost', appHostPath }, { waitFor: 'started' });
+            await executeE2eControlCommand({ name: 'publishAppHost', appHostPath }, { waitFor: 'started', timeoutMs: 30000 });
             await waitForExtensionState(
                 file =>
                     file.state.debugSessions.some(session => session.appHostPath !== undefined && isSamePath(session.appHostPath, appHostPath) && session.startupCompleted) &&

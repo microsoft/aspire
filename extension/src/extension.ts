@@ -167,7 +167,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const debugSessionRefreshRegistration = appHostLaunchService.onDidTerminateAppHostDebugSession(event => {
     // Only "run" session termination implies that an AppHost instance might be stopping.
     // Commands like "publish" are short-lived and can execute alongside a running AppHost.
-    if (!event.command || event.command === 'run') {
+    if (event.command === 'run') {
       appHostTreeProvider.notifyAppHostStopping(event.appHostPath);
     }
   });
