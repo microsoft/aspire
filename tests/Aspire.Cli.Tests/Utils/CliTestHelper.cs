@@ -278,6 +278,7 @@ internal static class CliTestHelper
         services.AddTransient<AgentCommand>();
         services.AddTransient<AgentMcpCommand>();
         services.AddTransient<AgentInitCommand>();
+        services.AddTransient<AgentTelemetryCommand>();
         services.AddSingleton<ResourceColorMap>();
         services.AddTransient<TelemetryCommand>();
         services.AddTransient<TelemetryLogsCommand>();

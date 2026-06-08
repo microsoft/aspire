@@ -228,4 +228,28 @@
   <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
     <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
   </data>
+  <data name="AgentTelemetryCommand_Description" xml:space="preserve">
+    <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>
+  </data>
+  <data name="AgentTelemetryCommand_EventTypeDescription" xml:space="preserve">
+    <value>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</value>
+  </data>
+  <data name="AgentTelemetryCommand_ClientNameDescription" xml:space="preserve">
+    <value>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</value>
+  </data>
+  <data name="AgentTelemetryCommand_SessionIdDescription" xml:space="preserve">
+    <value>The opaque AI agent session identifier</value>
+  </data>
+  <data name="AgentTelemetryCommand_SkillNameDescription" xml:space="preserve">
+    <value>The Aspire skill name for a skill_invocation event</value>
+  </data>
+  <data name="AgentTelemetryCommand_ToolNameDescription" xml:space="preserve">
+    <value>The Aspire MCP tool name for a tool_invocation event</value>
+  </data>
+  <data name="AgentTelemetryCommand_FileReferenceDescription" xml:space="preserve">
+    <value>The Aspire skills-relative reference file path for a reference_file_read event</value>
+  </data>
+  <data name="AgentTelemetryCommand_TimestampDescription" xml:space="preserve">
+    <value>The timestamp recorded for the event</value>
+  </data>
 </root>

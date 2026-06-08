@@ -563,5 +563,77 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InitCommand_SkillsOptionDescription", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly..
+        /// </summary>
+        internal static string AgentTelemetryCommand_Description {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_Description", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The telemetry event type (skill_invocation, tool_invocation, or reference_file_read).
+        /// </summary>
+        internal static string AgentTelemetryCommand_EventTypeDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_EventTypeDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode).
+        /// </summary>
+        internal static string AgentTelemetryCommand_ClientNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_ClientNameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The opaque AI agent session identifier.
+        /// </summary>
+        internal static string AgentTelemetryCommand_SessionIdDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_SessionIdDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire skill name for a skill_invocation event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_SkillNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_SkillNameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire MCP tool name for a tool_invocation event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_ToolNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_ToolNameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire skills-relative reference file path for a reference_file_read event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_FileReferenceDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_FileReferenceDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The timestamp recorded for the event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_TimestampDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_TimestampDescription", resourceCulture);
+            }
+        }
     }
 }

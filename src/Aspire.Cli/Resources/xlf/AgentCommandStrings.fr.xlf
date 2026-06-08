@@ -2,6 +2,46 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../AgentCommandStrings.resx">
     <body>
+      <trans-unit id="AgentTelemetryCommand_ClientNameDescription">
+        <source>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</source>
+        <target state="new">The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_Description">
+        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
+        <target state="new">Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
+        <source>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</source>
+        <target state="new">The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_FileReferenceDescription">
+        <source>The Aspire skills-relative reference file path for a reference_file_read event</source>
+        <target state="new">The Aspire skills-relative reference file path for a reference_file_read event</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
+        <source>The opaque AI agent session identifier</source>
+        <target state="new">The opaque AI agent session identifier</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_SkillNameDescription">
+        <source>The Aspire skill name for a skill_invocation event</source>
+        <target state="new">The Aspire skill name for a skill_invocation event</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_TimestampDescription">
+        <source>The timestamp recorded for the event</source>
+        <target state="new">The timestamp recorded for the event</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AgentTelemetryCommand_ToolNameDescription">
+        <source>The Aspire MCP tool name for a tool_invocation event</source>
+        <target state="new">The Aspire MCP tool name for a tool_invocation event</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
         <source>Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.</source>
         <target state="new">Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.</target>
