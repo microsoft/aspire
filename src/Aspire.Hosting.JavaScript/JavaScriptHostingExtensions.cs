@@ -435,6 +435,22 @@ public static class JavaScriptHostingExtensions
         appDirectory = Path.GetFullPath(appDirectory, builder.AppHostDirectory);
         var resource = new BunAppResource(name, "bun", appDirectory);
 
+        var resourceBuilder = builder.CreateBunAppBuilder(resource, scriptPath);
+
+        if (File.Exists(Path.Combine(appDirectory, "package.json")))
+        {
+            // Automatically add bun as the package manager if a package.json file exists
+            resourceBuilder.WithBun();
+        }
+
+        return resourceBuilder;
+    }
+
+    private static IResourceBuilder<BunAppResource> CreateBunAppBuilder(
+        this IDistributedApplicationBuilder builder,
+        BunAppResource resource,
+        string scriptPath)
+    {
         var resourceBuilder = builder.AddResource(resource)
             .WithBunDefaults()
             .WithArgs(c =>
@@ -544,6 +560,10 @@ public static class JavaScriptHostingExtensions
                         {
                             builderStage.Copy(".", ".");
                         }
+
+                        // Run post-copy finalization (e.g. regenerate Yarn PnP resolution files when a
+                        // Bun app is a member of a Yarn workspace). No-op for the default Bun package manager.
+                        packageManager.FinalizeDockerBuildStage?.Invoke(builderStage);
 
                         if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
@@ -660,7 +680,9 @@ public static class JavaScriptHostingExtensions
                         // See https://hub.docker.com/r/oven/bun
                         .User("bun")
                         .EmptyLine()
-                        .Entrypoint([resource.Command, scriptPath]);
+                        // Resolve the entry point inside the (possibly workspace-scoped) package directory so a
+                        // workspace member runs "<packagePath>/<scriptPath>"; a non-workspace app is unchanged.
+                        .Entrypoint([resource.Command, GetPublishedEntryPoint(resource, scriptPath)]);
                 });
             });
 
@@ -677,12 +699,6 @@ public static class JavaScriptHostingExtensions
                 }
             }
         });
-
-        if (File.Exists(Path.Combine(appDirectory, "package.json")))
-        {
-            // Automatically add bun as the package manager if a package.json file exists
-            resourceBuilder.WithBun();
-        }
 
         resourceBuilder.WithVSCodeDebugging(scriptPath, "bun");
 
@@ -2661,7 +2677,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="builder">The workspace resource builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <param name="workspaceProjectName">The name of the project in the workspace.</param>
-    /// <param name="packagePath">The path to the package directory relative to the workspace root (e.g. "packages/web"). Build output and entry-point paths resolve inside this member directory.</param>
+    /// <param name="packagePath">The path to the package directory relative to the workspace root (e.g. "packages/web"). Build output and entry-point paths resolve inside this member directory. When <see langword="null"/>, it is derived from the workspace member whose package.json name matches <paramref name="workspaceProjectName"/>.</param>
     /// <param name="runScriptName">The name of the script to run. Defaults to "dev".</param>
     /// <returns>A resource builder for the JavaScript application.</returns>
     [AspireExport("addJavaScriptAppToWorkspace")]
@@ -2669,18 +2685,18 @@ public static class JavaScriptHostingExtensions
         this IResourceBuilder<TWorkspace> builder,
         [ResourceName] string name,
         string workspaceProjectName,
-        string packagePath,
+        string? packagePath = null,
         string runScriptName = "dev")
         where TWorkspace : JavaScriptWorkspaceResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(workspaceProjectName);
-        ArgumentException.ThrowIfNullOrEmpty(packagePath);
         ArgumentException.ThrowIfNullOrEmpty(runScriptName);
 
         var workspace = builder.Resource;
-        var appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(workspace.WorkingDirectory, packagePath));
+        var resolvedPackagePath = ResolveWorkspacePackagePath(workspace, workspaceProjectName, packagePath);
+        var appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(workspace.WorkingDirectory, resolvedPackagePath));
         var resource = new JavaScriptAppResource(name, workspace.Name, workspace.WorkingDirectory);
 
         ConfigureWorkspaceContext(resource, workspace, workspaceProjectName);
@@ -2689,7 +2705,7 @@ public static class JavaScriptHostingExtensions
         // PublishAsDockerFile callback that reads it (via GetBuildOutputPath) runs later and
         // deferred; without the annotation in place the member's build-output/entry-point paths
         // would resolve at the workspace root instead of inside this package directory.
-        ConfigureWorkspaceAppPath(resource, appDirectory, packagePath);
+        ConfigureWorkspaceAppPath(resource, appDirectory, resolvedPackagePath);
 
         var resourceBuilder = builder.ApplicationBuilder
             .CreateDefaultJavaScriptAppBuilder(resource, appDirectory, runScriptName)
@@ -2709,7 +2725,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="builder">The workspace resource builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <param name="workspaceProjectName">The name of the project in the workspace.</param>
-    /// <param name="packagePath">The path to the package directory relative to the workspace root (e.g. "packages/web"). Used for Vite config resolution.</param>
+    /// <param name="packagePath">The path to the package directory relative to the workspace root (e.g. "packages/web"). Used for Vite config resolution. When <see langword="null"/>, it is derived from the workspace member whose package.json name matches <paramref name="workspaceProjectName"/>.</param>
     /// <param name="runScriptName">The name of the script to run. Defaults to "dev".</param>
     /// <returns>A resource builder for the Vite application.</returns>
     [AspireExport("addViteAppToWorkspace")]
@@ -2717,21 +2733,21 @@ public static class JavaScriptHostingExtensions
         this IResourceBuilder<TWorkspace> builder,
         [ResourceName] string name,
         string workspaceProjectName,
-        string packagePath,
+        string? packagePath = null,
         string runScriptName = "dev")
         where TWorkspace : JavaScriptWorkspaceResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(workspaceProjectName);
-        ArgumentException.ThrowIfNullOrEmpty(packagePath);
 
         var workspace = builder.Resource;
-        var appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(workspace.WorkingDirectory, packagePath));
+        var resolvedPackagePath = ResolveWorkspacePackagePath(workspace, workspaceProjectName, packagePath);
+        var appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(workspace.WorkingDirectory, resolvedPackagePath));
         var resource = new ViteAppResource(name, workspace.Name, workspace.WorkingDirectory);
 
         ConfigureWorkspaceContext(resource, workspace, workspaceProjectName);
-        ConfigureWorkspaceAppPath(resource, appDirectory, packagePath);
+        ConfigureWorkspaceAppPath(resource, appDirectory, resolvedPackagePath);
 
         var resourceBuilder = builder.ApplicationBuilder
             .CreateViteAppBuilder(resource, appDirectory, runScriptName)
@@ -2751,7 +2767,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="builder">The workspace resource builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <param name="workspaceProjectName">The name of the project in the workspace.</param>
-    /// <param name="packagePath">The path to the package directory relative to the workspace root (e.g. "packages/web"). Used for Next.js config resolution.</param>
+    /// <param name="packagePath">The path to the package directory relative to the workspace root (e.g. "packages/web"). Used for Next.js config resolution. When <see langword="null"/>, it is derived from the workspace member whose package.json name matches <paramref name="workspaceProjectName"/>.</param>
     /// <param name="runScriptName">The name of the script to run. Defaults to "dev".</param>
     /// <returns>A resource builder for the Next.js application.</returns>
     [AspireExport("addNextJsAppToWorkspace")]
@@ -2760,21 +2776,21 @@ public static class JavaScriptHostingExtensions
         this IResourceBuilder<TWorkspace> builder,
         [ResourceName] string name,
         string workspaceProjectName,
-        string packagePath,
+        string? packagePath = null,
         string runScriptName = "dev")
         where TWorkspace : JavaScriptWorkspaceResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(workspaceProjectName);
-        ArgumentException.ThrowIfNullOrEmpty(packagePath);
 
         var workspace = builder.Resource;
-        var appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(workspace.WorkingDirectory, packagePath));
+        var resolvedPackagePath = ResolveWorkspacePackagePath(workspace, workspaceProjectName, packagePath);
+        var appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(workspace.WorkingDirectory, resolvedPackagePath));
         var resource = new NextJsAppResource(name, workspace.Name, workspace.WorkingDirectory);
 
         ConfigureWorkspaceContext(resource, workspace, workspaceProjectName);
-        ConfigureWorkspaceAppPath(resource, appDirectory, packagePath);
+        ConfigureWorkspaceAppPath(resource, appDirectory, resolvedPackagePath);
 
         var resourceBuilder = builder.ApplicationBuilder
             .CreateNextJsAppBuilder(resource, appDirectory, runScriptName)
@@ -2794,8 +2810,8 @@ public static class JavaScriptHostingExtensions
     /// <param name="builder">The workspace resource builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <param name="workspaceProjectName">The name of the project in the workspace.</param>
-    /// <param name="packagePath">The path to the app package relative to the workspace root.</param>
     /// <param name="scriptPath">The path to the script relative to the app directory to run in production.</param>
+    /// <param name="packagePath">The path to the app package relative to the workspace root. When <see langword="null"/>, it is derived from the workspace member whose package.json name matches <paramref name="workspaceProjectName"/>.</param>
     /// <param name="runScriptName">The name of the script to run in development. Defaults to "dev".</param>
     /// <returns>A resource builder for the Node.js application.</returns>
     [AspireExport("addNodeAppToWorkspace")]
@@ -2803,24 +2819,24 @@ public static class JavaScriptHostingExtensions
         this IResourceBuilder<TWorkspace> builder,
         [ResourceName] string name,
         string workspaceProjectName,
-        string packagePath,
         string scriptPath,
+        string? packagePath = null,
         string runScriptName = "dev")
         where TWorkspace : JavaScriptWorkspaceResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(workspaceProjectName);
-        ArgumentException.ThrowIfNullOrEmpty(packagePath);
         ArgumentException.ThrowIfNullOrEmpty(scriptPath);
 
         var workspace = builder.Resource;
-        var appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(workspace.WorkingDirectory, packagePath));
+        var resolvedPackagePath = ResolveWorkspacePackagePath(workspace, workspaceProjectName, packagePath);
+        var appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(workspace.WorkingDirectory, resolvedPackagePath));
         var resource = new NodeAppResource(name, "node", workspace.WorkingDirectory);
 
         // Add workspace context annotation BEFORE any setup so AddInstaller skips per-app installer
         ConfigureWorkspaceContext(resource, workspace, workspaceProjectName);
-        ConfigureWorkspaceAppPath(resource, appDirectory, packagePath);
+        ConfigureWorkspaceAppPath(resource, appDirectory, resolvedPackagePath);
 
         var resourceBuilder = builder.ApplicationBuilder
             .CreateNodeAppBuilder(resource, scriptPath)
@@ -2830,6 +2846,90 @@ public static class JavaScriptHostingExtensions
         WireUpWorkspaceInstaller(builder, resourceBuilder);
 
         return resourceBuilder;
+    }
+
+    /// <summary>
+    /// Adds a Bun application to a workspace. In development mode, the app runs via the workspace
+    /// package manager. In publish mode, the build uses the workspace package manager but the runtime
+    /// entry point is <c>bun scriptPath</c> resolved inside the member's package directory.
+    /// </summary>
+    /// <typeparam name="TWorkspace">The workspace resource type.</typeparam>
+    /// <param name="builder">The workspace resource builder.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="workspaceProjectName">The name of the project in the workspace.</param>
+    /// <param name="scriptPath">The path to the script (for example <c>server.ts</c>) relative to the app directory to run in production.</param>
+    /// <param name="packagePath">The path to the app package relative to the workspace root. When <see langword="null"/>, it is derived from the workspace member whose package.json name matches <paramref name="workspaceProjectName"/>.</param>
+    /// <param name="runScriptName">The name of the script to run in development. Defaults to "dev".</param>
+    /// <returns>A resource builder for the Bun application.</returns>
+    [AspireExport("addBunAppToWorkspace")]
+    public static IResourceBuilder<BunAppResource> AddBunApp<TWorkspace>(
+        this IResourceBuilder<TWorkspace> builder,
+        [ResourceName] string name,
+        string workspaceProjectName,
+        string scriptPath,
+        string? packagePath = null,
+        string runScriptName = "dev")
+        where TWorkspace : JavaScriptWorkspaceResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(workspaceProjectName);
+        ArgumentException.ThrowIfNullOrEmpty(scriptPath);
+
+        var workspace = builder.Resource;
+        var resolvedPackagePath = ResolveWorkspacePackagePath(workspace, workspaceProjectName, packagePath);
+        var appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(workspace.WorkingDirectory, resolvedPackagePath));
+        var resource = new BunAppResource(name, "bun", workspace.WorkingDirectory);
+
+        // Add workspace context annotation BEFORE any setup so AddInstaller skips per-app installer
+        ConfigureWorkspaceContext(resource, workspace, workspaceProjectName);
+        ConfigureWorkspaceAppPath(resource, appDirectory, resolvedPackagePath);
+
+        var resourceBuilder = builder.ApplicationBuilder
+            .CreateBunAppBuilder(resource, scriptPath)
+            .WithParentRelationship(workspace)
+            .WithRunScript(runScriptName);
+
+        WireUpWorkspaceInstaller(builder, resourceBuilder);
+
+        return resourceBuilder;
+    }
+
+    /// <summary>
+    /// Resolves the member package path. When the caller supplied an explicit <paramref name="packagePath"/> it
+    /// is used verbatim; otherwise the path is derived from workspace discovery by matching the member whose
+    /// package.json <c>name</c> equals <paramref name="workspaceProjectName"/>. Discovery is cached on the
+    /// workspace resource (see <see cref="JavaScriptWorkspaceResource.GetWorkspaceInfo"/>), so this does not
+    /// re-walk the filesystem when the manifest layer already ran during <c>Add*Workspace</c>.
+    /// </summary>
+    private static string ResolveWorkspacePackagePath(JavaScriptWorkspaceResource workspace, string workspaceProjectName, string? packagePath)
+    {
+        if (!string.IsNullOrEmpty(packagePath))
+        {
+            return packagePath;
+        }
+
+        // The package-manager annotation is added by the Add*Workspace defaults before any member app is added,
+        // so it is always present here. It selects where the member declaration is read from (see GetWorkspaceInfo).
+        if (!workspace.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+        {
+            throw new InvalidOperationException(
+                $"Cannot derive the package path for workspace member '{workspaceProjectName}' because workspace '{workspace.Name}' has no package manager configured. Specify the package path explicitly.");
+        }
+
+        var workspaceInfo = workspace.GetWorkspaceInfo(packageManager.ExecutableName);
+        var member = workspaceInfo.Members.FirstOrDefault(m => string.Equals(m.PackageName, workspaceProjectName, StringComparison.Ordinal));
+        if (member is null)
+        {
+            var discovered = workspaceInfo.Members.Count == 0
+                ? "(none discovered)"
+                : string.Join(", ", workspaceInfo.Members.Select(m => m.PackageName));
+            throw new InvalidOperationException(
+                $"Could not find a workspace member named '{workspaceProjectName}' in workspace '{workspace.Name}'. " +
+                $"Specify the package path explicitly, or use one of the discovered members: {discovered}.");
+        }
+
+        return member.RelativeDir;
     }
 
     private static void ConfigureWorkspaceContext<TResource>(TResource resource, JavaScriptWorkspaceResource workspace, string workspaceProjectName)

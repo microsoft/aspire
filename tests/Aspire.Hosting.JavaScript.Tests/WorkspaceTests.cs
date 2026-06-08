@@ -367,7 +367,7 @@ public class WorkspaceTests
         var builder = DistributedApplication.CreateBuilder();
 
         var workspace = builder.AddBunWorkspace("bun", "bun-workspace");
-        workspace.AddNodeApp("api", "project1", "apps/api", "server.js");
+        workspace.AddNodeApp("api", "project1", "server.js", "apps/api");
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -377,6 +377,72 @@ public class WorkspaceTests
 
         Assert.Equal("api", appResource.Name);
         AssertWorkspaceAppWiring(appResource, workspaceResource, "project1", "apps/api");
+    }
+
+    [Fact]
+    public void AddBunAppToBunWorkspaceCreatesResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var workspace = builder.AddBunWorkspace("bun", "bun-workspace");
+        workspace.AddBunApp("api", "project1", "server.ts", "apps/api");
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var workspaceResource = Assert.Single(appModel.Resources.OfType<BunWorkspaceResource>());
+        var appResource = Assert.Single(appModel.Resources.OfType<BunAppResource>());
+
+        Assert.Equal("api", appResource.Name);
+        AssertWorkspaceAppWiring(appResource, workspaceResource, "project1", "apps/api");
+    }
+
+    [Fact]
+    public void AddWorkspaceAppWithoutPackagePathDerivesItFromProjectName()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        // The member "api" lives under packages/api on disk; omitting packagePath should resolve to
+        // that directory via workspace discovery (matching the package.json "name").
+        var root = Path.Combine(tempDir.Path, "ws");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root", "workspaces": ["packages/*"] }""");
+
+        var apiDir = Path.Combine(root, "packages", "api");
+        Directory.CreateDirectory(apiDir);
+        File.WriteAllText(Path.Combine(apiDir, "package.json"), """{ "name": "api" }""");
+
+        var builder = DistributedApplication.CreateBuilder();
+        var workspace = builder.AddNpmWorkspace("ws", root);
+        workspace.AddJavaScriptApp("apiApp", "api");
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var workspaceResource = Assert.Single(appModel.Resources.OfType<NpmWorkspaceResource>());
+        var appResource = Assert.Single(appModel.Resources.OfType<JavaScriptAppResource>());
+
+        AssertWorkspaceAppWiring(appResource, workspaceResource, "api", "packages/api");
+    }
+
+    [Fact]
+    public void AddWorkspaceAppWithUnknownProjectNameAndNoPackagePathThrows()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var root = Path.Combine(tempDir.Path, "ws");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root", "workspaces": ["packages/*"] }""");
+
+        var apiDir = Path.Combine(root, "packages", "api");
+        Directory.CreateDirectory(apiDir);
+        File.WriteAllText(Path.Combine(apiDir, "package.json"), """{ "name": "api" }""");
+
+        var builder = DistributedApplication.CreateBuilder();
+        var workspace = builder.AddNpmWorkspace("ws", root);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => workspace.AddJavaScriptApp("ghost", "does-not-exist"));
+        Assert.Contains("does-not-exist", ex.Message);
     }
 
     [Fact]
@@ -603,7 +669,7 @@ public class WorkspaceTests
         var builder = DistributedApplication.CreateBuilder();
 
         var workspace = builder.AddYarnWorkspace("yarn", "yarn-workspace");
-        workspace.AddNodeApp("api", "project1", "apps/api", "server.js");
+        workspace.AddNodeApp("api", "project1", "server.js", "apps/api");
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -622,7 +688,7 @@ public class WorkspaceTests
         var builder = DistributedApplication.CreateBuilder();
 
         var workspace = builder.AddPnpmWorkspace("pnpm", "pnpm-workspace");
-        workspace.AddNodeApp("api", "project1", "apps/api", "server.js");
+        workspace.AddNodeApp("api", "project1", "server.js", "apps/api");
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
