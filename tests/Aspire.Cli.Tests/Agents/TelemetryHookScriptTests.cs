@@ -109,6 +109,53 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_SkillMdRead_ForwardsSkillName()
+    {
+        var run = await RunBashHookAsync(
+            """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/aspire/SKILL.md"}}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        // Reading a skill's SKILL.md counts as using the skill, not a reference-file read.
+        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_SkillTool_Claude_StripsAspirePrefix()
+    {
+        var run = await RunBashHookAsync(
+            """{"hook_event_name":"PostToolUse","tool_name":"Skill","tool_input":{"skill":"aspire:aspire-deployment"}}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--client-name", "claude-code");
+        // Claude prefixes plugin skill names with "aspire:"; the hook strips it before the allowlist match.
+        AssertArg(args, "--skill-name", "aspire-deployment");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_McpTool_VsCode_DetectsClient()
+    {
+        var run = await RunBashHookAsync(
+            """{"hook_event_name":"PostToolUse","tool_name":"mcp_aspire_list_resources","tool_use_id":"toolu_01__vscode"}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "tool_invocation");
+        // A __vscode marker in tool_use_id distinguishes the VS Code client from Claude Code.
+        AssertArg(args, "--client-name", "vscode");
+        AssertArg(args, "--tool-name", "mcp_aspire_list_resources");
+    }
+
+    [Fact]
     [RequiresTools(["pwsh"])]
     public async Task Pwsh_SkillInvocation_Copilot_ForwardsSkillName()
     {
@@ -169,6 +216,63 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         AssertContinue(run);
         AssertNotInvoked(run);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_ReferenceFileRead_ForwardsRelativePath()
+    {
+        var run = await RunPwshHookAsync(
+            """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/aspire/references/deploy.md"}}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "reference_file_read");
+        // Only the repo-relative path after skills/<skill>/ is forwarded — never the absolute path.
+        AssertArg(args, "--file-reference", "aspire/references/deploy.md");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_SkillMdRead_ForwardsSkillName()
+    {
+        var run = await RunPwshHookAsync(
+            """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/aspire/SKILL.md"}}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_SkillTool_Claude_StripsAspirePrefix()
+    {
+        var run = await RunPwshHookAsync(
+            """{"hook_event_name":"PostToolUse","tool_name":"Skill","tool_input":{"skill":"aspire:aspire-deployment"}}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--client-name", "claude-code");
+        // Claude prefixes plugin skill names with "aspire:"; the hook strips it before the allowlist match.
+        AssertArg(args, "--skill-name", "aspire-deployment");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_McpTool_VsCode_DetectsClient()
+    {
+        var run = await RunPwshHookAsync(
+            """{"hook_event_name":"PostToolUse","tool_name":"mcp_aspire_list_resources","tool_use_id":"toolu_01__vscode"}""");
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "tool_invocation");
+        // A __vscode marker in tool_use_id distinguishes the VS Code client from Claude Code.
+        AssertArg(args, "--client-name", "vscode");
+        AssertArg(args, "--tool-name", "mcp_aspire_list_resources");
     }
 
     private async Task<HookRun> RunBashHookAsync(string payload, Dictionary<string, string?>? extraEnv = null)
