@@ -8,10 +8,10 @@
 // into validation errors and COPY directives.
 //
 // Lockfile precedence mirrors what each package manager looks at:
-// - npm : package-lock.json, npm-shrinkwrap.json
+// - npm  : package-lock.json, npm-shrinkwrap.json
 // - yarn : yarn.lock
 // - pnpm : pnpm-lock.yaml
-// - bun : bun.lock (textual), bun.lockb (binary)
+// - bun  : bun.lock (textual), bun.lockb (binary)
 //
 // Optional root config files that we copy into the manifest layer when present:
 // - pnpm-workspace.yaml — defines pnpm workspace members
@@ -22,9 +22,11 @@
 //
 // Optional root directories that we copy into the manifest layer when present:
 // - .yarn — Yarn Berry zero-installs cache, releases, etc.
+
 namespace Aspire.Hosting.JavaScript.Internal.Workspace;
 
 internal sealed record WorkspaceRootManifests(IReadOnlyList<string> RootFiles, IReadOnlyList<string> RootDirs, bool HasPackageJson, bool HasLockfile);
+
 internal static class WorkspaceManifestDiscovery
 {
     private static readonly string[] s_lockfileNames = [
@@ -35,6 +37,7 @@ internal static class WorkspaceManifestDiscovery
         "bun.lock",
         "bun.lockb",
     ];
+
     private static readonly string[] s_optionalRootManifestFiles = [
         "pnpm-workspace.yaml",
         ".yarnrc.yml",
@@ -42,27 +45,31 @@ internal static class WorkspaceManifestDiscovery
         ".npmrc",
         "bunfig.toml",
     ];
+
     private static readonly string[] s_optionalRootDirs = [
         ".yarn",
     ];
 
-    ///
+    /// <summary>
     /// The set of recognized lockfile names, ordered by package-manager precedence.
-    ///
+    /// </summary>
     public static IReadOnlyList<string> RecognizedLockfileNames => s_lockfileNames;
-    ///
-    /// Inspects  and returns the set of files and directories
+
+    /// <summary>
+    /// Inspects <paramref name="rootPath"/> and returns the set of files and directories
     /// that should be copied into the Dockerfile manifest layer.
-    ///
+    /// </summary>
     public static WorkspaceRootManifests Discover(string rootPath)
     {
         ArgumentNullException.ThrowIfNull(rootPath);
+
         var rootFiles = new List<string>();
         var hasPackageJson = File.Exists(Path.Combine(rootPath, "package.json"));
         if (hasPackageJson)
         {
             rootFiles.Add("package.json");
         }
+
         var hasLockfile = false;
         foreach (var lockName in s_lockfileNames)
         {
@@ -72,6 +79,7 @@ internal static class WorkspaceManifestDiscovery
                 hasLockfile = true;
             }
         }
+
         foreach (var optional in s_optionalRootManifestFiles)
         {
             if (File.Exists(Path.Combine(rootPath, optional)))
@@ -79,6 +87,7 @@ internal static class WorkspaceManifestDiscovery
                 rootFiles.Add(optional);
             }
         }
+
         var rootDirs = new List<string>();
         foreach (var dir in s_optionalRootDirs)
         {
@@ -87,6 +96,7 @@ internal static class WorkspaceManifestDiscovery
                 rootDirs.Add(dir);
             }
         }
+
         return new WorkspaceRootManifests(rootFiles, rootDirs, hasPackageJson, hasLockfile);
     }
 }
