@@ -2,8 +2,6 @@
 WORKDIR /app
 RUN corepack enable yarn
 COPY package.json yarn.lock ./
-COPY package.json ./package.json
-COPY yarn.lock ./yarn.lock
 COPY packages/api/package.json ./packages/api/package.json
 COPY packages/web/package.json ./packages/web/package.json
 RUN --mount=type=cache,target=/root/.cache/yarn yarn install --frozen-lockfile
