@@ -228,7 +228,7 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(apiDir, "dist", "index.js"), "console.log('hello');");
 
         var workspace = builder.AddPnpmWorkspace("workspace", workspaceDir);
-        var nodeApp = workspace.AddNodeApp("api", "workspace-api", "packages/api", "dist/index.js")
+        var nodeApp = workspace.AddNodeApp("api", "workspace-api", "dist/index.js", "packages/api")
             .WithBuildScript("build");
 
         await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
