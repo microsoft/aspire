@@ -738,9 +738,9 @@ await container.withCommand("noop", "Noop", async () => {
 });
 await container.withCommand("echo", "Echo", async (ctx) => {
     const commandInputs = await ctx.arguments();
-    const commandArguments = await commandInputs.toArray();
+    const message = await commandInputs.value("message");
 
-    return { success: commandArguments[0]?.value === "hello" };
+    return { success: message === "hello" };
 }, {
     commandOptions: {
         arguments: [
@@ -872,9 +872,8 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
             options: {
                 primaryButtonText: "Save",
                 validationCallback: async (validationContext) => {
-                    const inputs = await (await validationContext.inputs()).toArray();
-                    const solo = inputs.find(input => input.name === "solo");
-                    if (!solo?.value) {
+                    const solo = await (await validationContext.inputs()).value("solo");
+                    if (!solo) {
                         await validationContext.addValidationError("solo", "A value is required.");
                     }
                 }
@@ -890,9 +889,8 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
                 primaryButtonText: "Submit",
                 enableMessageMarkdown: true,
                 validationCallback: async (validationContext) => {
-                    const inputs = await (await validationContext.inputs()).toArray();
-                    const name = inputs.find(input => input.name === "name");
-                    if (name?.value === "bad") {
+                    const name = await (await validationContext.inputs()).value("name");
+                    if (name === "bad") {
                         await validationContext.addValidationError("name", "Name cannot be 'bad'.");
                     }
                 }
