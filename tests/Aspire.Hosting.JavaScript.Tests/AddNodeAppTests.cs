@@ -222,7 +222,9 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(workspaceDir, "package.json"), "{}");
         File.WriteAllText(Path.Combine(workspaceDir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
         File.WriteAllText(Path.Combine(workspaceDir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
-        File.WriteAllText(Path.Combine(apiDir, "package.json"), "{}");
+        // The member's package name must match the workspaceProjectName ("workspace-api") passed to
+        // AddNodeApp, otherwise the workspace configuration validator flags it as an unknown member.
+        File.WriteAllText(Path.Combine(apiDir, "package.json"), """{ "name": "workspace-api" }""");
         File.WriteAllText(Path.Combine(apiDir, "dist", "index.js"), "console.log('hello');");
 
         var workspace = builder.AddPnpmWorkspace("workspace", workspaceDir);
@@ -231,8 +233,11 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
 
         await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "api.Dockerfile"));
-        Assert.Contains("ENTRYPOINT [\"node\",\"packages/api/dist/index.js\"]", dockerfileContents);
+        var dockerfileContents = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "api.Dockerfile"));
+
+        // Snapshot the whole Dockerfile so the member-manifest COPY layer, the topological build RUN,
+        // and the package-path-relative ENTRYPOINT (node packages/api/dist/index.js) are all locked in.
+        await Verify(dockerfileContents);
     }
 
     [Fact]
