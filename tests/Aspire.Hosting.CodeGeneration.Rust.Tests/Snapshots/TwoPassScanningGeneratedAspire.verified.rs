@@ -1302,6 +1302,8 @@ impl CommandOptions {
 /// HttpCommandExportOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct HttpCommandExportOptions {
+    #[serde(rename = "CommandOptions", skip_serializing_if = "Option::is_none")]
+    pub command_options: Option<CommandOptions>,
     #[serde(rename = "Description")]
     pub description: String,
     #[serde(rename = "ConfirmationMessage")]
@@ -1318,6 +1320,8 @@ pub struct HttpCommandExportOptions {
     pub endpoint_name: String,
     #[serde(rename = "MethodName")]
     pub method_name: String,
+    #[serde(rename = "PrepareRequest", skip_serializing_if = "Option::is_none")]
+    pub prepare_request: Option<Value>,
     #[serde(rename = "ResultMode")]
     pub result_mode: HttpCommandResultMode,
 }
@@ -1325,6 +1329,9 @@ pub struct HttpCommandExportOptions {
 impl HttpCommandExportOptions {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
+        if let Some(ref v) = self.command_options {
+            map.insert("CommandOptions".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
         map.insert("ConfirmationMessage".to_string(), serde_json::to_value(&self.confirmation_message).unwrap_or(Value::Null));
         map.insert("IconName".to_string(), serde_json::to_value(&self.icon_name).unwrap_or(Value::Null));
@@ -1335,7 +1342,34 @@ impl HttpCommandExportOptions {
         map.insert("CommandName".to_string(), serde_json::to_value(&self.command_name).unwrap_or(Value::Null));
         map.insert("EndpointName".to_string(), serde_json::to_value(&self.endpoint_name).unwrap_or(Value::Null));
         map.insert("MethodName".to_string(), serde_json::to_value(&self.method_name).unwrap_or(Value::Null));
+        if let Some(ref v) = self.prepare_request {
+            map.insert("PrepareRequest".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("ResultMode".to_string(), serde_json::to_value(&self.result_mode).unwrap_or(Value::Null));
+        map
+    }
+}
+
+/// HttpCommandRequestExportData
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct HttpCommandRequestExportData {
+    #[serde(rename = "MethodName")]
+    pub method_name: String,
+    #[serde(rename = "Headers")]
+    pub headers: HashMap<String, String>,
+    #[serde(rename = "Content")]
+    pub content: String,
+    #[serde(rename = "ContentType")]
+    pub content_type: String,
+}
+
+impl HttpCommandRequestExportData {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("MethodName".to_string(), serde_json::to_value(&self.method_name).unwrap_or(Value::Null));
+        map.insert("Headers".to_string(), serde_json::to_value(&self.headers).unwrap_or(Value::Null));
+        map.insert("Content".to_string(), serde_json::to_value(&self.content).unwrap_or(Value::Null));
+        map.insert("ContentType".to_string(), serde_json::to_value(&self.content_type).unwrap_or(Value::Null));
         map
     }
 }
@@ -1417,6 +1451,8 @@ pub struct ProcessCommandExportOptions {
     pub standard_input_content: String,
     #[serde(rename = "KillEntireProcessTree", skip_serializing_if = "Option::is_none")]
     pub kill_entire_process_tree: Option<bool>,
+    #[serde(rename = "CreateProcessSpec", skip_serializing_if = "Option::is_none")]
+    pub create_process_spec: Option<Value>,
     #[serde(rename = "CommandOptions")]
     pub command_options: CommandOptions,
     #[serde(rename = "MaxOutputLineCount", skip_serializing_if = "Option::is_none")]
@@ -1440,6 +1476,9 @@ impl ProcessCommandExportOptions {
         map.insert("StandardInputContent".to_string(), serde_json::to_value(&self.standard_input_content).unwrap_or(Value::Null));
         if let Some(ref v) = self.kill_entire_process_tree {
             map.insert("KillEntireProcessTree".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.create_process_spec {
+            map.insert("CreateProcessSpec".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map.insert("CommandOptions".to_string(), serde_json::to_value(&self.command_options).unwrap_or(Value::Null));
         if let Some(ref v) = self.max_output_line_count {
@@ -9924,6 +9963,67 @@ impl ExternalServiceResource {
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeRouteMiddleware", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext
+pub struct HttpCommandPrepareRequestContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for HttpCommandPrepareRequestContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl HttpCommandPrepareRequestContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// The name of the resource the command was configured on.
+    pub fn resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.resourceName", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// The endpoint the request is targeting.
+    pub fn endpoint(&self) -> Result<EndpointReference, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.endpoint", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointReference::new(handle, self.client.clone()))
+    }
+
+    /// The cancellation token.
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+
+    /// Gets the invocation arguments supplied by the client when the command is executed.
+    pub fn arguments(&self) -> Result<InteractionInputCollection, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(InteractionInputCollection::new(handle, self.client.clone()))
     }
 }
 

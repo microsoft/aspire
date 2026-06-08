@@ -126,6 +126,11 @@ internal sealed class ProcessCommandExportOptions
     public bool? KillEntireProcessTree { get; set; }
 
     /// <summary>
+    /// A callback that creates the local process specification when the command is invoked.
+    /// </summary>
+    public Func<ExecuteCommandContext, Task<ProcessCommandSpecExportData>>? CreateProcessSpec { get; init; }
+
+    /// <summary>
     /// Optional command configuration.
     /// </summary>
     public CommandOptions? CommandOptions { get; set; }

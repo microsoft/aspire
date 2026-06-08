@@ -694,6 +694,7 @@ func (d *CommandOptions) ToMap() map[string]any {
 
 // HttpCommandExportOptions represents HttpCommandExportOptions.
 type HttpCommandExportOptions struct {
+	CommandOptions *CommandOptions `json:"CommandOptions,omitempty"`
 	Description string `json:"Description,omitempty"`
 	ConfirmationMessage string `json:"ConfirmationMessage,omitempty"`
 	IconName string `json:"IconName,omitempty"`
@@ -702,12 +703,14 @@ type HttpCommandExportOptions struct {
 	CommandName string `json:"CommandName,omitempty"`
 	EndpointName string `json:"EndpointName,omitempty"`
 	MethodName string `json:"MethodName,omitempty"`
+	PrepareRequest func(...any) any `json:"PrepareRequest,omitempty"`
 	ResultMode HttpCommandResultMode `json:"ResultMode,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *HttpCommandExportOptions) ToMap() map[string]any {
 	m := map[string]any{}
+	if d.CommandOptions != nil { m["CommandOptions"] = serializeValue(d.CommandOptions) }
 	m["Description"] = serializeValue(d.Description)
 	m["ConfirmationMessage"] = serializeValue(d.ConfirmationMessage)
 	m["IconName"] = serializeValue(d.IconName)
@@ -716,7 +719,26 @@ func (d *HttpCommandExportOptions) ToMap() map[string]any {
 	m["CommandName"] = serializeValue(d.CommandName)
 	m["EndpointName"] = serializeValue(d.EndpointName)
 	m["MethodName"] = serializeValue(d.MethodName)
+	if d.PrepareRequest != nil { m["PrepareRequest"] = serializeValue(d.PrepareRequest) }
 	m["ResultMode"] = serializeValue(d.ResultMode)
+	return m
+}
+
+// HttpCommandRequestExportData represents HttpCommandRequestExportData.
+type HttpCommandRequestExportData struct {
+	MethodName string `json:"MethodName,omitempty"`
+	Headers map[string]string `json:"Headers,omitempty"`
+	Content string `json:"Content,omitempty"`
+	ContentType string `json:"ContentType,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpCommandRequestExportData) ToMap() map[string]any {
+	m := map[string]any{}
+	m["MethodName"] = serializeValue(d.MethodName)
+	if d.Headers != nil { m["Headers"] = serializeValue(d.Headers) }
+	m["Content"] = serializeValue(d.Content)
+	m["ContentType"] = serializeValue(d.ContentType)
 	return m
 }
 
@@ -773,6 +795,7 @@ type ProcessCommandExportOptions struct {
 	InheritEnvironmentVariables *bool `json:"InheritEnvironmentVariables,omitempty"`
 	StandardInputContent string `json:"StandardInputContent,omitempty"`
 	KillEntireProcessTree *bool `json:"KillEntireProcessTree,omitempty"`
+	CreateProcessSpec func(...any) any `json:"CreateProcessSpec,omitempty"`
 	CommandOptions *CommandOptions `json:"CommandOptions,omitempty"`
 	MaxOutputLineCount *float64 `json:"MaxOutputLineCount,omitempty"`
 	DisplayImmediately *bool `json:"DisplayImmediately,omitempty"`
@@ -789,6 +812,7 @@ func (d *ProcessCommandExportOptions) ToMap() map[string]any {
 	if d.InheritEnvironmentVariables != nil { m["InheritEnvironmentVariables"] = serializeValue(d.InheritEnvironmentVariables) }
 	m["StandardInputContent"] = serializeValue(d.StandardInputContent)
 	if d.KillEntireProcessTree != nil { m["KillEntireProcessTree"] = serializeValue(d.KillEntireProcessTree) }
+	if d.CreateProcessSpec != nil { m["CreateProcessSpec"] = serializeValue(d.CreateProcessSpec) }
 	if d.CommandOptions != nil { m["CommandOptions"] = serializeValue(d.CommandOptions) }
 	if d.MaxOutputLineCount != nil { m["MaxOutputLineCount"] = serializeValue(d.MaxOutputLineCount) }
 	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
@@ -15821,6 +15845,94 @@ func (s *hostEnvironment) SetEnvironmentName(value string) HostEnvironment {
 	return s
 }
 
+// HttpCommandPrepareRequestContext is the public interface for handle type HttpCommandPrepareRequestContext.
+type HttpCommandPrepareRequestContext interface {
+	handleReference
+	Arguments() InteractionInputCollection
+	CancellationToken() (*CancellationToken, error)
+	Endpoint() EndpointReference
+	ResourceName() (string, error)
+	Err() error
+}
+
+// httpCommandPrepareRequestContext is the unexported impl of HttpCommandPrepareRequestContext.
+type httpCommandPrepareRequestContext struct {
+	*resourceBuilderBase
+}
+
+// newHttpCommandPrepareRequestContextFromHandle wraps an existing handle as HttpCommandPrepareRequestContext.
+func newHttpCommandPrepareRequestContextFromHandle(h *handle, c *client) HttpCommandPrepareRequestContext {
+	return &httpCommandPrepareRequestContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Arguments gets the invocation arguments supplied by the client when the command is executed.
+func (s *httpCommandPrepareRequestContext) Arguments() InteractionInputCollection {
+	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments", reqArgs)
+	if err != nil {
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments returned unexpected type %T", result)
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// CancellationToken the cancellation token.
+func (s *httpCommandPrepareRequestContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// Endpoint the endpoint the request is targeting.
+func (s *httpCommandPrepareRequestContext) Endpoint() EndpointReference {
+	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.endpoint", reqArgs)
+	if err != nil {
+		return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.endpoint returned unexpected type %T", result)
+		return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ResourceName the name of the resource the command was configured on.
+func (s *httpCommandPrepareRequestContext) ResourceName() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.resourceName", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
 // IComputeResource is the public interface for handle type IComputeResource.
 type IComputeResource interface {
 	handleReference
@@ -27386,6 +27498,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", func(h *handle, c *client) any {
 		return newHostEnvironmentFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext", func(h *handle, c *client) any {
+		return newHttpCommandPrepareRequestContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource", func(h *handle, c *client) any {
 		return newIComputeResourceFromHandle(h, c)

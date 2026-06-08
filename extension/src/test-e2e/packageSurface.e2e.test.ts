@@ -432,7 +432,11 @@ const expectedActivationEvents = [
     'onView:workbench.view.debug',
     'workspaceContains:**/apphost.cs',
     'workspaceContains:**/apphost.ts',
+    'workspaceContains:**/apphost.mts',
+    'workspaceContains:**/apphost.cts',
     'workspaceContains:**/apphost.js',
+    'workspaceContains:**/apphost.mjs',
+    'workspaceContains:**/apphost.cjs',
     'onCommand:aspire-vscode.installCliStable',
     'onCommand:aspire-vscode.installCliDaily',
     'onCommand:aspire-vscode.verifyCliInstalled',
@@ -465,6 +469,7 @@ const expectedCommandIds = [
     'aspire-vscode.new',
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.openDashboard',
+    'aspire-vscode.openDashboardToSide',
     'aspire-vscode.openGlobalSettings',
     'aspire-vscode.openInExternalBrowser',
     'aspire-vscode.openInIntegratedBrowser',
@@ -517,6 +522,7 @@ const expectedMenuLocations = [
 
 const expectedViewItemContextCommands = [
     'aspire-vscode.openDashboard',
+    'aspire-vscode.openDashboardToSide',
     'aspire-vscode.expandAll',
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.runAppHost',

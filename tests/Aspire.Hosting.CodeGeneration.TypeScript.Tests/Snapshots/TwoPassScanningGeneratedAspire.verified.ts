@@ -188,6 +188,9 @@ type ExecutableResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applicatio
 /** Context for {@link ResourceCommandAnnotation.ExecuteCommand}. */
 type ExecuteCommandContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext'>;
 
+/** Provides context for HTTP command prepare-request callbacks in polyglot app hosts. */
+type HttpCommandPrepareRequestContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext'>;
+
 /**
  * Represents a store for managing files in the Aspire hosting environment that can be reused across runs.
  *
@@ -896,6 +899,8 @@ export interface HealthCheckResult {
 
 /** ATS-friendly configuration for resource HTTP commands. */
 export interface HttpCommandExportOptions {
+    /** Optional command configuration. */
+    commandOptions?: CommandOptions;
     /** Optional description of the command, to be shown in the UI. */
     description?: string | null;
     /** When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog before starting the command. */
@@ -912,8 +917,22 @@ export interface HttpCommandExportOptions {
     endpointName?: string | null;
     /** Gets or sets the HTTP method name to use when sending the request. */
     methodName?: string | null;
+    /** Gets or sets a callback to be invoked to configure the request before it is sent. */
+    prepareRequest?: (arg: HttpCommandPrepareRequestContext) => Promise<HttpCommandRequestExportData>;
     /** Gets or sets how the HTTP response content should be returned as command result data. */
     resultMode?: HttpCommandResultMode;
+}
+
+/** ATS-friendly request data returned from HTTP command prepare-request callbacks. */
+export interface HttpCommandRequestExportData {
+    /** Gets or sets the HTTP method name to use when sending the request. */
+    methodName?: string | null;
+    /** Gets or sets the request headers. */
+    headers?: Record<string, string>;
+    /** Gets or sets the request content. */
+    content?: string | null;
+    /** Gets or sets the request content type. */
+    contentType?: string | null;
 }
 
 /** Configuration context for server authentication certificate configuration. */
@@ -1068,6 +1087,8 @@ export interface ProcessCommandExportOptions {
     standardInputContent?: string | null;
     /** A value indicating whether the entire process tree should be killed when the process is disposed. */
     killEntireProcessTree?: boolean | null;
+    /** A callback that creates the local process specification when the command is invoked. */
+    createProcessSpec?: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>;
     /** Optional command configuration. */
     commandOptions?: CommandOptions;
     /** The maximum number of stdout and stderr output lines returned as command result data. */
@@ -5242,6 +5263,113 @@ class ExecuteCommandContextPromiseImpl implements ExecuteCommandContextPromise {
 
     logger(): LoggerPromise {
         return new LoggerPromiseImpl(this._promise.then(obj => obj.logger()), this._client, false);
+    }
+
+    arguments(): Promise<InteractionInputCollection> {
+        return this._promise.then(obj => obj.arguments());
+    }
+
+}
+
+// ============================================================================
+// HttpCommandPrepareRequestContext
+// ============================================================================
+
+/** Provides context for HTTP command prepare-request callbacks in polyglot app hosts. */
+export interface HttpCommandPrepareRequestContext {
+    toJSON(): MarshalledHandle;
+    /** The name of the resource the command was configured on. */
+    resourceName(): Promise<string>;
+    /** The endpoint the request is targeting. */
+    endpoint(): EndpointReferencePromise;
+    /** The cancellation token. */
+    cancellationToken(): Promise<CancellationToken>;
+    /** Gets the invocation arguments supplied by the client when the command is executed. */
+    arguments(): Promise<InteractionInputCollection>;
+}
+
+export interface HttpCommandPrepareRequestContextPromise extends PromiseLike<HttpCommandPrepareRequestContext> {
+    /** The name of the resource the command was configured on. */
+    resourceName(): Promise<string>;
+    /** The endpoint the request is targeting. */
+    endpoint(): EndpointReferencePromise;
+    /** The cancellation token. */
+    cancellationToken(): Promise<CancellationToken>;
+    /** Gets the invocation arguments supplied by the client when the command is executed. */
+    arguments(): Promise<InteractionInputCollection>;
+}
+
+// ============================================================================
+// HttpCommandPrepareRequestContextImpl
+// ============================================================================
+
+/** Provides context for HTTP command prepare-request callbacks in polyglot app hosts. */
+class HttpCommandPrepareRequestContextImpl implements HttpCommandPrepareRequestContext {
+    constructor(private _handle: HttpCommandPrepareRequestContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async resourceName(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.resourceName',
+            { context: this._handle }
+        );
+    }
+
+    endpoint(): EndpointReferencePromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.endpoint',
+                { context: this._handle }
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client, false);
+    }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+    async arguments(): Promise<InteractionInputCollection> {
+        return await this._client.invokeCapability<InteractionInputCollection>(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments',
+            { context: this._handle }
+        );
+    }
+
+}
+
+/**
+ * Thenable wrapper for HttpCommandPrepareRequestContext that enables fluent chaining.
+ */
+class HttpCommandPrepareRequestContextPromiseImpl implements HttpCommandPrepareRequestContextPromise {
+    constructor(private _promise: Promise<HttpCommandPrepareRequestContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = HttpCommandPrepareRequestContext, TResult2 = never>(
+        onfulfilled?: ((value: HttpCommandPrepareRequestContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resourceName(): Promise<string> {
+        return this._promise.then(obj => obj.resourceName());
+    }
+
+    endpoint(): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.endpoint()), this._client, false);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
     }
 
     arguments(): Promise<InteractionInputCollection> {
@@ -12827,6 +12955,7 @@ export interface ContainerRegistryResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
     /**
@@ -13105,6 +13234,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
     /**
@@ -13568,8 +13698,30 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -13596,7 +13748,44 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ContainerRegistryResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -13616,8 +13805,36 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -13628,6 +13845,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -15022,6 +15240,7 @@ export interface ContainerResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
     /**
@@ -15762,6 +15981,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
     /**
@@ -17363,8 +17583,30 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -17391,7 +17633,44 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ContainerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -17411,8 +17690,36 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -17423,6 +17730,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -17430,8 +17738,45 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ContainerResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -19233,6 +19578,7 @@ export interface CSharpAppResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
     /**
@@ -19801,6 +20147,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
     /**
@@ -20998,8 +21345,30 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -21026,7 +21395,44 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<CSharpAppResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -21046,8 +21452,36 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -21058,6 +21492,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -21065,8 +21500,45 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<CSharpAppResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -22820,6 +23292,7 @@ export interface DotnetToolResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
     /**
@@ -23410,6 +23883,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
     /**
@@ -24691,8 +25165,30 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -24719,7 +25215,44 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<DotnetToolResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -24739,8 +25272,36 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -24751,6 +25312,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -24758,8 +25320,45 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<DotnetToolResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -26484,6 +27083,7 @@ export interface ExecutableResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
     /**
@@ -27041,6 +27641,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
     /**
@@ -28218,8 +28819,30 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -28246,7 +28869,44 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ExecutableResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -28266,8 +28926,36 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -28278,6 +28966,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -28285,8 +28974,45 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ExecutableResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -29829,6 +30555,7 @@ export interface ExternalServiceResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
     /**
@@ -30112,6 +30839,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
     /**
@@ -30599,8 +31327,30 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -30627,7 +31377,44 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ExternalServiceResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -30647,8 +31434,36 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -30659,6 +31474,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -31745,6 +32561,7 @@ export interface ParameterResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
     /**
@@ -32036,6 +32853,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
     /**
@@ -32541,8 +33359,30 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -32569,7 +33409,44 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ParameterResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -32589,8 +33466,36 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -32601,6 +33506,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -33839,6 +34745,7 @@ export interface ProjectResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
     /**
@@ -34407,6 +35314,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
     /**
@@ -35605,8 +36513,30 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -35633,7 +36563,44 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ProjectResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -35653,8 +36620,36 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -35665,6 +36660,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -35672,8 +36668,45 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ProjectResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -37563,6 +38596,7 @@ export interface TestDatabaseResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
     /**
@@ -38303,6 +39337,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
     /**
@@ -39903,8 +40938,30 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -39931,7 +40988,44 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<TestDatabaseResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -39951,8 +41045,36 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -39963,6 +41085,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -39970,8 +41093,45 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<TestDatabaseResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -41953,6 +43113,7 @@ export interface TestRedisResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
     /**
@@ -42757,6 +43918,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
     /**
@@ -44441,8 +45603,30 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -44469,7 +45653,44 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<TestRedisResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -44489,8 +45710,36 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -44501,6 +45750,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -44508,8 +45758,45 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<TestRedisResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -46746,6 +48033,7 @@ export interface TestVaultResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
     /**
@@ -47488,6 +48776,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
     /**
@@ -49090,8 +50379,30 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -49118,7 +50429,44 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<TestVaultResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -49138,8 +50486,36 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -49150,6 +50526,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -49157,8 +50534,45 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<TestVaultResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -51138,6 +52552,7 @@ export interface Resource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
     /**
@@ -51416,6 +52831,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
     /**
@@ -51880,8 +53296,30 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -51908,7 +53346,44 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<Resource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -51928,8 +53403,36 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -51940,6 +53443,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -53841,8 +55345,45 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ResourceWithEndpoints> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -54843,6 +56384,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Environmen
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor', (handle, client) => new EnvironmentEditorImpl(handle as EnvironmentEditorHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext', (handle, client) => new EventingSubscriberRegistrationContextImpl(handle as EventingSubscriberRegistrationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext', (handle, client) => new ExecuteCommandContextImpl(handle as ExecuteCommandContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext', (handle, client) => new HttpCommandPrepareRequestContextImpl(handle as HttpCommandPrepareRequestContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent', (handle, client) => new InitializeResourceEventImpl(handle as InitializeResourceEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext', (handle, client) => new InputsDialogValidationContextImpl(handle as InputsDialogValidationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder', (handle, client) => new InteractionInputBuilderImpl(handle as InteractionInputBuilderHandle, client));

@@ -8,7 +8,7 @@ import { AppHostResourceParser, ParsedResource, registerParser } from './AppHost
  */
 class JsTsAppHostParser implements AppHostResourceParser {
     getSupportedExtensions(): string[] {
-        return ['.ts', '.js'];
+        return ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'];
     }
 
     async isAppHostFile(document: vscode.TextDocument): Promise<boolean> {
@@ -107,8 +107,12 @@ function createSourceFile(document: vscode.TextDocument): ts.SourceFile {
         document.getText(),
         ts.ScriptTarget.Latest,
         true,
-        document.uri.fsPath.endsWith('.js') ? ts.ScriptKind.JS : ts.ScriptKind.TS
+        isJavaScriptFile(document.uri.fsPath) ? ts.ScriptKind.JS : ts.ScriptKind.TS
     );
+}
+
+function isJavaScriptFile(filePath: string): boolean {
+    return filePath.endsWith('.js') || filePath.endsWith('.mjs') || filePath.endsWith('.cjs');
 }
 
 function visit(node: ts.Node, visitor: (node: ts.Node) => boolean): boolean {

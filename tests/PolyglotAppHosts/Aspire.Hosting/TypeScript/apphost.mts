@@ -932,10 +932,58 @@ await container.withProcessCommand("node-stdin", "Node stdin", {
     },
     maxOutputLineCount: 10,
 });
+await container.withProcessCommand("node-message", "Node message", {
+    createProcessSpec: async (context) => {
+        const args = await context.arguments();
+        const message = await args.requiredValue("message");
+
+        return {
+            executablePath: "node",
+            arguments: ["-e", "console.log(process.argv[1])", message],
+        };
+    },
+    commandOptions: {
+        description: "Runs node with an argument supplied when the process command is invoked.",
+        iconName: "WindowConsole",
+        arguments: [
+            {
+                name: "message",
+                inputType: InputType.Text,
+                required: true,
+            },
+        ],
+    },
+    maxOutputLineCount: 10,
+    displayImmediately: false,
+});
 
 // withHttpCommand
 await container.withHttpCommand("/health", "Health Check");
-await container.withHttpCommand("/api/reset", "Reset", { methodName: "POST", confirmationMessage: "Are you sure?" });
+await container.withHttpCommand("/api/reset", "Reset", {
+    methodName: "POST",
+    prepareRequest: async (context) => {
+        const args = await context.arguments();
+        const message = await args.requiredValue("message");
+
+        return {
+            content: JSON.stringify({ message }),
+            contentType: "application/json",
+            headers: {
+                "X-Message": message,
+            },
+        };
+    },
+    commandOptions: {
+        arguments: [
+            {
+                name: "message",
+                inputType: InputType.Text,
+                required: true,
+            },
+        ],
+    },
+    confirmationMessage: "Are you sure?",
+});
 
 const app = await builder.build();
 await app.run();

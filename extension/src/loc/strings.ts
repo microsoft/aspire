@@ -79,6 +79,8 @@ export const resourceCommandInvalidNumber = vscode.l10n.t('Enter a number using 
 export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value must be {0} characters or fewer.', length);
 export const resourceCommandDisabledDescription = vscode.l10n.t('(disabled)');
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
+export const dashboardUrlNotFound = vscode.l10n.t('No Aspire Dashboard URL is available. Start an AppHost and try again.');
+export const dashboardUrlUnsupported = vscode.l10n.t('The Aspire Dashboard URL must use http or https.');
 export const workspaceAppHostLabel = vscode.l10n.t('Workspace AppHost');
 export const workspaceAppHostsGroupLabel = vscode.l10n.t('Workspace AppHosts');
 export const runningAppHostsGroupLabel = vscode.l10n.t('Running AppHosts');

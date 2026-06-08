@@ -176,6 +176,43 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('watches Node module AppHost filenames', async () => {
+            const watchedPatterns: string[] = [];
+            sandbox.stub(vscode.workspace, 'createFileSystemWatcher').callsFake((pattern) => {
+                watchedPatterns.push(typeof pattern === 'string' ? pattern : pattern.pattern);
+                return {
+                    ignoreCreateEvents: false,
+                    ignoreChangeEvents: false,
+                    ignoreDeleteEvents: false,
+                    onDidCreate: () => ({ dispose: () => { } }),
+                    onDidChange: () => ({ dispose: () => { } }),
+                    onDidDelete: () => ({ dispose: () => { } }),
+                    dispose: () => { },
+                } as vscode.FileSystemWatcher;
+            });
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                await service.discover(workspaceFolder);
+
+                assert.ok(watchedPatterns.includes('**/apphost.ts'));
+                assert.ok(watchedPatterns.includes('**/apphost.mts'));
+                assert.ok(watchedPatterns.includes('**/apphost.cts'));
+                assert.ok(watchedPatterns.includes('**/apphost.js'));
+                assert.ok(watchedPatterns.includes('**/apphost.mjs'));
+                assert.ok(watchedPatterns.includes('**/apphost.cjs'));
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
         test('ignores watched files in excluded directories', async () => {
             const watcherCallbacks = stubFileSystemWatchers(sandbox);
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {

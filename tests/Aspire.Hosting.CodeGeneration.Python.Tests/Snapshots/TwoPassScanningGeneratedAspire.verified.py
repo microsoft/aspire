@@ -1831,6 +1831,7 @@ class HealthCheckResult(typing.TypedDict, total=False):
     Data: typing.Mapping[str, str]
 
 class HttpCommandExportOptions(typing.TypedDict, total=False):
+    CommandOptions: CommandOptions
     Description: str | None
     ConfirmationMessage: str | None
     IconName: str | None
@@ -1839,7 +1840,14 @@ class HttpCommandExportOptions(typing.TypedDict, total=False):
     CommandName: str | None
     EndpointName: str | None
     MethodName: str | None
+    PrepareRequest: typing.Callable
     ResultMode: HttpCommandResultMode
+
+class HttpCommandRequestExportData(typing.TypedDict, total=False):
+    MethodName: str | None
+    Headers: typing.Mapping[str, str]
+    Content: str | None
+    ContentType: str | None
 
 class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=False):
     CertificatePath: ReferenceExpression
@@ -1931,6 +1939,7 @@ class ProcessCommandExportOptions(typing.TypedDict, total=False):
     InheritEnvironmentVariables: bool | None
     StandardInputContent: str | None
     KillEntireProcessTree: bool | None
+    CreateProcessSpec: typing.Callable
     CommandOptions: CommandOptions
     MaxOutputLineCount: int | None
     DisplayImmediately: bool | None
@@ -5056,6 +5065,57 @@ class ExecuteCommandContext:
         """Gets the invocation arguments supplied by the client when the command is executed."""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments',
+            {'context': self._handle}
+        )
+        return typing.cast(InteractionInputCollection, result)
+
+
+class HttpCommandPrepareRequestContext:
+    """Type class for HttpCommandPrepareRequestContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"HttpCommandPrepareRequestContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def resource_name(self) -> str:
+        """The name of the resource the command was configured on."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.resourceName',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @_cached_property
+    def endpoint(self) -> EndpointReference:
+        """The endpoint the request is targeting."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.endpoint',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReference, result)
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+    @_cached_property
+    def arguments(self) -> InteractionInputCollection:
+        """Gets the invocation arguments supplied by the client when the command is executed."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments',
             {'context': self._handle}
         )
         return typing.cast(InteractionInputCollection, result)
@@ -11913,6 +11973,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Environ
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor", EnvironmentEditor)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", EventingSubscriberRegistrationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", ExecuteCommandContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext", HttpCommandPrepareRequestContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", InitializeResourceEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", InputsDialogValidationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder", InteractionInputBuilder)
