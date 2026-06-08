@@ -873,7 +873,7 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
             options: {
                 primaryButtonText: "Save",
                 validationCallback: async (validationContext) => {
-                    const solo = await (await validationContext.inputs()).value("solo");
+                    const solo = await validationContext.inputs().value("solo");
                     if (!solo) {
                         await validationContext.addValidationError("solo", "A value is required.");
                     }
@@ -890,7 +890,7 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
                 primaryButtonText: "Submit",
                 enableMessageMarkdown: true,
                 validationCallback: async (validationContext) => {
-                    const name = await (await validationContext.inputs()).value("name");
+                    const name = await validationContext.inputs().value("name");
                     if (name === "bad") {
                         await validationContext.addValidationError("name", "Name cannot be 'bad'.");
                     }
@@ -898,7 +898,7 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
             }
         });
 
-    const selectedColor = await (await multi.inputs()).value("color");
+    const selectedColor = await multi.inputs().value("color");
     const soloValue = single.input?.value;
 
     const multiCanceled = await multi.canceled();

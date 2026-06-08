@@ -25,7 +25,8 @@ import {
     ReferenceExpression,
     refExpr,
     AspireDict,
-    AspireList
+    AspireList,
+    InteractionInputCollectionPromiseImpl
 } from './base.mjs';
 
 export {
@@ -35,13 +36,15 @@ export {
 
 export type {
     InteractionInput,
-    InteractionInputOption
+    InteractionInputOption,
+    InteractionInputCollectionPromise
 } from './base.mjs';
 
 import type {
     Awaitable,
     InteractionInput,
     InteractionInputCollection,
+    InteractionInputCollectionPromise,
     InputType
 } from './base.mjs';
 
@@ -5157,7 +5160,7 @@ export interface ExecuteCommandContext {
      * submitted values populated. CLI positional arguments are mapped by declaration order. Dashboard, MCP, and other
      * named-payload clients are mapped by `Name`.
      */
-    arguments(): Promise<InteractionInputCollection>;
+    arguments(): InteractionInputCollectionPromise;
 }
 
 export interface ExecuteCommandContextPromise extends PromiseLike<ExecuteCommandContext> {
@@ -5176,7 +5179,7 @@ export interface ExecuteCommandContextPromise extends PromiseLike<ExecuteCommand
      * submitted values populated. CLI positional arguments are mapped by declaration order. Dashboard, MCP, and other
      * named-payload clients are mapped by `Name`.
      */
-    arguments(): Promise<InteractionInputCollection>;
+    arguments(): InteractionInputCollectionPromise;
 }
 
 // ============================================================================
@@ -5227,11 +5230,11 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
         return new LoggerPromiseImpl(promise, this._client, false);
     }
 
-    async arguments(): Promise<InteractionInputCollection> {
-        return await this._client.invokeCapability<InteractionInputCollection>(
+    arguments(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._client.invokeCapability<InteractionInputCollection>(
             'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments',
             { context: this._handle }
-        );
+        ), this._client, false);
     }
 
 }
@@ -5267,8 +5270,8 @@ class ExecuteCommandContextPromiseImpl implements ExecuteCommandContextPromise {
         return new LoggerPromiseImpl(this._promise.then(obj => obj.logger()), this._client, false);
     }
 
-    arguments(): Promise<InteractionInputCollection> {
-        return this._promise.then(obj => obj.arguments());
+    arguments(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._promise.then(obj => obj.arguments()), this._client, false);
     }
 
 }
@@ -5287,7 +5290,7 @@ export interface HttpCommandPrepareRequestContext {
     /** The cancellation token. */
     cancellationToken(): Promise<CancellationToken>;
     /** Gets the invocation arguments supplied by the client when the command is executed. */
-    arguments(): Promise<InteractionInputCollection>;
+    arguments(): InteractionInputCollectionPromise;
 }
 
 export interface HttpCommandPrepareRequestContextPromise extends PromiseLike<HttpCommandPrepareRequestContext> {
@@ -5298,7 +5301,7 @@ export interface HttpCommandPrepareRequestContextPromise extends PromiseLike<Htt
     /** The cancellation token. */
     cancellationToken(): Promise<CancellationToken>;
     /** Gets the invocation arguments supplied by the client when the command is executed. */
-    arguments(): Promise<InteractionInputCollection>;
+    arguments(): InteractionInputCollectionPromise;
 }
 
 // ============================================================================
@@ -5338,11 +5341,11 @@ class HttpCommandPrepareRequestContextImpl implements HttpCommandPrepareRequestC
         return CancellationToken.fromValue(result);
     }
 
-    async arguments(): Promise<InteractionInputCollection> {
-        return await this._client.invokeCapability<InteractionInputCollection>(
+    arguments(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._client.invokeCapability<InteractionInputCollection>(
             'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments',
             { context: this._handle }
-        );
+        ), this._client, false);
     }
 
 }
@@ -5374,8 +5377,8 @@ class HttpCommandPrepareRequestContextPromiseImpl implements HttpCommandPrepareR
         return this._promise.then(obj => obj.cancellationToken());
     }
 
-    arguments(): Promise<InteractionInputCollection> {
-        return this._promise.then(obj => obj.arguments());
+    arguments(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._promise.then(obj => obj.arguments()), this._client, false);
     }
 
 }
@@ -5535,7 +5538,7 @@ class InitializeResourceEventPromiseImpl implements InitializeResourceEventPromi
 export interface InputsDialogValidationContext {
     toJSON(): MarshalledHandle;
     /** Gets the inputs that are being validated. */
-    inputs(): Promise<InteractionInputCollection>;
+    inputs(): InteractionInputCollectionPromise;
     /** Gets the cancellation token for the validation operation. */
     cancellationToken(): Promise<CancellationToken>;
     /**
@@ -5548,7 +5551,7 @@ export interface InputsDialogValidationContext {
 
 export interface InputsDialogValidationContextPromise extends PromiseLike<InputsDialogValidationContext> {
     /** Gets the inputs that are being validated. */
-    inputs(): Promise<InteractionInputCollection>;
+    inputs(): InteractionInputCollectionPromise;
     /** Gets the cancellation token for the validation operation. */
     cancellationToken(): Promise<CancellationToken>;
     /**
@@ -5570,11 +5573,11 @@ class InputsDialogValidationContextImpl implements InputsDialogValidationContext
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    async inputs(): Promise<InteractionInputCollection> {
-        return await this._client.invokeCapability<InteractionInputCollection>(
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._client.invokeCapability<InteractionInputCollection>(
             'Aspire.Hosting/InputsDialogValidationContext.inputs',
             { context: this._handle }
-        );
+        ), this._client, false);
     }
 
     async cancellationToken(): Promise<CancellationToken> {
@@ -5621,8 +5624,8 @@ class InputsDialogValidationContextPromiseImpl implements InputsDialogValidation
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    inputs(): Promise<InteractionInputCollection> {
-        return this._promise.then(obj => obj.inputs());
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._promise.then(obj => obj.inputs()), this._client, false);
     }
 
     cancellationToken(): Promise<CancellationToken> {
@@ -5652,14 +5655,14 @@ export interface InputsInteractionResult {
     /** Gets a value indicating whether the interaction was canceled by the user. */
     canceled(): Promise<boolean>;
     /** Gets the inputs returned from the interaction. Empty when `Canceled` is `true`. */
-    inputs(): Promise<InteractionInputCollection>;
+    inputs(): InteractionInputCollectionPromise;
 }
 
 export interface InputsInteractionResultPromise extends PromiseLike<InputsInteractionResult> {
     /** Gets a value indicating whether the interaction was canceled by the user. */
     canceled(): Promise<boolean>;
     /** Gets the inputs returned from the interaction. Empty when `Canceled` is `true`. */
-    inputs(): Promise<InteractionInputCollection>;
+    inputs(): InteractionInputCollectionPromise;
 }
 
 // ============================================================================
@@ -5687,11 +5690,11 @@ class InputsInteractionResultImpl implements InputsInteractionResult {
         );
     }
 
-    async inputs(): Promise<InteractionInputCollection> {
-        return await this._client.invokeCapability<InteractionInputCollection>(
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._client.invokeCapability<InteractionInputCollection>(
             'Aspire.Hosting.Ats/InputsInteractionResult.inputs',
             { context: this._handle }
-        );
+        ), this._client, false);
     }
 
 }
@@ -5715,8 +5718,8 @@ class InputsInteractionResultPromiseImpl implements InputsInteractionResultPromi
         return this._promise.then(obj => obj.canceled());
     }
 
-    inputs(): Promise<InteractionInputCollection> {
-        return this._promise.then(obj => obj.inputs());
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._promise.then(obj => obj.inputs()), this._client, false);
     }
 
 }

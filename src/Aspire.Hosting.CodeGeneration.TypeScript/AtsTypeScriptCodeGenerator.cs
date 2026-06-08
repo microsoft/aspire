@@ -892,7 +892,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 ReferenceExpression,
                 refExpr,
                 AspireDict,
-                AspireList
+                AspireList,
+                InteractionInputCollectionPromiseImpl
             } from './base.mjs';
 
             export {
@@ -902,13 +903,15 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
             export type {
                 InteractionInput,
-                InteractionInputOption
+                InteractionInputOption,
+                InteractionInputCollectionPromise
             } from './base.mjs';
 
             import type {
                 Awaitable,
                 InteractionInput,
                 InteractionInputCollection,
+                InteractionInputCollectionPromise,
                 InputType
             } from './base.mjs';
             """);
@@ -1008,6 +1011,18 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 _typesWithPromiseWrappers.Add(typeClass.TypeId);
             }
         }
+
+        // InteractionInputCollection is a hand-written base.mts type: its by-name accessors
+        // (value/get/required/requiredValue) are client-side conveniences, not ATS capabilities, so
+        // it is never registered as a generated type class. Register it as a promise-wrapper type so
+        // collection-returning getters (result.inputs(), validationContext.inputs(), command
+        // arguments()) emit the fluent InteractionInputCollectionPromise thenable instead of a bare
+        // Promise<InteractionInputCollection>. That lets callers chain `await x.inputs().value("c")`
+        // without an intermediate await, matching the C#/Go/Java/Python surfaces. The wrapper
+        // (InteractionInputCollectionPromise / InteractionInputCollectionPromiseImpl) is hand-written
+        // in base.mts; it is intentionally absent from _wrapperClassNames so the getter impl keeps
+        // using the marshaller-based collection construction rather than a handle+Impl wrapper.
+        _typesWithPromiseWrappers.Add(InteractionInputCollectionTypeId);
         // Note: ReferenceExpression is intentionally NOT added to _wrapperClassNames.
         // It is a value type defined in base.mts with a private constructor and static factory,
         // not a handle-based wrapper. It is handled via MapTypeRefToTypeScript instead.
@@ -3473,6 +3488,24 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         if (getter.ReturnType?.TypeId != null && _wrapperClassNames.TryGetValue(getter.ReturnType.TypeId, out var wrapperClassName))
         {
             GenerateWrapperGetterOnlyPropertyMethod(propertyName, getter, wrapperClassName);
+            return;
+        }
+
+        // Promise-wrapper types that are NOT registered as generated wrapper classes (currently only
+        // InteractionInputCollection, a hand-written base.mts type) wrap the marshalled collection
+        // promise in their hand-written ...Promise thenable so by-name accessors chain without an
+        // intermediate await. Awaiting the wrapper still resolves to the plain collection, preserving
+        // the existing `await (await x.inputs()).value(...)` form.
+        if (TryGetPromiseWrapperType(getter.ReturnType, out var promiseInterfaceName, out var promiseImplementationClassName))
+        {
+            var collectionType = GetGetterOnlyPropertyReturnType(getter.ReturnType);
+            WriteLine($"    {propertyName}(): {promiseInterfaceName} {{");
+            WriteLine($"        return new {promiseImplementationClassName}(this._client.invokeCapability<{collectionType}>(");
+            WriteLine($"            '{getter.CapabilityId}',");
+            WriteLine("            { context: this._handle }");
+            WriteLine("        ), this._client, false);");
+            WriteLine("    }");
+            WriteLine();
             return;
         }
 
