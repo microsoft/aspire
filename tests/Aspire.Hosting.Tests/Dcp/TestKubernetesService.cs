@@ -142,9 +142,11 @@ internal sealed class TestKubernetesService : IKubernetesService
                 continue;
             }
 
+            var hostPort = container.Spec.Ports?.FirstOrDefault(port => port.ContainerPort == serviceProduced.Port)?.HostPort;
+
             service.Status ??= new ServiceStatus();
             service.Status.EffectiveAddress = service.Spec.Address ?? "localhost";
-            service.Status.EffectivePort = Interlocked.Increment(ref _nextPort);
+            service.Status.EffectivePort = hostPort ?? Interlocked.Increment(ref _nextPort);
             modifiedResources.Add(service);
         }
 
@@ -249,6 +251,11 @@ internal sealed class TestKubernetesService : IKubernetesService
 
             if (res is Executable exe && result is Executable eu)
             {
+                if (eu.Spec.Start is not null)
+                {
+                    exe.Spec.Start = eu.Spec.Start;
+                }
+
                 if (eu.Spec.Stop == true)
                 {
                     exe.Spec.Stop = true;
@@ -262,6 +269,11 @@ internal sealed class TestKubernetesService : IKubernetesService
 
             if (res is Container ctr && result is Container cu)
             {
+                if (cu.Spec.Start is not null)
+                {
+                    ctr.Spec.Start = cu.Spec.Start;
+                }
+
                 if (cu.Spec.Stop == true)
                 {
                     ctr.Spec.Stop = true;

@@ -1,31 +1,27 @@
-# Aspire.Hosting.Azure.Functions library
+# Azure Functions hosting integration
 
-Provides methods to the Aspire hosting model for Azure functions.
+Use this integration to model, configure, and orchestrate Azure Functions projects in an Aspire solution.
 
 ## Getting started
 
 ### Prerequisites
 
 * An Aspire project based on the starter template.
-* A .NET-based Azure Functions worker project.
+* An Azure Functions app project.
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Azure Functions Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.Functions` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.Functions
+```bash
+aspire add Aspire.Hosting.Azure.Functions
 ```
 
 ## Usage example
 
-Add a reference to the .NET-based Azure Functions project in your `AppHost` project.
+In the AppHost, use `AddAzureFunctionsProject` to configure the Functions app resource. C# AppHosts use the generated project metadata type; TypeScript AppHosts point at the Functions app directory.
 
-```dotnetcli
-dotnet add reference ..\Company.FunctionApp\Company.FunctionApp.csproj
-```
-
-In the _AppHost.cs_ file of `AppHost`, use the `AddAzureFunctionsProject` to configure the Functions project resource.
+**C#**
 
 ```csharp
 using Aspire.Hosting;
@@ -47,11 +43,29 @@ var app = builder.Build();
 app.Run();
 ```
 
+**TypeScript**
+
+```typescript
+import { createBuilder } from "./.aspire/modules/aspire.mjs";
+
+const builder = await createBuilder();
+
+const storage = await builder.addAzureStorage("storage").runAsEmulator();
+const queue = await storage.addQueues("queue");
+const blob = await storage.addBlobs("blob");
+
+await builder.addAzureFunctionsProject("my-functions-project", "../Company.FunctionApp")
+    .withReference(queue)
+    .withReference(blob);
+
+await builder.build().run();
+```
+
 ## Durable Task Scheduler (Durable Functions)
 
-The Azure Functions hosting library also provides resource APIs for using the Durable Task Scheduler (DTS) with Durable Functions.
+The Azure Functions hosting integration also provides resource APIs for using the Durable Task Scheduler (DTS) with Durable Functions.
 
-In the _AppHost.cs_ file of `AppHost`, add a Scheduler resource, create one or more Task Hubs, and pass the connection string and hub name to your Functions project:
+In the AppHost, add a Scheduler resource, create one or more Task Hubs, and pass the connection string and hub name to your Functions app resource:
 
 ```csharp
 using Aspire.Hosting;
@@ -101,6 +115,8 @@ var taskHub = scheduler.AddTaskHub("taskhub").WithTaskHubName(taskHubName);
 ```
 ## Additional documentation
 
+- https://aspire.dev/integrations/gallery/
+- https://aspire.dev/integrations/cloud/azure/azure-functions/azure-functions-host/
 - https://learn.microsoft.com/azure/azure-functions
 - https://learn.microsoft.com/azure/azure-functions/durable/durable-task-scheduler/durable-task-scheduler
 

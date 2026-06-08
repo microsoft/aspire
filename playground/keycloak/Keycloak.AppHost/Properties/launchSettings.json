@@ -8,7 +8,10 @@
       "applicationUrl": "https://keycloak.dev.localhost:17241;http://keycloak.dev.localhost:15079",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development"
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21241",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "https://localhost:21242",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22241"
       }
     },
     "http": {
@@ -18,7 +21,11 @@
       "applicationUrl": "http://keycloak.dev.localhost:15079",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development"
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19141",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:19142",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20141",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       }
     },
     "generate-manifest": {
@@ -29,7 +36,8 @@
       "applicationUrl": "http://keycloak.dev.localhost:16370",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development"
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19141"
       }
     }
   }

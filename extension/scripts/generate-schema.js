@@ -30,7 +30,7 @@ try {
 
     // Get config info from CLI
     const output = execSync(`"${cliPath}" config info --json`, { encoding: 'utf8' });
-    const configInfo = JSON.parse(output);
+    const configInfo = normalizeConfigInfo(JSON.parse(output));
 
     // Ensure output directory exists
     const schemaDir = path.dirname(localSchemaOutputPath);
@@ -108,6 +108,66 @@ function generateJsonSchema(configInfo, settingsSchema, options) {
         ...(required.length > 0 ? { required } : {}),
         additionalProperties: false
     };
+}
+
+function normalizeConfigInfo(configInfo) {
+    return {
+        AvailableFeatures: readArray(configInfo.AvailableFeatures ?? configInfo.availableFeatures, 'availableFeatures')
+            .map(feature => ({
+                Name: readString(feature.Name ?? feature.name, 'availableFeatures[].name'),
+                Description: readString(feature.Description ?? feature.description, 'availableFeatures[].description'),
+                DefaultValue: readBoolean(feature.DefaultValue ?? feature.defaultValue, 'availableFeatures[].defaultValue'),
+            })),
+        LocalSettingsSchema: normalizeSettingsSchema(configInfo.LocalSettingsSchema ?? configInfo.localSettingsSchema, 'localSettingsSchema'),
+        GlobalSettingsSchema: normalizeSettingsSchema(configInfo.GlobalSettingsSchema ?? configInfo.globalSettingsSchema, 'globalSettingsSchema'),
+        ConfigFileSchema: configInfo.ConfigFileSchema || configInfo.configFileSchema
+            ? normalizeSettingsSchema(configInfo.ConfigFileSchema ?? configInfo.configFileSchema, 'configFileSchema')
+            : undefined,
+    };
+}
+
+function normalizeSettingsSchema(settingsSchema, propertyName) {
+    return {
+        Properties: readArray(settingsSchema?.Properties ?? settingsSchema?.properties, `${propertyName}.properties`).map(normalizePropertyInfo),
+    };
+}
+
+function normalizePropertyInfo(property) {
+    const subProperties = property.SubProperties ?? property.subProperties;
+    const additionalPropertiesType = property.AdditionalPropertiesType ?? property.additionalPropertiesType;
+
+    return {
+        Name: readString(property.Name ?? property.name, 'properties[].name'),
+        Type: readString(property.Type ?? property.type, 'properties[].type'),
+        Description: readString(property.Description ?? property.description, 'properties[].description'),
+        Required: readBoolean(property.Required ?? property.required, 'properties[].required'),
+        ...(subProperties === undefined ? {} : { SubProperties: readArray(subProperties, 'properties[].subProperties').map(normalizePropertyInfo) }),
+        ...(additionalPropertiesType === undefined ? {} : { AdditionalPropertiesType: readString(additionalPropertiesType, 'properties[].additionalPropertiesType') }),
+    };
+}
+
+function readArray(value, propertyName) {
+    if (Array.isArray(value)) {
+        return value;
+    }
+
+    throw new Error(`Expected ${propertyName} to be an array.`);
+}
+
+function readString(value, propertyName) {
+    if (typeof value === 'string') {
+        return value;
+    }
+
+    throw new Error(`Expected ${propertyName} to be a string.`);
+}
+
+function readBoolean(value, propertyName) {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+
+    throw new Error(`Expected ${propertyName} to be a boolean.`);
 }
 
 /**

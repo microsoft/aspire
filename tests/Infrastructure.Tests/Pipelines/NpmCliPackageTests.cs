@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Xml.Linq;
 using Xunit;
 
 namespace Infrastructure.Tests;
@@ -201,6 +202,23 @@ public sealed class NpmCliPackageTests
     }
 
     [Fact]
+    public async Task NpmSigningScopeCoversNestedTarballPayloads()
+    {
+        var signingProps = XDocument.Parse(await ReadRepoFileAsync("eng/Signing.props"));
+
+        AssertScopedSigningRule(signingProps, "FileExtensionSignInfo", ".tgz", "LinuxSign500180PGP");
+        AssertScopedSigningRule(signingProps, "FileSignInfo", "aspire.js", "MicrosoftDotNet500");
+
+        // The native npm packages are built from already-signed native archives.
+        // The main Windows build should only produce the detached npm tarball
+        // signature; it must still provide scoped rules for nested native
+        // executables because Arcade resolves nested file certificates inside
+        // the ItemsToSign collision scope.
+        AssertScopedSigningRule(signingProps, "FileSignInfo", "aspire.exe", "None");
+        AssertScopedSigningRule(signingProps, "FileSignInfo", "aspire", "None");
+    }
+
+    [Fact]
     public async Task ReleasePipelinePreflightsScheduledNpmPackagesBeforePublishing()
     {
         var releasePipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
@@ -238,7 +256,6 @@ public sealed class NpmCliPackageTests
 
         Assert.Contains("NPM_PUBLISH_REQUIRED_OWNERS", commonVariables);
         Assert.Contains("NPM_PUBLISH_REQUIRED_APPROVERS", commonVariables);
-        Assert.Contains("default: ''", releasePipeline);
         Assert.Contains("NpmPublishOwnersEffective", releasePipeline);
         Assert.Contains("NpmPublishApproversEffective", releasePipeline);
         Assert.Contains("owners: '$(NpmPublishOwnersEffective)'", releasePipeline);
@@ -263,6 +280,21 @@ public sealed class NpmCliPackageTests
         }
 
         return count;
+    }
+
+    private static void AssertScopedSigningRule(XDocument document, string elementName, string include, string certificateName)
+    {
+        var matchingRules = document
+            .Descendants(elementName)
+            .Where(element =>
+                (string?)element.Attribute("CollisionPriorityId") == "AspireCliNpmPackage" &&
+                ((string?)element.Attribute("Include") == include || (string?)element.Attribute("Update") == include) &&
+                (string?)element.Attribute("CertificateName") == certificateName)
+            .ToArray();
+
+        Assert.True(
+            matchingRules.Length == 1,
+            $"Expected exactly one {elementName} for '{include}' using '{certificateName}' in the AspireCliNpmPackage signing scope, but found {matchingRules.Length}.");
     }
 
     private static string FindRepoRoot()

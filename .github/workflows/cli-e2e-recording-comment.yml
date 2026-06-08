@@ -407,20 +407,15 @@ jobs:
                 # Look up test outcome from TRX data.
                 # .cast files are named after the test method name (via [CallerMemberName] in CreateTestTerminal),
                 # so the filename matches the method name key in the outcomes JSON.
-                # Per-link label carries the outcome too, so a recording URL copied out of
-                # the table still tells reviewers whether it represents a pass or a failure.
                 TEST_OUTCOME=$(jq -r --arg name "$filename" '.[$name] // "Unknown"' test_outcomes.json)
                 if [ "$TEST_OUTCOME" = "Passed" ]; then
                   STATUS_EMOJI="✅"
-                  LINK_LABEL="Recording"
                   TEST_PASS_COUNT=$((TEST_PASS_COUNT + 1))
                 elif [ "$TEST_OUTCOME" = "Failed" ]; then
                   STATUS_EMOJI="❌"
-                  LINK_LABEL="Recording"
                   TEST_FAIL_COUNT=$((TEST_FAIL_COUNT + 1))
                 else
                   STATUS_EMOJI="❔"
-                  LINK_LABEL="Recording"
                   TEST_UNKNOWN_COUNT=$((TEST_UNKNOWN_COUNT + 1))
                 fi
 
@@ -456,30 +451,26 @@ jobs:
                   fi
                 fi
 
-                # Build the job and artifacts link cells for the table
-                JOB_CELL=""
-                if [ -n "$JOB_URL" ]; then
-                  JOB_CELL="[#${JOB_ID}](${JOB_URL})"
-                else
-                  JOB_CELL="—"
-                fi
-                ARTIFACTS_CELL=""
-                if [ -n "$ARTIFACTS_URL" ]; then
-                  ARTIFACTS_CELL="[Logs](${ARTIFACTS_URL})"
-                else
-                  ARTIFACTS_CELL="—"
-                fi
-
-                # Build the table row once; append to both tables as needed.
+                # Build the detail cell with links separated by ·
+                DETAIL_PARTS=""
                 if [ -n "$ASCIINEMA_URL" ]; then
-                  ROW="| ${STATUS_EMOJI} | ${safe_filename} | [${LINK_LABEL}](${ASCIINEMA_URL}) | ${JOB_CELL} | ${ARTIFACTS_CELL} |"
+                  DETAIL_PARTS="[Recording](${ASCIINEMA_URL})"
                   echo "Uploaded: $ASCIINEMA_URL"
                   UPLOAD_COUNT=$((UPLOAD_COUNT + 1))
                 else
-                  ROW="| ${STATUS_EMOJI} | ${safe_filename} | ⚠️ Upload failed | ${JOB_CELL} | ${ARTIFACTS_CELL} |"
+                  DETAIL_PARTS="⚠️ Upload failed"
                   echo "Failed to upload $castfile after $MAX_UPLOAD_RETRIES attempts"
                   FAIL_COUNT=$((FAIL_COUNT + 1))
                 fi
+                if [ -n "$JOB_URL" ]; then
+                  DETAIL_PARTS="${DETAIL_PARTS} · [Job](${JOB_URL})"
+                fi
+                if [ -n "$ARTIFACTS_URL" ]; then
+                  DETAIL_PARTS="${DETAIL_PARTS} · [CLI logs](${ARTIFACTS_URL})"
+                fi
+
+                # Build the table row once; append to both tables as needed.
+                ROW="| ${STATUS_EMOJI} | ${safe_filename} | ${DETAIL_PARTS} |"
 
                 TABLE_BODY="${TABLE_BODY}
           ${ROW}"
@@ -537,8 +528,8 @@ jobs:
               FAILED_SECTION="
           ### ❌ Failed Tests
 
-          | Status | Test | Recording | Job | Artifacts |
-          |--------|------|-----------|-----|-----------|${FAILED_TESTS_BODY}
+          | - | Test | Detail |
+          |--------|------|-----------|${FAILED_TESTS_BODY}
           "
             fi
 
@@ -548,8 +539,8 @@ jobs:
           <details>
           <summary>View all recordings</summary>
 
-          | Status | Test | Recording | Job | Artifacts |
-          |--------|------|-----------|-----|-----------|${TABLE_BODY}
+          | - | Test | Detail |
+          |--------|------|-----------|${TABLE_BODY}
 
           ---
           <sub>📹 Recordings uploaded automatically from [CI run #${RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID})</sub>

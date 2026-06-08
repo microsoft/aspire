@@ -2033,6 +2033,17 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         {
             options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Staging);
 
+            // A real staging build always bakes the build's commit hash into its
+            // AssemblyInformationalVersion (e.g. "13.4.0-preview.1.26280.6+<sha>"), and the staging
+            // identity now routes to that build's SHA-specific darc-pub-microsoft-aspire-<sha> feed
+            // regardless of version shape. The test host assembly has no +<commit> metadata, so the
+            // feed could not be derived and the staging channel would never be synthesized. Provide a
+            // stamped informational version override so the derivation matches a real staging build.
+            options.ConfigurationCallback += config =>
+            {
+                config[PackagingService.OverrideCliInformationalVersionConfigKey] = "13.4.0-preview.1.26280.6+2574ef57e97fc393aff67592fd442afca6a6d02f";
+            };
+
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>

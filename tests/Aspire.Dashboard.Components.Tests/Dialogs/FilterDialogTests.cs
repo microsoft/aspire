@@ -33,6 +33,8 @@ public class FilterDialogTests : DashboardTestContext
 
         var conditionSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<FilterCondition>>>());
         Assert.Collection(conditionSelect.Instance.Items!,
+            item => Assert.Equal(FilterCondition.Equals, item.Id),
+            item => Assert.Equal(FilterCondition.NotEqual, item.Id),
             item => Assert.Equal(FilterCondition.GreaterThanOrEqual, item.Id),
             item => Assert.Equal(FilterCondition.GreaterThan, item.Id),
             item => Assert.Equal(FilterCondition.LessThanOrEqual, item.Id),

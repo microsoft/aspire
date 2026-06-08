@@ -628,7 +628,8 @@ internal sealed class DotNetCliRunner(
         var env = new Dictionary<string, string>
         {
             [KnownConfigNames.DotnetCliTelemetryOptOut] = "1",
-            [KnownConfigNames.DotnetCliWorkloadUpdateNotifyDisable] = "1"
+            [KnownConfigNames.DotnetCliWorkloadUpdateNotifyDisable] = "1",
+            [KnownConfigNames.SuppressCliRunHook] = "true"
         };
 
         var existingStandardOutputCallback = options.StandardOutputCallback;
@@ -640,13 +641,15 @@ internal sealed class DotNetCliRunner(
         for (var attempt = 0; attempt < maxRetries; attempt++)
         {
             var stdoutBuilder = new StringBuilder();
-            options.StandardOutputCallback = (line) => {
+            options.StandardOutputCallback = (line) =>
+            {
                 stdoutBuilder.AppendLine(line);
                 existingStandardOutputCallback?.Invoke(line);
             };
 
             var stderrBuilder = new StringBuilder();
-            options.StandardErrorCallback = (line) => {
+            options.StandardErrorCallback = (line) =>
+            {
                 stderrBuilder.AppendLine(line);
                 existingStandardErrorCallback?.Invoke(line);
             };
@@ -719,6 +722,7 @@ internal sealed class DotNetCliRunner(
         var noBuildSwitch = noBuild ? "--no-build" : string.Empty;
         var noRestoreSwitch = noRestore && !noBuild ? "--no-restore" : string.Empty; // --no-build implies --no-restore
         var noProfileSwitch = options.NoLaunchProfile ? "--no-launch-profile" : string.Empty;
+        var suppressCliRunHookProperty = $"/p:{KnownConfigNames.SuppressCliRunHook}=true";
         // Add --non-interactive flag when using watch to prevent interactive prompts during automation
         var nonInteractiveSwitch = watch ? "--non-interactive" : string.Empty;
         // Add --verbose flag when using watch and debug is enabled
@@ -727,7 +731,10 @@ internal sealed class DotNetCliRunner(
         string[] cliArgs = isSingleFile switch
         {
             false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, "--project", projectFile.FullName, "--", .. args],
-            true => ["run", noProfileSwitch, "--file", projectFile.FullName, "--", .. args]
+            // File-based dotnet run only recomputes RunCommand during build. Omit --no-build
+            // for single-file AppHosts so the suppression property is applied before launch
+            // and a CLI-launched AppHost cannot recursively enter the run hook.
+            true => ["run", noRestoreSwitch, noProfileSwitch, suppressCliRunHookProperty, "--file", projectFile.FullName, "--", .. args]
         };
 
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
@@ -735,6 +742,10 @@ internal sealed class DotNetCliRunner(
         var finalEnv = CreateRunEnvironment(
             env,
             watch,
+            // Aspire CLI launches AppHosts by shelling out to dotnet run. If the AppHost SDK run hook
+            // is enabled, every CLI-launched AppHost must suppress the hook to avoid recursive
+            // dotnet run -> aspire run -> dotnet run loops.
+            suppressCliRunHook: true,
             backchannelCompletionSource);
 
         return await ExecuteAsync(
@@ -762,6 +773,7 @@ internal sealed class DotNetCliRunner(
         var finalEnv = CreateRunEnvironment(
             env,
             watch: false,
+            suppressCliRunHook: false,
             backchannelCompletionSource);
 
         return await ExecuteAsync(
@@ -778,6 +790,7 @@ internal sealed class DotNetCliRunner(
     private Dictionary<string, string> CreateRunEnvironment(
         IDictionary<string, string>? env,
         bool watch,
+        bool suppressCliRunHook,
         TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource)
     {
         // We copy the dictionary here because we don't want to mutate the input.
@@ -801,6 +814,11 @@ internal sealed class DotNetCliRunner(
             {
                 finalEnv["DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER"] = "true";
             }
+        }
+
+        if (suppressCliRunHook)
+        {
+            finalEnv[KnownConfigNames.SuppressCliRunHook] = "true";
         }
 
         // Set the backchannel socket path when backchannel is configured
@@ -844,14 +862,16 @@ internal sealed class DotNetCliRunner(
 
         var stdoutBuilder = new StringBuilder();
         var existingStandardOutputCallback = options.StandardOutputCallback; // Preserve the existing callback if it exists.
-        options.StandardOutputCallback = (line) => {
+        options.StandardOutputCallback = (line) =>
+        {
             stdoutBuilder.AppendLine(line);
             existingStandardOutputCallback?.Invoke(line);
         };
 
         var stderrBuilder = new StringBuilder();
         var existingStandardErrorCallback = options.StandardErrorCallback; // Preserve the existing callback if it exists.
-        options.StandardErrorCallback = (line) => {
+        options.StandardErrorCallback = (line) =>
+        {
             stderrBuilder.AppendLine(line);
             existingStandardErrorCallback?.Invoke(line);
         };
@@ -996,10 +1016,13 @@ internal sealed class DotNetCliRunner(
             return false;
         }
 
-        var templateVersion = successLine.Split(" ") switch { // Break up the success line.
-            { Length: > 2 } chunks => chunks[1].Split("@") switch { // Break up the template+version string (@ separator for .NET 10.0+)
+        var templateVersion = successLine.Split(" ") switch
+        { // Break up the success line.
+            { Length: > 2 } chunks => chunks[1].Split("@") switch
+            { // Break up the template+version string (@ separator for .NET 10.0+)
                 { Length: 2 } versionChunks => versionChunks[1], // The version in the second chunk
-                _ => chunks[1].Split("::") switch { // Fallback to :: separator for older SDK versions
+                _ => chunks[1].Split("::") switch
+                { // Fallback to :: separator for older SDK versions
                     { Length: 2 } versionChunks => versionChunks[1],
                     _ => null
                 }
@@ -1023,7 +1046,7 @@ internal sealed class DotNetCliRunner(
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
-        string[] cliArgs = ["new", templateName, "--name", name, "--output", outputPath, ..extraArgs];
+        string[] cliArgs = ["new", templateName, "--name", name, "--output", outputPath, .. extraArgs];
         return await ExecuteAsync(
             args: cliArgs,
             env: null,
@@ -1410,14 +1433,16 @@ internal sealed class DotNetCliRunner(
 
         var stdoutLines = new List<string>();
         var existingStandardOutputCallback = options.StandardOutputCallback; // Preserve the existing callback if it exists.
-        options.StandardOutputCallback = (line) => {
+        options.StandardOutputCallback = (line) =>
+        {
             stdoutLines.Add(line);
             existingStandardOutputCallback?.Invoke(line);
         };
 
         var stderrLines = new List<string>();
         var existingStandardErrorCallback = options.StandardErrorCallback; // Preserve the existing callback if it exists.
-        options.StandardErrorCallback = (line) => {
+        options.StandardErrorCallback = (line) =>
+        {
             stderrLines.Add(line);
             existingStandardErrorCallback?.Invoke(line);
         };
@@ -1450,14 +1475,16 @@ internal sealed class DotNetCliRunner(
 
         var stdoutLines = new List<string>();
         var existingStandardOutputCallback = options.StandardOutputCallback;
-        options.StandardOutputCallback = (line) => {
+        options.StandardOutputCallback = (line) =>
+        {
             stdoutLines.Add(line);
             existingStandardOutputCallback?.Invoke(line);
         };
 
         var stderrLines = new List<string>();
         var existingStandardErrorCallback = options.StandardErrorCallback;
-        options.StandardErrorCallback = (line) => {
+        options.StandardErrorCallback = (line) =>
+        {
             stderrLines.Add(line);
             existingStandardErrorCallback?.Invoke(line);
         };

@@ -2,10 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
@@ -14,8 +10,8 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal abstract class ParentCommand : BaseCommand
 {
-    protected ParentCommand(string name, string description, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, IInteractionService interactionService, AspireCliTelemetry telemetry)
-        : base(name, description, features, updateNotifier, executionContext, interactionService, telemetry)
+    protected ParentCommand(string name, string description, CommonCommandServices services)
+        : base(name, description, services)
     {
     }
 

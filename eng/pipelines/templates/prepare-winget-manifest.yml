@@ -10,11 +10,6 @@ parameters:
   - name: archiveRoot
     type: string
     default: ''
-  - name: skipUrlValidation
-    type: boolean
-    default: false
-  # runInstallTest is derived from skipUrlValidation (they are logical inverses).
-  # Callers should only set skipUrlValidation; install tests run when URLs are valid.
 
 steps:
   - pwsh: |
@@ -56,32 +51,31 @@ steps:
     displayName: 🟣Set version ${{ parameters.version }}
 
   - pwsh: |
-      $repoName = 'dotnet-public'
-      $repoUri = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json'
-
-      Write-Host "Ensuring PSResource repository '$repoName' is registered..."
-      $existingRepo = Get-PSResourceRepository -Name $repoName -ErrorAction SilentlyContinue
-      if ($null -eq $existingRepo) {
-        Register-PSResourceRepository -Name $repoName -Uri $repoUri -Trusted
+      # Probe-only: do not attempt to install/repair winget here. The 1ES `1es-windows-2022`
+      # pool blocks outbound access to cdn.winget.microsoft.com, so
+      # `Repair-WinGetPackageManager` fails with "An attempt was made to access a socket in a
+      # way forbidden by its access permissions. (cdn.winget.microsoft.com:443)".
+      #
+      # `prepare-manifest-artifact.ps1` only needs winget when ValidationMode is `Full`
+      # (install/uninstall round-trip) or `Offline` (best-effort `winget validate`); in
+      # Offline mode it tolerates winget being missing and still produces the manifest
+      # artifact. This pipeline hardcodes Offline (see the Prepare step below), so
+      # probing for a pre-installed winget on the image is sufficient and avoids the
+      # blocked CDN path entirely.
+      #
+      # Manifest validation is intentionally delegated to upstream microsoft/winget-pkgs
+      # CI; see eng/winget/README.md "Validation model" for what upstream checks.
+      $winget = Get-Command winget -ErrorAction SilentlyContinue
+      if ($winget) {
+        Write-Host "winget already on PATH at $($winget.Source):"
+        winget --version
       } else {
-        Write-Host "PSResource repository '$repoName' is already registered. Skipping registration."
+        Write-Host "##[warning]winget was not found on PATH. Offline validation will skip the winget validate step (see prepare-manifest-artifact.ps1)."
       }
-
-      Write-Host "Installing Microsoft.WinGet.Client from $repoName feed..."
-      Install-PSResource -Name Microsoft.WinGet.Client -Repository $repoName -TrustRepository
-      Write-Host "Microsoft.WinGet.Client installed. Listing installed version:"
-      Get-Module -ListAvailable Microsoft.WinGet.Client | Select-Object Name, Version | Format-Table
-
-      Write-Host "Installing WinGet..."
-      Repair-WinGetPackageManager -Latest -Force -AllUsers
-
-      Write-Host "winget installed:"
-      winget --version
-    displayName: 🟣Install winget CLI
+    displayName: 🟣Probe winget CLI
 
   - pwsh: |
       $ErrorActionPreference = 'Stop'
-      $validationMode = if ('${{ parameters.skipUrlValidation }}' -eq 'true') { 'Offline' } else { 'Full' }
 
       $args = @{
         Version = '$(CliVersion)'
@@ -89,7 +83,13 @@ steps:
         Channel = '${{ parameters.channel }}'
         TemplateDir = '$(Build.SourcesDirectory)/eng/winget/$(WinGetTemplateDir)'
         OutputPath = '$(Build.StagingDirectory)/winget-manifests'
-        ValidationMode = $validationMode
+        # Hardcoded Offline: Full mode requires winget.exe on the agent, which
+        # is not present on 1ES `1es-windows-2022` and cannot be installed
+        # (see the Probe step above). prepare-manifest-artifact.ps1 still accepts
+        # ValidationMode for local/dogfood callers running on a machine with
+        # winget installed. Manifest validation is delegated to upstream
+        # microsoft/winget-pkgs CI — see eng/winget/README.md "Validation model".
+        ValidationMode = 'Offline'
       }
 
       if (-not [string]::IsNullOrWhiteSpace('${{ parameters.archiveRoot }}')) {

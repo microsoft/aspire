@@ -157,7 +157,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task CreateTypeScriptAppHostWithViteApp_AllowsGuestAppPackageManagerToDiffer()
+    public async Task TypeScriptAppHostWithVite_AllowsDifferentGuestPkgManager()
     {
         const string appHostToolchain = "pnpm";
         const string guestToolchain = "npm";

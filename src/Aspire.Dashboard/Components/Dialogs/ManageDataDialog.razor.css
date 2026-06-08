@@ -14,6 +14,10 @@
     display: inline-flex;
 }
 
+::deep .column-header {
+    align-content: center;
+}
+
 .button-container {
     display: grid;
     grid-template-columns: 1fr auto;

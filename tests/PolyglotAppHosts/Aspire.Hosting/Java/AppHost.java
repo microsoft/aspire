@@ -47,6 +47,14 @@ void main() throws Exception {
         dockerFactoryContainer.withDockerfileFactory("./app", dockerfileFactory, "runtime");
         var exe = builder.addExecutable("myexe", "echo", ".", new String[] { "hello" });
         var project = builder.addProject("myproject", "./src/MyProject", "https");
+        project.withEndpointsInEnvironment(new String[] { "https" });
+        builder.addHealthCheck("custom_check", () -> {
+            var result = new HealthCheckResult();
+            result.setStatus(HealthStatus.HEALTHY);
+            result.setDescription("custom health check");
+            result.setData(Map.of("custom", "value"));
+            return result;
+        });
         var csharpApp = builder.addCSharpApp("csharpapp", "./src/CSharpApp");
         var cache = builder.addRedis("cache");
         var tool = builder.addDotnetTool("mytool", "dotnet-ef");
@@ -60,6 +68,11 @@ void main() throws Exception {
         customInputOptions.setOptions(Map.of("one", "One", "two", "Two"));
         customInputParam.withCustomInput(customInputOptions);
         container.withDockerfileBaseImage(new WithDockerfileBaseImageOptions().buildImage("mcr.microsoft.com/dotnet/sdk:8.0"));
+        var containerFilesOptions = new ContainerFilesOptions();
+        containerFilesOptions.setDefaultOwner(1000.0);
+        containerFilesOptions.setDefaultGroup(1000.0);
+        containerFilesOptions.setUmask(18.0);
+        container.withContainerFiles("/usr/lib/aspire/container-files", ".", containerFilesOptions);
         container.withImageRegistry("docker.io");
         dockerContainer.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
         dockerContainer.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8080.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("http").createIfNotExists(false));
@@ -263,6 +276,7 @@ void main() throws Exception {
                     .arguments(Map.of("message", "hello"))
                     .cancellationToken(cancellationToken));
         });
+        container.withHealthCheck("custom_check");
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();
         httpCmdOptions.setMethodName("POST");

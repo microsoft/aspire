@@ -12,6 +12,8 @@ using Microsoft.Extensions.Http.Resilience;
 
 namespace Aspire.Hosting.Tests;
 
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
+
 [Trait("Partition", "6")]
 public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 {
@@ -218,6 +220,152 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithHttpCommandExport_CopiesCommonCommandOptions()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+        var resourceBuilder = builder.AddResource(new CustomResource("name"))
+            .WithHttpEndpoint()
+            .WithHttpCommandExport("/some-path", "Do The Thing", new HttpCommandExportOptions
+            {
+                CommandOptions = new CommandOptions
+                {
+                    Description = "Command description",
+                    ConfirmationMessage = "Are you sure?",
+                    IconName = "DatabaseLightning",
+                    IconVariant = IconVariant.Filled,
+                    IsHighlighted = true,
+                    Visibility = ResourceCommandVisibility.Api,
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "message",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                }
+            });
+
+        var command = resourceBuilder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Single();
+        var argument = Assert.Single(command.Arguments);
+
+        Assert.Equal("Do The Thing", command.DisplayName);
+        Assert.Equal("Command description", command.DisplayDescription);
+        Assert.Equal("Are you sure?", command.ConfirmationMessage);
+        Assert.Equal("DatabaseLightning", command.IconName);
+        Assert.Equal(IconVariant.Filled, command.IconVariant);
+        Assert.True(command.IsHighlighted);
+        Assert.Equal(ResourceCommandVisibility.Api, command.Visibility);
+        Assert.Equal("message", argument.Name);
+        Assert.True(argument.Required);
+    }
+
+    [Fact]
+    public void WithHttpCommandExport_PrefersTopLevelOptionsOverCommonCommandOptions()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+        var resourceBuilder = builder.AddResource(new CustomResource("name"))
+            .WithHttpEndpoint()
+            .WithHttpCommandExport("/some-path", "Do The Thing", new HttpCommandExportOptions
+            {
+                Description = "Top-level description",
+                ConfirmationMessage = "Top-level confirmation",
+                IconName = "TopLevelIcon",
+                IconVariant = IconVariant.Filled,
+                IsHighlighted = true,
+                CommandOptions = new CommandOptions
+                {
+                    Description = "Common description",
+                    ConfirmationMessage = "Common confirmation",
+                    IconName = "CommonIcon",
+                    IconVariant = IconVariant.Regular
+                }
+            });
+
+        var command = resourceBuilder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Single();
+
+        Assert.Equal("Top-level description", command.DisplayDescription);
+        Assert.Equal("Top-level confirmation", command.ConfirmationMessage);
+        Assert.Equal("TopLevelIcon", command.IconName);
+        Assert.Equal(IconVariant.Filled, command.IconVariant);
+        Assert.True(command.IsHighlighted);
+    }
+
+    [Fact]
+    public async Task WithHttpCommandExport_UsesPrepareRequestCallbackProperty()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, "ok", "text/plain");
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        InteractionInputCollection? prepareArguments = null;
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommandExport(
+            "/send",
+            "Send Message",
+            new HttpCommandExportOptions
+            {
+                MethodName = "POST",
+                CommandName = "mycommand",
+                PrepareRequest = context =>
+                {
+                    prepareArguments = context.Arguments;
+                    var message = context.Arguments.GetString("message")!;
+
+                    return Task.FromResult(new HttpCommandRequestExportData
+                    {
+                        MethodName = "PUT",
+                        Content = message,
+                        ContentType = "text/plain",
+                        Headers = new Dictionary<string, string>
+                        {
+                            ["X-Message"] = message
+                        }
+                    });
+                },
+                CommandOptions = new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "message",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                }
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "hello-from-ts-prepare-request"
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand", arguments).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal("hello-from-ts-prepare-request", prepareArguments?.GetString("message"));
+        Assert.Equal(HttpMethod.Put, fakeHandler.RequestMethod);
+        Assert.Equal("hello-from-ts-prepare-request", fakeHandler.RequestContent);
+        Assert.Equal("hello-from-ts-prepare-request", fakeHandler.RequestHeader);
+        Assert.Equal("text/plain", fakeHandler.RequestContentType);
+    }
+
+    [Fact]
     public void WithHttpCommand_AddsResourceCommandAnnotations_WithUniqueCommandNames()
     {
         // Arrange
@@ -343,10 +491,22 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     private sealed class FakeHttpMessageHandler(HttpStatusCode statusCode, string? responseBody = null, string? mediaType = null) : HttpMessageHandler
     {
         public bool Called { get; private set; }
+        public HttpMethod? RequestMethod { get; private set; }
+        public string? RequestContent { get; private set; }
+        public string? RequestContentType { get; private set; }
+        public string? RequestHeader { get; private set; }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Called = true;
+            RequestMethod = request.Method;
+            RequestContent = request.Content is not null
+                ? await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)
+                : null;
+            RequestContentType = request.Content?.Headers.ContentType?.MediaType;
+            RequestHeader = request.Headers.TryGetValues("X-Message", out var values)
+                ? Assert.Single(values)
+                : null;
 
             var response = new HttpResponseMessage(statusCode);
             if (responseBody is not null)
@@ -356,7 +516,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
                     : new StringContent(responseBody);
             }
 
-            return Task.FromResult(response);
+            return response;
         }
     }
 
@@ -490,6 +650,72 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
         Assert.True(callbackCalled);
         Assert.False(result.Success);
         Assert.Equal("A test error message", result.Message);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_PassesArgumentsToRequestAndResultCallbacks()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, "ok", "text/plain");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        InteractionInputCollection? prepareArguments = null;
+        InteractionInputCollection? resultArguments = null;
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/send", "Send Message",
+            commandName: "mycommand",
+            commandOptions: new()
+            {
+                HttpClientName = "commandclient",
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "message",
+                        InputType = InputType.Text,
+                        Required = true
+                    }
+                ],
+                PrepareRequest = requestContext =>
+                {
+                    prepareArguments = requestContext.Arguments;
+                    var message = requestContext.Arguments.GetString("message")!;
+                    requestContext.Request.Headers.Add("X-Message", message);
+                    requestContext.Request.Content = new StringContent(message, Encoding.UTF8, "text/plain");
+                    return Task.CompletedTask;
+                },
+                GetCommandResult = resultContext =>
+                {
+                    resultArguments = resultContext.Arguments;
+                    return Task.FromResult(CommandResults.Success(resultContext.Arguments.GetString("message")!));
+                }
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "hello-from-argument"
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand", arguments).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal("hello-from-argument", result.Message);
+        Assert.Equal("hello-from-argument", prepareArguments?.GetString("message"));
+        Assert.Equal("hello-from-argument", resultArguments?.GetString("message"));
+        Assert.Equal("hello-from-argument", fakeHandler.RequestContent);
+        Assert.Equal("hello-from-argument", fakeHandler.RequestHeader);
     }
 
     [Fact]
@@ -787,3 +1013,5 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 
     }
 }
+
+#pragma warning restore ASPIREINTERACTION001

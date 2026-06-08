@@ -1,20 +1,22 @@
-# Aspire.Hosting.Orleans library
+# Orleans hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure an Orleans cluster.
+Use this integration to model, configure, and orchestrate an Orleans cluster in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Orleans library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Orleans` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Orleans
+```bash
+aspire add Aspire.Hosting.Orleans
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Or resource and consume the connection using the following methods:
+In the AppHost, add an Orleans cluster resource and reference it from other resources with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var storage = builder.AddAzureStorage("storage").RunAsEmulator();
@@ -32,7 +34,28 @@ builder.AddProject<Projects.OrleansClient>("frontend")
        .WithReference(orleans.AsClient());
 ```
 
+**TypeScript**
+
+```typescript
+const storage = await builder.addAzureStorage("storage").runAsEmulator();
+const clusteringTable = await storage.addTables("clustering");
+const grainStorage = await storage.addBlobs("grainstate");
+
+const orleans = await builder.addOrleans("my-app")
+                     .withClustering(clusteringTable)
+                     .withGrainStorage("Default", grainStorage);
+
+await builder.addNodeApp("silo", "../orleans-silo", "server.js")
+    .withReference(orleans);
+
+await builder.addNodeApp("frontend", "../orleans-frontend", "server.js")
+    .withReference(orleans.asClient());
+```
+
 ## Additional documentation
+
+https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/frameworks/orleans/
 https://learn.microsoft.com/dotnet/orleans/
 
 ## Feedback & contributing

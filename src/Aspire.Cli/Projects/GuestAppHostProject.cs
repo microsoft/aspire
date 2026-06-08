@@ -602,7 +602,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // appHostSystemCts is linked to cancellationToken) tears down the guest process. The
                 // launcher will kill the guest's process tree when this token cancels.
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
-                    appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, appHostSystemToken);
+                    appHostFile, directory, environmentVariables, enableHotReload, context.NoBuild, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, appHostSystemToken);
             }
 
             // If the user cancelled (Ctrl+C), surface that as cancellation instead of a "guest failed"
@@ -1111,7 +1111,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // Step 6: Execute the guest apphost for publishing
                 // Pass the publish arguments (e.g., --operation publish --step deploy)
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostForPublishAsync(
-                    appHostFile, directory, environmentVariables, context.Arguments, rpcClient, cancellationToken);
+                    appHostFile, directory, environmentVariables, context.Arguments, context.NoBuild, rpcClient, cancellationToken);
             }
 
             if (guestExitCode != 0)
@@ -1875,6 +1875,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         DirectoryInfo directory,
         IDictionary<string, string> environmentVariables,
         bool watchMode,
+        bool noBuild,
         IAppHostRpcClient rpcClient,
         IGuestProcessLauncher launcher,
         Func<Task>? afterAppHostLaunchedAsync,
@@ -1888,7 +1889,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
-        return await _guestRuntime.RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, cancellationToken, afterAppHostLaunchedAsync: afterAppHostLaunchedAsync);
+        return await _guestRuntime.RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, cancellationToken, noBuild: noBuild, afterAppHostLaunchedAsync: afterAppHostLaunchedAsync);
     }
 
     /// <summary>
@@ -1899,6 +1900,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         DirectoryInfo directory,
         IDictionary<string, string> environmentVariables,
         string[]? publishArgs,
+        bool noBuild,
         IAppHostRpcClient rpcClient,
         CancellationToken cancellationToken)
     {
@@ -1910,7 +1912,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
-        return await _guestRuntime.PublishAsync(appHostFile, directory, environmentVariables, publishArgs, _guestRuntime.CreateDefaultLauncher(), cancellationToken);
+        return await _guestRuntime.PublishAsync(appHostFile, directory, environmentVariables, publishArgs, _guestRuntime.CreateDefaultLauncher(), cancellationToken, noBuild: noBuild);
     }
 
     /// <summary>

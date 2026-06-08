@@ -69,12 +69,14 @@
 
     <!--
       npm packages are tarballs, but only the Aspire CLI npm tarballs should get
-      detached signatures. Scope both the .tgz rule and the nested JavaScript
-      launcher override to the npm package ItemsToSign collision id so the global
-      .tgz/.js defaults remain unchanged for unrelated artifacts.
+      detached signatures. Scope these rules to the npm package ItemsToSign
+      collision id so the global .tgz/.js/native-executable defaults remain
+      unchanged for unrelated artifacts.
     -->
     <FileExtensionSignInfo Include=".tgz" CertificateName="LinuxSign500180PGP" CollisionPriorityId="AspireCliNpmPackage" />
     <FileSignInfo Include="aspire.js" CertificateName="MicrosoftDotNet500" CollisionPriorityId="AspireCliNpmPackage" />
+    <FileSignInfo Include="aspire.exe" CertificateName="None" CollisionPriorityId="AspireCliNpmPackage" />
+    <FileSignInfo Include="aspire" CertificateName="None" CollisionPriorityId="AspireCliNpmPackage" />
   </ItemGroup>
 
   <ItemGroup>

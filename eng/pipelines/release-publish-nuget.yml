@@ -106,15 +106,17 @@ parameters:
     type: boolean
     default: false
 
+  # Azure DevOps manual string parameters cannot be left blank. These defaults
+  # must include the NPM_PUBLISH_REQUIRED_* aliases from common-variables.yml.
   - name: NpmPublishOwners
-    displayName: 'npm ESRP owners (comma-separated Microsoft aliases or emails; leave blank for repo default)'
+    displayName: 'npm ESRP owners (comma-separated Microsoft aliases or emails; leave unchanged for repo default)'
     type: string
-    default: ''
+    default: 'joperezr,ankj'
 
   - name: NpmPublishApprovers
-    displayName: 'npm ESRP approvers (comma-separated Microsoft aliases or emails; leave blank for repo default)'
+    displayName: 'npm ESRP approvers (comma-separated Microsoft aliases or emails; leave unchanged for repo default)'
     type: string
-    default: ''
+    default: 'adamratzman,David.Pine'
 
   - name: NpmRegistryPropagationDelayMinutes
     displayName: 'Minutes to wait between npm RID and pointer package submissions'
@@ -2096,6 +2098,12 @@ extends:
             templateContext:
               type: releaseJob
               isProduction: true
+              # No ESRP publish runs in this job; vsce publishes directly to the VS Code Marketplace
+              # using a PAT. Skip the auto-injected MicroBuildAuthorizePublishPlugin@0 so it
+              # does not 401 against the devdiv MicroBuildToolset feed.
+              mb:
+                publish:
+                  enabled: false
               inputs:
                 - input: pipelineArtifact
                   artifactName: aspire-vscode-extension
