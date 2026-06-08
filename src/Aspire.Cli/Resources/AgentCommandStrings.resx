@@ -123,11 +123,8 @@
   <data name="InitCommand_ConfiguresDetectedAgentEnvironments" xml:space="preserve">
     <value>(configures detected agent environments)</value>
   </data>
-  <data name="InitCommand_NoTelemetryHooksOptionDescription" xml:space="preserve">
-    <value>Skip installing the agent telemetry hooks that record Aspire skill and tool usage.</value>
-  </data>
   <data name="InitCommand_TelemetryHooksInstalled" xml:space="preserve">
-    <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_AGENT_TELEMETRY_OPTOUT=true, or re-run with --no-telemetry-hooks to remove the install step.</value>
+    <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
   </data>
   <data name="InitCommand_TelemetryHookSkippedMalformedConfig" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</value>

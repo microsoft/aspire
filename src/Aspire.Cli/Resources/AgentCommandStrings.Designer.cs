@@ -250,16 +250,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Skip installing the agent telemetry hooks that record Aspire skill and tool usage..
-        /// </summary>
-        internal static string InitCommand_NoTelemetryHooksOptionDescription {
-            get {
-                return ResourceManager.GetString("InitCommand_NoTelemetryHooksOptionDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Installed Aspire agent telemetry hooks for: {0}. ....
+        ///   Looks up a localized string similar to Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true..
         /// </summary>
         internal static string InitCommand_TelemetryHooksInstalled {
             get {

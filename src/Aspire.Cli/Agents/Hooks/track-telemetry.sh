@@ -60,11 +60,10 @@ return_success() {
     exit 0
 }
 
-# Opt out when either the global Aspire CLI telemetry switch or the AI-specific switch is set.
+# Opt out when the Aspire CLI telemetry switch is set. This is the single opt-out that also
+# gates the `aspire agent telemetry` command path, so honoring it here avoids spawning the CLI
+# at all for opted-out users.
 case "${ASPIRE_CLI_TELEMETRY_OPTOUT}" in
-    1|true|TRUE|True) return_success ;;
-esac
-case "${ASPIRE_CLI_AGENT_TELEMETRY_OPTOUT}" in
     1|true|TRUE|True) return_success ;;
 esac
 

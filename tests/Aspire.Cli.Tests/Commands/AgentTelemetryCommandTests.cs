@@ -162,6 +162,31 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AgentTelemetry_EmitsNoActivity_WhenAllValuesInvalid()
+    {
+        var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
+        using (listener)
+        {
+            using var workspace = TemporaryWorkspace.Create(outputHelper);
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+            {
+                options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
+            });
+            using var provider = services.BuildServiceProvider();
+
+            var command = provider.GetRequiredService<RootCommand>();
+            // Every value fails validation (unknown event type, identifier with a space, absolute path).
+            // When nothing survives, the command must emit no span at all rather than a tagless one.
+            var result = command.Parse(["agent", "telemetry", "--event-type", "not_a_real_event", "--skill-name", "bad name", "--file-reference", "/etc/passwd"]);
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.Empty(capturedActivities);
+        }
+    }
+
+    [Fact]
     public async Task AgentTelemetry_ExitsZero_WithUnknownToken()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -280,60 +280,30 @@ public class TelemetryConfigurationTests
     [Theory]
     [InlineData("1")]
     [InlineData("true")]
-    public void AzureMonitor_Disabled_ForAgentTelemetry_WhenAgentTelemetryOptOutSet(string optOutValue)
+    public void AzureMonitor_Disabled_ForAgentTelemetry_WhenGlobalOptOutSet(string optOutValue)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [AspireCliTelemetry.AgentTelemetryOptOutConfigKey] = optOutValue
+                [AspireCliTelemetry.TelemetryOptOutConfigKey] = optOutValue
             })
             .Build();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
-        using var manager = new TelemetryManager(configuration, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
 
         Assert.False(manager.HasAzureMonitor);
-    }
-
-    [Fact]
-    public void AzureMonitor_Enabled_ForNonAgentCommand_WhenOnlyAgentTelemetryOptOutSet()
-    {
-        // The dedicated AI opt-out must not disable general CLI telemetry; it only suppresses
-        // the agent telemetry command path.
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [AspireCliTelemetry.AgentTelemetryOptOutConfigKey] = "true"
-            })
-            .Build();
-
-        using var manager = new TelemetryManager(configuration, ["run"]);
-
-        Assert.True(manager.HasAzureMonitor);
     }
 
     [Fact]
     public void AzureMonitor_Enabled_ForAgentTelemetry_WhenNoOptOutSet()
     {
         var configuration = new ConfigurationBuilder().Build();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
-        using var manager = new TelemetryManager(configuration, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
 
         Assert.True(manager.HasAzureMonitor);
-    }
-
-    [Fact]
-    public void AzureMonitor_Disabled_ForAgentTelemetry_WhenGlobalOptOutSet()
-    {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [AspireCliTelemetry.TelemetryOptOutConfigKey] = "true"
-            })
-            .Build();
-
-        using var manager = new TelemetryManager(configuration, ["agent", "telemetry", "--event-type", "skill_invocation"]);
-
-        Assert.False(manager.HasAzureMonitor);
     }
 
     private static ActivityListener CreateActivityListener(string sourceName)

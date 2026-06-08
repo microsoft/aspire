@@ -27,8 +27,10 @@ function Test-OptOut([string] $value) {
     return $value -eq '1' -or $value -ieq 'true'
 }
 
-# Opt out when either the global Aspire CLI telemetry switch or the AI-specific switch is set.
-if ((Test-OptOut $env:ASPIRE_CLI_TELEMETRY_OPTOUT) -or (Test-OptOut $env:ASPIRE_CLI_AGENT_TELEMETRY_OPTOUT)) {
+# Opt out when the Aspire CLI telemetry switch is set. This is the single opt-out that also
+# gates the `aspire agent telemetry` command path, so honoring it here avoids spawning the CLI
+# at all for opted-out users.
+if (Test-OptOut $env:ASPIRE_CLI_TELEMETRY_OPTOUT) {
     Write-Success
 }
 

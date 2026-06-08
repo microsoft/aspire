@@ -147,11 +147,6 @@
         <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_NoTelemetryHooksOptionDescription">
-        <source>Skip installing the agent telemetry hooks that record Aspire skill and tool usage.</source>
-        <target state="new">Skip installing the agent telemetry hooks that record Aspire skill and tool usage.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
@@ -183,8 +178,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_AGENT_TELEMETRY_OPTOUT=true, or re-run with --no-telemetry-hooks to remove the install step.</source>
-        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_AGENT_TELEMETRY_OPTOUT=true, or re-run with --no-telemetry-hooks to remove the install step.</target>
+        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">

@@ -32,13 +32,6 @@ internal sealed class AspireCliTelemetry : IHostedService
     internal const string TelemetryOptOutConfigKey = "ASPIRE_CLI_TELEMETRY_OPTOUT";
 
     /// <summary>
-    /// Environment variable to opt out of AI agent telemetry only. Set to "1" or "true" to
-    /// disable telemetry produced by the agent telemetry hook scripts (the
-    /// <c>aspire agent telemetry</c> command path) while leaving general CLI telemetry enabled.
-    /// </summary>
-    internal const string AgentTelemetryOptOutConfigKey = "ASPIRE_CLI_AGENT_TELEMETRY_OPTOUT";
-
-    /// <summary>
     /// Environment variable for OpenTelemetry Protocol exporter endpoint.
     /// </summary>
     internal const string OtlpExporterEndpointConfigKey = KnownOtelConfigNames.ExporterOtlpEndpoint;

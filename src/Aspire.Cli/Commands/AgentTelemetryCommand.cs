@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -22,8 +21,8 @@ namespace Aspire.Cli.Commands;
 /// and unmatched tokens are ignored, so option binding can never fail before the handler runs and a
 /// newer hook script passing an unknown flag cannot break an older CLI.
 ///
-/// The opt-out (<c>ASPIRE_CLI_TELEMETRY_OPTOUT</c> / <c>ASPIRE_CLI_AGENT_TELEMETRY_OPTOUT</c>) and
-/// the suppression of the generic <c>aspire/cli/main</c> span for this command path are handled in
+/// The opt-out (<c>ASPIRE_CLI_TELEMETRY_OPTOUT</c>) and the suppression of the generic
+/// <c>aspire/cli/main</c> span for this command path are handled in
 /// <see cref="TelemetryManager"/> and <c>Program</c> before the host is built. When telemetry is
 /// opted out no reported provider is created, so <see cref="AspireCliTelemetry.StartReportedActivity(string, System.Diagnostics.ActivityKind)"/>
 /// returns <see langword="null"/> here and the command is a no-op.
@@ -97,22 +96,27 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     {
         try
         {
+            // Validate every value up front. Invalid or oversized values are dropped (never recorded),
+            // so a parser bug in a hook script cannot leak an absolute path, user name, or other
+            // sensitive/high-cardinality data into telemetry.
+            var tags = CollectValidTags(parseResult);
+
+            // Nothing valid survived validation (for example a newer hook script paired with an older
+            // CLI dropped every field): emit no span rather than a tagless one.
+            if (tags.Count is 0)
+            {
+                return Task.FromResult(CommandResult.Success());
+            }
+
             // Activity is null when telemetry is opted out (no reported provider) or no listener is
             // attached; in that case this is a no-op, which is the desired behavior.
             using var activity = Telemetry.StartReportedActivity(TelemetryConstants.Activities.AgentTelemetry);
             if (activity is not null)
             {
-                // Defense-in-depth: even though the hook scripts only pass Aspire-owned identifiers,
-                // each value is validated here so a parser bug in a script cannot leak an absolute
-                // path, user name, or other sensitive/high-cardinality data into telemetry. Invalid
-                // values are dropped (the tag is simply not set), never recorded.
-                SetIfValid(activity, TelemetryConstants.Tags.AgentEventType, parseResult.GetValue(_eventTypeOption), static v => s_knownEventTypes.Contains(v, StringComparer.Ordinal));
-                SetIfValid(activity, TelemetryConstants.Tags.AgentClientName, parseResult.GetValue(_clientNameOption), static v => IsSafeIdentifier(v, maxLength: 64));
-                SetIfValid(activity, TelemetryConstants.Tags.AgentSessionId, parseResult.GetValue(_sessionIdOption), static v => IsSafeIdentifier(v, maxLength: 128));
-                SetIfValid(activity, TelemetryConstants.Tags.AgentSkillName, parseResult.GetValue(_skillNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
-                SetIfValid(activity, TelemetryConstants.Tags.AgentToolName, parseResult.GetValue(_toolNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
-                SetIfValid(activity, TelemetryConstants.Tags.AgentFileReference, parseResult.GetValue(_fileReferenceOption), IsSafeReference);
-                SetIfValid(activity, TelemetryConstants.Tags.AgentEventTimestamp, parseResult.GetValue(_timestampOption), IsValidTimestamp);
+                foreach (var (name, value) in tags)
+                {
+                    activity.SetTag(name, value);
+                }
             }
         }
         catch
@@ -123,14 +127,27 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         return Task.FromResult(CommandResult.Success());
     }
 
-    private static void SetIfValid(Activity activity, string name, string? value, Func<string, bool> isValid)
+    private List<(string Name, string Value)> CollectValidTags(ParseResult parseResult)
     {
-        if (string.IsNullOrWhiteSpace(value) || !isValid(value))
-        {
-            return;
-        }
+        var tags = new List<(string Name, string Value)>();
 
-        activity.SetTag(name, value);
+        AddIfValid(tags, TelemetryConstants.Tags.AgentEventType, parseResult.GetValue(_eventTypeOption), static v => s_knownEventTypes.Contains(v, StringComparer.Ordinal));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentClientName, parseResult.GetValue(_clientNameOption), static v => IsSafeIdentifier(v, maxLength: 64));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentSessionId, parseResult.GetValue(_sessionIdOption), static v => IsSafeIdentifier(v, maxLength: 128));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentSkillName, parseResult.GetValue(_skillNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentToolName, parseResult.GetValue(_toolNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentFileReference, parseResult.GetValue(_fileReferenceOption), IsSafeReference);
+        AddIfValid(tags, TelemetryConstants.Tags.AgentEventTimestamp, parseResult.GetValue(_timestampOption), IsValidTimestamp);
+
+        return tags;
+    }
+
+    private static void AddIfValid(List<(string Name, string Value)> tags, string name, string? value, Func<string, bool> isValid)
+    {
+        if (!string.IsNullOrWhiteSpace(value) && isValid(value))
+        {
+            tags.Add((name, value));
+        }
     }
 
     /// <summary>

@@ -9,13 +9,9 @@ namespace Aspire.Cli.Telemetry;
 /// </summary>
 /// <remarks>
 /// This check runs against the raw command-line arguments before the host and telemetry
-/// pipeline are built, which lets the CLI:
-/// <list type="bullet">
-///   <item>apply the agent-specific opt-out (<c>ASPIRE_CLI_AGENT_TELEMETRY_OPTOUT</c>) before
-///   any reported telemetry provider is created; and</item>
-///   <item>suppress the generic <c>aspire/cli/main</c> reported span so a hook event emits only
-///   the single dedicated <c>aspire/cli/agent_telemetry</c> span rather than two spans.</item>
-/// </list>
+/// pipeline are built, which lets the CLI suppress the generic <c>aspire/cli/main</c> reported
+/// span so a hook event emits only the single dedicated <c>aspire/cli/agent_telemetry</c> span
+/// rather than two spans.
 /// The hook scripts always invoke the command as <c>aspire agent telemetry ...</c> with no global
 /// options preceding the command path, so the detector requires <c>agent</c> and <c>telemetry</c>
 /// to be the first two arguments. Matching only the leading tokens (rather than anywhere in the

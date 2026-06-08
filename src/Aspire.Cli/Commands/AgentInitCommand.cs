@@ -61,7 +61,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         Options.Add(s_workspaceRootOption);
         Options.Add(s_skillLocationsOption);
         Options.Add(s_skillsOption);
-        Options.Add(s_noTelemetryHooksOption);
     }
 
     private static readonly Option<string?> s_workspaceRootOption = new("--workspace-root")
@@ -85,11 +84,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             ConsoleInteractionService.AllChoice,
             ConsoleInteractionService.NoneChoice),
         Recursive = true
-    };
-
-    private static readonly Option<bool> s_noTelemetryHooksOption = new("--no-telemetry-hooks")
-    {
-        Description = AgentCommandStrings.InitCommand_NoTelemetryHooksOptionDescription
     };
 
     /// <summary>
@@ -476,14 +470,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         }
 
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
-        // Hooks are installed for every detected, supported client unless the user opted out with
-        // --no-telemetry-hooks. Whether telemetry is actually transmitted stays gated by the opt-out
-        // environment variables that the hook scripts and the `agent telemetry` command both re-check.
-        var telemetryHooksDisabled = parseResult?.GetValue(s_noTelemetryHooksOption) ?? false;
-        if (!telemetryHooksDisabled)
-        {
-            hasErrors |= await ConfigureTelemetryHooksAsync(context, cancellationToken);
-        }
+        // Hooks are installed for every detected, supported client. Whether telemetry is actually
+        // transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the
+        // hook scripts and the `aspire agent telemetry` command path re-check at runtime.
+        await ConfigureTelemetryHooksAsync(context, cancellationToken);
 
         if (hasErrors)
         {
@@ -500,18 +490,21 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             selectedSkills);
     }
 
-    private async Task<bool> ConfigureTelemetryHooksAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
+    private async Task ConfigureTelemetryHooksAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
     {
         TelemetryHookConfigurationResult result;
         try
         {
             result = await _telemetryHookConfigurator.ConfigureAsync(context.DetectedClients, cancellationToken);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Hook installation is best-effort transparency tooling; never fail `agent init` over it.
+            // This deliberately catches everything except cancellation: besides file IO failures, a
+            // corrupted CLI build could surface a missing embedded hook script as an
+            // InvalidOperationException, and that must not abort the whole command either.
             InteractionService.DisplaySubtleMessage(ex.Message);
-            return false;
+            return;
         }
 
         if (result.ConfiguredClients.Count > 0)
@@ -529,16 +522,13 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             {
                 TelemetryHookSkipReason.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, clientName),
                 TelemetryHookSkipReason.UnexpectedConfigShape => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape, clientName),
-                TelemetryHookSkipReason.WriteFailed => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookWriteFailed, clientName),
                 _ => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookWriteFailed, clientName),
             };
 
+            // Skips are surfaced to the user but never treated as command failures: a user-owned
+            // config we can't safely modify must not break `agent init`.
             InteractionService.DisplaySubtleMessage(message);
         }
-
-        // Skips are surfaced to the user but are not treated as command failures: a user-owned config we
-        // can't safely modify must not break `agent init`.
-        return false;
     }
 
     private static string GetClientDisplayName(AgentClientKind client)

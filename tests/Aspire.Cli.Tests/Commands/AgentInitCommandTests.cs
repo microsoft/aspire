@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
@@ -914,25 +915,33 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInitCommand_NoTelemetryHooks_SkipsInstall()
+    public async Task AgentInitCommand_DoesNotFail_WhenTelemetryHookConfigurationThrows()
     {
+        // Hook installation is best-effort transparency tooling. A non-IO failure such as a missing
+        // embedded hook script (InvalidOperationException from the installer) must not abort `agent init`.
+        const string failureMessage = "simulated hook configuration failure";
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
+        var interactionService = new TestInteractionService();
+        var subtleMessages = new List<string>();
+        interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
+
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
             options.AgentEnvironmentDetectorFactory = _ => new FakeDetectingDetector(AgentClientKind.CopilotCli);
+            options.InteractionServiceFactory = _ => interactionService;
+            options.TelemetryHookConfiguratorFactory = _ => new ThrowingTelemetryHookConfigurator(failureMessage);
         });
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations none --skills none --no-telemetry-hooks");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations none --skills none");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        var copilotDirectory = Path.Combine(homeDirectory.FullName, ".copilot");
-        Assert.False(Directory.Exists(copilotDirectory), $"Expected no Copilot hook directory but found {copilotDirectory}");
+        Assert.Contains(failureMessage, subtleMessages);
     }
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo homeDirectory)
@@ -953,5 +962,18 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             context.AddDetectedClient(client);
             return Task.FromResult(Array.Empty<AgentEnvironmentApplicator>());
         }
+    }
+
+    /// <summary>
+    /// A configurator that always throws, simulating a non-IO failure (e.g. a missing embedded hook
+    /// script surfacing as <see cref="InvalidOperationException"/>) so the best-effort catch in
+    /// <c>agent init</c> can be verified to never abort the command.
+    /// </summary>
+    private sealed class ThrowingTelemetryHookConfigurator(string message) : ITelemetryHookConfigurator
+    {
+        public Task<TelemetryHookConfigurationResult> ConfigureAsync(
+            IReadOnlyCollection<AgentClientKind> detectedClients,
+            CancellationToken cancellationToken)
+            => throw new InvalidOperationException(message);
     }
 }
