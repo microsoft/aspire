@@ -167,6 +167,26 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConfigureAsync_SkipsClaude_WhenSettingsRootIsNotAnObject()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var claudeDirectory = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
+        var settingsPath = Path.Combine(claudeDirectory.FullName, "settings.json");
+        // Valid JSON, but the root is an array rather than an object. JsonNode.AsObject() throws
+        // InvalidOperationException on this input, so the configurator must skip it like any other
+        // unrecognized shape instead of letting that exception crash `agent init`.
+        const string nonObjectRoot = "[1, 2, 3]";
+        await File.WriteAllTextAsync(settingsPath, nonObjectRoot).DefaultTimeout();
+
+        var configurator = CreateConfigurator(workspace, home);
+        var result = await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None).DefaultTimeout();
+
+        Assert.Contains(result.Skipped, s => s.Client == AgentClientKind.ClaudeCode && s.Reason == TelemetryHookSkipReason.UnexpectedConfigShape);
+        Assert.Equal(nonObjectRoot, await File.ReadAllTextAsync(settingsPath).DefaultTimeout());
+    }
+
+    [Fact]
     public async Task ConfigureAsync_IsNoOp_ForUnsupportedClients()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -167,15 +167,33 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
                 return TelemetryHookSkipReason.WriteFailed;
             }
 
+            JsonNode? parsed;
             try
             {
-                settings = JsonNode.Parse(content)?.AsObject() ?? new JsonObject();
+                parsed = JsonNode.Parse(content);
             }
             catch (JsonException ex)
             {
                 // Never clobber a file we can't understand; leave it untouched and report the skip.
                 _logger.LogDebug(ex, "Claude settings at {Path} contained malformed JSON; skipping hook registration.", settingsPath);
                 return TelemetryHookSkipReason.MalformedConfig;
+            }
+
+            switch (parsed)
+            {
+                // An empty file or a literal `null` document: start from a fresh object.
+                case null:
+                    settings = new JsonObject();
+                    break;
+                case JsonObject existing:
+                    settings = existing;
+                    break;
+                // Valid JSON whose root isn't an object (array/string/number/bool) means another tool
+                // owns this file in a shape we don't recognize. Calling JsonNode.AsObject() here would
+                // throw InvalidOperationException (not JsonException), which would escape both this
+                // method and the best-effort callers and crash `agent init`; skip instead of clobbering.
+                default:
+                    return TelemetryHookSkipReason.UnexpectedConfigShape;
             }
         }
         else
