@@ -37,26 +37,6 @@ internal static class NodeVersionResolver
     public const string DefaultNodeVersion = "22";
 
     /// <summary>
-    /// Returns a default Node.js base image of the form
-    /// <c>node:&lt;major&gt;-&lt;suffix&gt;</c>, with <c>&lt;major&gt;</c>
-    /// resolved from local toolchain files when present.
-    /// </summary>
-    /// <param name="appDirectory">Application directory to inspect for toolchain files.</param>
-    /// <param name="defaultSuffix">Image variant suffix (for example <c>"alpine"</c> or <c>"slim"</c>).</param>
-    /// <param name="serviceProvider">Service provider used to resolve the logger.</param>
-    /// <param name="workspaceRoot">
-    /// Optional workspace root path. When set, the resolver inspects the workspace root first;
-    /// monorepos commonly pin the Node version with a root-level <c>.nvmrc</c> /
-    /// <c>.tool-versions</c> rather than per-app.
-    /// </param>
-    public static string GetDefaultBaseImage(string appDirectory, string defaultSuffix, IServiceProvider serviceProvider, string? workspaceRoot = null)
-    {
-        var logger = serviceProvider.GetService<ILogger<JavaScriptAppResource>>() ?? NullLogger<JavaScriptAppResource>.Instance;
-        var nodeVersion = ResolveNodeVersion(appDirectory, logger, workspaceRoot);
-        return $"node:{nodeVersion}-{defaultSuffix}";
-    }
-
-    /// <summary>
     /// Resolves the Node.js major version for a project by checking common
     /// configuration files. Returns <see cref="DefaultNodeVersion"/> when no
     /// toolchain pin is found.
