@@ -3,10 +3,6 @@ WORKDIR /app
 RUN corepack enable yarn
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
-COPY package.json ./package.json
-COPY yarn.lock ./yarn.lock
-COPY .yarnrc.yml ./.yarnrc.yml
-COPY .yarn ./.yarn/
 COPY packages/web/package.json ./packages/web/package.json
 RUN --mount=type=cache,target=.yarn/cache yarn install --immutable
 COPY . .
