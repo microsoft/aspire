@@ -6,16 +6,18 @@ using Aspire.Hosting.ApplicationModel;
 namespace Aspire.Hosting.JavaScript;
 
 /// <summary>
-/// An annotation that associates a JavaScript application resource with a workspace,
-/// carrying the workspace-specific command prefix for running and building.
+/// An annotation that associates a JavaScript application resource with a workspace.
 /// </summary>
+/// <remarks>
+/// The full run/build command is resolved lazily via <see cref="JavaScriptWorkspaceResource.GetRunScriptCommand"/>
+/// at the point each command is assembled, because run mode and publish (build) mode pass different
+/// script names and arguments. The annotation therefore carries only the workspace and the member name.
+/// </remarks>
 /// <param name="workspace">The workspace resource this app belongs to.</param>
 /// <param name="workspaceProjectName">The name of the project within the workspace.</param>
-/// <param name="commandPrefix">The package manager command prefix (e.g. <c>["workspace", "name"]</c> for Yarn, <c>["--filter", "name"]</c> for pnpm).</param>
 public sealed class JavaScriptWorkspaceContextAnnotation(
     JavaScriptWorkspaceResource workspace,
-    string workspaceProjectName,
-    string[] commandPrefix) : IResourceAnnotation
+    string workspaceProjectName) : IResourceAnnotation
 {
     /// <summary>
     /// Gets the workspace resource this app belongs to.
@@ -26,9 +28,4 @@ public sealed class JavaScriptWorkspaceContextAnnotation(
     /// Gets the name of the project within the workspace.
     /// </summary>
     public string WorkspaceProjectName { get; } = workspaceProjectName;
-
-    /// <summary>
-    /// Gets the package manager command prefix for workspace-scoped commands.
-    /// </summary>
-    public string[] CommandPrefix { get; } = commandPrefix;
 }
