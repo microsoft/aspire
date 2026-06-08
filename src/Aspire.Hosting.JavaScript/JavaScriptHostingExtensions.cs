@@ -3137,13 +3137,18 @@ public static class JavaScriptHostingExtensions
         }
     }
 
-    // Returns true when <paramref name="candidate"/> (a root-level file or directory name) is already
-    // copied by one of the existing pattern source tokens. Tokens are either literal names or the
-    // single-'*' glob the npm default uses ("package*.json"). Matching mirrors Docker COPY / Go
-    // filepath.Match semantics where '*' does NOT cross a '/': that is critical so a root glob like
-    // "package*.json" is never treated as covering a member manifest such as "packages/api/package.json"
-    // (which would silently drop it from the cache-stable layer). Any shape we don't model returns
-    // false, erring toward an explicit (harmless) COPY rather than dropping a file.
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="candidate"/> (a root-level file or directory
+    /// name) is already copied by one of the existing pattern source tokens. Tokens are either literal
+    /// names or the single-<c>*</c> glob the npm default uses (<c>package*.json</c>).
+    /// </summary>
+    /// <remarks>
+    /// Matching mirrors Docker COPY / Go <c>filepath.Match</c> semantics where <c>*</c> does NOT cross a
+    /// <c>/</c>: that is critical so a root glob like <c>package*.json</c> is never treated as covering a
+    /// member manifest such as <c>packages/api/package.json</c> (which would silently drop it from the
+    /// cache-stable layer). Any shape we don't model returns <see langword="false"/>, erring toward an
+    /// explicit (harmless) COPY rather than dropping a file.
+    /// </remarks>
     private static bool IsCoveredBySourceToken(IReadOnlyList<string> sourceTokens, string candidate)
     {
         foreach (var token in sourceTokens)
