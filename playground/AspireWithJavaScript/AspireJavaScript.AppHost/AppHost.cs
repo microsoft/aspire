@@ -74,7 +74,7 @@ pnpmWorkspace.AddViteApp("pnpm-workspace-vite", "pnpm-workspace-web", packagePat
     .WaitFor(weatherApi)
     .WithExternalHttpEndpoints();
 
-pnpmWorkspace.AddNodeApp("pnpm-workspace-node", "pnpm-workspace-api", "packages/api", "dist/index.js")
+pnpmWorkspace.AddNodeApp("pnpm-workspace-node", "pnpm-workspace-api", "dist/index.js", "packages/api")
     .WithBuildScript("build")
     .WithHttpEndpoint(env: "PORT")
     .WithExternalHttpEndpoints();
