@@ -540,7 +540,12 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var propertyName = ToPascalCase(property.Name);
-                var propertyType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
+                // Callback-typed DTO properties carry the same metadata as method parameters, so
+                // render the strongly-typed func signature (e.g. func(ctx InputsDialogValidationContext))
+                // instead of the weak func(...any) any fallback.
+                var propertyType = property.IsCallback
+                    ? RenderCallbackType(DtoPropertyToParameterInfo(property))
+                    : MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
                 var jsonTag = $"`json:\"{property.Name},omitempty\"`";
                 WriteLine($"\t{propertyName} {propertyType} {jsonTag}");
             }
@@ -553,6 +558,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var propertyName = ToPascalCase(property.Name);
+                if (property.IsCallback)
+                {
+                    EmitDtoCallbackToMap(property, propertyName);
+                    continue;
+                }
                 var propertyType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
                 if (IsNilableGoType(propertyType))
                 {
@@ -1371,6 +1381,47 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     /// </summary>
     private void EmitCallbackRegistration(string indent, AtsParameterInfo p, string callbackExpr)
     {
+        WriteLine($"{indent}if {callbackExpr} != nil {{");
+        WriteLine($"{indent}\tcb := {callbackExpr}");
+        WriteLine($"{indent}\tshim := func(args ...any) any {{");
+        EmitGoCallbackShimBody($"{indent}\t\t", p);
+        WriteLine($"{indent}\t}}");
+        WriteLine($"{indent}\treqArgs[\"{p.Name}\"] = s.client.registerCallback(shim)");
+        WriteLine($"{indent}}}");
+    }
+
+    // Emits a strongly-typed DTO callback property into the DTO's ToMap output. Method parameters
+    // pre-register their callback (putting a string id into reqArgs), but DTO properties instead
+    // embed the shim func directly in the map; the client's marshalTransportValue walks the
+    // serialized args, finds the func(...any) any value, and registers it. This keeps the public
+    // DTO field strongly typed (e.g. func(ctx InputsDialogValidationContext)) while reusing the
+    // exact arg-decoding/return/writeback behavior of method-parameter callbacks.
+    private void EmitDtoCallbackToMap(AtsDtoPropertyInfo property, string propertyName)
+    {
+        var p = DtoPropertyToParameterInfo(property);
+        WriteLine($"\tif d.{propertyName} != nil {{");
+        WriteLine($"\t\tcb := d.{propertyName}");
+        WriteLine($"\t\tm[\"{property.Name}\"] = func(args ...any) any {{");
+        EmitGoCallbackShimBody("\t\t\t", p);
+        WriteLine($"\t\t}}");
+        WriteLine($"\t}}");
+    }
+
+    private static AtsParameterInfo DtoPropertyToParameterInfo(AtsDtoPropertyInfo property)
+        => new()
+        {
+            Name = property.Name,
+            Type = property.Type,
+            IsOptional = property.IsOptional,
+            IsCallback = property.IsCallback,
+            CallbackParameters = property.CallbackParameters,
+            CallbackReturnType = property.CallbackReturnType,
+        };
+
+    // Writes the body of a `func(args ...any) any` callback shim, assuming the user's typed
+    // callback is in scope as `cb`. Shared by method-parameter and DTO-property callbacks.
+    private void EmitGoCallbackShimBody(string indent, AtsParameterInfo p)
+    {
         var hasReturn = p.CallbackReturnType is not null
             && p.CallbackReturnType.TypeId != AtsConstants.Void;
         var callExpr = new StringBuilder();
@@ -1390,17 +1441,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         }
         callExpr.Append(')');
 
-        WriteLine($"{indent}if {callbackExpr} != nil {{");
-        WriteLine($"{indent}\tcb := {callbackExpr}");
-        WriteLine($"{indent}\tshim := func(args ...any) any {{");
         if (hasReturn)
         {
-            WriteLine($"{indent}\t\treturn {callExpr}");
+            WriteLine($"{indent}return {callExpr}");
         }
         else if (p.CallbackParameters is null)
         {
             // Legacy untyped callback returning any — preserve return value.
-            WriteLine($"{indent}\t\treturn {callExpr}");
+            WriteLine($"{indent}return {callExpr}");
         }
         else if (p.CallbackParameters is { Count: > 0 } callbackParameters && callbackParameters.Any(cp => cp.Type.Category == AtsTypeCategory.Dto))
         {
@@ -1410,28 +1458,25 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 var argName = $"arg{i}";
                 argNames.Add(argName);
                 var goType = MapTypeRefToGo(callbackParameters[i].Type, false);
-                WriteLine($"{indent}\t\t{argName} := callbackArg[{goType}](args, {i})");
+                WriteLine($"{indent}{argName} := callbackArg[{goType}](args, {i})");
             }
 
-            WriteLine($"{indent}\t\tcb({string.Join(", ", argNames)})");
-            WriteLine($"{indent}\t\treturn map[string]any{{");
+            WriteLine($"{indent}cb({string.Join(", ", argNames)})");
+            WriteLine($"{indent}return map[string]any{{");
             for (var i = 0; i < callbackParameters.Count; i++)
             {
                 if (callbackParameters[i].Type.Category == AtsTypeCategory.Dto)
                 {
-                    WriteLine($"{indent}\t\t\t\"p{i}\": serializeValue({argNames[i]}),");
+                    WriteLine($"{indent}\t\"p{i}\": serializeValue({argNames[i]}),");
                 }
             }
-            WriteLine($"{indent}\t\t}}");
+            WriteLine($"{indent}}}");
         }
         else
         {
-            WriteLine($"{indent}\t\t{callExpr}");
-            WriteLine($"{indent}\t\treturn nil");
+            WriteLine($"{indent}{callExpr}");
+            WriteLine($"{indent}return nil");
         }
-        WriteLine($"{indent}\t}}");
-        WriteLine($"{indent}\treqArgs[\"{p.Name}\"] = s.client.registerCallback(shim)");
-        WriteLine($"{indent}}}");
     }
 
     // ── List / Dict accessor methods ─────────────────────────────────────────

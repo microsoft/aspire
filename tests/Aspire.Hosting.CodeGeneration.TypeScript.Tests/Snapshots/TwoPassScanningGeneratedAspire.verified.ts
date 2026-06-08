@@ -1009,6 +1009,8 @@ export interface InteractionInputsDialogOptions {
     showDismiss?: boolean | null;
     /** Gets or sets a value indicating whether Markdown in the message is rendered. */
     enableMessageMarkdown?: boolean | null;
+    /** Gets or sets a callback invoked to validate the inputs before the dialog is accepted. The callback receives a validation context that exposes the current inputs and can record validation errors. */
+    validationCallback?: (arg: InputsDialogValidationContext) => Promise<void>;
 }
 
 /** Options for message box and confirmation prompts. */
@@ -1471,13 +1473,11 @@ export interface PromptConfirmationOptions {
 
 export interface PromptInputOptions {
     options?: InteractionInputsDialogOptions;
-    validationCallback?: (arg: InputsDialogValidationContext) => Promise<void>;
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
 export interface PromptInputsOptions {
     options?: InteractionInputsDialogOptions;
-    validationCallback?: (arg: InputsDialogValidationContext) => Promise<void>;
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
@@ -11434,17 +11434,23 @@ class InteractionServiceImpl implements InteractionService {
      */
     async promptInput(title: string, message: string, input: Awaitable<InteractionInputBuilder>, optionsBag?: PromptInputOptions): Promise<InputInteractionResult> {
         const options = optionsBag?.options;
-        const validationCallback = optionsBag?.validationCallback;
         const cancellationToken = optionsBag?.cancellationToken;
-        const validationCallbackId = validationCallback ? registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
-            const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
-            await validationCallback(arg);
-        }) : undefined;
         input = isPromiseLike(input) ? await input : input;
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcValidationCallback = __optionsForRpc.validationCallback;
+            if (____optionsForRpcValidationCallback !== undefined) {
+                const ____optionsForRpcValidationCallbackId = ____optionsForRpcValidationCallback ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____optionsForRpcValidationCallback(arg);
+                }) : undefined;
+                __optionsForRpcData["validationCallback"] = ____optionsForRpcValidationCallbackId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message, input };
-        if (options !== undefined) rpcArgs.options = options;
-        if (validationCallback !== undefined) rpcArgs.validationCallback = validationCallbackId;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<InputInteractionResult>(
             'Aspire.Hosting/promptInput',
@@ -11458,16 +11464,22 @@ class InteractionServiceImpl implements InteractionService {
      */
     async promptInputs(title: string, message: string, inputs: InteractionInputBuilder[], optionsBag?: PromptInputsOptions): Promise<InputsInteractionResult> {
         const options = optionsBag?.options;
-        const validationCallback = optionsBag?.validationCallback;
         const cancellationToken = optionsBag?.cancellationToken;
-        const validationCallbackId = validationCallback ? registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
-            const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
-            await validationCallback(arg);
-        }) : undefined;
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcValidationCallback = __optionsForRpc.validationCallback;
+            if (____optionsForRpcValidationCallback !== undefined) {
+                const ____optionsForRpcValidationCallbackId = ____optionsForRpcValidationCallback ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____optionsForRpcValidationCallback(arg);
+                }) : undefined;
+                __optionsForRpcData["validationCallback"] = ____optionsForRpcValidationCallbackId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message, inputs };
-        if (options !== undefined) rpcArgs.options = options;
-        if (validationCallback !== undefined) rpcArgs.validationCallback = validationCallbackId;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<InputsInteractionResult>(
             'Aspire.Hosting/promptInputs',

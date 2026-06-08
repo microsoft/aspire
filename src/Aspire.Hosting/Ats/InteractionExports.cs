@@ -101,8 +101,8 @@ internal static class InteractionExports
     /// <summary>
     /// Prompts the user for a single input.
     /// </summary>
-    // Prompts can invoke dynamic-loading callbacks that re-enter the remote host through ATS, so the synchronous
-    // invocation path must run on a background thread to keep the JSON-RPC loop processing nested callbacks.
+    // Prompts can invoke dynamic-loading and validation callbacks that re-enter the remote host through ATS, so the
+    // synchronous invocation path must run on a background thread to keep the JSON-RPC loop processing nested callbacks.
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static async Task<InputInteractionResult> PromptInput(
         this IInteractionService interactionService,
@@ -110,13 +110,12 @@ internal static class InteractionExports
         string? message,
         InteractionInputBuilder input,
         InteractionInputsDialogOptions? options = null,
-        Func<InputsDialogValidationContext, Task>? validationCallback = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(interactionService);
         ArgumentNullException.ThrowIfNull(input);
 
-        var result = await interactionService.PromptInputAsync(title, message, input.Input, BuildDialogOptions(options, validationCallback), cancellationToken).ConfigureAwait(false);
+        var result = await interactionService.PromptInputAsync(title, message, input.Input, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
         return InputInteractionResult.From(result);
     }
 
@@ -132,7 +131,6 @@ internal static class InteractionExports
         string? message,
         InteractionInputBuilder[] inputs,
         InteractionInputsDialogOptions? options = null,
-        Func<InputsDialogValidationContext, Task>? validationCallback = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(interactionService);
@@ -145,32 +143,8 @@ internal static class InteractionExports
             interactionInputs[i] = input.Input;
         }
 
-        var result = await interactionService.PromptInputsAsync(title, message, interactionInputs, BuildDialogOptions(options, validationCallback), cancellationToken).ConfigureAwait(false);
+        var result = await interactionService.PromptInputsAsync(title, message, interactionInputs, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
         return InputsInteractionResult.From(result);
-    }
-
-    // Bridges the polyglot dialog options DTO and an optional validation callback to the native dialog options.
-    // The validation callback is supplied as a method argument (not on the DTO) because delegates cannot be
-    // serialized across the ATS boundary. The native InputsDialogValidationContext is already an exported, curated
-    // handle (its IServiceProvider is [AspireExportIgnore]'d), so it can be handed to the polyglot callback directly.
-    private static InputsDialogInteractionOptions? BuildDialogOptions(
-        InteractionInputsDialogOptions? options,
-        Func<InputsDialogValidationContext, Task>? validationCallback)
-    {
-        if (options is null && validationCallback is null)
-        {
-            return null;
-        }
-
-        // Never mutate the shared InputsDialogInteractionOptions.Default singleton; ToOptions() already returns a
-        // fresh instance, so only allocate a new one when no DTO options were provided.
-        var nativeOptions = options?.ToOptions() ?? new InputsDialogInteractionOptions();
-        if (validationCallback is not null)
-        {
-            nativeOptions.ValidationCallback = validationCallback;
-        }
-
-        return nativeOptions;
     }
 
     // The input factories hang off IInteractionService so the ATS scanner treats the service handle as the
@@ -653,6 +627,12 @@ internal sealed class InteractionInputsDialogOptions
     /// </summary>
     public bool? EnableMessageMarkdown { get; init; }
 
+    /// <summary>
+    /// Gets or sets a callback invoked to validate the inputs before the dialog is accepted. The callback
+    /// receives a validation context that exposes the current inputs and can record validation errors.
+    /// </summary>
+    public Func<InputsDialogValidationContext, Task>? ValidationCallback { get; init; }
+
     internal InputsDialogInteractionOptions ToOptions()
     {
         return new InputsDialogInteractionOptions
@@ -662,6 +642,7 @@ internal sealed class InteractionInputsDialogOptions
             ShowSecondaryButton = ShowSecondaryButton,
             ShowDismiss = ShowDismiss,
             EnableMessageMarkdown = EnableMessageMarkdown,
+            ValidationCallback = ValidationCallback,
         };
     }
 }

@@ -724,14 +724,16 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		})
 
 		single, err := interactionService.PromptInput("Single input", "Enter a value.", interactionService.CreateTextInput("solo"), &aspire.PromptInputOptions{
-			Options: &aspire.InteractionInputsDialogOptions{PrimaryButtonText: aspire.StringPtr("Save")},
-			ValidationCallback: func(validationContext aspire.InputsDialogValidationContext) {
-				inputs, _ := validationContext.Inputs().ToArray()
-				for _, input := range inputs {
-					if input.Name == "solo" && input.Value == "" {
-						_ = validationContext.AddValidationError("solo", "A value is required.")
+			Options: &aspire.InteractionInputsDialogOptions{
+				PrimaryButtonText: aspire.StringPtr("Save"),
+				ValidationCallback: func(validationContext aspire.InputsDialogValidationContext) {
+					inputs, _ := validationContext.Inputs().ToArray()
+					for _, input := range inputs {
+						if input.Name == "solo" && input.Value == "" {
+							_ = validationContext.AddValidationError("solo", "A value is required.")
+						}
 					}
-				}
+				},
 			},
 		})
 		if err != nil {
@@ -741,14 +743,17 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		multi, err := interactionService.PromptInputs("Multiple inputs", "Fill out the form.",
 			[]aspire.InteractionInputBuilder{textInput, secretInput, booleanInput, numberInput, choiceInput, presetInput, sizeInput, dependentInput},
 			&aspire.PromptInputsOptions{
-				Options: &aspire.InteractionInputsDialogOptions{PrimaryButtonText: aspire.StringPtr("Submit"), EnableMessageMarkdown: aspire.BoolPtr(true)},
-				ValidationCallback: func(validationContext aspire.InputsDialogValidationContext) {
-					inputs, _ := validationContext.Inputs().ToArray()
-					for _, input := range inputs {
-						if input.Name == "name" && input.Value == "bad" {
-							_ = validationContext.AddValidationError("name", "Name cannot be 'bad'.")
+				Options: &aspire.InteractionInputsDialogOptions{
+					PrimaryButtonText:     aspire.StringPtr("Submit"),
+					EnableMessageMarkdown: aspire.BoolPtr(true),
+					ValidationCallback: func(validationContext aspire.InputsDialogValidationContext) {
+						inputs, _ := validationContext.Inputs().ToArray()
+						for _, input := range inputs {
+							if input.Name == "name" && input.Value == "bad" {
+								_ = validationContext.AddValidationError("name", "Name cannot be 'bad'.")
+							}
 						}
-					}
+					},
 				},
 			})
 		if err != nil {

@@ -534,7 +534,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var fieldName = ToCamelCase(property.Name);
-                var fieldType = MapDtoPropertyTypeToJava(property.Type, property.IsOptional);
+                var fieldType = MapDtoFieldTypeToJava(property);
                 WriteLine($"    private {fieldType} {fieldName};");
             }
             WriteLine();
@@ -544,7 +544,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             {
                 var fieldName = ToCamelCase(property.Name);
                 var methodName = ToPascalCase(property.Name);
-                var fieldType = MapDtoPropertyTypeToJava(property.Type, property.IsOptional);
+                var fieldType = MapDtoFieldTypeToJava(property);
                 
                 WriteLine($"    public {fieldType} get{methodName}() {{ return {fieldName}; }}");
                 WriteLine($"    public void set{methodName}({fieldType} value) {{ this.{fieldName} = value; }}");
@@ -556,6 +556,13 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             WriteLine($"        var value = new {dtoName}();");
             foreach (var property in dto.Properties)
             {
+                // Strongly-typed callback properties cannot be reconstructed from transport data:
+                // callbacks only flow from client to host, never back. Skip them in fromMap so the
+                // generated code does not pass a raw transport value to the typed setter.
+                if (IsStronglyTypedDtoCallback(property))
+                {
+                    continue;
+                }
                 var fieldName = ToCamelCase(property.Name);
                 var methodName = ToPascalCase(property.Name);
                 var transportValueName = $"{fieldName}Value";
@@ -572,7 +579,14 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var fieldName = ToCamelCase(property.Name);
-                WriteLine($"        map.put(\"{property.Name}\", AspireClient.serializeValue({fieldName}));");
+                if (IsStronglyTypedDtoCallback(property))
+                {
+                    EmitJavaDtoCallbackToMap(property);
+                }
+                else
+                {
+                    WriteLine($"        map.put(\"{property.Name}\", AspireClient.serializeValue({fieldName}));");
+                }
             }
             WriteLine("        return map;");
             WriteLine("    }");
@@ -1672,19 +1686,67 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
     }
 
+    // A DTO callback property is rendered with a strong functional-interface type only when it has
+    // at most one parameter. The runtime marshaller registers DTO-embedded callbacks as a single-arg
+    // Function (args[0] only), so multi-parameter DTO callbacks must keep the weak Object fallback to
+    // avoid generating a strongly-typed API that silently drops arguments. All current DTO callbacks
+    // (e.g. validation/prepare-request contexts) are single-parameter.
+    private static bool IsStronglyTypedDtoCallback(AtsDtoPropertyInfo property)
+        => property.IsCallback && (property.CallbackParameters?.Count ?? 0) <= 1;
+
+    private string MapDtoFieldTypeToJava(AtsDtoPropertyInfo property)
+        => IsStronglyTypedDtoCallback(property)
+            ? GenerateCallbackTypeSignature(property.CallbackParameters, property.CallbackReturnType)
+            : MapDtoPropertyTypeToJava(property.Type, property.IsOptional);
+
+    // Serializes a strongly-typed DTO callback property by wrapping the user's AspireAction/AspireFunc
+    // in a java.util.function.Function. The client's marshalTransportValue detects Function values in
+    // the serialized DTO map and registers them, invoking the Function with the unwrapped first
+    // argument. This mirrors the typed arg-conversion used for method-parameter callbacks.
+    private void EmitJavaDtoCallbackToMap(AtsDtoPropertyInfo property)
+    {
+        var fieldName = ToCamelCase(property.Name);
+        var hasReturnType = property.CallbackReturnType != null && property.CallbackReturnType.TypeId != AtsConstants.Void;
+        var callbackParameter = property.CallbackParameters is { Count: 1 } ? property.CallbackParameters[0] : null;
+
+        WriteLine($"        map.put(\"{property.Name}\", {fieldName} == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {{");
+        var invocationArgument = string.Empty;
+        if (callbackParameter is not null)
+        {
+            var callbackParameterName = ToCamelCase(callbackParameter.Name);
+            WriteLine($"            var {callbackParameterName} = {GetCallbackArgumentExpression(callbackParameter, "transportArg")};");
+            invocationArgument = callbackParameterName;
+        }
+
+        var invocation = $"{fieldName}.invoke({invocationArgument})";
+        if (hasReturnType)
+        {
+            WriteLine($"            return AspireClient.awaitValue({invocation});");
+        }
+        else
+        {
+            WriteLine($"            {invocation};");
+            WriteLine("            return null;");
+        }
+        WriteLine("        }));");
+    }
+
     private string GetCallbackArgumentExpression(AtsCallbackParameterInfo callbackParameter, int index)
+        => GetCallbackArgumentExpression(callbackParameter, $"args[{index}]");
+
+    private string GetCallbackArgumentExpression(AtsCallbackParameterInfo callbackParameter, string argumentExpression)
     {
         if (callbackParameter.Type?.TypeId == AtsConstants.CancellationToken)
         {
-            return $"CancellationToken.fromValue(args[{index}])";
+            return $"CancellationToken.fromValue({argumentExpression})";
         }
 
         if (IsUnionType(callbackParameter.Type))
         {
-            return $"AspireUnion.of(args[{index}])";
+            return $"AspireUnion.of({argumentExpression})";
         }
 
-        return RenderJavaTransportValueConversion(callbackParameter.Type, $"args[{index}]", callbackParameter.Type?.IsNullable == true);
+        return RenderJavaTransportValueConversion(callbackParameter.Type, argumentExpression, callbackParameter.Type?.IsNullable == true);
     }
 
     private string RenderJavaTransportValueConversion(AtsTypeRef? typeRef, string valueExpression, bool isOptional, int depth = 0)

@@ -3549,13 +3549,13 @@ public class CommandOptions implements JsonSerializable {
     private String description;
     private Object parameter;
     private InteractionInput[] arguments;
-    private Object validateArguments;
+    private AspireAction1<InputsDialogValidationContext> validateArguments;
     private ResourceCommandVisibility visibility;
     private String confirmationMessage;
     private String iconName;
     private IconVariant iconVariant;
     private boolean isHighlighted;
-    private Object updateState;
+    private AspireFunc1<UpdateCommandStateContext, ResourceCommandState> updateState;
 
     public String getDescription() { return description; }
     public void setDescription(String value) { this.description = value; }
@@ -3563,8 +3563,8 @@ public class CommandOptions implements JsonSerializable {
     public void setParameter(Object value) { this.parameter = value; }
     public InteractionInput[] getArguments() { return arguments; }
     public void setArguments(InteractionInput[] value) { this.arguments = value; }
-    public Object getValidateArguments() { return validateArguments; }
-    public void setValidateArguments(Object value) { this.validateArguments = value; }
+    public AspireAction1<InputsDialogValidationContext> getValidateArguments() { return validateArguments; }
+    public void setValidateArguments(AspireAction1<InputsDialogValidationContext> value) { this.validateArguments = value; }
     public ResourceCommandVisibility getVisibility() { return visibility; }
     public void setVisibility(ResourceCommandVisibility value) { this.visibility = value; }
     public String getConfirmationMessage() { return confirmationMessage; }
@@ -3575,8 +3575,8 @@ public class CommandOptions implements JsonSerializable {
     public void setIconVariant(IconVariant value) { this.iconVariant = value; }
     public boolean getIsHighlighted() { return isHighlighted; }
     public void setIsHighlighted(boolean value) { this.isHighlighted = value; }
-    public Object getUpdateState() { return updateState; }
-    public void setUpdateState(Object value) { this.updateState = value; }
+    public AspireFunc1<UpdateCommandStateContext, ResourceCommandState> getUpdateState() { return updateState; }
+    public void setUpdateState(AspireFunc1<UpdateCommandStateContext, ResourceCommandState> value) { this.updateState = value; }
 
     @SuppressWarnings("unchecked")
     public static CommandOptions fromMap(Map<String, Object> map) {
@@ -3587,8 +3587,6 @@ public class CommandOptions implements JsonSerializable {
         value.setParameter(parameterValue);
         var argumentsValue = map.get("Arguments");
         value.setArguments((InteractionInput[]) argumentsValue);
-        var validateArgumentsValue = map.get("ValidateArguments");
-        value.setValidateArguments(validateArgumentsValue);
         var visibilityValue = map.get("Visibility");
         value.setVisibility(ResourceCommandVisibility.fromValue((String) visibilityValue));
         var confirmationMessageValue = map.get("ConfirmationMessage");
@@ -3599,8 +3597,6 @@ public class CommandOptions implements JsonSerializable {
         value.setIconVariant(iconVariantValue == null ? null : IconVariant.fromValue((String) iconVariantValue));
         var isHighlightedValue = map.get("IsHighlighted");
         value.setIsHighlighted((Boolean) isHighlightedValue);
-        var updateStateValue = map.get("UpdateState");
-        value.setUpdateState(updateStateValue);
         return value;
     }
 
@@ -3609,13 +3605,20 @@ public class CommandOptions implements JsonSerializable {
         map.put("Description", AspireClient.serializeValue(description));
         map.put("Parameter", AspireClient.serializeValue(parameter));
         map.put("Arguments", AspireClient.serializeValue(arguments));
-        map.put("ValidateArguments", AspireClient.serializeValue(validateArguments));
+        map.put("ValidateArguments", validateArguments == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (InputsDialogValidationContext) transportArg;
+            validateArguments.invoke(arg);
+            return null;
+        }));
         map.put("Visibility", AspireClient.serializeValue(visibility));
         map.put("ConfirmationMessage", AspireClient.serializeValue(confirmationMessage));
         map.put("IconName", AspireClient.serializeValue(iconName));
         map.put("IconVariant", AspireClient.serializeValue(iconVariant));
         map.put("IsHighlighted", AspireClient.serializeValue(isHighlighted));
-        map.put("UpdateState", AspireClient.serializeValue(updateState));
+        map.put("UpdateState", updateState == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (UpdateCommandStateContext) transportArg;
+            return AspireClient.awaitValue(updateState.invoke(arg));
+        }));
         return map;
     }
 }
@@ -12529,7 +12532,7 @@ public class HttpCommandExportOptions implements JsonSerializable {
     private String commandName;
     private String endpointName;
     private String methodName;
-    private Object prepareRequest;
+    private AspireFunc1<HttpCommandPrepareRequestContext, HttpCommandRequestExportData> prepareRequest;
     private HttpCommandResultMode resultMode;
 
     public CommandOptions getCommandOptions() { return commandOptions; }
@@ -12550,8 +12553,8 @@ public class HttpCommandExportOptions implements JsonSerializable {
     public void setEndpointName(String value) { this.endpointName = value; }
     public String getMethodName() { return methodName; }
     public void setMethodName(String value) { this.methodName = value; }
-    public Object getPrepareRequest() { return prepareRequest; }
-    public void setPrepareRequest(Object value) { this.prepareRequest = value; }
+    public AspireFunc1<HttpCommandPrepareRequestContext, HttpCommandRequestExportData> getPrepareRequest() { return prepareRequest; }
+    public void setPrepareRequest(AspireFunc1<HttpCommandPrepareRequestContext, HttpCommandRequestExportData> value) { this.prepareRequest = value; }
     public HttpCommandResultMode getResultMode() { return resultMode; }
     public void setResultMode(HttpCommandResultMode value) { this.resultMode = value; }
 
@@ -12576,8 +12579,6 @@ public class HttpCommandExportOptions implements JsonSerializable {
         value.setEndpointName(endpointNameValue == null ? null : (String) endpointNameValue);
         var methodNameValue = map.get("MethodName");
         value.setMethodName(methodNameValue == null ? null : (String) methodNameValue);
-        var prepareRequestValue = map.get("PrepareRequest");
-        value.setPrepareRequest(prepareRequestValue);
         var resultModeValue = map.get("ResultMode");
         value.setResultMode(HttpCommandResultMode.fromValue((String) resultModeValue));
         return value;
@@ -12594,7 +12595,10 @@ public class HttpCommandExportOptions implements JsonSerializable {
         map.put("CommandName", AspireClient.serializeValue(commandName));
         map.put("EndpointName", AspireClient.serializeValue(endpointName));
         map.put("MethodName", AspireClient.serializeValue(methodName));
-        map.put("PrepareRequest", AspireClient.serializeValue(prepareRequest));
+        map.put("PrepareRequest", prepareRequest == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (HttpCommandPrepareRequestContext) transportArg;
+            return AspireClient.awaitValue(prepareRequest.invoke(arg));
+        }));
         map.put("ResultMode", AspireClient.serializeValue(resultMode));
         return map;
     }
@@ -14058,9 +14062,8 @@ public class IInteractionService extends HandleWrapperBase {
     /** Prompts the user for a single input. */
     public InputInteractionResult promptInput(String title, String message, InteractionInputBuilder input, PromptInputOptions optionsBag) {
         var options = optionsBag == null ? null : optionsBag.getOptions();
-        var validationCallback = optionsBag == null ? null : optionsBag.getValidationCallback();
         var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
-        return promptInputImpl(title, message, input, options, validationCallback, cancellationToken);
+        return promptInputImpl(title, message, input, options, cancellationToken);
     }
 
     public InputInteractionResult promptInput(String title, String message, HandleWrapperBase input, PromptInputOptions options) {
@@ -14076,7 +14079,7 @@ public class IInteractionService extends HandleWrapperBase {
     }
 
     /** Prompts the user for a single input. */
-    private InputInteractionResult promptInputImpl(String title, String message, InteractionInputBuilder input, InteractionInputsDialogOptions options, AspireAction1<InputsDialogValidationContext> validationCallback, CancellationToken cancellationToken) {
+    private InputInteractionResult promptInputImpl(String title, String message, InteractionInputBuilder input, InteractionInputsDialogOptions options, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
         reqArgs.put("title", AspireClient.serializeValue(title));
@@ -14084,14 +14087,6 @@ public class IInteractionService extends HandleWrapperBase {
         reqArgs.put("input", AspireClient.serializeValue(input));
         if (options != null) {
             reqArgs.put("options", AspireClient.serializeValue(options));
-        }
-        var validationCallbackId = validationCallback == null ? null : getClient().registerCallback(args -> {
-            var arg = (InputsDialogValidationContext) args[0];
-            validationCallback.invoke(arg);
-            return null;
-        });
-        if (validationCallbackId != null) {
-            reqArgs.put("validationCallback", validationCallbackId);
         }
         if (cancellationToken != null) {
             reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
@@ -14103,9 +14098,8 @@ public class IInteractionService extends HandleWrapperBase {
     /** Prompts the user for multiple inputs. */
     public InputsInteractionResult promptInputs(String title, String message, InteractionInputBuilder[] inputs, PromptInputsOptions optionsBag) {
         var options = optionsBag == null ? null : optionsBag.getOptions();
-        var validationCallback = optionsBag == null ? null : optionsBag.getValidationCallback();
         var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
-        return promptInputsImpl(title, message, inputs, options, validationCallback, cancellationToken);
+        return promptInputsImpl(title, message, inputs, options, cancellationToken);
     }
 
     public InputsInteractionResult promptInputs(String title, String message, InteractionInputBuilder[] inputs) {
@@ -14113,7 +14107,7 @@ public class IInteractionService extends HandleWrapperBase {
     }
 
     /** Prompts the user for multiple inputs. */
-    private InputsInteractionResult promptInputsImpl(String title, String message, InteractionInputBuilder[] inputs, InteractionInputsDialogOptions options, AspireAction1<InputsDialogValidationContext> validationCallback, CancellationToken cancellationToken) {
+    private InputsInteractionResult promptInputsImpl(String title, String message, InteractionInputBuilder[] inputs, InteractionInputsDialogOptions options, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
         reqArgs.put("title", AspireClient.serializeValue(title));
@@ -14121,14 +14115,6 @@ public class IInteractionService extends HandleWrapperBase {
         reqArgs.put("inputs", AspireClient.serializeValue(inputs));
         if (options != null) {
             reqArgs.put("options", AspireClient.serializeValue(options));
-        }
-        var validationCallbackId = validationCallback == null ? null : getClient().registerCallback(args -> {
-            var arg = (InputsDialogValidationContext) args[0];
-            validationCallback.invoke(arg);
-            return null;
-        });
-        if (validationCallbackId != null) {
-            reqArgs.put("validationCallback", validationCallbackId);
         }
         if (cancellationToken != null) {
             reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
@@ -15393,6 +15379,7 @@ public class InteractionInputsDialogOptions implements JsonSerializable {
     private Boolean showSecondaryButton;
     private Boolean showDismiss;
     private Boolean enableMessageMarkdown;
+    private AspireAction1<InputsDialogValidationContext> validationCallback;
 
     public String getPrimaryButtonText() { return primaryButtonText; }
     public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
@@ -15404,6 +15391,8 @@ public class InteractionInputsDialogOptions implements JsonSerializable {
     public void setShowDismiss(Boolean value) { this.showDismiss = value; }
     public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
     public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+    public AspireAction1<InputsDialogValidationContext> getValidationCallback() { return validationCallback; }
+    public void setValidationCallback(AspireAction1<InputsDialogValidationContext> value) { this.validationCallback = value; }
 
     @SuppressWarnings("unchecked")
     public static InteractionInputsDialogOptions fromMap(Map<String, Object> map) {
@@ -15428,6 +15417,11 @@ public class InteractionInputsDialogOptions implements JsonSerializable {
         map.put("ShowSecondaryButton", AspireClient.serializeValue(showSecondaryButton));
         map.put("ShowDismiss", AspireClient.serializeValue(showDismiss));
         map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        map.put("ValidationCallback", validationCallback == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (InputsDialogValidationContext) transportArg;
+            validationCallback.invoke(arg);
+            return null;
+        }));
         return map;
     }
 }
@@ -17014,7 +17008,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     private Boolean inheritEnvironmentVariables;
     private String standardInputContent;
     private Boolean killEntireProcessTree;
-    private Object createProcessSpec;
+    private AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec;
     private CommandOptions commandOptions;
     private Double maxOutputLineCount;
     private Boolean displayImmediately;
@@ -17034,8 +17028,8 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     public void setStandardInputContent(String value) { this.standardInputContent = value; }
     public Boolean getKillEntireProcessTree() { return killEntireProcessTree; }
     public void setKillEntireProcessTree(Boolean value) { this.killEntireProcessTree = value; }
-    public Object getCreateProcessSpec() { return createProcessSpec; }
-    public void setCreateProcessSpec(Object value) { this.createProcessSpec = value; }
+    public AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> getCreateProcessSpec() { return createProcessSpec; }
+    public void setCreateProcessSpec(AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> value) { this.createProcessSpec = value; }
     public CommandOptions getCommandOptions() { return commandOptions; }
     public void setCommandOptions(CommandOptions value) { this.commandOptions = value; }
     public Double getMaxOutputLineCount() { return maxOutputLineCount; }
@@ -17062,8 +17056,6 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         value.setStandardInputContent(standardInputContentValue == null ? null : (String) standardInputContentValue);
         var killEntireProcessTreeValue = map.get("KillEntireProcessTree");
         value.setKillEntireProcessTree(killEntireProcessTreeValue == null ? null : (Boolean) killEntireProcessTreeValue);
-        var createProcessSpecValue = map.get("CreateProcessSpec");
-        value.setCreateProcessSpec(createProcessSpecValue);
         var commandOptionsValue = map.get("CommandOptions");
         value.setCommandOptions(commandOptionsValue == null ? null : CommandOptions.fromMap((Map<String, Object>) commandOptionsValue));
         var maxOutputLineCountValue = map.get("MaxOutputLineCount");
@@ -17084,7 +17076,10 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         map.put("InheritEnvironmentVariables", AspireClient.serializeValue(inheritEnvironmentVariables));
         map.put("StandardInputContent", AspireClient.serializeValue(standardInputContent));
         map.put("KillEntireProcessTree", AspireClient.serializeValue(killEntireProcessTree));
-        map.put("CreateProcessSpec", AspireClient.serializeValue(createProcessSpec));
+        map.put("CreateProcessSpec", createProcessSpec == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (ExecuteCommandContext) transportArg;
+            return AspireClient.awaitValue(createProcessSpec.invoke(arg));
+        }));
         map.put("CommandOptions", AspireClient.serializeValue(commandOptions));
         map.put("MaxOutputLineCount", AspireClient.serializeValue(maxOutputLineCount));
         map.put("DisplayImmediately", AspireClient.serializeValue(displayImmediately));
@@ -18894,18 +18889,11 @@ import java.util.function.*;
 /** Options for PromptInput. */
 public final class PromptInputOptions {
     private InteractionInputsDialogOptions options;
-    private AspireAction1<InputsDialogValidationContext> validationCallback;
     private CancellationToken cancellationToken;
 
     public InteractionInputsDialogOptions getOptions() { return options; }
     public PromptInputOptions options(InteractionInputsDialogOptions value) {
         this.options = value;
-        return this;
-    }
-
-    public AspireAction1<InputsDialogValidationContext> getValidationCallback() { return validationCallback; }
-    public PromptInputOptions validationCallback(AspireAction1<InputsDialogValidationContext> value) {
-        this.validationCallback = value;
         return this;
     }
 
@@ -18928,18 +18916,11 @@ import java.util.function.*;
 /** Options for PromptInputs. */
 public final class PromptInputsOptions {
     private InteractionInputsDialogOptions options;
-    private AspireAction1<InputsDialogValidationContext> validationCallback;
     private CancellationToken cancellationToken;
 
     public InteractionInputsDialogOptions getOptions() { return options; }
     public PromptInputsOptions options(InteractionInputsDialogOptions value) {
         this.options = value;
-        return this;
-    }
-
-    public AspireAction1<InputsDialogValidationContext> getValidationCallback() { return validationCallback; }
-    public PromptInputsOptions validationCallback(AspireAction1<InputsDialogValidationContext> value) {
-        this.validationCallback = value;
         return this;
     }
 

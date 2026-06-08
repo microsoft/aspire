@@ -258,6 +258,7 @@ Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputsDialogOptions # Options for i
   SecondaryButtonText?: string # Gets or sets the secondary button text.
   ShowDismiss?: boolean # Gets or sets a value indicating whether the dismiss button is shown.
   ShowSecondaryButton?: boolean # Gets or sets a value indicating whether the secondary button is shown.
+  ValidationCallback?: callback # Gets or sets a callback invoked to validate the inputs before the dialog is accepted. The callback receives a validation context that exposes the current inputs and can record validation errors.
 Aspire.Hosting/Aspire.Hosting.Ats.InteractionMessageBoxOptions # Options for message box and confirmation prompts.
   EnableMessageMarkdown?: boolean # Gets or sets a value indicating whether Markdown in the message is rendered.
   Intent?: enum:Aspire.Hosting.MessageIntent # Gets or sets the intent of the message box.
@@ -668,8 +669,8 @@ Aspire.Hosting/ProjectResourceOptions.setExcludeKestrelEndpoints(context: Aspire
 Aspire.Hosting/ProjectResourceOptions.setExcludeLaunchProfile(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions, value: boolean) -> Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions
 Aspire.Hosting/ProjectResourceOptions.setLaunchProfileName(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions, value: string) -> Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions
 Aspire.Hosting/promptConfirmation(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionMessageBoxOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
-Aspire.Hosting/promptInput(title: string, message: string, input: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputsDialogOptions, validationCallback?: callback, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputInteractionResult
-Aspire.Hosting/promptInputs(title: string, message: string, inputs: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder[], options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputsDialogOptions, validationCallback?: callback, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult
+Aspire.Hosting/promptInput(title: string, message: string, input: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputsDialogOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputInteractionResult
+Aspire.Hosting/promptInputs(title: string, message: string, inputs: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder[], options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputsDialogOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult
 Aspire.Hosting/promptMessageBox(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionMessageBoxOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
 Aspire.Hosting/promptNotification(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionNotificationOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
 Aspire.Hosting/publishAsConnectionString() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource

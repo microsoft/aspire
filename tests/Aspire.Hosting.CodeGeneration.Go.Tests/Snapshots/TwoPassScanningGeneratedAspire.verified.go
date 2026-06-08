@@ -519,6 +519,7 @@ type InteractionInputsDialogOptions struct {
 	ShowSecondaryButton *bool `json:"ShowSecondaryButton,omitempty"`
 	ShowDismiss *bool `json:"ShowDismiss,omitempty"`
 	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
+	ValidationCallback func(arg InputsDialogValidationContext) `json:"ValidationCallback,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -529,6 +530,13 @@ func (d *InteractionInputsDialogOptions) ToMap() map[string]any {
 	if d.ShowSecondaryButton != nil { m["ShowSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
 	if d.ShowDismiss != nil { m["ShowDismiss"] = serializeValue(d.ShowDismiss) }
 	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
+	if d.ValidationCallback != nil {
+		cb := d.ValidationCallback
+		m["ValidationCallback"] = func(args ...any) any {
+			cb(callbackArg[InputsDialogValidationContext](args, 0))
+			return nil
+		}
+	}
 	return m
 }
 
@@ -667,13 +675,13 @@ type CommandOptions struct {
 	Description string `json:"Description,omitempty"`
 	Parameter any `json:"Parameter,omitempty"`
 	Arguments []*InteractionInput `json:"Arguments,omitempty"`
-	ValidateArguments func(...any) any `json:"ValidateArguments,omitempty"`
+	ValidateArguments func(arg InputsDialogValidationContext) `json:"ValidateArguments,omitempty"`
 	Visibility ResourceCommandVisibility `json:"Visibility,omitempty"`
 	ConfirmationMessage string `json:"ConfirmationMessage,omitempty"`
 	IconName string `json:"IconName,omitempty"`
 	IconVariant *IconVariant `json:"IconVariant,omitempty"`
 	IsHighlighted bool `json:"IsHighlighted,omitempty"`
-	UpdateState func(...any) any `json:"UpdateState,omitempty"`
+	UpdateState func(arg UpdateCommandStateContext) ResourceCommandState `json:"UpdateState,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -682,13 +690,24 @@ func (d *CommandOptions) ToMap() map[string]any {
 	m["Description"] = serializeValue(d.Description)
 	if d.Parameter != nil { m["Parameter"] = serializeValue(d.Parameter) }
 	if d.Arguments != nil { m["Arguments"] = serializeValue(d.Arguments) }
-	if d.ValidateArguments != nil { m["ValidateArguments"] = serializeValue(d.ValidateArguments) }
+	if d.ValidateArguments != nil {
+		cb := d.ValidateArguments
+		m["ValidateArguments"] = func(args ...any) any {
+			cb(callbackArg[InputsDialogValidationContext](args, 0))
+			return nil
+		}
+	}
 	m["Visibility"] = serializeValue(d.Visibility)
 	m["ConfirmationMessage"] = serializeValue(d.ConfirmationMessage)
 	m["IconName"] = serializeValue(d.IconName)
 	if d.IconVariant != nil { m["IconVariant"] = serializeValue(d.IconVariant) }
 	m["IsHighlighted"] = serializeValue(d.IsHighlighted)
-	if d.UpdateState != nil { m["UpdateState"] = serializeValue(d.UpdateState) }
+	if d.UpdateState != nil {
+		cb := d.UpdateState
+		m["UpdateState"] = func(args ...any) any {
+			return cb(callbackArg[UpdateCommandStateContext](args, 0))
+		}
+	}
 	return m
 }
 
@@ -703,7 +722,7 @@ type HttpCommandExportOptions struct {
 	CommandName string `json:"CommandName,omitempty"`
 	EndpointName string `json:"EndpointName,omitempty"`
 	MethodName string `json:"MethodName,omitempty"`
-	PrepareRequest func(...any) any `json:"PrepareRequest,omitempty"`
+	PrepareRequest func(arg HttpCommandPrepareRequestContext) *HttpCommandRequestExportData `json:"PrepareRequest,omitempty"`
 	ResultMode HttpCommandResultMode `json:"ResultMode,omitempty"`
 }
 
@@ -719,7 +738,12 @@ func (d *HttpCommandExportOptions) ToMap() map[string]any {
 	m["CommandName"] = serializeValue(d.CommandName)
 	m["EndpointName"] = serializeValue(d.EndpointName)
 	m["MethodName"] = serializeValue(d.MethodName)
-	if d.PrepareRequest != nil { m["PrepareRequest"] = serializeValue(d.PrepareRequest) }
+	if d.PrepareRequest != nil {
+		cb := d.PrepareRequest
+		m["PrepareRequest"] = func(args ...any) any {
+			return cb(callbackArg[HttpCommandPrepareRequestContext](args, 0))
+		}
+	}
 	m["ResultMode"] = serializeValue(d.ResultMode)
 	return m
 }
@@ -795,7 +819,7 @@ type ProcessCommandExportOptions struct {
 	InheritEnvironmentVariables *bool `json:"InheritEnvironmentVariables,omitempty"`
 	StandardInputContent string `json:"StandardInputContent,omitempty"`
 	KillEntireProcessTree *bool `json:"KillEntireProcessTree,omitempty"`
-	CreateProcessSpec func(...any) any `json:"CreateProcessSpec,omitempty"`
+	CreateProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData `json:"CreateProcessSpec,omitempty"`
 	CommandOptions *CommandOptions `json:"CommandOptions,omitempty"`
 	MaxOutputLineCount *float64 `json:"MaxOutputLineCount,omitempty"`
 	DisplayImmediately *bool `json:"DisplayImmediately,omitempty"`
@@ -812,7 +836,12 @@ func (d *ProcessCommandExportOptions) ToMap() map[string]any {
 	if d.InheritEnvironmentVariables != nil { m["InheritEnvironmentVariables"] = serializeValue(d.InheritEnvironmentVariables) }
 	m["StandardInputContent"] = serializeValue(d.StandardInputContent)
 	if d.KillEntireProcessTree != nil { m["KillEntireProcessTree"] = serializeValue(d.KillEntireProcessTree) }
-	if d.CreateProcessSpec != nil { m["CreateProcessSpec"] = serializeValue(d.CreateProcessSpec) }
+	if d.CreateProcessSpec != nil {
+		cb := d.CreateProcessSpec
+		m["CreateProcessSpec"] = func(args ...any) any {
+			return cb(callbackArg[ExecuteCommandContext](args, 0))
+		}
+	}
 	if d.CommandOptions != nil { m["CommandOptions"] = serializeValue(d.CommandOptions) }
 	if d.MaxOutputLineCount != nil { m["MaxOutputLineCount"] = serializeValue(d.MaxOutputLineCount) }
 	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
@@ -16545,14 +16574,6 @@ func (s *interactionService) PromptInput(title string, message string, input Int
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.ValidationCallback != nil {
-			cb := merged.ValidationCallback
-			shim := func(args ...any) any {
-				cb(callbackArg[InputsDialogValidationContext](args, 0))
-				return nil
-			}
-			reqArgs["validationCallback"] = s.client.registerCallback(shim)
-		}
 		if merged.CancellationToken != nil {
 			ctx = merged.CancellationToken.Context()
 			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
@@ -16584,14 +16605,6 @@ func (s *interactionService) PromptInputs(title string, message string, inputs [
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.ValidationCallback != nil {
-			cb := merged.ValidationCallback
-			shim := func(args ...any) any {
-				cb(callbackArg[InputsDialogValidationContext](args, 0))
-				return nil
-			}
-			reqArgs["validationCallback"] = s.client.registerCallback(shim)
-		}
 		if merged.CancellationToken != nil {
 			ctx = merged.CancellationToken.Context()
 			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
@@ -26908,7 +26921,6 @@ func (o *PromptNotificationOptions) ToMap() map[string]any {
 // PromptInputOptions carries optional parameters for PromptInput.
 type PromptInputOptions struct {
 	Options *InteractionInputsDialogOptions `json:"options,omitempty"`
-	ValidationCallback func(arg InputsDialogValidationContext) `json:"-"`
 	CancellationToken *CancellationToken `json:"-"`
 }
 
@@ -26922,7 +26934,6 @@ func (o *PromptInputOptions) ToMap() map[string]any {
 // PromptInputsOptions carries optional parameters for PromptInputs.
 type PromptInputsOptions struct {
 	Options *InteractionInputsDialogOptions `json:"options,omitempty"`
-	ValidationCallback func(arg InputsDialogValidationContext) `json:"-"`
 	CancellationToken *CancellationToken `json:"-"`
 }
 

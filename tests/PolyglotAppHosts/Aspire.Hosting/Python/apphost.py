@@ -567,8 +567,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             "Single input",
             "Enter a value.",
             interaction_service.create_text_input("solo"),
-            options={"PrimaryButtonText": "Save"},
-            validation_callback=validate_solo,
+            options={"PrimaryButtonText": "Save", "ValidationCallback": validate_solo},
         )
 
         def validate_form(validation_context):
@@ -581,8 +580,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             "Multiple inputs",
             "Fill out the form.",
             [text_input, secret_input, boolean_input, number_input, choice_input, preset_input, size_input, dependent_input],
-            options={"PrimaryButtonText": "Submit", "EnableMessageMarkdown": True},
-            validation_callback=validate_form,
+            options={"PrimaryButtonText": "Submit", "EnableMessageMarkdown": True, "ValidationCallback": validate_form},
         )
 
         selected_color = next((i.get("Value") for i in (multi.get("Inputs") or []) if i.get("Name") == "color"), None)

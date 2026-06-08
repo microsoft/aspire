@@ -832,7 +832,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             sb.AppendLine(CultureInfo.InvariantCulture, $"class {className}(typing.TypedDict, total=False):");
             foreach (var prop in dtoType.Properties)
             {
-                var propType = MapDtoPropertyTypeToPython(prop.Type);
+                // Callback-typed DTO properties carry the same CallbackParameters/CallbackReturnType
+                // metadata as method parameters, so render the strongly-typed Callable signature
+                // (e.g. typing.Callable[[InputsDialogValidationContext], None]) instead of a bare
+                // typing.Callable. The runtime marshaller already registers callables embedded in
+                // DTO dicts, so no serialization change is needed.
+                var propType = prop.IsCallback
+                    ? GenerateCallbackTypeSignature(prop.CallbackParameters, prop.CallbackReturnType)
+                    : MapDtoPropertyTypeToPython(prop.Type);
                 sb.AppendLine(CultureInfo.InvariantCulture, $"    {prop.Name}: {propType}");
             }
             sb.AppendLine();

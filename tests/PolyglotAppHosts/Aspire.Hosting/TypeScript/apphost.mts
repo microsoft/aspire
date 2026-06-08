@@ -869,12 +869,14 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
         "Enter a value.",
         interactionService.createTextInput("solo"),
         {
-            options: { primaryButtonText: "Save" },
-            validationCallback: async (validationContext) => {
-                const inputs = await (await validationContext.inputs()).toArray();
-                const solo = inputs.find(input => input.name === "solo");
-                if (!solo?.value) {
-                    await validationContext.addValidationError("solo", "A value is required.");
+            options: {
+                primaryButtonText: "Save",
+                validationCallback: async (validationContext) => {
+                    const inputs = await (await validationContext.inputs()).toArray();
+                    const solo = inputs.find(input => input.name === "solo");
+                    if (!solo?.value) {
+                        await validationContext.addValidationError("solo", "A value is required.");
+                    }
                 }
             }
         });
@@ -884,12 +886,15 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
         "Fill out the form.",
         [textInput, secretInput, booleanInput, numberInput, choiceInput, presetInput, sizeInput, dependentInput],
         {
-            options: { primaryButtonText: "Submit", enableMessageMarkdown: true },
-            validationCallback: async (validationContext) => {
-                const inputs = await (await validationContext.inputs()).toArray();
-                const name = inputs.find(input => input.name === "name");
-                if (name?.value === "bad") {
-                    await validationContext.addValidationError("name", "Name cannot be 'bad'.");
+            options: {
+                primaryButtonText: "Submit",
+                enableMessageMarkdown: true,
+                validationCallback: async (validationContext) => {
+                    const inputs = await (await validationContext.inputs()).toArray();
+                    const name = inputs.find(input => input.name === "name");
+                    if (name?.value === "bad") {
+                        await validationContext.addValidationError("name", "Name cannot be 'bad'.");
+                    }
                 }
             }
         });
