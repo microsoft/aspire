@@ -45,9 +45,9 @@ public abstract class JavaScriptWorkspaceResource(string name, string workingDir
     /// the script, while yarn/pnpm/bun place their selector before <c>run</c>. pnpm additionally uses
     /// the topological <c>"&lt;name&gt;..."</c> selector so a member's workspace dependencies build first.
     /// </remarks>
-    /// <param name="projectName">The name of the member (package.json name) within the workspace.</param>
+    /// <param name="workspaceProjectName">The name of the member (package.json name) within the workspace.</param>
     /// <param name="scriptName">The package.json script to run (for example <c>dev</c> or <c>build</c>).</param>
     /// <param name="scriptArgs">Additional arguments passed to the script.</param>
     /// <returns>The complete argv, beginning with the package-manager executable.</returns>
-    public abstract IReadOnlyList<string> GetRunScriptCommand(string projectName, string scriptName, IReadOnlyList<string> scriptArgs);
+    public abstract IReadOnlyList<string> GetRunScriptCommand(string workspaceProjectName, string scriptName, IReadOnlyList<string> scriptArgs);
 }
