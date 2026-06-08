@@ -1,0 +1,3 @@
+﻿JavaScript workspace configuration for resource 'ws' is invalid:
+  - Workspace root '{WorkspaceRoot}' has a yarn lockfile, but the workspace is configured to use pnpm. Either call AddYarnWorkspace instead of AddPnpmWorkspace, or remove the yarn lockfile.
+  - 'web-typo' is not a declared workspace member of '{WorkspaceRoot}'. Declared members: web.
