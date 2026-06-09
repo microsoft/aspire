@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "PublishAsConnectionString marked obsolete with migration guidance to AddConnectionString; breaking change",
+  "mergedAt": "2026-06-09T07:43:57Z",
+  "number": 18044,
+  "runDate": "2026-06-09T12:56:46Z",
+  "status": "included",
+  "title": "Obsolete PublishAsConnectionString"
+}

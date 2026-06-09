@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix: stale AppHost backchannel sockets no longer block CLI commands",
+  "mergedAt": "2026-06-09T07:57:50Z",
+  "number": 18038,
+  "runDate": "2026-06-09T12:56:46Z",
+  "status": "included",
+  "title": "Fix stale AppHost backchannel sockets blocking CLI commands"
+}

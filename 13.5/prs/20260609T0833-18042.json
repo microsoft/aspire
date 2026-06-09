@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Playground-only revert of stress AppHost examples; no user-facing changes",
+  "mergedAt": "2026-06-09T08:33:04Z",
+  "number": 18042,
+  "runDate": "2026-06-09T12:56:46Z",
+  "status": "excluded",
+  "title": "Revert stress apphost changes from #17825 and #17112"
+}

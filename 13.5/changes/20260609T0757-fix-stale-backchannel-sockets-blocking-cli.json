@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Stale AppHost backchannel socket files left behind by exited processes no longer block CLI commands like `aspire add`. The CLI now automatically prunes orphaned PID-qualified sockets before probing, preventing spurious connection errors.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-06-09T07:57:50Z",
+  "lastMergedAt": "2026-06-09T07:57:50Z",
+  "name": "Fix stale backchannel sockets blocking CLI commands",
+  "owner": "davidfowl",
+  "prs": [
+    18038
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "NPM dependency bump for aspire.dev frontend; not related to milestone product changes",
+  "mergedAt": "2026-06-09T12:41:19Z",
+  "number": 1235,
+  "runDate": "2026-06-09T12:56:46Z",
+  "status": "excluded",
+  "title": "build(deps): bump the npm-all group across 1 directory with 8 updates"
+}
