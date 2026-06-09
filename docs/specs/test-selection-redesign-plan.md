@@ -1,11 +1,12 @@
 # Test Selection Redesign Implementation Plan
 
-> **Companion to [`test-selection-redesign.md`](./test-selection-redesign.md)** (the design)
-> and [`test-selection-redesign-eval.md`](./test-selection-redesign-eval.md) (the review rubric).
-> This is a proposed plan, not yet executed. The open questions at the end MUST be confirmed
-> with the maintainer before coding. Note: rubric item **D7** recommends a first-class
-> test→category label in *data*; this plan (Phase 3) instead derives the category booleans in
-> *code* via explicit selected-set membership. Both kill the old glob re-match — pick one in review.
+> **Status: implemented.** Companion to [`test-selection-redesign.md`](./test-selection-redesign.md)
+> (the design) and [`test-selection-redesign-eval.md`](./test-selection-redesign-eval.md) (the
+> review rubric). Retained as the historical implementation record; the shipped behavior is
+> documented in [`../conditional-tests-run.md`](../conditional-tests-run.md) and the
+> [config README](../../eng/scripts/test-selection-rules.README.md). The open **D7** question
+> below was resolved in favor of a first-class test→category label in *data* (the projected
+> category edge), not the in-code membership check this plan sketched.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

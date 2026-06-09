@@ -1,10 +1,13 @@
 # Evaluation Rubric — Test-Selection Redesign (data/policy split)
 
-> **Companion to [`test-selection-redesign.md`](./test-selection-redesign.md)** (the design)
+> **Status: implemented (rubric retained as a review record).** Companion to
+> [`test-selection-redesign.md`](./test-selection-redesign.md) (the design)
 > and [`test-selection-redesign-plan.md`](./test-selection-redesign-plan.md) (the implementation
 > plan). This is a review aid, not a spec: use it in a fresh session to judge the design and
 > its eventual implementation. Line/file citations were grounded against the tree at authoring
-> time — re-confirm before relying on a specific line number.
+> time — re-confirm before relying on a specific line number. The shipped behavior is documented
+> in [`../conditional-tests-run.md`](../conditional-tests-run.md) and the
+> [config README](../../eng/scripts/test-selection-rules.README.md).
 
 **Use this in a fresh session** to judge (a) the design spec
 `docs/specs/test-selection-redesign.md` and (b) its eventual implementation in

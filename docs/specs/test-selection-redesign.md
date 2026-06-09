@@ -1,16 +1,20 @@
 # Test Selection Redesign: Relationship Graph + Policy Engine
 
-> **Status:** Proposed design — not yet implemented. This document is meant to be
-> reviewed in a fresh session and then implemented. It supersedes the structural
-> approach in [`test-selection-by-changed-paths.md`](./test-selection-by-changed-paths.md)
-> (the original spec) and the current behavior documented in
-> [`../conditional-tests-run.md`](../conditional-tests-run.md).
+> **Status:** Implemented. This design shipped via the `tools/TestSelector` engine
+> and the v2 `test-selection-rules.json` schema. For current behavior and the
+> field-by-field reference, see
+> [`../conditional-tests-run.md`](../conditional-tests-run.md) and
+> [`../../eng/scripts/test-selection-rules.README.md`](../../eng/scripts/test-selection-rules.README.md).
+> This document is retained as the design record; exploratory naming here may
+> differ from the shipped schema, which uses
+> `ignore` / `runEverything` / `mappings` / `edges` / `inferDeps` / `jobCategories`
+> and removed the old `categories` block entirely.
 >
-> Nothing here changes live CI behavior on its own. The override mechanisms this
-> redesign reshapes (`restrictedTestProjects`, category `testProjects`) currently
-> live **only** in the audit config (`eng/scripts/test-selection-rules.audit.json`),
-> dormant in production. The active config
-> (`eng/scripts/test-selection-rules.json`) is a minimal templates-only pilot.
+> Decisions locked during implementation that this document left open: the
+> `run_<category>` boolean is a **data** label on category edges (projected from
+> the selected set, never re-matched in code); negation is `inferDeps:false` only
+> (no per-edge `!`); and migration was a hard cutover with the active config kept
+> behavior-preserving so the rich rules roll out through the audit selector first.
 >
 > **Companion docs (read alongside this for the fresh-session review):**
 > [`test-selection-redesign-eval.md`](./test-selection-redesign-eval.md) — the rubric

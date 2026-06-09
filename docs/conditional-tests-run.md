@@ -1,266 +1,168 @@
 # Conditional Test Runs
 
-> **Proposed redesign:** A redesign that separates the rules config into a
-> declarative relationship graph (data) and a fixed selection engine (code) is
-> under review in [`specs/test-selection-redesign.md`](./specs/test-selection-redesign.md).
-> This document describes the **current** implementation.
-
-## Overview
-
-Conditional test runs is a CI optimization feature that selectively runs tests based on which files have changed in a pull request. Instead of running all tests for every change, the current implementation uses glob pattern matching combined with `dotnet-affected` for transitive dependency analysis and convention-based source-to-test mappings to determine exactly which test projects are affected, reducing CI time and resource usage.
+Conditional test runs is a CI optimization: instead of running the full suite for
+every pull request, CI runs only the test projects a change can actually affect.
+This document explains how the feature works end to end. The field-by-field
+config reference lives next to the rules file in
+[`eng/scripts/test-selection-rules.README.md`](../eng/scripts/test-selection-rules.README.md).
 
 ## Motivation
 
 Running the full test suite for every pull request is expensive:
 
-- **CI Efficiency**: Integration tests run on 3 platforms with ~20 projects each. Running all tests can take significant time and compute resources.
-- **Faster Feedback**: Developers get quicker feedback when only relevant tests run.
-- **Resource Optimization**: Reduces GitHub Actions minutes and runner usage.
+- **CI efficiency** — integration tests run on three platforms with ~20 projects
+  each. The full sweep is slow and burns runner capacity.
+- **Faster feedback** — developers get results sooner when only relevant tests
+  run.
+- **Resource optimization** — fewer GitHub Actions minutes per PR.
 
-## How It Works
+The risk is the opposite failure: if selection is too aggressive it can silently
+*skip* a test that should have run, and a real regression sails through green.
+So the system is deliberately biased toward over-running. Every ambiguous case
+falls back to running everything.
 
-The system combines glob pattern matching with `dotnet-affected` for transitive dependencies:
+## Design: data vs. engine
 
-1. **Filter out ignored files** (docs, workflows, etc.)
-2. **Check for critical infrastructure changes** — files matching `triggerAllPaths` run everything
-3. **Match files to categories** via `triggerPaths` patterns — sets `run_<category>` flags
-4. **Apply source-to-test mappings** — resolve files to test project directories via `{name}` capture patterns
-5. **Run `dotnet-affected`** to find all projects affected by the changes when source-to-test mappings do not already fully account for the active files
-6. **Check for unmatched files** — conservative fallback runs everything if any file is unaccounted for
-7. **Filter test projects** — identify test projects using glob patterns from `testProjectPatterns`
-8. **Combine test projects** from dotnet-affected + source-to-test mappings, then add any category `testProjects` (forced test projects for runtime-only couplings that have no `ProjectReference` for dotnet-affected to follow, e.g. CLI end-to-end tests)
-9. **Match test projects to categories** — categories can be triggered by both source and test paths
-10. **Build final result** — `run_integrations` is `true` if the category is triggered by paths OR if any test projects were discovered
+The system is split into two pieces with a hard line between them:
 
-The key insight in the current implementation is that source-to-test mappings use naming conventions (e.g., `src/Components/Aspire.Redis/**` → `tests/Aspire.Redis.Tests/`) to discover test projects, while `dotnet-affected` provides MSBuild's transitive dependency graph for comprehensive coverage.
+- **Data** — `eng/scripts/test-selection-rules.json` is a relationship graph. It
+  records *which source paths couple to which test projects*, which paths matter
+  to everything or nothing, and which standalone jobs a path fans out to. It
+  contains no policy.
+- **Engine** — `tools/TestSelector` is a single fixed selection algorithm. All
+  decisions (ordering, fallbacks, how a category boolean is computed) live here.
+
+This split is the whole point of the design: adding a new coupling is a data
+edit, not a code change, and the policy that keeps selection safe is reviewed and
+tested in one place.
+
+### Active and audit configs
+
+Two rule files share the schema:
+
+- **`test-selection-rules.json`** (active) drives the live scope. Kept minimal.
+- **`test-selection-rules.audit.json`** (audit) is the rich rule set. It runs on
+  every PR in observational mode (`continue-on-error`, separate artifacts) so
+  rules can be validated against real PRs before being promoted into the active
+  file. The audit config never changes what tests run.
+
+## How it works
+
+For a pull request, the engine:
+
+1. **Drops ignored files** (`ignore`). Files that match a `jobCategory.when` or an
+   `edge.from` are rescued back in even if an `ignore` glob also matched them.
+2. **Checks critical paths** (`runEverything`). Any match runs the full suite.
+3. **Matches `jobCategories`, `mappings`, and `edges`** against the changed files.
+4. **Checks for unmatched files** — any active file claimed by none of those
+   forces a conservative full run.
+5. **Runs `dotnet-affected`** for the MSBuild transitive-dependency graph, filters
+   to test projects (`testProjectPatterns`), and unions in the mapping-resolved
+   projects.
+6. **Applies `inferDeps`** — projects whose inferred edges are declared false
+   positives are dropped unless a mapping/edge explicitly selected them.
+7. **Guards the matched-but-zero gap** — if integration-relevant files matched but
+   the change resolved to zero projects (e.g. a non-MSBuild-input file), runs the
+   full suite.
+8. **Unions edge-resolved projects** and **projects each `run_<category>` boolean**
+   from the final selected set.
+
+The two key ideas:
+
+- **Conventions over enumeration.** `mappings` use naming conventions
+  (`src/Components/{name}/**` → `tests/{name}.Tests/`) so one entry covers a
+  family, while `dotnet-affected` supplies MSBuild's transitive graph for
+  everything reachable by `ProjectReference`.
+- **Runtime edges for invisible couplings.** A test that consumes a *built
+  artifact* rather than a project reference is invisible to `dotnet-affected`. A
+  `runtime` edge declares that dependency so the test is still selected. CLI
+  end-to-end tests, which run against a built CLI archive, are the motivating
+  case.
+
+## Category booleans are projected, never re-matched
+
+A `run_<category>` boolean (e.g. `run_cli_e2e`) is **derived from whether the
+category's test project ended up in the selected set** — not from re-matching the
+changed paths against a second set of globs. Because the boolean and the matrix
+read the same selected set, they cannot disagree: if `run_cli_e2e` is `true`, the
+cli-e2e project is in the matrix, and vice versa. This removes a class of bug
+where a standalone boolean and the matrix were computed by parallel path-matching
+and could drift apart.
+
+`run_integrations` is the one count-derived boolean: it is `true` when `run_all`
+is set or at least one test project was selected. The `integrations` entry in
+`jobCategories` is therefore never a standalone job flag — instead its `when` set
+is the **accounting net** that decides whether a changed source file is "known"
+(matched by some rule) or "unmatched" (forces a full run).
 
 ## Architecture
 
-### 1. Test Selector Tool (`tools/TestSelector`)
+### Test selector tool (`tools/TestSelector`)
 
-A C# CLI tool that:
-- Reads the configuration file
-- Gets changed files from git
-- Matches files to categories via `triggerPaths`
-- Applies source-to-test mappings via `{name}` capture patterns
-- Runs `dotnet-affected` for transitive dependency analysis when mapping-only resolution is not sufficient
-- Filters test projects using glob patterns
-- Outputs JSON results and GitHub Actions outputs
+A NativeAOT C# CLI that reads the config, gets changed files from git (or
+`--changed-files`), runs the selection algorithm, and emits both a JSON result
+and GitHub Actions outputs. Key components:
 
-### 2. Configuration File (`eng/scripts/test-selection-rules.json`)
+- `Analyzers/IgnorePathFilter`, `CriticalFileDetector`, `ProjectMappingResolver`
+  (mappings **and** edges), `DotNetAffectedRunner`, `TestProjectFilter`,
+  `InferDepsFilter`, `NuGetDependentTestDetector`.
+- `CategoryMapper` — matches files to `jobCategories`.
+- `TestEvaluator` — the engine that orchestrates the fixed flow above.
+- `Models/TestSelectorConfig`, `Models/TestSelectionResult`.
 
-A JSON file that defines:
-- **ignorePaths**: Files that never trigger tests (docs, workflows)
-- **triggerAllPaths**: Critical files that trigger ALL tests when changed
-- **categories**: Category definitions with `triggerPaths` and optional `excludePaths`
-- **sourceToTestMappings**: Pattern-based mappings from source/test files to test project directories
-- **testProjectPatterns**: Glob patterns to identify test projects (include/exclude)
+### Configuration files (`eng/scripts/`)
 
-### 3. GitHub Actions Integration
+`test-selection-rules.json` (active) and `test-selection-rules.audit.json`
+(audit), validated by `test-selection-rules.schema.json`. See the
+[config README](../eng/scripts/test-selection-rules.README.md) for every field.
 
-The workflow runs the tool and uses the output to conditionally run test jobs.
+### GitHub Actions integration
 
-## Configuration Reference
+`.github/workflows/tests.yml` runs the active and audit selectors in parallel,
+reconciles them in the `setup_for_tests` job, and uses the outputs to gate jobs.
+The matrix filter `eng/scripts/filter-test-matrix-by-scope.ps1` narrows the test
+matrix to `affected_test_projects` and subtracts `suppressed_test_projects`.
 
-### `ignorePaths`
+## Tool usage
 
-Files matching these glob patterns are completely ignored — they don't trigger any tests.
-
-```json
-"ignorePaths": [
-  ".editorconfig",
-  ".gitignore",
-  "**/*.md",
-  "docs/**",
-  "eng/pipelines/**",
-  "eng/test-configuration.json",
-  "eng/testing/**",
-  ".github/workflows/**",
-  ".github/actions/**",
-  ".github/instructions/**",
-  ".github/skills/**",
-  "tests/agent-scenarios/**",
-  "eng/scripts/test-selection-rules.json",
-  "eng/scripts/test-selection-rules.schema.json"
-]
-```
-
-When **all** changed files in a pull request match `ignorePaths`, the selector produces no active files for the managed test matrix. Whole-workflow skipping is still handled earlier by the lightweight `prepare_for_ci` gate using `eng/testing/github-ci-trigger-patterns.txt`, while the selector outputs are consumed later in `tests.yml` `setup_for_tests`.
-
-### `triggerAllPaths`
-
-Critical files that trigger ALL tests when changed. This is specified at the top level of the config.
-
-```json
-"triggerAllPaths": [
-  "global.json",
-  "Directory.Build.props",
-  "Directory.Build.targets",
-  "Directory.Packages.props",
-  "NuGet.config",
-  "tests/Shared/**",
-  "*.sln",
-  "*.slnx",
-  "src/Aspire.Hosting/**"
-]
-```
-
-### `categories`
-
-Category definitions with trigger paths. Categories serve two purposes:
-
-1. **Standalone job flags** (`polyglot`, `extension`): Skip/run independent CI jobs
-2. **Test discovery signals** (`integrations`, `cli_e2e`): Identify which .NET test projects to run
-
-```json
-"categories": {
-  "cli_e2e": {
-    "description": "CLI end-to-end tests",
-    "triggerPaths": [
-      "src/Aspire.Cli/**",
-      "eng/clipack/**",
-      "tests/Aspire.Cli.EndToEnd.Tests/**"
-    ]
-  },
-
-  "extension": {
-    "description": "VS Code extension tests",
-    "triggerPaths": [
-      "extension/**"
-    ]
-  },
-
-  "polyglot": {
-    "description": "Polyglot SDK validation tests",
-    "triggerPaths": [
-      ".github/workflows/polyglot-validation/**",
-      ".github/workflows/polyglot-validation.yml"
-    ]
-  },
-
-  "integrations": {
-    "description": "Integration tests for components, dashboard, and hosting extensions",
-    "triggerPaths": [
-      "src/Aspire.Dashboard/**",
-      "src/Aspire.Hosting.*/**",
-      "src/Aspire.*/**",
-      "src/Components/**",
-      "src/Shared/**",
-      "src/Vendoring/**",
-      "tests/Aspire.*.Tests/**"
-    ],
-    "excludePaths": [
-      "src/Aspire.ProjectTemplates/**",
-      "src/Aspire.Cli/**",
-      "src/Aspire.Hosting/**",
-      "tests/Aspire.Templates.Tests/**",
-      "tests/Aspire.Cli.EndToEnd.Tests/**",
-      "tests/Aspire.EndToEnd.Tests/**"
-    ]
-  }
-}
-```
-
-Category properties:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `description` | string | Human-readable description |
-| `triggerPaths` | string[] | Glob patterns that trigger this category |
-| `excludePaths` | string[] | Glob patterns to exclude from matching (optional) |
-
-### `sourceToTestMappings`
-
-Pattern-based mappings that resolve changed files to test project directories. Uses `{name}` as a capture group.
-
-```json
-"sourceToTestMappings": [
-  {
-    "source": "playground/**",
-    "test": "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"
-  },
-  {
-    "source": "src/Aspire.ProjectTemplates/**",
-    "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
-  }
-]
-```
-
-When a changed file matches a `source` pattern, the captured `{name}` (if present) is substituted into `test` to identify the test project. Test projects discovered this way are added to `affected_test_projects` and contribute to matrix filtering.
-
-### `testProjectPatterns`
-
-Glob patterns to identify which projects are test projects. Used to filter `dotnet-affected` output.
-
-```json
-"testProjectPatterns": {
-  "include": [
-    "tests/**/*.csproj"
-  ],
-  "exclude": [
-    "tests/testproject/**"
-  ]
-}
-```
-
-## Evaluation Algorithm
-
-1. **Filter Ignored Files**: Remove files matching `ignorePaths`. If all files are ignored, no tests run.
-
-2. **Check Critical Files**: If any file matches patterns in `triggerAllPaths`, ALL tests run.
-
-3. **Match Files to Categories**: Apply each category's `triggerPaths` (minus `excludePaths`) to set `run_<category>` flags.
-
-4. **Apply Source-to-Test Mappings**: Resolve changed files to test project directories via `{name}` capture patterns.
-
-5. **Run dotnet-affected**: Find all MSBuild projects affected by the changed files (transitive dependencies) when active files are not already fully covered by source-to-test mappings.
-
-6. **Check Unmatched Files**: If any active file isn't matched by categories, solution scope, or source-to-test mappings, conservatively run all tests.
-
-7. **Filter Test Projects**: Use `testProjectPatterns` to identify test projects from `dotnet-affected` output.
-
-8. **Combine Test Projects**: Merge test projects from dotnet-affected and source-to-test mappings.
-
-9. **Match Test Projects to Categories**: Categories can be triggered by both source paths and resolved test project paths.
-
-10. **Build Final Result**: Set `run_integrations=true` if the integrations category is triggered OR if any test projects were discovered.
-
-## Tool Usage
-
-### CLI Reference
+### CLI reference
 
 ```bash
-# Basic usage - compare against origin/main
-dotnet run --project tools/TestSelector -- --solution Aspire.slnx --from origin/main
+# Compare against origin/main
+dotnet run --project tools/TestSelector/TestSelector.csproj -- \
+  --solution Aspire.slnx --config eng/scripts/test-selection-rules.json --from origin/main
 
-# With verbose output
-dotnet run --project tools/TestSelector -- --solution Aspire.slnx --from origin/main --verbose
+# Verbose, to see why each file did or didn't trigger
+dotnet run --project tools/TestSelector/TestSelector.csproj -- \
+  --solution Aspire.slnx --config eng/scripts/test-selection-rules.audit.json \
+  --from origin/main --verbose
 
-# Test with explicit changed files
-dotnet run --project tools/TestSelector -- --solution Aspire.slnx \
-  --changed-files "src/Aspire.Dashboard/App.razor" --verbose
+# Explicit changed files (bypasses git)
+dotnet run --project tools/TestSelector/TestSelector.csproj -- \
+  --solution Aspire.slnx --config eng/scripts/test-selection-rules.json \
+  --changed-files "src/Aspire.Dashboard/App.razor"
 
-# Output to file
-dotnet run --project tools/TestSelector -- --solution Aspire.slnx --from origin/main --output result.json
-
-# GitHub Actions format
-dotnet run --project tools/TestSelector -- --solution Aspire.slnx --from origin/main --github-output
+# GitHub Actions output format
+dotnet run --project tools/TestSelector/TestSelector.csproj -- \
+  --solution Aspire.slnx --config eng/scripts/test-selection-rules.json \
+  --from origin/main --github-output
 ```
 
 ### Options
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--solution` | `-s` | Path to solution file (required) |
-| `--config` | `-c` | Path to config file (optional; category logic skipped if omitted) |
-| `--from` | `-f` | Git ref to compare from (required unless `--changed-files` provided) |
+| `--solution` | `-s` | Path to the solution file (required) |
+| `--config` | `-c` | Path to the rules file (optional; without it, only `dotnet-affected` is used) |
+| `--from` | `-f` | Git ref to compare from (required unless `--changed-files` is given) |
 | `--to` | `-t` | Git ref to compare to (default: `HEAD`) |
-| `--changed-files` | | Comma-separated list of files (bypasses git) |
-| `--output` | `-o` | Output file path for JSON result |
-| `--github-output` | | Write outputs in GitHub Actions format |
-| `--verbose` | `-v` | Enable verbose output |
+| `--changed-files` | | Comma-separated file list (bypasses git) |
+| `--non-applying-paths` | | Comma-separated paths that yield a non-applying result when they are the only changes |
+| `--output` | `-o` | Write the JSON result to a file |
+| `--github-output` | | Emit GitHub Actions outputs |
+| `--verbose` | `-v` | Verbose diagnostics |
 
-### Output Format
+### JSON result
 
 ```json
 {
@@ -269,8 +171,7 @@ dotnet run --project tools/TestSelector -- --solution Aspire.slnx --from origin/
   "categories": {
     "cli_e2e": false,
     "extension": true,
-    "polyglot": false,
-    "integrations": false
+    "polyglot": false
   },
   "affectedTestProjects": [
     "tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj"
@@ -278,74 +179,68 @@ dotnet run --project tools/TestSelector -- --solution Aspire.slnx --from origin/
   "integrationsProjects": [
     "tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj"
   ],
-  "changedFiles": [
-    "tests/Aspire.Dashboard.Tests/Model/ResourceViewModelTests.cs",
-    "extension/Extension.proj"
-  ],
+  "suppressedTestProjects": [],
+  "changedFiles": ["src/Aspire.Dashboard/App.razor", "extension/Extension.proj"],
   "dotnetAffectedProjects": [],
   "ignoredFiles": []
 }
 ```
 
-### GitHub Actions Outputs
+`categories` never contains `integrations` — its boolean is count-derived (see
+above).
+
+### GitHub Actions outputs
 
 | Output | Description |
 |--------|-------------|
-| `run_all` | `true` if all tests should run |
-| `run_integrations` | `true` if category triggered by paths OR test projects discovered |
-| `run_cli_e2e` | `true` if CLI E2E test category triggered |
-| `run_extension` | `true` if VS Code extension category triggered |
-| `run_polyglot` | `true` if polyglot validation category triggered |
-| `affected_test_projects` | JSON array of affected test project `.csproj` paths |
+| `run_all` | `true` on critical-path or any conservative fallback |
+| `selection_reason` | Why the decision was made (`selective`, `critical_path`, `all_ignored`, unmatched-files text, etc.) |
+| `run_integrations` | Count-derived: `run_all` OR at least one test project selected |
+| `run_cli_e2e`, `run_extension`, `run_polyglot` | Projected category booleans |
+| `affected_test_projects` | JSON array of selected test `.csproj` paths |
+| `suppressed_test_projects` | JSON array of `inferDeps:false` paths to subtract from sweeps |
+| `run_nuget_tests`, `nuget_test_projects` | NuGet-dependent test gating |
 
 ## Testing
 
-### Running Tool Tests
-
 ```bash
-# Run all test selector tests
-dotnet test tests/Infrastructure.Tests
-
-# Run specific test categories
-dotnet test tests/Infrastructure.Tests -- --filter-class "*.IgnorePathFilterTests"
-dotnet test tests/Infrastructure.Tests -- --filter-class "*.EndToEndEvaluationTests"
+# All test selector tests
+dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
+  --no-launch-profile -- --filter-namespace "Infrastructure.Tests.TestSelector" \
+  --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
-### Test Coverage
-
-The test project provides coverage for:
-
-- **Analyzers**: IgnorePathFilter, CriticalFileDetector, TestProjectFilter, DotNetAffectedRunner, ProjectMappingResolver
-- **Models**: TestSelectorConfig, TestSelectionResult (including GitHub output generation)
-- **CategoryMapper**: File-to-category matching via triggerPaths/excludePaths
-- **Path normalization**: Forward/back slash handling across platforms
+Different MTP filter *types* are ANDed, so run each in its own invocation rather
+than combining `--filter-namespace` with `--filter-class`. Coverage spans the
+analyzers, the config/result models (including GitHub-output generation), the
+`CategoryMapper`, path normalization, and audit-fixture tests that replay
+captured real PRs through the audit config.
 
 ## Troubleshooting
 
-### All Tests Running Unexpectedly
+### All tests running unexpectedly
 
-**Cause**: A changed file matches `triggerAllPaths`, or a file is unmatched by any rule (conservative fallback).
+A changed file matched `runEverything`, or a file is unmatched by every rule
+(conservative fallback). Run with `--verbose` to see the trigger. For an
+unmatched file, either add it to `ignore`, cover it with a `mapping`/`edge`, or
+extend the `integrations.when` accounting net.
 
-**Solution**: Run with `--verbose` to see which file triggered it. If it's an unmatched file, add it to `ignorePaths` or ensure it's covered by a category or source-to-test mapping.
+### Tests not running when expected
 
-### Tests Not Running When Expected
+The coupling is invisible to `dotnet-affected` (no `ProjectReference`), the file
+is ignored, or no mapping/edge resolves to the project. Check `ignore`, confirm a
+`mapping`/`edge` resolves to the project, and for built-artifact couplings add a
+`runtime` edge. If the project carries `inferDeps:false`, it runs only when a
+declared mapping/edge selects it.
 
-**Cause**: Missing project reference, file is being ignored, or missing source-to-test mapping.
+### Non-.NET files not triggering tests
 
-**Solution**:
-1. Check if file matches `ignorePaths`
-2. Verify project references exist in the `.csproj` files
-3. Check if a `sourceToTestMappings` entry is needed
-4. Run `dotnet affected` manually to debug
-
-### Non-.NET Files Not Triggering Tests
-
-**Cause**: Files like extension code can't be analyzed by `dotnet-affected`.
-
-**Solution**: Add a category with `triggerPaths` matching the file pattern.
+Files such as extension or polyglot sources can't be analyzed by
+`dotnet-affected`. Add a `jobCategories` entry with matching `when` patterns and
+gate the job on the projected `run_<category>` output.
 
 ## Dependencies
 
 - .NET 10.0 SDK
-- `dotnet-affected` global tool: `dotnet tool install --global dotnet-affected --prerelease`
+- `dotnet-affected` global tool: `dotnet tool install --global dotnet-affected`
 - Git
