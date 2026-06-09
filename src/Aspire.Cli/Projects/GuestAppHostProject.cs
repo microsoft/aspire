@@ -1489,11 +1489,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             genericAppHostPath,
             homeDirectory.FullName,
             Environment.ProcessId,
-            out var orphanedSocketsDeleted);
-        if (orphanedSocketsDeleted > 0)
-        {
-            _logger.LogDebug("Cleaned up {Count} orphaned socket(s) before stopping running AppHost instances.", orphanedSocketsDeleted);
-        }
+            _logger);
 
         // Check if any socket files exist
         if (matchingSockets.Length == 0)

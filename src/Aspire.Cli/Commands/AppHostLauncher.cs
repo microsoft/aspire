@@ -233,11 +233,7 @@ internal sealed class AppHostLauncher(
             effectiveAppHostFile.FullName,
             executionContext.HomeDirectory.FullName,
             Environment.ProcessId,
-            out var orphanedSocketsDeleted);
-        if (orphanedSocketsDeleted > 0)
-        {
-            logger.LogDebug("Cleaned up {Count} orphaned socket(s) before stopping running AppHost instances.", orphanedSocketsDeleted);
-        }
+            logger);
 
         if (existingSockets.Length > 0)
         {

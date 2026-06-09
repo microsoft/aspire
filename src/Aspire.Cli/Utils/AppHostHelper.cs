@@ -8,6 +8,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting.Backchannel;
+using Microsoft.Extensions.Logging;
 using Semver;
 
 namespace Aspire.Cli.Utils;
@@ -132,10 +133,20 @@ internal static class AppHostHelper
     /// <summary>
     /// Finds matching socket files and deletes PID-qualified sockets whose owning process has exited.
     /// </summary>
-    internal static string[] FindMatchingNonOrphanedSockets(string appHostPath, string homeDirectory, int currentPid, out int deletedCount)
+    internal static string[] FindMatchingNonOrphanedSockets(
+        string appHostPath,
+        string homeDirectory,
+        int currentPid,
+        ILogger logger)
     {
         var matchingSockets = BackchannelConstants.FindMatchingSockets(appHostPath, homeDirectory);
-        return PruneOrphanedSockets(matchingSockets, currentPid, out deletedCount);
+        var remainingSockets = PruneOrphanedSockets(matchingSockets, currentPid, out var deletedCount);
+        if (deletedCount > 0)
+        {
+            logger.LogDebug("Cleaned up {Count} orphaned AppHost socket(s).", deletedCount);
+        }
+
+        return remainingSockets;
     }
 
     /// <summary>

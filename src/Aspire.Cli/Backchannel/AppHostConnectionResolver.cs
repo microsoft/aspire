@@ -139,11 +139,7 @@ internal sealed class AppHostConnectionResolver(
                 targetPath,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
-                out var orphanedSocketsDeleted);
-            if (orphanedSocketsDeleted > 0)
-            {
-                logger.LogDebug("Cleaned up {Count} orphaned socket(s) while resolving AppHost connection.", orphanedSocketsDeleted);
-            }
+                logger);
 
             // Try each matching socket until we get a connection
             foreach (var socketPath in matchingSockets)

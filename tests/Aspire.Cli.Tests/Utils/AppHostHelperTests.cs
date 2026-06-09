@@ -5,6 +5,7 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Backchannel;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -391,13 +392,12 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
             appHostPath,
             workspace.WorkspaceRoot.FullName,
             currentPid,
-            out var deletedCount);
+            NullLogger.Instance);
 
-        Assert.Equal(1, deletedCount);
-        Assert.Equal(2, remainingSockets.Length);
-        Assert.Contains(liveSocket, remainingSockets);
-        Assert.Contains(pidlessSocket, remainingSockets);
-        Assert.DoesNotContain(orphanedSocket, remainingSockets);
+        Assert.Collection(
+            remainingSockets.Order(StringComparer.Ordinal),
+            socket => Assert.Equal(pidlessSocket, socket),
+            socket => Assert.Equal(liveSocket, socket));
         Assert.False(File.Exists(orphanedSocket));
         Assert.True(File.Exists(liveSocket));
         Assert.True(File.Exists(pidlessSocket));
