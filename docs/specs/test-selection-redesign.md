@@ -11,6 +11,13 @@
 > live **only** in the audit config (`eng/scripts/test-selection-rules.audit.json`),
 > dormant in production. The active config
 > (`eng/scripts/test-selection-rules.json`) is a minimal templates-only pilot.
+>
+> **Companion docs (read alongside this for the fresh-session review):**
+> [`test-selection-redesign-eval.md`](./test-selection-redesign-eval.md) — the rubric
+> for judging this design and its implementation (grounded in real line numbers); and
+> [`test-selection-redesign-plan.md`](./test-selection-redesign-plan.md) — the phased
+> implementation plan. The eval flags one design gap (no explicit test→category label,
+> §D7) that the plan resolves differently than the eval recommends — that fork is open.
 
 ## TL;DR
 
