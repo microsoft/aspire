@@ -14067,7 +14067,10 @@ export interface ContainerResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): ContainerResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise;
     /**
@@ -14808,7 +14811,10 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): ContainerResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise;
     /**
@@ -15909,7 +15915,10 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -37423,7 +37432,10 @@ export interface TestDatabaseResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestDatabaseResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise;
     /**
@@ -38164,7 +38176,10 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withOtlpExporter(options?: WithOtlpExporterOptions): TestDatabaseResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise;
     /**
@@ -39264,7 +39279,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -41924,7 +41942,10 @@ export interface TestRedisResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestRedisResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise;
     /**
@@ -42729,7 +42750,10 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): TestRedisResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise;
     /**
@@ -43893,7 +43917,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -46860,7 +46887,10 @@ export interface TestVaultResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestVaultResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise;
     /**
@@ -47603,7 +47633,10 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): TestVaultResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise;
     /**
@@ -48705,7 +48738,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
