@@ -1882,6 +1882,7 @@ class ProcessCommandExportOptions(typing.TypedDict, total=False):
     InheritEnvironmentVariables: bool | None
     StandardInputContent: str | None
     KillEntireProcessTree: bool | None
+    CreateProcessSpec: typing.Callable
     CommandOptions: CommandOptions
     MaxOutputLineCount: int | None
     DisplayImmediately: bool | None
@@ -3848,6 +3849,15 @@ class DistributedApplicationExecutionContext:
         """The `IServiceProvider` for the AppHost."""
         result = self._client.invoke_capability(
             'Aspire.Hosting/DistributedApplicationExecutionContext.serviceProvider',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """The `IServiceProvider` for the AppHost."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/DistributedApplicationExecutionContext.services',
             {'context': self._handle}
         )
         return typing.cast(AbstractServiceProvider, result)

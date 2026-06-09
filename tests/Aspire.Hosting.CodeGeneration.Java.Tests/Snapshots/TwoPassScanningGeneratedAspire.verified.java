@@ -6899,6 +6899,14 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
         return (IServiceProvider) result;
     }
 
+    /** The `IServiceProvider` for the AppHost. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.services", reqArgs);
+        return (IServiceProvider) result;
+    }
+
     /** Returns true if the current operation is publishing. */
     public boolean isPublishMode() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -16114,6 +16122,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     private Boolean inheritEnvironmentVariables;
     private String standardInputContent;
     private Boolean killEntireProcessTree;
+    private Object createProcessSpec;
     private CommandOptions commandOptions;
     private Double maxOutputLineCount;
     private Boolean displayImmediately;
@@ -16133,6 +16142,8 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     public void setStandardInputContent(String value) { this.standardInputContent = value; }
     public Boolean getKillEntireProcessTree() { return killEntireProcessTree; }
     public void setKillEntireProcessTree(Boolean value) { this.killEntireProcessTree = value; }
+    public Object getCreateProcessSpec() { return createProcessSpec; }
+    public void setCreateProcessSpec(Object value) { this.createProcessSpec = value; }
     public CommandOptions getCommandOptions() { return commandOptions; }
     public void setCommandOptions(CommandOptions value) { this.commandOptions = value; }
     public Double getMaxOutputLineCount() { return maxOutputLineCount; }
@@ -16159,6 +16170,8 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         value.setStandardInputContent(standardInputContentValue == null ? null : (String) standardInputContentValue);
         var killEntireProcessTreeValue = map.get("KillEntireProcessTree");
         value.setKillEntireProcessTree(killEntireProcessTreeValue == null ? null : (Boolean) killEntireProcessTreeValue);
+        var createProcessSpecValue = map.get("CreateProcessSpec");
+        value.setCreateProcessSpec(createProcessSpecValue);
         var commandOptionsValue = map.get("CommandOptions");
         value.setCommandOptions(commandOptionsValue == null ? null : CommandOptions.fromMap((Map<String, Object>) commandOptionsValue));
         var maxOutputLineCountValue = map.get("MaxOutputLineCount");
@@ -16179,6 +16192,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         map.put("InheritEnvironmentVariables", AspireClient.serializeValue(inheritEnvironmentVariables));
         map.put("StandardInputContent", AspireClient.serializeValue(standardInputContent));
         map.put("KillEntireProcessTree", AspireClient.serializeValue(killEntireProcessTree));
+        map.put("CreateProcessSpec", AspireClient.serializeValue(createProcessSpec));
         map.put("CommandOptions", AspireClient.serializeValue(commandOptions));
         map.put("MaxOutputLineCount", AspireClient.serializeValue(maxOutputLineCount));
         map.put("DisplayImmediately", AspireClient.serializeValue(displayImmediately));

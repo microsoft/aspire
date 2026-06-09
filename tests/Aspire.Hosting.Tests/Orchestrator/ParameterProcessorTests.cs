@@ -788,7 +788,7 @@ public class ParameterProcessorTests
                {
                    // This should not throw InvalidOperationException
                    // when using the proper execution context constructor
-                   var sp = context.ExecutionContext.ServiceProvider;
+                   var sp = context.ExecutionContext.Services;
                    serviceProviderAccessed = sp is not null;
                    context.EnvironmentVariables["TEST_ENV"] = param;
                });
@@ -1292,7 +1292,7 @@ public class ParameterProcessorTests
         var executionContext = new DistributedApplicationExecutionContext(
             new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, "manifest")
             {
-                ServiceProvider = serviceProvider
+                Services = serviceProvider
             });
 
         var parameterProcessor = CreateParameterProcessor(executionContext: executionContext);

@@ -396,18 +396,16 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
 
     private string? TryReadChannel()
     {
-        try
+        if (_channelReader.TryReadChannel(out var channel, out var error))
         {
-            return _channelReader.ReadChannel();
+            return channel;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // Same defensive posture as doctor: a misconfigured dev build
-            // with no AspireCliChannel assembly metadata must not break
-            // aspire doctor.
-            _logger.LogDebug(ex, "Could not read identity channel for InstallationDiscovery.");
-            return null;
-        }
+
+        // Same defensive posture as doctor: a misconfigured dev build
+        // with no AspireCliChannel assembly metadata must not break
+        // aspire doctor.
+        _logger.LogDebug("Could not read identity channel for InstallationDiscovery: {Error}", error);
+        return null;
     }
 
     private static string GetNotProbedReason(InstallSidecarReadResult result)

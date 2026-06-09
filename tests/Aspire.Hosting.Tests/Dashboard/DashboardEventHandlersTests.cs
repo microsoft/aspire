@@ -150,7 +150,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
         var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
         {
-            ServiceProvider = new TestServiceProvider().AddService(model)
+            Services = new TestServiceProvider().AddService(model)
         });
         var dashboardEnvironment = await ExecutionConfigurationBuilder.Create(dashboardResource)
             .WithEnvironmentVariablesConfig()
@@ -194,7 +194,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
         var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
         {
-            ServiceProvider = new TestServiceProvider().AddService(model)
+            Services = new TestServiceProvider().AddService(model)
         });
         // Act
         await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: envVars, resource: dashboardResource));
@@ -664,7 +664,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             .AddService<IDeveloperCertificateService>(new TestDeveloperCertificateService([], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
         var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
         {
-            ServiceProvider = executionContextServiceProvider
+            Services = executionContextServiceProvider
         });
 
         return new DashboardEventHandlers(

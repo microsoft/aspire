@@ -11,14 +11,11 @@ namespace Infrastructure.Tests;
 /// </summary>
 public sealed class CreateFailingTestIssueFixture : IAsyncLifetime
 {
-    public string RepoRoot { get; private set; } = string.Empty;
-
     public string ToolProjectPath { get; private set; } = string.Empty;
 
     public async ValueTask InitializeAsync()
     {
-        RepoRoot = FindRepoRoot();
-        ToolProjectPath = Path.Combine(RepoRoot, "tools", "CreateFailingTestIssue", "CreateFailingTestIssue.csproj");
+        ToolProjectPath = Path.Combine(RepoRoot.Path, "tools", "CreateFailingTestIssue", "CreateFailingTestIssue.csproj");
 
         if (!File.Exists(ToolProjectPath))
         {
@@ -69,21 +66,5 @@ public sealed class CreateFailingTestIssueFixture : IAsyncLifetime
                 $"stdout:{Environment.NewLine}{stdout}{Environment.NewLine}" +
                 $"stderr:{Environment.NewLine}{stderr}");
         }
-    }
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Aspire.slnx")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not find repository root (looking for Aspire.slnx).");
     }
 }

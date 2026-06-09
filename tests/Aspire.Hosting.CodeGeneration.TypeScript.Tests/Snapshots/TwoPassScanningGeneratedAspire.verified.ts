@@ -944,6 +944,8 @@ export interface ProcessCommandExportOptions {
     standardInputContent?: string | null;
     /** A value indicating whether the entire process tree should be killed when the process is disposed. */
     killEntireProcessTree?: boolean | null;
+    /** A callback that creates the local process specification when the command is invoked. */
+    createProcessSpec?: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>;
     /** Optional command configuration. */
     commandOptions?: CommandOptions;
     /** The maximum number of stdout and stderr output lines returned as command result data. */
@@ -2840,6 +2842,8 @@ export interface DistributedApplicationExecutionContext {
     operation(): Promise<DistributedApplicationOperation>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
+    /** The `IServiceProvider` for the AppHost. */
+    services(): ServiceProviderPromise;
     /** Returns true if the current operation is publishing. */
     isPublishMode(): Promise<boolean>;
     /** Returns true if the current operation is running. */
@@ -2851,6 +2855,8 @@ export interface DistributedApplicationExecutionContextPromise extends PromiseLi
     operation(): Promise<DistributedApplicationOperation>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
+    /** The `IServiceProvider` for the AppHost. */
+    services(): ServiceProviderPromise;
     /** Returns true if the current operation is publishing. */
     isPublishMode(): Promise<boolean>;
     /** Returns true if the current operation is running. */
@@ -2901,6 +2907,17 @@ class DistributedApplicationExecutionContextImpl implements DistributedApplicati
         return new ServiceProviderPromiseImpl(promise, this._client, false);
     }
 
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting/DistributedApplicationExecutionContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
     async isPublishMode(): Promise<boolean> {
         return await this._client.invokeCapability<boolean>(
             'Aspire.Hosting/DistributedApplicationExecutionContext.isPublishMode',
@@ -2938,6 +2955,10 @@ class DistributedApplicationExecutionContextPromiseImpl implements DistributedAp
 
     serviceProvider(): ServiceProviderPromise {
         return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.serviceProvider()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
     isPublishMode(): Promise<boolean> {
@@ -11992,6 +12013,7 @@ export interface ContainerRegistryResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
     /**
@@ -12270,6 +12292,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
     /**
@@ -12786,6 +12809,15 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -12871,6 +12903,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -14053,7 +14086,10 @@ export interface ContainerResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): ContainerResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise;
     /**
@@ -14265,6 +14301,7 @@ export interface ContainerResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
     /**
@@ -14793,7 +14830,10 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): ContainerResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise;
     /**
@@ -15005,6 +15045,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
     /**
@@ -15893,7 +15934,10 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -16659,6 +16703,15 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -16744,6 +16797,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -18591,6 +18645,7 @@ export interface CSharpAppResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
     /**
@@ -19159,6 +19214,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
     /**
@@ -20409,6 +20465,15 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -20494,6 +20559,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -22293,6 +22359,7 @@ export interface DotnetToolResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
     /**
@@ -22883,6 +22950,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
     /**
@@ -24217,6 +24285,15 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -24302,6 +24379,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -26072,6 +26150,7 @@ export interface ExecutableResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
     /**
@@ -26629,6 +26708,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
     /**
@@ -27859,6 +27939,15 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -27944,6 +28033,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -29532,6 +29622,7 @@ export interface ExternalServiceResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
     /**
@@ -29815,6 +29906,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
     /**
@@ -30355,6 +30447,15 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -30440,6 +30541,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -31526,6 +31628,7 @@ export interface ParameterResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
     /**
@@ -31817,6 +31920,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
     /**
@@ -32375,6 +32479,15 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -32460,6 +32573,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -33698,6 +33812,7 @@ export interface ProjectResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
     /**
@@ -34266,6 +34381,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
     /**
@@ -35517,6 +35633,15 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -35602,6 +35727,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -37325,7 +37451,10 @@ export interface TestDatabaseResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestDatabaseResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise;
     /**
@@ -37537,6 +37666,7 @@ export interface TestDatabaseResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
     /**
@@ -38065,7 +38195,10 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withOtlpExporter(options?: WithOtlpExporterOptions): TestDatabaseResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise;
     /**
@@ -38277,6 +38410,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
     /**
@@ -39164,7 +39298,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -39930,6 +40067,15 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -40015,6 +40161,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -41814,7 +41961,10 @@ export interface TestRedisResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestRedisResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise;
     /**
@@ -42042,6 +42192,7 @@ export interface TestRedisResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
     /**
@@ -42618,7 +42769,10 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): TestRedisResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise;
     /**
@@ -42846,6 +43000,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
     /**
@@ -43781,7 +43936,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -44583,6 +44741,15 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -44668,6 +44835,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -46738,7 +46906,10 @@ export interface TestVaultResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestVaultResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise;
     /**
@@ -46950,6 +47121,7 @@ export interface TestVaultResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
     /**
@@ -47480,7 +47652,10 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): TestVaultResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise;
     /**
@@ -47692,6 +47867,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
     /**
@@ -48581,7 +48757,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -49347,6 +49526,15 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -49432,6 +49620,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -51457,6 +51646,7 @@ export interface Resource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
     /**
@@ -51735,6 +51925,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
     /**
@@ -52252,6 +52443,15 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         const __optionsForRpc = options === null ? options : { ...options };
         if (__optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
             const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
             if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
                 const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
@@ -52337,6 +52537,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);

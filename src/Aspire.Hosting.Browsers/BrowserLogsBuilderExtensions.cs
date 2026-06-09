@@ -156,11 +156,11 @@ public static class BrowserLogsBuilderExtensions
                 {
                     try
                     {
-                        var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
-                        var configurationStore = context.ServiceProvider.GetRequiredService<BrowserLogsConfigurationStore>();
+                        var configuration = context.Services.GetRequiredService<IConfiguration>();
+                        var configurationStore = context.Services.GetRequiredService<BrowserLogsConfigurationStore>();
                         var currentConfiguration = browserLogsResource.ResolveCurrentConfiguration(configuration, configurationStore);
                         var url = ResolveBrowserUrl(parentResource);
-                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var sessionManager = context.Services.GetRequiredService<IBrowserLogsSessionManager>();
                         await sessionManager.StartSessionAsync(browserLogsResource, currentConfiguration, context.ResourceName, url, context.CancellationToken).ConfigureAwait(false);
                         return CommandResults.Success();
                     }
@@ -183,7 +183,7 @@ public static class BrowserLogsBuilderExtensions
                             return ResourceCommandState.Disabled;
                         }
 
-                        var resourceNotifications = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
+                        var resourceNotifications = context.Services.GetRequiredService<ResourceNotificationService>();
                         if (resourceNotifications.TryGetCurrentState(parentResource.Name, out var resourceEvent))
                         {
                             var parentState = resourceEvent.Snapshot.State?.Text;
@@ -203,7 +203,7 @@ public static class BrowserLogsBuilderExtensions
                 {
                     try
                     {
-                        var configurationManager = context.ServiceProvider.GetRequiredService<BrowserLogsConfigurationManager>();
+                        var configurationManager = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
                         return await configurationManager.ConfigureAsync(browserLogsResource, context.Arguments, context.CancellationToken).ConfigureAwait(false);
                     }
                     catch (Exception ex)
@@ -224,7 +224,7 @@ public static class BrowserLogsBuilderExtensions
                     },
                     UpdateState = context =>
                     {
-                        var interactionService = context.ServiceProvider.GetRequiredService<IInteractionService>();
+                        var interactionService = context.Services.GetRequiredService<IInteractionService>();
                         return interactionService.IsAvailable
                             ? ResourceCommandState.Enabled
                             : ResourceCommandState.Disabled;
@@ -237,7 +237,7 @@ public static class BrowserLogsBuilderExtensions
                 {
                     try
                     {
-                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var sessionManager = context.Services.GetRequiredService<IBrowserLogsSessionManager>();
                         var result = await sessionManager.CaptureScreenshotAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
                         var resultJson = JsonSerializer.Serialize(
                             new BrowserLogsScreenshotCommandResult(

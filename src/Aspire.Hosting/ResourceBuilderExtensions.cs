@@ -3242,6 +3242,21 @@ public static class ResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        if (options.CreateProcessSpec is { } createProcessSpec)
+        {
+            return builder.WithProcessCommand(
+                commandName,
+                displayName,
+                async context =>
+                {
+                    var processCommandSpec = await createProcessSpec(context).ConfigureAwait(false)
+                        ?? throw new InvalidOperationException("The process command specification factory returned null.");
+
+                    return CreateProcessCommandSpec(processCommandSpec);
+                },
+                CreateProcessCommandOptions(options));
+        }
+
         return builder.WithProcessCommand(
             commandName,
             displayName,
@@ -3253,6 +3268,7 @@ public static class ResourceBuilderExtensions
     /// Adds a command to the resource that starts a local process created by a callback when invoked.
     /// </summary>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Obsolete("Use withProcessCommand with createProcessSpec in the options object instead.")]
     [AspireExport("withProcessCommandFactory")]
     internal static IResourceBuilder<TResource> WithProcessCommandFactoryExport<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -3280,7 +3296,7 @@ public static class ResourceBuilderExtensions
     internal static async Task<ExecuteCommandResult> ExecuteProcessCommandAsync(ExecuteCommandContext context, ProcessCommandSpec processCommandSpec, ProcessCommandOptions commandOptions)
     {
         var processSpec = CreateProcessSpec(context, processCommandSpec, commandOptions);
-        var processRunner = context.ServiceProvider.GetRequiredService<IProcessRunner>();
+        var processRunner = context.Services.GetRequiredService<IProcessRunner>();
         var (pendingProcessResult, processDisposable) = processRunner.Run(processSpec);
 
         await using (processDisposable.ConfigureAwait(false))
@@ -3461,10 +3477,11 @@ public static class ResourceBuilderExtensions
         {
             var resultContext = new ProcessCommandResultContext
             {
-                ServiceProvider = context.ServiceProvider,
+                Services = context.Services,
                 ResourceName = context.ResourceName,
                 Logger = context.Logger,
                 CancellationToken = context.CancellationToken,
+                Arguments = context.Arguments,
                 ProcessCommandSpec = processCommandSpec,
                 ExitCode = processResult.ExitCode,
                 Output = processResult.ProcessOutput,
@@ -3707,13 +3724,13 @@ public static class ResourceBuilderExtensions
                     return new ExecuteCommandResult { Success = false, Message = "Endpoints are not yet allocated." };
                 }
                 var uri = new UriBuilder(endpoint.Url) { Path = path }.Uri;
-                var httpClient = context.ServiceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
+                var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
                 var request = new HttpRequestMessage(commandOptions.Method, uri);
                 if (commandOptions.PrepareRequest is not null)
                 {
                     var requestContext = new HttpCommandRequestContext
                     {
-                        ServiceProvider = context.ServiceProvider,
+                        Services = context.Services,
                         ResourceName = context.ResourceName,
                         Endpoint = endpoint,
                         CancellationToken = context.CancellationToken,
@@ -3731,7 +3748,7 @@ public static class ResourceBuilderExtensions
                     {
                         var resultContext = new HttpCommandResultContext
                         {
-                            ServiceProvider = context.ServiceProvider,
+                            Services = context.Services,
                             ResourceName = context.ResourceName,
                             Endpoint = endpoint,
                             CancellationToken = context.CancellationToken,
