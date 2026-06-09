@@ -15,7 +15,7 @@ internal static class LaunchProfileExtensions
 
     internal static LaunchSettings? GetLaunchSettings(this ProjectResource projectResource)
     {
-        if (!projectResource.TryGetProjectAnnotation(out var projectMetadata))
+        if (!projectResource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
         {
             throw new DistributedApplicationException(LaunchProfileStrings.ProjectDoesNotContainMetadataExceptionMessage);
         }
@@ -189,7 +189,7 @@ internal static class LaunchProfileExtensions
 
     internal static string? SelectLaunchProfileName(this IResource resource)
     {
-        if (!resource.TryGetProjectAnnotation(out var projectMetadata))
+        if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
         {
             return null;
         }

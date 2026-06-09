@@ -143,7 +143,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         {
             if (!project.TryGetProjectAnnotation(out var projectMetadata))
             {
-                continue;
+                throw new InvalidOperationException($"Project resource '{project.Name}' is missing required project metadata annotation, despite being returned from GetProjectAnnotatedResources().");
             }
 
             EnsureRequiredAnnotations(project);
@@ -294,7 +294,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         {
             if (!executable.TryGetExecutableAnnotation(out var executableAnnotation))
             {
-                continue;
+                throw new InvalidOperationException($"Executable resource '{executable.Name}' is missing required executable annotation, despite being returned from GetExecutableAnnotatedResources().");
             }
 
             EnsureRequiredAnnotations(executable);
@@ -557,8 +557,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             ?? (Debugger.IsAttached ? ExecutableLaunchMode.Debug : ExecutableLaunchMode.NoDebug);
 
         projectLaunchConfiguration.DisableLaunchProfile = project.TryGetLastAnnotation<ExcludeLaunchProfileAnnotation>(out _);
-        // Only ProjectResource currently carries the launch profile selection helpers. Resources detected via
-        // IProjectMetadata still get the standard project launch configuration, just without inferred profile selection.
+
         if (!projectLaunchConfiguration.DisableLaunchProfile && project.GetEffectiveLaunchProfile() is NamedLaunchProfile namedLaunchProfile)
         {
             projectLaunchConfiguration.LaunchProfile = namedLaunchProfile.Name;

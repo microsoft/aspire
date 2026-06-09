@@ -65,5 +65,5 @@ public static class ProjectResourceExtensions
                 yield return resource;
             }
         }
-    }    
+    }
 }
