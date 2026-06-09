@@ -89,12 +89,17 @@ public class WorkspaceMemberDiscoveryTests
     }
 
     [Fact]
-    public void DiscoverThrowsForUnsupportedPattern()
+    public void DiscoverResolvesRecursivePattern()
     {
         using var root = new TempRoot();
         root.WriteFile("package.json", """{ "name": "root", "workspaces": ["packages/**"] }""");
+        root.WriteMember("packages/web", "web");
+        root.WriteMember("packages/group/api", "api");
 
-        Assert.Throws<DistributedApplicationException>(() => WorkspaceMemberDiscovery.Discover(root.Path, "npm"));
+        var info = WorkspaceMemberDiscovery.Discover(root.Path, "npm");
+
+        Assert.Equal(["packages/group/api", "packages/web"], info.WorkspaceDirs);
+        Assert.Equal(["api", "web"], info.Members.Select(m => m.PackageName).OrderBy(n => n, StringComparer.Ordinal));
     }
 
     [Fact]

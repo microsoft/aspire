@@ -79,20 +79,11 @@ internal static class WorkspaceConfigurationValidator
                 "Run the package manager's install at the workspace root before publishing.");
         }
 
-        // 3. Pattern shape validation. Parse first, then run the shape validator inside a try/catch so a
-        //    bad glob joins the aggregated diagnostics instead of throwing before the other checks run.
+        // 3. Member discovery (reuses the cached WorkspaceInfo). Detect patterns that resolved to zero
+        //    members. Glob shapes themselves are no longer rejected: the expander resolves the full
+        //    pnpm/npm/yarn/bun glob vocabulary (recursive **, single-segment *, negation), so the only
+        //    pattern-level failure left is "matched nothing", which the check below reports.
         var rawPatterns = ReadDeclaredPatterns(root, configuredPm);
-        try
-        {
-            WorkspacePatternValidator.Validate(rawPatterns, root);
-        }
-        catch (DistributedApplicationException ex)
-        {
-            diagnostics.Add(ex.Message);
-        }
-
-        // 4. Member discovery (reuses the cached WorkspaceInfo). Build the declared-name set and detect
-        //    patterns that resolved to zero members.
         var workspaceInfo = workspace.GetWorkspaceInfo(configuredPm);
         if (rawPatterns.Count > 0 && workspaceInfo.WorkspaceDirs.Count == 0)
         {
@@ -101,13 +92,13 @@ internal static class WorkspaceConfigurationValidator
                 "did not match any directory containing a package.json.");
         }
 
-        // 5. Package-manager <-> lockfile / pnpm-workspace.yaml / packageManager-field consistency.
+        // 4. Package-manager <-> lockfile / pnpm-workspace.yaml / packageManager-field consistency.
         if (!string.IsNullOrEmpty(configuredPm))
         {
             ValidatePackageManagerConsistency(root, configuredPm, diagnostics);
         }
 
-        // 6. pnpm 10 deploy: PublishAsPackageScript generates a `pnpm deploy` Dockerfile that needs
+        // 5. pnpm 10 deploy: PublishAsPackageScript generates a `pnpm deploy` Dockerfile that needs
         //    injectWorkspacePackages. Only relevant in publish/deploy mode.
         if (isPublishMode &&
             string.Equals(configuredPm, "pnpm", StringComparison.Ordinal) &&
@@ -117,7 +108,7 @@ internal static class WorkspaceConfigurationValidator
             ValidatePnpmDeployConfiguration(root, diagnostics);
         }
 
-        // 7. Per-app member-name typo + script existence. WHY name vs dir: the user supplies the package
+        // 6. Per-app member-name typo + script existence. WHY name vs dir: the user supplies the package
         //    NAME (used by --filter/--workspace/workspace <name>) but the expander resolves DIRECTORIES,
         //    so we compare against the dir->name map built by WorkspaceMemberDiscovery.
         var memberNames = workspaceInfo.Members

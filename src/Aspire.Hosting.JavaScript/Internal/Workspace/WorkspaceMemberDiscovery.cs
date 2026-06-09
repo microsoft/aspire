@@ -7,8 +7,8 @@ using System.Text.Json.Serialization;
 namespace Aspire.Hosting.JavaScript.Internal.Workspace;
 
 // The single member-discovery orchestrator for JS workspaces. It ties together the
-// otherwise-independent pure parsers, the shape validator, and the (filesystem-touching)
-// pattern expander into one entry point that produces a fully populated WorkspaceInfo.
+// otherwise-independent pure parsers and the (filesystem-touching) pattern expander
+// into one entry point that produces a fully populated WorkspaceInfo.
 //
 // This is the single documented filesystem boundary for member discovery: only the
 // expander (Directory.Enumerate*), WorkspaceManifestDiscovery (File.Exists), and the
@@ -37,19 +37,12 @@ internal static class WorkspaceMemberDiscovery
     /// A populated <see cref="WorkspaceInfo"/> carrying the resolved member directories,
     /// the dir-&gt;name member pairs, the root manifest files/dirs, and the root app name.
     /// </returns>
-    /// <exception cref="DistributedApplicationException">
-    /// Thrown when a declared workspace pattern uses an unsupported glob shape.
-    /// </exception>
     public static WorkspaceInfo Discover(string workspaceRootPath, string packageManagerExecutable)
     {
         ArgumentException.ThrowIfNullOrEmpty(workspaceRootPath);
         ArgumentException.ThrowIfNullOrEmpty(packageManagerExecutable);
 
         var patterns = ReadDeclaredPatterns(workspaceRootPath, packageManagerExecutable);
-
-        // Fail early with a declaration-site error rather than letting an unsupported
-        // glob silently resolve to zero members downstream.
-        WorkspacePatternValidator.Validate(patterns, workspaceRootPath);
 
         var memberDirs = WorkspacePatternExpander.Expand(workspaceRootPath, patterns);
 
