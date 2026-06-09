@@ -610,7 +610,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		})
 
 		zoneInput := interactionService.CreateChoiceInput("zone").WithDynamicLoading(func(loadContext aspire.InteractionInputLoadContext) {
-			region, _ := loadContext.GetInputValue("region")
+			region, _ := loadContext.Inputs().Value("region")
 			zones := []*aspire.InteractionChoiceOption{{Value: "us-east", Label: "US East"}, {Value: "us-west", Label: "US West"}}
 			if region == "eu" {
 				zones = []*aspire.InteractionChoiceOption{{Value: "eu-west", Label: "EU West"}, {Value: "eu-north", Label: "EU North"}}
@@ -707,7 +707,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		dependentInput := interactionService.CreateChoiceInput("shade").WithDynamicLoading(func(loadContext aspire.InteractionInputLoadContext) {
 			input := loadContext.Input()
 			inputName, _ := input.GetName()
-			color, _ := loadContext.GetInputValue("color")
+			color, _ := loadContext.Inputs().Value("color")
 			shades := []*aspire.InteractionChoiceOption{{Value: "lime", Label: "Lime"}, {Value: "forest", Label: "Forest"}}
 			if color == "r" {
 				shades = []*aspire.InteractionChoiceOption{{Value: "crimson", Label: "Crimson"}, {Value: "scarlet", Label: "Scarlet"}}

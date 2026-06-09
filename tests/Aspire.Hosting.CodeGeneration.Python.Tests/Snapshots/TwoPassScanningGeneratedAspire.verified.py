@@ -5367,6 +5367,15 @@ class InteractionInputLoadContext:
         """The underlying object reference handle."""
         return self._handle
 
+    @_cached_property
+    def inputs(self) -> InteractionInputCollection:
+        """Gets all inputs in the prompt, including the one currently loading."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/InteractionInputLoadContext.inputs',
+            {'context': self._handle}
+        )
+        return typing.cast(InteractionInputCollection, result)
+
     def input(self) -> InteractionLoadingInput:
         """Gets a handle to the input that is loading. Mutate the input through this handle."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
@@ -5375,16 +5384,6 @@ class InteractionInputLoadContext:
             rpc_args,
         )
         return typing.cast(InteractionLoadingInput, result)
-
-    def get_input_value(self, input_name: str) -> str:
-        """Gets the current value of an input in the prompt by name."""
-        rpc_args: dict[str, typing.Any] = {'context': self._handle}
-        rpc_args['inputName'] = input_name
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.Ats/getInputValue',
-            rpc_args,
-        )
-        return result
 
 
 class InteractionLoadingInput:

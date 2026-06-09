@@ -5884,6 +5884,17 @@ class InteractionInputBuilderPromiseImpl implements InteractionInputBuilderPromi
 export interface InteractionInputLoadContext {
     toJSON(): MarshalledHandle;
     /**
+     * Gets all inputs in the prompt, including the one currently loading.
+     *
+     * Mirrors the native `LoadInputContext.AllInputs`. Use the collection's by-name accessors (for example
+     * `value` or `requiredValue`) to read the dependency inputs declared via
+     * `DependsOnInputs`. This is the same `InteractionInputCollection`
+     * idiom used by the validation callback and prompt results, so reading inputs by name is consistent across every
+     * callback context. This is exposed as a property (rather than a method) so it routes through the generated
+     * collection accessor, matching the other contexts that surface an `InteractionInputCollection`.
+     */
+    inputs(): InteractionInputCollectionPromise;
+    /**
      * Gets a handle to the input that is loading. Mutate the input through this handle.
      *
      * Mirrors the native `LoadInputContext.Input`: the callback updates the live input it is loading, rather than
@@ -5892,19 +5903,21 @@ export interface InteractionInputLoadContext {
      * @returns A handle to the loading input.
      */
     input(): InteractionLoadingInputPromise;
-    /**
-     * Gets the current value of an input in the prompt by name.
-     *
-     * Reads any input in the prompt, mirroring the native `LoadInputContext.AllInputs`. Use this to read the
-     * dependency inputs declared via `DependsOnInputs`.
-     * @param inputName The name of the input to read.
-     * @returns The input value, or an empty string when the input has no value or no input with that name exists.
-     */
-    getInputValue(inputName: string): Promise<string>;
 }
 
 export interface InteractionInputLoadContextPromise extends PromiseLike<InteractionInputLoadContext> {
     /**
+     * Gets all inputs in the prompt, including the one currently loading.
+     *
+     * Mirrors the native `LoadInputContext.AllInputs`. Use the collection's by-name accessors (for example
+     * `value` or `requiredValue`) to read the dependency inputs declared via
+     * `DependsOnInputs`. This is the same `InteractionInputCollection`
+     * idiom used by the validation callback and prompt results, so reading inputs by name is consistent across every
+     * callback context. This is exposed as a property (rather than a method) so it routes through the generated
+     * collection accessor, matching the other contexts that surface an `InteractionInputCollection`.
+     */
+    inputs(): InteractionInputCollectionPromise;
+    /**
      * Gets a handle to the input that is loading. Mutate the input through this handle.
      *
      * Mirrors the native `LoadInputContext.Input`: the callback updates the live input it is loading, rather than
@@ -5913,15 +5926,6 @@ export interface InteractionInputLoadContextPromise extends PromiseLike<Interact
      * @returns A handle to the loading input.
      */
     input(): InteractionLoadingInputPromise;
-    /**
-     * Gets the current value of an input in the prompt by name.
-     *
-     * Reads any input in the prompt, mirroring the native `LoadInputContext.AllInputs`. Use this to read the
-     * dependency inputs declared via `DependsOnInputs`.
-     * @param inputName The name of the input to read.
-     * @returns The input value, or an empty string when the input has no value or no input with that name exists.
-     */
-    getInputValue(inputName: string): Promise<string>;
 }
 
 // ============================================================================
@@ -5934,6 +5938,13 @@ class InteractionInputLoadContextImpl implements InteractionInputLoadContext {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._client.invokeCapability<InteractionInputCollection>(
+            'Aspire.Hosting.Ats/InteractionInputLoadContext.inputs',
+            { context: this._handle }
+        ), this._client, false);
+    }
 
     /** @internal */
     async _inputInternal(): Promise<InteractionLoadingInput> {
@@ -5957,22 +5968,6 @@ class InteractionInputLoadContextImpl implements InteractionInputLoadContext {
         return new InteractionLoadingInputPromiseImpl(this._inputInternal(), this._client);
     }
 
-    /**
-     * Gets the current value of an input in the prompt by name.
-     *
-     * Reads any input in the prompt, mirroring the native `LoadInputContext.AllInputs`. Use this to read the
-     * dependency inputs declared via `DependsOnInputs`.
-     * @param inputName The name of the input to read.
-     * @returns The input value, or an empty string when the input has no value or no input with that name exists.
-     */
-    async getInputValue(inputName: string): Promise<string> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle, inputName };
-        return await this._client.invokeCapability<string>(
-            'Aspire.Hosting.Ats/getInputValue',
-            rpcArgs
-        );
-    }
-
 }
 
 /**
@@ -5990,12 +5985,12 @@ class InteractionInputLoadContextPromiseImpl implements InteractionInputLoadCont
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    input(): InteractionLoadingInputPromise {
-        return new InteractionLoadingInputPromiseImpl(this._promise.then(obj => obj.input()), this._client);
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._promise.then(obj => obj.inputs()), this._client, false);
     }
 
-    getInputValue(inputName: string): Promise<string> {
-        return this._promise.then(obj => obj.getInputValue(inputName));
+    input(): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._promise.then(obj => obj.input()), this._client);
     }
 
 }

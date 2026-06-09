@@ -12297,6 +12297,15 @@ impl InteractionInputLoadContext {
         &self.client
     }
 
+    /// Gets all inputs in the prompt, including the one currently loading.
+    pub fn inputs(&self) -> Result<InteractionInputCollection, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Ats/InteractionInputLoadContext.inputs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(InteractionInputCollection::new(handle, self.client.clone()))
+    }
+
     /// Gets a handle to the input that is loading. Mutate the input through this handle.
     pub fn input(&self) -> Result<InteractionLoadingInput, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -12304,15 +12313,6 @@ impl InteractionInputLoadContext {
         let result = self.client.invoke_capability("Aspire.Hosting.Ats/input", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(InteractionLoadingInput::new(handle, self.client.clone()))
-    }
-
-    /// Gets the current value of an input in the prompt by name.
-    pub fn get_input_value(&self, input_name: &str) -> Result<String, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        args.insert("inputName".to_string(), serde_json::to_value(&input_name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting.Ats/getInputValue", args)?;
-        Ok(serde_json::from_value(result)?)
     }
 }
 

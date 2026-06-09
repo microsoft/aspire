@@ -16356,8 +16356,8 @@ func (s *interactionInputCollection) RequiredValue(name string) (string, error) 
 // InteractionInputLoadContext is the public interface for handle type InteractionInputLoadContext.
 type InteractionInputLoadContext interface {
 	handleReference
-	GetInputValue(inputName string) (string, error)
 	Input() InteractionLoadingInput
+	Inputs() InteractionInputCollection
 	Err() error
 }
 
@@ -16369,22 +16369,6 @@ type interactionInputLoadContext struct {
 // newInteractionInputLoadContextFromHandle wraps an existing handle as InteractionInputLoadContext.
 func newInteractionInputLoadContextFromHandle(h *handle, c *client) InteractionInputLoadContext {
 	return &interactionInputLoadContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
-}
-
-// GetInputValue gets the current value of an input in the prompt by name.
-func (s *interactionInputLoadContext) GetInputValue(inputName string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["inputName"] = serializeValue(inputName)
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/getInputValue", reqArgs)
-	if err != nil {
-		var zero string
-		return zero, err
-	}
-	return decodeAs[string](result)
 }
 
 // Input gets a handle to the input that is loading. Mutate the input through this handle.
@@ -16404,6 +16388,25 @@ func (s *interactionInputLoadContext) Input() InteractionLoadingInput {
 		return &interactionLoadingInput{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &interactionLoadingInput{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Inputs gets all inputs in the prompt, including the one currently loading.
+func (s *interactionInputLoadContext) Inputs() InteractionInputCollection {
+	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/InteractionInputLoadContext.inputs", reqArgs)
+	if err != nil {
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Ats/InteractionInputLoadContext.inputs returned unexpected type %T", result)
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // InteractionLoadingInput is the public interface for handle type InteractionLoadingInput.

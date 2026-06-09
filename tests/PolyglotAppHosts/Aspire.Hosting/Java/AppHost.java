@@ -293,7 +293,7 @@ void main() throws Exception {
                 new CreateChoiceInputOptions().choices(new InteractionChoiceOption[] { opt("us", "United States"), opt("eu", "Europe") }));
 
             var zoneInput = interactionService.createChoiceInput("zone").withDynamicLoading((loadContext) -> {
-                var region = loadContext.getInputValue("region");
+                var region = loadContext.inputs().value("region");
                 InteractionChoiceOption[] zones = "eu".equals(region)
                     ? new InteractionChoiceOption[] { opt("eu-west", "EU West"), opt("eu-north", "EU North") }
                     : new InteractionChoiceOption[] { opt("us-east", "US East"), opt("us-west", "US West") };
@@ -385,7 +385,7 @@ void main() throws Exception {
             var dependentInput = interactionService.createChoiceInput("shade").withDynamicLoading((loadContext) -> {
                 var input = loadContext.input();
                 var inputName = input.getName();
-                var color = loadContext.getInputValue("color");
+                var color = loadContext.inputs().value("color");
                 InteractionChoiceOption[] shades = "r".equals(color)
                     ? new InteractionChoiceOption[] { opt("crimson", "Crimson"), opt("scarlet", "Scarlet") }
                     : new InteractionChoiceOption[] { opt("lime", "Lime"), opt("forest", "Forest") };

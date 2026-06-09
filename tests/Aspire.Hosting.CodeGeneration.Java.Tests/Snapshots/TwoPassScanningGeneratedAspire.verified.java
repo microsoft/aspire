@@ -15357,21 +15357,20 @@ public class InteractionInputLoadContext extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets all inputs in the prompt, including the one currently loading. */
+    public InteractionInputCollection inputs() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/InteractionInputLoadContext.inputs", reqArgs);
+        return (InteractionInputCollection) result;
+    }
+
     /** Gets a handle to the input that is loading. Mutate the input through this handle. */
     public InteractionLoadingInput input() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.Ats/input", reqArgs);
         return (InteractionLoadingInput) result;
-    }
-
-    /** Gets the current value of an input in the prompt by name. */
-    public String getInputValue(String inputName) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("inputName", AspireClient.serializeValue(inputName));
-        var result = getClient().invokeCapability("Aspire.Hosting.Ats/getInputValue", reqArgs);
-        return (String) result;
     }
 
 }

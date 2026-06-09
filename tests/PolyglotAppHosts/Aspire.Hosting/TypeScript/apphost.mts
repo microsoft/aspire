@@ -778,7 +778,7 @@ await container.withCommand("pick-zone", "Pick Zone", async (ctx) => {
     const zoneInput = await interactionService
         .createChoiceInput("zone")
         .withDynamicLoading(async (loadContext) => {
-            const region = await loadContext.getInputValue("region");
+            const region = await loadContext.inputs().value("region");
 
             const zones: InteractionChoiceOption[] = region === "eu"
                 ? [{ value: "eu-west", label: "EU West" }, { value: "eu-north", label: "EU North" }]
@@ -852,7 +852,7 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
         .withDynamicLoading(async (loadContext) => {
             const input = loadContext.input();
             const inputName = await input.getName();
-            const color = await loadContext.getInputValue("color");
+            const color = await loadContext.inputs().value("color");
 
             await input.setChoiceOptions(color === "r"
                 ? [{ value: "crimson", label: "Crimson" }, { value: "scarlet", label: "Scarlet" }]

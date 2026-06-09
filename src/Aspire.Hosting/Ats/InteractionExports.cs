@@ -339,7 +339,7 @@ internal sealed class InteractionInputBuilder
 /// The context passed to a polyglot dynamic-loading callback. Exposes the loading input as a handle and provides
 /// read access to the other inputs in the prompt.
 /// </summary>
-[AspireExport]
+[AspireExport(ExposeProperties = true)]
 internal sealed class InteractionInputLoadContext
 {
     private readonly LoadInputContext _inner;
@@ -367,21 +367,17 @@ internal sealed class InteractionInputLoadContext
     }
 
     /// <summary>
-    /// Gets the current value of an input in the prompt by name.
+    /// Gets all inputs in the prompt, including the one currently loading.
     /// </summary>
-    /// <param name="inputName">The name of the input to read.</param>
-    /// <returns>The input value, or an empty string when the input has no value or no input with that name exists.</returns>
     /// <remarks>
-    /// Reads any input in the prompt, mirroring the native <c>LoadInputContext.AllInputs</c>. Use this to read the
-    /// dependency inputs declared via <see cref="DynamicLoadingOptions.DependsOnInputs"/>.
+    /// Mirrors the native <c>LoadInputContext.AllInputs</c>. Use the collection's by-name accessors (for example
+    /// <c>value</c> or <c>requiredValue</c>) to read the dependency inputs declared via
+    /// <see cref="DynamicLoadingOptions.DependsOnInputs"/>. This is the same <see cref="InteractionInputCollection"/>
+    /// idiom used by the validation callback and prompt results, so reading inputs by name is consistent across every
+    /// callback context. This is exposed as a property (rather than a method) so it routes through the generated
+    /// collection accessor, matching the other contexts that surface an <see cref="InteractionInputCollection"/>.
     /// </remarks>
-    [AspireExport]
-    public string GetInputValue(string inputName)
-    {
-        ArgumentNullException.ThrowIfNull(inputName);
-
-        return _inner.AllInputs.TryGetByName(inputName, out var input) ? input.Value ?? string.Empty : string.Empty;
-    }
+    public InteractionInputCollection Inputs => _inner.AllInputs;
 }
 
 /// <summary>

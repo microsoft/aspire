@@ -463,7 +463,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         )
 
         def load_zones(load_context):
-            region = load_context.get_input_value("region")
+            region = load_context.inputs().value("region")
             zones = ([{"Value": "eu-west", "Label": "EU West"}, {"Value": "eu-north", "Label": "EU North"}]
                      if region == "eu"
                      else [{"Value": "us-east", "Label": "US East"}, {"Value": "us-west", "Label": "US West"}])
@@ -545,7 +545,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         def load_shade(load_context):
             input = load_context.input()
             input_name = input.get_name()
-            color = load_context.get_input_value("color")
+            color = load_context.inputs().value("color")
             input.set_choice_options(
                 [{"Value": "crimson", "Label": "Crimson"}, {"Value": "scarlet", "Label": "Scarlet"}]
                 if color == "r"
