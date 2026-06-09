@@ -94,7 +94,7 @@ parameters:
     default: false
 
   - name: SkipHomebrewValidation
-    displayName: '[Advanced] Skip Homebrew cask validation against live GitHub release (re-run after success)'
+    displayName: '[Advanced] Skip Homebrew cask validation against live GitHub release (default; set false to opt in)'
     type: boolean
     default: true
 
