@@ -74,6 +74,11 @@ internal static class TelemetryConstants
         public const string CliBuildId = "aspire.cli.build_id";
 
         /// <summary>
+        /// Tag for the detected coding agent that invoked the CLI process.
+        /// </summary>
+        public const string CodingAgent = "process.coding_agent";
+
+        /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
         /// </summary>
         public const string DeploymentEnvironmentName = "deployment.environment.name";
