@@ -337,6 +337,7 @@ internal sealed class GuestRuntime
         {
             var replaced = arg
                 .Replace("{appHostFile}", appHostFile?.FullName ?? "")
+                .Replace("{compiledAppHostFile}", GetCompiledAppHostFilePath(appHostFile, directory) ?? "")
                 .Replace("{appHostDir}", directory.FullName);
 
             if (replaced.Contains("{args}"))
@@ -363,5 +364,17 @@ internal sealed class GuestRuntime
         }
 
         return result.ToArray();
+    }
+
+    private static string? GetCompiledAppHostFilePath(FileInfo? appHostFile, DirectoryInfo directory)
+    {
+        if (appHostFile is null)
+        {
+            return null;
+        }
+
+        var relativePath = Path.GetRelativePath(directory.FullName, appHostFile.FullName);
+        var compiledRelativePath = Path.ChangeExtension(relativePath, appHostFile.Extension.Equals(".mts", StringComparison.OrdinalIgnoreCase) ? ".mjs" : ".js");
+        return Path.Combine(directory.FullName, "dist", "apphost", compiledRelativePath);
     }
 }

@@ -29,6 +29,8 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string AppHostFileName = "apphost.mts";
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
+    private const string AppHostTypeCheckTsBuildInfoFileName = "./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo";
+    private const string AppHostCompileTsBuildInfoFileName = "./node_modules/.tmp/tsconfig.apphost.compile.tsbuildinfo";
     private const string AppHostPackageName = "aspire-apphost";
     private const string EslintConfigFileName = "eslint.config.mjs";
 
@@ -145,6 +147,9 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         var scripts = EnsureObject(packageJson, "scripts");
         scripts["aspire:lint"] = "eslint apphost.mts";
         scripts["aspire:start"] = "aspire run";
+        scripts["aspire:typecheck"] = $"tsgo --noEmit --incremental --tsBuildInfoFile {AppHostTypeCheckTsBuildInfoFileName} -p {AppHostTsConfigFileName}";
+        scripts["aspire:compile"] = $"tsgo --incremental --tsBuildInfoFile {AppHostCompileTsBuildInfoFileName} -p {AppHostTsConfigFileName}";
+        scripts["aspire:execute"] = $"tsx --tsconfig {AppHostTsConfigFileName}";
         scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
 
@@ -160,6 +165,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 
         EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");
         EnsureDependency(packageJson, "devDependencies", "@types/node", "^22.0.0");
+        EnsureDependency(packageJson, "devDependencies", "@typescript/native-preview", "^7.0.0-dev.20260523.1");
         EnsureDependency(packageJson, "devDependencies", "eslint", "^10.0.3");
         EnsureDependency(packageJson, "devDependencies", "nodemon", "^3.1.14");
         EnsureDependency(packageJson, "devDependencies", "tsx", "^4.21.0");
@@ -261,14 +267,14 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             [
                 new CommandSpec
                 {
-                    Command = "npx",
-                    Args = ["--no-install", "tsc", "--noEmit", "-p", AppHostTsConfigFileName]
+                    Command = "npm",
+                    Args = ["run", "aspire:typecheck"]
                 }
             ],
             Execute = new CommandSpec
             {
-                Command = "npx",
-                Args = ["--no-install", "tsx", "--tsconfig", AppHostTsConfigFileName, "{appHostFile}"]
+                Command = "npm",
+                Args = ["run", "aspire:execute", "--", "{appHostFile}"]
             },
             WatchExecute = new CommandSpec
             {
@@ -281,7 +287,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--ext", "ts,mts",
                     "--ignore", "node_modules/",
                     "--ignore", ".aspire/modules/",
-                    "--exec", $"npx --no-install tsc --noEmit -p {AppHostTsConfigFileName} && npx --no-install tsx --tsconfig {AppHostTsConfigFileName} \"{{appHostFile}}\""
+                    "--exec", "npm run aspire:typecheck && npm run aspire:execute -- \"{appHostFile}\""
                 ]
             },
             MigrationFiles = new Dictionary<string, string>

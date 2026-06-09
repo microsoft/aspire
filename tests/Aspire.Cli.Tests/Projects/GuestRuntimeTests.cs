@@ -181,6 +181,27 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         Assert.Equal("run-cmd", launcher.Calls[1].Command);
     }
 
+    [Theory]
+    [InlineData("apphost.mts", "dist/apphost/apphost.mjs")]
+    [InlineData("apphost.ts", "dist/apphost/apphost.js")]
+    [InlineData("src/apphost.mts", "dist/apphost/src/apphost.mjs")]
+    public async Task RunAsync_ReplacesCompiledAppHostFilePlaceholder(string appHostRelativePath, string compiledRelativePath)
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var directory = new DirectoryInfo(tempDirectory.Path);
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, appHostRelativePath));
+        var expectedCompiledPath = Path.Combine(directory.FullName, compiledRelativePath);
+        var spec = CreateTestSpec(execute: new CommandSpec { Command = "node", Args = ["{compiledAppHostFile}"] });
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+
+        await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("node", call.Command);
+        Assert.Equal([expectedCompiledPath], call.Args);
+    }
+
     [Fact]
     public async Task RunAsync_NoBuildSkipsTypeScriptTscAndRunsAppHost()
     {

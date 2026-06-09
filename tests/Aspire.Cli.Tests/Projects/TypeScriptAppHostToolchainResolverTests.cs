@@ -264,7 +264,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["install"], runtimeSpec.InstallDependencies!.Args);
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("bun", preExecute.Command);
-        Assert.Equal(["run", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
+        Assert.Equal(["run", "aspire:typecheck"], preExecute.Args);
         Assert.Equal("bun", runtimeSpec.Execute.Command);
         Assert.Equal(["run", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.NotNull(runtimeSpec.WatchExecute);
@@ -278,7 +278,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 "--ext", "ts,mts",
                 "--ignore", "node_modules/",
                 "--ignore", ".aspire/modules/",
-                "--exec", "bun run tsc --noEmit -p tsconfig.apphost.json && bun run \"{appHostFile}\""
+                "--exec", "bun run aspire:typecheck && bun run \"{appHostFile}\""
             ],
             runtimeSpec.WatchExecute!.Args);
         Assert.Equal("node", runtimeSpec.ExtensionLaunchCapability);
@@ -293,11 +293,11 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("yarn", preExecute.Command);
-        Assert.Equal(["run", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
+        Assert.Equal(["run", "aspire:typecheck"], preExecute.Args);
         Assert.Equal("yarn", runtimeSpec.Execute.Command);
-        Assert.Equal(["run", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal(["run", "aspire:execute", "--", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("yarn", runtimeSpec.WatchExecute?.Command);
-        Assert.Contains("yarn run tsc --noEmit -p tsconfig.apphost.json && yarn run tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
+        Assert.Contains("yarn run aspire:typecheck && yarn run aspire:execute -- \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
     }
 
     [Fact]
@@ -312,11 +312,51 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["install", "--ignore-workspace"], installDependencies.Args);
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("pnpm", preExecute.Command);
-        Assert.Equal(["exec", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
+        Assert.Equal(["run", "aspire:typecheck"], preExecute.Args);
         Assert.Equal("pnpm", runtimeSpec.Execute.Command);
-        Assert.Equal(["exec", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal(["run", "aspire:execute", "--", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("pnpm", runtimeSpec.WatchExecute?.Command);
-        Assert.Contains("pnpm exec tsc --noEmit -p tsconfig.apphost.json && pnpm exec tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
+        Assert.Contains("pnpm run aspire:typecheck && pnpm run aspire:execute -- \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
+    }
+
+    [Fact]
+    public void ApplyToRuntimeSpec_WhenNpmSelected_UsesPackageScripts()
+    {
+        var baseRuntimeSpec = CreateBaseRuntimeSpec();
+
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Npm);
+
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
+        Assert.Equal("npm", preExecute.Command);
+        Assert.Equal(["run", "aspire:typecheck"], preExecute.Args);
+        Assert.Equal("npm", runtimeSpec.Execute.Command);
+        Assert.Equal(["run", "aspire:execute", "--", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal("npx", runtimeSpec.WatchExecute?.Command);
+        Assert.Contains("npm run aspire:typecheck && npm run aspire:execute -- \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
+    }
+
+    [Theory]
+    [InlineData(0, "npm", "npx", "node", "node \"{compiledAppHostFile}\"")]
+    [InlineData(1, "bun", "bun", "bun", "bun run \"{compiledAppHostFile}\"")]
+    [InlineData(2, "yarn", "yarn", "node", "node \"{compiledAppHostFile}\"")]
+    [InlineData(3, "pnpm", "pnpm", "node", "node \"{compiledAppHostFile}\"")]
+    public void ApplyToRuntimeSpec_WhenCompiledRunnerEnabled_CompilesThenRunsCompiledAppHost(int toolchainValue, string commandName, string watchCommandName, string executeCommand, string watchExecuteCommand)
+    {
+        var toolchain = (TypeScriptAppHostToolchain)toolchainValue;
+        var baseRuntimeSpec = CreateBaseRuntimeSpec();
+
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, toolchain, useCompiledRunner: true);
+
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
+        Assert.Equal(commandName, preExecute.Command);
+        Assert.Equal(["run", "aspire:compile"], preExecute.Args);
+        Assert.Equal(executeCommand, runtimeSpec.Execute.Command);
+        var expectedExecuteArgs = toolchain == TypeScriptAppHostToolchain.Bun
+            ? new[] { "run", "{compiledAppHostFile}" }
+            : new[] { "{compiledAppHostFile}" };
+        Assert.Equal(expectedExecuteArgs, runtimeSpec.Execute.Args);
+        Assert.Equal(watchCommandName, runtimeSpec.WatchExecute?.Command);
+        Assert.Contains($"{commandName} run aspire:compile && {watchExecuteCommand}", runtimeSpec.WatchExecute?.Args ?? []);
     }
 
     private static RuntimeSpec CreateBaseRuntimeSpec()

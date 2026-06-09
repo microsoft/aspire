@@ -5,6 +5,9 @@
   "scripts": {
     "aspire:lint": "eslint apphost.mts",
     "aspire:start": "aspire run",
+    "aspire:typecheck": "tsgo --noEmit --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.typecheck.tsbuildinfo -p tsconfig.apphost.json",
+    "aspire:compile": "tsgo --incremental --tsBuildInfoFile ./node_modules/.tmp/tsconfig.apphost.compile.tsbuildinfo -p tsconfig.apphost.json",
+    "aspire:execute": "tsx --tsconfig tsconfig.apphost.json",
     "aspire:build": "tsc -p tsconfig.apphost.json",
     "aspire:dev": "tsc --watch -p tsconfig.apphost.json",
     "lint": "npm run aspire:lint",
@@ -22,6 +25,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@typescript/native-preview": "^7.0.0-dev.20260523.1",
     "eslint": "^10.0.3",
     "nodemon": "^3.1.14",
     "tsx": "^4.21.0",

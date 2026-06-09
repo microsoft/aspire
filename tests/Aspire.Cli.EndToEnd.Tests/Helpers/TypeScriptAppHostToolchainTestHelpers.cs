@@ -73,15 +73,19 @@ internal static class TypeScriptAppHostToolchainTestHelpers
     /// <summary>
     /// Gets the no-emit type-check command for a toolchain.
     /// </summary>
-    internal static string GetTypeCheckCommand(string toolchain, string tsConfigFileName) =>
-        NormalizeToolchain(toolchain) switch
+    internal static string GetTypeCheckCommand(string toolchain, string tsConfigFileName)
+    {
+        _ = tsConfigFileName;
+
+        return NormalizeToolchain(toolchain) switch
         {
-            "bun" => $"bun run tsc --noEmit -p {tsConfigFileName}",
-            "yarn" => $"yarn run tsc --noEmit -p {tsConfigFileName}",
-            "pnpm" => $"pnpm exec tsc --noEmit -p {tsConfigFileName}",
-            "npm" => $"npx --no-install tsc --noEmit -p {tsConfigFileName}",
+            "bun" => "bun run aspire:typecheck",
+            "yarn" => "yarn run aspire:typecheck",
+            "pnpm" => "pnpm run aspire:typecheck",
+            "npm" => "npm run aspire:typecheck",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
+    }
 
     /// <summary>
     /// Gets the script runner command for a toolchain.

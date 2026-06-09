@@ -1800,7 +1800,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_resolvedLanguage))
             {
                 var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _logger);
-                runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
+                var useCompiledRunner = _features.IsFeatureEnabled(KnownFeatures.TypeScriptAppHostCompiledRunner, defaultValue: false);
+                runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain, useCompiledRunner);
             }
 
             _guestRuntime = new GuestRuntime(runtimeSpec, _logger, _fileLoggerProvider, profilingTelemetry: _profilingTelemetry);

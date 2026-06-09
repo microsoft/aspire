@@ -30,6 +30,7 @@ internal static class KnownFeatures
     public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
     public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
+    public static string TypeScriptAppHostCompiledRunner => "typescriptAppHostCompiledRunner";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
@@ -86,6 +87,11 @@ internal static class KnownFeatures
         [AspireSkillsRemoteFetchEnabled] = new(
             AspireSkillsRemoteFetchEnabled,
             "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
+            DefaultValue: false),
+
+        [TypeScriptAppHostCompiledRunner] = new(
+            TypeScriptAppHostCompiledRunner,
+            "Use tsgo emitted JavaScript to run TypeScript AppHosts instead of tsx",
             DefaultValue: false)
     };
 

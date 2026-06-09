@@ -498,7 +498,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             "[2026-05-15 17:07:27.381] [INFO] [Stdout] Connecting to AppHost...",
             "[2026-05-15 17:07:28.618] [DBUG] [GuestAppHostProject] Executing: /opt/homebrew/bin/npm install",
             "[2026-05-15 17:07:29.512] [INFO] [AppHost] up to date, audited 116 packages in 619ms",
-            "[2026-05-15 17:07:29.520] [DBUG] [GuestAppHostProject] Executing: /opt/homebrew/bin/npx --no-install tsc --noEmit -p tsconfig.apphost.json",
+            "[2026-05-15 17:07:29.520] [DBUG] [GuestAppHostProject] Executing: /opt/homebrew/bin/npm run aspire:typecheck",
             "[2026-05-15 17:07:30.501] [INFO] [AppHost] apphost.ts(5,22): error TS1109: Expression expected.",
             "[2026-05-15 17:07:30.521] [FAIL] [GuestAppHostProject] TypeScript (Node.js) apphost exited with code 2",
             "[2026-05-15 17:07:30.522] [FAIL] [GuestAppHostProject] AppHost server process has exited. Unable to connect to backchannel at /tmp/cli.sock",
@@ -549,7 +549,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             "[2026-05-15 17:07:27.381] [INFO] [Stdout] Connecting to AppHost...",
             "[2026-05-15 17:07:28.618] [DBUG] [GuestAppHostProject] Executing: /opt/homebrew/bin/npm install",
             "[2026-05-15 17:07:29.512] [INFO] [AppHost] up to date, audited 116 packages in 619ms",
-            "[2026-05-15 17:07:29.520] [DBUG] [GuestAppHostProject] Executing: /opt/homebrew/bin/npx --no-install tsc --noEmit -p tsconfig.apphost.json",
+            "[2026-05-15 17:07:29.520] [DBUG] [GuestAppHostProject] Executing: /opt/homebrew/bin/npm run aspire:typecheck",
             "[2026-05-15 17:07:30.501] [INFO] [AppHost] apphost.ts(5,22): error TS1109: Expression expected.",
             "[2026-05-15 17:07:30.521] [FAIL] [GuestAppHostProject] TypeScript (Node.js) apphost exited with code 2",
             "[2026-05-15 17:07:30.522] [FAIL] [GuestAppHostProject] AppHost server process has exited. Unable to connect to backchannel at /tmp/cli.sock",
@@ -578,7 +578,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             {
                 Assert.Equal(CliLogFormat.FileLevelTokens.Debug, entry.Level);
                 Assert.Equal(CliLogFormat.Categories.GuestAppHostProject, entry.Category);
-                Assert.Equal("Executing: /opt/homebrew/bin/npx --no-install tsc --noEmit -p tsconfig.apphost.json", entry.Message);
+                Assert.Equal("Executing: /opt/homebrew/bin/npm run aspire:typecheck", entry.Message);
             },
             entry =>
             {

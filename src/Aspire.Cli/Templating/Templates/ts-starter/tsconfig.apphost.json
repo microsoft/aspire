@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.apphost.tsbuildinfo",
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
@@ -12,6 +14,7 @@
   },
   "include": [
     "apphost.mts",
+    "apphost.ts",
     ".aspire/modules/aspire.mts",
     ".aspire/modules/base.mts",
     ".aspire/modules/transport.mts"
