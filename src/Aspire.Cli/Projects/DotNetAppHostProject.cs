@@ -1168,7 +1168,15 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public async Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
     {
-        var matchingSockets = AppHostHelper.FindMatchingSockets(appHostFile.FullName, homeDirectory.FullName);
+        var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+            appHostFile.FullName,
+            homeDirectory.FullName,
+            Environment.ProcessId,
+            out var orphanedSocketsDeleted);
+        if (orphanedSocketsDeleted > 0)
+        {
+            _logger.LogDebug("Cleaned up {Count} orphaned socket(s) before stopping running AppHost instances.", orphanedSocketsDeleted);
+        }
 
         // Check if any socket files exist
         if (matchingSockets.Length == 0)

@@ -1485,7 +1485,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var genericAppHostPath = appHostServerProject.GetInstanceIdentifier();
 
         // Find matching sockets for this AppHost
-        var matchingSockets = AppHostHelper.FindMatchingSockets(genericAppHostPath, homeDirectory.FullName);
+        var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+            genericAppHostPath,
+            homeDirectory.FullName,
+            Environment.ProcessId,
+            out var orphanedSocketsDeleted);
+        if (orphanedSocketsDeleted > 0)
+        {
+            _logger.LogDebug("Cleaned up {Count} orphaned socket(s) before stopping running AppHost instances.", orphanedSocketsDeleted);
+        }
 
         // Check if any socket files exist
         if (matchingSockets.Length == 0)

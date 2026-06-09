@@ -105,7 +105,7 @@ internal static class AppHostHelper
     /// Since socket names now include a randomized instance ID and the AppHost's PID
     /// (e.g., <c>{appHostId}{instanceId}.{pid}</c>),
     /// the CLI cannot compute the exact socket path. Use this prefix with a glob pattern
-    /// to find matching sockets, or use <see cref="FindMatchingSockets"/> instead.
+    /// to find matching sockets, or use <see cref="FindMatchingNonOrphanedSockets"/> instead.
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file or assembly.</param>
     /// <param name="homeDirectory">The user's home directory.</param>
@@ -130,13 +130,51 @@ internal static class AppHostHelper
         => BackchannelConstants.ComputeLegacyHashes(appHostPath);
 
     /// <summary>
-    /// Finds all socket files matching the given AppHost path.
+    /// Finds matching socket files and deletes PID-qualified sockets whose owning process has exited.
     /// </summary>
-    /// <param name="appHostPath">The full path to the AppHost project file or assembly.</param>
-    /// <param name="homeDirectory">The user's home directory.</param>
-    /// <returns>An array of socket file paths, or empty if none found.</returns>
-    internal static string[] FindMatchingSockets(string appHostPath, string homeDirectory)
-        => BackchannelConstants.FindMatchingSockets(appHostPath, homeDirectory);
+    internal static string[] FindMatchingNonOrphanedSockets(string appHostPath, string homeDirectory, int currentPid, out int deletedCount)
+    {
+        var matchingSockets = BackchannelConstants.FindMatchingSockets(appHostPath, homeDirectory);
+        return PruneOrphanedSockets(matchingSockets, currentPid, out deletedCount);
+    }
+
+    /// <summary>
+    /// Deletes PID-qualified socket files whose owning process has exited and returns sockets that should still be probed.
+    /// </summary>
+    private static string[] PruneOrphanedSockets(string[] socketPaths, int currentPid, out int deletedCount)
+    {
+        deletedCount = 0;
+        var remainingSockets = new List<string>(socketPaths.Length);
+
+        foreach (var socketPath in socketPaths)
+        {
+            var pid = BackchannelConstants.ExtractPid(socketPath);
+            if (pid is { } pidValue && pidValue != currentPid && !BackchannelConstants.ProcessExists(pidValue))
+            {
+                try
+                {
+                    // Socket names include the owning PID in the compact/current legacy formats:
+                    //   {appHostId}{instanceId}.{pid}
+                    //   auxi.sock.{hash}.{instanceHash}.{pid}
+                    // After a crash or reboot these files can remain, and connecting to them
+                    // reports "connection refused" even though there is no AppHost to stop.
+                    if (!BackchannelConstants.ProcessExists(pidValue))
+                    {
+                        File.Delete(socketPath);
+                        deletedCount++;
+                        continue;
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
+
+            remainingSockets.Add(socketPath);
+        }
+
+        return [.. remainingSockets];
+    }
 
     /// <summary>
     /// Extracts the hash portion from an auxiliary socket path.
