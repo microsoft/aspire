@@ -129,7 +129,9 @@ jobs:
       - build_cli_archive_windows_arm64
       - build_cli_archive_macos
       - build_cli_e2e_image
-    if: ${{ !cancelled() && !failure() }}
+    # Run even when an artifact producer fails so independent buckets still
+    # produce diagnostics. The final gate below still fails the workflow.
+    if: ${{ !cancelled() && needs.setup_for_tests.result == 'success' }}
     uses: ./.github/workflows/run-tests-core.yml
     with:
       tests_matrix_no_nugets: ${{ needs.setup_for_tests.outputs.tests_matrix_no_nugets }}
