@@ -127,6 +127,14 @@ rootCommand.SetAction(async result =>
         // Run the evaluation
         var evaluationResult = await TestEvaluator.EvaluateAsync(config, changedFiles, solution, fromRef, toRef, workingDir, ciEnvironment, verbose, nonApplyingPaths).ConfigureAwait(false);
 
+        // Surface the inferDeps:false opt-outs so the matrix filter can subtract them from
+        // pass-through/run-all sweeps. The error path below leaves this empty, so a failed
+        // selector runs everything (conservative fallback).
+        if (config is not null)
+        {
+            evaluationResult.SuppressedTestProjects = config.GetSuppressedTestProjects();
+        }
+
         // For RunAll/CriticalPath results, populate NuGet-dependent tests (all of them)
         if (evaluationResult.RunAllTests && evaluationResult.NuGetDependentTests is null)
         {

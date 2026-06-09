@@ -669,6 +669,36 @@ public class TestSelectorConfigTests
     }
 
     [Fact]
+    public void GetSuppressedTestProjects_ReturnsOnlyFalseKeys_Sorted()
+    {
+        // Only inferDeps:false projects opt out of broad sweeps; true/absent entries are no-ops.
+        // Keys are listed out of order to prove the result is sorted.
+        var json = """
+        {
+            "inferDeps": {
+                "tests/Zeta.Tests/Zeta.Tests.csproj": false,
+                "tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj": true,
+                "tests/Alpha.Tests/Alpha.Tests.csproj": false
+            }
+        }
+        """;
+
+        var config = TestSelectorConfig.LoadFromJson(json);
+
+        Assert.Equal(
+            ["tests/Alpha.Tests/Alpha.Tests.csproj", "tests/Zeta.Tests/Zeta.Tests.csproj"],
+            config.GetSuppressedTestProjects());
+    }
+
+    [Fact]
+    public void GetSuppressedTestProjects_Empty_WhenNoFalseEntries()
+    {
+        var config = TestSelectorConfig.LoadFromJson("""{"inferDeps": {"tests/A/A.csproj": true}}""");
+
+        Assert.Empty(config.GetSuppressedTestProjects());
+    }
+
+    [Fact]
     public void LoadFromJson_JobCategoryWhenAsString_NormalizesToSingleElementList()
     {
         // 'when' accepts either a single string or an array of strings (same converter as mapping/edge 'from').

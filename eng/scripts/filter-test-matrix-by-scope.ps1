@@ -28,12 +28,13 @@
 .PARAMETER DefaultCoverageRunsOn
   Runner name used for default coverage entries that are not directly affected.
 
-.PARAMETER RestrictedTestProjects
+.PARAMETER SuppressedTestProjects
   JSON array string of test project .csproj paths that opt out of broad runs
-  (RunAll / categories sweep). Entries in restricted projects are subtracted
-  from the matrix when RunAll=true; in selective mode they only run when the
-  project is also in AffectedProjects (because a sourceToTestMappings entry
-  explicitly resolved to it).
+  (RunAll / pass-through). These come from the selector's inferDeps:false set.
+  Entries in suppressed projects are subtracted from the matrix when RunAll=true
+  (or in no-affected pass-through); in selective mode they only run when the
+  project is also in AffectedProjects (because a mappings/edges entry explicitly
+  resolved to it).
 
 .PARAMETER AuditOnly
   If set, log what would be filtered but return unfiltered matrices.
@@ -63,7 +64,7 @@ param(
   [string]$DefaultCoverageRunsOn = "ubuntu-latest",
 
   [Parameter(Mandatory=$false)]
-  [string]$RestrictedTestProjects = "[]",
+  [string]$SuppressedTestProjects = "[]",
 
   [Parameter(Mandatory=$false)]
   [switch]$AuditOnly,
@@ -171,29 +172,29 @@ if ($defaultCoverageSet.Count -gt 0 -and $defaultCoverageSet.Count -le 20) {
   }
 }
 
-# Parse restricted test projects. Entries in this set opt out of broad runs
+# Parse suppressed test projects. Entries in this set opt out of broad runs
 # (RunAll / pass-through) and run only when explicitly affected via a
-# sourceToTestMappings hit. In selective mode (RunAll=false) the existing
+# mappings/edges hit. In selective mode (RunAll=false) the existing
 # affectedSet check already handles this — anything not in affectedSet is
-# filtered out — so the restricted set only changes behavior under RunAll.
-$restricted = @()
-if ($RestrictedTestProjects -and $RestrictedTestProjects -ne "[]") {
-  $restricted = Parse-ProjectListJson -Value $RestrictedTestProjects -ParameterName 'RestrictedTestProjects'
+# filtered out — so the suppressed set only changes behavior under pass-through.
+$suppressed = @()
+if ($SuppressedTestProjects -and $SuppressedTestProjects -ne "[]") {
+  $suppressed = Parse-ProjectListJson -Value $SuppressedTestProjects -ParameterName 'SuppressedTestProjects'
 }
-$restrictedSet = [System.Collections.Generic.HashSet[string]]::new(
+$suppressedSet = [System.Collections.Generic.HashSet[string]]::new(
   [StringComparer]::OrdinalIgnoreCase
 )
-foreach ($path in $restricted) {
+foreach ($path in $suppressed) {
   if ([string]::IsNullOrWhiteSpace($path)) {
     continue
   }
 
   $normalizedPath = $path -replace '\\', '/'
-  [void]$restrictedSet.Add($normalizedPath)
+  [void]$suppressedSet.Add($normalizedPath)
 }
-if ($restrictedSet.Count -gt 0) {
-  Write-Host "Restricted test projects (opt out of RunAll): $($restrictedSet.Count)"
-  foreach ($p in $restrictedSet) {
+if ($suppressedSet.Count -gt 0) {
+  Write-Host "Suppressed test projects (opt out of run-all): $($suppressedSet.Count)"
+  foreach ($p in $suppressedSet) {
     Write-Host "  - $p"
   }
 }
@@ -279,9 +280,9 @@ foreach ($matrixName in $Matrices.Keys) {
 
   if ($skipFiltering) {
     # Even in pass-through mode (RunAll or no-affected), entries whose
-    # testProjectPath is in $restrictedSet are excluded. They run only when
-    # an explicit sourceToTestMappings hit puts them in $affectedSet, which
-    # is handled by the selective filtering branch below.
+    # testProjectPath is in $suppressedSet are excluded. They run only when
+    # an explicit mappings/edges hit puts them in $affectedSet, which is
+    # handled by the selective filtering branch below.
     $passThroughKept = @()
     $passThroughRemoved = @()
     foreach ($entry in $entries) {
@@ -290,7 +291,7 @@ foreach ($matrixName in $Matrices.Keys) {
         $testPath = $entry.testProjectPath -replace '\\', '/'
       }
 
-      if (-not [string]::IsNullOrWhiteSpace($testPath) -and $restrictedSet.Contains($testPath)) {
+      if (-not [string]::IsNullOrWhiteSpace($testPath) -and $suppressedSet.Contains($testPath)) {
         $passThroughRemoved += $entry
         $auditFilteredEntries.Add((New-AuditEntry -MatrixName $matrixName -Entry $entry))
         continue
@@ -311,7 +312,7 @@ foreach ($matrixName in $Matrices.Keys) {
       mode = 'pass-through'
     }
     $passThroughLabel = if ($passThroughRemoved.Count -gt 0) {
-      "$($passThroughKept.Count) entries (pass-through; $($passThroughRemoved.Count) restricted-filtered)"
+      "$($passThroughKept.Count) entries (pass-through; $($passThroughRemoved.Count) suppressed-filtered)"
     } else {
       "$($entries.Count) entries (pass-through)"
     }

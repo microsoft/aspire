@@ -296,12 +296,55 @@ public class FilterTestMatrixByScopeTests : IDisposable
         Assert.Single(filtered);
     }
 
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task FilterMatrix_SubtractsSuppressedProjects_FromSelectorOutput()
+    {
+        // Under RunAll (pass-through), a suppressed (inferDeps:false) project is removed from the
+        // sweep; a normal project stays. Revert the suppressedSet subtraction in the script and
+        // the suppressed entry survives this filter, turning this red.
+        var matrix = CreateMatrix(
+            CreateEntry("Acquisition-linux", "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"),
+            CreateEntry("Dashboard-linux", "tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj"));
+
+        var suppressed = JsonSerializer.Serialize(new[] { "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj" });
+
+        var result = await RunFilter(matrix, "[]", runAll: true, suppressedTestProjects: suppressed);
+
+        result.EnsureSuccessful("RunAll with a suppressed project should pass through the rest");
+        var filtered = ParseOutputMatrix(result.Output, "test_matrix");
+        var kept = Assert.Single(filtered);
+        Assert.Equal("Dashboard-linux", kept.GetProperty("shortname").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task SuppressedProject_StillRuns_WhenDirectlyAffected()
+    {
+        // A suppressed project opts out of broad sweeps but still runs when a mapping/edge put it
+        // in the affected list (selective mode keys off affectedSet, not the suppressed set).
+        var matrix = CreateMatrix(
+            CreateEntry("Acquisition-linux", "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"),
+            CreateEntry("Dashboard-linux", "tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj"));
+
+        var affected = JsonSerializer.Serialize(new[] { "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj" });
+        var suppressed = affected;
+
+        var result = await RunFilter(matrix, affected, runAll: false, suppressedTestProjects: suppressed);
+
+        result.EnsureSuccessful("A suppressed-but-affected project should still run");
+        var filtered = ParseOutputMatrix(result.Output, "test_matrix");
+        var kept = Assert.Single(filtered);
+        Assert.Equal("Acquisition-linux", kept.GetProperty("shortname").GetString());
+    }
+
     private async Task<CommandResult> RunFilter(
         string matrixJson,
         string affectedProjects,
         bool runAll,
         bool auditOnly = false,
-        string defaultCoverageProjects = "[]")
+        string defaultCoverageProjects = "[]",
+        string suppressedTestProjects = "[]")
     {
         // Write a small wrapper script that calls filter-test-matrix-by-scope.ps1
         // with hashtable parameter (can't pass hashtable directly from CLI)
@@ -316,6 +359,7 @@ public class FilterTestMatrixByScopeTests : IDisposable
                 -Matrices $matrices `
                 -AffectedProjects '{{affectedProjects.Replace("'", "''")}}' `
                 -DefaultCoverageProjects '{{defaultCoverageProjects.Replace("'", "''")}}' `
+                -SuppressedTestProjects '{{suppressedTestProjects.Replace("'", "''")}}' `
                 {{runAllSwitch}} {{auditSwitch}}
             """);
 

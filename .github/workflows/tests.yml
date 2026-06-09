@@ -102,6 +102,7 @@ jobs:
           AUDIT_SELECTION_REASON: ${{ steps.detect_audit_raw.outputs.selection_reason }}
           ACTIVE_AFFECTED_TEST_PROJECTS_JSON: ${{ steps.detect_active_raw.outputs.affected_test_projects }}
           AUDIT_AFFECTED_TEST_PROJECTS_JSON: ${{ steps.detect_audit_raw.outputs.affected_test_projects }}
+          ACTIVE_SUPPRESSED_TEST_PROJECTS_JSON: ${{ steps.detect_active_raw.outputs.suppressed_test_projects }}
         run: |
           normalize_bool() {
             if [ "$1" = "true" ]; then
@@ -160,6 +161,7 @@ jobs:
             echo "run_polyglot=true" >> $GITHUB_OUTPUT
             echo "affected_test_projects=[]" >> $GITHUB_OUTPUT
             echo "default_coverage_projects=[]" >> $GITHUB_OUTPUT
+            echo "suppressed_test_projects=[]" >> $GITHUB_OUTPUT
 
             echo "<details><summary>Test Scope Selection</summary>" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -215,6 +217,7 @@ jobs:
           ACTIVE_RUN_POLYGLOT="$(normalize_bool "${{ steps.detect_active_raw.outputs.run_polyglot }}")"
           ACTIVE_AFFECTED="$(normalize_json_array "$ACTIVE_AFFECTED_TEST_PROJECTS_JSON")"
           ACTIVE_REASON="$(normalize_reason "$ACTIVE_SELECTION_REASON")"
+          ACTIVE_SUPPRESSED="$(normalize_json_array "$ACTIVE_SUPPRESSED_TEST_PROJECTS_JSON")"
           DEFAULT_COVERAGE='[]'
 
           if [ "${ACTIVE_RUN_ALL}" = "true" ] && reason_is_selector_failure "$ACTIVE_REASON"; then
@@ -232,6 +235,7 @@ jobs:
           echo "run_polyglot=${ACTIVE_RUN_POLYGLOT}" >> $GITHUB_OUTPUT
           echo "affected_test_projects=${ACTIVE_AFFECTED}" >> $GITHUB_OUTPUT
           echo "default_coverage_projects=${DEFAULT_COVERAGE}" >> $GITHUB_OUTPUT
+          echo "suppressed_test_projects=${ACTIVE_SUPPRESSED}" >> $GITHUB_OUTPUT
 
           echo "<details><summary>Test Scope Selection</summary>" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -363,6 +367,7 @@ jobs:
             -Matrices $matrices `
             -AffectedProjects '${{ steps.detect.outputs.affected_test_projects }}' `
             -DefaultCoverageProjects '${{ steps.detect.outputs.default_coverage_projects }}' `
+            -SuppressedTestProjects '${{ steps.detect.outputs.suppressed_test_projects }}' `
             -RunAll:$runAll `
             -AuditFilePath "${{ github.workspace }}/artifacts/test-selection/matrix-active.json" `
             -OutputToGitHubEnv
@@ -393,6 +398,7 @@ jobs:
             -Matrices $matrices `
             -AffectedProjects $affectedProjects `
             -DefaultCoverageProjects $defaultCoverageProjects `
+            -SuppressedTestProjects '${{ steps.detect_audit_raw.outputs.suppressed_test_projects }}' `
             -RunAll:$runAll `
             -AuditFilePath "${{ github.workspace }}/artifacts/test-selection/matrix-audit.json"
 
@@ -812,9 +818,8 @@ jobs:
     # gains a dedicated polyglot category.) Non-PR events fall through because
     # setup_for_tests sets every run_* output to 'true' for them.
     if: |
-      (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') &&
-      (needs.setup_for_tests.outputs.run_all == 'true' ||
-       needs.setup_for_tests.outputs.run_polyglot == 'true')
+      needs.setup_for_tests.outputs.run_all == 'true' ||
+      needs.setup_for_tests.outputs.run_polyglot == 'true'
     uses: ./.github/workflows/polyglot-validation.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_linux]
     with:

@@ -60,6 +60,15 @@ public sealed class TestSelectionResult
     public List<string> IntegrationsProjects { get; set; } = [];
 
     /// <summary>
+    /// Test projects that opt out of broad run-all/pass-through sweeps (their <c>inferDeps</c>
+    /// entry is <see langword="false"/>). The matrix filter subtracts these from pass-through
+    /// runs; in selective runs they are already excluded unless a declared mapping/edge resolved
+    /// them into <see cref="AffectedTestProjects"/>.
+    /// </summary>
+    [JsonPropertyName("suppressedTestProjects")]
+    public List<string> SuppressedTestProjects { get; set; } = [];
+
+    /// <summary>
     /// Information about NuGet-dependent tests.
     /// </summary>
     [JsonPropertyName("nugetDependentTests")]
@@ -206,6 +215,10 @@ public sealed class TestSelectionResult
 
         // Output affected test projects as JSON array of .csproj paths for matrix filtering
         outputs.Add(new("affected_test_projects", JsonSerializer.Serialize(AffectedTestProjects)));
+
+        // inferDeps:false projects opt out of broad sweeps. The matrix filter subtracts these in
+        // pass-through/run-all mode; selective runs already exclude them via the affected filter.
+        outputs.Add(new("suppressed_test_projects", JsonSerializer.Serialize(SuppressedTestProjects)));
 
         // NuGet-dependent test outputs
         var nugetTriggered = NuGetDependentTests?.Triggered == true;

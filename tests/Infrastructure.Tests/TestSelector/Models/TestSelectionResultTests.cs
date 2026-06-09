@@ -453,6 +453,41 @@ public class TestSelectionResultTests
         Assert.Contains("   at Example.Frame()", output);
     }
 
+    [Fact]
+    public void WriteGitHubOutput_EmitsSuppressedTestProjects()
+    {
+        var result = new TestSelectionResult
+        {
+            RunAllTests = true,
+            Reason = "critical_path",
+            SuppressedTestProjects =
+            [
+                "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj",
+                "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+            ]
+        };
+
+        var output = CaptureGitHubOutput(result);
+
+        Assert.Contains(
+            "suppressed_test_projects=[\"tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj\",\"tests/Infrastructure.Tests/Infrastructure.Tests.csproj\"]",
+            output);
+    }
+
+    [Fact]
+    public void WriteGitHubOutput_EmitsEmptySuppressedTestProjects_ByDefault()
+    {
+        var result = new TestSelectionResult
+        {
+            RunAllTests = false,
+            Reason = "msbuild_analysis"
+        };
+
+        var output = CaptureGitHubOutput(result);
+
+        Assert.Contains("suppressed_test_projects=[]", output);
+    }
+
     private static string CaptureGitHubOutput(TestSelectionResult result)
     {
         var tempFile = Path.GetTempFileName();

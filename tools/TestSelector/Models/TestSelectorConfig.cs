@@ -123,6 +123,15 @@ public sealed class TestSelectorConfig
         return JsonSerializer.Deserialize<TestSelectorConfig>(json, s_jsonOptions)
             ?? throw new InvalidOperationException("Failed to deserialize config from JSON");
     }
+
+    /// <summary>
+    /// Returns the test projects whose <c>inferDeps</c> entry is <see langword="false"/>, sorted
+    /// ordinally. These opt out of broad run-all/pass-through matrix sweeps — the matrix filter
+    /// subtracts them so they run only when a declared <see cref="Mappings"/> or <see cref="Edges"/>
+    /// entry resolves them into the affected set. See <see cref="InferDeps"/>.
+    /// </summary>
+    public List<string> GetSuppressedTestProjects()
+        => InferDeps.Where(kv => !kv.Value).Select(kv => kv.Key).OrderBy(p => p, StringComparer.Ordinal).ToList();
 }
 
 /// <summary>
