@@ -6899,6 +6899,14 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
         return (IServiceProvider) result;
     }
 
+    /** The `IServiceProvider` for the AppHost. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.services", reqArgs);
+        return (IServiceProvider) result;
+    }
+
     /** Returns true if the current operation is publishing. */
     public boolean isPublishMode() {
         Map<String, Object> reqArgs = new HashMap<>();

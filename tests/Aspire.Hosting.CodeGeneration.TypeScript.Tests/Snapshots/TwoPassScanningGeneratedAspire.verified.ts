@@ -2842,6 +2842,8 @@ export interface DistributedApplicationExecutionContext {
     operation(): Promise<DistributedApplicationOperation>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
+    /** The `IServiceProvider` for the AppHost. */
+    services(): ServiceProviderPromise;
     /** Returns true if the current operation is publishing. */
     isPublishMode(): Promise<boolean>;
     /** Returns true if the current operation is running. */
@@ -2853,6 +2855,8 @@ export interface DistributedApplicationExecutionContextPromise extends PromiseLi
     operation(): Promise<DistributedApplicationOperation>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
+    /** The `IServiceProvider` for the AppHost. */
+    services(): ServiceProviderPromise;
     /** Returns true if the current operation is publishing. */
     isPublishMode(): Promise<boolean>;
     /** Returns true if the current operation is running. */
@@ -2903,6 +2907,17 @@ class DistributedApplicationExecutionContextImpl implements DistributedApplicati
         return new ServiceProviderPromiseImpl(promise, this._client, false);
     }
 
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting/DistributedApplicationExecutionContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
     async isPublishMode(): Promise<boolean> {
         return await this._client.invokeCapability<boolean>(
             'Aspire.Hosting/DistributedApplicationExecutionContext.isPublishMode',
@@ -2940,6 +2955,10 @@ class DistributedApplicationExecutionContextPromiseImpl implements DistributedAp
 
     serviceProvider(): ServiceProviderPromise {
         return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.serviceProvider()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
     isPublishMode(): Promise<boolean> {
