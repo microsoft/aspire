@@ -8,10 +8,4 @@ namespace Aspire.Hosting.Java;
 /// <summary>
 /// Stores the wrapper path for Maven or Gradle build tools.
 /// </summary>
-internal sealed class WrapperAnnotation : IResourceAnnotation
-{
-    /// <summary>
-    /// Gets or sets the path to the wrapper executable (mvnw, mvnw.cmd, gradlew, gradlew.bat).
-    /// </summary>
-    public required string WrapperPath { get; init; }
-}
+internal sealed record WrapperAnnotation(string WrapperPath) : IResourceAnnotation;

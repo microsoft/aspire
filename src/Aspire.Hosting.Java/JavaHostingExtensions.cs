@@ -1,6 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECERTIFICATES001
+#pragma warning disable IDE1006 // Naming Styles - match Community Toolkit naming convention
+
+using System.Formats.Asn1;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Security.Cryptography.Pkcs;
+using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Java;
 
@@ -11,12 +19,21 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class JavaHostingExtensions
 {
+    private const string JavaToolOptions = "JAVA_TOOL_OPTIONS";
+    private static readonly string DefaultMavenWrapper = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "mvnw.cmd" : "mvnw";
+    private static readonly string DefaultGradleWrapper = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "gradlew.bat" : "gradlew";
+
     /// <summary>
-    /// Adds a Java application to the application model. The Java runtime must be available on the PATH.
+    /// Adds a Java application to the application model. Executes the executable Java app.
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/> to add the resource to.</param>
     /// <param name="name">The name of the resource.</param>
-    /// <param name="workingDirectory">The working directory for the Java application.</param>
+    /// <param name="workingDirectory">The working directory to use for the command.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Use <see cref="WithMavenGoal"/> or <see cref="WithGradleTask"/> to run the application via a build tool,
+    /// or use the overload that accepts a <c>jarPath</c> parameter to run with <c>java -jar</c>.
+    /// </remarks>
     [AspireExport]
     public static IResourceBuilder<JavaAppResource> AddJavaApp(
         this IDistributedApplicationBuilder builder,
@@ -33,23 +50,21 @@ public static class JavaHostingExtensions
         var rb = builder.AddResource(resource)
             .WithArgs(ctx =>
             {
-                // If we have a JAR path, use -jar option
-                if (resource.JarPath is not null)
+                if (resource.TryGetLastAnnotation<JavaBuildToolAnnotation>(out var buildTool))
                 {
-                    ctx.Args.Add("-jar");
-                    ctx.Args.Add(resource.JarPath);
-                }
-
-                // Add JVM arguments
-                if (ctx.Resource.TryGetLastAnnotation<JvmArgsAnnotation>(out var jvmArgs))
-                {
-                    foreach (var arg in jvmArgs.Args)
+                    foreach (var arg in buildTool.Args)
                     {
                         ctx.Args.Add(arg);
                     }
                 }
+                else if (resource.JarPath is not null)
+                {
+                    ctx.Args.Add("-jar");
+                    ctx.Args.Add(resource.JarPath);
+                }
             })
-            .WithOtlpExporter();
+            .WithOtlpExporter()
+            .WithCertificateTrustConfiguration(JavaCertificateTrustCallback);
 
         return rb;
     }
@@ -75,40 +90,13 @@ public static class JavaHostingExtensions
         ArgumentException.ThrowIfNullOrEmpty(workingDirectory);
         ArgumentException.ThrowIfNullOrEmpty(jarPath);
 
-        workingDirectory = Path.GetFullPath(workingDirectory, builder.AppHostDirectory);
-        jarPath = Path.GetFullPath(jarPath, workingDirectory);
+        var rb = builder.AddJavaApp(name, workingDirectory);
+        rb.Resource.JarPath = jarPath;
 
-        var resource = new JavaAppResource(name, workingDirectory, jarPath);
-
-        var rb = builder.AddResource(resource)
-            .WithArgs(ctx =>
-            {
-                // If we have a JAR path, use -jar option
-                if (resource.JarPath is not null)
-                {
-                    ctx.Args.Add("-jar");
-                    ctx.Args.Add(resource.JarPath);
-                }
-
-                // Add application arguments
-                if (args is not null)
-                {
-                    foreach (var arg in args)
-                    {
-                        ctx.Args.Add(arg);
-                    }
-                }
-
-                // Add JVM arguments
-                if (ctx.Resource.TryGetLastAnnotation<JvmArgsAnnotation>(out var jvmArgs))
-                {
-                    foreach (var arg in jvmArgs.Args)
-                    {
-                        ctx.Args.Add(arg);
-                    }
-                }
-            })
-            .WithOtlpExporter();
+        if (args is { Length: > 0 })
+        {
+            rb.WithArgs(args);
+        }
 
         return rb;
     }
@@ -116,27 +104,29 @@ public static class JavaHostingExtensions
     /// <summary>
     /// Adds a Maven goal to be executed before the Java application starts.
     /// </summary>
-    /// <typeparam name="T">The type of the Java application resource.</typeparam>
     /// <param name="builder">The resource builder for the Java application.</param>
     /// <param name="goal">The Maven goal to execute.</param>
+    /// <param name="args">Additional arguments to pass to the Maven wrapper.</param>
     [AspireExport]
-    public static IResourceBuilder<T> WithMavenGoal<T>(this IResourceBuilder<T> builder, string goal)
-        where T : JavaAppResource
+    public static IResourceBuilder<JavaAppResource> WithMavenGoal(
+        this IResourceBuilder<JavaAppResource> builder,
+        string goal,
+        params string[] args)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(goal);
 
-        var resource = new MavenBuildResource($"{builder.Resource.Name}-maven-goal", builder.Resource.WorkingDirectory, [goal]);
+        var resolvedWrapper = builder.Resource.TryGetLastAnnotation<WrapperAnnotation>(out var wrapper)
+            ? wrapper.WrapperPath
+            : Path.GetFullPath(Path.Combine(builder.Resource.WorkingDirectory, DefaultMavenWrapper));
 
-        var build = builder.ApplicationBuilder
-            .AddResource(resource)
-            .WithArgs(ctx =>
-            {
-                ctx.Args.Add(resource.Args);
-            })
-            .ExcludeFromManifest();
+        builder.Resource.Annotations.Add(
+            new JavaBuildToolAnnotation(resolvedWrapper, args is { Length: > 0 } ? [goal, .. args] : [goal]));
 
-        builder.WaitForCompletion(build);
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            builder.WithCommand(resolvedWrapper);
+        }
 
         return builder;
     }
@@ -144,177 +134,272 @@ public static class JavaHostingExtensions
     /// <summary>
     /// Adds a Gradle task to be executed before the Java application starts.
     /// </summary>
-    /// <typeparam name="T">The type of the Java application resource.</typeparam>
     /// <param name="builder">The resource builder for the Java application.</param>
-    /// <param name="task">The Gradle task to execute (e.g., "build", "bootJar").</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <param name="task">The Gradle task to execute (e.g., "bootRun").</param>
+    /// <param name="args">Additional arguments to pass to the Gradle wrapper.</param>
     [AspireExport]
-    public static IResourceBuilder<T> WithGradleTask<T>(this IResourceBuilder<T> builder, string task)
-        where T : JavaAppResource
+    public static IResourceBuilder<JavaAppResource> WithGradleTask(
+        this IResourceBuilder<JavaAppResource> builder,
+        string task,
+        params string[] args)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(task);
 
-        var resource = new GradleBuildResource($"{builder.Resource.Name}-gradle-task", builder.Resource.WorkingDirectory, [task]);
+        if (builder.Resource.JarPath is not null)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(WithGradleTask)} cannot be used when a {nameof(JavaAppResource.JarPath)} has been specified. " +
+                $"Use either {nameof(AddJavaApp)} with a {nameof(JavaAppResource.JarPath)} or {nameof(WithGradleTask)}, not both.");
+        }
 
-        var build = builder.ApplicationBuilder
-            .AddResource(resource)
-            .WithArgs(ctx =>
-            {
-                ctx.Args.Add(resource.Args);
-            })
-            .ExcludeFromManifest();
+        var resolvedWrapper = builder.Resource.TryGetLastAnnotation<WrapperAnnotation>(out var wrapper)
+            ? wrapper.WrapperPath
+            : Path.GetFullPath(Path.Combine(builder.Resource.WorkingDirectory, DefaultGradleWrapper));
 
-        builder.WaitForCompletion(build);
+        builder.Resource.Annotations.Add(
+            new JavaBuildToolAnnotation(resolvedWrapper, args is { Length: > 0 } ? [task, .. args] : [task]));
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            builder.WithCommand(resolvedWrapper);
+        }
 
         return builder;
     }
 
     /// <summary>
     /// Adds Maven build support to the Java application.
+    /// The wrapper script path defaults to <c>mvnw</c> (or <c>mvnw.cmd</c> on Windows) in the resource's working directory,
+    /// unless overridden with <see cref="WithWrapperPath"/>.
     /// </summary>
-    /// <typeparam name="T">The type of the Java application resource.</typeparam>
     /// <param name="builder">The resource builder for the Java application.</param>
-    /// <param name="goals">The Maven goals to execute (defaults to "package").</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// This method configures the Java application to use Maven for building.
-    /// </remarks>
+    /// <param name="args">Arguments to pass to the Maven wrapper. If not provided, defaults to <c>clean package</c>.</param>
     [AspireExport]
-    public static IResourceBuilder<T> WithMavenBuild<T>(this IResourceBuilder<T> builder, string[]? goals = null)
-        where T : JavaAppResource
+    public static IResourceBuilder<JavaAppResource> WithMavenBuild(
+        this IResourceBuilder<JavaAppResource> builder,
+        params string[] args)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var args = goals ?? ["package"];
-        var resource = new MavenBuildResource($"{builder.Resource.Name}-maven-build", builder.Resource.WorkingDirectory, [.. args]);
+        var resolvedWrapper = builder.Resource.TryGetLastAnnotation<WrapperAnnotation>(out var wrapper)
+            ? wrapper.WrapperPath
+            : Path.GetFullPath(Path.Combine(builder.Resource.WorkingDirectory, DefaultMavenWrapper));
 
-        var build = builder.ApplicationBuilder
-            .AddResource(resource)
-            .WithArgs(ctx =>
-            {
-                ctx.Args.Add(resource.Args);
-            })
-            .ExcludeFromManifest();
-
-        builder.WaitForCompletion(build);
-
-        // Store the build tool annotation
-        builder.WithAnnotation(new JavaBuildToolAnnotation
-        {
-            BuildTool = JavaBuildTool.Maven,
-            WrapperPath = "mvnw",
-            Args = args
-        });
-
-        return builder;
+        return builder.WithJavaBuildStep(
+            buildResourceName: $"{builder.Resource.Name}-maven-build",
+            createResource: (name, wrapperScript, workingDirectory) => new MavenBuildResource(name, wrapperScript, workingDirectory),
+            wrapperPath: resolvedWrapper,
+            buildArgs: args.Length > 0 ? args : ["clean", "package"]);
     }
 
     /// <summary>
     /// Adds Gradle build support to the Java application.
+    /// The wrapper script path defaults to <c>gradlew</c> (or <c>gradlew.bat</c> on Windows) in the resource's working directory,
+    /// unless overridden with <see cref="WithWrapperPath"/>.
     /// </summary>
-    /// <typeparam name="T">The type of the Java application resource.</typeparam>
     /// <param name="builder">The resource builder for the Java application.</param>
-    /// <param name="tasks">The Gradle tasks to execute (defaults to "build").</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// This method configures the Java application to use Gradle for building.
-    /// </remarks>
+    /// <param name="args">Arguments to pass to the Gradle wrapper. If not provided, defaults to <c>clean build</c>.</param>
     [AspireExport]
-    public static IResourceBuilder<T> WithGradleBuild<T>(this IResourceBuilder<T> builder, string[]? tasks = null)
-        where T : JavaAppResource
+    public static IResourceBuilder<JavaAppResource> WithGradleBuild(
+        this IResourceBuilder<JavaAppResource> builder,
+        params string[] args)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var args = tasks ?? ["build"];
-        var resource = new GradleBuildResource($"{builder.Resource.Name}-gradle-build", builder.Resource.WorkingDirectory, [.. args]);
+        var resolvedWrapper = builder.Resource.TryGetLastAnnotation<WrapperAnnotation>(out var wrapper)
+            ? wrapper.WrapperPath
+            : Path.GetFullPath(Path.Combine(builder.Resource.WorkingDirectory, DefaultGradleWrapper));
 
-        var build = builder.ApplicationBuilder
-            .AddResource(resource)
-            .WithArgs(ctx =>
-            {
-                ctx.Args.Add(resource.Args);
-            })
-            .ExcludeFromManifest();
+        return builder.WithJavaBuildStep(
+            buildResourceName: $"{builder.Resource.Name}-gradle-build",
+            createResource: (name, wrapperScript, workingDirectory) => new GradleBuildResource(name, wrapperScript, workingDirectory),
+            wrapperPath: resolvedWrapper,
+            buildArgs: args.Length > 0 ? args : ["clean", "build"]);
+    }
 
-        builder.WaitForCompletion(build);
-
-        // Store the build tool annotation
-        builder.WithAnnotation(new JavaBuildToolAnnotation
+    private static IResourceBuilder<JavaAppResource> WithJavaBuildStep<TBuildResource>(
+        this IResourceBuilder<JavaAppResource> builder,
+        string buildResourceName,
+        Func<string, string, string, TBuildResource> createResource,
+        string wrapperPath,
+        string[] buildArgs) where TBuildResource : ExecutableResource
+    {
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            BuildTool = JavaBuildTool.Gradle,
-            WrapperPath = "gradlew",
-            Args = args
-        });
+            var buildResource = createResource(buildResourceName, wrapperPath, builder.Resource.WorkingDirectory);
+
+            var buildBuilder = builder.ApplicationBuilder.AddResource(buildResource)
+                .WithArgs(buildArgs)
+                .WithParentRelationship(builder.Resource)
+                .ExcludeFromManifest();
+
+            builder.WaitForCompletion(buildBuilder);
+        }
 
         return builder;
     }
 
     /// <summary>
-    /// Sets the wrapper path for Maven or Gradle.
+    /// Configures the custom build tool wrapper script path.
+    /// This is useful when the wrapper script is not in the default location or has a non-standard name.
     /// </summary>
-    /// <typeparam name="T">The type of the Java application resource.</typeparam>
-    /// <param name="builder">The resource builder for the Java application.</param>
-    /// <param name="wrapperPath">The path to the wrapper script.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <param name="builder">The <see cref="IResourceBuilder{T}"/> to configure.</param>
+    /// <param name="wrapperScript">The path to the wrapper script, relative to the resource working directory or an absolute path.</param>
     [AspireExport]
-    public static IResourceBuilder<T> WithWrapperPath<T>(this IResourceBuilder<T> builder, string wrapperPath)
-        where T : JavaAppResource
+    public static IResourceBuilder<JavaAppResource> WithWrapperPath(
+        this IResourceBuilder<JavaAppResource> builder,
+        string wrapperScript)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(wrapperPath);
+        ArgumentException.ThrowIfNullOrEmpty(wrapperScript);
 
-        return builder.WithAnnotation(new WrapperAnnotation { WrapperPath = wrapperPath }, ResourceAnnotationMutationBehavior.Replace);
+        var wrapperPath = Path.GetFullPath(Path.Combine(builder.Resource.WorkingDirectory, wrapperScript));
+
+        builder.Resource.Annotations.Add(new WrapperAnnotation(wrapperPath));
+
+        return builder;
     }
 
     /// <summary>
-    /// Adds JVM arguments to the Java application.
+    /// Configures the Java Virtual Machine arguments for the Java application.
+    /// The arguments are set via the <c>JAVA_TOOL_OPTIONS</c> environment variable,
+    /// which is recognized by the JVM regardless of how the application is launched
+    /// (e.g., <c>java -jar</c>, Maven wrapper, or Gradle wrapper).
     /// </summary>
-    /// <typeparam name="T">The type of the Java application resource.</typeparam>
-    /// <param name="builder">The resource builder for the Java application.</param>
-    /// <param name="args">The JVM arguments to add.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="args">The JVM arguments.</param>
     [AspireExport]
-    public static IResourceBuilder<T> WithJvmArgs<T>(this IResourceBuilder<T> builder, params string[] args)
-        where T : JavaAppResource
+    public static IResourceBuilder<T> WithJvmArgs<T>(
+        this IResourceBuilder<T> builder,
+        string[] args) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(args);
 
-        return builder.WithAnnotation(new JvmArgsAnnotation(args), ResourceAnnotationMutationBehavior.Replace);
+        if (args.Length == 0)
+        {
+            return builder;
+        }
+
+        return builder.WithEnvironment(context =>
+        {
+            AppendJavaToolOptions(context, args);
+        });
     }
 
     /// <summary>
-    /// Configures the Java OpenTelemetry agent for the Java application.
+    /// Configures the OpenTelemetry Java Agent for the Java application.
     /// </summary>
-    /// <typeparam name="T">The type of the Java application resource.</typeparam>
-    /// <param name="builder">The resource builder for the Java application.</param>
-    /// <param name="agentPath">Optional path to the OpenTelemetry Java agent JAR file.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="agentPath">The path to the OpenTelemetry Java Agent jar file.</param>
     [AspireExport]
-    public static IResourceBuilder<T> WithOtelAgent<T>(this IResourceBuilder<T> builder, string? agentPath = null)
-        where T : JavaAppResource
+    public static IResourceBuilder<T> WithOtelAgent<T>(
+        this IResourceBuilder<T> builder,
+        string? agentPath = null) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        if (agentPath is not null)
+        builder.WithOtlpExporter();
+
+        if (!string.IsNullOrEmpty(agentPath))
         {
-            // Add javaagent argument
-            return builder.WithJvmArgs($"-javaagent:{agentPath}");
+            builder.WithEnvironment(context =>
+            {
+                AppendJavaToolOptions(context, [$"-javaagent:{agentPath}"]);
+            });
         }
 
-        // For self-instrumented apps, just ensure OTLP exporter is configured
-        return builder.WithOtlpExporter();
+        return builder;
     }
-}
 
-/// <summary>
-/// Stores JVM arguments for a Java application.
-/// </summary>
-internal sealed class JvmArgsAnnotation(string[] args) : IResourceAnnotation
-{
     /// <summary>
-    /// Gets the JVM arguments.
+    /// Merges the specified values into the <c>JAVA_TOOL_OPTIONS</c> environment variable.
+    /// This ensures that all JVM arguments are passed to the Java application regardless of how it is launched.
     /// </summary>
-    public string[] Args { get; } = args;
+    private static void AppendJavaToolOptions(EnvironmentCallbackContext context, string[] values)
+    {
+        AppendJavaToolOptions(context.EnvironmentVariables, values);
+    }
+
+    /// <summary>
+    /// Merges the specified values into the <c>JAVA_TOOL_OPTIONS</c> environment variable.
+    /// </summary>
+    private static void AppendJavaToolOptions(Dictionary<string, object> environmentVariables, string[] values)
+    {
+        var value = string.Join(' ', values);
+
+        if (environmentVariables.TryGetValue(JavaToolOptions, out var existing) &&
+            existing is string existingValue &&
+            !string.IsNullOrEmpty(existingValue))
+        {
+            environmentVariables[JavaToolOptions] = $"{existingValue} {value}";
+        }
+        else
+        {
+            environmentVariables[JavaToolOptions] = value;
+        }
+    }
+
+    /// <summary>
+    /// Configures a PKCS#12 trust store for the Java application via JAVA_TOOL_OPTIONS so the JVM
+    /// trusts the Aspire developer certificate and any configured certificate authorities.
+    /// </summary>
+    private static async Task JavaCertificateTrustCallback(CertificateTrustConfigurationCallbackAnnotationContext ctx)
+    {
+        // Generate a random password for the trust store.
+        var trustStorePassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+
+        var bundlePath = ctx.CreateCustomBundle((certificates, ct) =>
+        {
+            var pkcs12Builder = new Pkcs12Builder();
+            var safeContents = new Pkcs12SafeContents();
+
+            // Oracle/OpenJDK trusted cert bag attribute OID — required for entries to be
+            // recognized as trustedCertEntry in a PKCS#12 trust store.
+            var trustAnchorOid = new Oid("2.16.840.1.113894.746875.1.1");
+            var asnWriter = new AsnWriter(AsnEncodingRules.DER);
+            asnWriter.WriteObjectIdentifier("2.5.29.37.0");
+            var trustAnchorValue = asnWriter.Encode();
+
+            for (var i = 0; i < certificates.Count; i++)
+            {
+                // Export public-only cert to avoid including private keys in the trust store.
+                var publicCert = new X509Certificate2(certificates[i].Export(X509ContentType.Cert));
+                var certBag = safeContents.AddCertificate(publicCert);
+                certBag.Attributes.Add(
+                    new CryptographicAttributeObject(
+                        trustAnchorOid,
+                        new AsnEncodedDataCollection(new AsnEncodedData(trustAnchorOid, trustAnchorValue))));
+            }
+
+            pkcs12Builder.AddSafeContentsUnencrypted(safeContents);
+            pkcs12Builder.SealWithMac(trustStorePassword, HashAlgorithmName.SHA256, iterationCount: 2048);
+
+            return Task.FromResult(pkcs12Builder.Encode());
+        });
+
+        // Resolve the bundle path to a string before using it in environment variables.
+        // The ReferenceExpression from CreateCustomBundle must be resolved to avoid serialization issues.
+        var bundlePathValue = await bundlePath.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
+
+        // Configure the JVM to use the generated PKCS#12 trust store via JAVA_TOOL_OPTIONS.
+        // JAVA_TOOL_OPTIONS is processed by the JVM at startup, avoiding the current limitation
+        // where WithJvmArgs are placed after -jar and would be treated as application args.
+        // Preserve any existing JAVA_TOOL_OPTIONS value set by the user or another configuration source.
+        var trustStoreArgs = $"-Djavax.net.ssl.trustStore={bundlePathValue} -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword={trustStorePassword}";
+        if (ctx.EnvironmentVariables.TryGetValue("JAVA_TOOL_OPTIONS", out var existing))
+        {
+            var existingValue = existing switch
+            {
+                ReferenceExpression re => await re.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false),
+                _ => existing.ToString()
+            };
+            ctx.EnvironmentVariables["JAVA_TOOL_OPTIONS"] = $"{existingValue} {trustStoreArgs}";
+        }
+        else
+        {
+            ctx.EnvironmentVariables["JAVA_TOOL_OPTIONS"] = trustStoreArgs;
+        }
+    }
 }

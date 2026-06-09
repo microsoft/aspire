@@ -6,38 +6,19 @@ using Aspire.Hosting.ApplicationModel;
 namespace Aspire.Hosting.Java;
 
 /// <summary>
-/// Stores the Maven or Gradle build tool configuration for a Java application.
+/// Represents a metadata annotation that specifies the build tool used to run the Java application.
 /// </summary>
-internal sealed class JavaBuildToolAnnotation : IResourceAnnotation
+/// <param name="wrapperPath">The full path to the build tool wrapper script.</param>
+/// <param name="args">The arguments to pass to the build tool (e.g., the goal or task name).</param>
+internal sealed class JavaBuildToolAnnotation(string wrapperPath, string[] args) : IResourceAnnotation
 {
     /// <summary>
-    /// Gets or sets the type of build tool (Maven or Gradle).
+    /// The full path to the build tool wrapper script (e.g., mvnw or gradlew).
     /// </summary>
-    public required JavaBuildTool BuildTool { get; init; }
+    public string WrapperPath { get; } = wrapperPath;
 
     /// <summary>
-    /// Gets or sets the path to the wrapper executable (mvnw, mvnw.cmd, gradlew, gradlew.bat).
+    /// The arguments to pass to the build tool.
     /// </summary>
-    public required string WrapperPath { get; init; }
-
-    /// <summary>
-    /// Gets or sets the arguments to pass to the build tool.
-    /// </summary>
-    public required string[] Args { get; init; }
-}
-
-/// <summary>
-/// Enumerates the supported Java build tools.
-/// </summary>
-internal enum JavaBuildTool
-{
-    /// <summary>
-    /// Apache Maven build tool.
-    /// </summary>
-    Maven,
-
-    /// <summary>
-    /// Gradle build tool.
-    /// </summary>
-    Gradle
+    public string[] Args { get; } = args;
 }

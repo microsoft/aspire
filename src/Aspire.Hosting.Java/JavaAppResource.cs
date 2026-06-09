@@ -10,9 +10,8 @@ namespace Aspire.Hosting.Java;
 /// </summary>
 /// <param name="name">The name of the resource in the application model.</param>
 /// <param name="workingDirectory">The working directory for the Java application.</param>
-/// <param name="jarPath">Optional path to a JAR file to execute.</param>
 [AspireExport(ExposeProperties = true)]
-public class JavaAppResource(string name, string workingDirectory, string? jarPath = null)
+public class JavaAppResource(string name, string workingDirectory)
     : ExecutableResource(name, "java", workingDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
 {
     /// <summary>
@@ -21,5 +20,5 @@ public class JavaAppResource(string name, string workingDirectory, string? jarPa
     /// <remarks>
     /// When set, the resource will execute the JAR file using <c>java -jar &lt;jarPath&gt;</c>.
     /// </remarks>
-    public string? JarPath { get; set; } = jarPath;
+    public string? JarPath { get; set; }
 }

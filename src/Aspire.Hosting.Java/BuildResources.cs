@@ -1,30 +1,22 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.ApplicationModel;
-
-namespace Aspire.Hosting.Java;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Represents a Maven build resource that executes Maven goals before the main Java application starts.
+/// A resource that represents a Maven build step.
 /// </summary>
-internal sealed class MavenBuildResource(string name, string workingDirectory, string[] args)
-    : ExecutableResource(name, "mvnw", workingDirectory)
-{
-    /// <summary>
-    /// Gets the arguments to pass to Maven.
-    /// </summary>
-    public string[] Args { get; } = args;
-}
+/// <param name="name">The name of the resource.</param>
+/// <param name="wrapperScript">The full path to the Maven wrapper script.</param>
+/// <param name="workingDirectory">The working directory to use for the command.</param>
+public class MavenBuildResource(string name, string wrapperScript, string workingDirectory)
+    : ExecutableResource(name, wrapperScript, workingDirectory);
 
 /// <summary>
-/// Represents a Gradle build resource that executes Gradle tasks before the main Java application starts.
+/// A resource that represents a Gradle build step.
 /// </summary>
-internal sealed class GradleBuildResource(string name, string workingDirectory, string[] args)
-    : ExecutableResource(name, "gradlew", workingDirectory)
-{
-    /// <summary>
-    /// Gets the arguments to pass to Gradle.
-    /// </summary>
-    public string[] Args { get; } = args;
-}
+/// <param name="name">The name of the resource.</param>
+/// <param name="wrapperScript">The full path to the Gradle wrapper script.</param>
+/// <param name="workingDirectory">The working directory to use for the command.</param>
+public class GradleBuildResource(string name, string wrapperScript, string workingDirectory)
+    : ExecutableResource(name, wrapperScript, workingDirectory);
