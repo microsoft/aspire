@@ -2,19 +2,20 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/dotnet/aspire/eng/scripts/test-selection-rules.schema.json",
   "title": "Test Selection Rules",
-  "description": "Configuration for test selection based on changed paths",
+  "description": "Relationship data for test selection based on changed paths. Holds only relationships (which source paths couple to which test projects, which paths matter to everything or nothing, which standalone jobs a path fans out to). All selection policy lives in the TestSelector engine, not here.",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "$schema": {
       "type": "string",
       "description": "JSON schema reference"
     },
-    "ignorePaths": {
+    "ignore": {
       "type": "array",
       "items": { "type": "string" },
       "description": "Glob patterns for files that should be completely ignored (no test triggers, no fallback)"
     },
-    "triggerAllPaths": {
+    "runEverything": {
       "type": "array",
       "items": { "type": "string" },
       "description": "Glob patterns for critical files - if any match, ALL tests run"
@@ -23,11 +24,18 @@
       "$ref": "#/definitions/includeExcludePatterns",
       "description": "Patterns to identify test projects from affected project paths"
     },
-    "sourceToTestMappings": {
+    "mappings": {
       "type": "array",
-      "description": "Mappings from source file patterns to test project patterns",
+      "description": "Conventional source->test edge generators (the compact form for the component case). Each entry expands, via the optional {name} placeholder, into one or more build-typed edges.",
       "items": {
-        "$ref": "#/definitions/sourceToTestMapping"
+        "$ref": "#/definitions/mapping"
+      }
+    },
+    "edges": {
+      "type": "array",
+      "description": "Explicit source->test edges for non-conventional couplings, tagged by type. Use a runtime edge for a coupling dotnet-affected cannot see (no ProjectReference).",
+      "items": {
+        "$ref": "#/definitions/edge"
       }
     },
     "packageOrArchiveProducingProjects": {
@@ -35,24 +43,24 @@
       "items": { "type": "string" },
       "description": "Glob patterns for projects that produce NuGet packages or archives but may not have IsPackable=true in a csproj (e.g. eng/clipack/**)"
     },
-    "categories": {
+    "inferDeps": {
       "type": "object",
-      "description": "Test categories with their trigger rules",
-      "additionalProperties": {
-        "$ref": "#/definitions/category"
-      }
+      "description": "Per-test fact: does this test project trust the edges dotnet-affected infers from the build graph? Default true. Set a .csproj path to false to declare its inferred edges are false positives; it then runs only when a declared mappings/edges entry resolves to it. Replaces the old restrictedTestProjects list.",
+      "additionalProperties": { "type": "boolean" }
     },
-    "restrictedTestProjects": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Test project .csproj paths that opt out of trigger_all and category sweeps. They run only when a sourceToTestMappings entry explicitly resolves to them. Use for tests whose dependencies are self-contained (e.g. installer scripts, CI infrastructure)."
+    "jobCategories": {
+      "type": "object",
+      "description": "Boolean run_<name> gates for standalone jobs that do not flow through the affected_test_projects matrix (e.g. extension, polyglot). The reserved name 'integrations' is special: its boolean is derived from the selected test count, and its 'when' glob set doubles as the known-source-areas accounting net.",
+      "additionalProperties": {
+        "$ref": "#/definitions/jobCategory"
+      }
     }
   },
-  "required": ["categories"],
   "definitions": {
     "includeExcludePatterns": {
       "type": "object",
       "description": "Include/exclude pattern configuration",
+      "additionalProperties": false,
       "properties": {
         "include": {
           "type": "array",
@@ -67,20 +75,25 @@
       },
       "required": ["include"]
     },
-    "sourceToTestMapping": {
+    "globOrGlobArray": {
+      "description": "A glob pattern, or an array of glob patterns.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ]
+    },
+    "mapping": {
       "type": "object",
-      "description": "Maps source paths to test projects using pattern substitution",
+      "description": "A conventional source->test edge generator. Supports {name} capture-group substitution so one entry can cover a family of components.",
+      "additionalProperties": false,
       "properties": {
-        "source": {
-          "description": "Glob pattern (or array of glob patterns) with optional {name} placeholder for source files. Use the array form to map multiple source patterns to a single test project.",
-          "oneOf": [
-            { "type": "string" },
-            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
-          ]
+        "from": {
+          "$ref": "#/definitions/globOrGlobArray",
+          "description": "Glob pattern(s) with optional {name} placeholder for source files."
         },
-        "test": {
+        "to": {
           "type": "string",
-          "description": "Pattern with {name} placeholder for test project path"
+          "description": "Pattern with optional {name} placeholder for the test project path."
         },
         "exclude": {
           "type": "array",
@@ -88,38 +101,55 @@
           "description": "Glob patterns for paths to exclude from this mapping"
         }
       },
-      "required": ["source", "test"]
+      "required": ["from", "to"]
     },
-    "category": {
+    "edge": {
       "type": "object",
-      "description": "A test category configuration",
+      "description": "An explicit source->test edge for couplings the mapping convention can't express.",
+      "additionalProperties": false,
       "properties": {
-        "description": {
+        "from": {
+          "$ref": "#/definitions/globOrGlobArray",
+          "description": "Glob pattern(s) for source files."
+        },
+        "to": {
           "type": "string",
-          "description": "Human-readable description of the category"
+          "description": "Repo-root-relative .csproj path of the test project this edge selects."
         },
-        "triggerPaths": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Glob patterns - if any match, category is triggered"
+        "type": {
+          "type": "string",
+          "enum": ["build", "runtime"],
+          "default": "build",
+          "description": "build (default; a coupling dotnet-affected can also see) or runtime (a coupling with no ProjectReference, invisible to the build graph)."
         },
-        "excludePaths": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Glob patterns - matching files are excluded from triggering this category"
+        "category": {
+          "type": "string",
+          "description": "Optional run_<category> label. The category boolean is derived from whether 'to' ends up in the selected test set, so it can never disagree with the matrix. Category edges must use a literal 'to' (no {name})."
         },
-        "testProjects": {
+        "exclude": {
           "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Test project .csproj paths to run additively whenever this category is triggered. Use for tests that depend on the category's sources at runtime (e.g. a built CLI archive or resource includes) rather than via a ProjectReference that dotnet-affected can discover."
+          "items": { "type": "string" },
+          "description": "Glob patterns for paths to exclude from this edge"
         }
-      }
+      },
+      "required": ["from", "to"]
+    },
+    "jobCategory": {
+      "type": "object",
+      "description": "A standalone job gate. 'when' declares the paths that fan out to the job; 'exclude' carves out paths that should not.",
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "$ref": "#/definitions/globOrGlobArray",
+          "description": "Glob pattern(s) that trigger this job category."
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns - matching files are excluded from triggering this category"
+        }
+      },
+      "required": ["when"]
     }
   }
 }

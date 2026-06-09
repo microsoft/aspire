@@ -88,7 +88,7 @@ rootCommand.SetAction(async result =>
             config = TestSelectorConfig.LoadFromFile(configFullPath);
             if (verbose)
             {
-                Console.WriteLine($"Loaded config with {config.IgnorePaths.Count} ignore patterns");
+                Console.WriteLine($"Loaded config with {config.Ignore.Count} ignore patterns");
             }
         }
         else if (verbose)

@@ -21,31 +21,29 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": ["**/*.md", "docs/**", ".github/**"],
-            "triggerAllPaths": ["global.json", "Directory.Build.props", "*.slnx"],
-            "categories": {
+            "ignore": ["**/*.md", "docs/**", ".github/**"],
+            "runEverything": ["global.json", "Directory.Build.props", "*.slnx"],
+            "jobCategories": {
                 "integrations": {
-                    "description": "Integration tests",
-                    "triggerPaths": ["src/**", "tests/**"],
-                    "excludePaths": ["src/Aspire.Cli/**"]
+                    "when": ["src/**", "tests/**"],
+                    "exclude": ["src/Aspire.Cli/**"]
                 },
                 "cli_e2e": {
-                    "description": "CLI end-to-end tests",
-                    "triggerPaths": ["src/Aspire.Cli/**", "tests/Aspire.Cli.EndToEnd.Tests/**"]
+                    "when": ["src/Aspire.Cli/**", "tests/Aspire.Cli.EndToEnd.Tests/**"]
                 }
             },
-            "sourceToTestMappings": [
-                {"source": "src/Components/{name}/**", "test": "tests/{name}.Tests/"},
-                {"source": "tests/{name}.Tests/**", "test": "tests/{name}.Tests/"}
+            "mappings": [
+                {"from": "src/Components/{name}/**", "to": "tests/{name}.Tests/"},
+                {"from": "tests/{name}.Tests/**", "to": "tests/{name}.Tests/"}
             ]
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
-        var criticalDetector = new CriticalFileDetector(config.TriggerAllPaths);
-        var categoryMapper = new CategoryMapper(config.Categories);
-        var projectResolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
+        var criticalDetector = new CriticalFileDetector(config.RunEverything);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
+        var projectResolver = new ProjectMappingResolver(config.Mappings);
 
         var changedFiles = new[]
         {
@@ -80,19 +78,19 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": ["**/*.md"],
-            "triggerAllPaths": ["global.json", "Directory.Build.props"],
-            "categories": {
+            "ignore": ["**/*.md"],
+            "runEverything": ["global.json", "Directory.Build.props"],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var criticalDetector = new CriticalFileDetector(config.TriggerAllPaths);
+        var criticalDetector = new CriticalFileDetector(config.RunEverything);
 
         var changedFiles = new[] { "global.json", "src/SomeFile.cs" };
 
@@ -106,13 +104,13 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "extension": {
-                    "triggerPaths": ["extension/**"]
+                    "when": ["extension/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
@@ -145,19 +143,19 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": ["**/*.md"],
-            "categories": {
+            "ignore": ["**/*.md"],
+            "jobCategories": {
                 "known": {
-                    "triggerPaths": ["src/**", "tests/**"]
+                    "when": ["src/**", "tests/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[] { "some-random-file.txt" };
         var (_, activeFiles) = ignoreFilter.SplitFiles(changedFiles);
@@ -175,18 +173,18 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": ["**/*.md", "docs/**", ".github/**", "eng/**"],
-            "categories": {
+            "ignore": ["**/*.md", "docs/**", ".github/**", "eng/**"],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
 
         var changedFiles = new[]
         {
@@ -207,19 +205,19 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = Array.Empty<string>();
 
@@ -240,22 +238,22 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"],
-                    "excludePaths": ["src/Aspire.Cli/**", "src/Aspire.ProjectTemplates/**"]
+                    "when": ["src/**"],
+                    "exclude": ["src/Aspire.Cli/**", "src/Aspire.ProjectTemplates/**"]
                 },
                 "cli": {
-                    "triggerPaths": ["src/Aspire.Cli/**"]
+                    "when": ["src/Aspire.Cli/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[] { "src/Aspire.Cli/Program.cs" };
 
@@ -270,21 +268,21 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "hosting": {
-                    "triggerPaths": ["src/Aspire.Hosting/**"]
+                    "when": ["src/Aspire.Hosting/**"]
                 },
                 "allsrc": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[] { "src/Aspire.Hosting/Host.cs" };
 
@@ -304,16 +302,16 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {},
-            "sourceToTestMappings": [
-                {"source": "src/Components/{name}/**", "test": "tests/{name}.Tests/"}
+            "ignore": [],
+            "jobCategories": {},
+            "mappings": [
+                {"from": "src/Components/{name}/**", "to": "tests/{name}.Tests/"}
             ]
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var resolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var resolver = new ProjectMappingResolver(config.Mappings);
 
         var changedFiles = new[]
         {
@@ -333,12 +331,12 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {},
-            "sourceToTestMappings": [
+            "ignore": [],
+            "jobCategories": {},
+            "mappings": [
                 {
-                    "source": "src/Aspire.Hosting.{name}/**",
-                    "test": "tests/Aspire.Hosting.{name}.Tests/",
+                    "from": "src/Aspire.Hosting.{name}/**",
+                    "to": "tests/Aspire.Hosting.{name}.Tests/",
                     "exclude": ["src/Aspire.Hosting.Testing/**"]
                 }
             ]
@@ -346,7 +344,7 @@ public class EndToEndEvaluationTests
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var resolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var resolver = new ProjectMappingResolver(config.Mappings);
 
         var changedFiles = new[]
         {
@@ -366,17 +364,17 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {},
-            "sourceToTestMappings": [
-                {"source": "src/**", "test": "tests/All.Tests/"},
-                {"source": "src/Components/{name}/**", "test": "tests/{name}.Tests/"}
+            "ignore": [],
+            "jobCategories": {},
+            "mappings": [
+                {"from": "src/**", "to": "tests/All.Tests/"},
+                {"from": "src/Components/{name}/**", "to": "tests/{name}.Tests/"}
             ]
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var resolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var resolver = new ProjectMappingResolver(config.Mappings);
 
         var changedFiles = new[] { "src/Components/Aspire.Redis/Client.cs" };
 
@@ -392,16 +390,16 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {},
-            "sourceToTestMappings": [
-                {"source": "src/Dashboard/**", "test": "tests/Dashboard.Tests/"}
+            "ignore": [],
+            "jobCategories": {},
+            "mappings": [
+                {"from": "src/Dashboard/**", "to": "tests/Dashboard.Tests/"}
             ]
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var resolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var resolver = new ProjectMappingResolver(config.Mappings);
 
         var changedFiles = new[] { "src/Dashboard/Components/Chart.cs" };
 
@@ -416,16 +414,16 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {},
-            "sourceToTestMappings": [
-                {"source": "src/Components/{name}/**", "test": "tests/{name}.Tests/"}
+            "ignore": [],
+            "jobCategories": {},
+            "mappings": [
+                {"from": "src/Components/{name}/**", "to": "tests/{name}.Tests/"}
             ]
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var resolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var resolver = new ProjectMappingResolver(config.Mappings);
 
         // Multiple files in the same component should resolve to the same test project
         var changedFiles = new[]
@@ -450,20 +448,20 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": ["**/*.md"],
-            "categories": {
+            "ignore": ["**/*.md"],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": [
-                {"source": "playground/**", "test": "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"}
+            "mappings": [
+                {"from": "playground/**", "to": "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"}
             ]
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var resolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var resolver = new ProjectMappingResolver(config.Mappings);
 
         var testProjects = resolver.ResolveAllTestProjects(["playground/TestShop/Foo.cs"]);
 
@@ -476,21 +474,21 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": ["**/*.md"],
-            "categories": {
+            "ignore": ["**/*.md"],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"],
-                    "excludePaths": ["src/Aspire.ProjectTemplates/**"]
+                    "when": ["src/**"],
+                    "exclude": ["src/Aspire.ProjectTemplates/**"]
                 }
             },
-            "sourceToTestMappings": [
-                {"source": "src/Aspire.ProjectTemplates/**", "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"}
+            "mappings": [
+                {"from": "src/Aspire.ProjectTemplates/**", "to": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"}
             ]
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var resolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var resolver = new ProjectMappingResolver(config.Mappings);
 
         var testProjects = resolver.ResolveAllTestProjects(["src/Aspire.ProjectTemplates/templates/Foo.json"]);
 
@@ -503,17 +501,17 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {},
-            "sourceToTestMappings": [
-                {"source": "playground/**", "test": "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"},
-                {"source": "src/Aspire.ProjectTemplates/**", "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"}
+            "ignore": [],
+            "jobCategories": {},
+            "mappings": [
+                {"from": "playground/**", "to": "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"},
+                {"from": "src/Aspire.ProjectTemplates/**", "to": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"}
             ]
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var resolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var resolver = new ProjectMappingResolver(config.Mappings);
 
         var testProjects = resolver.ResolveAllTestProjects(["playground/TestShop/Foo.cs", "src/Aspire.ProjectTemplates/templates/Bar.json"]);
 
@@ -530,22 +528,22 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": ["**/*.md"],
-            "categories": {
+            "ignore": ["**/*.md"],
+            "jobCategories": {
                 "extension": {
-                    "triggerPaths": ["extension/**"]
+                    "when": ["extension/**"]
                 },
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[] { "extension/package.json" };
         var (_, activeFiles) = ignoreFilter.SplitFiles(changedFiles);
@@ -561,19 +559,19 @@ public class EndToEndEvaluationTests
         // Config without templates, endtoend, playground categories
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
-                "cli_e2e": { "triggerPaths": ["src/Aspire.Cli/**"] },
-                "extension": { "triggerPaths": ["extension/**"] },
-                "polyglot": { "triggerPaths": [".github/workflows/polyglot-validation/**"] },
-                "integrations": { "triggerPaths": ["src/**"] }
+            "ignore": [],
+            "jobCategories": {
+                "cli_e2e": { "when": ["src/Aspire.Cli/**"] },
+                "extension": { "when": ["extension/**"] },
+                "polyglot": { "when": [".github/workflows/polyglot-validation/**"] },
+                "integrations": { "when": ["src/**"] }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var (categories, _) = categoryMapper.GetCategoriesTriggeredByFiles(["src/Aspire.Hosting.Redis/Foo.cs"]);
 
@@ -592,18 +590,18 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         // Windows-style paths should be normalized
         var changedFiles = new[] { @"src\Components\Aspire.Redis\Client.cs" };
@@ -623,19 +621,19 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "triggerAllPaths": ["global.json", "Directory.Build.props", "tests/Shared/**"],
-            "categories": {
+            "ignore": [],
+            "runEverything": ["global.json", "Directory.Build.props", "tests/Shared/**"],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var criticalDetector = new CriticalFileDetector(config.TriggerAllPaths);
+        var criticalDetector = new CriticalFileDetector(config.RunEverything);
 
         // Test various critical files
         Assert.True(criticalDetector.IsCriticalFile("global.json", out _));
@@ -651,15 +649,15 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "triggerAllPaths": ["global.json", "*.slnx"],
-            "categories": {},
-            "sourceToTestMappings": []
+            "ignore": [],
+            "runEverything": ["global.json", "*.slnx"],
+            "jobCategories": {},
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var criticalDetector = new CriticalFileDetector(config.TriggerAllPaths);
+        var criticalDetector = new CriticalFileDetector(config.RunEverything);
 
         var result = criticalDetector.FindFirstCriticalFile(["global.json"]);
 
@@ -676,22 +674,22 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": ["**/*.md", "docs/**"],
-            "categories": {
+            "ignore": ["**/*.md", "docs/**"],
+            "jobCategories": {
                 "cli": {
-                    "triggerPaths": ["src/Aspire.Cli/**"]
+                    "when": ["src/Aspire.Cli/**"]
                 },
                 "extension": {
-                    "triggerPaths": ["extension/**"]
+                    "when": ["extension/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[]
         {
@@ -716,36 +714,36 @@ public class EndToEndEvaluationTests
     {
         var configJson = """
         {
-            "ignorePaths": ["**/*.md", "docs/**", ".github/**", "eng/**"],
-            "triggerAllPaths": ["global.json", "Directory.Build.props", "*.slnx", "src/Aspire.Hosting/**", "tests/Shared/**"],
-            "categories": {
+            "ignore": ["**/*.md", "docs/**", ".github/**", "eng/**"],
+            "runEverything": ["global.json", "Directory.Build.props", "*.slnx", "src/Aspire.Hosting/**", "tests/Shared/**"],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**", "tests/Aspire.*.Tests/**"],
-                    "excludePaths": ["src/Aspire.Cli/**", "src/Aspire.ProjectTemplates/**"]
+                    "when": ["src/**", "tests/Aspire.*.Tests/**"],
+                    "exclude": ["src/Aspire.Cli/**", "src/Aspire.ProjectTemplates/**"]
                 },
                 "cli_e2e": {
-                    "triggerPaths": ["src/Aspire.Cli/**", "tests/Aspire.Cli.EndToEnd.Tests/**"]
+                    "when": ["src/Aspire.Cli/**", "tests/Aspire.Cli.EndToEnd.Tests/**"]
                 },
                 "templates": {
-                    "triggerPaths": ["src/Aspire.ProjectTemplates/**", "tests/Aspire.Templates.Tests/**"]
+                    "when": ["src/Aspire.ProjectTemplates/**", "tests/Aspire.Templates.Tests/**"]
                 },
                 "extension": {
-                    "triggerPaths": ["extension/**"]
+                    "when": ["extension/**"]
                 }
             },
-            "sourceToTestMappings": [
-                {"source": "src/Components/{name}/**", "test": "tests/{name}.Tests/"},
-                {"source": "src/Aspire.Dashboard/**", "test": "tests/Aspire.Dashboard.Tests/"},
-                {"source": "tests/{name}.Tests/**", "test": "tests/{name}.Tests/"}
+            "mappings": [
+                {"from": "src/Components/{name}/**", "to": "tests/{name}.Tests/"},
+                {"from": "src/Aspire.Dashboard/**", "to": "tests/Aspire.Dashboard.Tests/"},
+                {"from": "tests/{name}.Tests/**", "to": "tests/{name}.Tests/"}
             ]
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
-        var criticalDetector = new CriticalFileDetector(config.TriggerAllPaths);
-        var categoryMapper = new CategoryMapper(config.Categories);
-        var projectResolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
+        var criticalDetector = new CriticalFileDetector(config.RunEverything);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
+        var projectResolver = new ProjectMappingResolver(config.Mappings);
 
         var changedFiles = new[]
         {
@@ -792,9 +790,9 @@ public class EndToEndEvaluationTests
         var configPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "test-selection-rules.audit.json");
         var configJson = File.ReadAllText(configPath);
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
-        var criticalDetector = new CriticalFileDetector(config.TriggerAllPaths);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
+        var criticalDetector = new CriticalFileDetector(config.RunEverything);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         // Representative file paths for every pattern in the old github-ci-trigger-patterns.txt:
         //   eng/testing/github-ci-trigger-patterns.txt  (self)
@@ -901,8 +899,8 @@ public class EndToEndEvaluationTests
         var configPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "test-selection-rules.audit.json");
         var configJson = File.ReadAllText(configPath);
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
-        var criticalDetector = new CriticalFileDetector(config.TriggerAllPaths);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
+        var criticalDetector = new CriticalFileDetector(config.RunEverything);
 
         // Typical doc-only PR
         var changedFiles = new[]
@@ -929,7 +927,7 @@ public class EndToEndEvaluationTests
         var configPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "test-selection-rules.audit.json");
         var configJson = File.ReadAllText(configPath);
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
 
         var changedFiles = new[]
         {
@@ -948,7 +946,7 @@ public class EndToEndEvaluationTests
         var configPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "test-selection-rules.json");
         var configJson = File.ReadAllText(configPath);
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var resolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var resolver = new ProjectMappingResolver(config.Mappings);
 
         var changedFiles = new[]
         {
@@ -971,12 +969,12 @@ public class EndToEndEvaluationTests
     {
         var activeConfigPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "test-selection-rules.json");
         var activeConfig = TestSelectorConfig.LoadFromJson(File.ReadAllText(activeConfigPath));
-        var activeIgnoreFilter = new IgnorePathFilter(activeConfig.IgnorePaths);
+        var activeIgnoreFilter = new IgnorePathFilter(activeConfig.Ignore);
 
         var auditConfigPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "test-selection-rules.audit.json");
         var auditConfig = TestSelectorConfig.LoadFromJson(File.ReadAllText(auditConfigPath));
-        var auditIgnoreFilter = new IgnorePathFilter(auditConfig.IgnorePaths);
-        var auditCategoryMapper = new CategoryMapper(auditConfig.Categories);
+        var auditIgnoreFilter = new IgnorePathFilter(auditConfig.Ignore);
+        var auditCategoryMapper = new CategoryMapper(auditConfig.JobCategories);
 
         var changedFiles = new[]
         {
@@ -1021,7 +1019,10 @@ public class EndToEndEvaluationTests
         Assert.Equal("selective_mappings_only", result.Reason);
         Assert.Equal(["tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"], result.AffectedTestProjects);
         Assert.Empty(result.DotnetAffectedProjects);
-        Assert.True(result.Categories["integrations"]);
+        // integrations is never a key in Categories; its run_integrations boolean is derived from the
+        // selected-project count in WriteGitHubOutput, and one project was selected here.
+        Assert.DoesNotContain(TestSelectorConfig.IntegrationsCategory, result.Categories.Keys);
+        Assert.NotEmpty(result.AffectedTestProjects);
     }
 
     [Fact]
@@ -1066,16 +1067,15 @@ public class EndToEndEvaluationTests
         // excludePath match).
         var configJson = """
         {
-            "ignorePaths": ["**/*.md"],
-            "triggerAllPaths": [],
-            "categories": {
+            "ignore": ["**/*.md"],
+            "runEverything": [],
+            "jobCategories": {
                 "integrations": {
-                    "description": "Integrations sweep",
-                    "triggerPaths": ["tests/Aspire.*.Tests/**"],
-                    "excludePaths": ["**/*.md"]
+                    "when": ["tests/Aspire.*.Tests/**"],
+                    "exclude": ["**/*.md"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
@@ -1093,7 +1093,10 @@ public class EndToEndEvaluationTests
 
         Assert.False(result.RunAllTests);
         Assert.Equal("all_ignored", result.Reason);
-        Assert.False(result.Categories["integrations"]);
+        // The file stayed ignored, so nothing was selected; run_integrations is count-derived and
+        // false here (integrations is never placed in Categories).
+        Assert.DoesNotContain(TestSelectorConfig.IntegrationsCategory, result.Categories.Keys);
+        Assert.Empty(result.AffectedTestProjects);
     }
 
     [Fact]
@@ -1107,15 +1110,14 @@ public class EndToEndEvaluationTests
         // polyglot category, so it must rescue.
         var configJson = """
         {
-            "ignorePaths": [".github/workflows/**"],
-            "triggerAllPaths": [],
-            "categories": {
+            "ignore": [".github/workflows/**"],
+            "runEverything": [],
+            "jobCategories": {
                 "polyglot": {
-                    "description": "Polyglot validation",
-                    "triggerPaths": [".github/workflows/polyglot-validation.yml"]
+                    "when": [".github/workflows/polyglot-validation.yml"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
@@ -1147,15 +1149,15 @@ public class EndToEndEvaluationTests
         // prefixing "**/" before handing them to the Matcher.
         var configJson = """
         {
-            "ignorePaths": [],
-            "triggerAllPaths": ["global.json", "Directory.Build.props", "Directory.Packages.props", "*.slnx"],
-            "categories": {},
-            "sourceToTestMappings": []
+            "ignore": [],
+            "runEverything": ["global.json", "Directory.Build.props", "Directory.Packages.props", "*.slnx"],
+            "jobCategories": {},
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var criticalDetector = new CriticalFileDetector(config.TriggerAllPaths);
+        var criticalDetector = new CriticalFileDetector(config.RunEverything);
 
         Assert.True(criticalDetector.IsCriticalFile("global.json", out _));
         Assert.True(criticalDetector.IsCriticalFile("Directory.Build.props", out _));
@@ -1179,14 +1181,14 @@ public class EndToEndEvaluationTests
         // at the repo root.
         var configJson = """
         {
-            "ignorePaths": [".editorconfig", ".gitignore", "*.sln"],
-            "categories": {},
-            "sourceToTestMappings": []
+            "ignore": [".editorconfig", ".gitignore", "*.sln"],
+            "jobCategories": {},
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var filter = new IgnorePathFilter(config.IgnorePaths);
+        var filter = new IgnorePathFilter(config.Ignore);
 
         Assert.True(filter.ShouldIgnore(".editorconfig"));
         Assert.True(filter.ShouldIgnore("src/.editorconfig"));
@@ -1224,12 +1226,12 @@ public class EndToEndEvaluationTests
 
     private const string MatchedButZeroConfigJson = """
     {
-        "ignorePaths": [],
-        "categories": {
-            "integrations": { "triggerPaths": ["src/**"] },
-            "polyglot": { "triggerPaths": [".github/workflows/polyglot-validation.yml"] }
+        "ignore": [],
+        "jobCategories": {
+            "integrations": { "when": ["src/**"] },
+            "polyglot": { "when": [".github/workflows/polyglot-validation.yml"] }
         },
-        "sourceToTestMappings": []
+        "mappings": []
     }
     """;
 
@@ -1249,7 +1251,9 @@ public class EndToEndEvaluationTests
 
         Assert.NotNull(result);
         Assert.True(result.RunAllTests);
-        Assert.True(result.Categories["integrations"]);
+        // integrations is never placed in Categories (its run_<name> boolean is count-derived in
+        // WriteGitHubOutput); RunAllTests=true is what makes run_integrations true on this path.
+        Assert.DoesNotContain(TestSelectorConfig.IntegrationsCategory, result.Categories.Keys);
         Assert.True(result.Categories["polyglot"]);
         Assert.Contains("src/Aspire.Hosting.Redis/non-input-asset.txt", result.ChangedFiles);
     }
@@ -1313,96 +1317,42 @@ public class EndToEndEvaluationTests
 
     #endregion
 
-    #region Category Forced Test Projects
+    #region Edges (runtime/build couplings)
 
-    // A category can declare testProjects that must run whenever it is triggered, even though no
-    // ProjectReference connects them to the changed sources (so dotnet-affected can't find them).
-    // The motivating case is CLI end-to-end tests, which consume a built CLI archive at runtime.
+    // An edge expresses a coupling dotnet-affected cannot follow because there is no
+    // ProjectReference. The motivating case is the CLI end-to-end tests, which consume a built CLI
+    // archive at runtime, so a change under src/Aspire.Cli/** (or the archive build under
+    // eng/clipack/**) must still select tests/Aspire.Cli.EndToEnd.Tests even though nothing
+    // references it. Edges carry an optional category label; run_<category> is then a pure
+    // projection over the selected set, never a parallel glob re-match (the D7 contract).
 
-    private const string ForcedTestProjectsConfigJson = """
+    private const string CliE2eEdgeConfigJson = """
     {
-        "ignorePaths": [],
-        "categories": {
-            "cli_e2e": {
-                "triggerPaths": ["src/Aspire.Cli/**"],
-                "testProjects": ["tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj"]
-            },
-            "integrations": { "triggerPaths": ["src/**"] }
-        },
-        "sourceToTestMappings": []
+        "ignore": [],
+        "runEverything": [],
+        "testProjectPatterns": { "include": ["tests/**/*.Tests.csproj"], "exclude": [] },
+        "mappings": [
+            { "from": "src/Aspire.Cli/**", "to": "tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj" }
+        ],
+        "edges": [
+            {
+                "from": "src/Aspire.Cli/**",
+                "to": "tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj",
+                "type": "runtime",
+                "category": "cli_e2e"
+            }
+        ]
     }
     """;
 
     [Fact]
-    public void CollectCategoryForcedTestProjects_TriggeredCategory_ReturnsTestProjects()
+    public async Task EndToEnd_RuntimeEdge_SelectsCliE2E()
     {
-        var config = TestSelectorConfig.LoadFromJson(ForcedTestProjectsConfigJson);
-        var categories = new Dictionary<string, bool> { ["cli_e2e"] = true, ["integrations"] = true };
-
-        var forced = TestEvaluator.CollectCategoryForcedTestProjects(config, categories);
-
-        Assert.Equal(["tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj"], forced);
-    }
-
-    [Fact]
-    public void CollectCategoryForcedTestProjects_UntriggeredCategory_ReturnsEmpty()
-    {
-        // The category that owns the forced project is not triggered, so nothing is forced even
-        // though another (triggered) category exists without testProjects.
-        var config = TestSelectorConfig.LoadFromJson(ForcedTestProjectsConfigJson);
-        var categories = new Dictionary<string, bool> { ["cli_e2e"] = false, ["integrations"] = true };
-
-        var forced = TestEvaluator.CollectCategoryForcedTestProjects(config, categories);
-
-        Assert.Empty(forced);
-    }
-
-    [Fact]
-    public void AddCategoryForcedTestProjects_AppendsAndDeduplicates()
-    {
-        var config = TestSelectorConfig.LoadFromJson(ForcedTestProjectsConfigJson);
-        var logger = new DiagnosticLogger(false);
-        var categories = new Dictionary<string, bool> { ["cli_e2e"] = true };
-
-        // The forced project is already present (different casing) and must not be duplicated;
-        // an unrelated project must be preserved.
-        var existing = new List<string>
-        {
-            "tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj",
-            "tests/aspire.cli.endtoend.tests/aspire.cli.endtoend.tests.csproj"
-        };
-
-        var combined = TestEvaluator.AddCategoryForcedTestProjects(logger, config, categories, existing);
-
-        Assert.Equal(2, combined.Count);
-        Assert.Contains("tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj", combined);
-        Assert.Contains(combined, p => p.Equals("tests/aspire.cli.endtoend.tests/aspire.cli.endtoend.tests.csproj", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public async Task Evaluate_CategoryTestProjects_MappingsOnly_ForcesProjectAdditively()
-    {
-        // The changed file is both resolved by a sourceToTestMapping (so dotnet-affected is
-        // skipped) and triggers cli_e2e. The mapped test project and the category's forced test
-        // project must both end up in AffectedTestProjects.
-        var configJson = """
-        {
-            "ignorePaths": [],
-            "triggerAllPaths": [],
-            "testProjectPatterns": { "include": ["tests/**/*.Tests.csproj"], "exclude": [] },
-            "sourceToTestMappings": [
-                { "source": "src/Aspire.Cli/**", "test": "tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj" }
-            ],
-            "categories": {
-                "cli_e2e": {
-                    "triggerPaths": ["src/Aspire.Cli/**"],
-                    "testProjects": ["tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj"]
-                }
-            }
-        }
-        """;
-
-        var config = TestSelectorConfig.LoadFromJson(configJson);
+        // The changed CLI source file is resolved by a mapping (so dotnet-affected is skipped) AND
+        // fires the runtime edge. The mapped unit-test project and the edge's end-to-end project
+        // must both end up in AffectedTestProjects. REVERT-RED: delete the edge and
+        // Aspire.Cli.EndToEnd.Tests is silently dropped (it has no ProjectReference).
+        var config = TestSelectorConfig.LoadFromJson(CliE2eEdgeConfigJson);
 
         var result = await TestEvaluator.EvaluateAsync(
             config,
@@ -1418,28 +1368,95 @@ public class EndToEndEvaluationTests
         Assert.Equal("selective_mappings_only", result.Reason);
         Assert.Contains("tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj", result.AffectedTestProjects);
         Assert.Contains("tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj", result.AffectedTestProjects);
-        Assert.True(result.Categories["cli_e2e"]);
+    }
+
+    [Fact]
+    public async Task RunCliE2E_TrueIff_CliE2EProjectSelected()
+    {
+        // The D7 contract: run_cli_e2e is a projection over the selected set, so the boolean is true
+        // exactly when the cli_e2e test project is selected — they can never disagree. REVERT-RED:
+        // re-deriving run_cli_e2e by re-matching selected test-project paths against a category's
+        // globs (the old UpdateCategoriesFromTestProjects) lets the boolean and the matrix drift.
+        const string cliE2eProject = "tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj";
+
+        var fired = await TestEvaluator.EvaluateAsync(
+            TestSelectorConfig.LoadFromJson(CliE2eEdgeConfigJson),
+            ["src/Aspire.Cli/Program.cs"],
+            solution: "Aspire.slnx", fromRef: null, toRef: null,
+            workingDir: Directory.GetCurrentDirectory(), ciEnvironment: "github-actions", verbose: false);
+
+        Assert.Equal(fired.AffectedTestProjects.Contains(cliE2eProject), fired.Categories["cli_e2e"]);
+        Assert.True(fired.Categories["cli_e2e"]);
+
+        // A mapping-only change that does not match the edge's from-glob: the project is not
+        // selected and run_cli_e2e is false, again in lock-step.
+        const string mappingOnlyConfigJson = """
+        {
+            "ignore": [],
+            "runEverything": [],
+            "testProjectPatterns": { "include": ["tests/**/*.Tests.csproj"], "exclude": [] },
+            "mappings": [
+                { "from": "src/Aspire.Dashboard/**", "to": "tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj" }
+            ],
+            "edges": [
+                {
+                    "from": "src/Aspire.Cli/**",
+                    "to": "tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj",
+                    "type": "runtime",
+                    "category": "cli_e2e"
+                }
+            ]
+        }
+        """;
+
+        var notFired = await TestEvaluator.EvaluateAsync(
+            TestSelectorConfig.LoadFromJson(mappingOnlyConfigJson),
+            ["src/Aspire.Dashboard/DashboardWebApplication.cs"],
+            solution: "Aspire.slnx", fromRef: null, toRef: null,
+            workingDir: Directory.GetCurrentDirectory(), ciEnvironment: "github-actions", verbose: false);
+
+        Assert.Equal(notFired.AffectedTestProjects.Contains(cliE2eProject), notFired.Categories["cli_e2e"]);
+        Assert.False(notFired.Categories["cli_e2e"]);
     }
 
     [Theory]
     [InlineData("src/Aspire.Cli/Program.cs")]
     [InlineData("src/Aspire.Hosting/DistributedApplication.cs")]
     [InlineData("eng/clipack/build.proj")]
-    public void RealAuditConfig_CliE2eTrigger_ForcesCliE2eTestProject(string changedFile)
+    [InlineData("tests/Aspire.Cli.EndToEnd.Tests/CliEndToEndTests.cs")]
+    public void RealAuditConfig_CliE2eEdge_SelectsCliE2eTestProject(string changedFile)
     {
-        // Pins the audit ruleset: a change that fires cli_e2e (cli, hosting core, or the cli
-        // archive) forces Aspire.Cli.EndToEnd.Tests, which has no ProjectReference and would
-        // otherwise be silently dropped under selective scope.
+        // Pins the audit ruleset: a change that fires either cli_e2e edge (CLI source, hosting core,
+        // the archive build, or a direct edit to the end-to-end tests) resolves the
+        // Aspire.Cli.EndToEnd.Tests project through the edge. That project has no ProjectReference
+        // and an inferDeps:false opt-out, so without the edge it would be silently dropped.
         var auditConfigPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "test-selection-rules.audit.json");
         var auditConfig = TestSelectorConfig.LoadFromJson(File.ReadAllText(auditConfigPath));
-        var categoryMapper = new CategoryMapper(auditConfig.Categories);
 
-        var (categories, _) = categoryMapper.GetCategoriesTriggeredByFiles([changedFile]);
-        Assert.True(categories["cli_e2e"]);
+        var edgeResolver = new ProjectMappingResolver(auditConfig.Edges
+            .Where(e => string.Equals(e.Category, "cli_e2e", StringComparison.Ordinal))
+            .Select(e => new SelectionMapping { From = e.From, To = e.To, Exclude = e.Exclude }));
 
-        var forced = TestEvaluator.CollectCategoryForcedTestProjects(auditConfig, categories);
+        var resolved = edgeResolver.ResolveAllTestProjects([changedFile]);
 
-        Assert.Contains("tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj", forced);
+        Assert.Contains("tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj", resolved);
+    }
+
+    [Theory]
+    [InlineData("extension/src/extension.ts", true)]
+    [InlineData("src/Aspire.Hosting/DistributedApplication.cs", true)]
+    [InlineData("src/Aspire.Dashboard/DashboardWebApplication.cs", false)]
+    public void JobCategory_Extension_TriggersOnExtensionPathsOnly(string changedFile, bool expectedTriggered)
+    {
+        // Standalone job categories (extension/polyglot) keep when/exclude trigger semantics and run
+        // as dedicated jobs gated by run_<category>, independent of the affected-projects matrix.
+        var auditConfigPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "test-selection-rules.audit.json");
+        var auditConfig = TestSelectorConfig.LoadFromJson(File.ReadAllText(auditConfigPath));
+
+        var mapper = new CategoryMapper(auditConfig.JobCategories);
+        var (categories, _) = mapper.GetCategoriesTriggeredByFiles([changedFile]);
+
+        Assert.Equal(expectedTriggered, categories["extension"]);
     }
 
     #endregion

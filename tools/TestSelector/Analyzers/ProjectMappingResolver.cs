@@ -8,14 +8,16 @@ using Microsoft.Extensions.FileSystemGlobbing;
 namespace TestSelector.Analyzers;
 
 /// <summary>
-/// Resolves test projects from changed files using sourceToTestMappings configuration.
-/// Supports {name} capture group substitution for flexible source-to-test mapping.
+/// Resolves test projects from changed files using <see cref="SelectionMapping"/> entries.
+/// Supports {name} capture group substitution for flexible source-to-test mapping. The same
+/// resolver is reused for explicit <see cref="SelectionEdge"/> entries (which carry the same
+/// from/to/exclude shape) so the glob/{name} logic lives in exactly one place.
 /// </summary>
 public sealed class ProjectMappingResolver
 {
     private readonly List<CompiledMapping> _mappings;
 
-    public ProjectMappingResolver(IEnumerable<SourceToTestMapping> mappings)
+    public ProjectMappingResolver(IEnumerable<SelectionMapping> mappings)
     {
         _mappings = mappings.Select(m => new CompiledMapping(m)).ToList();
     }
@@ -130,10 +132,10 @@ public sealed class ProjectMappingResolver
         private readonly string _testPattern;
         private readonly Matcher _excludeMatcher;
 
-        public CompiledMapping(SourceToTestMapping mapping)
+        public CompiledMapping(SelectionMapping mapping)
         {
-            _testPattern = mapping.Test;
-            _sources = mapping.Source.Select(s => new CompiledSourcePattern(s)).ToArray();
+            _testPattern = mapping.To;
+            _sources = mapping.From.Select(s => new CompiledSourcePattern(s)).ToArray();
 
             // Build exclude matcher (applied to every source pattern in this mapping).
             _excludeMatcher = new Matcher();

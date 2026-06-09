@@ -1,36 +1,35 @@
 {
   "$schema": "./test-selection-rules.schema.json",
 
-  "ignorePaths": [],
+  "ignore": [],
 
-  "triggerAllPaths": [],
+  "runEverything": [],
 
   "testProjectPatterns": {
     "include": ["tests/**/*.Tests.csproj"],
     "exclude": ["tests/testproject/**", "tests/**/TestFixtures/**", "tests/TestingAppHost1/**"]
   },
 
-  "sourceToTestMappings": [
+  "mappings": [
     {
-      "source": "src/Aspire.ProjectTemplates/**",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+      "from": "src/Aspire.ProjectTemplates/**",
+      "to": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
     },
     {
-      "source": "tests/Aspire.Templates.Tests/**",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+      "from": "tests/Aspire.Templates.Tests/**",
+      "to": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
     },
     {
-      "source": "tests/Shared/TemplatesTesting/**",
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+      "from": "tests/Shared/TemplatesTesting/**",
+      "to": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
     }
   ],
 
   "packageOrArchiveProducingProjects": [],
 
-  "categories": {
+  "jobCategories": {
     "integrations": {
-      "description": "Template-focused integration test coverage",
-      "triggerPaths": [
+      "when": [
         "src/Aspire.ProjectTemplates/**",
         "tests/Aspire.Templates.Tests/**",
         "tests/Shared/TemplatesTesting/**"

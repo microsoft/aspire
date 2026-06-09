@@ -8,14 +8,15 @@ using Microsoft.Extensions.FileSystemGlobbing;
 namespace TestSelector;
 
 /// <summary>
-/// Maps files to test categories based on triggerPaths configuration.
+/// Maps files to job categories based on each <see cref="JobCategory.When"/> glob set
+/// (minus <see cref="JobCategory.Exclude"/>).
 /// </summary>
 public sealed class CategoryMapper
 {
-    private readonly Dictionary<string, CategoryConfig> _categoryConfigs;
+    private readonly Dictionary<string, JobCategory> _categoryConfigs;
     private readonly Dictionary<string, CompiledCategory> _compiledCategories;
 
-    public CategoryMapper(Dictionary<string, CategoryConfig> categoryConfigs)
+    public CategoryMapper(Dictionary<string, JobCategory> categoryConfigs)
     {
         _categoryConfigs = categoryConfigs;
         _compiledCategories = categoryConfigs
@@ -146,11 +147,11 @@ public sealed class CategoryMapper
     }
 
     /// <summary>
-    /// Gets the category configuration for a specific category.
+    /// Gets the job category configuration for a specific category.
     /// </summary>
     /// <param name="categoryName">The category name.</param>
-    /// <returns>The category configuration, or null if not found.</returns>
-    public CategoryConfig? GetCategoryConfig(string categoryName)
+    /// <returns>The job category configuration, or null if not found.</returns>
+    public JobCategory? GetCategoryConfig(string categoryName)
     {
         return _categoryConfigs.TryGetValue(categoryName, out var config) ? config : null;
     }
@@ -161,12 +162,12 @@ public sealed class CategoryMapper
         private readonly Matcher _excludeMatcher;
         private readonly Dictionary<string, Matcher> _patternMatchers;
 
-        public CompiledCategory(CategoryConfig config)
+        public CompiledCategory(JobCategory config)
         {
             _patternMatchers = [];
 
             _triggerMatcher = new Matcher();
-            foreach (var pattern in config.TriggerPaths)
+            foreach (var pattern in config.When)
             {
                 var normalized = PatternNormalization.NormalizeGlob(pattern);
                 _triggerMatcher.AddInclude(normalized);
@@ -178,7 +179,7 @@ public sealed class CategoryMapper
             }
 
             _excludeMatcher = new Matcher();
-            foreach (var pattern in config.ExcludePaths)
+            foreach (var pattern in config.Exclude)
             {
                 _excludeMatcher.AddInclude(PatternNormalization.NormalizeGlob(pattern));
             }

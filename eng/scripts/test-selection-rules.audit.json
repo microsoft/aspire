@@ -1,7 +1,7 @@
 {
   "$schema": "./test-selection-rules.schema.json",
 
-  "ignorePaths": [
+  "ignore": [
     ".editorconfig",
     ".gitignore",
     "**/*.md",
@@ -32,7 +32,7 @@
     "*.slnf"
   ],
 
-  "triggerAllPaths": [
+  "runEverything": [
     "global.json",
     "Directory.Build.props",
     "Directory.Build.targets",
@@ -45,13 +45,13 @@
     "exclude": ["tests/testproject/**", "tests/**/TestFixtures/**", "tests/TestingAppHost1/**"]
   },
 
-  "sourceToTestMappings": [
+  "mappings": [
     {
-      "source": "playground/**",
-      "test": "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"
+      "from": "playground/**",
+      "to": "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"
     },
     {
-      "source": [
+      "from": [
         "src/Aspire.ProjectTemplates/**",
         "tests/Aspire.Templates.Tests/**",
         "tests/Shared/TemplatesTesting/**",
@@ -70,16 +70,16 @@
         "eng/Versions.props",
         "global.json"
       ],
-      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+      "to": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
     },
 
     {
-      "source": "tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**",
-      "test": "tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests.csproj"
+      "from": "tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**",
+      "to": "tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests.csproj"
     },
 
     {
-      "source": [
+      "from": [
         "tests/Infrastructure.Tests/**",
         "eng/Publishing.props",
         "eng/Signing.props",
@@ -89,11 +89,11 @@
         "eng/scripts/validate-cli-symbols.ps1",
         "tools/TypeScriptApiCompat/**"
       ],
-      "test": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+      "to": "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
     },
 
     {
-      "source": [
+      "from": [
         "eng/scripts/get-aspire-cli.ps1",
         "eng/scripts/get-aspire-cli.sh",
         "eng/scripts/get-aspire-cli-pr.ps1",
@@ -103,15 +103,45 @@
         "eng/winget/**",
         "tests/Aspire.Acquisition.Tests/**"
       ],
-      "test": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
+      "to": "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj"
     },
 
     {
-      "source": [
+      "from": [
         "eng/scripts/update-aspire-skills-bundle.ps1",
         "eng/scripts/verify-aspire-skills-bundle.ps1"
       ],
-      "test": "tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj"
+      "to": "tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj"
+    }
+  ],
+
+  "edges": [
+    {
+      "from": [
+        "src/Aspire.Cli/**",
+        "src/Aspire.Hosting/**",
+        "eng/clipack/**"
+      ],
+      "to": "tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj",
+      "type": "runtime",
+      "category": "cli_e2e",
+      "exclude": [
+        "**/*.md",
+        "**/api/*.txt"
+      ]
+    },
+    {
+      "from": [
+        "tests/Aspire.Cli.EndToEnd.Tests/**",
+        "tests/Shared/Hex1b*"
+      ],
+      "to": "tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj",
+      "type": "build",
+      "category": "cli_e2e",
+      "exclude": [
+        "**/*.md",
+        "**/api/*.txt"
+      ]
     }
   ],
 
@@ -119,38 +149,25 @@
     "eng/clipack/**"
   ],
 
-  "categories": {
-    "cli_e2e": {
-      "description": "CLI end-to-end tests",
-      "triggerPaths": [
-        "src/Aspire.Cli/**",
-        "src/Aspire.Hosting/**",
-        "eng/clipack/**",
-        "tests/Aspire.Cli.EndToEnd.Tests/**",
-        "tests/Shared/Hex1b*"
-      ],
-      "excludePaths": [
-        "**/api/*.txt"
-      ],
-      "testProjects": [
-        "tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj"
-      ]
-    },
+  "inferDeps": {
+    "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj": false,
+    "tests/Infrastructure.Tests/Infrastructure.Tests.csproj": false,
+    "tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj": false
+  },
 
+  "jobCategories": {
     "extension": {
-      "description": "VS Code extension tests",
-      "triggerPaths": [
+      "when": [
         "extension/**",
         "src/Aspire.Hosting/**"
       ],
-      "excludePaths": [
+      "exclude": [
         "**/api/*.txt"
       ]
     },
 
     "polyglot": {
-      "description": "Polyglot SDK validation tests",
-      "triggerPaths": [
+      "when": [
         ".github/workflows/polyglot-validation/**",
         ".github/workflows/polyglot-validation.yml",
         "tests/PolyglotAppHosts/**",
@@ -163,14 +180,13 @@
         "src/Aspire.Hosting.Rust/**",
         "src/Aspire.Hosting.CodeGeneration*/**"
       ],
-      "excludePaths": [
+      "exclude": [
         "**/api/*.txt"
       ]
     },
 
     "integrations": {
-      "description": "Integration tests for components, dashboard, and hosting extensions",
-      "triggerPaths": [
+      "when": [
         "src/Aspire.Dashboard/**",
         "src/Aspire.Hosting/**",
         "src/Aspire.Hosting.*/**",
@@ -185,7 +201,7 @@
         "tests/testproject/**",
         "tests/TestingAppHost1/**"
       ],
-      "excludePaths": [
+      "exclude": [
         "src/Aspire.ProjectTemplates/**",
         "src/Aspire.Cli/**",
         "tests/Aspire.Templates.Tests/**",
@@ -197,10 +213,5 @@
         "**/api/*.txt"
       ]
     }
-  },
-
-  "restrictedTestProjects": [
-    "tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj",
-    "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
-  ]
+  }
 }

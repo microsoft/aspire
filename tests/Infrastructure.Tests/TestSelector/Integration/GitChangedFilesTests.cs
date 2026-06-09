@@ -21,18 +21,18 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         // Windows-style paths
         var changedFiles = new[]
@@ -52,18 +52,18 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         // Unix-style paths
         var changedFiles = new[]
@@ -83,18 +83,18 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         // Mixed path separators
         var changedFiles = new[]
@@ -118,19 +118,19 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
 
         var changedFiles = Array.Empty<string>();
 
@@ -148,18 +148,18 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[] { "src/File.cs" };
 
@@ -178,18 +178,18 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[]
         {
@@ -208,18 +208,18 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[]
         {
@@ -238,18 +238,18 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[]
         {
@@ -272,18 +272,18 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         // Different casing
         var changedFiles = new[]
@@ -309,18 +309,18 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[]
         {
@@ -338,18 +338,18 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "integrations": {
-                    "triggerPaths": ["src/**"]
+                    "when": ["src/**"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var longFilename = new string('a', 200) + ".cs";
         var changedFiles = new[]
@@ -372,16 +372,16 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {},
-            "sourceToTestMappings": [
-                {"source": "src/Components/{name}/**", "test": "tests/{name}.Tests/"}
+            "ignore": [],
+            "jobCategories": {},
+            "mappings": [
+                {"from": "src/Components/{name}/**", "to": "tests/{name}.Tests/"}
             ]
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var resolver = new ProjectMappingResolver(config.SourceToTestMappings);
+        var resolver = new ProjectMappingResolver(config.Mappings);
 
         // Windows paths
         var changedFiles = new[]
@@ -400,14 +400,14 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": ["**/*.md", "docs/**"],
-            "categories": {},
-            "sourceToTestMappings": []
+            "ignore": ["**/*.md", "docs/**"],
+            "jobCategories": {},
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var ignoreFilter = new IgnorePathFilter(config.IgnorePaths);
+        var ignoreFilter = new IgnorePathFilter(config.Ignore);
 
         // Windows paths
         var changedFiles = new[]
@@ -432,27 +432,27 @@ public class GitChangedFilesTests
     {
         var configJson = """
         {
-            "ignorePaths": [],
-            "categories": {
+            "ignore": [],
+            "jobCategories": {
                 "csharp": {
-                    "triggerPaths": ["**/*.cs"]
+                    "when": ["**/*.cs"]
                 },
                 "razor": {
-                    "triggerPaths": ["**/*.razor"]
+                    "when": ["**/*.razor"]
                 },
                 "typescript": {
-                    "triggerPaths": ["**/*.ts", "**/*.tsx"]
+                    "when": ["**/*.ts", "**/*.tsx"]
                 },
                 "json": {
-                    "triggerPaths": ["**/*.json"]
+                    "when": ["**/*.json"]
                 }
             },
-            "sourceToTestMappings": []
+            "mappings": []
         }
         """;
 
         var config = TestSelectorConfig.LoadFromJson(configJson);
-        var categoryMapper = new CategoryMapper(config.Categories);
+        var categoryMapper = new CategoryMapper(config.JobCategories);
 
         var changedFiles = new[]
         {

@@ -11,28 +11,24 @@ public class CategoryMapperTests
 {
     private static CategoryMapper CreateMapper()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["core"] = new CategoryConfig
+            ["core"] = new JobCategory
             {
-                Description = "Critical paths",
-                TriggerPaths = ["global.json", "Directory.Build.props", "src/Aspire.Hosting/**"]
+                When = ["global.json", "Directory.Build.props", "src/Aspire.Hosting/**"]
             },
-            ["integrations"] = new CategoryConfig
+            ["integrations"] = new JobCategory
             {
-                Description = "Integration tests",
-                TriggerPaths = ["src/Aspire.*/**", "src/Components/**", "tests/Aspire.*.Tests/**"],
-                ExcludePaths = ["src/Aspire.Cli/**", "src/Aspire.ProjectTemplates/**"]
+                When = ["src/Aspire.*/**", "src/Components/**", "tests/Aspire.*.Tests/**"],
+                Exclude = ["src/Aspire.Cli/**", "src/Aspire.ProjectTemplates/**"]
             },
-            ["cli_e2e"] = new CategoryConfig
+            ["cli_e2e"] = new JobCategory
             {
-                Description = "CLI E2E tests",
-                TriggerPaths = ["src/Aspire.Cli/**", "tests/Aspire.Cli.EndToEnd.Tests/**"]
+                When = ["src/Aspire.Cli/**", "tests/Aspire.Cli.EndToEnd.Tests/**"]
             },
-            ["extension"] = new CategoryConfig
+            ["extension"] = new JobCategory
             {
-                Description = "VS Code extension tests",
-                TriggerPaths = ["extension/**"]
+                When = ["extension/**"]
             }
         };
 
@@ -186,7 +182,7 @@ public class CategoryMapperTests
         var config = mapper.GetCategoryConfig("core");
 
         Assert.NotNull(config);
-        Assert.Equal("Critical paths", config.Description);
+        Assert.Contains("global.json", config.When);
     }
 
     [Fact]
@@ -252,12 +248,11 @@ public class CategoryMapperTests
     [Fact]
     public void CategoryWithEmptyTriggerPaths_NeverMatches()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["empty"] = new CategoryConfig
+            ["empty"] = new JobCategory
             {
-                Description = "Empty trigger paths",
-                TriggerPaths = []
+                When = []
             }
         };
 
@@ -272,13 +267,12 @@ public class CategoryMapperTests
     [Fact]
     public void CategoryWithOnlyExcludePaths_NeverMatches()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["excludeOnly"] = new CategoryConfig
+            ["excludeOnly"] = new JobCategory
             {
-                Description = "Only exclude paths",
-                TriggerPaths = [],
-                ExcludePaths = ["src/Internal/**", "src/Private/**"]
+                When = [],
+                Exclude = ["src/Internal/**", "src/Private/**"]
             }
         };
 
@@ -293,11 +287,11 @@ public class CategoryMapperTests
     [Fact]
     public void OverlappingCategories_FileMatchesMultiple()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["broad"] = new CategoryConfig { TriggerPaths = ["src/**"] },
-            ["specific"] = new CategoryConfig { TriggerPaths = ["src/Components/**"] },
-            ["verySpecific"] = new CategoryConfig { TriggerPaths = ["src/Components/Aspire.Redis/**"] }
+            ["broad"] = new JobCategory { When = ["src/**"] },
+            ["specific"] = new JobCategory { When = ["src/Components/**"] },
+            ["verySpecific"] = new JobCategory { When = ["src/Components/Aspire.Redis/**"] }
         };
 
         var mapper = new CategoryMapper(categories);
@@ -312,12 +306,12 @@ public class CategoryMapperTests
     [Fact]
     public void PatternPriority_ExcludeOverridesTrigger()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["test"] = new CategoryConfig
+            ["test"] = new JobCategory
             {
-                TriggerPaths = ["src/**"],
-                ExcludePaths = ["src/Generated/**"]
+                When = ["src/**"],
+                Exclude = ["src/Generated/**"]
             }
         };
 
@@ -370,11 +364,11 @@ public class CategoryMapperTests
     [Fact]
     public void SingleFileTriggersMultipleCategories_AllAreTracked()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["all"] = new CategoryConfig { TriggerPaths = ["**/*"] },
-            ["csharp"] = new CategoryConfig { TriggerPaths = ["**/*.cs"] },
-            ["src"] = new CategoryConfig { TriggerPaths = ["src/**"] }
+            ["all"] = new JobCategory { When = ["**/*"] },
+            ["csharp"] = new JobCategory { When = ["**/*.cs"] },
+            ["src"] = new JobCategory { When = ["src/**"] }
         };
 
         var mapper = new CategoryMapper(categories);
@@ -423,11 +417,11 @@ public class CategoryMapperTests
     [Fact]
     public void SpecialCharactersInPath_HandledCorrectly()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["test"] = new CategoryConfig
+            ["test"] = new JobCategory
             {
-                TriggerPaths = ["src/**"]
+                When = ["src/**"]
             }
         };
 
@@ -446,11 +440,11 @@ public class CategoryMapperTests
     [Fact]
     public void UnicodePathComponents_MatchCorrectly()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["i18n"] = new CategoryConfig
+            ["i18n"] = new JobCategory
             {
-                TriggerPaths = ["locales/**"]
+                When = ["locales/**"]
             }
         };
 
@@ -468,11 +462,11 @@ public class CategoryMapperTests
     [Fact]
     public void CategoryWithWildcardInMiddle_MatchesCorrectly()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["hosting"] = new CategoryConfig
+            ["hosting"] = new JobCategory
             {
-                TriggerPaths = ["src/Aspire.Hosting.*/Resources/**"]
+                When = ["src/Aspire.Hosting.*/Resources/**"]
             }
         };
 
@@ -486,11 +480,11 @@ public class CategoryMapperTests
     [Fact]
     public void ExactFileMatch_WorksWithoutGlob()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["config"] = new CategoryConfig
+            ["config"] = new JobCategory
             {
-                TriggerPaths = ["global.json", "Directory.Build.props", "NuGet.config"]
+                When = ["global.json", "Directory.Build.props", "NuGet.config"]
             }
         };
 
@@ -510,10 +504,10 @@ public class CategoryMapperTests
     [Fact]
     public void ExtensionPattern_MatchesOnlySpecificExtension()
     {
-        var categories = new Dictionary<string, CategoryConfig>
+        var categories = new Dictionary<string, JobCategory>
         {
-            ["markdown"] = new CategoryConfig { TriggerPaths = ["**/*.md"] },
-            ["csharp"] = new CategoryConfig { TriggerPaths = ["**/*.cs"] }
+            ["markdown"] = new JobCategory { When = ["**/*.md"] },
+            ["csharp"] = new JobCategory { When = ["**/*.cs"] }
         };
 
         var mapper = new CategoryMapper(categories);

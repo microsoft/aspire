@@ -185,28 +185,24 @@ public sealed class TestSelectionResult
             new("selection_reason", Reason)
         };
 
-        // Output run_integrations based on both the category trigger status AND whether
-        // there are integration test projects discovered via dotnet-affected/sourceToTestMappings.
+        // run_integrations is derived purely from the selected test count (plus the run-all
+        // override). The "integrations" jobCategory is never placed in Categories (its coverage
+        // flows through the affected_test_projects matrix, not a standalone run_<name> job), so the
+        // boolean and the matrix can never disagree.
         var runIntegrations = RunAllTests || AffectedTestProjects.Count > 0;
 
         foreach (var (category, enabled) in Categories)
         {
-            if (category == "integrations")
+            // Defensive: never let a stray "integrations" entry shadow the count-derived value.
+            if (string.Equals(category, TestSelectorConfig.IntegrationsCategory, StringComparison.Ordinal))
             {
-                // Merge: integrations runs if triggered by paths OR if test projects were discovered
-                var integrationsEnabled = enabled || runIntegrations;
-                outputs.Add(new("run_integrations", integrationsEnabled.ToString().ToLowerInvariant()));
+                continue;
             }
-            else
-            {
-                outputs.Add(new($"run_{category}", enabled.ToString().ToLowerInvariant()));
-            }
+
+            outputs.Add(new($"run_{category}", enabled.ToString().ToLowerInvariant()));
         }
 
-        if (!Categories.ContainsKey("integrations"))
-        {
-            outputs.Add(new("run_integrations", runIntegrations.ToString().ToLowerInvariant()));
-        }
+        outputs.Add(new("run_integrations", runIntegrations.ToString().ToLowerInvariant()));
 
         // Output affected test projects as JSON array of .csproj paths for matrix filtering
         outputs.Add(new("affected_test_projects", JsonSerializer.Serialize(AffectedTestProjects)));

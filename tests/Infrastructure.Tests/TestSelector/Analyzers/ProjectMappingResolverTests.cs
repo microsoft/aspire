@@ -11,23 +11,23 @@ public class ProjectMappingResolverTests
 {
     private static ProjectMappingResolver CreateResolver()
     {
-        var mappings = new List<SourceToTestMapping>
+        var mappings = new List<SelectionMapping>
         {
             new()
             {
-                Source = ["src/Components/{name}/**"],
-                Test = "tests/{name}.Tests/"
+                From = ["src/Components/{name}/**"],
+                To = "tests/{name}.Tests/"
             },
             new()
             {
-                Source = ["src/Aspire.Hosting.{name}/**"],
-                Test = "tests/Aspire.Hosting.{name}.Tests/",
+                From = ["src/Aspire.Hosting.{name}/**"],
+                To = "tests/Aspire.Hosting.{name}.Tests/",
                 Exclude = ["src/Aspire.Hosting.Testing/**"]
             },
             new()
             {
-                Source = ["tests/{name}.Tests/**"],
-                Test = "tests/{name}.Tests/"
+                From = ["tests/{name}.Tests/**"],
+                To = "tests/{name}.Tests/"
             }
         };
 
@@ -158,12 +158,12 @@ public class ProjectMappingResolverTests
     [Fact]
     public void ResolveTestProjects_PatternWithoutCapture_ReturnsStaticPattern()
     {
-        var mappings = new List<SourceToTestMapping>
+        var mappings = new List<SelectionMapping>
         {
             new()
             {
-                Source = ["playground/**"],
-                Test = "tests/Aspire.EndToEnd.Tests/"
+                From = ["playground/**"],
+                To = "tests/Aspire.EndToEnd.Tests/"
             }
         };
 
@@ -178,17 +178,17 @@ public class ProjectMappingResolverTests
     [Fact]
     public void ResolveTestProjects_MultipleMatches_ReturnsAll()
     {
-        var mappings = new List<SourceToTestMapping>
+        var mappings = new List<SelectionMapping>
         {
             new()
             {
-                Source = ["src/**/*.cs"],
-                Test = "tests/Unit.Tests/"
+                From = ["src/**/*.cs"],
+                To = "tests/Unit.Tests/"
             },
             new()
             {
-                Source = ["src/Components/{name}/**"],
-                Test = "tests/{name}.Tests/"
+                From = ["src/Components/{name}/**"],
+                To = "tests/{name}.Tests/"
             }
         };
 
@@ -210,18 +210,18 @@ public class ProjectMappingResolverTests
     {
         // A single mapping with N source patterns must resolve any matched file
         // to the same test project — equivalent to N mappings sharing a test value.
-        var mappings = new List<SourceToTestMapping>
+        var mappings = new List<SelectionMapping>
         {
             new()
             {
-                Source =
+                From =
                 [
                     "eng/Publishing.props",
                     "eng/Signing.props",
                     "eng/scripts/pack-cli-npm-package.ps1",
                     "eng/scripts/validate-cli-symbols.ps1"
                 ],
-                Test = "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+                To = "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
             }
         };
 
@@ -237,12 +237,12 @@ public class ProjectMappingResolverTests
     public void ResolveTestProjects_ArraySource_ExcludeAppliesToAllPatterns()
     {
         // exclude is applied uniformly across every source pattern in the mapping.
-        var mappings = new List<SourceToTestMapping>
+        var mappings = new List<SelectionMapping>
         {
             new()
             {
-                Source = ["src/Aspire.Hosting.{name}/**", "src/Components/{name}/**"],
-                Test = "tests/{name}.Tests/",
+                From = ["src/Aspire.Hosting.{name}/**", "src/Components/{name}/**"],
+                To = "tests/{name}.Tests/",
                 Exclude = ["**/*.md", "**/*.designer.cs"]
             }
         };
@@ -297,12 +297,12 @@ public class ProjectMappingResolverTests
         // A bare-filename source (no directory separator) is normalized to match at any depth,
         // including the repository root. A regression in the glob-to-regex translation would make
         // the root-level file (no leading directory) silently miss its mapping.
-        var mappings = new List<SourceToTestMapping>
+        var mappings = new List<SelectionMapping>
         {
             new()
             {
-                Source = ["Directory.Build.props"],
-                Test = "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
+                From = ["Directory.Build.props"],
+                To = "tests/Infrastructure.Tests/Infrastructure.Tests.csproj"
             }
         };
 
