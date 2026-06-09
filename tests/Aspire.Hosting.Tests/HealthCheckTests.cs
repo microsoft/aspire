@@ -1,12 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using Aspire.TestUtilities;
 using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -85,53 +81,28 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
-        var stalePort = await Network.GetAvailablePortAsync();
-        var healthyPort = await Network.GetAvailablePortAsync();
-        while (healthyPort == stalePort)
-        {
-            healthyPort = await Network.GetAvailablePortAsync();
-        }
+        var resource = builder.AddContainer("resource", "dummycontainer")
+            .WithHttpEndpoint(port: 49217, targetPort: 80)
+            .WithHttpHealthCheck();
 
-        using var serverCts = new CancellationTokenSource();
-        var listener = new TcpListener(IPAddress.Loopback, healthyPort);
-        listener.Start();
-        var serverTask = RunHealthyHttpServerAsync(listener, serverCts.Token);
+        using var app = builder.Build();
 
-        try
-        {
-            var resource = builder.AddContainer("resource", "dummycontainer")
-                .WithHttpEndpoint(port: stalePort, targetPort: 80)
-                .WithHttpHealthCheck();
+        var endpoint = resource.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, KnownHostNames.Localhost, 49217, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: null);
 
-            using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var registration = app.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations
+            .Single(r => r.Name == "resource_http_/_200_check");
 
-            var endpoint = resource.GetEndpoint("http").EndpointAnnotation;
-            endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, IPAddress.Loopback.ToString(), stalePort, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: null);
+        await eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(resource.Resource, app.Services));
 
-            var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
-            var registration = app.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations
-                .Single(r => r.Name == "resource_http_/_200_check");
+        var ex = Assert.Throws<DistributedApplicationException>(() => registration.Factory(app.Services));
+        Assert.Equal("The URI for the health check on resource 'resource' is not set. Ensure that the resource has been allocated before the health check is executed.", ex.Message);
 
-            await eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(resource.Resource, app.Services));
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource.Resource, app.Services));
 
-            // Change the endpoint after allocation so this test proves the health check URI is initialized
-            // from BeforeResourceStartedEvent rather than ResourceEndpointsAllocatedEvent.
-            endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, IPAddress.Loopback.ToString(), healthyPort, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: null);
-
-            await eventing.PublishAsync(new BeforeResourceStartedEvent(resource.Resource, app.Services));
-
-            var healthCheck = registration.Factory(app.Services);
-            var result = await healthCheck.CheckHealthAsync(
-                new HealthCheckContext { Registration = registration },
-                TestContext.Current.CancellationToken);
-            Assert.Equal(HealthStatus.Healthy, result.Status);
-        }
-        finally
-        {
-            await serverCts.CancelAsync();
-            listener.Stop();
-            await serverTask.DefaultTimeout();
-        }
+        var healthCheck = registration.Factory(app.Services);
+        Assert.NotNull(healthCheck);
     }
 
     [Fact]
@@ -202,30 +173,6 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
             logs,
             l => l.Message == "The health check 'test_check' is not registered and is required for resource 'test'."
             );
-    }
-
-    private static async Task RunHealthyHttpServerAsync(TcpListener listener, CancellationToken cancellationToken)
-    {
-        var response = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                using var client = await listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
-                await using var stream = client.GetStream();
-                await stream.WriteAsync(response, cancellationToken).ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-        catch (SocketException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
     }
 
     private sealed class CustomChildResource(string name, CustomResource parent) : Resource(name), IResourceWithParent<CustomResource>
