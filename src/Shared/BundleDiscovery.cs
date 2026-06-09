@@ -252,6 +252,36 @@ internal static class BundleDiscovery
         return TryDiscoverManagedFromDirectory(baseDir, out managedPath);
     }
 
+    /// <summary>
+    /// Returns the path to <c>aspire-managed</c> inside an Aspire repo checkout when the
+    /// normal repo build has produced it under <c>artifacts/bin/Aspire.Managed/{Configuration}/{tfm}/</c>.
+    /// Used by callers that want to point dev-mode child processes at the repo's just-built
+    /// terminal host instead of the user's installed CLI bundle (which may be stale).
+    /// Returns <c>null</c> when <paramref name="repoRoot"/> is empty or the artifact is missing.
+    /// </summary>
+    /// <remarks>
+    /// Hardcoded to Debug/net10.0 to keep behavior predictable — Release configurations are
+    /// rarely used during inner-loop dev, and probing every TFM/config combination makes the
+    /// outcome depend on stale build outputs from earlier sessions.
+    /// </remarks>
+    public static string? TryGetRepoLocalManagedPath(string? repoRoot)
+    {
+        if (string.IsNullOrEmpty(repoRoot))
+        {
+            return null;
+        }
+
+        var managedPath = Path.Combine(
+            repoRoot,
+            "artifacts",
+            "bin",
+            "Aspire.Managed",
+            "Debug",
+            "net10.0",
+            GetExecutableFileName(ManagedExecutableName));
+        return File.Exists(managedPath) ? managedPath : null;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     // HELPER METHODS
     // ═══════════════════════════════════════════════════════════════════════

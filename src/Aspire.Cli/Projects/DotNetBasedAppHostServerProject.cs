@@ -11,6 +11,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -504,6 +505,23 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // for the dashboard to resolve static web assets correctly
         startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
 
+        // Wire WithTerminal() for guest/polyglot AppHosts running from the repo. The
+        // generated AppHostServer references Aspire.Hosting from the repo and DCP resolves
+        // the terminal host via ASPIRE_TERMINAL_HOST_PATH or assembly metadata. No per-RID
+        // NuGet stamps the metadata path today, so without this env var the AppHostServer
+        // would always resolve to <unresolved-aspire-terminalhost> in repo mode.
+        // Mirrors the same injection that DotNetAppHostProject performs for .NET AppHosts.
+        // Skipped when the caller pre-populates the path so a user-side override always wins.
+        if (BundleDiscovery.TryGetRepoLocalManagedPath(_repoRoot) is { } terminalHostPath
+            && !ContainsKey(environmentVariables, BundleDiscovery.TerminalHostPathEnvVar))
+        {
+            startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
+            if (!ContainsKey(environmentVariables, BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+            {
+                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
+            }
+        }
+
         if (environmentVariables is not null)
         {
             foreach (var (key, value) in environmentVariables)
@@ -644,5 +662,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         {
             return fallbackVersion;
         }
+    }
+
+    private static bool ContainsKey(IReadOnlyDictionary<string, string>? env, string key)
+    {
+        return env is not null && env.ContainsKey(key);
     }
 }

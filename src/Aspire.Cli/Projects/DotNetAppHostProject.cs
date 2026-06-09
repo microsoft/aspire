@@ -1331,6 +1331,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     /// an Aspire repo checkout (typically <c>dotnet run --project src/Aspire.Cli</c>).
     /// Returns <c>null</c> in release builds and when no repo-local build exists.
     /// </summary>
+    /// <summary>
+    /// Resolves the repo-local <c>aspire-managed</c> binary when the CLI is running from
+    /// an Aspire repo checkout (typically <c>dotnet run --project src/Aspire.Cli</c>).
+    /// Returns <c>null</c> in release builds and when no repo-local build exists.
+    /// </summary>
     private static string? TryGetRepoLocalManagedPath()
     {
         if (RepoLocalManagedPathProviderOverride is { } overrideProvider)
@@ -1339,22 +1344,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
 
         var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot();
-        if (string.IsNullOrEmpty(repoRoot))
-        {
-            return null;
-        }
-
-        // Mirrors ProfileCaptureService.ResolveRepoLocalManagedPath: pin to the Debug/net10.0
-        // output produced by the normal repo build instead of scanning every TFM directory.
-        var managedPath = Path.Combine(
-            repoRoot,
-            "artifacts",
-            "bin",
-            "Aspire.Managed",
-            "Debug",
-            "net10.0",
-            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
-        return File.Exists(managedPath) ? managedPath : null;
+        return BundleDiscovery.TryGetRepoLocalManagedPath(repoRoot);
     }
 
     /// <summary>
