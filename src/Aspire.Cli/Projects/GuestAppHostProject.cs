@@ -1254,7 +1254,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             {
                 _logger.LogError("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", process.ExitCode, socketPath);
                 var message = process.ExitCode == CliExitCodes.Success
-                    ? $"The AppHost server process exited with exit code {process.ExitCode}"
+                    ? "The AppHost server process exited"
                     : $"The AppHost server process exited unexpectedly with exit code {process.ExitCode}";
                 var backchannelException = new FailedToConnectBackchannelConnection(message, ex);
                 activity.SetError(backchannelException);

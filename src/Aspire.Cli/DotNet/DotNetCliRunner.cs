@@ -417,7 +417,7 @@ internal sealed class DotNetCliRunner(
                 // Log at Debug level - this is expected when AppHost crashes, the real error is in AppHost output
                 logger.LogDebug(ex, "AppHost process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", execution.ExitCode, socketPath);
                 var message = execution.ExitCode == CliExitCodes.Success
-                    ? $"The AppHost process exited with exit code {execution.ExitCode}"
+                    ? "The AppHost process exited"
                     : $"The AppHost process exited unexpectedly with exit code {execution.ExitCode}";
                 var backchannelException = new FailedToConnectBackchannelConnection(message, ex);
                 backchannelCompletionSource.SetException(backchannelException);
