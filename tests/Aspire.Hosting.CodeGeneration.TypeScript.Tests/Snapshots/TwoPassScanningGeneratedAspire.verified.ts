@@ -5562,6 +5562,8 @@ class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscr
 /** Context for {@link ResourceCommandAnnotation.ExecuteCommand}. */
 export interface ExecuteCommandContext {
     toJSON(): MarshalledHandle;
+    /** The service provider. */
+    services(): ServiceProviderPromise;
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -5579,6 +5581,8 @@ export interface ExecuteCommandContext {
 }
 
 export interface ExecuteCommandContextPromise extends PromiseLike<ExecuteCommandContext> {
+    /** The service provider. */
+    services(): ServiceProviderPromise;
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -5605,6 +5609,17 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
 
     async resourceName(): Promise<string> {
         return await this._client.invokeCapability<string>(
@@ -5654,6 +5669,10 @@ class ExecuteCommandContextPromiseImpl implements ExecuteCommandContextPromise {
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
     ): PromiseLike<TResult1 | TResult2> {
         return this._promise.then(onfulfilled, onrejected);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
     resourceName(): Promise<string> {
@@ -9412,11 +9431,15 @@ export interface UpdateCommandStateContext {
     toJSON(): MarshalledHandle;
     /** Gets the resource snapshot data available to polyglot command state callbacks. */
     resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot>;
+    /** The service provider. */
+    services(): ServiceProviderPromise;
 }
 
 export interface UpdateCommandStateContextPromise extends PromiseLike<UpdateCommandStateContext> {
     /** Gets the resource snapshot data available to polyglot command state callbacks. */
     resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot>;
+    /** The service provider. */
+    services(): ServiceProviderPromise;
 }
 
 // ============================================================================
@@ -9435,6 +9458,17 @@ class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
             'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot',
             { context: this._handle }
         );
+    }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
     }
 
 }
@@ -9456,6 +9490,10 @@ class UpdateCommandStateContextPromiseImpl implements UpdateCommandStateContextP
 
     resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot> {
         return this._promise.then(obj => obj.resourceSnapshot());
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
 }

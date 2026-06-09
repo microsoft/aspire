@@ -375,7 +375,7 @@ public sealed class UpdateCommandStateContext
     /// The service provider.
     /// </summary>
     [Obsolete("Use Services instead.")]
-    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
+    [AspireExportIgnore(Reason = "Obsolete alias for Services. The service provider is exposed to polyglot hosts via Services (services).")]
     public IServiceProvider ServiceProvider
     {
         get => Services;
@@ -385,7 +385,6 @@ public sealed class UpdateCommandStateContext
     /// <summary>
     /// The service provider.
     /// </summary>
-    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
     public required IServiceProvider Services { get; init; }
 }
 
@@ -444,7 +443,7 @@ public sealed class ExecuteCommandContext
     /// The service provider.
     /// </summary>
     [Obsolete("Use Services instead.")]
-    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command callbacks.")]
+    [AspireExportIgnore(Reason = "Obsolete alias for Services. The service provider is exposed to polyglot hosts via Services (services).")]
     public IServiceProvider ServiceProvider
     {
         get => Services;
@@ -454,7 +453,6 @@ public sealed class ExecuteCommandContext
     /// <summary>
     /// The service provider.
     /// </summary>
-    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command callbacks.")]
     public required IServiceProvider Services { get; init; }
 
     /// <summary>

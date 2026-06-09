@@ -13,7 +13,7 @@ public class ContainerFileSystemCallbackContextTests
         return new ContainerFileSystemCallbackContext
         {
             Model = new ContainerResource("test"),
-            ServiceProvider = new ServiceCollection().BuildServiceProvider(),
+            Services = new ServiceCollection().BuildServiceProvider(),
         };
     }
 

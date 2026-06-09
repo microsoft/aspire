@@ -5092,6 +5092,15 @@ class ExecuteCommandContext:
         return self._handle
 
     @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """The service provider."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    @_cached_property
     def resource_name(self) -> str:
         """The resource name."""
         result = self._client.invoke_capability(
@@ -6792,6 +6801,15 @@ class UpdateCommandStateContext:
             {'context': self._handle}
         )
         return typing.cast(UpdateCommandStateResourceSnapshot, result)
+
+    @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """The service provider."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
 
 
 # ============================================================================

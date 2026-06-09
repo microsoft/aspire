@@ -12133,6 +12133,14 @@ public class ExecuteCommandContext extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** The service provider. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services", reqArgs);
+        return (IServiceProvider) result;
+    }
+
     /** The resource name. */
     public String resourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -26737,6 +26745,14 @@ public class UpdateCommandStateContext extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot", reqArgs);
         return UpdateCommandStateResourceSnapshot.fromMap((Map<String, Object>) result);
+    }
+
+    /** The service provider. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services", reqArgs);
+        return (IServiceProvider) result;
     }
 
 }

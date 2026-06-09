@@ -15341,6 +15341,7 @@ type ExecuteCommandContext interface {
 	CancellationToken() (*CancellationToken, error)
 	Logger() Logger
 	ResourceName() (string, error)
+	Services() ServiceProvider
 	Err() error
 }
 
@@ -15420,6 +15421,25 @@ func (s *executeCommandContext) ResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// Services the service provider.
+func (s *executeCommandContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // ExecutionConfigurationBuilder is the public interface for handle type ExecutionConfigurationBuilder.
@@ -27211,6 +27231,7 @@ func (s *testResourceContext) Value() (float64, error) {
 type UpdateCommandStateContext interface {
 	handleReference
 	ResourceSnapshot() (*UpdateCommandStateResourceSnapshot, error)
+	Services() ServiceProvider
 	Err() error
 }
 
@@ -27237,6 +27258,25 @@ func (s *updateCommandStateContext) ResourceSnapshot() (*UpdateCommandStateResou
 		return zero, err
 	}
 	return decodeAs[*UpdateCommandStateResourceSnapshot](result)
+}
+
+// Services the service provider.
+func (s *updateCommandStateContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // UserSecretsManager is the public interface for handle type UserSecretsManager.
