@@ -240,6 +240,40 @@ public static class AzureVirtualNetworkExtensions
     }
 
     /// <summary>
+    /// Adds an Azure Subnet to the Virtual Network with parameterized address prefix and subnet name.
+    /// </summary>
+    /// <param name="builder">The Virtual Network resource builder.</param>
+    /// <param name="name">The name of the subnet resource.</param>
+    /// <param name="addressPrefix">The parameter resource containing the address prefix for the subnet (e.g., "10.0.1.0/24").</param>
+    /// <param name="subnetName">The parameter resource containing the subnet name in Azure.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/>.</returns>
+    /// <example>
+    /// This example adds a subnet with parameterized address prefix and subnet name:
+    /// <code>
+    /// var subnetName = builder.AddParameter("subnetName");
+    /// var subnetPrefix = builder.AddParameter("subnetPrefix");
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet");
+    /// var subnet = vnet.AddSubnet("my-subnet", subnetPrefix, subnetName);
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
+    public static IResourceBuilder<AzureSubnetResource> AddSubnet(
+        this IResourceBuilder<AzureVirtualNetworkResource> builder,
+        [ResourceName] string name,
+        IResourceBuilder<ParameterResource> addressPrefix,
+        IResourceBuilder<ParameterResource> subnetName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(addressPrefix);
+        ArgumentNullException.ThrowIfNull(subnetName);
+
+        var subnet = new AzureSubnetResource(name, subnetName.Resource, addressPrefix.Resource, builder.Resource);
+
+        return AddSubnetCore(builder, subnet);
+    }
+
+    /// <summary>
     /// Adds an Azure subnet resource to an Azure Virtual Network resource.
     /// </summary>
     [AspireExport("addSubnet")]
