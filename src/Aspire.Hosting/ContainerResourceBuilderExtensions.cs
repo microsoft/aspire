@@ -1457,7 +1457,6 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This overload is exposed to polyglot app hosts via the <c>withContainerFilesCallback</c> shim, which constructs entries through factory methods on <see cref="ContainerFileSystemCallbackContext"/>.</remarks>
     [AspireExportIgnore(Reason = "Exposed to ATS via the WithContainerFilesCallbackExport shim, which accepts integer file-mode options and lets polyglot callbacks build the IEnumerable<ContainerFileSystemItem> result through ContainerFileSystemCallbackContext factory methods (createFile/createDirectory/createCertificateFile).")]
     public static IResourceBuilder<T> WithContainerFiles<T>(this IResourceBuilder<T> builder, string destinationPath, Func<ContainerFileSystemCallbackContext, CancellationToken, Task<IEnumerable<ContainerFileSystemItem>>> callback, int? defaultOwner = null, int? defaultGroup = null, UnixFileMode? umask = null) where T : ContainerResource
     {
@@ -1490,7 +1489,6 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="defaultGroup">The default group ID for the created or updated file system. Defaults to 0 for root if not set.</param>
     /// <param name="umask">The umask <see cref="UnixFileMode"/> permissions to exclude from the default file and folder permissions. This takes away (rather than granting) default permissions to files and folders without an explicit mode permission set.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This overload is exposed to polyglot app hosts via the <c>withContainerFiles</c> shim, which accepts integer file-mode options.</remarks>
     [AspireExportIgnore(Reason = "Exposed to ATS via the WithContainerFilesExport shim overload, which accepts integer file-mode options (ContainerFilesOptions) in place of the UnixFileMode parameter.")]
     public static IResourceBuilder<T> WithContainerFiles<T>(this IResourceBuilder<T> builder, string destinationPath, string sourcePath, int? defaultOwner = null, int? defaultGroup = null, UnixFileMode? umask = null) where T : ContainerResource
     {
