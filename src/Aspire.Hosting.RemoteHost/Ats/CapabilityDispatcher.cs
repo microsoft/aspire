@@ -579,7 +579,7 @@ internal sealed class CapabilityDispatcher
             activity.SetError(ex);
             throw CapabilityException.InvalidArgument(
                 capabilityId,
-                ex.ParamName ?? "unknown",
+                ex.ParamName ?? registration.Capability?.TargetParameterName ?? "unknown",
                 ex.Message);
         }
         catch (InvalidCastException ex)
