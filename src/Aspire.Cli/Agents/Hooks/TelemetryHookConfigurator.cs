@@ -120,8 +120,10 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
             var filePath = Path.Combine(hooksDirectory, CopilotHookFileName);
 
             // Owned file: a full overwrite is trivially idempotent. The Copilot CLI hooks reference
-            // (https://docs.github.com/en/copilot/reference/hooks-reference) defines `bash`/`powershell`
-            // as shell command strings, so we pass `bash '<sh>'` / `powershell ... -File '<ps1>'`.
+            // (https://docs.github.com/en/copilot/reference/hooks-reference) defines `bash` and
+            // `powershell` as keys whose values are shell command strings. The `powershell` value
+            // invokes `pwsh` (PowerShell 7+) because that is the documented Windows prerequisite for
+            // Copilot CLI hooks.
             var config = new JsonObject
             {
                 ["version"] = 1,
@@ -132,7 +134,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
                         {
                             ["type"] = "command",
                             ["bash"] = HookCommandFormatter.BuildBashCommand(scripts.ShellScriptPath),
-                            ["powershell"] = HookCommandFormatter.BuildPowerShellCommand(scripts.PowerShellScriptPath),
+                            ["powershell"] = HookCommandFormatter.BuildPwshCommand(scripts.PowerShellScriptPath),
                             ["timeoutSec"] = HookTimeoutSeconds,
                         }),
                 },
@@ -188,10 +190,9 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
                 case JsonObject existing:
                     settings = existing;
                     break;
-                // Valid JSON whose root isn't an object (array/string/number/bool) means another tool
-                // owns this file in a shape we don't recognize. Calling JsonNode.AsObject() here would
-                // throw InvalidOperationException (not JsonException), which would escape both this
-                // method and the best-effort callers and crash `agent init`; skip instead of clobbering.
+                // Root is valid JSON but not an object (array/string/number/bool): another tool owns this
+                // file in a shape we don't recognize. AsObject() would throw InvalidOperationException (not
+                // JsonException), escape the best-effort callers, and crash `agent init`. Skip instead.
                 default:
                     return TelemetryHookSkipReason.UnexpectedConfigShape;
             }
@@ -201,9 +202,8 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
             settings = new JsonObject();
         }
 
-        // The `hooks` value and its `PostToolUse` child must have the documented shapes. An unexpected
-        // shape means another tool owns this file in a way we don't recognize, so we skip rather than risk
-        // corrupting it.
+        // `hooks` and its `PostToolUse` child must have the documented shapes; an unexpected shape means
+        // another tool owns the file, so skip rather than risk corrupting it.
         JsonObject hooks;
         if (settings.TryGetPropertyValue("hooks", out var hooksNode))
         {
@@ -240,12 +240,30 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
         // refreshes the command if the script path changed across CLI upgrades.
         RemoveExistingAspireEntries(postToolUse);
 
-        // On Windows run the .ps1, otherwise run the .sh under bash. The path is single-quoted, which
-        // preserves spaces in both bash and PowerShell. A literal apostrophe in the home path is the one
-        // case the two shells quote differently; that is rare enough on Windows to accept.
-        var command = OperatingSystem.IsWindows()
-            ? HookCommandFormatter.BuildPowerShellCommand(scripts.PowerShellScriptPath)
-            : HookCommandFormatter.BuildBashCommand(scripts.ShellScriptPath);
+        // Claude Code runs a path-referencing hook best in exec form (`command` + `args`): the executable
+        // is spawned directly with no shell, so the script path passes through verbatim with no quoting.
+        // Shell form is avoided because on Windows Claude runs the command line through Git Bash (or
+        // PowerShell only when Git Bash is absent), which would mismatch PowerShell-style path quoting. The
+        // Claude hooks reference recommends exec form for any hook that references a script path; see the
+        // "Exec form and shell form" / "Reference scripts by path" sections in
+        // https://docs.claude.com/en/docs/claude-code/hooks.
+        string command;
+        JsonArray commandArgs;
+        if (OperatingSystem.IsWindows())
+        {
+            // Use modern PowerShell 7+ (pwsh), consistent with the Copilot hook. pwsh is the documented
+            // Windows prerequisite for agent hooks; if it is absent the hook simply does not run, the same
+            // as Copilot. `-ExecutionPolicy Bypass` is passed straight to the process (exec form has no
+            // shell) so the local script runs regardless of the machine policy; `-NoProfile` avoids profile
+            // side effects and startup cost.
+            command = "pwsh";
+            commandArgs = new JsonArray("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scripts.PowerShellScriptPath);
+        }
+        else
+        {
+            command = "bash";
+            commandArgs = new JsonArray(scripts.ShellScriptPath);
+        }
 
         postToolUse.Add((JsonNode?)new JsonObject
         {
@@ -255,6 +273,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
                 {
                     ["type"] = "command",
                     ["command"] = command,
+                    ["args"] = commandArgs,
                     // Bound the hook so a stuck telemetry call can never stall a Claude session. The shell
                     // scripts also self-limit, but Claude's own timeout is the reliable backstop.
                     ["timeout"] = HookTimeoutSeconds,
@@ -318,22 +337,44 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
     private static bool IsAspireHook(JsonNode? node)
     {
-        // Our command embeds the materialized script path, which always ends in the distinctive
-        // file names track-telemetry.sh / track-telemetry.ps1. Matching on those file names (rather
-        // than just "aspire") avoids removing an unrelated user hook, while still catching a stale
-        // entry that points at a previous script location after the home directory moved.
-        if (node is not JsonObject hook
-            || !hook.TryGetPropertyValue("command", out var commandNode)
-            || commandNode is not JsonValue commandValue
-            || !commandValue.TryGetValue<string>(out var command)
-            || command is null)
+        // Match the distinctive script file name (track-telemetry.sh/.ps1) wherever a hook entry can
+        // carry the path: an `args` element in exec form (the form we write), or embedded in the
+        // `command` shell string in shell form. Both forms are valid in the hook schema, so checking
+        // each keeps re-init idempotent regardless of which one an existing entry uses. Matching the
+        // file name rather than just "aspire" avoids removing an unrelated user hook.
+        if (node is not JsonObject hook)
         {
             return false;
         }
 
-        return command.Contains("track-telemetry.sh", StringComparison.OrdinalIgnoreCase)
-            || command.Contains("track-telemetry.ps1", StringComparison.OrdinalIgnoreCase);
+        if (hook.TryGetPropertyValue("command", out var commandNode)
+            && commandNode is JsonValue commandValue
+            && commandValue.TryGetValue<string>(out var command)
+            && ReferencesTelemetryScript(command))
+        {
+            return true;
+        }
+
+        if (hook.TryGetPropertyValue("args", out var argsNode) && argsNode is JsonArray args)
+        {
+            foreach (var arg in args)
+            {
+                if (arg is JsonValue argValue
+                    && argValue.TryGetValue<string>(out var argString)
+                    && ReferencesTelemetryScript(argString))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
+
+    private static bool ReferencesTelemetryScript(string? value)
+        => value is not null
+            && (value.Contains("track-telemetry.sh", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("track-telemetry.ps1", StringComparison.OrdinalIgnoreCase));
 
     private static async Task WriteJsonAtomicAsync(string path, JsonObject config, CancellationToken cancellationToken)
     {

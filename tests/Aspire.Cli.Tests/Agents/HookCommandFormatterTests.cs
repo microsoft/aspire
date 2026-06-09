@@ -34,10 +34,10 @@ public class HookCommandFormatterTests
     }
 
     [Fact]
-    public void BuildPowerShellCommand_UsesNoProfileBypassFile()
+    public void BuildPwshCommand_UsesPwshWithNoProfileBypassFile()
     {
         Assert.Equal(
-            @"powershell -NoProfile -ExecutionPolicy Bypass -File 'C:\x\y.ps1'",
-            HookCommandFormatter.BuildPowerShellCommand(@"C:\x\y.ps1"));
+            @"pwsh -NoProfile -ExecutionPolicy Bypass -File 'C:\x\y.ps1'",
+            HookCommandFormatter.BuildPwshCommand(@"C:\x\y.ps1"));
     }
 }

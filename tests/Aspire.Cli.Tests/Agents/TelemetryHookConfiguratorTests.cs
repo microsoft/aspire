@@ -37,6 +37,8 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         Assert.StartsWith("bash ", (string)entry["bash"]!);
         Assert.Contains("track-telemetry.ps1", (string)entry["powershell"]!);
         Assert.Contains("-File ", (string)entry["powershell"]!);
+        // Copilot CLI requires PowerShell 7+ on Windows, so the hook must invoke pwsh, not Windows PowerShell.
+        Assert.StartsWith("pwsh ", (string)entry["powershell"]!);
     }
 
     [Fact]
@@ -75,6 +77,22 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var entry = FindAspireHook(postToolUse);
         Assert.Equal("command", (string)entry["type"]!);
         Assert.Equal(30, (int)entry["timeout"]!);
+
+        // Claude uses exec form (command + args): the executable is spawned directly and the script path is
+        // a discrete argument, not part of a shell command string.
+        var execCommand = (string)entry["command"]!;
+        var args = entry["args"]!.AsArray().Select(a => (string)a!).ToArray();
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Equal("pwsh", execCommand);
+            Assert.Contains("-File", args);
+            Assert.Contains(args, a => a.EndsWith("track-telemetry.ps1", StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            Assert.Equal("bash", execCommand);
+            Assert.Contains(args, a => a.EndsWith("track-telemetry.sh", StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     [Fact]
@@ -218,9 +236,17 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     private static bool GroupContainsAspireHook(JsonNode? group)
         => group is JsonObject obj
             && obj["hooks"] is JsonArray hooks
-            && hooks.Any(h => h is JsonObject ho
-                && ho["command"] is JsonValue v
-                && v.ToString().Contains("track-telemetry", StringComparison.OrdinalIgnoreCase));
+            && hooks.Any(HookReferencesTelemetryScript);
+
+    // The Aspire hook can carry the script path in the shell-form `command` string or, for Claude's exec
+    // form, in an `args` element. Check both so helpers locate the entry regardless of format.
+    private static bool HookReferencesTelemetryScript(JsonNode? hook)
+        => hook is JsonObject ho
+            && (JsonValueHasTelemetryScript(ho["command"])
+                || (ho["args"] is JsonArray args && args.Any(JsonValueHasTelemetryScript)));
+
+    private static bool JsonValueHasTelemetryScript(JsonNode? node)
+        => node is JsonValue v && v.ToString().Contains("track-telemetry", StringComparison.OrdinalIgnoreCase);
 
     private static bool GroupContainsCommand(JsonNode? group, string command)
         => group is JsonObject obj
@@ -237,8 +263,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             {
                 foreach (var hook in hooks)
                 {
-                    if (hook is JsonObject ho && ho["command"] is JsonValue v
-                        && v.ToString().Contains("track-telemetry", StringComparison.OrdinalIgnoreCase))
+                    if (hook is JsonObject ho && HookReferencesTelemetryScript(ho))
                     {
                         return ho;
                     }
