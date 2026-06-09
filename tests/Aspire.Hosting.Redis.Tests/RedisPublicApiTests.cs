@@ -161,6 +161,21 @@ public class RedisPublicApiTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(nameof(path), exception.ParamName);
     }
 
+    [Theory]
+    [InlineData("custom-module.so")]
+    [InlineData("/opt/redis/custom-module")]
+    [InlineData("/opt/redis/custom-module.txt")]
+    public void WithModuleShouldThrowWhenPathIsNotAbsoluteSoPath(string path)
+    {
+        var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("Redis");
+
+        var action = () => redis.WithModule(path);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(path), exception.ParamName);
+    }
+
     [Fact]
     public void WithModuleUnionShouldThrowWhenModuleIsNull()
     {

@@ -584,6 +584,15 @@ public static class RedisBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(path);
+        if (path[0] is not '/')
+        {
+            throw new ArgumentException("The Redis module path must be an absolute container path.", nameof(path));
+        }
+
+        if (!path.EndsWith(".so", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The Redis module path must point to a .so file.", nameof(path));
+        }
 
         return builder.WithAnnotation(new RedisModuleAnnotation(path));
     }
