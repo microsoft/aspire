@@ -493,7 +493,7 @@ public static class ProjectResourceBuilderExtensions
             if (ctx.Scope != CertificateTrustScope.None && OperatingSystem.IsWindows())
             {
                 // Log if the user attempts to enable certificate trust customization on Windows for .NET projects.
-                var resourceLogger = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLogger.GetLogger(builder.Resource);
                 logger.LogWarning("Certificate trust scope is set to '{Scope}', but the feature is not supported for .NET projects on Windows. No certificate trust customization will be applied. Set the certificate trust scope to 'None' to disable this warning.", Enum.GetName(ctx.Scope));
                 return Task.CompletedTask;

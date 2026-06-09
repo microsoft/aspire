@@ -38,7 +38,7 @@ internal class HttpsCertificateExecutionConfigurationGatherer : IExecutionConfig
         X509Certificate2? certificate = effectiveAnnotation.Certificate;
         if (certificate is null)
         {
-            var developerCertificateService = executionContext.ServiceProvider.GetRequiredService<IDeveloperCertificateService>();
+            var developerCertificateService = executionContext.Services.GetRequiredService<IDeveloperCertificateService>();
             if (effectiveAnnotation.UseDeveloperCertificate.GetValueOrDefault(developerCertificateService.UseForHttps))
             {
                 certificate = developerCertificateService.Certificates.FirstOrDefault();

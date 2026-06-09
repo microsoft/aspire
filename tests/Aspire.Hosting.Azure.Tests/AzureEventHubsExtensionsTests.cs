@@ -352,7 +352,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
         var configAnnotation = eventHubsEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/Eventhubs_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = eventHubsEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = eventHubsEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
 
@@ -413,7 +413,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
         var configAnnotation = eventHubsEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/Eventhubs_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = eventHubsEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = eventHubsEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
 
@@ -487,7 +487,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
         var configAnnotation = eventHubsEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/Eventhubs_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = eventHubsEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = eventHubsEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
         Assert.Equal(configJsonPath, configFile.SourcePath);

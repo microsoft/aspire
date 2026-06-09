@@ -374,8 +374,19 @@ public sealed class UpdateCommandStateContext
     /// <summary>
     /// The service provider.
     /// </summary>
+    [Obsolete("Use Services instead.")]
     [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
-    public required IServiceProvider ServiceProvider { get; init; }
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// The service provider.
+    /// </summary>
+    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
+    public required IServiceProvider Services { get; init; }
 }
 
 /// <summary>
@@ -432,7 +443,18 @@ public sealed class ExecuteCommandContext
     /// <summary>
     /// The service provider.
     /// </summary>
-    public required IServiceProvider ServiceProvider { get; init; }
+    [Obsolete("Use Services instead.")]
+    [AspireExportIgnore(Reason = "Obsolete alias for Services.")]
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// The service provider.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
 
     /// <summary>
     /// The resource name.

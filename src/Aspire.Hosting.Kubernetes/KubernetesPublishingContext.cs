@@ -86,7 +86,7 @@ internal sealed class KubernetesPublishingContext(
                 {
                     var dockerfileContext = new DockerfileFactoryContext
                     {
-                        Services = executionContext.ServiceProvider,
+                        Services = executionContext.Services,
                         Resource = serviceResource.TargetResource,
                         CancellationToken = cancellationToken
                     };

@@ -195,6 +195,40 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task FindAndStopRunningInstanceAsync_CleansUpDeadPidSocketAndReturnsNoRunningInstance()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        var runner = new TestDotNetCliRunner();
+        var project = CreateDotNetAppHostProject(runner);
+        var socketPath = CreateMatchingSocketFile(appHostFile.FullName, int.MaxValue - 1);
+
+        var result = await project.FindAndStopRunningInstanceAsync(
+            appHostFile,
+            _workspace.WorkspaceRoot,
+            CancellationToken.None);
+
+        Assert.Equal(RunningInstanceResult.NoRunningInstance, result);
+        Assert.False(File.Exists(socketPath));
+    }
+
+    [Fact]
+    public async Task FindAndStopRunningInstanceAsync_KeepsLivePidSocketAndReportsStopFailureWhenConnectionFails()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        var runner = new TestDotNetCliRunner();
+        var project = CreateDotNetAppHostProject(runner);
+        var socketPath = CreateMatchingSocketFile(appHostFile.FullName, Environment.ProcessId);
+
+        var result = await project.FindAndStopRunningInstanceAsync(
+            appHostFile,
+            _workspace.WorkspaceRoot,
+            CancellationToken.None);
+
+        Assert.Equal(RunningInstanceResult.StopFailed, result);
+        Assert.True(File.Exists(socketPath));
+    }
+
+    [Fact]
     public async Task RunAsync_ProjectAppHostUsingCliBundlePassesBundleEnvironmentToRunner()
     {
         var appHostFile = CreateProjectAppHost();
@@ -1402,6 +1436,20 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             """.Replace("{0}", useCliBundleProperty, StringComparison.Ordinal));
 
         return new FileInfo(appHostPath);
+    }
+
+    private string CreateMatchingSocketFile(string appHostPath, int pid)
+    {
+        var backchannelsDir = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
+        Directory.CreateDirectory(backchannelsDir);
+
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, _workspace.WorkspaceRoot.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var socketPath = Path.Combine(
+            backchannelsDir,
+            $"{appHostId}a1b2C3d4.{pid.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        File.WriteAllText(socketPath, "");
+        return socketPath;
     }
 
     private FileInfo CreateBuiltAppHostAssembly(string fileName)

@@ -3008,6 +3008,8 @@ export interface DistributedApplicationExecutionContext {
     operation(): Promise<DistributedApplicationOperation>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
+    /** The `IServiceProvider` for the AppHost. */
+    services(): ServiceProviderPromise;
     /** Returns true if the current operation is publishing. */
     isPublishMode(): Promise<boolean>;
     /** Returns true if the current operation is running. */
@@ -3019,6 +3021,8 @@ export interface DistributedApplicationExecutionContextPromise extends PromiseLi
     operation(): Promise<DistributedApplicationOperation>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
+    /** The `IServiceProvider` for the AppHost. */
+    services(): ServiceProviderPromise;
     /** Returns true if the current operation is publishing. */
     isPublishMode(): Promise<boolean>;
     /** Returns true if the current operation is running. */
@@ -3069,6 +3073,17 @@ class DistributedApplicationExecutionContextImpl implements DistributedApplicati
         return new ServiceProviderPromiseImpl(promise, this._client, false);
     }
 
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting/DistributedApplicationExecutionContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
     async isPublishMode(): Promise<boolean> {
         return await this._client.invokeCapability<boolean>(
             'Aspire.Hosting/DistributedApplicationExecutionContext.isPublishMode',
@@ -3106,6 +3121,10 @@ class DistributedApplicationExecutionContextPromiseImpl implements DistributedAp
 
     serviceProvider(): ServiceProviderPromise {
         return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.serviceProvider()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
     isPublishMode(): Promise<boolean> {
@@ -5130,7 +5149,7 @@ class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscr
 export interface ExecuteCommandContext {
     toJSON(): MarshalledHandle;
     /** The service provider. */
-    serviceProvider(): ServiceProviderPromise;
+    services(): ServiceProviderPromise;
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -5149,7 +5168,7 @@ export interface ExecuteCommandContext {
 
 export interface ExecuteCommandContextPromise extends PromiseLike<ExecuteCommandContext> {
     /** The service provider. */
-    serviceProvider(): ServiceProviderPromise;
+    services(): ServiceProviderPromise;
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -5177,10 +5196,10 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    serviceProvider(): ServiceProviderPromise {
+    services(): ServiceProviderPromise {
         const promise = (async () => {
             const handle = await this._client.invokeCapability<IServiceProviderHandle>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider',
+                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services',
                 { context: this._handle }
             );
             return new ServiceProviderImpl(handle, this._client);
@@ -5238,8 +5257,8 @@ class ExecuteCommandContextPromiseImpl implements ExecuteCommandContextPromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    serviceProvider(): ServiceProviderPromise {
-        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.serviceProvider()), this._client, false);
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
     resourceName(): Promise<string> {
@@ -15213,7 +15232,10 @@ export interface ContainerResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): ContainerResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise;
     /**
@@ -15954,7 +15976,10 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): ContainerResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise;
     /**
@@ -17055,7 +17080,10 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -38569,7 +38597,10 @@ export interface TestDatabaseResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestDatabaseResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise;
     /**
@@ -39310,7 +39341,10 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withOtlpExporter(options?: WithOtlpExporterOptions): TestDatabaseResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise;
     /**
@@ -40410,7 +40444,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -43070,7 +43107,10 @@ export interface TestRedisResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestRedisResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise;
     /**
@@ -43875,7 +43915,10 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): TestRedisResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise;
     /**
@@ -45039,7 +45082,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -48006,7 +48052,10 @@ export interface TestVaultResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestVaultResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise;
     /**
@@ -48749,7 +48798,10 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): TestVaultResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise;
     /**
@@ -49851,7 +49903,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);

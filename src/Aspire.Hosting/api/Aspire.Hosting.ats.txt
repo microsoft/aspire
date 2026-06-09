@@ -443,7 +443,7 @@ Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments(context: Aspire.
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> cancellationToken
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.resourceName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> string
-Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/getEndpoint(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext, name: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
 Aspire.Hosting.ApplicationModel/getValueAsync(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression, cancellationToken: cancellationToken) -> string
 Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext) -> Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
@@ -579,6 +579,7 @@ Aspire.Hosting/DistributedApplicationExecutionContext.isRunMode(context: Aspire.
 Aspire.Hosting/DistributedApplicationExecutionContext.operation(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> enum:Aspire.Hosting.DistributedApplicationOperation
 Aspire.Hosting/DistributedApplicationExecutionContext.publisherName(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> string
 Aspire.Hosting/DistributedApplicationExecutionContext.serviceProvider(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting/DistributedApplicationExecutionContext.services(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting/DistributedApplicationExecutionContext.setPublisherName(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext, value: string) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
 Aspire.Hosting/dockerfileBuilderAddContainerFilesStages(resource: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource, logger?: Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder
 Aspire.Hosting/dockerfileBuilderArg(name: string, defaultValue?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder

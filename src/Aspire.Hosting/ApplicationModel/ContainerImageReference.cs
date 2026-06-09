@@ -45,7 +45,7 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
     async ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
     {
         // Check if this resource is configured to save as an archive instead of pushing to a registry
-        if (context.ExecutionContext?.ServiceProvider is { } serviceProvider)
+        if (context.ExecutionContext?.Services is { } serviceProvider)
         {
             var logger = Resource.GetLogger(serviceProvider);
             var buildOptionsContext = await Resource.ProcessContainerBuildOptionsCallbackAsync(

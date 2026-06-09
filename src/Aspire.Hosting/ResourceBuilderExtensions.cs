@@ -3296,7 +3296,7 @@ public static class ResourceBuilderExtensions
     internal static async Task<ExecuteCommandResult> ExecuteProcessCommandAsync(ExecuteCommandContext context, ProcessCommandSpec processCommandSpec, ProcessCommandOptions commandOptions)
     {
         var processSpec = CreateProcessSpec(context, processCommandSpec, commandOptions);
-        var processRunner = context.ServiceProvider.GetRequiredService<IProcessRunner>();
+        var processRunner = context.Services.GetRequiredService<IProcessRunner>();
         var (pendingProcessResult, processDisposable) = processRunner.Run(processSpec);
 
         await using (processDisposable.ConfigureAwait(false))
@@ -3477,7 +3477,7 @@ public static class ResourceBuilderExtensions
         {
             var resultContext = new ProcessCommandResultContext
             {
-                ServiceProvider = context.ServiceProvider,
+                Services = context.Services,
                 ResourceName = context.ResourceName,
                 Logger = context.Logger,
                 CancellationToken = context.CancellationToken,
@@ -3724,13 +3724,13 @@ public static class ResourceBuilderExtensions
                     return new ExecuteCommandResult { Success = false, Message = "Endpoints are not yet allocated." };
                 }
                 var uri = new UriBuilder(endpoint.Url) { Path = path }.Uri;
-                var httpClient = context.ServiceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
+                var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
                 var request = new HttpRequestMessage(commandOptions.Method, uri);
                 if (commandOptions.PrepareRequest is not null)
                 {
                     var requestContext = new HttpCommandRequestContext
                     {
-                        ServiceProvider = context.ServiceProvider,
+                        Services = context.Services,
                         ResourceName = context.ResourceName,
                         Endpoint = endpoint,
                         CancellationToken = context.CancellationToken,
@@ -3748,7 +3748,7 @@ public static class ResourceBuilderExtensions
                     {
                         var resultContext = new HttpCommandResultContext
                         {
-                            ServiceProvider = context.ServiceProvider,
+                            Services = context.Services,
                             ResourceName = context.ResourceName,
                             Endpoint = endpoint,
                             CancellationToken = context.CancellationToken,

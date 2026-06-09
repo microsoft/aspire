@@ -592,10 +592,10 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 	// Test bench for the polyglot IInteractionService API: prompts for a region, then dynamically
 	// loads the available zones for that region into a second choice input. Reached via the command's
-	// service provider (ServiceProvider().GetInteractionService()), which only prompts when the
+	// service provider (Services().GetInteractionService()), which only prompts when the
 	// interaction service is available (the interactive dashboard path).
 	_ = container.WithCommand("pick-zone", "Pick Zone", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		interactionService := ctx.ServiceProvider().GetInteractionService()
+		interactionService := ctx.Services().GetInteractionService()
 
 		available, err := interactionService.IsAvailable()
 		if err != nil {
@@ -631,7 +631,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	// exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
 	// the dynamic-loading context accessors/setters, and the option/result DTO fields.
 	_ = container.WithCommand("interaction-showcase", "Interaction Showcase", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		interactionService := ctx.ServiceProvider().GetInteractionService()
+		interactionService := ctx.Services().GetInteractionService()
 
 		available, err := interactionService.IsAvailable()
 		if err != nil {

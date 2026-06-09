@@ -217,7 +217,7 @@
     </MSBuild>
 
     <!-- Zip each VSIX file for publishing to blob feed, as certain file types, such as .tar.gz or .zip are allowed to be published, and .vsix is not included -->
-    <Exec Command="powershell -NoProfile -Command &quot;'@(_ExtensionFilesToPublish)' -split ';' | Where-Object { $_ } | ForEach-Object { Compress-Archive -Path $_ -DestinationPath ($_ + '.zip') -Force }&quot;"
+    <Exec Command="pwsh -NoProfile -Command &quot;'@(_ExtensionFilesToPublish)' -split ';' | Where-Object { $_ } | ForEach-Object { Compress-Archive -Path $_ -DestinationPath ($_ + '.zip') -Force }&quot;"
           Condition="'@(_ExtensionFilesToPublish)' != ''" />
 
     <!-- Replace VSIX files with their zipped versions -->

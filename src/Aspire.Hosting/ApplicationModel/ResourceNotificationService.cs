@@ -1066,7 +1066,7 @@ public class ResourceNotificationService : IDisposable
             else
             {
                 // Command already exists in snapshot. Update its state based on annotation callback.
-                var newState = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, ServiceProvider = _serviceProvider });
+                var newState = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, Services = _serviceProvider });
 
                 if (existingCommand.State != newState)
                 {
@@ -1109,7 +1109,7 @@ public class ResourceNotificationService : IDisposable
 
         static ResourceCommandSnapshot CreateCommandFromAnnotation(ResourceCommandAnnotation annotation, CustomResourceSnapshot previousState, IServiceProvider serviceProvider)
         {
-            var state = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, ServiceProvider = serviceProvider });
+            var state = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, Services = serviceProvider });
 
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
 #pragma warning disable ASPIREINTERACTION001 // Command arguments intentionally reuse the experimental interaction input model.

@@ -9466,6 +9466,7 @@ type DistributedApplicationExecutionContext interface {
 	Operation() (DistributedApplicationOperation, error)
 	PublisherName() (string, error)
 	ServiceProvider() ServiceProvider
+	Services() ServiceProvider
 	SetPublisherName(value string) DistributedApplicationExecutionContext
 	Err() error
 }
@@ -9554,6 +9555,25 @@ func (s *distributedApplicationExecutionContext) ServiceProvider() ServiceProvid
 	href, ok := result.(handleReference)
 	if !ok {
 		err := fmt.Errorf("aspire: Aspire.Hosting/DistributedApplicationExecutionContext.serviceProvider returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Services the `IServiceProvider` for the AppHost.
+func (s *distributedApplicationExecutionContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/DistributedApplicationExecutionContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/DistributedApplicationExecutionContext.services returned unexpected type %T", result)
 		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -14490,7 +14510,7 @@ type ExecuteCommandContext interface {
 	CancellationToken() (*CancellationToken, error)
 	Logger() Logger
 	ResourceName() (string, error)
-	ServiceProvider() ServiceProvider
+	Services() ServiceProvider
 	Err() error
 }
 
@@ -14572,20 +14592,20 @@ func (s *executeCommandContext) ResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// ServiceProvider the service provider.
-func (s *executeCommandContext) ServiceProvider() ServiceProvider {
+// Services the service provider.
+func (s *executeCommandContext) Services() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services", reqArgs)
 	if err != nil {
 		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider returned unexpected type %T", result)
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services returned unexpected type %T", result)
 		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}

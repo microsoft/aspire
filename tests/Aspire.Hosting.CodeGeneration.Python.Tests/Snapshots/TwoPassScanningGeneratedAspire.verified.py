@@ -4081,6 +4081,15 @@ class DistributedApplicationExecutionContext:
         return typing.cast(AbstractServiceProvider, result)
 
     @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """The `IServiceProvider` for the AppHost."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/DistributedApplicationExecutionContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    @_cached_property
     def is_publish_mode(self) -> bool:
         """Returns true if the current operation is publishing."""
         result = self._client.invoke_capability(
@@ -5019,10 +5028,10 @@ class ExecuteCommandContext:
         return self._handle
 
     @_cached_property
-    def service_provider(self) -> AbstractServiceProvider:
+    def services(self) -> AbstractServiceProvider:
         """The service provider."""
         result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider',
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services',
             {'context': self._handle}
         )
         return typing.cast(AbstractServiceProvider, result)

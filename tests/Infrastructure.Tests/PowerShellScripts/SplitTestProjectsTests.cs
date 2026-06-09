@@ -27,7 +27,7 @@ public class SplitTestProjectsTests : IDisposable
     public SplitTestProjectsTests(ITestOutputHelper output)
     {
         _output = output;
-        _repoRoot = FindRepoRoot();
+        _repoRoot = RepoRoot.Path;
         _scriptPath = Path.Combine(_repoRoot, "eng", "scripts", "split-test-projects-for-ci.ps1");
     }
 
@@ -205,20 +205,6 @@ public class SplitTestProjectsTests : IDisposable
         {
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to parse partitions JSON");
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root");
     }
 
     private sealed class TestPartitionsJson

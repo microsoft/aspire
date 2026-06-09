@@ -389,7 +389,7 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("hello-from-argument", result.Data?.Value);
         Assert.NotNull(capturedContext);
         Assert.Equal(resource.Resource.Name, capturedContext.ResourceName);
-        Assert.NotNull(capturedContext.ServiceProvider);
+        Assert.NotNull(capturedContext.Services);
         Assert.Equal("hello-from-argument", capturedContext.Arguments.GetString("message"));
         Assert.NotNull(capturedContext.Logger);
 
@@ -799,7 +799,7 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.NotNull(capturedContext);
         Assert.Equal(42, capturedContext.ExitCode);
         Assert.Equal(resource.Resource.Name, capturedContext.ResourceName);
-        Assert.NotNull(capturedContext.ServiceProvider);
+        Assert.NotNull(capturedContext.Services);
         Assert.NotNull(capturedContext.Logger);
         Assert.Equal(["custom-argument"], capturedContext.ProcessCommandSpec.Arguments);
         Assert.Equal(["{\"status\":\"custom\"}", "diagnostic-line"], capturedContext.Output);

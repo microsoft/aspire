@@ -394,7 +394,7 @@ public static class AzureKustoBuilderExtensions
             {
                 // If the launcher fails (which may mean we're in a remote session or can't detect a browser),
                 // show a notification with a clickable link to the Kusto Web Explorer
-                var interactionService = context.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = context.Services.GetRequiredService<IInteractionService>();
                 if (interactionService.IsAvailable)
                 {
                     _ = await interactionService.PromptMessageBoxAsync(

@@ -450,10 +450,10 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     container.with_command("restart", "Restart", restart_command)
     # Test bench for the polyglot IInteractionService API: prompts for a region, then dynamically
     # loads the available zones for that region into a second choice input. Reached via the command's
-    # service provider (service_provider.get_interaction_service()), which only prompts when the
+    # service provider (services.get_interaction_service()), which only prompts when the
     # interaction service is available (the interactive dashboard path).
     def pick_zone_command(ctx):
-        interaction_service = ctx.service_provider.get_interaction_service()
+        interaction_service = ctx.services.get_interaction_service()
         if not interaction_service.is_available():
             return {"success": True, "message": "Interaction service is not available."}
 
@@ -484,7 +484,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     # exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
     # the dynamic-loading context accessors/setters, and the option/result DTO fields.
     def interaction_showcase_command(ctx):
-        interaction_service = ctx.service_provider.get_interaction_service()
+        interaction_service = ctx.services.get_interaction_service()
         if not interaction_service.is_available():
             return {"success": True, "message": "Interaction service is not available."}
 

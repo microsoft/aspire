@@ -277,10 +277,10 @@ void main() throws Exception {
         });
         // Test bench for the polyglot IInteractionService API: prompts for a region, then dynamically
         // loads the available zones for that region into a second choice input. Reached via the command's
-        // service provider (serviceProvider().getInteractionService()), which only prompts when the
+        // service provider (services().getInteractionService()), which only prompts when the
         // interaction service is available (the interactive dashboard path).
         container.withCommand("pick-zone", "Pick Zone", (ctx) -> {
-            var interactionService = ctx.serviceProvider().getInteractionService();
+            var interactionService = ctx.services().getInteractionService();
             if (!interactionService.isAvailable()) {
                 var unavailable = new ExecuteCommandResult();
                 unavailable.setSuccess(true);
@@ -315,7 +315,7 @@ void main() throws Exception {
         // exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
         // the dynamic-loading context accessors/setters, and the option/result DTO fields.
         container.withCommand("interaction-showcase", "Interaction Showcase", (ctx) -> {
-            var interactionService = ctx.serviceProvider().getInteractionService();
+            var interactionService = ctx.services().getInteractionService();
             if (!interactionService.isAvailable()) {
                 var unavailable = new ExecuteCommandResult();
                 unavailable.setSuccess(true);
