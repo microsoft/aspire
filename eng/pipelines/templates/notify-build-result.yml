@@ -1,0 +1,101 @@
+# Job template shared by the notify_failure and notify_success stages in
+# azure-pipelines.yml. Both stages run the same notifier script with a
+# different -Mode and job name; only the per-stage dependsOn / condition
+# (which must reference dependencies.<stage>.result at the stage level) and
+# the *StageResult variables stay in the stage definitions.
+#
+# See docs/ci/internal-build-failure-notifications.md for the full contract.
+
+parameters:
+  - name: mode
+    type: string
+    values:
+      - Failure
+      - Success
+  - name: jobName
+    type: string
+  - name: jobDisplayName
+    type: string
+  # Queue-time dry-run flag, forwarded from the pipeline's
+  # notifyOnFailureDryRun parameter. In dry-run the notifier logs the gh
+  # commands it would run and mints no token, so the aspire-repo-bot secret
+  # env block is omitted entirely.
+  - name: dryRun
+    type: boolean
+    default: false
+
+jobs:
+- template: /eng/common/templates-official/jobs/jobs.yml@self
+  parameters:
+    enableMicrobuild: false
+    enablePublishUsingPipelines: false
+    enablePublishBuildAssets: false
+    # No build output to publish; mirrors prepare_installers.
+    enablePublishBuildArtifacts: false
+    enableTelemetry: true
+    workspace:
+      clean: all
+    jobs:
+    - job: ${{ parameters.jobName }}
+      displayName: ${{ parameters.jobDisplayName }}
+      timeoutInMinutes: 15
+      pool:
+        name: NetCore1ESPool-Internal
+        image: 1es-ubuntu-2204
+        os: linux
+      templateContext:
+        mb:
+          publish:
+            enabled: false
+      steps:
+        - checkout: self
+          displayName: 'Checkout repo (for notify script)'
+          fetchDepth: 1
+        - pwsh: |
+            $ErrorActionPreference = 'Stop'
+            # Use env vars instead of $(Build.*) macros: a branch with a
+            # quote in it would break out of the PowerShell literal before
+            # the script's try/catch (and "always exit 0" invariant) could
+            # absorb it.
+            $branch = $env:BUILD_SOURCEBRANCH -replace '^refs/heads/', ''
+            $buildUrl = "$($env:SYSTEM_TEAMFOUNDATIONCOLLECTIONURI)$($env:SYSTEM_TEAMPROJECT)/_build/results?buildId=$($env:BUILD_BUILDID)"
+
+            # The dry-run flag is interpolated from the queue-time parameter at
+            # template-expansion time, then parsed to a real bool and passed as
+            # a typed -DryRun:$bool. Do NOT splat a literal '-DryRun' string —
+            # array splatting is positional (about_Splatting), so the string
+            # would bind to the first non-mandatory positional string parameter
+            # (-Owner) instead of engaging the switch.
+            $dryRun = [bool]::Parse('${{ parameters.dryRun }}')
+
+            # Compose the failed-stages list from the stage-result variables the
+            # stage exposes (see each stage's `variables:` block). In Success
+            # mode none are 'Failed', so the list is empty and the notifier
+            # ignores it.
+            $failed = @()
+            if ('$(BuildSignNativeStageResult)' -eq 'Failed') { $failed += 'build_sign_native' }
+            if ('$(BuildExtensionStageResult)' -eq 'Failed') { $failed += 'build_extension' }
+            if ('$(BuildStageResult)' -eq 'Failed') { $failed += 'build' }
+            if ('$(TemplateTestsStageResult)' -eq 'Failed') { $failed += 'template_tests' }
+            if ('$(AssembleStageResult)' -eq 'Failed') { $failed += 'assemble' }
+            if ('$(PrepareInstallersStageResult)' -eq 'Failed') { $failed += 'prepare_installers' }
+            $failedStages = $failed -join ', '
+
+            & "$env:BUILD_SOURCESDIRECTORY/eng/pipelines/scripts/Notify-GitHubOnBuildResult.ps1" `
+              -Mode         ${{ parameters.mode }} `
+              -AppId        "$env:ASPIRE_BOT_APP_ID" `
+              -PrivateKeyPem "$env:ASPIRE_BOT_PRIVATE_KEY" `
+              -Branch       $branch `
+              -BuildId      $env:BUILD_BUILDID `
+              -BuildNumber  $env:BUILD_BUILDNUMBER `
+              -BuildUrl     $buildUrl `
+              -CommitSha    $env:BUILD_SOURCEVERSION `
+              -FailedStages $failedStages `
+              -DryRun:$dryRun
+          displayName: 'Run notify script (${{ parameters.mode }} mode)'
+          # Resolve aspire-repo-bot secrets only in live mode; dry-run skips the
+          # token mint and accepts empty -AppId/-PrivateKeyPem.
+          ${{ if ne(parameters.dryRun, true) }}:
+            env:
+              ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
+              ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
