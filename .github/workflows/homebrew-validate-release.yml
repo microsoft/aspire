@@ -59,7 +59,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
 
@@ -110,6 +110,17 @@ jobs:
           # resulting hashes. This depends on the release assets being
           # public, which is why this workflow runs on release: [released]
           # rather than [created]/[published-on-a-draft].
+          #
+          # NOTE (@radical, please review): the old AzDO HomebrewValidateJob
+          # consumed the cask file emitted by the source build directly
+          # (download artifact: homebrew-cask-stable). This workflow
+          # regenerates the cask from scratch instead, which means
+          # generate-cask.sh becomes the de-facto source of truth for the
+          # cask shape. If the source build ever customizes the cask
+          # template (custom test do block, per-build tweaks), the
+          # validation here will silently diverge from what ships. See
+          # eng/homebrew/README.md for the trade-off and aspire#18068
+          # for the discussion that introduced this change.
           eng/homebrew/generate-cask.sh \
             --version "$version" \
             --output "$out_dir/aspire.rb"

@@ -180,7 +180,7 @@ echo ""
 #   * github/gitlab repo probes (e.g. "is microsoft/aspire archived?")
 #   * homepage redirect / 404 detection against aspire.dev
 #   * livecheck strategy resolution
-# All of these run in LiveRelease in `HomebrewValidateJob` for every
+# All of these run in LiveRelease in `homebrew-validate-release.yml` for every
 # released version, so a regression in any of them surfaces there.
 echo "Auditing cask via local tap..."
 audit_args=(--cask --online --signing)

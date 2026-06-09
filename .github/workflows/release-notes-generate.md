@@ -132,14 +132,9 @@ Determine the tag this run is processing:
 Fetch the full release record for `microsoft/aspire` by tag
 (`GET /repos/microsoft/aspire/releases/tags/<tag>`). Capture its `id`,
 `tag_name`, `name`, `body`, `published_at`, `html_url`, `draft`, and
-`prerelease`.
-
-> **Note**: `GET /repos/.../releases/tags/<tag>` does NOT return draft
-> releases for unauthenticated requests, but this workflow runs with a
-> GitHub App token that can see drafts in `microsoft/aspire`. If you get
-> a 404 despite the release existing, fall back to listing releases via
-> `GET /repos/microsoft/aspire/releases?per_page=100` (which returns
-> drafts the token can see) and filtering by `tag_name`.
+`prerelease`. The workflow runs with a GitHub App token that can see
+drafts in `microsoft/aspire`, so this call returns the draft record
+when the release-create step has just fired `release: [created]`.
 
 **Exit successfully with a diagnostic** if any of these are true (do not
 fail the run — these are expected states the workflow shouldn't act on):

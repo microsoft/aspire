@@ -638,8 +638,10 @@ jobs:
 
           The release manager must, after both notes and assets are in place:
 
-          1. Open the [draft release](https://github.com/${{ github.repository }}/releases/tag/untagged-${{ inputs.release_version }})
-             (or find it on the [Releases page](https://github.com/${{ github.repository }}/releases)).
+          1. Open the [Releases page](https://github.com/${{ github.repository }}/releases)
+             and find the draft for \`v${{ inputs.release_version }}\` at the
+             top (drafts are assigned a random \`untagged-<hash>\` URL by
+             GitHub, so there is no stable deep link until publish).
           2. Confirm the auto-generated release notes look correct.
           3. Confirm the \`aspire-cli-*\` archives are attached.
           4. Click **Publish release**.

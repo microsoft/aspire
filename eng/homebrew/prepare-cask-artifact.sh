@@ -31,7 +31,8 @@ OUTPUT_DIR=""
 # resolve yet — the GH release for v#{version} hasn't been published". Callers
 # that want the full upstream-CI-equivalent audit + brew install/uninstall must
 # do so against an already-published cask via validate-cask-artifact.sh
-# directly, as HomebrewValidateJob does in release-publish-nuget.yml.
+# directly, as the homebrew-validate-release.yml GitHub workflow does on
+# release: [released].
 VALIDATION_MODE="LiveArchives"
 
 while [[ $# -gt 0 ]]; do
