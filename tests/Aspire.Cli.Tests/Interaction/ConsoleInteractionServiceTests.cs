@@ -516,6 +516,84 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public void DisplayIncompatibleVersionError_AppHostOlderThanCli_SuggestsUpdatingAppHost()
+    {
+        // Arrange
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+        console.Profile.Width = 512;
+
+        var interactionService = CreateInteractionService(console);
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - hosting version is older than any CLI version.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "0.1.0");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleUpdateAppHost, outputString);
+        Assert.Contains("aspire update", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_CliOlderThanAppHost_SuggestsUpdatingCli()
+    {
+        // Arrange
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+        console.Profile.Width = 512;
+
+        var interactionService = CreateInteractionService(console);
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - hosting version is newer than any CLI version.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "999.0.0");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleUpdateCli, outputString);
+        Assert.Contains("To update, run:", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_UnparseableVersion_ShowsGenericMessage()
+    {
+        // Arrange
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+        console.Profile.Width = 512;
+
+        var interactionService = CreateInteractionService(console);
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - the caller passes the required capability when no version is available.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "baseline.v2");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading, outputString);
+        Assert.DoesNotContain("To update, run:", outputString);
+    }
+
+    [Fact]
     public void DisplayMessage_WithMarkupCharactersInMessage_AutoEscapesByDefault()
     {
         // Arrange
