@@ -7,11 +7,14 @@ using Azure.Core;
 namespace Aspire.Hosting.Azure.Provisioning;
 
 // Represents the Azure identity that the provisioner is acting as.
-// `Type` carries the Microsoft Entra principal type ("User", "ServicePrincipal", or "Group")
-// and matches the values accepted by the `principalType` property on
-// Microsoft.Authorization/roleAssignments. Defaults to "User" to preserve historical behavior
-// for credentials whose access tokens don't include the `idtyp` claim.
-// See: https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference#payload-claims
+// `Type` is forwarded directly to the `principalType` property on
+// Microsoft.Authorization/roleAssignments. ARM accepts a fixed set of values for that property
+// (see the docs link below); today this component emits "User" or "ServicePrincipal" based on
+// the credential's access token, but the field is a plain string so consumers can override it.
+// Defaults to "User" to preserve historical behavior for credentials whose access tokens don't
+// include the `idtyp` claim.
+// principalType values: https://learn.microsoft.com/azure/templates/microsoft.authorization/roleassignments
+// idtyp claim:          https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference#payload-claims
 internal sealed record AzurePrincipal(Guid Id, string Name, string Type = "User");
 
 internal sealed class ProvisioningContext(

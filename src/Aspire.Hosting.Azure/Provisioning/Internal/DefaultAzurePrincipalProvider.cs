@@ -39,7 +39,15 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
             // historical behavior — a hardcoded "User" principalType — instead of regressing
             // to an empty value.
             var principalType = PrincipalTypeUser;
+            // A JWT is "header.payload.signature". The token credential should always return
+            // that shape, but guard explicitly so a malformed token surfaces as a clear error
+            // instead of a confusing IndexOutOfRangeException deep in the parser.
             var parts = response.Token.Split('.');
+            if (parts.Length < 3)
+            {
+                throw new InvalidOperationException(
+                    $"The access token returned by the credential is not a valid JWT (expected 3 '.'-separated segments, found {parts.Length}).");
+            }
             var part = parts[1];
             var convertedToken = part.ToString().Replace('_', '/').Replace('-', '+');
 

@@ -133,11 +133,31 @@ public class DefaultAzurePrincipalProviderTests
         Assert.True(customTokenCredential.GetTokenCalled);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-a-jwt")]
+    [InlineData("header.payload")]
+    public async Task GetPrincipalAsync_ThrowsClearErrorForMalformedToken(string token)
+    {
+        // Real Azure AD always returns a 3-segment JWT, but a misbehaving custom credential
+        // could hand back something else. The provider must surface that as a descriptive
+        // InvalidOperationException instead of leaking an IndexOutOfRangeException from the
+        // payload split.
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(token);
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetPrincipalAsync());
+        Assert.Contains("not a valid JWT", ex.Message);
+    }
+
     // Produces a JWT-shaped string ("header.payload.signature") with the requested claims.
-    // The signature is not validated by the provider; only the base64url-encoded payload is parsed.
+    // All three segments use base64url encoding (RFC 7515 §3) so the helper matches the wire
+    // format real Azure AD tokens use, even though the provider currently only decodes the
+    // payload segment.
     private static string CreateTestToken(Guid oid, string? upn = null, string? email = null, string? idtyp = null)
     {
-        var header = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { alg = "RS256", typ = "JWT" })));
+        var headerJson = JsonSerializer.Serialize(new { alg = "RS256", typ = "JWT" });
+        var header = Base64UrlEncode(Encoding.UTF8.GetBytes(headerJson));
 
         var payload = new Dictionary<string, object?>
         {
@@ -158,16 +178,17 @@ public class DefaultAzurePrincipalProviderTests
             payload["idtyp"] = idtyp;
         }
 
-        var payloadJson = JsonSerializer.Serialize(payload);
-        var payloadBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(payloadJson))
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
-
-        var signature = Convert.ToBase64String(Encoding.UTF8.GetBytes("test-signature"));
+        var payloadBase64 = Base64UrlEncode(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload)));
+        var signature = Base64UrlEncode(Encoding.UTF8.GetBytes("test-signature"));
 
         return $"{header}.{payloadBase64}.{signature}";
     }
+
+    private static string Base64UrlEncode(byte[] bytes) =>
+        Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
 
     private sealed class TestTokenCredentialProviderWithCustomToken(string token) : ITokenCredentialProvider
     {
