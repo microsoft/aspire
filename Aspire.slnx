@@ -65,6 +65,7 @@
     <Project Path="src/Aspire.Hosting.MySql/Aspire.Hosting.MySql.csproj" />
     <Project Path="src/Aspire.Hosting.Nats/Aspire.Hosting.Nats.csproj" />
     <Project Path="src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj" />
+    <Project Path="src/Aspire.Hosting.Java/Aspire.Hosting.Java.csproj" />
     <Project Path="src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj" />
     <Project Path="src/Aspire.Hosting.OpenAI/Aspire.Hosting.OpenAI.csproj" />
     <Project Path="src/Aspire.Hosting.Oracle/Aspire.Hosting.Oracle.csproj" />
