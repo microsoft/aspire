@@ -18,27 +18,42 @@ paths exist for different audiences:
 
 ## Files
 
-- `aspire.rb.template` — canonical formula template. Placeholders (`SDK_VERSION`,
-  `SHA_*`, `SRC_VERSION`, `SRC_SHA`) are filled in per release.
-- `generate-formula.sh` — *(to be added)* substitutes release-tag values into
-  the template; reads SDK version from the release tag's `global.json` and
-  resolves per-RID SDK URLs from `https://builds.dotnet.microsoft.com/dotnet/release-metadata/...`.
-- `validate-formula.sh` — *(to be added)* drives the local Ring A + Ring B
-  validation gauntlet (see issue #17880).
+- `aspire.rb.template` — canonical formula template (`class Aspire`, rendered to
+  `aspire.rb`). Placeholders (`SDK_VERSION`, `SHA_*`, `SRC_VERSION`, `SRC_SHA`)
+  are substituted per release.
+- `build-cli.sh` — single-shot bundled build the formula's `install` block
+  invokes. With `--no-embed` it produces an unbundled NativeAOT `aspire` plus the
+  sibling bundle layout (`managed/`, `dcp/`) the formula lays out under `libexec/`.
+- Rendering + validation are driven by `.github/workflows/homebrew-formula.yml`
+  (it resolves SDK/source SHAs and renders the template inline); there is no
+  standalone `generate-formula.sh` yet. The release-pipeline bump automation
+  (service account `aspire-homebrew-bot`) will add a generator when submission
+  lands.
+
+## Open decisions — resolved
+
+- **Formula name:** `aspire` (fallback `aspire-cli` only if homebrew-core
+  maintainers object at submission).
+- **Bump-PR identity:** service account `aspire-homebrew-bot` (used by the
+  release-pipeline bump automation; not built yet).
+- **First-submission target:** validated against latest `main` (a preview
+  version) for now; switch to a stable release tag before submitting.
+- **SDK:** vendor per-RID `resource` blocks (see below).
 
 ## Design decisions (issue #17880 spike outcomes)
 
 - **SDK acquisition:** per-RID `resource` blocks, version sourced from
   `global.json`. Not `depends_on "dotnet"` — homebrew-core's `dotnet` formula
   tracks the 1xx feature band only, and we need the exact SDK we develop
-  against. See `spike-sdk-strategy.md`.
-- **Bundle extraction:** install-time, via the existing hidden command
-  `aspire setup --install-path libexec --force`. No CLI change. The installed
-  formula does not extract anything at runtime, so the Cellar prefix is not
-  mutated post-install. See `spike-extract-dir.md`.
+  against.
+- **Bundle layout:** the `install` block builds with `--no-embed` and lays the
+  unwrapped bundle out under `libexec/versions/<v>/{managed,dcp}` with a
+  `libexec/bundle` symlink (the canonical sidecar-route shape). No
+  self-extracting transport and no runtime extraction, so the Cellar prefix is
+  not mutated post-install and nothing lands in `~/.aspire/{versions,bundles,bin}`.
 - **Bottle matrix:** ship all four — `arm64_sonoma`, `sonoma`,
   `arm64_linux`, `x86_64_linux`. NativeAOT publishes cleanly on all four
-  with only system stdlib runtime deps. See `spike-nativeaot.md`.
+  with only system stdlib runtime deps.
 - **Install-route sidecar:** writes `{"source":"brew"}` to
   `.aspire-install.json` next to the installed binary. Same wire value as the
   cask; the CLI treats them identically via `InstallSource.Brew`.
@@ -48,5 +63,6 @@ paths exist for different audiences:
 | Ring | Scope | Where it runs |
 |---|---|---|
 | A — static | `ruby -c`, `brew style`, `brew audit --strict --new`, `brew test-bot --only-tap-syntax` | local; PR CI on `eng/homebrew-core/**` change |
-| B — build / install | `brew install --build-from-source aspire` on each supported platform; cross-route coexistence with cask; upgrade scenarios | PR CI on `eng/homebrew-core/**` change; release pipeline pre-bump |
+| B — build / install | `brew install --build-from-source aspire` on each supported platform; the formula's `test do`; `aspire doctor` route + `update --self` gate + no-`~/.aspire`-mutation post-install checks | PR CI on `eng/homebrew-core/**` change; release pipeline pre-bump |
+| B2 — CLI e2e | `HomebrewInstalledCliTests` drives the brew-installed CLI in a non-Docker host terminal: doctor route, `update --self` gate, config round-trip, and a `new→start→ps→describe→stop` lifecycle (set `ASPIRE_E2E_HOMEBREW=true`) | PR CI install job (osx-arm64 + linux-x64) |
 | C — live / online | `brew audit --online --new aspire` against generated formula pointing at the live release URLs | release pipeline post-tag, before opening the bump PR |

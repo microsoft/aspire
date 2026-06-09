@@ -20,6 +20,10 @@ name: Homebrew formula
 #                    `aspire update --self` prints `brew upgrade aspire`,
 #                    exits 0, and does not mutate the binary; the canonical
 #                    `brew test` block (the formula's `test do`) runs clean.
+#   * e2e          — HomebrewInstalledCliTests drives the brew-installed CLI in
+#                    a non-Docker host terminal (the only path that can cover
+#                    osx-arm64): doctor route, update-self gate, config
+#                    round-trip, and a new→start→ps→describe→stop lifecycle.
 #   * cleanup      — `brew uninstall aspire` succeeds.
 #
 # While we iterate on the formula, the matrix is intentionally narrow:
@@ -37,6 +41,8 @@ on:
       - 'src/Aspire.Cli/**'
       - 'global.json'
       - '.github/workflows/homebrew-formula.yml'
+      - 'tests/Aspire.Cli.EndToEnd.Tests/HomebrewInstalledCliTests.cs'
+      - 'tests/Shared/CliInstallStrategy.cs'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -451,6 +457,45 @@ jobs:
             exit 1
           fi
 
+      # ---- Aspire CLI E2E against the brew-installed binary ----
+      # The rest of this suite runs in Linux containers and can't see a host brew
+      # install or cover osx-arm64. HomebrewInstalledCliTests runs in the non-Docker
+      # host terminal against the brew `aspire` on PATH (gated to ASPIRE_E2E_HOMEBREW).
+      # Placed after the bundle-layout snapshot checks because its `aspire new/start`
+      # side effects (workspace + ~/.aspire/logs) would otherwise trip them.
+      - name: Restore repo SDK for E2E
+        run: ./restore.sh
+
+      - name: Put repo SDK on PATH
+        # The lifecycle scenario's `aspire start` shells out to `dotnet` to build the
+        # generated app; pin it to the global.json SDK the repo develops against.
+        run: |
+          echo "$PWD/.dotnet" >> "$GITHUB_PATH"
+          echo "DOTNET_ROOT=$PWD/.dotnet" >> "$GITHUB_ENV"
+
+      - name: Trust HTTPS dev cert
+        # The starter app's apiservice/webfrontend bind https endpoints; without a dev
+        # cert they fail to start and `aspire start` never reports success. On Linux the
+        # trust store path must be exported so the app's child processes pick it up
+        # (mirrors the Docker DoctorCommandTests).
+        run: |
+          ./.dotnet/dotnet dev-certs https --trust || ./.dotnet/dotnet dev-certs https
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            echo "SSL_CERT_DIR=/etc/ssl/certs:$HOME/.aspnet/dev-certs/trust" >> "$GITHUB_ENV"
+          fi
+
+      - name: Aspire CLI E2E (Homebrew install route)
+        env:
+          ASPIRE_E2E_HOMEBREW: 'true'
+          # The formula bakes its version into the binary, so aspire --version equals the
+          # rendered formula version; assert the running CLI is exactly that build.
+          ASPIRE_E2E_HOMEBREW_VERSION: ${{ needs.resolve.outputs.src_version }}
+        run: |
+          ./.dotnet/dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+            -c Debug --no-launch-profile \
+            -- --filter-class "*.HomebrewInstalledCliTests" \
+               --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+
       - name: brew uninstall
         run: brew uninstall --verbose aspire-e2e/scratch/aspire
 
@@ -462,5 +507,6 @@ jobs:
           path: |
             ${{ runner.temp }}/aspire-doctor.txt
             ${{ runner.temp }}/aspire-home-bundle-*.txt
+            artifacts/bin/Aspire.Cli.EndToEnd.Tests/**/TestResults/**
           if-no-files-found: ignore
           retention-days: 7
