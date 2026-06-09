@@ -656,6 +656,43 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         Assert.DoesNotContain("--save", args.Substring(saveIndex + 1));
     }
 
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForNativeModule()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisNativeModule.Json);
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /usr/local/lib/redis/modules/rejson.so", args);
+    }
+
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForModulePath()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule("/opt/redis/custom-module.so");
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /opt/redis/custom-module.so", args);
+    }
+
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForMultipleModules()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisNativeModule.Search)
+            .WithModule("/opt/redis/custom-module.so");
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /usr/local/lib/redis/modules/redisearch.so --loadmodule /opt/redis/custom-module.so", args);
+    }
+
     private static async Task<string> GetCommandLineArgs(IResourceBuilder<RedisResource> builder)
     {
         var args = await ArgumentEvaluator.GetArgumentListAsync(builder.Resource);
