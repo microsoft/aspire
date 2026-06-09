@@ -104,6 +104,11 @@ internal static class CliE2EAutomatorHelpers
             case CliInstallMode.Preinstalled:
                 throw new InvalidOperationException("Preinstalled CLI mode is only supported for non-Docker test environments.");
 
+            case CliInstallMode.Homebrew:
+                throw new InvalidOperationException(
+                    "Homebrew CLI mode is only supported for non-Docker test environments. " +
+                    "Use CreateTestTerminal (host brew install) instead of CreateDockerTestTerminal.");
+
             case CliInstallMode.PullRequest:
                 var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
                 await auto.RunCommandAsync(
@@ -395,6 +400,10 @@ internal static class CliE2EAutomatorHelpers
                 await auto.SourceAspireCliEnvironmentAsync(counter);
                 break;
 
+            case CliInstallMode.Homebrew:
+                await auto.SourceHomebrewCliEnvironmentAsync(counter);
+                break;
+
             case CliInstallMode.PullRequest:
                 var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
                 await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
@@ -579,6 +588,21 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter)
     {
         await auto.SourceAspireEnvironmentAsync(counter);
+    }
+
+    /// <summary>
+    /// Configures PATH for a brew-installed Aspire CLI in a non-Docker environment by putting
+    /// Homebrew's bin on PATH. The brew install itself is expected to have run already (CI
+    /// pre-step or local); this only makes the installed <c>aspire</c> resolvable in the test shell.
+    /// </summary>
+    internal static async Task SourceHomebrewCliEnvironmentAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.RunCommandAsync(
+            AspireCliShellCommandHelpers.GetSourceHomebrewEnvironmentCommand(),
+            counter,
+            TimeSpan.FromSeconds(30));
     }
 
     /// <summary>
