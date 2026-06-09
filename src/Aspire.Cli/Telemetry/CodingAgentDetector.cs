@@ -12,6 +12,7 @@ internal sealed class CodingAgentDetector(IConfiguration configuration) : ICodin
 {
     // Keep this in sync with the dotnet CLI's LLMEnvironmentDetectorForTelemetry detection
     // order so Aspire reports the same agent names when the same environment variables are set.
+    // https://github.com/dotnet/sdk/blob/main/src/Cli/dotnet/Telemetry/LLMEnvironmentDetectorForTelemetry.cs
     private static readonly DetectionRule[] s_detectionRules =
     [
         new("cowork", ["CLAUDE_CODE_IS_COWORK"]),
