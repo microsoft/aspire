@@ -174,7 +174,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
     private async Task WriteProjectAsync(ProjectResource project)
     {
-        if (!project.TryGetLastAnnotation<IProjectMetadata>(out var metadata))
+        if (!project.TryGetProjectAnnotation(out var metadata))
         {
             throw new DistributedApplicationException($"Project metadata was not found for resource '{project.Name}'.");
         }

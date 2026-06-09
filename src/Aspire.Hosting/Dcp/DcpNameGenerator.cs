@@ -46,12 +46,7 @@ internal sealed class DcpNameGenerator
             var (name, suffix) = GetContainerName(resource);
             AddInstancesAnnotation(resource, [new DcpInstance(name, suffix, 0)]);
         }
-        else if (resource is ExecutableResource or ContainerExecutableResource)
-        {
-            var (name, suffix) = GetExecutableName(resource);
-            AddInstancesAnnotation(resource, [new DcpInstance(name, suffix, 0)]);
-        }
-        else if (resource is ProjectResource)
+        else if (resource.TryGetProjectAnnotation(out _))
         {
             var replicas = resource.GetReplicaCount();
             var builder = ImmutableArray.CreateBuilder<DcpInstance>(replicas);
@@ -62,6 +57,11 @@ internal sealed class DcpNameGenerator
             }
             AddInstancesAnnotation(resource, builder.ToImmutable());
         }
+        else if (resource is ContainerExecutableResource || resource.TryGetExecutableAnnotation(out _))
+        {
+            var (name, suffix) = GetExecutableName(resource);
+            AddInstancesAnnotation(resource, [new DcpInstance(name, suffix, 0)]);
+        }
     }
 
     private static void AddInstancesAnnotation(IResource resource, ImmutableArray<DcpInstance> instances)
@@ -71,7 +71,7 @@ internal sealed class DcpNameGenerator
 
     private static void ThrowIfPersistentExecutableHasReplicas(IResource resource)
     {
-        if (resource is not (ExecutableResource or ProjectResource))
+        if (!(resource.TryGetProjectAnnotation(out _) || resource.TryGetExecutableAnnotation(out _)))
         {
             return;
         }
