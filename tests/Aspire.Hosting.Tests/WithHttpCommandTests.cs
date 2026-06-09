@@ -583,7 +583,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
                 PrepareRequest = requestContext =>
                 {
                     Assert.NotNull(requestContext);
-                    Assert.NotNull(requestContext.ServiceProvider);
+                    Assert.NotNull(requestContext.Services);
                     Assert.Equal(service.Resource.Name, requestContext.ResourceName);
                     Assert.NotNull(requestContext.Endpoint);
                     Assert.NotNull(requestContext.HttpClient);
@@ -627,7 +627,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
                 GetCommandResult = resultContext =>
                 {
                     Assert.NotNull(resultContext);
-                    Assert.NotNull(resultContext.ServiceProvider);
+                    Assert.NotNull(resultContext.Services);
                     Assert.Equal(service.Resource.Name, resultContext.ResourceName);
                     Assert.NotNull(resultContext.Endpoint);
                     Assert.NotNull(resultContext.HttpClient);

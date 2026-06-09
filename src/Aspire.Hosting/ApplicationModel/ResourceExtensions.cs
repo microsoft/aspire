@@ -1728,7 +1728,7 @@ public static class ResourceExtensions
         DistributedApplicationModel? model;
         try
         {
-            model = executionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+            model = executionContext.Services.GetService<DistributedApplicationModel>();
         }
         catch (InvalidOperationException)
         {

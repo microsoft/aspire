@@ -6031,6 +6031,15 @@ impl DistributedApplicationExecutionContext {
         Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
+    /// The `IServiceProvider` for the AppHost.
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/DistributedApplicationExecutionContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
     /// Returns true if the current operation is publishing.
     pub fn is_publish_mode(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9594,15 +9603,6 @@ impl ExecuteCommandContext {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
-    }
-
-    /// The service provider.
-    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
     /// The resource name.
@@ -20497,15 +20497,6 @@ impl UpdateCommandStateContext {
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot", args)?;
         Ok(serde_json::from_value(result)?)
-    }
-
-    /// The service provider.
-    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 }
 

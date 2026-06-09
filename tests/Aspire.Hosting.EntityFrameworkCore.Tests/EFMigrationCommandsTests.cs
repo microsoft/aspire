@@ -209,7 +209,7 @@ public class EFMigrationCommandsTests
             var state = command.UpdateState(new UpdateCommandStateContext
             {
                 ResourceSnapshot = snapshot,
-                ServiceProvider = builder.Services.BuildServiceProvider()
+                Services = builder.Services.BuildServiceProvider()
             });
             Assert.Equal(ResourceCommandState.Enabled, state);
         }
@@ -239,7 +239,7 @@ public class EFMigrationCommandsTests
             var state = command.UpdateState(new UpdateCommandStateContext
             {
                 ResourceSnapshot = snapshot,
-                ServiceProvider = builder.Services.BuildServiceProvider()
+                Services = builder.Services.BuildServiceProvider()
             });
             Assert.Equal(ResourceCommandState.Disabled, state);
         }
@@ -270,7 +270,7 @@ public class EFMigrationCommandsTests
             var state = command.UpdateState(new UpdateCommandStateContext
             {
                 ResourceSnapshot = snapshot,
-                ServiceProvider = builder.Services.BuildServiceProvider()
+                Services = builder.Services.BuildServiceProvider()
             });
             Assert.Equal(ResourceCommandState.Disabled, state);
         }
@@ -290,7 +290,7 @@ public class EFMigrationCommandsTests
             var state = command.UpdateState(new UpdateCommandStateContext
             {
                 ResourceSnapshot = snapshot,
-                ServiceProvider = builder.Services.BuildServiceProvider()
+                Services = builder.Services.BuildServiceProvider()
             });
             Assert.Equal(ResourceCommandState.Enabled, state);
         }

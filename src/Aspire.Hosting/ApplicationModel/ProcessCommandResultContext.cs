@@ -19,7 +19,17 @@ public sealed class ProcessCommandResultContext
     /// <summary>
     /// Gets the service provider.
     /// </summary>
-    public required IServiceProvider ServiceProvider { get; init; }
+    [Obsolete("Use Services instead.")]
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// Gets the service provider.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
 
     /// <summary>
     /// Gets the name of the resource the command was configured on.

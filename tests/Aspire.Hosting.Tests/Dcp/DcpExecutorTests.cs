@@ -4842,7 +4842,7 @@ public class DcpExecutorTests
         var nameGenerator = new DcpNameGenerator(configuration, Options.Create(dcpOptions));
         var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
             {
-                ServiceProvider = new TestServiceProvider(configuration)
+                Services = new TestServiceProvider(configuration)
                     .AddService<IDeveloperCertificateService>(developerCertificateService)
                     .AddService(distributedAppModel)
                     .AddService(Options.Create(dcpOptions))

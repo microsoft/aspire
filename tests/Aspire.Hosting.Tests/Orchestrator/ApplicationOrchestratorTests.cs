@@ -526,7 +526,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         resourceLoggerService ??= new ResourceLoggerService();
 
         var executionContext = new DistributedApplicationExecutionContext(
-            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { ServiceProvider = serviceProvider });
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = serviceProvider });
 
         return new ApplicationOrchestrator(
             distributedAppModel,

@@ -278,8 +278,18 @@ public sealed class ContainerFileSystemCallbackContext
     /// <summary>
     /// A <see cref="IServiceProvider"/> that can be used to resolve services in the callback.
     /// </summary>
-    [AspireExport(MethodName = "services")]
-    public required IServiceProvider ServiceProvider { get; init; }
+    [Obsolete("Use Services instead.")]
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// A <see cref="IServiceProvider"/> that can be used to resolve services in the callback.
+    /// </summary>
+    [AspireExport]
+    public required IServiceProvider Services { get; init; }
 
     /// <summary>
     /// The app model resource the callback is associated with.

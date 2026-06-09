@@ -802,7 +802,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         var application = new DistributedApplication(_innerBuilder.Build());
 
-        _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
+        _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
 
         LogAppBuilt(application);
         ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);

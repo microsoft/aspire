@@ -78,7 +78,7 @@ public static class YarpResourceExtensions
         {
             yarpBuilder.WithEnvironment(ctx =>
             {
-                var developerCertificateService = ctx.ExecutionContext.ServiceProvider.GetRequiredService<IDeveloperCertificateService>();
+                var developerCertificateService = ctx.ExecutionContext.Services.GetRequiredService<IDeveloperCertificateService>();
                 if (!developerCertificateService.SupportsContainerTrust)
                 {
                     // On systems without the ASP.NET DevCert updates introduced in .NET 10, YARP will not trust the cert used

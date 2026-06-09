@@ -114,7 +114,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
             {
                 try
                 {
-                    tcs.TrySetResult(c.ExecutionContext.ServiceProvider);
+                    tcs.TrySetResult(c.ExecutionContext.Services);
                 }
                 catch (InvalidOperationException ex)
                 {

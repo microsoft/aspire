@@ -7684,6 +7684,14 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
         return (IServiceProvider) result;
     }
 
+    /** The `IServiceProvider` for the AppHost. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.services", reqArgs);
+        return (IServiceProvider) result;
+    }
+
     /** Returns true if the current operation is publishing. */
     public boolean isPublishMode() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -12123,14 +12131,6 @@ import java.util.function.*;
 public class ExecuteCommandContext extends HandleWrapperBase {
     ExecuteCommandContext(Handle handle, AspireClient client) {
         super(handle, client);
-    }
-
-    /** The service provider. */
-    public IServiceProvider services() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services", reqArgs);
-        return (IServiceProvider) result;
     }
 
     /** The resource name. */
@@ -26737,14 +26737,6 @@ public class UpdateCommandStateContext extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot", reqArgs);
         return UpdateCommandStateResourceSnapshot.fromMap((Map<String, Object>) result);
-    }
-
-    /** The service provider. */
-    public IServiceProvider services() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services", reqArgs);
-        return (IServiceProvider) result;
     }
 
 }
