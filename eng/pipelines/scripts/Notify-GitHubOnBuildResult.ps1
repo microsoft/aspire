@@ -20,9 +20,10 @@
 #     endpoint is intentionally avoided because its 1-2 min eventual
 #     consistency causes near-simultaneous failed builds to each see
 #     "0 hits" and each file a duplicate.
-#   - On create, we re-list to detect the rare race where two builds raced
-#     past the consistency window simultaneously, and close ours as a
-#     duplicate of the older one.
+#   - Two builds of the same branch failing within the same window can still
+#     briefly create two issues. Builds are rolling so this is rare; the
+#     duplicate is left for a human to close rather than auto-deduped, which
+#     avoids an extra `gh issue list` round-trip on every first-failure.
 #
 # Per-failure history:
 #   - The issue body is written once at creation (build, commit, and the
@@ -253,7 +254,6 @@ function Invoke-FailureMode {
         Write-Step "DRY-RUN: issue body would contain:"
         $body = New-IssueBody -Marker $Marker
         $body -split "`n" | ForEach-Object { Write-Step "DRY-RUN:   | $_" }
-        Write-Step "DRY-RUN: would then re-list and close as duplicate if not oldest (race handler)"
         Write-Step "DRY-RUN: if an existing issue had been found, would run 'gh issue comment' to append a follow-up failure comment with @-mentions"
         return
     }
@@ -278,27 +278,10 @@ function Invoke-FailureMode {
         ) + $labelFlags + $assigneeFlags
 
         # gh issue create prints the new issue's URL as the last non-empty
-        # line of stdout. Parse the number out for the race-handler compare.
+        # line of stdout.
         $createOutput = Invoke-Gh -ArgList $createArgs -StdinBody $issueBody
         $createdUrl = (@($createOutput) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Last 1).ToString().Trim()
-        if ($createdUrl -notmatch '/issues/(\d+)$') {
-            throw "Could not parse issue number from gh output: '$createdUrl'"
-        }
-        $createdNumber = [int]$Matches[1]
-        Write-Step "Created issue #${createdNumber}: $createdUrl"
-
-        # Post-create race handler: re-list and close as duplicate if we
-        # aren't the oldest. See file header "Dedupe strategy".
-        $recheck = Get-OpenBrokenIssuesForBranch -Marker $Marker
-        $oldest = $recheck | Where-Object { $_.number -ne $createdNumber } | Select-Object -First 1
-        if ($null -ne $oldest -and $oldest.number -lt $createdNumber) {
-            Write-Step "Race detected: older open issue #$($oldest.number) found. Closing our just-created #${createdNumber} as duplicate."
-            $dupBody = "Duplicate of #$($oldest.number). Two near-simultaneous failed builds raced past the dedupe window; auto-closing this one."
-            Invoke-Gh -ArgList @('issue', 'comment', "$createdNumber", '--repo', "$Owner/$Repo", '--body-file', '-') -StdinBody $dupBody | Out-Null
-            # `gh issue close --reason` accepts "completed" or "not planned"
-            # (with a space) — gh maps the latter to the API's not_planned.
-            Invoke-Gh -ArgList @('issue', 'close', "$createdNumber", '--repo', "$Owner/$Repo", '--reason', 'not planned') | Out-Null
-        }
+        Write-Step "Created issue: $createdUrl"
         return
     }
 

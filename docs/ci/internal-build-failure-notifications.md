@@ -96,10 +96,10 @@ intentionally avoided because its 1–2 minute eventual-consistency window
 would cause near-simultaneous failed builds to each see "0 hits" and file
 duplicate issues.
 
-After the create-issue path, the script re-lists immediately. If our
-just-created issue is not the oldest carrying the marker, it closes itself
-as a duplicate of the older issue. This self-heals the rare race when two
-builds fail within seconds of each other.
+Two builds of the same branch failing within that window can still briefly
+create two issues. Because builds are rolling this is rare, and the cost of
+auto-deduping it (an extra `gh issue list` round-trip on every first-failure)
+isn't worth it — the duplicate is left for a human to close.
 
 ## Auth
 
