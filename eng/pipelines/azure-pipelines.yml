@@ -912,28 +912,45 @@ extends:
       displayName: Notify Build Failure
       dependsOn:
         - build_sign_native
+        - build_extension
         - build
+        - template_tests
+        - assemble
         - prepare_installers
-      # Files an issue when at least one upstream stage Failed.
-      # Canceled stage results match neither 'Failed' nor 'Succeeded',
-      # so operator/timeout cancellations produce no notification.
+      # Files an issue when at least one watched stage Failed. We depend on
+      # EVERY non-notify stage so a break anywhere — including the publish
+      # stage `assemble`, the VSIX build `build_extension`, or `template_tests`
+      # — files an issue. A stage whose dependency failed is reported as
+      # 'Skipped' (not 'Failed'), so each stage must be watched directly
+      # rather than relying on one downstream stage to roll failures up.
+      # Canceled stage results match neither 'Failed' nor 'Succeeded', so
+      # operator/timeout cancellations produce no notification.
       condition: |
         and(
           ne(variables['Build.Reason'], 'PullRequest'),
           eq(variables['_IsNotificationBranch'], 'true'),
           or(
-            in(dependencies.build.result, 'Failed'),
             in(dependencies.build_sign_native.result, 'Failed'),
+            in(dependencies.build_extension.result, 'Failed'),
+            in(dependencies.build.result, 'Failed'),
+            in(dependencies.template_tests.result, 'Failed'),
+            in(dependencies.assemble.result, 'Failed'),
             in(dependencies.prepare_installers.result, 'Failed')
           )
         )
       variables:
         # Stage results, exposed as runtime variables so the pwsh step below
         # can compose a "failed stages" list for the GitHub notification.
-        - name: BuildStageResult
-          value: $[ dependencies.build.result ]
         - name: BuildSignNativeStageResult
           value: $[ dependencies.build_sign_native.result ]
+        - name: BuildExtensionStageResult
+          value: $[ dependencies.build_extension.result ]
+        - name: BuildStageResult
+          value: $[ dependencies.build.result ]
+        - name: TemplateTestsStageResult
+          value: $[ dependencies.template_tests.result ]
+        - name: AssembleStageResult
+          value: $[ dependencies.assemble.result ]
         - name: PrepareInstallersStageResult
           value: $[ dependencies.prepare_installers.result ]
         # Drives the -DryRun:$value pattern in the pwsh wrapper below.
@@ -995,8 +1012,11 @@ extends:
                   # Compose the failed-stages list from the upstream stage
                   # results exposed via stage-scoped variables above.
                   $failed = @()
-                  if ('$(BuildStageResult)' -eq 'Failed') { $failed += 'build' }
                   if ('$(BuildSignNativeStageResult)' -eq 'Failed') { $failed += 'build_sign_native' }
+                  if ('$(BuildExtensionStageResult)' -eq 'Failed') { $failed += 'build_extension' }
+                  if ('$(BuildStageResult)' -eq 'Failed') { $failed += 'build' }
+                  if ('$(TemplateTestsStageResult)' -eq 'Failed') { $failed += 'template_tests' }
+                  if ('$(AssembleStageResult)' -eq 'Failed') { $failed += 'assemble' }
                   if ('$(PrepareInstallersStageResult)' -eq 'Failed') { $failed += 'prepare_installers' }
                   $failedStages = $failed -join ', '
 
@@ -1023,19 +1043,35 @@ extends:
       displayName: Notify Build Success
       dependsOn:
         - build_sign_native
+        - build_extension
         - build
+        - template_tests
+        - assemble
         - prepare_installers
-      # Only fires when all three upstream stages are Succeeded /
-      # SucceededWithIssues — except prepare_installers may legitimately
-      # Skip on stable GA release builds (its own condition excludes
-      # stable channel builds), which is not a failure. Canceled stage
-      # results don't match either branch and produce no notification.
+      # Only closes the issue when EVERY watched stage is Succeeded /
+      # SucceededWithIssues (the same stage set as notify_failure). Requiring
+      # the full set means a build that fixes one stage but breaks another
+      # (e.g. green build/build_sign_native but a failed `assemble`) does NOT
+      # falsely close the open ci-broken issue.
+      #
+      # prepare_installers also permits 'Skipped': on a notifiable branch
+      # (main / release/*) it runs whenever build_sign_native succeeded, so a
+      # Skip there implies build_sign_native did not succeed — a failure path
+      # already covered by notify_failure. (The stable-channel skip in its own
+      # condition only takes effect on non-notifiable branches.) Allowing
+      # 'Skipped' is therefore defensive and cannot cause a false close.
+      #
+      # Canceled stage results don't match either branch and produce no
+      # notification.
       condition: |
         and(
           ne(variables['Build.Reason'], 'PullRequest'),
           eq(variables['_IsNotificationBranch'], 'true'),
-          in(dependencies.build.result, 'Succeeded', 'SucceededWithIssues'),
           in(dependencies.build_sign_native.result, 'Succeeded', 'SucceededWithIssues'),
+          in(dependencies.build_extension.result, 'Succeeded', 'SucceededWithIssues'),
+          in(dependencies.build.result, 'Succeeded', 'SucceededWithIssues'),
+          in(dependencies.template_tests.result, 'Succeeded', 'SucceededWithIssues'),
+          in(dependencies.assemble.result, 'Succeeded', 'SucceededWithIssues'),
           in(dependencies.prepare_installers.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
         )
       variables:

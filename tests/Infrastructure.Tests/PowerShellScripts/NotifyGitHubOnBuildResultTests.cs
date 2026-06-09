@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
 using Aspire.TestUtilities;
 using Aspire.Templates.Tests;
 using Xunit;
@@ -55,135 +54,139 @@ public sealed class NotifyGitHubOnBuildResultTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task NewFailureTableRow_EscapesPipesInFailedStages()
+    public async Task GhAvailable_ReturnsTrue_WhenGhExitsZero()
     {
-        var (_, row) = await RunHarnessAsync("""
-            $CommitSha = 'abcdef1234567'
-            $FailedStages = 'build | test'
-            $BuildNumber = 'B9'
-            $BuildUrl = 'https://example.test/9'
-            $__result = New-FailureTableRow -Index 3
+        var bin = MakeFakeGhBin(exitCode: 0);
+        var (_, r) = await RunHarnessAsync($"""
+            $env:PATH = '{bin}'
+            $__result = Test-GhAvailable
             """);
 
-        // A raw pipe would split the markdown table cell; it must be backslash-escaped.
-        Assert.Contains(@"build \| test", row);
-        Assert.DoesNotContain("build | test", row);
+        Assert.Equal("True", r.Trim());
     }
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task NewFailureTableRow_ShortensCommitShaToSevenChars()
+    public async Task GhAvailable_ReturnsFalse_WhenGhExitsNonZero()
     {
-        var (_, row) = await RunHarnessAsync("""
-            $CommitSha = 'abcdef1234567'
-            $FailedStages = 'build'
-            $BuildNumber = 'B9'
-            $BuildUrl = 'https://example.test/9'
-            $__result = New-FailureTableRow -Index 3
+        var bin = MakeFakeGhBin(exitCode: 3);
+        var (_, r) = await RunHarnessAsync($"""
+            $env:PATH = '{bin}'
+            $__result = Test-GhAvailable
             """);
 
-        // Displayed sha is shortened to 7 chars, but the commit link uses the full sha.
-        Assert.Contains("[`abcdef1`]", row);
-        Assert.Contains("/commit/abcdef1234567)", row);
+        Assert.Equal("False", r.Trim());
     }
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task NewFailureTableRow_HandlesShaShorterThanSevenChars()
+    public async Task GhAvailable_ReturnsFalse_WhenGhMissingFromPath()
     {
-        var (_, row) = await RunHarnessAsync("""
-            $CommitSha = 'abc'
-            $FailedStages = 'build'
-            $BuildNumber = 'B9'
-            $BuildUrl = 'https://example.test/9'
-            $__result = New-FailureTableRow -Index 3
+        // PATH points at an empty dir, so `gh` cannot be resolved; the probe must
+        // report unavailable rather than let the resolution error escape.
+        var empty = Path.Combine(_tempDir.Path, $"empty-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(empty);
+        var (_, r) = await RunHarnessAsync($"""
+            $env:PATH = '{empty}'
+            $__result = Test-GhAvailable
             """);
 
-        // Substring(0, 7) would throw on a sub-7-char sha; the script must fall back to the full value.
-        Assert.Contains("[`abc`]", row);
-        Assert.Contains("/commit/abc)", row);
+        Assert.Equal("False", r.Trim());
     }
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task NewFailureTableRow_RendersEmDashForEmptyFailedStages()
+    public async Task IssueBodyMatchesMarker_True_WhenMarkerAtStartOfLine()
     {
-        var (_, row) = await RunHarnessAsync("""
+        var (_, r) = await RunHarnessAsync("""
+            $marker = '<!-- aspire-internal-build-broken:main -->'
+            $body = "$marker`n`nThe build is failing."
+            $__result = Test-IssueBodyMatchesMarker -Body $body -Marker $marker
+            """);
+
+        Assert.Equal("True", r.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task IssueBodyMatchesMarker_False_WhenMarkerOnlyMidProse()
+    {
+        // The marker pasted inside a sentence (not at line start) must NOT match,
+        // so success-mode never comments on / closes an unrelated issue.
+        var (_, r) = await RunHarnessAsync("""
+            $marker = '<!-- aspire-internal-build-broken:main -->'
+            $body = "see the tracking issue mentioning $marker inline somewhere"
+            $__result = Test-IssueBodyMatchesMarker -Body $body -Marker $marker
+            """);
+
+        Assert.Equal("False", r.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task IssueBodyMatchesMarker_False_WhenMarkerAbsentOrBodyEmpty()
+    {
+        var (_, r) = await RunHarnessAsync("""
+            $marker = '<!-- aspire-internal-build-broken:main -->'
+            $a = Test-IssueBodyMatchesMarker -Body 'no marker here' -Marker $marker
+            $b = Test-IssueBodyMatchesMarker -Body '' -Marker $marker
+            $__result = "$a,$b"
+            """);
+
+        Assert.Equal("False,False", r.Trim());
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task NewIssueBody_ContainsMarkerBuildCommitAndFailedStages()
+    {
+        var (_, body) = await RunHarnessAsync("""
+            $Branch = 'main'
+            $BuildNumber = 'B9'
+            $BuildUrl = 'https://example.test/9'
             $CommitSha = 'abcdef1234567'
+            $FailedStages = 'build, assemble'
+            $__result = New-IssueBody -Marker '<!-- aspire-internal-build-broken:main -->'
+            """);
+
+        Assert.StartsWith("<!-- aspire-internal-build-broken:main -->", body);
+        Assert.Contains("[B9](https://example.test/9)", body);
+        Assert.Contains("abcdef1234567", body);
+        Assert.Contains("**Failed stages:** build, assemble", body);
+        Assert.Contains("cc @joperezr @radical", body);
+        // The in-body failures table was removed; no managed-region markers remain.
+        Assert.DoesNotContain("ci-broken-failures", body);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task NewFailureFollowupComment_ContainsBuildCommitAndFailedStages()
+    {
+        var (_, comment) = await RunHarnessAsync("""
+            $Branch = 'main'
+            $BuildNumber = 'B42'
+            $BuildUrl = 'https://example.test/42'
+            $CommitSha = 'deadbeefcafef00d'
+            $FailedStages = 'template_tests'
+            $__result = New-FailureFollowupCommentBody
+            """);
+
+        Assert.Contains("[B42](https://example.test/42)", comment);
+        Assert.Contains("deadbeefcafef00d", comment);
+        Assert.Contains("**Failed stages:** template_tests", comment);
+        Assert.Contains("cc @joperezr @radical", comment);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task FormatFailedStages_RendersEmDashWhenEmpty()
+    {
+        var (_, r) = await RunHarnessAsync("""
             $FailedStages = ''
-            $BuildNumber = 'B9'
-            $BuildUrl = 'https://example.test/9'
-            $__result = New-FailureTableRow -Index 3
+            $__result = Format-FailedStages
             """);
 
-        Assert.Contains("| \u2014 |", row);
-    }
-
-    [Fact]
-    [RequiresTools(["pwsh"])]
-    public async Task UpdateFailuresTableInBody_AppendsRowAndPreservesSurroundingProse()
-    {
-        var (_, body) = await RunHarnessAsync("""
-            $begin = '<!-- ci-broken-failures:begin -->'
-            $end = '<!-- ci-broken-failures:end -->'
-            $hdr = "| # | When (UTC) | Build | Commit | Failed stages |`n|---|------------|-------|--------|---------------|"
-            $existing = "INTRO PROSE`n$begin`n$hdr`n| 1 | 2026-01-01 00:00 | [B1](u) | [``abc``](c) | x |`n$end`nTRAILING PROSE"
-            $__result = Update-FailuresTableInBody -Body $existing
-            """);
-
-        Assert.Equal(2, CountDataRows(body));
-        Assert.Contains("| 2 |", body);
-        // Human-authored prose outside the managed region must survive the edit.
-        Assert.Contains("INTRO PROSE", body);
-        Assert.Contains("TRAILING PROSE", body);
-    }
-
-    [Fact]
-    [RequiresTools(["pwsh"])]
-    public async Task UpdateFailuresTableInBody_RollsOverOldestRowsBeyondCap()
-    {
-        var (_, body) = await RunHarnessAsync("""
-            $begin = '<!-- ci-broken-failures:begin -->'
-            $end = '<!-- ci-broken-failures:end -->'
-            $hdr = "| # | When (UTC) | Build | Commit | Failed stages |`n|---|------------|-------|--------|---------------|"
-            $rows = (1..50 | ForEach-Object { "| $_ | 2026-01-01 00:00 | [B](u) | [``abc``](c) | x |" }) -join "`n"
-            $existing = "$begin`n$hdr`n$rows`n$end"
-            $__result = Update-FailuresTableInBody -Body $existing
-            """);
-
-        // FailuresTableMaxRows = 50: the 51st row drops the oldest, which is summarized as omitted.
-        Assert.Equal(50, CountDataRows(body));
-        Assert.Matches(@"_\d+ earlier failures omitted", body);
-    }
-
-    [Fact]
-    [RequiresTools(["pwsh"])]
-    public async Task UpdateFailuresTableInBody_AccountsForExistingOmittedCountInNextIndex()
-    {
-        var (_, body) = await RunHarnessAsync("""
-            $begin = '<!-- ci-broken-failures:begin -->'
-            $end = '<!-- ci-broken-failures:end -->'
-            $hdr = "| # | When (UTC) | Build | Commit | Failed stages |`n|---|------------|-------|--------|---------------|"
-            $omitted = '_3 earlier failures omitted; see issue comments._'
-            $existing = "$begin`n$omitted`n`n$hdr`n| 4 | 2026-01-01 00:00 | [B](u) | [``abc``](c) | x |`n| 5 | 2026-01-01 00:00 | [B](u) | [``abc``](c) | x |`n$end"
-            $__result = Update-FailuresTableInBody -Body $existing
-            """);
-
-        // nextIndex = visibleRows(2) + omitted(3) + 1 = 6
-        Assert.Contains("| 6 |", body);
-    }
-
-    [Fact]
-    [RequiresTools(["pwsh"])]
-    public async Task UpdateFailuresTableInBody_LeavesBodyUnchangedAndWarnsWhenMarkersMissing()
-    {
-        var (result, body) = await RunHarnessAsync("""
-            $existing = 'a hand-edited body with no managed markers'
-            $__result = Update-FailuresTableInBody -Body $existing
-            """);
-
-        Assert.Equal("a hand-edited body with no managed markers", body);
-        Assert.Contains("Could not locate failures-table markers", result.Output);
+        Assert.Equal("\u2014", r.Trim());
     }
 
     [Fact]
@@ -288,8 +291,28 @@ public sealed class NotifyGitHubOnBuildResultTests : IDisposable
         }
     }
 
-    private static int CountDataRows(string body)
-        => Regex.Matches(body, @"(?m)^\|\s*\d+\s*\|").Count;
+    private string MakeFakeGhBin(int exitCode)
+    {
+        var dir = Path.Combine(_tempDir.Path, $"ghbin-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        if (OperatingSystem.IsWindows())
+        {
+            File.WriteAllText(
+                Path.Combine(dir, "gh.cmd"),
+                $"@echo off\r\necho gh version 0.0\r\nexit /b {exitCode}\r\n");
+        }
+        else
+        {
+            var ghPath = Path.Combine(dir, "gh");
+            File.WriteAllText(ghPath, $"#!/bin/sh\necho 'gh version 0.0'\nexit {exitCode}\n");
+            File.SetUnixFileMode(
+                ghPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
+        return dir;
+    }
 
     // Dot-sources the shipped script with a non-notifiable branch (so main bails before any
     // gh/token work) and runs the per-test body, which sets $__result. The "# __BODY__" token

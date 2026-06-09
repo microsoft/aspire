@@ -11,16 +11,30 @@ the behavior without re-reading the pipeline YAML.
 
 ## What gets notified
 
-Two stages run at the end of every non-PR internal build:
+Two stages run at the end of every non-PR internal build, after every
+other stage:
 
 - `notify_failure` — files or updates a GitHub issue when at least one
-  of `build_sign_native` / `build` / `prepare_installers` ends with
-  `Failed`.
+  build stage ends with `Failed`. It depends on **every** non-notify
+  stage — `build_sign_native`, `build_extension`, `build`,
+  `template_tests`, `assemble`, and `prepare_installers` — so a break
+  anywhere (including the publish stage `assemble`) files an issue.
 - `notify_success` — closes any open `ci-broken` issue for the branch
-  when all three upstream stages end with `Succeeded` or
-  `SucceededWithIssues` (`prepare_installers` may also legitimately
-  end with `Skipped` on stable GA release builds — that is accepted
-  as success).
+  when all of those stages end with `Succeeded` or `SucceededWithIssues`
+  (`prepare_installers` may also end with `Skipped`; see below).
+
+A stage whose dependency failed is reported as `Skipped` (not `Failed`)
+by Azure Pipelines, so each stage must be watched directly — a single
+downstream stage cannot be relied on to roll failures up. This is why
+both conditions enumerate the full stage set rather than gating on one
+terminal stage.
+
+`prepare_installers` is allowed to end with `Skipped` in the success
+condition only as a defensive measure. On a notifiable branch
+(`main` / `release/*`) it runs whenever `build_sign_native` succeeded, so
+a `Skipped` there implies `build_sign_native` did not succeed — a failure
+path already covered by `notify_failure`. (Its own condition only skips on
+the *stable* channel for **non**-notifiable branches.)
 
 Both stages gate on the branch being either:
 
@@ -53,25 +67,16 @@ a single GitHub issue per affected branch:
 
 Only one open issue per branch exists at a time.
 
-The body contains a managed markdown table inside a fenced region
-delimited by `<!-- ci-broken-failures:begin -->` /
-`<!-- ci-broken-failures:end -->`. Each row records one failure: index,
-UTC timestamp, build link, commit SHA (linked to the GitHub commit),
-and the comma-separated list of failed upstream stages (`build`,
-`build_sign_native`, `prepare_installers`).
+The body records the first failure's build link, commit SHA, and the
+comma-separated list of failed stages (any of `build_sign_native`,
+`build_extension`, `build`, `template_tests`, `assemble`,
+`prepare_installers`). It is written once at creation and is **not**
+rewritten afterwards.
 
-On each subsequent failure the script:
-
-1. **Updates the issue body** to append a new row to the table. Only
-   content between the fenced markers is rewritten — any human-added
-   prose elsewhere in the body is preserved.
-2. **Posts a follow-up comment** containing the new build link, commit
-   SHA, and `cc @joperezr @radical`. The comment is what fires
-   notifications — body edits don't.
-
-Visible rows in the table are capped (currently 50). Older rows are
-collapsed into a `_N earlier failures omitted_` summary line; the full
-per-failure history remains in the issue's comments.
+On each subsequent failure the script **posts a follow-up comment** with
+that build's link, commit SHA, failed stages, and `cc @joperezr @radical`.
+The comments are the per-failure history — and the comment is what fires
+notifications, since editing the issue body would not.
 
 `Canceled` stage results (operator cancellation, 1ES timeouts) intentionally
 do not file an issue — the stage condition uses explicit `in(..., 'Failed')`
@@ -101,8 +106,10 @@ builds fail within seconds of each other.
 The script mints an installation access token for the **aspire-repo-bot**
 GitHub App via [`Get-AspireBotInstallationToken.ps1`](../../eng/pipelines/scripts/Get-AspireBotInstallationToken.ps1)
 (the same helper used by the release pipeline's
-`dispatch-release-github-tasks.ps1`). The token is immediately marked as a
-secret AzDO pipeline variable so any incidental log echo is redacted.
+`dispatch-release-github-tasks.ps1`). The token is immediately registered
+as a secret with the agent via `##vso[task.setsecret]` so any incidental
+log echo is redacted; it is consumed by `gh` through the `GH_TOKEN` process
+environment variable and is not persisted as a pipeline variable.
 
 The App's `aspire-bot-app-id` and `aspire-bot-private-key` secrets come
 from the `Aspire-Release-Secrets` variable group, imported at pipeline
@@ -156,10 +163,7 @@ worth investigating, but does not block anything that depends on the build.
 
 If you need to file or close a `ci-broken` issue by hand (e.g. during
 recovery), use the existing label and add the marker `<!-- aspire-internal-build-broken:<branch> -->`
-as the first line of the body. The script's next run will treat it as the
-canonical open issue and append/close accordingly.
-
-For the failures table to grow, also include the fenced region
-(`<!-- ci-broken-failures:begin -->` / `<!-- ci-broken-failures:end -->`)
-somewhere in the body. If the markers are absent the script logs a
-warning, leaves the body alone, and still posts the follow-up comment.
+as the first line of the body. The marker must start a line — the script
+matches it anchored to the start of a line so the text can't accidentally
+match if pasted mid-prose into an unrelated issue. The script's next run
+will treat the issue as the canonical open one and append/close accordingly.

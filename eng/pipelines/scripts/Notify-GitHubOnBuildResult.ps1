@@ -8,8 +8,8 @@
 #
 # Auth: mints an aspire-repo-bot GitHub App installation access token via the
 # shared Get-AspireBotInstallationToken.ps1 helper, exports it as GH_TOKEN for
-# the gh CLI, and also marks it as a secret AzDO variable so any incidental
-# log echo gets redacted.
+# the gh CLI, and registers it as a secret with the agent (task.setsecret) so
+# any incidental log echo gets redacted.
 #
 # Dedupe strategy:
 #   - Issues are identified by a hidden HTML-comment marker in the body:
@@ -24,18 +24,13 @@
 #     past the consistency window simultaneously, and close ours as a
 #     duplicate of the older one.
 #
-# Failures table:
-#   - The issue body contains a managed markdown table inside a fenced
-#     region delimited by <!-- ci-broken-failures:begin --> /
-#     <!-- ci-broken-failures:end -->. Each subsequent failure on the same
-#     branch appends a row (build, commit, failed stages, timestamp).
-#     A follow-up comment is also posted so @-mentions still fire — body
-#     edits don't generate notifications.
-#   - Visible rows are capped (FailuresTableMaxRows); older rows are
-#     summarized as "_N earlier failures omitted_" and remain accessible
-#     via the per-failure comments.
-#   - Only content between the markers is rewritten; any human-added
-#     prose elsewhere in the body is preserved across updates.
+# Per-failure history:
+#   - The issue body is written once at creation (build, commit, and the
+#     failed stages for the first failure). Each subsequent failure on the
+#     same branch posts a comment with that build's details and @-mentions —
+#     editing the body would not re-fire notifications, but comments do.
+#   - The comments are the per-failure history; the body is not rewritten
+#     after creation.
 #
 # Safety: this script ALWAYS exits 0. A flaky notification path must not
 # turn an otherwise-correct build red. All API errors are logged via
@@ -71,17 +66,6 @@ $Script:IssueLabels = @('area-engineering-systems', 'ci-broken', 'blocking-clean
 # comment @-mentions do.
 $Script:Assignees = @('joperezr', 'radical')
 $Script:MentionLine = 'cc @joperezr @radical'
-
-# Managed region in the issue body. Update-FailuresTableInBody only touches
-# content between these markers, so any human-added prose elsewhere in the
-# body is preserved across updates.
-$Script:FailuresTableBeginMarker = '<!-- ci-broken-failures:begin -->'
-$Script:FailuresTableEndMarker = '<!-- ci-broken-failures:end -->'
-$Script:FailuresTableHeader = "| # | When (UTC) | Build | Commit | Failed stages |`n|---|------------|-------|--------|---------------|"
-# Cap visible rows in the issue body. Older rows are collapsed into a
-# "_N earlier failures omitted_" line; full per-failure history is still
-# preserved in the issue's comments.
-$Script:FailuresTableMaxRows = 50
 
 # See Exit-NotifyScript for the SucceededWithIssues rationale.
 $Script:HasWarnings = $false
@@ -119,6 +103,13 @@ function Exit-NotifyScript {
 
 # Defense in depth: pipeline gate is the primary filter. Pipeline
 # trigger's `main*` wildcard means we must match `main` exactly.
+#
+# IMPORTANT: the notifiable-branch policy is defined in THREE places that
+# must stay in sync if the policy ever changes:
+#   1. _IsNotificationBranch in eng/pipelines/common-variables.yml
+#   2. the notify_failure / notify_success stage `condition:` blocks in
+#      eng/pipelines/azure-pipelines.yml
+#   3. this function
 function Test-NotifiableBranch {
     param([string]$Name)
     return ($Name -eq 'main') -or ($Name -like 'release/*')
@@ -147,6 +138,33 @@ function Invoke-Gh {
     return $output
 }
 
+# Probe for the gh CLI up front. If it's missing from the image, every
+# Invoke-Gh call would throw into the top-level catch and we'd silently stop
+# filing/closing issues (silent-dead-feature). The release pipeline
+# pin-installs gh for the same reason. Returns $true when `gh --version` runs
+# and exits 0.
+function Test-GhAvailable {
+    try {
+        & gh --version *> $null
+        return ($LASTEXITCODE -eq 0)
+    }
+    catch {
+        return $false
+    }
+}
+
+# Matches the dedupe marker only at the START of a line. Every issue body this
+# script files puts the marker on its own first line, so anchoring avoids a
+# false match if the marker text is ever pasted mid-prose into an unrelated
+# issue (which success-mode would otherwise comment on and close).
+function Test-IssueBodyMatchesMarker {
+    param([string]$Body, [string]$Marker)
+    if ([string]::IsNullOrEmpty($Body)) {
+        return $false
+    }
+    return [regex]::IsMatch($Body, '(?m)^' + [regex]::Escape($Marker))
+}
+
 # Lists open issues with the ci-broken label and filters locally on the
 # branch-specific marker. Returns an array (possibly empty) sorted by issue
 # number ascending — so [0] is always the oldest open issue for this branch.
@@ -165,90 +183,24 @@ function Get-OpenBrokenIssuesForBranch {
     )
 
     $all = @($json | ConvertFrom-Json)
-    $matched = @($all | Where-Object { $_.body -and $_.body.Contains($Marker) })
+    $matched = @($all | Where-Object { Test-IssueBodyMatchesMarker -Body $_.body -Marker $Marker })
     return @($matched | Sort-Object -Property number)
 }
 
-function New-FailureTableRow {
-    param([int]$Index)
-    $shortSha = if ($CommitSha.Length -ge 7) { $CommitSha.Substring(0, 7) } else { $CommitSha }
-    $commitLink = "[``$shortSha``](https://github.com/$Owner/$Repo/commit/$CommitSha)"
-    # Escape pipes in user-supplied content so they don't break the markdown
-    # table. FailedStages currently comes from a fixed enumeration in the
-    # pipeline, but a future caller could pass arbitrary text.
-    $stages = if ([string]::IsNullOrWhiteSpace($FailedStages)) { '—' } else { $FailedStages -replace '\|', '\|' }
-    $when = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm')
-    return "| $Index | $when | [$BuildNumber]($BuildUrl) | $commitLink | $stages |"
-}
-
-# Initial failures table section embedded in a freshly-filed issue body.
-# Contains the header plus the first failure row (index 1).
-function New-InitialFailuresTableSection {
-    $row = New-FailureTableRow -Index 1
-    return @"
-$($Script:FailuresTableBeginMarker)
-$($Script:FailuresTableHeader)
-$row
-$($Script:FailuresTableEndMarker)
-"@
-}
-
-# Splices a new failure row into the managed region of an existing issue body.
-# - Locates the begin/end markers; if missing (issue body was hand-edited or
-#   pre-dates this feature), returns the body unchanged with a warning.
-# - Counts existing visible rows + any "N earlier omitted" tally to determine
-#   the next failure index.
-# - When the visible-row count exceeds FailuresTableMaxRows, drops oldest
-#   rows and rolls them into the omitted tally.
-function Update-FailuresTableInBody {
-    param([string]$Body)
-
-    $beginIdx = $Body.IndexOf($Script:FailuresTableBeginMarker)
-    $endIdx = $Body.IndexOf($Script:FailuresTableEndMarker)
-    if ($beginIdx -lt 0 -or $endIdx -lt 0 -or $endIdx -lt $beginIdx) {
-        Write-NotifyWarning "Could not locate failures-table markers in issue body; skipping body update."
-        return $Body
+# Renders the failed-stages list for the issue body / comment. Em-dash when
+# empty. The pipeline passes a comma-separated list of stage names (no pipe
+# characters), so no markdown escaping is needed.
+function Format-FailedStages {
+    if ([string]::IsNullOrWhiteSpace($FailedStages)) {
+        return '—'
     }
-
-    $contentStart = $beginIdx + $Script:FailuresTableBeginMarker.Length
-    $managedContent = $Body.Substring($contentStart, $endIdx - $contentStart)
-
-    # Data rows look like:  | 3 | 2026-06-04 22:34 | [...](...) | ... | ... |
-    $lines = $managedContent -split "`r?`n"
-    $dataRows = @($lines | Where-Object { $_ -match '^\|\s*\d+\s*\|' })
-
-    $omittedCount = 0
-    foreach ($line in $lines) {
-        if ($line -match '^_(\d+) earlier failures omitted') {
-            $omittedCount = [int]$Matches[1]
-            break
-        }
-    }
-
-    $nextIndex = $dataRows.Count + $omittedCount + 1
-    $newRow = New-FailureTableRow -Index $nextIndex
-    $allRows = @($dataRows) + @($newRow)
-
-    if ($allRows.Count -gt $Script:FailuresTableMaxRows) {
-        $extraToDrop = $allRows.Count - $Script:FailuresTableMaxRows
-        $omittedCount += $extraToDrop
-        $allRows = $allRows | Select-Object -Skip $extraToDrop
-    }
-
-    $omittedLine = ''
-    if ($omittedCount -gt 0) {
-        $omittedLine = "_$omittedCount earlier failures omitted; see issue comments._`n`n"
-    }
-
-    $newContent = "`n" + $omittedLine + $Script:FailuresTableHeader + "`n" + ($allRows -join "`n") + "`n"
-
-    return $Body.Substring(0, $contentStart) + $newContent + $Body.Substring($endIdx)
+    return $FailedStages
 }
 
 function New-IssueBody {
     param([string]$Marker)
 
-    $failuresTable = New-InitialFailuresTableSection
+    $stages = Format-FailedStages
 
     return @"
 $Marker
@@ -256,22 +208,26 @@ $Marker
 The internal Azure DevOps build for ``microsoft-aspire`` (definition 1602)
 is failing on ``$Branch``.
 
-$failuresTable
+- **Build:** [$BuildNumber]($BuildUrl)
+- **Commit:** ``$CommitSha``
+- **Failed stages:** $stages
 
-This issue is updated with a new row in the table above on each subsequent
-failure of the same branch, and closed automatically when the next build of
-``$Branch`` succeeds. See [docs/ci/internal-build-failure-notifications.md](https://github.com/$Owner/$Repo/blob/main/docs/ci/internal-build-failure-notifications.md).
+Each subsequent failure on the same branch adds a comment with that build's
+details; the comments are the per-failure history. This issue is closed
+automatically when the next build of ``$Branch`` succeeds. See [docs/ci/internal-build-failure-notifications.md](https://github.com/$Owner/$Repo/blob/main/docs/ci/internal-build-failure-notifications.md).
 
 $Script:MentionLine
 "@
 }
 
 function New-FailureFollowupCommentBody {
+    $stages = Format-FailedStages
     return @"
-Another failure on ``$Branch`` — see the failures table in the issue body for full history.
+Another failure on ``$Branch``.
 
 - **Build:** [$BuildNumber]($BuildUrl)
 - **Commit:** ``$CommitSha``
+- **Failed stages:** $stages
 
 $Script:MentionLine
 "@
@@ -298,7 +254,7 @@ function Invoke-FailureMode {
         $body = New-IssueBody -Marker $Marker
         $body -split "`n" | ForEach-Object { Write-Step "DRY-RUN:   | $_" }
         Write-Step "DRY-RUN: would then re-list and close as duplicate if not oldest (race handler)"
-        Write-Step "DRY-RUN: if an existing issue had been found, would run 'gh issue edit' to update the failures table and 'gh issue comment' for the follow-up with @-mentions"
+        Write-Step "DRY-RUN: if an existing issue had been found, would run 'gh issue comment' to append a follow-up failure comment with @-mentions"
         return
     }
 
@@ -351,21 +307,7 @@ function Invoke-FailureMode {
         Write-NotifyWarning "Found $($existing.Count) open ci-broken issues for branch '$Branch' (numbers: $($existing.number -join ', ')). Updating the oldest (#$($target.number)) and leaving the rest for human cleanup."
     }
     else {
-        Write-Step "Found existing open issue #$($target.number) for branch '$Branch'. Updating failures table and appending comment."
-    }
-
-    # Append a row to the failures table in the issue body. Race: two
-    # near-simultaneous failures doing list->modify->edit may drop one row;
-    # accepted because the follow-up comment still fires and per-failure
-    # history is preserved in the issue comments. The table is the at-a-glance
-    # summary, not the system of record.
-    $currentBody = $target.body
-    if ($null -ne $currentBody) {
-        $newBody = Update-FailuresTableInBody -Body $currentBody
-        if ($newBody -ne $currentBody) {
-            Invoke-Gh -ArgList @('issue', 'edit', "$($target.number)", '--repo', "$Owner/$Repo", '--body-file', '-') -StdinBody $newBody | Out-Null
-            Write-Step "Updated failures table in #$($target.number)."
-        }
+        Write-Step "Found existing open issue #$($target.number) for branch '$Branch'. Appending failure comment."
     }
 
     $commentBody = New-FailureFollowupCommentBody
@@ -411,6 +353,12 @@ try {
     $marker = "<!-- aspire-internal-build-broken:$Branch -->"
 
     if (-not $DryRun) {
+        # Bail loudly if gh is missing rather than minting a token we can't use
+        # and then failing every API call into the catch (see Test-GhAvailable).
+        if (-not (Test-GhAvailable)) {
+            Write-NotifyWarning "gh CLI is not available on this image; cannot file/update/close issues. Skipping notification."
+            Exit-NotifyScript
+        }
         # Live mode enforces -AppId/-PrivateKeyPem presence here (see param comment).
         if ([string]::IsNullOrWhiteSpace($AppId) -or [string]::IsNullOrWhiteSpace($PrivateKeyPem)) {
             Write-NotifyWarning "Live mode requires -AppId and -PrivateKeyPem; aborting."
