@@ -325,6 +325,7 @@ internal static class ContainerFileSystemCallbackContextExtensions
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ThrowIfContentsAndSourcePathBothProvided(contents, sourcePath);
 
         return new ContainerFile
         {
@@ -358,6 +359,7 @@ internal static class ContainerFileSystemCallbackContextExtensions
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ThrowIfContentsAndSourcePathBothProvided(contents, sourcePath);
 
         return new ContainerOpenSSLCertificateFile
         {
@@ -417,6 +419,17 @@ internal static class ContainerFileSystemCallbackContextExtensions
         }
 
         return (UnixFileMode)mode.Value;
+    }
+
+    // contents and sourcePath are mutually exclusive: a file entry is sourced either from inline contents or
+    // from a host path, never both. Validate here so polyglot callers get a clear error at construction time
+    // instead of a harder-to-diagnose failure later during DCP conversion.
+    private static void ThrowIfContentsAndSourcePathBothProvided(string? contents, string? sourcePath)
+    {
+        if (contents is not null && sourcePath is not null)
+        {
+            throw new ArgumentException($"Only one of '{nameof(contents)}' or '{nameof(sourcePath)}' can be specified, not both.");
+        }
     }
 }
 

@@ -134,4 +134,20 @@ public class ContainerFileSystemCallbackContextTests
 
         Assert.Throws<ArgumentNullException>(() => context.CreateDirectory("conf.d", entries: null!));
     }
+
+    [Fact]
+    public void CreateFileWithBothContentsAndSourcePathThrows()
+    {
+        var context = CreateContext();
+
+        Assert.Throws<ArgumentException>(() => context.CreateFile("app.conf", contents: "key=value", sourcePath: "/host/app.conf"));
+    }
+
+    [Fact]
+    public void CreateCertificateFileWithBothContentsAndSourcePathThrows()
+    {
+        var context = CreateContext();
+
+        Assert.Throws<ArgumentException>(() => context.CreateCertificateFile("server.pem", contents: "-----BEGIN CERTIFICATE-----", sourcePath: "/host/server.pem"));
+    }
 }

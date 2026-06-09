@@ -300,7 +300,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         validation_logger.log_information("RequiredCommandValidation services")
         return validation_ctx.success()
 
-    container.with_required_command("docker", validation_callback=required_command_validation)
+    container.with_required_command_validation("docker", required_command_validation)
     # withToolIgnoreExistingFeeds
     tool.with_tool_ignore_existing_feeds()
     # withToolIgnoreFailedSources

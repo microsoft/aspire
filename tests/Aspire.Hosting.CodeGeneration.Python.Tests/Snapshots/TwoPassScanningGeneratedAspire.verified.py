@@ -1561,9 +1561,9 @@ class DockerfileBaseImageParameters(typing.TypedDict, total=False):
     runtime_image: str
 
 
-class RequiredCommandParameters(typing.TypedDict, total=False):
+class RequiredCommandValidationParameters(typing.TypedDict, total=False):
     command: typing.Required[str]
-    validation_callback: typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]
+    validation_callback: typing.Required[typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]]
     help_link: str
 
 
@@ -6819,8 +6819,12 @@ class AbstractResource(abc.ABC):
         """Configures custom base images for generated Dockerfiles."""
 
     @abc.abstractmethod
-    def with_required_command(self, command: str, *, validation_callback: typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult] | None = None, help_link: str | None = None) -> typing.Self:
+    def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
         """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start."""
+
+    @abc.abstractmethod
+    def with_required_command_validation(self, command: str, validation_callback: typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult], *, help_link: str | None = None) -> typing.Self:
+        """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic."""
 
     @abc.abstractmethod
     def with_session_lifetime(self) -> typing.Self:
@@ -7252,7 +7256,8 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
 
     container_registry: AbstractResource
     dockerfile_base_image: DockerfileBaseImageParameters | typing.Literal[True]
-    required_command: str | RequiredCommandParameters
+    required_command: str | tuple[str, str]
+    required_command_validation: tuple[str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]] | RequiredCommandValidationParameters
     session_lifetime: typing.Literal[True]
     persistent_lifetime: typing.Literal[True]
     lifetime_of: AbstractResource
@@ -7338,17 +7343,28 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_required_command(self, command: str, *, validation_callback: typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult] | None = None, help_link: str | None = None) -> typing.Self:
+    def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
         """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['command'] = command
-        if validation_callback is not None:
-            rpc_args['validationCallback'] = self._client.register_callback(validation_callback)
         if help_link is not None:
             rpc_args['helpLink'] = help_link
-        capability_id = 'Aspire.Hosting/withRequiredCommandValidation' if validation_callback is not None else 'Aspire.Hosting/withRequiredCommand'
         result = self._client.invoke_capability(
-            capability_id,
+            'Aspire.Hosting/withRequiredCommand',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_required_command_validation(self, command: str, validation_callback: typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult], *, help_link: str | None = None) -> typing.Self:
+        """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['command'] = command
+        rpc_args['validationCallback'] = self._client.register_callback(validation_callback)
+        if help_link is not None:
+            rpc_args['helpLink'] = help_link
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withRequiredCommandValidation',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -7948,15 +7964,27 @@ class _BaseResource(AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["command"] = typing.cast(str, _required_command)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommand', rpc_args))
-            elif _validate_dict_types(_required_command, RequiredCommandParameters):
+            elif _validate_tuple_types(_required_command, (str, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["command"] = typing.cast(RequiredCommandParameters, _required_command)["command"]
-                rpc_args["validationCallback"] = client.register_callback(typing.cast(RequiredCommandParameters, _required_command).get("validation_callback"))
-                rpc_args["helpLink"] = typing.cast(RequiredCommandParameters, _required_command).get("help_link")
-                capability_id = 'Aspire.Hosting/withRequiredCommandValidation' if "validation_callback" in _required_command else 'Aspire.Hosting/withRequiredCommand'
-                handle = self._wrap_builder(client.invoke_capability(capability_id, rpc_args))
+                rpc_args["command"] = typing.cast(tuple[str, str], _required_command)[0]
+                rpc_args["helpLink"] = typing.cast(tuple[str, str], _required_command)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommand', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'required_command'. Expected: str or RequiredCommandParameters")
+                raise TypeError("Invalid type for option 'required_command'. Expected: str or (str, str)")
+        if _required_command_validation := kwargs.pop("required_command_validation", None):
+            if _validate_tuple_types(_required_command_validation, (str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["command"] = typing.cast(tuple[str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]], _required_command_validation)[0]
+                rpc_args["validationCallback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]], _required_command_validation)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommandValidation', rpc_args))
+            elif _validate_dict_types(_required_command_validation, RequiredCommandValidationParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["command"] = typing.cast(RequiredCommandValidationParameters, _required_command_validation)["command"]
+                rpc_args["validationCallback"] = client.register_callback(typing.cast(RequiredCommandValidationParameters, _required_command_validation)["validation_callback"])
+                rpc_args["helpLink"] = typing.cast(RequiredCommandValidationParameters, _required_command_validation).get("help_link")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommandValidation', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'required_command_validation'. Expected: (str, Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]) or RequiredCommandValidationParameters")
         if _session_lifetime := kwargs.pop("session_lifetime", None):
             if _session_lifetime is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

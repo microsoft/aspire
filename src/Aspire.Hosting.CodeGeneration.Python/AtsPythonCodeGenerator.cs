@@ -334,8 +334,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             var capWithExtra = items.First(c => c.Parameters.Any(p => string.Equals(p.Name, extraParamName, StringComparison.Ordinal)));
             var extraParam = capWithExtra.Parameters.First(p => string.Equals(p.Name, extraParamName, StringComparison.Ordinal));
 
-            // Only merge if the extra param is required (not already optional)
-            if (extraParam.IsOptional || extraParam.IsNullable)
+            // Only merge if the extra param is required (not already optional).
+            // Never merge when the differing parameter is a callback: a callback cannot be represented as a
+            // positional tuple element, so merging would (a) change the option shape from the published
+            // `str | tuple[...]` shorthand to a TypedDict (a breaking change for the non-callback overload)
+            // and (b) require conditional capability dispatch that always registers the callback argument even
+            // when routing to the non-callback capability. Keeping the callback overload as its own separate
+            // option avoids both problems.
+            if (extraParam.IsOptional || extraParam.IsNullable || extraParam.IsCallback)
             {
                 result.AddRange(items);
                 continue;
