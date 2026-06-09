@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
@@ -77,10 +78,45 @@ public class HostedAgentExtensionTests
         var resource = builder.Resources.Single(r => r.Name == "agent");
         var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
         Assert.Equal("Send Message", command.DisplayName);
-        Assert.EndsWith("-/responses", command.Name);
+        Assert.Equal("send-message", command.Name);
         Assert.Equal("ChatSparkle", command.IconName);
         Assert.Equal(IconVariant.Regular, command.IconVariant);
         Assert.True(command.IsHighlighted);
+        var argument = Assert.Single(command.Arguments);
+        Assert.Equal("message", argument.Name);
+        Assert.Equal(InputType.Text, argument.InputType);
+        Assert.Equal("Message", argument.Label);
+        Assert.True(argument.Required);
+        Assert.NotNull(command.ValidateArguments);
+    }
+
+    [Fact]
+    public async Task AsHostedAgent_InRunMode_SendMessageCommandRejectsWhitespaceMessage()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent();
+
+        using var app = builder.Build();
+
+        var resource = builder.Resources.Single(r => r.Name == "agent");
+        var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.NotNull(command.ValidateArguments);
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "   "
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource, command.Name, arguments);
+
+        Assert.False(result.Success);
+        Assert.Equal("Command argument validation failed.", result.Message);
     }
 
     [Fact]
@@ -100,7 +136,7 @@ public class HostedAgentExtensionTests
 
         var resource = builder.Resources.Single(r => r.Name == "agent");
         var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
-        Assert.EndsWith("-/invocations", command.Name);
+        Assert.Equal("send-message", command.Name);
 
         var urlsCallback = Assert.Single(resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
         var url = new ResourceUrlAnnotation

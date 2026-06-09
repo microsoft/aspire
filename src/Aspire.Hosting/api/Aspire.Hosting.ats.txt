@@ -186,6 +186,10 @@ Aspire.Hosting/Aspire.Hosting.Ats.CertificateTrustExecutionConfigurationExportDa
   CertificateSubjects: string[] # The certificate subjects included in the trust configuration.
   CustomBundlePaths: string[] # The relative custom bundle paths.
   Scope: enum:Aspire.Hosting.ApplicationModel.CertificateTrustScope # The certificate trust scope.
+Aspire.Hosting/Aspire.Hosting.Ats.ContainerFilesOptions # Options for creating or updating files and directories in a container from polyglot apphosts.
+  DefaultGroup?: number # The default group ID for the created or updated file system entries. Defaults to 0 for root if not set.
+  DefaultOwner?: number # The default owner UID for the created or updated file system entries. Defaults to 0 for root if not set.
+  Umask?: number # The Unix umask to apply to files or directories without explicit permissions. Use octal literals in JavaScript or TypeScript, for example `0o022`.
 Aspire.Hosting/Aspire.Hosting.Ats.CreateBuilderOptions # Options for creating a distributed application builder from polyglot apphosts.
   AllowUnsecuredTransport: boolean # Allows the use of HTTP urls for the AppHost resource endpoint.
   AppHostFilePath: string # The full path to the AppHost file (e.g., apphost.ts, apphost.py). Used for consistent socket path computation across CLI and AppHost.
@@ -195,6 +199,10 @@ Aspire.Hosting/Aspire.Hosting.Ats.CreateBuilderOptions # Options for creating a 
   DisableDashboard: boolean # Determines whether the dashboard is disabled.
   EnableResourceLogging: boolean # Enables resource logging.
   ProjectDirectory: string # The directory containing the AppHost project file.
+Aspire.Hosting/Aspire.Hosting.Ats.HealthCheckResult # ATS-friendly custom health check result.
+  Data?: Aspire.Hosting/Dict<string,string> # Gets optional string data for the health check result.
+  Description?: string # Gets an optional description for the health check result.
+  Status: enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus # Gets the health status returned by the health check.
 Aspire.Hosting/Aspire.Hosting.Ats.HttpsCertificateExecutionConfigurationExportData # ATS-friendly HTTPS certificate data returned from an execution-configuration result.
   IsKeyPathReferenced: boolean # Indicates whether the key path was referenced.
   IsPfxPathReferenced: boolean # Indicates whether the PFX path was referenced.
@@ -451,6 +459,7 @@ Aspire.Hosting/addDotnetTool(name: string, packageId: string) -> Aspire.Hosting/
 Aspire.Hosting/addEventingSubscriber(subscribe: callback) -> void
 Aspire.Hosting/addExecutable(name: string, command: string, workingDirectory: string, args: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/addExternalService(name: string, url: string|uri|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting/Aspire.Hosting.ExternalServiceResource
+Aspire.Hosting/addHealthCheck(name: string, check: callback) -> void
 Aspire.Hosting/addMarkdown(key: string, markdownString: string) -> void
 Aspire.Hosting/addParameter(name: string, value?: string, publishValueAsDefault?: boolean, secret?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting/addParameterFromConfiguration(name: string, configurationKey: string, secret?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
@@ -619,6 +628,7 @@ Aspire.Hosting/withCommand(name: string, displayName: string, executeCommand: ca
 Aspire.Hosting/withComputeEnvironment(computeEnvironmentResource: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting/withConnectionProperty(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString
 Aspire.Hosting/withContainerCertificatePaths(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
+Aspire.Hosting/withContainerFiles(destinationPath: string, sourcePath: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.ContainerFilesOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withContainerFilesSource(sourcePath: string) -> Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles
 Aspire.Hosting/withContainerName(name: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withContainerNetworkAlias(alias: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
@@ -634,6 +644,7 @@ Aspire.Hosting/withDockerfileFactory(contextPath: string, dockerfileFactory: cal
 Aspire.Hosting/withEndpoint(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: enum:System.Net.Sockets.ProtocolType) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withEndpointCallback(endpointName: string, callback: callback, createIfNotExists?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withEndpointProxySupport(proxyEnabled: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting/withEndpointsInEnvironment(endpointNames: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
 Aspire.Hosting/withEntrypoint(entrypoint: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ExternalServiceResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withEnvironmentCallback(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment

@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.Network library
+# Azure networking integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Azure Virtual Networks, Subnets, NAT Gateways, Public IP Addresses, Network Security Groups, Network Security Perimeters, and Private Endpoints.
+Use this integration to model, configure, and orchestrate Azure Virtual Networks, Subnets, NAT Gateways, Public IP Addresses, Network Security Groups, Network Security Perimeters, and Private Endpoints in an Aspire solution.
 
 ## Getting started
 
@@ -8,29 +8,24 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 - Azure subscription - [create one for free](https://azure.microsoft.com/free/)
 
-### Install the package
+### Add the integration
 
-Install the Aspire Azure Virtual Network Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.Network` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.Network
+```bash
+aspire add Aspire.Hosting.Azure.Network
 ```
 
 ## Configure Azure Provisioning for local development
 
-Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
+Adding Azure resources to the AppHost model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
-to be available via .NET configuration. Set these values in user secrets in order to allow resources to be configured
-automatically.
+to be available via AppHost configuration. From your AppHost directory, set these values with `aspire secret set`:
 
-```json
-{
-    "Azure": {
-      "SubscriptionId": "<your subscription id>",
-      "ResourceGroupPrefix": "<prefix for the resource group>",
-      "Location": "<azure location>"
-    }
-}
+```bash
+aspire secret set Azure:SubscriptionId "<your subscription id>"
+aspire secret set Azure:ResourceGroupPrefix "<prefix for the resource group>"
+aspire secret set Azure:Location "<azure location>"
 ```
 
 > NOTE: Developers must have Owner access to the target subscription so that role assignments
@@ -40,10 +35,18 @@ automatically.
 
 ### Adding a Virtual Network
 
-In the _AppHost.cs_ file of `AppHost`, add a Virtual Network using the following method:
+In the AppHost, add a Virtual Network using the following method:
+
+**C#**
 
 ```csharp
 var vnet = builder.AddAzureVirtualNetwork("vnet");
+```
+
+**TypeScript**
+
+```typescript
+const vnet = await builder.addAzureVirtualNetwork("vnet");
 ```
 
 By default, the virtual network will use the address prefix `10.0.0.0/16`. You can specify a custom address prefix:
@@ -179,6 +182,8 @@ storage.ConfigureInfrastructure(infra =>
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-virtual-network/
 * https://learn.microsoft.com/azure/virtual-network/
 * https://learn.microsoft.com/azure/nat-gateway/
 * https://learn.microsoft.com/azure/private-link/

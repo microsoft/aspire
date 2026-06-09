@@ -1804,7 +1804,13 @@ class GenerateParameterDefault(typing.TypedDict, total=False):
     MinNumeric: int
     MinSpecial: int
 
+class HealthCheckResult(typing.TypedDict, total=False):
+    Status: HealthStatus
+    Description: str | None
+    Data: typing.Mapping[str, str]
+
 class HttpCommandExportOptions(typing.TypedDict, total=False):
+    CommandOptions: CommandOptions
     Description: str | None
     ConfirmationMessage: str | None
     IconName: str | None
@@ -1813,7 +1819,14 @@ class HttpCommandExportOptions(typing.TypedDict, total=False):
     CommandName: str | None
     EndpointName: str | None
     MethodName: str | None
+    PrepareRequest: typing.Callable
     ResultMode: HttpCommandResultMode
+
+class HttpCommandRequestExportData(typing.TypedDict, total=False):
+    MethodName: str | None
+    Headers: typing.Mapping[str, str]
+    Content: str | None
+    ContentType: str | None
 
 class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=False):
     CertificatePath: ReferenceExpression
@@ -1869,6 +1882,7 @@ class ProcessCommandExportOptions(typing.TypedDict, total=False):
     InheritEnvironmentVariables: bool | None
     StandardInputContent: str | None
     KillEntireProcessTree: bool | None
+    CreateProcessSpec: typing.Callable
     CommandOptions: CommandOptions
     MaxOutputLineCount: int | None
     DisplayImmediately: bool | None
@@ -2503,6 +2517,16 @@ class DistributedApplicationBuilder:
             rpc_args
         )
 
+    def add_health_check(self, name: str, check: typing.Callable[[], HealthCheckResult]) -> None:
+        """Adds a custom health check callback to the distributed-application builder."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        rpc_args['check'] = self._client.register_callback(check)
+        self._client.invoke_capability(
+            'Aspire.Hosting/addHealthCheck',
+            rpc_args
+        )
+
     def add_test_redis(self, name: str, *, port: int | None = None, **kwargs: typing.Unpack["TestRedisResourceKwargs"]) -> TestRedisResource:  # type: ignore
         """Adds a test Redis resource from ATS documentation."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -3094,6 +3118,15 @@ class AbstractServiceProvider:
         """The underlying object reference handle."""
         return self._handle
 
+    def get_aspire_store(self) -> AbstractAspireStore:
+        """Gets the Aspire store from the service provider."""
+        rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getAspireStore',
+            rpc_args,
+        )
+        return typing.cast(AbstractAspireStore, result)
+
     def get_eventing(self) -> AbstractDistributedApplicationEventing:
         """Gets the distributed application eventing service from the service provider."""
         rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
@@ -3147,15 +3180,6 @@ class AbstractServiceProvider:
             rpc_args,
         )
         return typing.cast(ResourceCommandService, result)
-
-    def get_aspire_store(self) -> AbstractAspireStore:
-        """Gets the Aspire store from the service provider."""
-        rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/getAspireStore',
-            rpc_args,
-        )
-        return typing.cast(AbstractAspireStore, result)
 
     def get_user_secrets_manager(self) -> AbstractUserSecretsManager:
         """Gets the user secrets manager from the service provider."""
@@ -4798,6 +4822,57 @@ class ExecuteCommandContext:
         """Gets the invocation arguments supplied by the client when the command is executed."""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments',
+            {'context': self._handle}
+        )
+        return typing.cast(InteractionInputCollection, result)
+
+
+class HttpCommandPrepareRequestContext:
+    """Type class for HttpCommandPrepareRequestContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"HttpCommandPrepareRequestContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def resource_name(self) -> str:
+        """The name of the resource the command was configured on."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.resourceName',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @_cached_property
+    def endpoint(self) -> EndpointReference:
+        """The endpoint the request is targeting."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.endpoint',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReference, result)
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+    @_cached_property
+    def arguments(self) -> InteractionInputCollection:
+        """Gets the invocation arguments supplied by the client when the command is executed."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments',
             {'context': self._handle}
         )
         return typing.cast(InteractionInputCollection, result)
@@ -9052,6 +9127,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
+    endpoints_in_env: typing.Iterable[str]
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
     env_vars: typing.Mapping[str, str]
@@ -9539,6 +9615,17 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_endpoints_in_env(self, endpoint_names: typing.Iterable[str]) -> typing.Self:
+        """Includes only the specified project endpoint names in environment-variable injection."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['endpointNames'] = endpoint_names
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withEndpointsInEnvironment',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def on_resource_endpoints_allocated(self, callback: typing.Callable[[ResourceEndpointsAllocatedEvent], None]) -> typing.Self:
         """Subscribes to the ResourceEndpointsAllocated event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -9917,6 +10004,13 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageTag', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_tag'. Expected: str")
+        if _endpoints_in_env := kwargs.pop("endpoints_in_env", None):
+            if _validate_type(_endpoints_in_env, typing.Iterable[str]):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["endpointNames"] = typing.cast(typing.Iterable[str], _endpoints_in_env)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointsInEnvironment', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'endpoints_in_env'. Expected: Iterable[str]")
         if _on_resource_endpoints_allocated := kwargs.pop("on_resource_endpoints_allocated", None):
             if _validate_type(_on_resource_endpoints_allocated, typing.Callable[[ResourceEndpointsAllocatedEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11534,6 +11628,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Environ
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor", EnvironmentEditor)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", EventingSubscriberRegistrationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", ExecuteCommandContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext", HttpCommandPrepareRequestContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", InitializeResourceEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", InputsDialogValidationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", InteractionInputCollection)

@@ -20,6 +20,8 @@ export const aspireHostingSdkVersion = (version: string) => vscode.l10n.t('Aspir
 export const aspireCliVersion = (version: string) => vscode.l10n.t('Aspire CLI Version: {0}.', version);
 export const requiredCapability = (capability: string) => vscode.l10n.t('Required capability: {0}.', capability);
 export const aspireTerminalName = vscode.l10n.t('Aspire terminal');
+export const terminalCommandArgumentControlCharacters = vscode.l10n.t('Aspire terminal command arguments cannot contain control characters.');
+export const terminalCommandUnsafeLiteral = vscode.l10n.t('Aspire terminal command syntax can only contain command names and flags.');
 export const aspireOutputChannelName = vscode.l10n.t('Aspire Extension');
 export const fieldRequired = vscode.l10n.t('This field is required.');
 export const runProject = (projectName: string) => vscode.l10n.t('Run {0}', projectName);
@@ -77,6 +79,8 @@ export const resourceCommandInvalidNumber = vscode.l10n.t('Enter a number using 
 export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value must be {0} characters or fewer.', length);
 export const resourceCommandDisabledDescription = vscode.l10n.t('(disabled)');
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
+export const dashboardUrlNotFound = vscode.l10n.t('No Aspire Dashboard URL is available. Start an AppHost and try again.');
+export const dashboardUrlUnsupported = vscode.l10n.t('The Aspire Dashboard URL must use http or https.');
 export const workspaceAppHostLabel = vscode.l10n.t('Workspace AppHost');
 export const workspaceAppHostsGroupLabel = vscode.l10n.t('Workspace AppHosts');
 export const runningAppHostsGroupLabel = vscode.l10n.t('Running AppHosts');

@@ -1386,6 +1386,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", (h, c) -> new EndpointUpdateContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", (h, c) -> new EnvironmentCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor", (h, c) -> new EnvironmentEditor(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext", (h, c) -> new HttpCommandPrepareRequestContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue", (h, c) -> new IExpressionValue(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", (h, c) -> new InitializeResourceEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", (h, c) -> new LogFacade(h, c));
@@ -2774,6 +2775,15 @@ public class CSharpAppResource extends ProjectResource {
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
         return (String) result;
+    }
+
+    /** Includes only the specified project endpoint names in environment-variable injection. */
+    public CSharpAppResource withEndpointsInEnvironment(String[] endpointNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointNames", AspireClient.serializeValue(endpointNames));
+        getClient().invokeCapability("Aspire.Hosting/withEndpointsInEnvironment", reqArgs);
+        return this;
     }
 
     /** Subscribes to the BeforeResourceStarted event. */
@@ -12240,6 +12250,48 @@ public class HandleWrapperBase {
     }
 }
 
+// ===== HealthCheckResult.java =====
+// HealthCheckResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** HealthCheckResult DTO. */
+public class HealthCheckResult implements JsonSerializable {
+    private HealthStatus status;
+    private String description;
+    private Map<String, String> data;
+
+    public HealthStatus getStatus() { return status; }
+    public void setStatus(HealthStatus value) { this.status = value; }
+    public String getDescription() { return description; }
+    public void setDescription(String value) { this.description = value; }
+    public Map<String, String> getData() { return data; }
+    public void setData(Map<String, String> value) { this.data = value; }
+
+    @SuppressWarnings("unchecked")
+    public static HealthCheckResult fromMap(Map<String, Object> map) {
+        var value = new HealthCheckResult();
+        var statusValue = map.get("Status");
+        value.setStatus(HealthStatus.fromValue((String) statusValue));
+        var descriptionValue = map.get("Description");
+        value.setDescription(descriptionValue == null ? null : (String) descriptionValue);
+        var dataValue = map.get("Data");
+        value.setData(dataValue == null ? null : (Map<String, String>) dataValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Status", AspireClient.serializeValue(status));
+        map.put("Description", AspireClient.serializeValue(description));
+        map.put("Data", AspireClient.serializeValue(data));
+        return map;
+    }
+}
+
 // ===== HealthStatus.java =====
 // HealthStatus.java - GENERATED CODE - DO NOT EDIT
 
@@ -12280,6 +12332,7 @@ import java.util.function.*;
 
 /** HttpCommandExportOptions DTO. */
 public class HttpCommandExportOptions implements JsonSerializable {
+    private CommandOptions commandOptions;
     private String description;
     private String confirmationMessage;
     private String iconName;
@@ -12288,8 +12341,11 @@ public class HttpCommandExportOptions implements JsonSerializable {
     private String commandName;
     private String endpointName;
     private String methodName;
+    private Object prepareRequest;
     private HttpCommandResultMode resultMode;
 
+    public CommandOptions getCommandOptions() { return commandOptions; }
+    public void setCommandOptions(CommandOptions value) { this.commandOptions = value; }
     public String getDescription() { return description; }
     public void setDescription(String value) { this.description = value; }
     public String getConfirmationMessage() { return confirmationMessage; }
@@ -12306,12 +12362,16 @@ public class HttpCommandExportOptions implements JsonSerializable {
     public void setEndpointName(String value) { this.endpointName = value; }
     public String getMethodName() { return methodName; }
     public void setMethodName(String value) { this.methodName = value; }
+    public Object getPrepareRequest() { return prepareRequest; }
+    public void setPrepareRequest(Object value) { this.prepareRequest = value; }
     public HttpCommandResultMode getResultMode() { return resultMode; }
     public void setResultMode(HttpCommandResultMode value) { this.resultMode = value; }
 
     @SuppressWarnings("unchecked")
     public static HttpCommandExportOptions fromMap(Map<String, Object> map) {
         var value = new HttpCommandExportOptions();
+        var commandOptionsValue = map.get("CommandOptions");
+        value.setCommandOptions(commandOptionsValue == null ? null : CommandOptions.fromMap((Map<String, Object>) commandOptionsValue));
         var descriptionValue = map.get("Description");
         value.setDescription(descriptionValue == null ? null : (String) descriptionValue);
         var confirmationMessageValue = map.get("ConfirmationMessage");
@@ -12328,6 +12388,8 @@ public class HttpCommandExportOptions implements JsonSerializable {
         value.setEndpointName(endpointNameValue == null ? null : (String) endpointNameValue);
         var methodNameValue = map.get("MethodName");
         value.setMethodName(methodNameValue == null ? null : (String) methodNameValue);
+        var prepareRequestValue = map.get("PrepareRequest");
+        value.setPrepareRequest(prepareRequestValue);
         var resultModeValue = map.get("ResultMode");
         value.setResultMode(HttpCommandResultMode.fromValue((String) resultModeValue));
         return value;
@@ -12335,6 +12397,7 @@ public class HttpCommandExportOptions implements JsonSerializable {
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
+        map.put("CommandOptions", AspireClient.serializeValue(commandOptions));
         map.put("Description", AspireClient.serializeValue(description));
         map.put("ConfirmationMessage", AspireClient.serializeValue(confirmationMessage));
         map.put("IconName", AspireClient.serializeValue(iconName));
@@ -12343,7 +12406,104 @@ public class HttpCommandExportOptions implements JsonSerializable {
         map.put("CommandName", AspireClient.serializeValue(commandName));
         map.put("EndpointName", AspireClient.serializeValue(endpointName));
         map.put("MethodName", AspireClient.serializeValue(methodName));
+        map.put("PrepareRequest", AspireClient.serializeValue(prepareRequest));
         map.put("ResultMode", AspireClient.serializeValue(resultMode));
+        return map;
+    }
+}
+
+// ===== HttpCommandPrepareRequestContext.java =====
+// HttpCommandPrepareRequestContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext. */
+public class HttpCommandPrepareRequestContext extends HandleWrapperBase {
+    HttpCommandPrepareRequestContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** The name of the resource the command was configured on. */
+    public String resourceName() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.resourceName", reqArgs);
+        return (String) result;
+    }
+
+    /** The endpoint the request is targeting. */
+    public EndpointReference endpoint() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.endpoint", reqArgs);
+        return (EndpointReference) result;
+    }
+
+    /** The cancellation token. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
+    /** Gets the invocation arguments supplied by the client when the command is executed. */
+    public InteractionInputCollection arguments() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments", reqArgs);
+        return (InteractionInputCollection) result;
+    }
+
+}
+
+// ===== HttpCommandRequestExportData.java =====
+// HttpCommandRequestExportData.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** HttpCommandRequestExportData DTO. */
+public class HttpCommandRequestExportData implements JsonSerializable {
+    private String methodName;
+    private Map<String, String> headers;
+    private String content;
+    private String contentType;
+
+    public String getMethodName() { return methodName; }
+    public void setMethodName(String value) { this.methodName = value; }
+    public Map<String, String> getHeaders() { return headers; }
+    public void setHeaders(Map<String, String> value) { this.headers = value; }
+    public String getContent() { return content; }
+    public void setContent(String value) { this.content = value; }
+    public String getContentType() { return contentType; }
+    public void setContentType(String value) { this.contentType = value; }
+
+    @SuppressWarnings("unchecked")
+    public static HttpCommandRequestExportData fromMap(Map<String, Object> map) {
+        var value = new HttpCommandRequestExportData();
+        var methodNameValue = map.get("MethodName");
+        value.setMethodName(methodNameValue == null ? null : (String) methodNameValue);
+        var headersValue = map.get("Headers");
+        value.setHeaders(headersValue == null ? null : (Map<String, String>) headersValue);
+        var contentValue = map.get("Content");
+        value.setContent(contentValue == null ? null : (String) contentValue);
+        var contentTypeValue = map.get("ContentType");
+        value.setContentType(contentTypeValue == null ? null : (String) contentTypeValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("MethodName", AspireClient.serializeValue(methodName));
+        map.put("Headers", AspireClient.serializeValue(headers));
+        map.put("Content", AspireClient.serializeValue(content));
+        map.put("ContentType", AspireClient.serializeValue(contentType));
         return map;
     }
 }
@@ -13199,6 +13359,20 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/tryAddEventingSubscriber", reqArgs);
     }
 
+    /** Adds a custom health check callback to the distributed-application builder. */
+    public void addHealthCheck(String name, AspireFunc0<HealthCheckResult> check) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        var checkId = getClient().registerCallback(args -> {
+            return AspireClient.awaitValue(check.invoke());
+        });
+        if (checkId != null) {
+            reqArgs.put("check", checkId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/addHealthCheck", reqArgs);
+    }
+
     public TestRedisResource addTestRedis(String name) {
         return addTestRedis(name, null);
     }
@@ -14046,6 +14220,14 @@ public class IServiceProvider extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets the Aspire store from the service provider. */
+    public IAspireStore getAspireStore() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/getAspireStore", reqArgs);
+        return (IAspireStore) result;
+    }
+
     /** Gets the distributed application eventing service from the service provider. */
     public IDistributedApplicationEventing getEventing() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14092,14 +14274,6 @@ public class IServiceProvider extends HandleWrapperBase {
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/getResourceCommandService", reqArgs);
         return (ResourceCommandService) result;
-    }
-
-    /** Gets the Aspire store from the service provider. */
-    public IAspireStore getAspireStore() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
-        var result = getClient().invokeCapability("Aspire.Hosting/getAspireStore", reqArgs);
-        return (IAspireStore) result;
     }
 
     /** Gets the user secrets manager from the service provider. */
@@ -15940,6 +16114,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     private Boolean inheritEnvironmentVariables;
     private String standardInputContent;
     private Boolean killEntireProcessTree;
+    private Object createProcessSpec;
     private CommandOptions commandOptions;
     private Double maxOutputLineCount;
     private Boolean displayImmediately;
@@ -15959,6 +16134,8 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     public void setStandardInputContent(String value) { this.standardInputContent = value; }
     public Boolean getKillEntireProcessTree() { return killEntireProcessTree; }
     public void setKillEntireProcessTree(Boolean value) { this.killEntireProcessTree = value; }
+    public Object getCreateProcessSpec() { return createProcessSpec; }
+    public void setCreateProcessSpec(Object value) { this.createProcessSpec = value; }
     public CommandOptions getCommandOptions() { return commandOptions; }
     public void setCommandOptions(CommandOptions value) { this.commandOptions = value; }
     public Double getMaxOutputLineCount() { return maxOutputLineCount; }
@@ -15985,6 +16162,8 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         value.setStandardInputContent(standardInputContentValue == null ? null : (String) standardInputContentValue);
         var killEntireProcessTreeValue = map.get("KillEntireProcessTree");
         value.setKillEntireProcessTree(killEntireProcessTreeValue == null ? null : (Boolean) killEntireProcessTreeValue);
+        var createProcessSpecValue = map.get("CreateProcessSpec");
+        value.setCreateProcessSpec(createProcessSpecValue);
         var commandOptionsValue = map.get("CommandOptions");
         value.setCommandOptions(commandOptionsValue == null ? null : CommandOptions.fromMap((Map<String, Object>) commandOptionsValue));
         var maxOutputLineCountValue = map.get("MaxOutputLineCount");
@@ -16005,6 +16184,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         map.put("InheritEnvironmentVariables", AspireClient.serializeValue(inheritEnvironmentVariables));
         map.put("StandardInputContent", AspireClient.serializeValue(standardInputContent));
         map.put("KillEntireProcessTree", AspireClient.serializeValue(killEntireProcessTree));
+        map.put("CreateProcessSpec", AspireClient.serializeValue(createProcessSpec));
         map.put("CommandOptions", AspireClient.serializeValue(commandOptions));
         map.put("MaxOutputLineCount", AspireClient.serializeValue(maxOutputLineCount));
         map.put("DisplayImmediately", AspireClient.serializeValue(displayImmediately));
@@ -17279,6 +17459,15 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
         return (String) result;
+    }
+
+    /** Includes only the specified project endpoint names in environment-variable injection. */
+    public ProjectResource withEndpointsInEnvironment(String[] endpointNames) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointNames", AspireClient.serializeValue(endpointNames));
+        getClient().invokeCapability("Aspire.Hosting/withEndpointsInEnvironment", reqArgs);
+        return this;
     }
 
     /** Subscribes to the BeforeResourceStarted event. */
@@ -25885,8 +26074,11 @@ public final class WithVolumeOptions {
 .aspire/modules/GenerateParameterDefault.java
 .aspire/modules/Handle.java
 .aspire/modules/HandleWrapperBase.java
+.aspire/modules/HealthCheckResult.java
 .aspire/modules/HealthStatus.java
 .aspire/modules/HttpCommandExportOptions.java
+.aspire/modules/HttpCommandPrepareRequestContext.java
+.aspire/modules/HttpCommandRequestExportData.java
 .aspire/modules/HttpCommandResultMode.java
 .aspire/modules/HttpsCertificateExecutionConfigurationContext.java
 .aspire/modules/HttpsCertificateExecutionConfigurationExportData.java

@@ -6,50 +6,9 @@ import { extensionLogOutputChannel } from './logging';
 import { resolveCliPath } from './cliPath';
 import { AppHostDiscoveryService, AppHostProjectSearchResult, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from './appHostDiscovery';
 import type { AppHostCandidate } from './appHostDiscovery';
+import { getCommonExcludeGlob } from './workspaceFileSearch';
 
-/**
- * Common file patterns to exclude from workspace file searches.
- * These patterns match typical build outputs, dependencies, and generated files
- * that should not be searched when looking for Aspire configuration files.
- */
-const commonExcludePatterns = [
-    // Build outputs
-    '**/artifacts/**',
-    '**/[Bb]in/**',
-    '**/[Oo]bj/**',
-    '**/[Dd]ebug/**',
-    '**/[Rr]elease/**',
-    '**/dist/**',
-    '**/out/**',
-    '**/build/**',
-    '**/target/**',
-    '**/publish/**',
-
-    // Dependencies
-    '**/node_modules/**',
-    '**/.venv/**',
-    '**/packages/**',
-
-    // IDE/Tool directories
-    '**/.vs/**',
-    '**/.vscode-test/**',
-    '**/.worktrees/**',
-    '**/.idea/**',
-    '**/.git/**',
-
-    // Generated/Cache
-    '**/.angular/**',
-    '**/.aspire/modules/**',
-    '**/.azurite/**',
-];
-
-/**
- * Returns a glob pattern suitable for use as an exclude pattern in vscode.workspace.findFiles.
- * This excludes common build outputs, dependencies, and generated directories.
- */
-export function getCommonExcludeGlob(): string {
-    return `{${commonExcludePatterns.join(',')}}`;
-}
+export { getCommonExcludeGlob } from './workspaceFileSearch';
 
 /**
  * Searches for Aspire configuration files in the workspace, excluding common build output

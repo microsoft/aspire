@@ -15,9 +15,11 @@ var builder = DistributedApplication.CreateBuilder(args);
 // The expression below is a bit more complex than the average developer app would
 // probably have, but in our repo we'll probably want to experiment with seperately
 // deployed resources a little bit.
-var db = builder.AddSqlServer("sql")
-                .PublishAsConnectionString()
-                .AddDatabase("db");
+var sql = builder.AddSqlServer("sql");
+#pragma warning disable CS0618 // This playground intentionally exercises obsolete manifest-only PublishAsConnectionString behavior.
+sql.PublishAsConnectionString();
+#pragma warning restore CS0618
+var db = sql.AddDatabase("db");
 
 var insertionrows = builder.AddParameter("insertionrows")
     .WithDescription("The number of rows to insert into the database.");
