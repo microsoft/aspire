@@ -151,22 +151,23 @@ internal static class AppHostHelper
             var pid = BackchannelConstants.ExtractPid(socketPath);
             if (pid is { } pidValue && pidValue != currentPid && !BackchannelConstants.ProcessExists(pidValue))
             {
-                try
+                if (!BackchannelConstants.ProcessExists(pidValue))
                 {
                     // Socket names include the owning PID in the compact/current legacy formats:
                     //   {appHostId}{instanceId}.{pid}
                     //   auxi.sock.{hash}.{instanceHash}.{pid}
                     // After a crash or reboot these files can remain, and connecting to them
                     // reports "connection refused" even though there is no AppHost to stop.
-                    if (!BackchannelConstants.ProcessExists(pidValue))
+                    try
                     {
                         File.Delete(socketPath);
                         deletedCount++;
-                        continue;
                     }
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                    }
+
+                    continue;
                 }
             }
 
