@@ -93,6 +93,97 @@ public class WorkspacePatternExpanderTests
     }
 
     [Fact]
+    public void RecursiveStarResolvesMembersAtAnyDepth()
+    {
+        using var root = new TempWorkspace();
+        root.CreatePackage("apps/web");
+        root.CreatePackage("apps/consumer");
+        // pnpm "apps/**" matches packages nested at any depth, not just direct children.
+        root.CreatePackage("apps/group/inner");
+        // A parent directory without its own package.json is just a grouping folder, not a member.
+        root.CreateDir("apps/group");
+
+        var members = WorkspacePatternExpander.Expand(root.Path, ["apps/**"]);
+
+        Assert.Equal(["apps/consumer", "apps/group/inner", "apps/web"], members);
+    }
+
+    [Fact]
+    public void RecursiveStarSkipsNodeModules()
+    {
+        using var root = new TempWorkspace();
+        root.CreatePackage("packages/database");
+        // Installed dependencies carry package.json files but are never workspace members.
+        // Walking node_modules would also be pathologically slow on a real repo.
+        root.CreatePackage("packages/database/node_modules/left-pad");
+
+        var members = WorkspacePatternExpander.Expand(root.Path, ["packages/**"]);
+
+        Assert.Equal(["packages/database"], members);
+    }
+
+    [Fact]
+    public void RecursiveStarSkipsDotDirectories()
+    {
+        using var root = new TempWorkspace();
+        root.CreatePackage("apps/web");
+        // Hidden tooling directories (e.g. .turbo, .cache) carry a package.json but are not members.
+        root.CreatePackage("apps/.cache");
+        root.CreatePackage("apps/web/.tmp/scratch");
+
+        var members = WorkspacePatternExpander.Expand(root.Path, ["apps/**"]);
+
+        Assert.Equal(["apps/web"], members);
+    }
+
+    [Fact]
+    public void NegatedRecursivePatternExcludesMatches()
+    {
+        using var root = new TempWorkspace();
+        root.CreatePackage("apps/web");
+        root.CreatePackage("apps/consumer");
+        // "!**/test/**" excludes any member whose path contains a "test" segment.
+        root.CreatePackage("apps/web/test");
+
+        var members = WorkspacePatternExpander.Expand(root.Path, ["apps/**", "!**/test/**"]);
+
+        Assert.Equal(["apps/consumer", "apps/web"], members);
+    }
+
+    [Fact]
+    public void NonTrailingStarMatchesWithinSegment()
+    {
+        using var root = new TempWorkspace();
+        root.CreatePackage("apps/auth-svc");
+        root.CreatePackage("apps/api-svc");
+        root.CreatePackage("apps/web");
+
+        var members = WorkspacePatternExpander.Expand(root.Path, ["apps/*-svc"]);
+
+        Assert.Equal(["apps/api-svc", "apps/auth-svc"], members);
+    }
+
+    [Fact]
+    public void RealWorldPnpmCombinationResolvesAppsAndPackagesExcludingTests()
+    {
+        // Mirrors a real pnpm-workspace.yaml:
+        //   packages:
+        //     - apps/**
+        //     - packages/**
+        //     - "!**/test/**"
+        using var root = new TempWorkspace();
+        root.CreatePackage("apps/web");
+        root.CreatePackage("apps/consumer");
+        root.CreatePackage("packages/database");
+        root.CreatePackage("apps/web/test");
+        root.CreatePackage("packages/database/node_modules/dep");
+
+        var members = WorkspacePatternExpander.Expand(root.Path, ["apps/**", "packages/**", "!**/test/**"]);
+
+        Assert.Equal(["apps/consumer", "apps/web", "packages/database"], members);
+    }
+
+    [Fact]
     public void DuplicatePatternsResolveToDistinctSortedSet()
     {
         using var root = new TempWorkspace();

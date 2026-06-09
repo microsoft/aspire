@@ -23,8 +23,8 @@
 // settings such as catalog, overrides, onlyBuiltDependencies, trustPolicy, etc.;
 // those must remain tolerated because pnpm, not Aspire, owns their semantics.
 //
-// All glob semantics (recursive, negated, non-trailing star) are handled by
-// callers (see WorkspacePatternValidator).
+// All glob semantics (recursive, negated, non-trailing star) are handled by the
+// caller (see WorkspacePatternExpander); this parser just extracts the strings.
 
 using YamlDotNet.Serialization;
 
