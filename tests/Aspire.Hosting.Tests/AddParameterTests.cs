@@ -201,7 +201,8 @@ public class AddParameterTests
         var ex = Assert.Throws<ArgumentException>(() =>
             ParameterResourceBuilderExtensions.AddParameterForPolyglot(appBuilder, "pass", "SomeSecret", publishValueAsDefault: true, secret: true));
 
-        Assert.Equal("A parameter cannot be both secret and published as a default value. (Parameter 'secret')", ex.Message);
+        Assert.Equal("secret", ex.ParamName);
+        Assert.Contains("A parameter cannot be both secret and published as a default value.", ex.Message);
     }
 
     [Theory]
