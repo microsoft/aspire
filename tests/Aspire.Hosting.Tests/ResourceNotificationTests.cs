@@ -56,8 +56,8 @@ public class ResourceNotificationTests
     {
         IResource resource = resourceType.Name switch
         {
-            nameof(ProjectResource) => new ProjectResource("test"),
-            nameof(ContainerResource) => new ContainerResource("test"),
+            nameof(ProjectResource) => CreateProjectResource(),
+            nameof(ContainerResource) => CreateContainerResource(),
             nameof(ExecutableResource) => new ExecutableResource("test", "cmd", "."),
             nameof(ParameterResource) => new ParameterResource("test", _ => "value", secret: false),
             nameof(ConnectionStringResource) => new ConnectionStringResource("test", ReferenceExpression.Create($"connectionString")),
@@ -85,6 +85,20 @@ public class ResourceNotificationTests
 
         Assert.NotNull(resourceEvent);
         Assert.Equal(expectedResourceType, resourceEvent.Snapshot.ResourceType);
+
+        static ProjectResource CreateProjectResource()
+        {
+            var project = new ProjectResource("test");
+            project.Annotations.Add(new ProjectMetadata("test.csproj"));
+            return project;
+        }
+
+        static ContainerResource CreateContainerResource()
+        {
+            var container = new ContainerResource("test");
+            container.Annotations.Add(new ContainerImageAnnotation { Image = "test" });
+            return container;
+        }
     }
 
     [Fact]
