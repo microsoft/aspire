@@ -96,7 +96,13 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
 
         await eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(resource.Resource, app.Services));
 
-        var ex = Assert.Throws<DistributedApplicationException>(() => registration.Factory(app.Services));
+        var ex = await Assert.ThrowsAnyAsync<DistributedApplicationException>(async () =>
+        {
+            var healthCheck = registration.Factory(app.Services);
+            await healthCheck.CheckHealthAsync(
+                new HealthCheckContext { Registration = registration },
+                TestContext.Current.CancellationToken);
+        });
         Assert.Equal("The URI for the health check on resource 'resource' is not set. Ensure that the resource has been allocated before the health check is executed.", ex.Message);
 
         await eventing.PublishAsync(new BeforeResourceStartedEvent(resource.Resource, app.Services));
