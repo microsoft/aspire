@@ -82,7 +82,8 @@ public class Program
         FileLoggerProvider FileLoggerProvider,
         ConsoleLogBufferContext LogBufferContext,
         ILogger Logger,
-        ConsoleCancellationManager CancellationManager) : IDisposable
+        ConsoleCancellationManager CancellationManager,
+        IdentityChannelReader IdentityChannelReader) : IDisposable
     {
         public void Dispose()
         {
@@ -343,7 +344,7 @@ public class Program
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
-        builder.Services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
+        builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
         if (OperatingSystem.IsWindows())
         {
             builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
@@ -356,7 +357,10 @@ public class Program
         builder.Services.AddSingleton(sp =>
         {
             var channelReader = sp.GetRequiredService<IIdentityChannelReader>();
-            var channel = channelReader.ReadChannel();
+            if (!channelReader.TryReadChannel(out var channel, out var error))
+            {
+                throw new InvalidOperationException(error);
+            }
             return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath, channel);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
@@ -807,10 +811,20 @@ public class Program
         var (loggerFactory, fileLoggerProvider) = CreateLoggerFactory(args, loggingOptions, errorWriter, logBufferContext);
         var logger = loggerFactory.CreateLogger(RootLoggerName);
         cancellationManager.SetLogger(logger);
-        using var startupContext = new CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, logger, cancellationManager);
+        var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
+        using var startupContext = new CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, logger, cancellationManager, identityChannelReader);
 
         logger.LogInformation("Aspire CLI version: {Version}", AspireCliTelemetry.GetCliVersion());
         logger.LogInformation("Aspire CLI build ID: {BuildId}", AspireCliTelemetry.GetCliBuildId());
+        logger.LogInformation("Aspire CLI path: {CliPath}", Environment.ProcessPath);
+        if (identityChannelReader.TryReadChannel(out var channel, out var channelError))
+        {
+            logger.LogInformation("Aspire CLI channel: {Channel}", channel);
+        }
+        else
+        {
+            logger.LogWarning("Failed to resolve CLI channel: {Error}", channelError);
+        }
         logger.LogInformation("Working directory: {WorkingDirectory}", Environment.CurrentDirectory);
         // Logging the log file path is useful so that when console logging is enabled (for example with --log-level debug),
         // the path is written to the console logger (stderr) for easier discovery.

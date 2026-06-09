@@ -1,26 +1,37 @@
-# Aspire.Hosting.RabbitMQ library
+# RabbitMQ hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a RabbitMQ resource.
+Use this integration to model, configure, and orchestrate a RabbitMQ resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire RabbitMQ Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.RabbitMQ` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.RabbitMQ
+```bash
+aspire add Aspire.Hosting.RabbitMQ
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a RabbitMQ resource and consume the connection using the following methods:
+In the AppHost, add a RabbitMQ resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var rmq = builder.AddRabbitMQ("rmq");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(rmq);
+```
+
+**TypeScript**
+
+```typescript
+const rmq = await builder.addRabbitMQ("rmq");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(rmq);
 ```
 
 ## Connection Properties
@@ -43,7 +54,8 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://aspire.dev/integrations/messaging/rabbitmq/
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/messaging/rabbitmq/rabbitmq-host/
 
 ## Feedback & contributing
 

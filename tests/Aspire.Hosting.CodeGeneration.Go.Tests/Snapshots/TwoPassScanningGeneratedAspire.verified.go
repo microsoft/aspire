@@ -619,6 +619,7 @@ type ProcessCommandExportOptions struct {
 	InheritEnvironmentVariables *bool `json:"InheritEnvironmentVariables,omitempty"`
 	StandardInputContent string `json:"StandardInputContent,omitempty"`
 	KillEntireProcessTree *bool `json:"KillEntireProcessTree,omitempty"`
+	CreateProcessSpec func(...any) any `json:"CreateProcessSpec,omitempty"`
 	CommandOptions *CommandOptions `json:"CommandOptions,omitempty"`
 	MaxOutputLineCount *float64 `json:"MaxOutputLineCount,omitempty"`
 	DisplayImmediately *bool `json:"DisplayImmediately,omitempty"`
@@ -635,6 +636,7 @@ func (d *ProcessCommandExportOptions) ToMap() map[string]any {
 	if d.InheritEnvironmentVariables != nil { m["InheritEnvironmentVariables"] = serializeValue(d.InheritEnvironmentVariables) }
 	m["StandardInputContent"] = serializeValue(d.StandardInputContent)
 	if d.KillEntireProcessTree != nil { m["KillEntireProcessTree"] = serializeValue(d.KillEntireProcessTree) }
+	if d.CreateProcessSpec != nil { m["CreateProcessSpec"] = serializeValue(d.CreateProcessSpec) }
 	if d.CommandOptions != nil { m["CommandOptions"] = serializeValue(d.CommandOptions) }
 	if d.MaxOutputLineCount != nil { m["MaxOutputLineCount"] = serializeValue(d.MaxOutputLineCount) }
 	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }

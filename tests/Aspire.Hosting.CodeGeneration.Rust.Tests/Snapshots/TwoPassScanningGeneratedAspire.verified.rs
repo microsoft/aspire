@@ -1137,6 +1137,8 @@ pub struct ProcessCommandExportOptions {
     pub standard_input_content: String,
     #[serde(rename = "KillEntireProcessTree", skip_serializing_if = "Option::is_none")]
     pub kill_entire_process_tree: Option<bool>,
+    #[serde(rename = "CreateProcessSpec", skip_serializing_if = "Option::is_none")]
+    pub create_process_spec: Option<Value>,
     #[serde(rename = "CommandOptions")]
     pub command_options: CommandOptions,
     #[serde(rename = "MaxOutputLineCount", skip_serializing_if = "Option::is_none")]
@@ -1160,6 +1162,9 @@ impl ProcessCommandExportOptions {
         map.insert("StandardInputContent".to_string(), serde_json::to_value(&self.standard_input_content).unwrap_or(Value::Null));
         if let Some(ref v) = self.kill_entire_process_tree {
             map.insert("KillEntireProcessTree".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.create_process_spec {
+            map.insert("CreateProcessSpec".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map.insert("CommandOptions".to_string(), serde_json::to_value(&self.command_options).unwrap_or(Value::Null));
         if let Some(ref v) = self.max_output_line_count {

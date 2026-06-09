@@ -18,6 +18,7 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SystemProcess = System.Diagnostics.Process;
@@ -2837,17 +2838,18 @@ public static class ResourceBuilderExtensions
 
         var healthCheckKey = $"{builder.Resource.Name}_{endpointName}_{path}_{statusCode}_check";
 
+        builder.ApplicationBuilder.Services.AddHttpClient();
         builder.ApplicationBuilder.Services.SuppressHealthCheckHttpClientLogging(healthCheckKey);
 
-        builder.ApplicationBuilder.Services.AddHealthChecks().AddUrlGroup(options =>
-        {
-            if (uri is null)
-            {
-                throw new DistributedApplicationException($"The URI for the health check on resource '{builder.Resource.Name}' is not set. Ensure that the resource has been allocated before the health check is executed.");
-            }
-
-            options.AddUri(uri, setup => setup.ExpectHttpCode(statusCode ?? 200));
-        }, healthCheckKey);
+        builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
+            healthCheckKey,
+            serviceProvider => new DeferredUriHealthCheck(
+                () => uri,
+                statusCode.Value,
+                () => serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(healthCheckKey)),
+            failureStatus: default,
+            tags: default,
+            timeout: default));
 
         builder.WithHealthCheck(healthCheckKey);
 
@@ -3240,6 +3242,21 @@ public static class ResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        if (options.CreateProcessSpec is { } createProcessSpec)
+        {
+            return builder.WithProcessCommand(
+                commandName,
+                displayName,
+                async context =>
+                {
+                    var processCommandSpec = await createProcessSpec(context).ConfigureAwait(false)
+                        ?? throw new InvalidOperationException("The process command specification factory returned null.");
+
+                    return CreateProcessCommandSpec(processCommandSpec);
+                },
+                CreateProcessCommandOptions(options));
+        }
+
         return builder.WithProcessCommand(
             commandName,
             displayName,
@@ -3251,6 +3268,7 @@ public static class ResourceBuilderExtensions
     /// Adds a command to the resource that starts a local process created by a callback when invoked.
     /// </summary>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Obsolete("Use withProcessCommand with createProcessSpec in the options object instead.")]
     [AspireExport("withProcessCommandFactory")]
     internal static IResourceBuilder<TResource> WithProcessCommandFactoryExport<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -3463,6 +3481,7 @@ public static class ResourceBuilderExtensions
                 ResourceName = context.ResourceName,
                 Logger = context.Logger,
                 CancellationToken = context.CancellationToken,
+                Arguments = context.Arguments,
                 ProcessCommandSpec = processCommandSpec,
                 ExitCode = processResult.ExitCode,
                 Output = processResult.ProcessOutput,

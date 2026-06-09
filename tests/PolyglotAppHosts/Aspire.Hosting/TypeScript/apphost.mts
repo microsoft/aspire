@@ -781,6 +781,30 @@ await container.withProcessCommand("node-stdin", "Node stdin", {
     },
     maxOutputLineCount: 10,
 });
+await container.withProcessCommand("node-message", "Node message", {
+    createProcessSpec: async (context) => {
+        const args = await context.arguments();
+        const message = await args.requiredValue("message");
+
+        return {
+            executablePath: "node",
+            arguments: ["-e", "console.log(process.argv[1])", message],
+        };
+    },
+    commandOptions: {
+        description: "Runs node with an argument supplied when the process command is invoked.",
+        iconName: "WindowConsole",
+        arguments: [
+            {
+                name: "message",
+                inputType: InputType.Text,
+                required: true,
+            },
+        ],
+    },
+    maxOutputLineCount: 10,
+    displayImmediately: false,
+});
 
 // withHttpCommand
 await container.withHttpCommand("/health", "Health Check");
