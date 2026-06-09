@@ -9,7 +9,7 @@ name: Homebrew formula
 #                    commit's sources (URL = archive/<sha>.tar.gz, SHA
 #                    computed at runtime; SDK URL + per-RID SHA likewise
 #                    resolved at runtime), then `brew install --build-from-
-#                    source <tap>/aspire-cli`. This is the same code path
+#                    source <tap>/aspire`. This is the same code path
 #                    homebrew-core's CI runs on the submission PR — it
 #                    exercises the formula's `def install` block, resource
 #                    staging, `eng/homebrew-core/build-cli.sh`, the brew
@@ -20,7 +20,7 @@ name: Homebrew formula
 #                    `aspire update --self` prints `brew upgrade aspire`,
 #                    exits 0, and does not mutate the binary; the canonical
 #                    `brew test` block (the formula's `test do`) runs clean.
-#   * cleanup      — `brew uninstall aspire-cli` succeeds.
+#   * cleanup      — `brew uninstall aspire` succeeds.
 #
 # While we iterate on the formula, the matrix is intentionally narrow:
 # osx-arm64 and linux-x64 only. osx-x64 hosted runners are scarce right now;
@@ -62,10 +62,8 @@ jobs:
         run: brew tap-new aspire-lint/scratch --no-git
 
       # `no_autobump!` is stripped because `brew audit` rejects it outside
-      # official Homebrew taps. Rendered filename is `aspire-cli.rb` so the
-      # class name `AspireCli` matches; if the open formula-name decision
-      # flips to `aspire`, update the class name in the template and the
-      # rendered filename here in lockstep.
+      # official Homebrew taps. Rendered filename is `aspire.rb` so it
+      # matches the `class Aspire` name in the template.
       - name: Render formula with lint stubs
         run: |
           set -euo pipefail
@@ -81,9 +79,9 @@ jobs:
             -e "s|__SHA_LINUX_ARM64__|${STUB_SHA}|g" \
             -e '/no_autobump!/d' \
             eng/homebrew-core/aspire.rb.template \
-            > "$TAP_REPO/Formula/aspire-cli.rb"
+            > "$TAP_REPO/Formula/aspire.rb"
 
-          if grep -nE '__[A-Z_]+__' "$TAP_REPO/Formula/aspire-cli.rb"; then
+          if grep -nE '__[A-Z_]+__' "$TAP_REPO/Formula/aspire.rb"; then
             echo "::error::Unrendered placeholders remain in the formula. Update the sed pipeline above to cover every __PLACEHOLDER__ in the template."
             exit 1
           fi
@@ -91,10 +89,10 @@ jobs:
       - name: brew style
         run: |
           TAP_REPO="$(brew --repo aspire-lint/scratch)"
-          cd "$TAP_REPO" && brew style Formula/aspire-cli.rb
+          cd "$TAP_REPO" && brew style Formula/aspire.rb
 
       - name: brew audit --strict
-        run: brew audit --strict aspire-lint/scratch/aspire-cli
+        run: brew audit --strict aspire-lint/scratch/aspire
 
   resolve:
     name: Resolve formula values
@@ -276,15 +274,15 @@ jobs:
             -e 's|"-n", "SmokeTest"|"-n", "SmokeTest",\n           "--version", "13.4.2"|' \
             -e '/no_autobump!/d' \
             eng/homebrew-core/aspire.rb.template \
-            > "$TAP_REPO/Formula/aspire-cli.rb"
+            > "$TAP_REPO/Formula/aspire.rb"
 
-          if grep -nE '__[A-Z_]+__' "$TAP_REPO/Formula/aspire-cli.rb"; then
+          if grep -nE '__[A-Z_]+__' "$TAP_REPO/Formula/aspire.rb"; then
             echo "::error::Unrendered placeholders remain after sed."
             exit 1
           fi
 
           echo "--- rendered formula ---"
-          cat "$TAP_REPO/Formula/aspire-cli.rb"
+          cat "$TAP_REPO/Formula/aspire.rb"
           echo "--- end rendered formula ---"
 
       # Snapshot the directories whose creation/population would indicate
@@ -317,12 +315,12 @@ jobs:
           # --verbose surfaces the install block's progress on failure;
           # --build-from-source bypasses bottle resolution (we don't have
           # one) and forces a from-source compile.
-          brew install --build-from-source --verbose aspire-e2e/scratch/aspire-cli
+          brew install --build-from-source --verbose aspire-e2e/scratch/aspire
 
       - name: Verify installed binary
         run: |
           set -euo pipefail
-          PREFIX="$(brew --prefix aspire-e2e/scratch/aspire-cli)"
+          PREFIX="$(brew --prefix aspire-e2e/scratch/aspire)"
           BIN="$PREFIX/bin/aspire"
           test -L "$BIN" || test -f "$BIN"
           "$BIN" --version
@@ -365,7 +363,7 @@ jobs:
       - name: aspire doctor
         run: |
           set -euo pipefail
-          PREFIX="$(brew --prefix aspire-e2e/scratch/aspire-cli)"
+          PREFIX="$(brew --prefix aspire-e2e/scratch/aspire)"
           # `aspire doctor` exits non-zero when any host check fails (e.g.
           # macOS hosted runners have no Docker). We don't gate the
           # workflow on host completeness — only on the install-route
@@ -406,7 +404,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PREFIX="$(brew --prefix aspire-e2e/scratch/aspire-cli)"
+          PREFIX="$(brew --prefix aspire-e2e/scratch/aspire)"
           BIN="$PREFIX/bin/aspire"
           REAL_BIN="$(readlink -f "$BIN" 2>/dev/null || python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$BIN")"
 
@@ -437,7 +435,7 @@ jobs:
           echo "OK — brew gate printed expected message, exited 0, and did not mutate the binary."
 
       - name: brew test
-        run: brew test --verbose aspire-e2e/scratch/aspire-cli
+        run: brew test --verbose aspire-e2e/scratch/aspire
 
       - name: Verify bundle-layout dirs unchanged after brew test
         run: |
@@ -454,7 +452,7 @@ jobs:
           fi
 
       - name: brew uninstall
-        run: brew uninstall --verbose aspire-e2e/scratch/aspire-cli
+        run: brew uninstall --verbose aspire-e2e/scratch/aspire
 
       - name: Upload diagnostics on failure
         if: failure()

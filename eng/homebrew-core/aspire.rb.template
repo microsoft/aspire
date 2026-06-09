@@ -1,4 +1,4 @@
-class AspireCli < Formula
+class Aspire < Formula
   desc "CLI for building observable, production-ready distributed applications"
   homepage "https://aspire.dev/"
   url "https://github.com/microsoft/aspire/archive/refs/tags/v__SRC_VERSION__.tar.gz"
