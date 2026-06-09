@@ -108,23 +108,26 @@ internal static class ResourceSnapshotMapper
             }
         }
 
-        // By default, include only API-visible enabled commands so existing structured
-        // consumers keep the pre-existing contract. The include-disabled stream is used
-        // by UI consumers that need full command metadata, so it also includes UI-only
-        // commands. Hidden commands are never emitted.
+        // Include only API-visible enabled commands by default; the include-disabled stream
+        // also surfaces UI-only commands for UI consumers. Hidden commands are never emitted.
+        // Capture each command's registration index (before filtering) and stamp it as
+        // RegistrationOrder so consumers can sort by (RegistrationOrder, Name); keys are sorted
+        // alphabetically only for a stable JSON shape.
         var commands = snapshot.Commands
-            .Where(c => IsCommandVisibleForConsumer(c.Visibility, includeDisabledCommands) && IsCommandVisibleToConsumer(c.State, includeDisabledCommands))
-            .OrderBy(c => c.Name)
+            .Select((command, index) => (command, index))
+            .Where(c => IsCommandVisibleForConsumer(c.command.Visibility, includeDisabledCommands) && IsCommandVisibleToConsumer(c.command.State, includeDisabledCommands))
+            .OrderBy(c => c.command.Name)
             .ToDistinctDictionary(
-                c => c.Name,
+                c => c.command.Name,
                 c => new ResourceCommandJson
                 {
-                    DisplayName = string.IsNullOrWhiteSpace(c.DisplayName) ? null : c.DisplayName.Trim(),
-                    Description = c.Description,
-                    Visibility = IsDefaultCommandVisibility(c.Visibility) ? null : c.Visibility,
-                    State = c.State,
-                    ArgumentInputs = c.ArgumentInputs.Length > 0
-                        ? c.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
+                    DisplayName = string.IsNullOrWhiteSpace(c.command.DisplayName) ? null : c.command.DisplayName.Trim(),
+                    Description = c.command.Description,
+                    Visibility = IsDefaultCommandVisibility(c.command.Visibility) ? null : c.command.Visibility,
+                    State = c.command.State,
+                    RegistrationOrder = c.index,
+                    ArgumentInputs = c.command.ArgumentInputs.Length > 0
+                        ? c.command.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
                         : null
                 });
 

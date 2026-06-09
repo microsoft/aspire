@@ -10,17 +10,14 @@ namespace Infrastructure.Tests;
 /// </summary>
 public sealed class DownloadFailingJobLogsFixture : IAsyncLifetime
 {
-    public string RepoRoot { get; private set; } = string.Empty;
-
     public string ToolPath { get; private set; } = string.Empty;
 
     public string DotNetPath { get; private set; } = string.Empty;
 
     public ValueTask InitializeAsync()
     {
-        RepoRoot = FindRepoRoot();
-        ToolPath = Path.Combine(RepoRoot, "tools", "scripts", "DownloadFailingJobLogs.cs");
-        DotNetPath = Path.Combine(RepoRoot, "dotnet.sh");
+        ToolPath = Path.Combine(RepoRoot.Path, "tools", "scripts", "DownloadFailingJobLogs.cs");
+        DotNetPath = Path.Combine(RepoRoot.Path, "dotnet.sh");
 
         if (!File.Exists(ToolPath))
         {
@@ -36,20 +33,4 @@ public sealed class DownloadFailingJobLogsFixture : IAsyncLifetime
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Aspire.slnx")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not find repository root (looking for Aspire.slnx).");
-    }
 }

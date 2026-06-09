@@ -851,8 +851,8 @@ public static class ProjectResourceBuilderExtensions
     /// <param name="builder">The project resource builder.</param>
     /// <param name="filter">The filter callback that returns true if and only if the endpoint should be included.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore(Reason = "Uses Func<EndpointAnnotation, bool> which is not ATS-compatible.")]
+    [AspireExportIgnore(Reason = "Uses Func<EndpointAnnotation, bool> which is not ATS-compatible. " +
+        "The ATS-friendly implementation is in src/Aspire.Hosting/Ats/CoreExports.cs and accepts endpoint names instead of a predicate.")]
     public static IResourceBuilder<ProjectResource> WithEndpointsInEnvironment(
         this IResourceBuilder<ProjectResource> builder, Func<EndpointAnnotation, bool> filter)
     {

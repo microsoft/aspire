@@ -75,6 +75,11 @@ public class HttpCommandOptions : CommandOptions
 internal sealed class HttpCommandExportOptions
 {
     /// <summary>
+    /// Optional command configuration.
+    /// </summary>
+    public CommandOptions? CommandOptions { get; init; }
+
+    /// <summary>
     /// Optional description of the command, to be shown in the UI.
     /// </summary>
     public string? Description { get; set; }
@@ -115,7 +120,39 @@ internal sealed class HttpCommandExportOptions
     public string? MethodName { get; set; }
 
     /// <summary>
+    /// Gets or sets a callback to be invoked to configure the request before it is sent.
+    /// </summary>
+    public Func<HttpCommandPrepareRequestContext, Task<HttpCommandRequestExportData>>? PrepareRequest { get; init; }
+
+    /// <summary>
     /// Gets or sets how the HTTP response content should be returned as command result data.
     /// </summary>
     public HttpCommandResultMode ResultMode { get; set; }
+}
+
+/// <summary>
+/// ATS-friendly request data returned from HTTP command prepare-request callbacks.
+/// </summary>
+[AspireDto]
+internal sealed class HttpCommandRequestExportData
+{
+    /// <summary>
+    /// Gets or sets the HTTP method name to use when sending the request.
+    /// </summary>
+    public string? MethodName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the request headers.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? Headers { get; set; }
+
+    /// <summary>
+    /// Gets or sets the request content.
+    /// </summary>
+    public string? Content { get; set; }
+
+    /// <summary>
+    /// Gets or sets the request content type.
+    /// </summary>
+    public string? ContentType { get; set; }
 }

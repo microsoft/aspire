@@ -135,6 +135,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     // Mapping of handle type IDs to XML documentation captured during ATS scanning.
     private readonly Dictionary<string, AtsDocumentationInfo> _handleDocumentationById = new(StringComparer.Ordinal);
 
+    // Mapping of DTO type IDs to DTO metadata for generated argument marshalling.
+    private readonly Dictionary<string, AtsDtoTypeInfo> _dtoTypesById = new(StringComparer.Ordinal);
+
     private static string GetInterfaceName(string className) => className;
 
     private static string GetPromiseInterfaceName(string className) => $"{className}Promise";
@@ -741,26 +744,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             : $"{parameterName}: {valueExpression}";
     }
 
-    private static string GetRpcArgumentEntry(AtsParameterInfo param, bool useRegisteredCallback = true)
-    {
-        if (useRegisteredCallback && param.IsCallback)
-        {
-            return $"{param.Name}: {param.Name}Id";
-        }
-
-        return GetRpcArgumentEntry(param.Name, param.Type);
-    }
-
-    private static string GetRpcArgumentExpression(AtsParameterInfo param, bool useRegisteredCallback = true)
-    {
-        if (useRegisteredCallback && param.IsCallback)
-        {
-            return $"{param.Name}Id";
-        }
-
-        return GetRpcArgumentValueExpression(param.Name, param.Type);
-    }
-
     private static string GetRpcArgumentExpression(AtsParameterInfo param, string localParameterName, bool useRegisteredCallback = true)
     {
         if (useRegisteredCallback && param.IsCallback)
@@ -770,6 +753,74 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         return GetRpcArgumentValueExpression(localParameterName, param.Type);
     }
+
+    private string GetRpcArgumentEntryForParam(AtsParameterInfo param, string localParameterName, bool useRegisteredCallback = true)
+    {
+        if (useRegisteredCallback && param.IsCallback)
+        {
+            return $"{param.Name}: {localParameterName}Id";
+        }
+
+        var valueExpression = GetRpcArgumentExpressionForParam(param, localParameterName, useRegisteredCallback);
+        return valueExpression == param.Name
+            ? param.Name
+            : $"{param.Name}: {valueExpression}";
+    }
+
+    private string GetRpcArgumentExpressionForParam(AtsParameterInfo param, string localParameterName, bool useRegisteredCallback = true)
+    {
+        if (TryGetDtoCallbackMarshallingProperties(param.Type, out _))
+        {
+            return GetDtoRpcLocalName(localParameterName);
+        }
+
+        return GetRpcArgumentExpression(param, localParameterName, useRegisteredCallback);
+    }
+
+    private bool TryGetDtoCallbackMarshallingProperties(AtsTypeRef? typeRef, out List<AtsDtoPropertyInfo> marshallingProperties)
+    {
+        marshallingProperties = [];
+
+        if (typeRef?.Category != AtsTypeCategory.Dto ||
+            !_dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoType))
+        {
+            return false;
+        }
+
+        marshallingProperties = dtoType.Properties
+            .Where(p => p.IsCallback || RequiresDtoCallbackMarshalling(p.Type))
+            .ToList();
+
+        return marshallingProperties.Count > 0;
+    }
+
+    private bool RequiresDtoCallbackMarshalling(AtsTypeRef? typeRef, HashSet<string>? visitedDtoTypeIds = null)
+    {
+        if (typeRef?.Category != AtsTypeCategory.Dto ||
+            !_dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoType))
+        {
+            return false;
+        }
+
+        visitedDtoTypeIds ??= new(StringComparer.Ordinal);
+        if (!visitedDtoTypeIds.Add(typeRef.TypeId))
+        {
+            return false;
+        }
+
+        try
+        {
+            return dtoType.Properties.Any(p => p.IsCallback || RequiresDtoCallbackMarshalling(p.Type, visitedDtoTypeIds));
+        }
+        finally
+        {
+            visitedDtoTypeIds.Remove(typeRef.TypeId);
+        }
+    }
+
+    private static string GetDtoRpcLocalName(string localParameterName) => $"__{localParameterName}ForRpc";
+
+    private static string GetDtoCallbackLocalName(string dtoLocalName, string propertyName) => $"__{dtoLocalName}{propertyName}";
 
     /// <summary>
     /// Gets the TypeId from a capability's return type.
@@ -919,6 +970,12 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         _optionsInterfacesToGenerate.Clear();
         _capabilityOptionsInterfaceMap.Clear();
         _handleDocumentationById.Clear();
+        _dtoTypesById.Clear();
+
+        foreach (var dtoType in dtoTypes)
+        {
+            _dtoTypesById[dtoType.TypeId] = dtoType;
+        }
 
         foreach (var handleType in context.HandleTypes)
         {
@@ -2342,11 +2399,16 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Resolve any promise-like handle parameters
         GeneratePromiseResolution(allParams, indent);
 
+        // DTO callback properties are sent over the wire as callback IDs, just like direct
+        // callback parameters. Copy the DTO before replacing function-valued properties so
+        // callers keep their original options object unchanged.
+        GenerateDtoCallbackPropertyMarshalling(requiredParams.Concat(optionalParams), useSafeOptionalLocalNames, indent);
+
         // Build the required args inline
         var requiredArgs = new List<string> { $"{targetParamName}: this._handle" };
         foreach (var param in requiredParams)
         {
-            requiredArgs.Add(GetRpcArgumentEntry(param));
+            requiredArgs.Add(GetRpcArgumentEntryForParam(param, param.Name));
         }
 
         WriteLine($"{indent}const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
@@ -2355,7 +2417,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         foreach (var param in optionalParams)
         {
             var localParameterName = useSafeOptionalLocalNames ? GetLocalParameterName(param) : param.Name;
-            var rpcExpression = GetRpcArgumentExpression(param, localParameterName);
+            var rpcExpression = GetRpcArgumentExpressionForParam(param, localParameterName);
             WriteLine($"{indent}if ({localParameterName} !== undefined) rpcArgs.{param.Name} = {rpcExpression};");
         }
     }
@@ -2370,11 +2432,16 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         bool useSafeOptionalLocalNames = false,
         string indent = "        ")
     {
+        // DTO callback properties are sent over the wire as callback IDs, just like direct
+        // callback parameters. Copy the DTO before replacing function-valued properties so
+        // callers keep their original options object unchanged.
+        GenerateDtoCallbackPropertyMarshalling(requiredParams.Concat(optionalParams), useSafeOptionalLocalNames, indent);
+
         // Build the required args inline
         var requiredArgs = new List<string> { $"{targetParamName}: this._handle" };
         foreach (var param in requiredParams)
         {
-            requiredArgs.Add(GetRpcArgumentEntry(param));
+            requiredArgs.Add(GetRpcArgumentEntryForParam(param, param.Name));
         }
 
         WriteLine($"{indent}const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
@@ -2383,10 +2450,125 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         foreach (var param in optionalParams)
         {
             var localParameterName = useSafeOptionalLocalNames ? GetLocalParameterName(param) : param.Name;
-            var rpcExpression = GetRpcArgumentExpression(param, localParameterName);
+            var rpcExpression = GetRpcArgumentExpressionForParam(param, localParameterName);
             WriteLine($"{indent}if ({localParameterName} !== undefined) rpcArgs.{param.Name} = {rpcExpression};");
         }
     }
+
+    private void GenerateDtoCallbackPropertyMarshalling(
+        IEnumerable<AtsParameterInfo> parameters,
+        bool useSafeOptionalLocalNames,
+        string indent,
+        string clientExpression = "this._client")
+    {
+        foreach (var param in parameters)
+        {
+            if (!TryGetDtoCallbackMarshallingProperties(param.Type, out var marshallingProperties))
+            {
+                continue;
+            }
+
+            if (param.Type is not { TypeId: var dtoTypeId })
+            {
+                continue;
+            }
+
+            var localParameterName = useSafeOptionalLocalNames ? GetLocalParameterName(param) : param.Name;
+            var dtoRpcLocalName = GetDtoRpcLocalName(localParameterName);
+            var visitedDtoTypeIds = new HashSet<string>(StringComparer.Ordinal) { dtoTypeId };
+            if (param.IsOptional || param.IsNullable)
+            {
+                WriteLine($"{indent}const {dtoRpcLocalName} = {localParameterName} === undefined || {localParameterName} === null ? {localParameterName} : {{ ...{localParameterName} }};");
+                WriteLine($"{indent}if ({dtoRpcLocalName} !== undefined && {dtoRpcLocalName} !== null) {{");
+                GenerateDtoCallbackPropertyAssignments(dtoRpcLocalName, marshallingProperties, visitedDtoTypeIds, $"{indent}    ", clientExpression);
+                WriteLine($"{indent}}}");
+            }
+            else
+            {
+                WriteLine($"{indent}const {dtoRpcLocalName} = {localParameterName} === null ? {localParameterName} : {{ ...{localParameterName} }};");
+                WriteLine($"{indent}if ({dtoRpcLocalName} !== null) {{");
+                GenerateDtoCallbackPropertyAssignments(dtoRpcLocalName, marshallingProperties, visitedDtoTypeIds, $"{indent}    ", clientExpression);
+                WriteLine($"{indent}}}");
+            }
+        }
+    }
+
+    private void GenerateDtoCallbackPropertyAssignments(
+        string dtoRpcLocalName,
+        IReadOnlyList<AtsDtoPropertyInfo> marshallingProperties,
+        HashSet<string> visitedDtoTypeIds,
+        string indent,
+        string clientExpression)
+    {
+        var dtoDataLocalName = $"{dtoRpcLocalName}Data";
+        WriteLine($"{indent}const {dtoDataLocalName} = {dtoRpcLocalName} as Record<string, unknown>;");
+
+        foreach (var marshallingProperty in marshallingProperties)
+        {
+            if (marshallingProperty.IsCallback)
+            {
+                var propertyName = ToCamelCase(marshallingProperty.Name);
+                var callbackLocalName = GetDtoCallbackLocalName(dtoRpcLocalName, marshallingProperty.Name);
+                WriteLine($"{indent}const {callbackLocalName} = {dtoRpcLocalName}.{propertyName};");
+                WriteLine($"{indent}if ({callbackLocalName} !== undefined) {{");
+                GenerateCallbackRegistration(CreateCallbackParameter(marshallingProperty, callbackLocalName), $"{indent}    ", clientExpression);
+                WriteLine($"{indent}    {dtoDataLocalName}[\"{propertyName}\"] = {callbackLocalName}Id;");
+                WriteLine($"{indent}}}");
+                continue;
+            }
+
+            GenerateNestedDtoCallbackPropertyAssignments(dtoRpcLocalName, dtoDataLocalName, marshallingProperty, visitedDtoTypeIds, indent, clientExpression);
+        }
+    }
+
+    private void GenerateNestedDtoCallbackPropertyAssignments(
+        string dtoRpcLocalName,
+        string dtoDataLocalName,
+        AtsDtoPropertyInfo dtoProperty,
+        HashSet<string> visitedDtoTypeIds,
+        string indent,
+        string clientExpression)
+    {
+        if (!TryGetDtoCallbackMarshallingProperties(dtoProperty.Type, out var nestedMarshallingProperties))
+        {
+            return;
+        }
+
+        var propertyName = ToCamelCase(dtoProperty.Name);
+        var dtoPropertyLocalName = GetDtoCallbackLocalName(dtoRpcLocalName, dtoProperty.Name);
+        var nestedDtoRpcLocalName = $"{dtoPropertyLocalName}ForRpc";
+
+        if (!visitedDtoTypeIds.Add(dtoProperty.Type.TypeId))
+        {
+            return;
+        }
+
+        try
+        {
+            WriteLine($"{indent}const {dtoPropertyLocalName} = {dtoRpcLocalName}.{propertyName};");
+            WriteLine($"{indent}if ({dtoPropertyLocalName} !== undefined && {dtoPropertyLocalName} !== null) {{");
+            WriteLine($"{indent}    const {nestedDtoRpcLocalName} = {{ ...{dtoPropertyLocalName} }};");
+            GenerateDtoCallbackPropertyAssignments(nestedDtoRpcLocalName, nestedMarshallingProperties, visitedDtoTypeIds, $"{indent}    ", clientExpression);
+            WriteLine($"{indent}    {dtoDataLocalName}[\"{propertyName}\"] = {nestedDtoRpcLocalName};");
+            WriteLine($"{indent}}}");
+        }
+        finally
+        {
+            visitedDtoTypeIds.Remove(dtoProperty.Type.TypeId);
+        }
+    }
+
+    private static AtsParameterInfo CreateCallbackParameter(AtsDtoPropertyInfo callbackProperty, string callbackLocalName)
+        => new()
+        {
+            Name = callbackLocalName,
+            Type = callbackProperty.Type,
+            IsOptional = callbackProperty.IsOptional,
+            IsNullable = callbackProperty.Type.IsNullable == true,
+            IsCallback = true,
+            CallbackParameters = callbackProperty.CallbackParameters,
+            CallbackReturnType = callbackProperty.CallbackReturnType
+        };
 
     /// <summary>
     /// Generates a thenable wrapper class for a builder that enables fluent chaining.
@@ -2650,13 +2832,14 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                     WriteLine($"        {param.Name} = isPromiseLike({param.Name}) ? await {param.Name} : {param.Name};");
                 }
             }
+            GenerateDtoCallbackPropertyMarshalling(capability.Parameters, useSafeOptionalLocalNames: false, indent: "        ", clientExpression: "client");
             var requiredArgs = requiredParams
-                .Select(param => GetRpcArgumentEntry(param, useRegisteredCallback: false))
+                .Select(param => GetRpcArgumentEntryForParam(param, param.Name, useRegisteredCallback: false))
                 .ToList();
             WriteLine($"        const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
             foreach (var param in optionalParams)
             {
-                WriteLine($"        if ({param.Name} !== undefined) rpcArgs.{param.Name} = {GetRpcArgumentExpression(param, useRegisteredCallback: false)};");
+                WriteLine($"        if ({param.Name} !== undefined) rpcArgs.{param.Name} = {GetRpcArgumentExpressionForParam(param, param.Name, useRegisteredCallback: false)};");
             }
             WriteLine($"        const handle = await client.invokeCapability<{handleType}>(");
             WriteLine($"            '{capability.CapabilityId}',");
@@ -2685,13 +2868,14 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                     WriteLine($"    {param.Name} = isPromiseLike({param.Name}) ? await {param.Name} : {param.Name};");
                 }
             }
+            GenerateDtoCallbackPropertyMarshalling(capability.Parameters, useSafeOptionalLocalNames: false, indent: "    ", clientExpression: "client");
             var requiredArgs = requiredParams
-                .Select(param => GetRpcArgumentEntry(param, useRegisteredCallback: false))
+                .Select(param => GetRpcArgumentEntryForParam(param, param.Name, useRegisteredCallback: false))
                 .ToList();
             WriteLine($"    const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
             foreach (var param in optionalParams)
             {
-                WriteLine($"    if ({param.Name} !== undefined) rpcArgs.{param.Name} = {GetRpcArgumentExpression(param, useRegisteredCallback: false)};");
+                WriteLine($"    if ({param.Name} !== undefined) rpcArgs.{param.Name} = {GetRpcArgumentExpressionForParam(param, param.Name, useRegisteredCallback: false)};");
             }
             if (returnType == "void")
             {
@@ -2744,7 +2928,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         return $"({paramsString}) => Promise<{returnType}>";
     }
 
-    private void GenerateCallbackRegistration(AtsParameterInfo callbackParam, string indent = "        ")
+    private void GenerateCallbackRegistration(AtsParameterInfo callbackParam, string indent = "        ", string clientExpression = "this._client")
     {
         var callbackParameters = callbackParam.CallbackParameters;
         var isOptional = callbackParam.IsOptional || callbackParam.IsNullable;
@@ -2776,7 +2960,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
 
         // Generate the callback body
-        GenerateCallbackBody(callbackParam, callbackParameters, indent);
+        GenerateCallbackBody(callbackParam, callbackParameters, indent, clientExpression);
 
         // Close the callback registration
         if (isOptional)
@@ -2792,7 +2976,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// <summary>
     /// Generates the body of a callback function.
     /// </summary>
-    private void GenerateCallbackBody(AtsParameterInfo callbackParam, IReadOnlyList<AtsCallbackParameterInfo>? callbackParameters, string indent)
+    private void GenerateCallbackBody(AtsParameterInfo callbackParam, IReadOnlyList<AtsCallbackParameterInfo>? callbackParameters, string indent, string clientExpression)
     {
         var callbackName = callbackParam.Name;
         var bodyIndent = $"{indent}    ";
@@ -2811,7 +2995,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             // Single parameter callback
             var cbParam = callbackParameters[0];
-            GenerateCallbackParameterConversion(cbParam, $"{cbParam.Name}Data");
+            GenerateCallbackParameterConversion(cbParam, $"{cbParam.Name}Data", clientExpression, bodyIndent);
 
             WriteLine($"{bodyIndent}{returnPrefix}await {callbackName}({cbParam.Name});");
         }
@@ -2823,7 +3007,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 var cbParam = callbackParameters[i];
                 var callbackArgName = $"{cbParam.Name}Data";
 
-                GenerateCallbackParameterConversion(cbParam, callbackArgName);
+                GenerateCallbackParameterConversion(cbParam, callbackArgName, clientExpression, bodyIndent);
                 callArgs.Add(cbParam.Name);
             }
 
@@ -2831,14 +3015,14 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
     }
 
-    private void GenerateCallbackParameterConversion(AtsCallbackParameterInfo callbackParameter, string callbackArgName)
+    private void GenerateCallbackParameterConversion(AtsCallbackParameterInfo callbackParameter, string callbackArgName, string clientExpression, string indent)
     {
         var tsType = MapTypeRefToTypeScript(callbackParameter.Type);
         var cbTypeId = callbackParameter.Type.TypeId;
 
         if (cbTypeId == AtsConstants.CancellationToken)
         {
-            WriteLine($"            const {callbackParameter.Name} = CancellationToken.fromValue({callbackArgName});");
+            WriteLine($"{indent}const {callbackParameter.Name} = CancellationToken.fromValue({callbackArgName});");
         }
         else if (IsDictionaryType(callbackParameter.Type) && !callbackParameter.Type.IsReadOnly)
         {
@@ -2846,18 +3030,18 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var valueType = MapTypeRefToTypeScript(callbackParameter.Type.ValueType);
             var handleType = GetHandleTypeName(cbTypeId);
 
-            WriteLine($"            const {callbackParameter.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
-            WriteLine($"            const {callbackParameter.Name} = new AspireDict<{keyType}, {valueType}>({callbackParameter.Name}Handle, this._client, '{cbTypeId}');");
+            WriteLine($"{indent}const {callbackParameter.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
+            WriteLine($"{indent}const {callbackParameter.Name} = new AspireDict<{keyType}, {valueType}>({callbackParameter.Name}Handle, {clientExpression}, '{cbTypeId}');");
         }
         else if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
         {
             var handleType = GetHandleTypeName(cbTypeId);
-            WriteLine($"            const {callbackParameter.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
-            WriteLine($"            const {callbackParameter.Name} = new {GetImplementationClassName(wrapperClassName)}({callbackParameter.Name}Handle, this._client);");
+            WriteLine($"{indent}const {callbackParameter.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
+            WriteLine($"{indent}const {callbackParameter.Name} = new {GetImplementationClassName(wrapperClassName)}({callbackParameter.Name}Handle, {clientExpression});");
         }
         else
         {
-            WriteLine($"            const {callbackParameter.Name} = wrapIfHandle({callbackArgName}) as {tsType};");
+            WriteLine($"{indent}const {callbackParameter.Name} = wrapIfHandle({callbackArgName}) as {tsType};");
         }
     }
 

@@ -55,6 +55,24 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         };
     }
 
+    private static RuntimeSpec CreateTypeScriptRuntimeSpec()
+    {
+        return CreateTestSpec(
+            execute: new CommandSpec
+            {
+                Command = "npx",
+                Args = ["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"]
+            },
+            preExecute:
+            [
+                new CommandSpec
+                {
+                    Command = "npx",
+                    Args = ["--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"]
+                }
+            ]);
+    }
+
     [Fact]
     public void Language_ReturnsSpecLanguage()
     {
@@ -161,6 +179,30 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         Assert.Equal("typecheck-cmd", launcher.Calls[0].Command);
         Assert.Equal(["--project", directory.FullName], launcher.Calls[0].Args);
         Assert.Equal("run-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task RunAsync_NoBuildSkipsTypeScriptTscAndRunsAppHost()
+    {
+        var spec = CreateTypeScriptRuntimeSpec();
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        var (exitCode, _) = await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            CancellationToken.None,
+            noBuild: true);
+
+        Assert.Equal(0, exitCode);
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("npx", call.Command);
+        Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName], call.Args);
     }
 
     [Fact]
@@ -372,6 +414,30 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, launcher.Calls.Count);
         Assert.Equal("typecheck-cmd", launcher.Calls[0].Command);
         Assert.Equal("publish-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task PublishAsync_NoBuildSkipsTypeScriptTscAndRunsAppHost()
+    {
+        var spec = CreateTypeScriptRuntimeSpec();
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        var (exitCode, _) = await runtime.PublishAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            ["--operation", "publish"],
+            launcher,
+            CancellationToken.None,
+            noBuild: true);
+
+        Assert.Equal(0, exitCode);
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("npx", call.Command);
+        Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName, "--operation", "publish"], call.Args);
     }
 
     [Fact]

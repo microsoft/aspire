@@ -1,4 +1,4 @@
-# Aspire.Hosting.DevTunnels library
+# Dev tunnels hosting integration
 
 Provides extension methods and resource definitions for an Aspire AppHost to expose local application endpoints publicly via a secure [dev tunnel](https://learn.microsoft.com/azure/developer/dev-tunnels/overview).  
 Dev tunnels are useful for:
@@ -12,18 +12,12 @@ Dev tunnels are useful for:
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the `Aspire.Hosting.DevTunnels` library via NuGet:
-
-```dotnetcli
-dotnet add package Aspire.Hosting.DevTunnels
-```
-
-Or using the Aspire CLI:
+From your AppHost directory, add the `Aspire.Hosting.DevTunnels` integration with the Aspire CLI:
 
 ```bash
-aspire add devtunnels
+aspire add Aspire.Hosting.DevTunnels
 ```
 
 ### Install the devtunnel CLI
@@ -36,6 +30,8 @@ Before you create a dev tunnel, you first need to download and install the devtu
 
 ### Expose all endpoints on a project
 
+**C#**
+
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -45,6 +41,21 @@ var tunnel = builder.AddDevTunnel("mytunnel")
                     .WithReference(web);
 
 builder.Build().Run();
+```
+
+**TypeScript**
+
+```typescript
+import { createBuilder } from "./.aspire/modules/aspire.mjs";
+
+const builder = await createBuilder();
+
+const web = await builder.addNodeApp("web", "../web", "server.js");
+
+const tunnel = await builder.addDevTunnel("mytunnel")
+                    .withReference(web);
+
+await builder.build().run();
 ```
 
 ### Enable anonymous (public) access
@@ -69,7 +80,7 @@ var tunnel = builder.AddDevTunnel("apitunnel")
 You can control anonymous access at the port (endpoint) level using the overload of `WithReference` that accepts a `bool allowAnonymous` parameter:
 
 ```csharp
-var api = builder.AddProject<Projects.ApiService>("api");
+var api = builder.AddProject<Projects.Api>("api");
 
 var tunnel = builder.AddDevTunnel("mixedaccess")
                     .WithReference(api.GetEndpoint("public"), allowAnonymous: true)
@@ -225,7 +236,8 @@ The logging helps you verify that your tunnel configuration is working as expect
 
 ## Additional documentation
 
-* [Aspire documentation](https://aspire.dev/integrations/devtools/dev-tunnels/)
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/devtools/dev-tunnels/
 * [Dev tunnels service](https://learn.microsoft.com/azure/developer/dev-tunnels/overview)
 * [Dev tunnels FAQ](https://learn.microsoft.com/azure/developer/dev-tunnels/faq)
 

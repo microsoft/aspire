@@ -14,7 +14,7 @@ import {
     ResourceCommandState,
     refExpr,
 } from './.aspire/modules/aspire.mjs';
-import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext } from './.aspire/modules/aspire.mjs';
+import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext, HealthCheckResult } from './.aspire/modules/aspire.mjs';
 import { fileURLToPath } from 'node:url';
 
 const builder = await createBuilder();
@@ -90,12 +90,22 @@ const exe = await builder.addExecutable("myexe", "echo", ".", ["hello"]);
 // addProject (pre-existing)
 const project = await builder.addProject("myproject", "./src/MyProject", { launchProfileOrOptions: "https" });
 const projectWithoutLaunchProfile = await builder.addProject("myproject-noprofile", "./src/MyProject");
+await project.withEndpointsInEnvironment(["https"]);
 // ATS exports ReferenceEnvironmentInjectionFlags as a DTO-shaped object in TypeScript.
 const referenceEnvironmentOptions = {
     connectionString: true,
     serviceDiscovery: true,
 };
 await project.withReferenceEnvironment(referenceEnvironmentOptions);
+
+const customHealthCheck = async (): Promise<HealthCheckResult> => ({
+    status: HealthStatus.Healthy,
+    description: "custom health check",
+    data: {
+        custom: "value",
+    },
+});
+await builder.addHealthCheck("custom_check", customHealthCheck);
 
 // addCSharpApp
 const csharpApp = await builder.addCSharpApp("csharpapp", "./src/CSharpApp");
@@ -144,6 +154,11 @@ await container.withContainerCertificatePaths({
     customCertificatesDestination: "/usr/lib/ssl/aspire/custom",
     defaultCertificateBundlePaths: ["/etc/ssl/certs/ca-certificates.crt"],
     defaultCertificateDirectoryPaths: ["/etc/ssl/certs", "/usr/local/share/ca-certificates"],
+});
+await container.withContainerFiles("/usr/lib/aspire/container-files", ".", {
+    defaultOwner: 1000,
+    defaultGroup: 1000,
+    umask: 0o022,
 });
 
 // withImageRegistry
@@ -704,6 +719,7 @@ await container.withUrl(refExpr`http://${endpoint}`);
 
 // withHealthCheck
 await container.withHealthCheck("http");
+await container.withHealthCheck("custom_check");
 
 // withCommand
 await container.withCommand("noop", "Noop", async () => {
@@ -765,10 +781,58 @@ await container.withProcessCommand("node-stdin", "Node stdin", {
     },
     maxOutputLineCount: 10,
 });
+await container.withProcessCommand("node-message", "Node message", {
+    createProcessSpec: async (context) => {
+        const args = await context.arguments();
+        const message = await args.requiredValue("message");
+
+        return {
+            executablePath: "node",
+            arguments: ["-e", "console.log(process.argv[1])", message],
+        };
+    },
+    commandOptions: {
+        description: "Runs node with an argument supplied when the process command is invoked.",
+        iconName: "WindowConsole",
+        arguments: [
+            {
+                name: "message",
+                inputType: InputType.Text,
+                required: true,
+            },
+        ],
+    },
+    maxOutputLineCount: 10,
+    displayImmediately: false,
+});
 
 // withHttpCommand
 await container.withHttpCommand("/health", "Health Check");
-await container.withHttpCommand("/api/reset", "Reset", { methodName: "POST", confirmationMessage: "Are you sure?" });
+await container.withHttpCommand("/api/reset", "Reset", {
+    methodName: "POST",
+    prepareRequest: async (context) => {
+        const args = await context.arguments();
+        const message = await args.requiredValue("message");
+
+        return {
+            content: JSON.stringify({ message }),
+            contentType: "application/json",
+            headers: {
+                "X-Message": message,
+            },
+        };
+    },
+    commandOptions: {
+        arguments: [
+            {
+                name: "message",
+                inputType: InputType.Text,
+                required: true,
+            },
+        ],
+    },
+    confirmationMessage: "Are you sure?",
+});
 
 const app = await builder.build();
 await app.run();

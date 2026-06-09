@@ -1,5 +1,19 @@
 # Aspire VS Code Extension Changelog
 
+## v1.14.0
+
+### Features
+
+- Add Bun debugging support for Bun services running under Aspire ([#17848](https://github.com/microsoft/aspire/pull/17848)).
+- Improve parameter display in the resource tree and AppHost CodeLens: secrets are masked, long values are truncated, and missing parameter values are shown explicitly ([#17193](https://github.com/microsoft/aspire/issues/17193), [#17881](https://github.com/microsoft/aspire/pull/17881)).
+
+### Fixes
+
+- Fix excessive AppHost discovery requests that could flood the workspace with redundant file-system scans ([#17897](https://github.com/microsoft/aspire/pull/17897)).
+- Show a compatibility error in the Aspire pane when the running AppHost returns empty `describe` output ([#17925](https://github.com/microsoft/aspire/pull/17925)).
+- Harden terminal commands against shell injection by routing Aspire CLI arguments through structured shell quoting ([#17930](https://github.com/microsoft/aspire/pull/17930)).
+- Update npm dependencies to resolve open security advisories: `undici` ([#17868](https://github.com/microsoft/aspire/pull/17868)) and `ws`, `fast-uri`, `qs`, `@nevware21/ts-utils` ([#17951](https://github.com/microsoft/aspire/pull/17951)).
+
 ## v1.13.0
 
 ### Features
