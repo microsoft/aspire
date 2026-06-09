@@ -97,7 +97,7 @@ Before starting a release:
    | `SkipWinGetPublish` | Set `true` if re-running after WinGet success. | `true` |
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow. | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading `aspire-cli-*` assets to the GitHub release. | `false` |
-   | `SkipHomebrewValidation` | Set `true` if re-running after a successful Homebrew cask validation against the live GitHub release. | `false` |
+   | `SkipHomebrewValidation` | Set `false` to run Homebrew cask validation against the live GitHub release. | `true` |
    | `SkipVSCodeExtensionPublish` | Set `false` to publish the signed `aspire-vscode-extension` artifact to the Visual Studio Marketplace. | `true` |
    | `NpmPublishOwners` | Optional comma-separated ESRP owner aliases or emails. Leave empty for the repo default; overrides must still include the required owner aliases from `eng/pipelines/common-variables.yml`. | empty |
    | `NpmPublishApprovers` | Optional comma-separated ESRP approver aliases or emails. Leave empty for the repo default; overrides must still include the required approver aliases from `eng/pipelines/common-variables.yml` and must not overlap owners. | empty |

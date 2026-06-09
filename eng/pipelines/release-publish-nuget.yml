@@ -96,7 +96,7 @@ parameters:
   - name: SkipHomebrewValidation
     displayName: '[Advanced] Skip Homebrew cask validation against live GitHub release (re-run after success)'
     type: boolean
-    default: false
+    default: true
 
   # Azure DevOps manual string parameters cannot be left blank. These defaults
   # must include the NPM_PUBLISH_REQUIRED_* aliases from common-variables.yml.
@@ -2274,14 +2274,15 @@ extends:
       # DryRun behavior: this stage still runs when DryRun=true. DryRun is
       # propagated to the GH workflow as dry_run=true (keeps it from
       # creating tags/releases/PRs) and to the asset script (downloads and
-      # verifies SHA512s but skips the gh release upload). HomebrewValidateJob
-      # also runs under DryRun — it does not publish anything, it only audits
-      # and `brew install`/`brew uninstall` against a public URL. If the
-      # release for the version being validated does not yet exist (DryRun,
-      # or a re-run after assets were already uploaded), the job is expected
-      # to surface that as a real failure rather than be silently skipped.
-      # This lets a release manager validate the full AzDO → GitHub path
-      # end-to-end without performing a real release.
+      # verifies SHA512s but skips the gh release upload). When
+      # SkipHomebrewValidation=false, HomebrewValidateJob also runs under DryRun
+      # — it does not publish anything, it only audits and `brew install`/
+      # `brew uninstall` against a public URL. If the release for the version
+      # being validated does not yet exist (DryRun, or a re-run after assets
+      # were already uploaded), the job is expected to surface that as a real
+      # failure rather than be silently skipped. This lets a release manager
+      # validate the full AzDO → GitHub path end-to-end without performing a
+      # real release.
       - stage: GitHubTasks
         displayName: 'Dispatch GitHub Release Tasks'
         # PrepareArtifacts is listed explicitly (in addition to Release) so the
