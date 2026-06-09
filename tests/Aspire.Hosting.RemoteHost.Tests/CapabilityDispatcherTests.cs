@@ -158,12 +158,8 @@ public class CapabilityDispatcherTests
     {
         var dispatcher = CreateDispatcher();
         dispatcher.Register("test/capability@1", (_, _) =>
-        {
-            throw new ArgumentException("A parameter value is required when publishValueAsDefault is true.", "publishValueAsDefault");
-#pragma warning disable CS0162 // Unreachable code detected - needed for return type inference
-            return Task.FromResult<JsonNode?>(null);
-#pragma warning restore CS0162
-        });
+            Task.FromException<JsonNode?>(
+                new ArgumentException("A parameter value is required when publishValueAsDefault is true.", "publishValueAsDefault")));
 
         var ex = Assert.Throws<CapabilityException>(() =>
             dispatcher.Invoke("test/capability@1", null));
