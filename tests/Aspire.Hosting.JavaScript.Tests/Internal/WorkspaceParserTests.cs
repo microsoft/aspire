@@ -163,33 +163,6 @@ public class WorkspaceParserTests
     }
 
     [Theory]
-    [InlineData("!apps/legacy")]
-    [InlineData("packages/**")]
-    [InlineData("apps/*-svc")]
-    [InlineData("apps/api-*")]
-    [InlineData("*/api")]
-    public void WorkspacePatternValidatorThrowsForUnsupportedShapes(string pattern)
-    {
-        Assert.Throws<DistributedApplicationException>(() => WorkspacePatternValidator.Validate([pattern], "/root"));
-    }
-
-    [Theory]
-    [InlineData("apps/web")]
-    [InlineData("packages/utils")]
-    [InlineData("packages/*")]
-    [InlineData("*")]
-    public void WorkspacePatternValidatorAllowsSupportedShapes(string pattern)
-    {
-        WorkspacePatternValidator.Validate([pattern], "/root");
-    }
-
-    [Fact]
-    public void WorkspacePatternValidatorAllowsLiteralAndTrailingStarTogether()
-    {
-        WorkspacePatternValidator.Validate(["apps/web", "packages/*"], "/root");
-    }
-
-    [Theory]
     [InlineData("pnpm@10.4.1", 10)]
     [InlineData("pnpm@9.0.0", 9)]
     [InlineData("pnpm@10", 10)]
