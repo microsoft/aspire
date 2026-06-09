@@ -6,6 +6,7 @@ using Aspire.Hosting.DevTunnels;
 using Aspire.Hosting.Maui;
 using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Otlp;
+using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
 
@@ -81,12 +82,14 @@ public static class MauiOtlpExtensions
     /// </summary>
     private static OtlpDevTunnelConfigurationAnnotation CreateOtlpDevTunnelInfrastructure(
         IResourceBuilder<MauiProjectResource> parentBuilder,
-        Microsoft.Extensions.Configuration.IConfiguration configuration)
+        IConfiguration configuration)
     {
         var appBuilder = parentBuilder.ApplicationBuilder;
-
-        // Resolve OTLP scheme and port from configuration
-        var (otlpScheme, otlpPort) = OtlpEndpointResolver.ResolveSchemeAndPort(configuration);
+        var configuredOtlpEndpoint = ResolveConfiguredOtlpEndpoint(configuration);
+        // Dynamic dashboard endpoints start with a provisional scheme and no port. The actual
+        // scheme and port are copied from the dashboard allocation event before the dev tunnel
+        // can consume the endpoint.
+        var initialOtlpScheme = configuredOtlpEndpoint?.Scheme ?? ResolveDynamicDashboardOtlpScheme(configuration);
 
         // Create names for the tunnel infrastructure
         // Use a short random suffix to ensure uniqueness (similar to DCP naming strategy)
@@ -96,7 +99,7 @@ public static class MauiOtlpExtensions
         var stubName = $"t{randomSuffix}"; // Prefix with 't' to ensure valid resource name
 
         // Create OtlpLoopbackResource - a synthetic IResourceWithEndpoints for service discovery
-        var stubResource = new OtlpLoopbackResource(stubName, otlpPort, otlpScheme);
+        var stubResource = new OtlpLoopbackResource(stubName, configuredOtlpEndpoint?.Port, initialOtlpScheme);
 
         var stubBuilder = appBuilder.AddResource(stubResource)
             .ExcludeFromManifest();
@@ -108,25 +111,123 @@ public static class MauiOtlpExtensions
             Properties = []
         });
 
-        // Create dev tunnel with anonymous access for OTLP
+        if (configuredOtlpEndpoint is null)
+        {
+            appBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>((evt, _) =>
+            {
+                if (evt.Resource is DevTunnelResource devTunnelResource &&
+                    string.Equals(devTunnelResource.Name, tunnelName, StringComparisons.ResourceName) &&
+                    stubResource.OtlpEndpoint.AllocatedEndpoint is null)
+                {
+                    var hasDashboardResource = appBuilder.Resources.Any(resource => string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+                    if (!hasDashboardResource)
+                    {
+                        throw new DistributedApplicationException($"The MAUI OTLP dev tunnel for resource '{parentBuilder.Resource.Name}' requires the Aspire dashboard to be enabled or an explicit OTLP endpoint URL to be configured.");
+                    }
+
+                    throw new DistributedApplicationException($"The Aspire dashboard resource '{KnownResourceNames.AspireDashboard}' does not have an allocated OTLP endpoint named '{KnownEndpointNames.OtlpGrpcEndpointName}' or '{KnownEndpointNames.OtlpHttpEndpointName}', so the MAUI OTLP dev tunnel for resource '{parentBuilder.Resource.Name}' cannot start. Ensure dashboard OTLP ingestion is enabled, or configure an explicit OTLP endpoint URL.");
+                }
+
+                return Task.CompletedTask;
+            });
+
+            appBuilder.Eventing.Subscribe<ResourceEndpointsAllocatedEvent>((evt, ct) =>
+            {
+                if (TryResolveDashboardOtlpEndpoint(evt.Resource, out var dashboardOtlpEndpoint))
+                {
+                    return AllocateOtlpStubEndpointAsync(stubResource, dashboardOtlpEndpoint, evt.Services, appBuilder.Eventing, ct);
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+        else
+        {
+            appBuilder.OnBeforeStart((evt, ct) =>
+                appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(stubResource, evt.Services), ct));
+        }
+
+        // Create dev tunnel with anonymous access for OTLP. The dynamic unresolved-endpoint guard above
+        // must be registered first so it can fail fast before the dev tunnel waits on the target endpoint.
         var devTunnel = appBuilder.AddDevTunnel(tunnelName)
             .WithAnonymousAccess()
             .WithReference(stubBuilder, new DevTunnelPortOptions { Protocol = "https" });
 
-        // Manually allocate the stub endpoint so dev tunnel can start
-        // Dev tunnels wait for ResourceEndpointsAllocatedEvent before starting
-        appBuilder.OnBeforeStart((evt, ct) =>
-        {
-            var endpoint = stubResource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault();
-            if (endpoint is not null && endpoint.AllocatedEndpoint is null)
-            {
-                endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", otlpPort);
-                return appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(stubResource, evt.Services), ct);
-            }
-            return Task.CompletedTask;
-        });
-
         return new OtlpDevTunnelConfigurationAnnotation(stubResource, stubBuilder, devTunnel);
+    }
+
+    private static OtlpEndpointTarget? ResolveConfiguredOtlpEndpoint(IConfiguration configuration)
+    {
+        var configuredGrpcUrl = configuration.GetString(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl);
+        var configuredHttpUrl = configuration.GetString(KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
+
+        if (string.IsNullOrWhiteSpace(configuredGrpcUrl) && string.IsNullOrWhiteSpace(configuredHttpUrl))
+        {
+            return null;
+        }
+
+        var (url, _) = OtlpEndpointResolver.ResolveOtlpEndpoint(configuration);
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            ? new OtlpEndpointTarget(uri.Scheme, uri.Port)
+            : null;
+    }
+
+    private static string ResolveDynamicDashboardOtlpScheme(IConfiguration configuration)
+        => configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) is true ? "http" : "https";
+
+    private static bool TryResolveDashboardOtlpEndpoint(IResource resource, out OtlpEndpointTarget target)
+    {
+        target = default;
+
+        if (!string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName) || resource is not IResourceWithEndpoints dashboardResource)
+        {
+            return false;
+        }
+
+        var grpcEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpGrpcEndpointName);
+        if (TryResolveEndpoint(grpcEndpoint, out target))
+        {
+            return true;
+        }
+
+        var httpEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName);
+        return TryResolveEndpoint(httpEndpoint, out target);
+    }
+
+    private static bool TryResolveEndpoint(EndpointReference endpointReference, out OtlpEndpointTarget target)
+    {
+        target = default;
+
+        if (!endpointReference.Exists || endpointReference.EndpointAnnotation.AllocatedEndpoint is not { } allocatedEndpoint)
+        {
+            return false;
+        }
+
+        target = new OtlpEndpointTarget(allocatedEndpoint.UriScheme, allocatedEndpoint.Port);
+        return true;
+    }
+
+    private static Task AllocateOtlpStubEndpointAsync(
+        OtlpLoopbackResource stubResource,
+        OtlpEndpointTarget target,
+        IServiceProvider services,
+        Aspire.Hosting.Eventing.IDistributedApplicationEventing eventing,
+        CancellationToken cancellationToken)
+    {
+        var endpoint = stubResource.OtlpEndpoint;
+        if (endpoint.AllocatedEndpoint is not null)
+        {
+            return Task.CompletedTask;
+        }
+
+        endpoint.UriScheme = target.Scheme;
+        endpoint.Port = target.Port;
+        endpoint.TargetPort = target.Port;
+        endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", target.Port);
+
+        // The stub endpoint is synthetic and not allocated by DCP. Publishing the event keeps
+        // endpoint consumers such as dev tunnel ports on the normal endpoint-allocation path.
+        return eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(stubResource, services), cancellationToken);
     }
 
     /// <summary>
@@ -147,4 +248,6 @@ public static class MauiOtlpExtensions
         // Set OTEL_EXPORTER_OTLP_ENDPOINT directly to the tunnel endpoint URL
         platformBuilder.WithEnvironment(KnownOtelConfigNames.ExporterOtlpEndpoint, tunnelEndpoint);
     }
+
+    private readonly record struct OtlpEndpointTarget(string Scheme, int Port);
 }
