@@ -5700,7 +5700,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withContainerFilesCallback(destinationPath, callback, null);
     }
 
-    /** Creates or updates files and folders in a container using entries produced by a callback. */
+    /** Creates or updates files and/or folders at the destination path in the container using entries produced by a callback. */
     public ContainerResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback, ContainerFilesOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20716,7 +20716,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withContainerFilesCallback(destinationPath, callback, null);
     }
 
-    /** Creates or updates files and folders in a container using entries produced by a callback. */
+    /** Creates or updates files and/or folders at the destination path in the container using entries produced by a callback. */
     public TestDatabaseResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback, ContainerFilesOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -22869,7 +22869,7 @@ public class TestRedisResource extends ContainerResource {
         return withContainerFilesCallback(destinationPath, callback, null);
     }
 
-    /** Creates or updates files and folders in a container using entries produced by a callback. */
+    /** Creates or updates files and/or folders at the destination path in the container using entries produced by a callback. */
     public TestRedisResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback, ContainerFilesOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -25094,7 +25094,7 @@ public class TestVaultResource extends ContainerResource {
         return withContainerFilesCallback(destinationPath, callback, null);
     }
 
-    /** Creates or updates files and folders in a container using entries produced by a callback. */
+    /** Creates or updates files and/or folders at the destination path in the container using entries produced by a callback. */
     public TestVaultResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback, ContainerFilesOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));

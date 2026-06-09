@@ -1833,7 +1833,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 	return s
 }
 
-// WithContainerFilesCallback creates or updates files and folders in a container using entries produced by a callback.
+// WithContainerFilesCallback creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7893,7 +7893,7 @@ func (s *containerResource) WithContainerFiles(destinationPath string, sourcePat
 	return s
 }
 
-// WithContainerFilesCallback creates or updates files and folders in a container using entries produced by a callback.
+// WithContainerFilesCallback creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
 func (s *containerResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23281,7 +23281,7 @@ func (s *testDatabaseResource) WithContainerFiles(destinationPath string, source
 	return s
 }
 
-// WithContainerFilesCallback creates or updates files and folders in a container using entries produced by a callback.
+// WithContainerFilesCallback creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
 func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -25692,7 +25692,7 @@ func (s *testRedisResource) WithContainerFiles(destinationPath string, sourcePat
 	return s
 }
 
-// WithContainerFilesCallback creates or updates files and folders in a container using entries produced by a callback.
+// WithContainerFilesCallback creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
 func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()

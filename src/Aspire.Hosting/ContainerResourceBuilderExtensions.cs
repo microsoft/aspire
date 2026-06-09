@@ -1599,8 +1599,6 @@ public static class ContainerResourceBuilderExtensions
     /// </param>
     /// <param name="options">Options for the created or updated file system entries.</param>
     /// <returns>The resource builder.</returns>
-    /// <ats-summary>Creates or updates files and folders in a container using entries produced by a callback.</ats-summary>
-    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withContainerFilesCallback", MethodName = "withContainerFilesCallback")]
     internal static IResourceBuilder<T> WithContainerFilesCallbackExport<T>(
         this IResourceBuilder<T> builder,

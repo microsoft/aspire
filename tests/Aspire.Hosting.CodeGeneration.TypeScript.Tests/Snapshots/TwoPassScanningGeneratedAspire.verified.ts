@@ -15354,7 +15354,7 @@ export interface ContainerResource {
      */
     withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): ContainerResourcePromise;
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -16161,7 +16161,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): ContainerResourcePromise;
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -17253,7 +17253,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -40370,7 +40370,7 @@ export interface TestDatabaseResource {
      */
     withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestDatabaseResourcePromise;
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -41177,7 +41177,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestDatabaseResourcePromise;
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -42268,7 +42268,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -45183,7 +45183,7 @@ export interface TestRedisResource {
      */
     withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestRedisResourcePromise;
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -46054,7 +46054,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestRedisResourcePromise;
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -47209,7 +47209,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -50431,7 +50431,7 @@ export interface TestVaultResource {
      */
     withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestVaultResourcePromise;
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -51240,7 +51240,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestVaultResourcePromise;
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.
@@ -52333,7 +52333,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /**
-     * Creates or updates files and folders in a container using entries produced by a callback.
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
      * @param destinationPath The destination absolute path in the container.
      * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
      * @param options Additional options.

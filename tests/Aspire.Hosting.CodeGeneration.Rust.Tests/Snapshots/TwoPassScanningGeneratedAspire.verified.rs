@@ -4711,7 +4711,7 @@ impl ContainerResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Creates or updates files and folders in a container using entries produced by a callback.
+    /// Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
     pub fn with_container_files_callback(&self, destination_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -16027,7 +16027,7 @@ impl TestDatabaseResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Creates or updates files and folders in a container using entries produced by a callback.
+    /// Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
     pub fn with_container_files_callback(&self, destination_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -17595,7 +17595,7 @@ impl TestRedisResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Creates or updates files and folders in a container using entries produced by a callback.
+    /// Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
     pub fn with_container_files_callback(&self, destination_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -19269,7 +19269,7 @@ impl TestVaultResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
-    /// Creates or updates files and folders in a container using entries produced by a callback.
+    /// Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
     pub fn with_container_files_callback(&self, destination_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());

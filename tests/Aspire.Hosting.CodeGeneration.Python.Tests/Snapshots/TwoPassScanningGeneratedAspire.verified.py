@@ -8685,7 +8685,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         return self
 
     def with_container_files_callback(self, destination_path: str, callback: typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]], *, options: ContainerFilesOptions | None = None) -> typing.Self:
-        """Creates or updates files and folders in a container using entries produced by a callback."""
+        """Creates or updates files and/or folders at the destination path in the container using entries produced by a callback."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['destinationPath'] = destination_path
         rpc_args['callback'] = self._client.register_callback(callback)
