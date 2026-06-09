@@ -127,7 +127,6 @@ public class ParameterResource : Resource, IExpressionValue
     /// </summary>
     public bool EnableDescriptionMarkdown { get; set; }
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     internal InteractionInput CreateInput(string? name = null, bool? required = null, InputLoadOptions? dynamicLoading = null)
     {
         if (this.TryGetLastAnnotation<InputGeneratorAnnotation>(out var annotation))
@@ -164,5 +163,4 @@ public class ParameterResource : Resource, IExpressionValue
         };
         return input;
     }
-#pragma warning restore ASPIREINTERACTION001
 }

@@ -1,14 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.Ats;
 
 /// <summary>
 /// Options for customizing parameter inputs from polyglot app hosts.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireDto]
 internal sealed class ParameterCustomInputOptions
 {

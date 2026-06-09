@@ -11,8 +11,6 @@ using static Aspire.Hosting.Dashboard.DashboardServiceData;
 
 namespace Aspire.Hosting.Tests;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 [Trait("Partition", "2")]
 public class InteractionServiceTests
 {
@@ -1157,4 +1155,3 @@ public class InteractionServiceTests
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

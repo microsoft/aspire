@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREUSERSECRETS001
 
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
@@ -239,7 +238,6 @@ public static class ParameterResourceBuilderExtensions
     /// </code>
     /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Complex Func delegate with InteractionInput — not ATS-compatible.")]
     public static IResourceBuilder<ParameterResource> WithCustomInput(this IResourceBuilder<ParameterResource> builder, Func<ParameterResource, InteractionInput> createInput)
     {
@@ -257,7 +255,6 @@ public static class ParameterResourceBuilderExtensions
     /// <param name="builder">Resource builder for the parameter.</param>
     /// <param name="options">Options used to customize the input for the parameter.</param>
     /// <returns>Resource builder for the parameter.</returns>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withCustomInput")]
     internal static IResourceBuilder<ParameterResource> WithCustomInputForPolyglot(this IResourceBuilder<ParameterResource> builder, Ats.ParameterCustomInputOptions options)
     {

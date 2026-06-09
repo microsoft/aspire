@@ -22,8 +22,6 @@ using Resource = Aspire.Hosting.ApplicationModel.Resource;
 
 namespace Aspire.Hosting.Tests.Dashboard;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 [Trait("Partition", "3")]
 public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 {
@@ -848,4 +846,3 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

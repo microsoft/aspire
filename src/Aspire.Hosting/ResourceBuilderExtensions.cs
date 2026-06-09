@@ -2928,7 +2928,6 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(executeCommand);
 
         commandOptions ??= CommandOptions.Default;
-#pragma warning disable ASPIREINTERACTION001 // Command arguments intentionally reuse the experimental interaction input model.
         ValidateCommandArguments(commandOptions.Arguments);
 
         // Replace existing annotation with the same name.
@@ -2941,7 +2940,6 @@ public static class ResourceBuilderExtensions
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
         return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments));
 #pragma warning restore CS0618
-#pragma warning restore ASPIREINTERACTION001
     }
 
     /// <summary>
@@ -3006,21 +3004,16 @@ public static class ResourceBuilderExtensions
             builder.Resource.Annotations.Remove(existingAnnotation);
         }
 
-#pragma warning disable ASPIREINTERACTION001 // The obsolete overload still flows the obsolete parameter for compatibility.
         return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, updateState ?? (c => ResourceCommandState.Enabled), executeCommand, displayDescription, parameter, confirmationMessage, iconName, iconVariant, isHighlighted));
-#pragma warning restore ASPIREINTERACTION001
     }
 
-#pragma warning disable ASPIREINTERACTION001 // Command arguments reuse interaction input metadata.
     private static void ValidateCommandArguments(IReadOnlyList<InteractionInput> arguments)
     {
         _ = new InteractionInputCollection(arguments);
     }
-#pragma warning restore ASPIREINTERACTION001
 
     private static void ApplyCommandOptions(CommandOptions target, CommandOptions source)
     {
-#pragma warning disable ASPIREINTERACTION001 // Exported command options intentionally reuse command argument metadata.
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for command option compatibility.
         target.Description = source.Description;
         target.Parameter = source.Parameter;
@@ -3033,7 +3026,6 @@ public static class ResourceBuilderExtensions
         target.IsHighlighted = source.IsHighlighted;
         target.UpdateState = source.UpdateState;
 #pragma warning restore CS0618
-#pragma warning restore ASPIREINTERACTION001
     }
 
     #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.

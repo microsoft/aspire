@@ -379,7 +379,6 @@ public class AddParameterTests
         Assert.True(parameter.Resource.EnableDescriptionMarkdown);
     }
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     [Fact]
     public void ParameterWithDescriptionAndCustomInput_AddsInputGeneratorAnnotation()
     {
@@ -682,7 +681,6 @@ public class AddParameterTests
         Assert.Null(input.Value);
         Assert.Null(input.Options);
     }
-#pragma warning restore ASPIREINTERACTION001
 
     private static void InvokeWithCustomInputForPolyglot(IResourceBuilder<ParameterResource> parameter, IReadOnlyDictionary<string, object?>? properties = null)
     {

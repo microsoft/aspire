@@ -1,11 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.ApplicationModel;
-
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
 
 /// <summary>
 /// Optional configuration for resource commands added with <see cref="ResourceBuilderExtensions.WithCommand{T}(Aspire.Hosting.ApplicationModel.IResourceBuilder{T}, string, string, Func{Aspire.Hosting.ApplicationModel.ExecuteCommandContext, Task{Aspire.Hosting.ApplicationModel.ExecuteCommandResult}}, Aspire.Hosting.ApplicationModel.CommandOptions?)"/>.
@@ -41,7 +37,6 @@ public class CommandOptions
     /// <see cref="InteractionInput.Name"/>.
     /// </para>
     /// </remarks>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IReadOnlyList<InteractionInput> Arguments
     {
         get => _arguments;
@@ -58,7 +53,6 @@ public class CommandOptions
     /// errors to callers.
     /// </para>
     /// </remarks>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public Func<InputsDialogValidationContext, Task>? ValidateArguments { get; set; }
 
     /// <summary>
@@ -100,5 +94,3 @@ public class CommandOptions
     /// </summary>
     public Func<UpdateCommandStateContext, ResourceCommandState>? UpdateState { get; set; }
 }
-
-#pragma warning restore ASPIREINTERACTION001

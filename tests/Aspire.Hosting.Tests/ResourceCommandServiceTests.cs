@@ -8,8 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
-
 [Trait("Partition", "2")]
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 {
@@ -1621,4 +1619,3 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001

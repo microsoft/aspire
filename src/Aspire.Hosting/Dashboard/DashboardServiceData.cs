@@ -8,8 +8,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dashboard;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 /// <summary>
 /// Models the state for <see cref="DashboardService"/>, as that service is constructed
 /// for each gRPC request. This long-lived object holds state across requests.
@@ -264,4 +262,3 @@ internal enum ExecuteCommandResultType
     Canceled
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

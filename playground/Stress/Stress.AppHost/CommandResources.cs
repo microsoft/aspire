@@ -4,7 +4,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to exercise resource command arguments.
 #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
 
 internal static class CommandResources
@@ -1173,4 +1172,4 @@ internal static class CommandResources
 }
 
 #pragma warning restore ASPIREPROCESSCOMMAND001
-#pragma warning restore ASPIREINTERACTION001
+

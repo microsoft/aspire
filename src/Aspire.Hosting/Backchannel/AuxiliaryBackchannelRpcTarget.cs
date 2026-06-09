@@ -22,8 +22,6 @@ using ModelContextProtocol.Protocol;
 
 namespace Aspire.Hosting.Backchannel;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInputCollection is used to validate resource command arguments.
-
 /// <summary>
 /// RPC target for the auxiliary backchannel.
 /// </summary>
