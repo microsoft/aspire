@@ -158,18 +158,28 @@ public static class MauiOtlpExtensions
 
     private static OtlpEndpointTarget? ResolveConfiguredOtlpEndpoint(IConfiguration configuration)
     {
-        var configuredGrpcUrl = configuration.GetString(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl);
-        var configuredHttpUrl = configuration.GetString(KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
+        var configuredGrpcUrl = configuration.GetString(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl, fallbackOnEmpty: true);
+        var configuredHttpUrl = configuration.GetString(KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl, fallbackOnEmpty: true);
 
         if (string.IsNullOrWhiteSpace(configuredGrpcUrl) && string.IsNullOrWhiteSpace(configuredHttpUrl))
         {
             return null;
         }
 
-        var (url, _) = OtlpEndpointResolver.ResolveOtlpEndpoint(configuration);
-        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            ? new OtlpEndpointTarget(uri.Scheme, uri.Port)
-            : null;
+        return !string.IsNullOrWhiteSpace(configuredGrpcUrl)
+            ? CreateConfiguredOtlpEndpointTarget(configuredGrpcUrl, KnownConfigNames.DashboardOtlpGrpcEndpointUrl)
+            : CreateConfiguredOtlpEndpointTarget(configuredHttpUrl!, KnownConfigNames.DashboardOtlpHttpEndpointUrl);
+    }
+
+    private static OtlpEndpointTarget CreateConfiguredOtlpEndpointTarget(string url, string configKey)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https"))
+        {
+            throw new DistributedApplicationException($"The configured OTLP endpoint URL '{url}' from '{configKey}' must be an absolute HTTP or HTTPS URL.");
+        }
+
+        return new OtlpEndpointTarget(uri.Scheme, uri.Port);
     }
 
     private static string ResolveDynamicDashboardOtlpScheme(IConfiguration configuration)

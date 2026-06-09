@@ -9,6 +9,7 @@ using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Utilities;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 using System.Text.Json;
@@ -681,6 +682,8 @@ public class MauiPlatformExtensionsTests
         try
         {
             var appBuilder = DistributedApplication.CreateBuilder();
+            ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+
             var dashboard = appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
             dashboard.Resource.Annotations.Add(new EndpointAnnotation(
                 ProtocolType.Tcp,
@@ -807,6 +810,7 @@ public class MauiPlatformExtensionsTests
         try
         {
             var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions { DisableDashboard = true });
+            ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
 
             var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
             maui.AddAndroidEmulator()
@@ -836,6 +840,7 @@ public class MauiPlatformExtensionsTests
         try
         {
             var appBuilder = DistributedApplication.CreateBuilder();
+            ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
             appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
 
             var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
@@ -852,6 +857,31 @@ public class MauiPlatformExtensionsTests
             Assert.Contains("does not have an allocated OTLP endpoint", exception.Message);
             Assert.Contains(KnownEndpointNames.OtlpGrpcEndpointName, exception.Message);
             Assert.Contains(KnownEndpointNames.OtlpHttpEndpointName, exception.Message);
+        }
+        finally
+        {
+            CleanupTempFile(tempFile);
+        }
+    }
+
+    [Fact]
+    public void WithOtlpDevTunnel_ThrowsForInvalidConfiguredOtlpEndpoint()
+    {
+        var projectContent = CreateProjectContent("net10.0-android");
+        var tempFile = CreateTempProjectFile(projectContent);
+
+        try
+        {
+            var appBuilder = DistributedApplication.CreateBuilder();
+            appBuilder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "not a url";
+
+            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+            var androidEmulator = maui.AddAndroidEmulator();
+
+            var exception = Assert.Throws<DistributedApplicationException>(() => androidEmulator.WithOtlpDevTunnel());
+
+            Assert.Contains(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, exception.Message);
+            Assert.Contains("not a url", exception.Message);
         }
         finally
         {
@@ -927,6 +957,17 @@ public class MauiPlatformExtensionsTests
         annotator.DynamicInvoke(executable, "Debug");
 
         return Assert.Single(GetLaunchConfigurations<SerializedMauiLaunchConfiguration>(executable));
+    }
+
+    private static void ClearDashboardOtlpEndpointConfiguration(ConfigurationManager configuration)
+    {
+        configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "",
+            [KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl] = "",
+            [KnownConfigNames.DashboardOtlpHttpEndpointUrl] = "",
+            [KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl] = ""
+        });
     }
 
     // Configuration class for platform-specific test data
