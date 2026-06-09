@@ -983,8 +983,14 @@ extends:
       # condition only takes effect on non-notifiable branches.) Allowing
       # 'Skipped' is therefore defensive and cannot cause a false close.
       #
-      # Canceled stage results don't match either branch and produce no
-      # notification.
+      # A build with no Failed stage but a Canceled/Skipped watched stage (a
+      # 1ES timeout, say) matches neither this success set nor notify_failure's
+      # Failed set, so neither stage fires. That "limbo" build leaves an open
+      # ci-broken issue OPEN by design: a canceled stage never verified its
+      # work, so there's no fully-green signal to justify a close, and
+      # auto-closing would be a false all-clear. Operators close manually if a
+      # cancellation was spurious. See
+      # docs/ci/internal-build-failure-notifications.md.
       condition: |
         and(
           ne(variables['Build.Reason'], 'PullRequest'),

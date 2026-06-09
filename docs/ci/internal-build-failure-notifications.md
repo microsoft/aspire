@@ -88,6 +88,28 @@ The `notify_success` stage lists open `ci-broken` issues, filters by the
 branch marker, and for each match posts a "build is green again" comment
 and closes the issue with `state_reason: completed`.
 
+### Mixed results that neither file nor close
+
+A build can finish with **no** stage `Failed` but one or more watched stages
+`Canceled` (a 1ES timeout or operator cancellation) or `Skipped`. This is the
+*limbo* case: `notify_failure` does not fire (nothing `Failed`) and
+`notify_success` does not fire (not every stage is `Succeeded` /
+`SucceededWithIssues`). This is intentional, not a coverage gap:
+
+- No issue is filed — a cancellation is infrastructure noise, not a code break.
+- An existing open `ci-broken` issue is **left open** — the build produced no
+  fully-green signal, and we cannot assert the break is fixed when a stage
+  never completed. Auto-closing here would be a false all-clear.
+
+The consequence is that an open issue can persist across successive limbo
+builds until a fully-green build closes it. If you have confirmed the
+cancellation was spurious (e.g. a transient 1ES timeout on an otherwise-healthy
+build), close the issue manually.
+
+Widening the success condition to tolerate `Canceled` was considered and
+rejected: a canceled stage never verified its work, so tolerating it risks
+closing the issue while the tree is still broken.
+
 ## Dedup and race handling
 
 Issue lookup uses `GET /repos/microsoft/aspire/issues?labels=ci-broken&state=open`
