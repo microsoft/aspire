@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Health check failures now display concise, actionable error messages instead of raw exception stack traces, making it easier to diagnose why a resource health check is failing in the Dashboard.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩺",
+  "firstMergedAt": "2026-06-07T17:06:19Z",
+  "lastMergedAt": "2026-06-07T17:06:19Z",
+  "name": "Friendly error messages for health check failures",
+  "owner": "davidfowl",
+  "prs": [
+    14072
+  ]
+}

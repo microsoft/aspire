@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "TypeScript AppHosts now correctly skip the TypeScript compilation check (tsc --noEmit) when the --no-build flag is passed, so developers can skip all build steps consistently.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔨",
+  "firstMergedAt": "2026-06-08T01:03:36Z",
+  "lastMergedAt": "2026-06-08T01:03:36Z",
+  "name": "TypeScript AppHosts honor --no-build",
+  "owner": "davidfowl",
+  "prs": [
+    17994
+  ]
+}

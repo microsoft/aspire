@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Foundry Local CLI-based lifecycle (aspire#17889); matches foundry-local-cli-integration change",
+  "mergedAt": "2026-06-09T02:26:38Z",
+  "number": 1210,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "included",
+  "title": "[docs] Update Foundry Local docs to reflect CLI-based lifecycle (aspire#17889)"
+}

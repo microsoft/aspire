@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal refactoring of IdentityChannelReader; minor debug logging addition",
+  "mergedAt": "2026-06-08T09:39:24Z",
+  "number": 17828,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "excluded",
+  "title": "Refactor IdentityChannelReader to Try pattern and log CLI channel at startup"
+}

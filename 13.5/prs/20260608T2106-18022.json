@@ -1,0 +1,9 @@
+{
+  "author": "sliekens",
+  "comment": "Documentation-only change to specs/appmodel.md, no user-facing product change",
+  "mergedAt": "2026-06-08T21:06:27Z",
+  "number": 18022,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "excluded",
+  "title": "Update specs/appmodel.md with AfterEndpointsAllocatedEvent deprecation"
+}

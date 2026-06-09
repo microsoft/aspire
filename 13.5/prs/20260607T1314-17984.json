@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes visual glitch with stealth button backgrounds in dashboard dialogs",
+  "mergedAt": "2026-06-07T13:14:21Z",
+  "number": 17984,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "included",
+  "title": "Fix stealth button background in dashboard dialogs"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "WithProcessCommand now supports named arguments end-to-end, including process spec callbacks, result callbacks, CLI/backchannel invocation, and TypeScript/polyglot AppHosts, completing the argument-passing feature for process commands.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⚙️",
+  "firstMergedAt": "2026-06-08T00:52:55Z",
+  "lastMergedAt": "2026-06-08T00:52:55Z",
+  "name": "WithProcessCommand supports named arguments and TypeScript callbacks",
+  "owner": "davidfowl",
+  "prs": [
+    17968
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Stealth and lightweight buttons in dashboard dialogs now use a transparent background instead of the dialog background color, fixing visual glitches when buttons appear inside table header rows such as the Manage Data dialog.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-06-07T13:14:21Z",
+  "lastMergedAt": "2026-06-07T13:14:21Z",
+  "name": "Fix button appearance in dashboard dialogs",
+  "owner": "JamesNK",
+  "prs": [
+    17984
+  ]
+}

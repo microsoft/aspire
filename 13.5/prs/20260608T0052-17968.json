@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "WithProcessCommand now supports named arguments end-to-end for TypeScript callbacks",
+  "mergedAt": "2026-06-08T00:52:55Z",
+  "number": 17968,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "included",
+  "title": "Support process command arguments and TypeScript callbacks"
+}

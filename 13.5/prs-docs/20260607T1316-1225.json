@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Docs update for interaction service; no matching changelog entry in 13.5",
+  "mergedAt": "2026-06-07T13:16:49Z",
+  "number": 1225,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "excluded",
+  "title": "Update interaction service docs with name-based access and improved examples"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Duplicate fix for persistent container endpoint proxy defaults in 13.4 docs; not a 13.5 feature",
+  "mergedAt": "2026-06-08T12:32:14Z",
+  "number": 1227,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "excluded",
+  "title": "[docs] Fix persistent container endpoint proxy default docs"
+}

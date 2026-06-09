@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The VS Code extension has been rebranded from \".NET Aspire\" to \"Aspire\". Users will see the updated display name and icon in the VS Code marketplace and extension panel.",
-  "docsPrs": [],
+  "docsPrs": [
+    1211
+  ],
   "docsRequired": false,
   "emoji": "🏷️",
   "firstMergedAt": "2026-06-02T16:13:36Z",

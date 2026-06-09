@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Fixes parameter name in WithProcessCommand examples in 13.4 docs; not documenting new 13.5 functionality",
+  "mergedAt": "2026-06-08T03:46:43Z",
+  "number": 1154,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "excluded",
+  "title": "Fix incorrect parameter name in WithProcessCommand doc examples (name -> commandName)"
+}

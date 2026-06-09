@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Dashboard improvement: markdown option hidden for JSON/XML content in text visualizer",
+  "mergedAt": "2026-06-08T09:47:07Z",
+  "number": 17970,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "included",
+  "title": "Disable markdown option when JSON or XML is detected in TextVisualizerDialog"
+}

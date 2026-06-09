@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "TypeScript AppHosts now honor --no-build flag correctly",
+  "mergedAt": "2026-06-08T01:03:36Z",
+  "number": 17994,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "included",
+  "title": "Honor --no-build for TypeScript AppHosts"
+}

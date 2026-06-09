@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Friendly error messages for health check failures in dashboard",
+  "mergedAt": "2026-06-07T17:06:19Z",
+  "number": 14072,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "included",
+  "title": "Add friendly error messages to health check failures"
+}

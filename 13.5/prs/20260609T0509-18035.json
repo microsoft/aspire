@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Removes unused GitHub Copilot canvas extension; repository maintenance only",
+  "mergedAt": "2026-06-09T05:09:14Z",
+  "number": 18035,
+  "runDate": "2026-06-09T07:11:34Z",
+  "status": "excluded",
+  "title": "Remove LOC breakdown canvas extension"
+}
