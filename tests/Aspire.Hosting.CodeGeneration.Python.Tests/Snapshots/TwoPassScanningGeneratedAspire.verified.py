@@ -5367,14 +5367,14 @@ class InteractionInputLoadContext:
         """The underlying object reference handle."""
         return self._handle
 
-    def get_input_name(self) -> str:
-        """Gets the name of the input that is loading."""
+    def input(self) -> InteractionLoadingInput:
+        """Gets a handle to the input that is loading. Mutate the input through this handle."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         result = self._client.invoke_capability(
-            'Aspire.Hosting.Ats/getInputName',
+            'Aspire.Hosting.Ats/input',
             rpc_args,
         )
-        return result
+        return typing.cast(InteractionLoadingInput, result)
 
     def get_input_value(self, input_name: str) -> str:
         """Gets the current value of an input in the prompt by name."""
@@ -5386,8 +5386,33 @@ class InteractionInputLoadContext:
         )
         return result
 
+
+class InteractionLoadingInput:
+    """Type class for InteractionLoadingInput."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"InteractionLoadingInput(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def get_name(self) -> str:
+        """Gets the name of the input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/getName',
+            rpc_args,
+        )
+        return result
+
     def set_choice_options(self, choices: typing.Iterable[InteractionChoiceOption]) -> None:
-        """Sets the choice options for the loading input."""
+        """Sets the choice options for the input."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['choices'] = choices
         self._client.invoke_capability(
@@ -5396,7 +5421,7 @@ class InteractionInputLoadContext:
         )
 
     def set_value(self, value: str) -> None:
-        """Sets the value of the loading input."""
+        """Sets the value of the input."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['value'] = value
         self._client.invoke_capability(
@@ -12034,6 +12059,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionRes
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder", InteractionInputBuilder)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", InteractionInputCollection)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext", InteractionInputLoadContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput", InteractionLoadingInput)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", LogFacade)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", PipelineConfigurationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext", PipelineContext)

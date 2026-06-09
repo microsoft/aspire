@@ -334,8 +334,17 @@ type InputsInteractionResultHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ats.I
  */
 type InteractionInputBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder'>;
 
-/** The context passed to a polyglot dynamic-loading callback. Exposes the loading input and the other inputs in the prompt, and provides guarded setters to update the loading input. */
+/** The context passed to a polyglot dynamic-loading callback. Exposes the loading input as a handle and provides read access to the other inputs in the prompt. */
 type InteractionInputLoadContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext'>;
+
+/**
+ * A handle to the input currently being loaded by a dynamic-loading callback. Mirrors the native `LoadInputContext.Input` by letting callbacks update the live input directly.
+ *
+ * The handle owns the live `InteractionInput` for the duration of the load callback. Setters are routed
+ * back to the server-side input across the ATS boundary, which is why this is a handle rather than the by-value
+ * `InteractionInput` DTO.
+ */
+type InteractionLoadingInputHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput'>;
 
 /** Represents a distributed application that implements the {@link IHost} and {@link IAsyncDisposable} interfaces. */
 type DistributedApplicationHandle = Handle<'Aspire.Hosting/Aspire.Hosting.DistributedApplication'>;
@@ -5871,81 +5880,88 @@ class InteractionInputBuilderPromiseImpl implements InteractionInputBuilderPromi
 // InteractionInputLoadContext
 // ============================================================================
 
-/** The context passed to a polyglot dynamic-loading callback. Exposes the loading input and the other inputs in the prompt, and provides guarded setters to update the loading input. */
+/** The context passed to a polyglot dynamic-loading callback. Exposes the loading input as a handle and provides read access to the other inputs in the prompt. */
 export interface InteractionInputLoadContext {
     toJSON(): MarshalledHandle;
     /**
-     * Gets the name of the input that is loading.
-     * @returns The input name.
+     * Gets a handle to the input that is loading. Mutate the input through this handle.
+     *
+     * Mirrors the native `LoadInputContext.Input`: the callback updates the live input it is loading, rather than
+     * the context itself. The input is a handle (not a by-value DTO) so guarded setters route back to the server-side
+     * input across the ATS boundary.
+     * @returns A handle to the loading input.
      */
-    getInputName(): Promise<string>;
+    input(): InteractionLoadingInputPromise;
     /**
      * Gets the current value of an input in the prompt by name.
+     *
+     * Reads any input in the prompt, mirroring the native `LoadInputContext.AllInputs`. Use this to read the
+     * dependency inputs declared via `DependsOnInputs`.
      * @param inputName The name of the input to read.
      * @returns The input value, or an empty string when the input has no value or no input with that name exists.
      */
     getInputValue(inputName: string): Promise<string>;
-    /**
-     * Sets the choice options for the loading input.
-     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
-     */
-    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputLoadContextPromise;
-    /**
-     * Sets the value of the loading input.
-     * @param value The value to assign.
-     */
-    setValue(value: string): InteractionInputLoadContextPromise;
 }
 
 export interface InteractionInputLoadContextPromise extends PromiseLike<InteractionInputLoadContext> {
     /**
-     * Gets the name of the input that is loading.
-     * @returns The input name.
+     * Gets a handle to the input that is loading. Mutate the input through this handle.
+     *
+     * Mirrors the native `LoadInputContext.Input`: the callback updates the live input it is loading, rather than
+     * the context itself. The input is a handle (not a by-value DTO) so guarded setters route back to the server-side
+     * input across the ATS boundary.
+     * @returns A handle to the loading input.
      */
-    getInputName(): Promise<string>;
+    input(): InteractionLoadingInputPromise;
     /**
      * Gets the current value of an input in the prompt by name.
+     *
+     * Reads any input in the prompt, mirroring the native `LoadInputContext.AllInputs`. Use this to read the
+     * dependency inputs declared via `DependsOnInputs`.
      * @param inputName The name of the input to read.
      * @returns The input value, or an empty string when the input has no value or no input with that name exists.
      */
     getInputValue(inputName: string): Promise<string>;
-    /**
-     * Sets the choice options for the loading input.
-     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
-     */
-    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputLoadContextPromise;
-    /**
-     * Sets the value of the loading input.
-     * @param value The value to assign.
-     */
-    setValue(value: string): InteractionInputLoadContextPromise;
 }
 
 // ============================================================================
 // InteractionInputLoadContextImpl
 // ============================================================================
 
-/** The context passed to a polyglot dynamic-loading callback. Exposes the loading input and the other inputs in the prompt, and provides guarded setters to update the loading input. */
+/** The context passed to a polyglot dynamic-loading callback. Exposes the loading input as a handle and provides read access to the other inputs in the prompt. */
 class InteractionInputLoadContextImpl implements InteractionInputLoadContext {
     constructor(private _handle: InteractionInputLoadContextHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /**
-     * Gets the name of the input that is loading.
-     * @returns The input name.
-     */
-    async getInputName(): Promise<string> {
+    /** @internal */
+    async _inputInternal(): Promise<InteractionLoadingInput> {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
-        return await this._client.invokeCapability<string>(
-            'Aspire.Hosting.Ats/getInputName',
+        const result = await this._client.invokeCapability<InteractionLoadingInputHandle>(
+            'Aspire.Hosting.Ats/input',
             rpcArgs
         );
+        return new InteractionLoadingInputImpl(result, this._client);
+    }
+
+    /**
+     * Gets a handle to the input that is loading. Mutate the input through this handle.
+     *
+     * Mirrors the native `LoadInputContext.Input`: the callback updates the live input it is loading, rather than
+     * the context itself. The input is a handle (not a by-value DTO) so guarded setters route back to the server-side
+     * input across the ATS boundary.
+     * @returns A handle to the loading input.
+     */
+    input(): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._inputInternal(), this._client);
     }
 
     /**
      * Gets the current value of an input in the prompt by name.
+     *
+     * Reads any input in the prompt, mirroring the native `LoadInputContext.AllInputs`. Use this to read the
+     * dependency inputs declared via `DependsOnInputs`.
      * @param inputName The name of the input to read.
      * @returns The input value, or an empty string when the input has no value or no input with that name exists.
      */
@@ -5955,42 +5971,6 @@ class InteractionInputLoadContextImpl implements InteractionInputLoadContext {
             'Aspire.Hosting.Ats/getInputValue',
             rpcArgs
         );
-    }
-
-    /** @internal */
-    async _setChoiceOptionsInternal(choices: InteractionChoiceOption[]): Promise<InteractionInputLoadContext> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle, choices };
-        await this._client.invokeCapability<void>(
-            'Aspire.Hosting.Ats/setChoiceOptions',
-            rpcArgs
-        );
-        return this;
-    }
-
-    /**
-     * Sets the choice options for the loading input.
-     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
-     */
-    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputLoadContextPromise {
-        return new InteractionInputLoadContextPromiseImpl(this._setChoiceOptionsInternal(choices), this._client);
-    }
-
-    /** @internal */
-    async _setValueInternal(value: string): Promise<InteractionInputLoadContext> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle, value };
-        await this._client.invokeCapability<void>(
-            'Aspire.Hosting.Ats/setValue',
-            rpcArgs
-        );
-        return this;
-    }
-
-    /**
-     * Sets the value of the loading input.
-     * @param value The value to assign.
-     */
-    setValue(value: string): InteractionInputLoadContextPromise {
-        return new InteractionInputLoadContextPromiseImpl(this._setValueInternal(value), this._client);
     }
 
 }
@@ -6010,20 +5990,156 @@ class InteractionInputLoadContextPromiseImpl implements InteractionInputLoadCont
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    getInputName(): Promise<string> {
-        return this._promise.then(obj => obj.getInputName());
+    input(): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._promise.then(obj => obj.input()), this._client);
     }
 
     getInputValue(inputName: string): Promise<string> {
         return this._promise.then(obj => obj.getInputValue(inputName));
     }
 
-    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputLoadContextPromise {
-        return new InteractionInputLoadContextPromiseImpl(this._promise.then(obj => obj.setChoiceOptions(choices)), this._client);
+}
+
+// ============================================================================
+// InteractionLoadingInput
+// ============================================================================
+
+/**
+ * A handle to the input currently being loaded by a dynamic-loading callback. Mirrors the native `LoadInputContext.Input` by letting callbacks update the live input directly.
+ *
+ * The handle owns the live `InteractionInput` for the duration of the load callback. Setters are routed
+ * back to the server-side input across the ATS boundary, which is why this is a handle rather than the by-value
+ * `InteractionInput` DTO.
+ */
+export interface InteractionLoadingInput {
+    toJSON(): MarshalledHandle;
+    /**
+     * Gets the name of the input.
+     * @returns The input name.
+     */
+    getName(): Promise<string>;
+    /**
+     * Sets the choice options for the input.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
+     */
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionLoadingInputPromise;
+    /**
+     * Sets the value of the input.
+     * @param value The value to assign.
+     */
+    setValue(value: string): InteractionLoadingInputPromise;
+}
+
+export interface InteractionLoadingInputPromise extends PromiseLike<InteractionLoadingInput> {
+    /**
+     * Gets the name of the input.
+     * @returns The input name.
+     */
+    getName(): Promise<string>;
+    /**
+     * Sets the choice options for the input.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
+     */
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionLoadingInputPromise;
+    /**
+     * Sets the value of the input.
+     * @param value The value to assign.
+     */
+    setValue(value: string): InteractionLoadingInputPromise;
+}
+
+// ============================================================================
+// InteractionLoadingInputImpl
+// ============================================================================
+
+/**
+ * A handle to the input currently being loaded by a dynamic-loading callback. Mirrors the native `LoadInputContext.Input` by letting callbacks update the live input directly.
+ *
+ * The handle owns the live `InteractionInput` for the duration of the load callback. Setters are routed
+ * back to the server-side input across the ATS boundary, which is why this is a handle rather than the by-value
+ * `InteractionInput` DTO.
+ */
+class InteractionLoadingInputImpl implements InteractionLoadingInput {
+    constructor(private _handle: InteractionLoadingInputHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /**
+     * Gets the name of the input.
+     * @returns The input name.
+     */
+    async getName(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.Ats/getName',
+            rpcArgs
+        );
     }
 
-    setValue(value: string): InteractionInputLoadContextPromise {
-        return new InteractionInputLoadContextPromiseImpl(this._promise.then(obj => obj.setValue(value)), this._client);
+    /** @internal */
+    async _setChoiceOptionsInternal(choices: InteractionChoiceOption[]): Promise<InteractionLoadingInput> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, choices };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting.Ats/setChoiceOptions',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Sets the choice options for the input.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
+     */
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._setChoiceOptionsInternal(choices), this._client);
+    }
+
+    /** @internal */
+    async _setValueInternal(value: string): Promise<InteractionLoadingInput> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, value };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting.Ats/setValue',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Sets the value of the input.
+     * @param value The value to assign.
+     */
+    setValue(value: string): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._setValueInternal(value), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for InteractionLoadingInput that enables fluent chaining.
+ */
+class InteractionLoadingInputPromiseImpl implements InteractionLoadingInputPromise {
+    constructor(private _promise: Promise<InteractionLoadingInput>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = InteractionLoadingInput, TResult2 = never>(
+        onfulfilled?: ((value: InteractionLoadingInput) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    getName(): Promise<string> {
+        return this._promise.then(obj => obj.getName());
+    }
+
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._promise.then(obj => obj.setChoiceOptions(choices)), this._client);
+    }
+
+    setValue(value: string): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._promise.then(obj => obj.setValue(value)), this._client);
     }
 
 }
@@ -56464,6 +56580,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.InputsDialogValidationConte
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult', (handle, client) => new InputsInteractionResultImpl(handle as InputsInteractionResultHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder', (handle, client) => new InteractionInputBuilderImpl(handle as InteractionInputBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext', (handle, client) => new InteractionInputLoadContextImpl(handle as InteractionInputLoadContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput', (handle, client) => new InteractionLoadingInputImpl(handle as InteractionLoadingInputHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade', (handle, client) => new LogFacadeImpl(handle as LogFacadeHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext', (handle, client) => new PipelineConfigurationContextImpl(handle as PipelineConfigurationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext', (handle, client) => new PipelineContextImpl(handle as PipelineContextHandle, client));

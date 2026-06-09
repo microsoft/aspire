@@ -16356,10 +16356,8 @@ func (s *interactionInputCollection) RequiredValue(name string) (string, error) 
 // InteractionInputLoadContext is the public interface for handle type InteractionInputLoadContext.
 type InteractionInputLoadContext interface {
 	handleReference
-	GetInputName() (string, error)
 	GetInputValue(inputName string) (string, error)
-	SetChoiceOptions(choices []*InteractionChoiceOption) error
-	SetValue(value string) error
+	Input() InteractionLoadingInput
 	Err() error
 }
 
@@ -16371,21 +16369,6 @@ type interactionInputLoadContext struct {
 // newInteractionInputLoadContextFromHandle wraps an existing handle as InteractionInputLoadContext.
 func newInteractionInputLoadContextFromHandle(h *handle, c *client) InteractionInputLoadContext {
 	return &interactionInputLoadContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
-}
-
-// GetInputName gets the name of the input that is loading.
-func (s *interactionInputLoadContext) GetInputName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/getInputName", reqArgs)
-	if err != nil {
-		var zero string
-		return zero, err
-	}
-	return decodeAs[string](result)
 }
 
 // GetInputValue gets the current value of an input in the prompt by name.
@@ -16404,8 +16387,61 @@ func (s *interactionInputLoadContext) GetInputValue(inputName string) (string, e
 	return decodeAs[string](result)
 }
 
-// SetChoiceOptions sets the choice options for the loading input.
-func (s *interactionInputLoadContext) SetChoiceOptions(choices []*InteractionChoiceOption) error {
+// Input gets a handle to the input that is loading. Mutate the input through this handle.
+func (s *interactionInputLoadContext) Input() InteractionLoadingInput {
+	if s.err != nil { return &interactionLoadingInput{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/input", reqArgs)
+	if err != nil {
+		return &interactionLoadingInput{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Ats/input returned unexpected type %T", result)
+		return &interactionLoadingInput{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionLoadingInput{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// InteractionLoadingInput is the public interface for handle type InteractionLoadingInput.
+type InteractionLoadingInput interface {
+	handleReference
+	GetName() (string, error)
+	SetChoiceOptions(choices []*InteractionChoiceOption) error
+	SetValue(value string) error
+	Err() error
+}
+
+// interactionLoadingInput is the unexported impl of InteractionLoadingInput.
+type interactionLoadingInput struct {
+	*resourceBuilderBase
+}
+
+// newInteractionLoadingInputFromHandle wraps an existing handle as InteractionLoadingInput.
+func newInteractionLoadingInputFromHandle(h *handle, c *client) InteractionLoadingInput {
+	return &interactionLoadingInput{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// GetName gets the name of the input.
+func (s *interactionLoadingInput) GetName() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/getName", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// SetChoiceOptions sets the choice options for the input.
+func (s *interactionLoadingInput) SetChoiceOptions(choices []*InteractionChoiceOption) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -16416,8 +16452,8 @@ func (s *interactionInputLoadContext) SetChoiceOptions(choices []*InteractionCho
 	return err
 }
 
-// SetValue sets the value of the loading input.
-func (s *interactionInputLoadContext) SetValue(value string) error {
+// SetValue sets the value of the input.
+func (s *interactionLoadingInput) SetValue(value string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -27618,6 +27654,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext", func(h *handle, c *client) any {
 		return newInteractionInputLoadContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput", func(h *handle, c *client) any {
+		return newInteractionLoadingInputFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IInteractionService", func(h *handle, c *client) any {
 		return newInteractionServiceFromHandle(h, c)

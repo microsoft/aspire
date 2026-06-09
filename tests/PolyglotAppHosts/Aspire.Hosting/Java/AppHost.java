@@ -297,7 +297,7 @@ void main() throws Exception {
                 InteractionChoiceOption[] zones = "eu".equals(region)
                     ? new InteractionChoiceOption[] { opt("eu-west", "EU West"), opt("eu-north", "EU North") }
                     : new InteractionChoiceOption[] { opt("us-east", "US East"), opt("us-west", "US West") };
-                loadContext.setChoiceOptions(zones);
+                loadContext.input().setChoiceOptions(zones);
             });
 
             var result = interactionService.promptInputs(
@@ -383,13 +383,14 @@ void main() throws Exception {
             dynamicLoadingOptions.setAlwaysLoadOnStart(true);
             dynamicLoadingOptions.setDependsOnInputs(new String[] { "color" });
             var dependentInput = interactionService.createChoiceInput("shade").withDynamicLoading((loadContext) -> {
-                var inputName = loadContext.getInputName();
+                var input = loadContext.input();
+                var inputName = input.getName();
                 var color = loadContext.getInputValue("color");
                 InteractionChoiceOption[] shades = "r".equals(color)
                     ? new InteractionChoiceOption[] { opt("crimson", "Crimson"), opt("scarlet", "Scarlet") }
                     : new InteractionChoiceOption[] { opt("lime", "Lime"), opt("forest", "Forest") };
-                loadContext.setChoiceOptions(shades);
-                loadContext.setValue(inputName);
+                input.setChoiceOptions(shades);
+                input.setValue(inputName);
             }, dynamicLoadingOptions);
 
             var singleDialogOptions = new InteractionInputsDialogOptions();

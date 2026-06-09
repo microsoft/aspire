@@ -61,6 +61,7 @@ Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext [ExposeP
 Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
 Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext
+Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput
 Aspire.Hosting/Aspire.Hosting.DistributedApplication
 Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContextOptions
@@ -475,12 +476,13 @@ Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot(conte
 Aspire.Hosting.ApplicationModel/warning(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade, message: string) -> void
 Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext) -> cancellationToken
 Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext(context: Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
-Aspire.Hosting.Ats/getInputName(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext) -> string
 Aspire.Hosting.Ats/getInputValue(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext, inputName: string) -> string
+Aspire.Hosting.Ats/getName(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput) -> string
+Aspire.Hosting.Ats/input(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput
 Aspire.Hosting.Ats/InputsInteractionResult.canceled(context: Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult) -> boolean
 Aspire.Hosting.Ats/InputsInteractionResult.inputs(context: Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult) -> Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
-Aspire.Hosting.Ats/setChoiceOptions(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext, choices: Aspire.Hosting/Aspire.Hosting.Ats.InteractionChoiceOption[]) -> void
-Aspire.Hosting.Ats/setValue(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext, value: string) -> void
+Aspire.Hosting.Ats/setChoiceOptions(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput, choices: Aspire.Hosting/Aspire.Hosting.Ats.InteractionChoiceOption[]) -> void
+Aspire.Hosting.Ats/setValue(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput, value: string) -> void
 Aspire.Hosting.Ats/withChoiceOptions(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder, choices: Aspire.Hosting/Aspire.Hosting.Ats.InteractionChoiceOption[]) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
 Aspire.Hosting.Ats/withDynamicLoading(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder, callback: callback, options?: Aspire.Hosting/Aspire.Hosting.Ats.DynamicLoadingOptions) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
 Aspire.Hosting.Ats/withValue(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder, value: string) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder

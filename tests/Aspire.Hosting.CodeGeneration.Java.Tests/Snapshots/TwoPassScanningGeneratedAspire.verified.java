@@ -1374,6 +1374,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", (h, c) -> new EventingSubscriberRegistrationContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder", (h, c) -> new InteractionInputBuilder(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext", (h, c) -> new InteractionInputLoadContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput", (h, c) -> new InteractionLoadingInput(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult", (h, c) -> new InputsInteractionResult(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", (h, c) -> new AfterResourcesCreatedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent", (h, c) -> new BeforeResourceStartedEvent(h, c));
@@ -15356,12 +15357,12 @@ public class InteractionInputLoadContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the name of the input that is loading. */
-    public String getInputName() {
+    /** Gets a handle to the input that is loading. Mutate the input through this handle. */
+    public InteractionLoadingInput input() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        var result = getClient().invokeCapability("Aspire.Hosting.Ats/getInputName", reqArgs);
-        return (String) result;
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/input", reqArgs);
+        return (InteractionLoadingInput) result;
     }
 
     /** Gets the current value of an input in the prompt by name. */
@@ -15371,22 +15372,6 @@ public class InteractionInputLoadContext extends HandleWrapperBase {
         reqArgs.put("inputName", AspireClient.serializeValue(inputName));
         var result = getClient().invokeCapability("Aspire.Hosting.Ats/getInputValue", reqArgs);
         return (String) result;
-    }
-
-    /** Sets the choice options for the loading input. */
-    public void setChoiceOptions(InteractionChoiceOption[] choices) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("choices", AspireClient.serializeValue(choices));
-        getClient().invokeCapability("Aspire.Hosting.Ats/setChoiceOptions", reqArgs);
-    }
-
-    /** Sets the value of the loading input. */
-    public void setValue(String value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        getClient().invokeCapability("Aspire.Hosting.Ats/setValue", reqArgs);
     }
 
 }
@@ -15451,6 +15436,46 @@ public class InteractionInputsDialogOptions implements JsonSerializable {
         }));
         return map;
     }
+}
+
+// ===== InteractionLoadingInput.java =====
+// InteractionLoadingInput.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput. */
+public class InteractionLoadingInput extends HandleWrapperBase {
+    InteractionLoadingInput(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the name of the input. */
+    public String getName() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/getName", reqArgs);
+        return (String) result;
+    }
+
+    /** Sets the choice options for the input. */
+    public void setChoiceOptions(InteractionChoiceOption[] choices) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("choices", AspireClient.serializeValue(choices));
+        getClient().invokeCapability("Aspire.Hosting.Ats/setChoiceOptions", reqArgs);
+    }
+
+    /** Sets the value of the input. */
+    public void setValue(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting.Ats/setValue", reqArgs);
+    }
+
 }
 
 // ===== InteractionMessageBoxOptions.java =====
@@ -27188,6 +27213,7 @@ public final class WithVolumeOptions {
 .aspire/modules/InteractionInputCollection.java
 .aspire/modules/InteractionInputLoadContext.java
 .aspire/modules/InteractionInputsDialogOptions.java
+.aspire/modules/InteractionLoadingInput.java
 .aspire/modules/InteractionMessageBoxOptions.java
 .aspire/modules/InteractionNotificationOptions.java
 .aspire/modules/JsonSerializable.java

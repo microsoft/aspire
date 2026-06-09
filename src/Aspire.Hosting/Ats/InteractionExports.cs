@@ -336,27 +336,34 @@ internal sealed class InteractionInputBuilder
 }
 
 /// <summary>
-/// The context passed to a polyglot dynamic-loading callback. Exposes the loading input and the other inputs in the
-/// prompt, and provides guarded setters to update the loading input.
+/// The context passed to a polyglot dynamic-loading callback. Exposes the loading input as a handle and provides
+/// read access to the other inputs in the prompt.
 /// </summary>
 [AspireExport]
 internal sealed class InteractionInputLoadContext
 {
     private readonly LoadInputContext _inner;
+    private readonly InteractionLoadingInput _input;
 
     internal InteractionInputLoadContext(LoadInputContext inner)
     {
         _inner = inner;
+        _input = new InteractionLoadingInput(inner);
     }
 
     /// <summary>
-    /// Gets the name of the input that is loading.
+    /// Gets a handle to the input that is loading. Mutate the input through this handle.
     /// </summary>
-    /// <returns>The input name.</returns>
+    /// <returns>A handle to the loading input.</returns>
+    /// <remarks>
+    /// Mirrors the native <c>LoadInputContext.Input</c>: the callback updates the live input it is loading, rather than
+    /// the context itself. The input is a handle (not a by-value DTO) so guarded setters route back to the server-side
+    /// input across the ATS boundary.
+    /// </remarks>
     [AspireExport]
-    public string GetInputName()
+    public InteractionLoadingInput Input()
     {
-        return _inner.Input.Name;
+        return _input;
     }
 
     /// <summary>
@@ -364,6 +371,10 @@ internal sealed class InteractionInputLoadContext
     /// </summary>
     /// <param name="inputName">The name of the input to read.</param>
     /// <returns>The input value, or an empty string when the input has no value or no input with that name exists.</returns>
+    /// <remarks>
+    /// Reads any input in the prompt, mirroring the native <c>LoadInputContext.AllInputs</c>. Use this to read the
+    /// dependency inputs declared via <see cref="DynamicLoadingOptions.DependsOnInputs"/>.
+    /// </remarks>
     [AspireExport]
     public string GetInputValue(string inputName)
     {
@@ -371,9 +382,39 @@ internal sealed class InteractionInputLoadContext
 
         return _inner.AllInputs.TryGetByName(inputName, out var input) ? input.Value ?? string.Empty : string.Empty;
     }
+}
+
+/// <summary>
+/// A handle to the input currently being loaded by a dynamic-loading callback. Mirrors the native
+/// <c>LoadInputContext.Input</c> by letting callbacks update the live input directly.
+/// </summary>
+/// <remarks>
+/// The handle owns the live <see cref="InteractionInput"/> for the duration of the load callback. Setters are routed
+/// back to the server-side input across the ATS boundary, which is why this is a handle rather than the by-value
+/// <c>InteractionInput</c> DTO.
+/// </remarks>
+[AspireExport]
+internal sealed class InteractionLoadingInput
+{
+    private readonly LoadInputContext _inner;
+
+    internal InteractionLoadingInput(LoadInputContext inner)
+    {
+        _inner = inner;
+    }
 
     /// <summary>
-    /// Sets the choice options for the loading input.
+    /// Gets the name of the input.
+    /// </summary>
+    /// <returns>The input name.</returns>
+    [AspireExport]
+    public string GetName()
+    {
+        return _inner.Input.Name;
+    }
+
+    /// <summary>
+    /// Sets the choice options for the input.
     /// </summary>
     /// <param name="choices">The available choices, in display order. Each option pairs a submitted value with a display label.</param>
     [AspireExport]
@@ -387,7 +428,7 @@ internal sealed class InteractionInputLoadContext
     }
 
     /// <summary>
-    /// Sets the value of the loading input.
+    /// Sets the value of the input.
     /// </summary>
     /// <param name="value">The value to assign.</param>
     [AspireExport]

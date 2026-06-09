@@ -467,7 +467,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             zones = ([{"Value": "eu-west", "Label": "EU West"}, {"Value": "eu-north", "Label": "EU North"}]
                      if region == "eu"
                      else [{"Value": "us-east", "Label": "US East"}, {"Value": "us-west", "Label": "US West"}])
-            load_context.set_choice_options(zones)
+            load_context.input().set_choice_options(zones)
 
         zone_input = interaction_service.create_choice_input("zone").with_dynamic_loading(load_zones)
 
@@ -543,14 +543,15 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         size_input = interaction_service.create_choice_input("size").with_choice_options([{"Value": "s", "Label": "Small"}, {"Value": "l", "Label": "Large"}])
 
         def load_shade(load_context):
-            input_name = load_context.get_input_name()
+            input = load_context.input()
+            input_name = input.get_name()
             color = load_context.get_input_value("color")
-            load_context.set_choice_options(
+            input.set_choice_options(
                 [{"Value": "crimson", "Label": "Crimson"}, {"Value": "scarlet", "Label": "Scarlet"}]
                 if color == "r"
                 else [{"Value": "lime", "Label": "Lime"}, {"Value": "forest", "Label": "Forest"}]
             )
-            load_context.set_value(input_name)
+            input.set_value(input_name)
 
         dependent_input = interaction_service.create_choice_input("shade").with_dynamic_loading(
             load_shade,

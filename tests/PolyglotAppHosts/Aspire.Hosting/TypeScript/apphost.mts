@@ -784,7 +784,7 @@ await container.withCommand("pick-zone", "Pick Zone", async (ctx) => {
                 ? [{ value: "eu-west", label: "EU West" }, { value: "eu-north", label: "EU North" }]
                 : [{ value: "us-east", label: "US East" }, { value: "us-west", label: "US West" }];
 
-            await loadContext.setChoiceOptions(zones);
+            await loadContext.input().setChoiceOptions(zones);
         });
 
     const result = await interactionService.promptInputs(
@@ -850,13 +850,14 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
     const dependentInput = await interactionService
         .createChoiceInput("shade")
         .withDynamicLoading(async (loadContext) => {
-            const inputName = await loadContext.getInputName();
+            const input = loadContext.input();
+            const inputName = await input.getName();
             const color = await loadContext.getInputValue("color");
 
-            await loadContext.setChoiceOptions(color === "r"
+            await input.setChoiceOptions(color === "r"
                 ? [{ value: "crimson", label: "Crimson" }, { value: "scarlet", label: "Scarlet" }]
                 : [{ value: "lime", label: "Lime" }, { value: "forest", label: "Forest" }]);
-            await loadContext.setValue(inputName);
+            await input.setValue(inputName);
         }, {
             alwaysLoadOnStart: true,
             dependsOnInputs: ["color"]

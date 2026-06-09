@@ -615,7 +615,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			if region == "eu" {
 				zones = []*aspire.InteractionChoiceOption{{Value: "eu-west", Label: "EU West"}, {Value: "eu-north", Label: "EU North"}}
 			}
-			_ = loadContext.SetChoiceOptions(zones)
+			_ = loadContext.Input().SetChoiceOptions(zones)
 		})
 
 		result := interactionService.PromptInputs("Pick a zone", "Choose a region, then pick a zone from the dynamically loaded options.", []aspire.InteractionInputBuilder{regionInput, zoneInput})
@@ -705,14 +705,15 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		presetInput := interactionService.CreateTextInput("greeting").WithValue("hello")
 		sizeInput := interactionService.CreateChoiceInput("size").WithChoiceOptions([]*aspire.InteractionChoiceOption{{Value: "s", Label: "Small"}, {Value: "l", Label: "Large"}})
 		dependentInput := interactionService.CreateChoiceInput("shade").WithDynamicLoading(func(loadContext aspire.InteractionInputLoadContext) {
-			inputName, _ := loadContext.GetInputName()
+			input := loadContext.Input()
+			inputName, _ := input.GetName()
 			color, _ := loadContext.GetInputValue("color")
 			shades := []*aspire.InteractionChoiceOption{{Value: "lime", Label: "Lime"}, {Value: "forest", Label: "Forest"}}
 			if color == "r" {
 				shades = []*aspire.InteractionChoiceOption{{Value: "crimson", Label: "Crimson"}, {Value: "scarlet", Label: "Scarlet"}}
 			}
-			_ = loadContext.SetChoiceOptions(shades)
-			_ = loadContext.SetValue(inputName)
+			_ = input.SetChoiceOptions(shades)
+			_ = input.SetValue(inputName)
 		}, &aspire.WithDynamicLoadingOptions{
 			Options: &aspire.DynamicLoadingOptions{AlwaysLoadOnStart: aspire.BoolPtr(true), DependsOnInputs: []string{"color"}},
 		})

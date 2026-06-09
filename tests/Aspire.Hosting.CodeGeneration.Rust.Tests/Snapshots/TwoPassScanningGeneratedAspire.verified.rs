@@ -12297,12 +12297,13 @@ impl InteractionInputLoadContext {
         &self.client
     }
 
-    /// Gets the name of the input that is loading.
-    pub fn get_input_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+    /// Gets a handle to the input that is loading. Mutate the input through this handle.
+    pub fn input(&self) -> Result<InteractionLoadingInput, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.Ats/getInputName", args)?;
-        Ok(serde_json::from_value(result)?)
+        let result = self.client.invoke_capability("Aspire.Hosting.Ats/input", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(InteractionLoadingInput::new(handle, self.client.clone()))
     }
 
     /// Gets the current value of an input in the prompt by name.
@@ -12313,8 +12314,42 @@ impl InteractionInputLoadContext {
         let result = self.client.invoke_capability("Aspire.Hosting.Ats/getInputValue", args)?;
         Ok(serde_json::from_value(result)?)
     }
+}
 
-    /// Sets the choice options for the loading input.
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput
+pub struct InteractionLoadingInput {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for InteractionLoadingInput {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl InteractionLoadingInput {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the name of the input.
+    pub fn get_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Ats/getName", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the choice options for the input.
     pub fn set_choice_options(&self, choices: Vec<InteractionChoiceOption>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12323,7 +12358,7 @@ impl InteractionInputLoadContext {
         Ok(())
     }
 
-    /// Sets the value of the loading input.
+    /// Sets the value of the input.
     pub fn set_value(&self, value: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
