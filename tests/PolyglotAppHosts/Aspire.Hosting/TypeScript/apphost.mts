@@ -5,6 +5,9 @@ import {
     WellKnownPipelineTags,
     createBuilder,
     CertificateTrustScope,
+    ContainerImageDestination,
+    ContainerImageFormat,
+    ContainerTargetPlatform,
     EndpointProperty,
     HealthStatus,
     IconVariant,
@@ -160,6 +163,20 @@ await container.withContainerFiles("/usr/lib/aspire/container-files", ".", {
     defaultGroup: 1000,
     umask: 0o022,
 });
+
+// withContainerFilesCallback — build entries dynamically via the context factory methods
+await container.withContainerFilesCallback("/usr/lib/aspire/container-files", async (filesCtx) => {
+    const filesServices = await filesCtx.services();
+    const filesLoggerFactory = await filesServices.getLoggerFactory();
+    const filesLogger = await filesLoggerFactory.createLogger("ValidationAppHost.ContainerFilesCallback");
+    await filesLogger.logInformation("ContainerFilesCallback services");
+
+    const appConfig = await filesCtx.createFile("app.conf", { contents: "key=value", mode: 0o644 });
+    const nestedConfig = await filesCtx.createFile("nested.conf", { contents: "nested=true" });
+    const confDir = await filesCtx.createDirectory("conf.d", [nestedConfig], { mode: 0o755 });
+    const cert = await filesCtx.createCertificateFile("server.pem", { contents: "-----BEGIN CERTIFICATE-----" });
+    return [appConfig, confDir, cert];
+}, { defaultOwner: 1000, defaultGroup: 1000, umask: 0o022 });
 
 // withImageRegistry
 await container.withImageRegistry("docker.io");
@@ -335,6 +352,16 @@ await container.withMcpServer({ path: "/mcp" });
 
 // withRequiredCommand
 await container.withRequiredCommand("docker");
+
+// withRequiredCommandValidation
+await container.withRequiredCommandValidation("docker", async (validationCtx) => {
+    const _validationResolvedPath = await validationCtx.resolvedPath();
+    const validationServices = await validationCtx.services();
+    const validationLoggerFactory = await validationServices.getLoggerFactory();
+    const validationLogger = await validationLoggerFactory.createLogger("ValidationAppHost.RequiredCommandValidation");
+    await validationLogger.logInformation("RequiredCommandValidation services");
+    return await validationCtx.success();
+});
 
 // ===================================================================
 // DotnetToolResourceExtensions.cs — NEW exports
@@ -728,6 +755,10 @@ await container.withCommand("noop", "Noop", async () => {
     commandOptions: {
         updateState: async (ctx) => {
             const snapshot = await ctx.resourceSnapshot();
+            const updateStateServices = await ctx.services();
+            const updateStateLoggerFactory = await updateStateServices.getLoggerFactory();
+            const updateStateLogger = await updateStateLoggerFactory.createLogger("ValidationAppHost.UpdateCommandState");
+            await updateStateLogger.logInformation("UpdateCommandState services");
 
             return snapshot.healthStatus === HealthStatus.Healthy
                 ? ResourceCommandState.Enabled
@@ -738,6 +769,10 @@ await container.withCommand("noop", "Noop", async () => {
 await container.withCommand("echo", "Echo", async (ctx) => {
     const commandInputs = await ctx.arguments();
     const commandArguments = await commandInputs.toArray();
+    const echoServices = await ctx.services();
+    const echoLoggerFactory = await echoServices.getLoggerFactory();
+    const echoLogger = await echoLoggerFactory.createLogger("ValidationAppHost.EchoCommand");
+    await echoLogger.logInformation("Echo command services");
 
     return { success: commandArguments[0]?.value === "hello" };
 }, {
@@ -748,7 +783,13 @@ await container.withCommand("echo", "Echo", async (ctx) => {
                 inputType: InputType.Text,
                 required: true
             }
-        ]
+        ],
+        validateArguments: async (ctx) => {
+            const validationServices = await ctx.services();
+            const validationLoggerFactory = await validationServices.getLoggerFactory();
+            const validationLogger = await validationLoggerFactory.createLogger("ValidationAppHost.ValidateCommandArguments");
+            await validationLogger.logInformation("Validate command arguments services");
+        }
     }
 });
 await container.withCommand("restart", "Restart", async (ctx) => {
@@ -758,6 +799,48 @@ await container.withCommand("restart", "Restart", async (ctx) => {
         arguments: { message: "hello" },
         cancellationToken
     });
+});
+
+// withHttpsCertificateConfiguration
+await container.withHttpsCertificateConfiguration(async (certCtx) => {
+    const _certResource = await certCtx.resource();
+    const _certIsRunMode: boolean = await certCtx.executionContext().isRunMode();
+    const certificatePath = await certCtx.certificatePath();
+    const keyPath = await certCtx.keyPath();
+    const certArgs = await certCtx.arguments();
+    await certArgs.add("--certificate");
+    await certArgs.add(certificatePath);
+    await certArgs.add("--key");
+    await certArgs.add(keyPath);
+    const certEnv = await certCtx.environment();
+    await certEnv.set("Kestrel__Certificates__Path", certificatePath);
+    await certEnv.set("Kestrel__Certificates__KeyPath", keyPath);
+});
+
+// subscribeHttpsEndpointsUpdate
+await container.subscribeHttpsEndpointsUpdate(async (httpsCtx) => {
+    const _httpsResource = await httpsCtx.resource();
+    const _httpsModel = await httpsCtx.model();
+    const httpsServices = await httpsCtx.services();
+    const httpsLoggerFactory = await httpsServices.getLoggerFactory();
+    const httpsLogger = await httpsLoggerFactory.createLogger("ValidationAppHost.HttpsEndpointsUpdate");
+    await httpsLogger.logInformation("HttpsEndpointsUpdate services");
+});
+
+// withContainerBuildOptions
+await container.withContainerBuildOptions(async (buildCtx) => {
+    await buildCtx.destination.set(ContainerImageDestination.Registry);
+    await buildCtx.imageFormat.set(ContainerImageFormat.Oci);
+    await buildCtx.targetPlatform.set(ContainerTargetPlatform.LinuxAmd64);
+    await buildCtx.outputPath.set("./artifacts/container-image");
+    await buildCtx.localImageName.set("validation-image");
+    await buildCtx.localImageTag.set("latest");
+    const _buildResource = await buildCtx.resource();
+    const _buildExecutionContext = await buildCtx.executionContext();
+    const buildServices = await buildCtx.services();
+    const buildLoggerFactory = await buildServices.getLoggerFactory();
+    const buildLogger = await buildLoggerFactory.createLogger("ValidationAppHost.ContainerBuildOptions");
+    await buildLogger.logInformation("ContainerBuildOptions services");
 });
 
 // withProcessCommand

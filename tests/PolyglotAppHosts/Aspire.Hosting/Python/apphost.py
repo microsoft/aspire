@@ -150,6 +150,28 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             "Umask": 0o022,
         },
     )
+
+    # withContainerFilesCallback — build entries dynamically via the context factory methods
+    def container_files_callback(files_ctx, files_cancellation_token):
+        files_services = files_ctx.services
+        files_logger_factory = files_services.get_logger_factory()
+        files_logger = files_logger_factory.create_logger("ValidationAppHost.ContainerFilesCallback")
+        files_logger.log_information("ContainerFilesCallback services")
+        app_config = files_ctx.create_file("app.conf", contents="key=value", mode=0o644)
+        nested_config = files_ctx.create_file("nested.conf", contents="nested=true")
+        conf_dir = files_ctx.create_dir("conf.d", [nested_config], mode=0o755)
+        cert = files_ctx.create_certificate_file("server.pem", contents="-----BEGIN CERTIFICATE-----")
+        return [app_config, conf_dir, cert]
+
+    container.with_container_files_callback(
+        "/usr/lib/aspire/container-files",
+        container_files_callback,
+        options={
+            "DefaultOwner": 1000,
+            "DefaultGroup": 1000,
+            "Umask": 0o022,
+        },
+    )
     # withImageRegistry
     container.with_image_registry("docker.io")
     # ===================================================================
@@ -269,6 +291,16 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     container.with_mcp_server()
     # withRequiredCommand
     container.with_required_command("docker")
+
+    def required_command_validation(validation_ctx):
+        _validation_resolved_path = validation_ctx.resolved_path
+        validation_services = validation_ctx.services
+        validation_logger_factory = validation_services.get_logger_factory()
+        validation_logger = validation_logger_factory.create_logger("ValidationAppHost.RequiredCommandValidation")
+        validation_logger.log_information("RequiredCommandValidation services")
+        return validation_ctx.success()
+
+    container.with_required_command("docker", validation_callback=required_command_validation)
     # withToolIgnoreExistingFeeds
     tool.with_tool_ignore_existing_feeds()
     # withToolIgnoreFailedSources
@@ -426,11 +458,26 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     # withCommand
     def update_command_state(ctx):
         snapshot = ctx.resource_snapshot
+        update_state_services = ctx.services
+        update_state_logger_factory = update_state_services.get_logger_factory()
+        update_state_logger = update_state_logger_factory.create_logger("ValidationAppHost.UpdateCommandState")
+        update_state_logger.log_information("UpdateCommandState services")
         return "Enabled" if snapshot.get("HealthStatus") == "Healthy" else "Disabled"
 
     def echo_command(ctx):
         command_arguments = list(ctx.arguments.to_array())
+        echo_services = ctx.services
+        echo_logger_factory = echo_services.get_logger_factory()
+        echo_logger = echo_logger_factory.create_logger("ValidationAppHost.EchoCommand")
+        echo_logger.log_information("Echo command services")
         return {"success": command_arguments[0]["Value"] == "hello"}
+
+    def validate_command_arguments(ctx):
+        validation_services = ctx.services
+        validation_logger_factory = validation_services.get_logger_factory()
+        validation_logger = validation_logger_factory.create_logger("ValidationAppHost.ValidateCommandArguments")
+        validation_logger.log_information("Validate command arguments services")
+        return None
 
     container.with_command(
         "noop",
@@ -446,9 +493,48 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         "echo",
         "Echo",
         echo_command,
-        command_options={"Arguments": [{"Name": "message", "InputType": "Text", "Required": True}]}
+        command_options={"Arguments": [{"Name": "message", "InputType": "Text", "Required": True}], "ValidateArguments": validate_command_arguments}
     )
     container.with_command("restart", "Restart", restart_command)
+
+    def https_endpoints_update(https_ctx):
+        _https_resource = https_ctx.resource
+        _https_model = https_ctx.model
+        https_services = https_ctx.services
+        https_logger_factory = https_services.get_logger_factory()
+        https_logger = https_logger_factory.create_logger("ValidationAppHost.HttpsEndpointsUpdate")
+        https_logger.log_information("HttpsEndpointsUpdate services")
+
+    def https_certificate_configuration(cert_ctx):
+        _cert_resource = cert_ctx.resource
+        certificate_path = cert_ctx.certificate_path
+        key_path = cert_ctx.key_path
+        cert_ctx.arguments.add("--certificate")
+        cert_ctx.arguments.add(certificate_path)
+        cert_ctx.arguments.add("--key")
+        cert_ctx.arguments.add(key_path)
+        cert_ctx.env.set("Kestrel__Certificates__Path", certificate_path)
+        cert_ctx.env.set("Kestrel__Certificates__KeyPath", key_path)
+
+    container.with_https_certificate_config(https_certificate_configuration)
+
+    container.subscribe_https_endpoints_update(https_endpoints_update)
+
+    def container_build_options(build_ctx):
+        build_ctx.destination = "Registry"
+        build_ctx.image_format = "Oci"
+        build_ctx.target_platform = "LinuxAmd64"
+        build_ctx.output_path = "./artifacts/container-image"
+        build_ctx.local_image_name = "validation-image"
+        build_ctx.local_image_tag = "latest"
+        _build_resource = build_ctx.resource
+        _build_execution_context = build_ctx.execution_context
+        build_services = build_ctx.services
+        build_logger_factory = build_services.get_logger_factory()
+        build_logger = build_logger_factory.create_logger("ValidationAppHost.ContainerBuildOptions")
+        build_logger.log_information("ContainerBuildOptions services")
+
+    container.with_container_build_options(container_build_options)
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})

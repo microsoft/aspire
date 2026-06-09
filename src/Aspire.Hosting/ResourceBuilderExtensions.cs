@@ -4273,10 +4273,9 @@ public static class ResourceBuilderExtensions
     ///     });
     /// </code>
     /// </example>
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "HttpsCertificateConfigurationCallbackAnnotationContext exposes IServiceProvider and IResource — not usable from polyglot hosts.")]
+    [AspireExport]
     public static IResourceBuilder<TResource> WithHttpsCertificateConfiguration<TResource>(this IResourceBuilder<TResource> builder, Func<HttpsCertificateConfigurationCallbackAnnotationContext, Task> callback)
         where TResource : IResourceWithEnvironment, IResourceWithArgs
     {
@@ -4314,10 +4313,9 @@ public static class ResourceBuilderExtensions
     /// });
     /// </code>
     /// </example>
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "HttpsEndpointUpdateCallbackContext exposes IServiceProvider and IResource — not usable from polyglot hosts.")]
+    [AspireExport]
     public static IResourceBuilder<TResource> SubscribeHttpsEndpointsUpdate<TResource>(this IResourceBuilder<TResource> builder, Action<HttpsEndpointUpdateCallbackContext> callback)
         where TResource : IResource
     {

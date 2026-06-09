@@ -468,6 +468,30 @@ public class RequiredCommandAnnotationTests
         Assert.False(testInteractionService.Interactions.Reader.TryRead(out _));
     }
 
+    [Fact]
+    public void RequiredCommandValidationContext_Success_ReturnsValidResult()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var context = new RequiredCommandValidationContext("/usr/bin/test", services, CancellationToken.None);
+
+        var result = context.Success();
+
+        Assert.True(result.IsValid);
+        Assert.Null(result.ValidationMessage);
+    }
+
+    [Fact]
+    public void RequiredCommandValidationContext_Failure_ReturnsInvalidResultWithMessage()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var context = new RequiredCommandValidationContext("/usr/bin/test", services, CancellationToken.None);
+
+        var result = context.Failure("command is too old");
+
+        Assert.False(result.IsValid);
+        Assert.Equal("command is too old", result.ValidationMessage);
+    }
+
     /// <summary>
     /// Helper method to subscribe all eventing subscribers (including RequiredCommandValidationEventingSubscriber)
     /// to the eventing system. This simulates what happens during app.StartAsync().

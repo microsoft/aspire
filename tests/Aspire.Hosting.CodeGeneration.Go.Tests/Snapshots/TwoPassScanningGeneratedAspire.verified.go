@@ -132,6 +132,35 @@ const (
 	ProbeTypeLiveness ProbeType = "Liveness"
 )
 
+// ContainerImageDestination represents ContainerImageDestination.
+type ContainerImageDestination string
+
+const (
+	ContainerImageDestinationRegistry ContainerImageDestination = "Registry"
+	ContainerImageDestinationArchive ContainerImageDestination = "Archive"
+)
+
+// ContainerImageFormat represents ContainerImageFormat.
+type ContainerImageFormat string
+
+const (
+	ContainerImageFormatDocker ContainerImageFormat = "Docker"
+	ContainerImageFormatOci ContainerImageFormat = "Oci"
+)
+
+// ContainerTargetPlatform represents ContainerTargetPlatform.
+type ContainerTargetPlatform string
+
+const (
+	ContainerTargetPlatformLinuxAmd64 ContainerTargetPlatform = "LinuxAmd64"
+	ContainerTargetPlatformLinuxArm64 ContainerTargetPlatform = "LinuxArm64"
+	ContainerTargetPlatformAllLinux ContainerTargetPlatform = "AllLinux"
+	ContainerTargetPlatformLinuxArm ContainerTargetPlatform = "LinuxArm"
+	ContainerTargetPlatformLinux386 ContainerTargetPlatform = "Linux386"
+	ContainerTargetPlatformWindowsAmd64 ContainerTargetPlatform = "WindowsAmd64"
+	ContainerTargetPlatformWindowsArm64 ContainerTargetPlatform = "WindowsArm64"
+)
+
 // EndpointProperty represents EndpointProperty.
 type EndpointProperty string
 
@@ -1136,6 +1165,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	PublishAsConnectionString() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	PublishAsContainer() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	TestWaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WaitFor(dependency Resource, options ...*WaitForOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1152,8 +1182,10 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerName(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerNetworkAlias(alias string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerRegistry(registry Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1184,6 +1216,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1223,6 +1256,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithRemoteImageName(remoteImageName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRemoteImageTag(remoteImageTag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1447,6 +1481,25 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsConta
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainer", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -1723,6 +1776,25 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(con
 	return s
 }
 
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithContainerCertificatePaths adds container certificate path overrides used for certificate trust at run time.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -1758,6 +1830,32 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerFilesCallback creates or updates files and folders in a container using entries produced by a callback.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["destinationPath"] = serializeValue(destinationPath)
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			return cb(callbackArg[ContainerFileSystemCallbackContext](args, 0), callbackArg[*CancellationToken](args, 1))
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithContainerFilesCallbackOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2242,6 +2340,25 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpProbe(
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpProbe", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHttpsCertificateConfiguration adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2881,6 +2998,32 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 	return s
 }
 
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -3234,6 +3377,7 @@ type CSharpAppResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) CSharpAppResource
 	PublishAsDockerFile(options ...*PublishAsDockerFileOptions) CSharpAppResource
 	PublishWithContainerFiles(source ResourceWithContainerFiles, destinationPath string) CSharpAppResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) CSharpAppResource
 	TestWaitFor(dependency Resource) CSharpAppResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) CSharpAppResource
 	WaitFor(dependency Resource, options ...*WaitForOptions) CSharpAppResource
@@ -3247,6 +3391,7 @@ type CSharpAppResource interface {
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) CSharpAppResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) CSharpAppResource
 	WithConfig(config *TestConfigDto) CSharpAppResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) CSharpAppResource
 	WithContainerRegistry(registry Resource) CSharpAppResource
 	WithCorrelationId(correlationId string) CSharpAppResource
 	WithCreatedAt(createdAt string) CSharpAppResource
@@ -3271,6 +3416,7 @@ type CSharpAppResource interface {
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) CSharpAppResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) CSharpAppResource
 	WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) CSharpAppResource
+	WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) CSharpAppResource
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) CSharpAppResource
 	WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) CSharpAppResource
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) CSharpAppResource
@@ -3305,6 +3451,7 @@ type CSharpAppResource interface {
 	WithRemoteImageTag(remoteImageTag string) CSharpAppResource
 	WithReplicas(replicas float64) CSharpAppResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) CSharpAppResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) CSharpAppResource
 	WithSessionLifetime() CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
 	WithUnionDependency(dependency any) CSharpAppResource
@@ -3559,6 +3706,25 @@ func (s *cSharpAppResource) PublishWithContainerFiles(source ResourceWithContain
 	return s
 }
 
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *cSharpAppResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // TestWaitFor waits for another resource (test version)
 func (s *cSharpAppResource) TestWaitFor(dependency Resource) CSharpAppResource {
 	if s.err != nil { return s }
@@ -3775,6 +3941,25 @@ func (s *cSharpAppResource) WithConfig(config *TestConfigDto) CSharpAppResource 
 	}
 	if config != nil { reqArgs["config"] = serializeValue(config) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *cSharpAppResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -4151,6 +4336,25 @@ func (s *cSharpAppResource) WithHttpProbe(probeType ProbeType, options ...*WithH
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpProbe", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHttpsCertificateConfiguration adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+func (s *cSharpAppResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -4723,6 +4927,32 @@ func (s *cSharpAppResource) WithRequiredCommand(command string, options ...*With
 	return s
 }
 
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *cSharpAppResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *cSharpAppResource) WithSessionLifetime() CSharpAppResource {
 	if s.err != nil { return s }
@@ -5227,6 +5457,445 @@ func (s *connectionStringAvailableEvent) Services() ServiceProvider {
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// ContainerBuildOptionsCallbackContext is the public interface for handle type ContainerBuildOptionsCallbackContext.
+type ContainerBuildOptionsCallbackContext interface {
+	handleReference
+	CancellationToken() (*CancellationToken, error)
+	Destination() (ContainerImageDestination, error)
+	ExecutionContext() DistributedApplicationExecutionContext
+	ImageFormat() (ContainerImageFormat, error)
+	LocalImageName() (string, error)
+	LocalImageTag() (string, error)
+	Logger() Logger
+	OutputPath() (string, error)
+	Resource() Resource
+	Services() ServiceProvider
+	SetDestination(value ContainerImageDestination) ContainerBuildOptionsCallbackContext
+	SetImageFormat(value ContainerImageFormat) ContainerBuildOptionsCallbackContext
+	SetLocalImageName(value string) ContainerBuildOptionsCallbackContext
+	SetLocalImageTag(value string) ContainerBuildOptionsCallbackContext
+	SetOutputPath(value string) ContainerBuildOptionsCallbackContext
+	SetTargetPlatform(value ContainerTargetPlatform) ContainerBuildOptionsCallbackContext
+	TargetPlatform() (ContainerTargetPlatform, error)
+	Err() error
+}
+
+// containerBuildOptionsCallbackContext is the unexported impl of ContainerBuildOptionsCallbackContext.
+type containerBuildOptionsCallbackContext struct {
+	*resourceBuilderBase
+}
+
+// newContainerBuildOptionsCallbackContextFromHandle wraps an existing handle as ContainerBuildOptionsCallbackContext.
+func newContainerBuildOptionsCallbackContextFromHandle(h *handle, c *client) ContainerBuildOptionsCallbackContext {
+	return &containerBuildOptionsCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CancellationToken gets the cancellation token.
+func (s *containerBuildOptionsCallbackContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// Destination gets or sets the destination for the container image.
+func (s *containerBuildOptionsCallbackContext) Destination() (ContainerImageDestination, error) {
+	if s.err != nil { var zero ContainerImageDestination; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.destination", reqArgs)
+	if err != nil {
+		var zero ContainerImageDestination
+		return zero, err
+	}
+	return decodeAs[ContainerImageDestination](result)
+}
+
+// ExecutionContext gets the distributed application execution context.
+func (s *containerBuildOptionsCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
+	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.executionContext", reqArgs)
+	if err != nil {
+		return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.executionContext returned unexpected type %T", result)
+		return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ImageFormat gets or sets the container image format.
+func (s *containerBuildOptionsCallbackContext) ImageFormat() (ContainerImageFormat, error) {
+	if s.err != nil { var zero ContainerImageFormat; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.imageFormat", reqArgs)
+	if err != nil {
+		var zero ContainerImageFormat
+		return zero, err
+	}
+	return decodeAs[ContainerImageFormat](result)
+}
+
+// LocalImageName gets or sets the local image name for the built container.
+func (s *containerBuildOptionsCallbackContext) LocalImageName() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageName", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// LocalImageTag gets or sets the local image tag for the built container.
+func (s *containerBuildOptionsCallbackContext) LocalImageTag() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageTag", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// Logger gets the logger instance.
+func (s *containerBuildOptionsCallbackContext) Logger() Logger {
+	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.logger", reqArgs)
+	if err != nil {
+		return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.logger returned unexpected type %T", result)
+		return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &logger{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// OutputPath gets or sets the output path for the container archive.
+func (s *containerBuildOptionsCallbackContext) OutputPath() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.outputPath", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// Resource gets the resource being built.
+func (s *containerBuildOptionsCallbackContext) Resource() Resource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.resource", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(Resource)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.resource returned unexpected type %T", result))
+		return nil
+	}
+	return typed
+}
+
+// Services gets the service provider.
+func (s *containerBuildOptionsCallbackContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// SetDestination sets the Destination property
+func (s *containerBuildOptionsCallbackContext) SetDestination(value ContainerImageDestination) ContainerBuildOptionsCallbackContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setDestination", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetImageFormat sets the ImageFormat property
+func (s *containerBuildOptionsCallbackContext) SetImageFormat(value ContainerImageFormat) ContainerBuildOptionsCallbackContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setImageFormat", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetLocalImageName sets the LocalImageName property
+func (s *containerBuildOptionsCallbackContext) SetLocalImageName(value string) ContainerBuildOptionsCallbackContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetLocalImageTag sets the LocalImageTag property
+func (s *containerBuildOptionsCallbackContext) SetLocalImageTag(value string) ContainerBuildOptionsCallbackContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageTag", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetOutputPath sets the OutputPath property
+func (s *containerBuildOptionsCallbackContext) SetOutputPath(value string) ContainerBuildOptionsCallbackContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setOutputPath", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetTargetPlatform sets the TargetPlatform property
+func (s *containerBuildOptionsCallbackContext) SetTargetPlatform(value ContainerTargetPlatform) ContainerBuildOptionsCallbackContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setTargetPlatform", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// TargetPlatform gets or sets the target platform for the container.
+func (s *containerBuildOptionsCallbackContext) TargetPlatform() (ContainerTargetPlatform, error) {
+	if s.err != nil { var zero ContainerTargetPlatform; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.targetPlatform", reqArgs)
+	if err != nil {
+		var zero ContainerTargetPlatform
+		return zero, err
+	}
+	return decodeAs[ContainerTargetPlatform](result)
+}
+
+// ContainerFileSystemCallbackContext is the public interface for handle type ContainerFileSystemCallbackContext.
+type ContainerFileSystemCallbackContext interface {
+	handleReference
+	CreateCertificateFile(name string, options ...*CreateCertificateFileOptions) ContainerFileSystemItem
+	CreateDirectory(name string, entries []ContainerFileSystemItem, options ...*CreateDirectoryOptions) ContainerFileSystemItem
+	CreateFile(name string, options ...*CreateFileOptions) ContainerFileSystemItem
+	Model() Resource
+	Services() ServiceProvider
+	Err() error
+}
+
+// containerFileSystemCallbackContext is the unexported impl of ContainerFileSystemCallbackContext.
+type containerFileSystemCallbackContext struct {
+	*resourceBuilderBase
+}
+
+// newContainerFileSystemCallbackContextFromHandle wraps an existing handle as ContainerFileSystemCallbackContext.
+func newContainerFileSystemCallbackContextFromHandle(h *handle, c *client) ContainerFileSystemCallbackContext {
+	return &containerFileSystemCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CreateCertificateFile creates a PEM container certificate file entry with the OpenSSL subject-hash symlink.
+func (s *containerFileSystemCallbackContext) CreateCertificateFile(name string, options ...*CreateCertificateFileOptions) ContainerFileSystemItem {
+	if s.err != nil { return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	if len(options) > 0 {
+		merged := &CreateCertificateFileOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createCertificateFile", reqArgs)
+	if err != nil {
+		return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/createCertificateFile returned unexpected type %T", result)
+		return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &containerFileSystemItem{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// CreateDirectory creates a container directory entry containing the specified child entries.
+func (s *containerFileSystemCallbackContext) CreateDirectory(name string, entries []ContainerFileSystemItem, options ...*CreateDirectoryOptions) ContainerFileSystemItem {
+	if s.err != nil { return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	if entries != nil { reqArgs["entries"] = serializeValue(entries) }
+	if len(options) > 0 {
+		merged := &CreateDirectoryOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createDirectory", reqArgs)
+	if err != nil {
+		return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/createDirectory returned unexpected type %T", result)
+		return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &containerFileSystemItem{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// CreateFile creates a container file entry with inline contents or a host source path.
+func (s *containerFileSystemCallbackContext) CreateFile(name string, options ...*CreateFileOptions) ContainerFileSystemItem {
+	if s.err != nil { return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	if len(options) > 0 {
+		merged := &CreateFileOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createFile", reqArgs)
+	if err != nil {
+		return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/createFile returned unexpected type %T", result)
+		return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &containerFileSystemItem{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Model the app model resource the callback is associated with.
+func (s *containerFileSystemCallbackContext) Model() Resource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.model", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(Resource)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.model returned unexpected type %T", result))
+		return nil
+	}
+	return typed
+}
+
+// Services a `IServiceProvider` that can be used to resolve services in the callback.
+func (s *containerFileSystemCallbackContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ContainerFileSystemItem is the public interface for handle type ContainerFileSystemItem.
+type ContainerFileSystemItem interface {
+	handleReference
+	Err() error
+}
+
+// containerFileSystemItem is the unexported impl of ContainerFileSystemItem.
+type containerFileSystemItem struct {
+	*resourceBuilderBase
+}
+
+// newContainerFileSystemItemFromHandle wraps an existing handle as ContainerFileSystemItem.
+func newContainerFileSystemItemFromHandle(h *handle, c *client) ContainerFileSystemItem {
+	return &containerFileSystemItem{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
 // ContainerImagePushOptions is the public interface for handle type ContainerImagePushOptions.
 type ContainerImagePushOptions interface {
 	handleReference
@@ -5562,11 +6231,13 @@ type ContainerRegistryResource interface {
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ContainerRegistryResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ContainerRegistryResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ContainerRegistryResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ContainerRegistryResource
 	TestWaitFor(dependency Resource) ContainerRegistryResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ContainerRegistryResource
 	WithChildRelationship(child Resource) ContainerRegistryResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ContainerRegistryResource
 	WithConfig(config *TestConfigDto) ContainerRegistryResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ContainerRegistryResource
 	WithContainerRegistry(registry Resource) ContainerRegistryResource
 	WithCorrelationId(correlationId string) ContainerRegistryResource
 	WithCreatedAt(createdAt string) ContainerRegistryResource
@@ -5600,6 +6271,7 @@ type ContainerRegistryResource interface {
 	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ContainerRegistryResource
 	WithRelationship(resourceBuilder Resource, type_ string) ContainerRegistryResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerRegistryResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerRegistryResource
 	WithSessionLifetime() ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
 	WithUnionDependency(dependency any) ContainerRegistryResource
@@ -5752,6 +6424,25 @@ func (s *containerRegistryResource) OnResourceStopped(callback func(arg Resource
 	return s
 }
 
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *containerRegistryResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // TestWaitFor waits for another resource (test version)
 func (s *containerRegistryResource) TestWaitFor(dependency Resource) ContainerRegistryResource {
 	if s.err != nil { return s }
@@ -5833,6 +6524,25 @@ func (s *containerRegistryResource) WithConfig(config *TestConfigDto) ContainerR
 	}
 	if config != nil { reqArgs["config"] = serializeValue(config) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *containerRegistryResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6346,6 +7056,32 @@ func (s *containerRegistryResource) WithRequiredCommand(command string, options 
 	return s
 }
 
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *containerRegistryResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *containerRegistryResource) WithSessionLifetime() ContainerRegistryResource {
 	if s.err != nil { return s }
@@ -6490,6 +7226,7 @@ type ContainerResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ContainerResource
 	PublishAsConnectionString() ContainerResource
 	PublishAsContainer() ContainerResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ContainerResource
 	TestWaitFor(dependency Resource) ContainerResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ContainerResource
 	WaitFor(dependency Resource, options ...*WaitForOptions) ContainerResource
@@ -6506,8 +7243,10 @@ type ContainerResource interface {
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ContainerResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ContainerResource
 	WithConfig(config *TestConfigDto) ContainerResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ContainerResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) ContainerResource
 	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) ContainerResource
+	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) ContainerResource
 	WithContainerName(name string) ContainerResource
 	WithContainerNetworkAlias(alias string) ContainerResource
 	WithContainerRegistry(registry Resource) ContainerResource
@@ -6538,6 +7277,7 @@ type ContainerResource interface {
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ContainerResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ContainerResource
 	WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) ContainerResource
+	WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) ContainerResource
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ContainerResource
 	WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) ContainerResource
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) ContainerResource
@@ -6577,6 +7317,7 @@ type ContainerResource interface {
 	WithRemoteImageName(remoteImageName string) ContainerResource
 	WithRemoteImageTag(remoteImageTag string) ContainerResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerResource
 	WithSessionLifetime() ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
 	WithUnionDependency(dependency any) ContainerResource
@@ -6800,6 +7541,25 @@ func (s *containerResource) PublishAsContainer() ContainerResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainer", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *containerResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7076,6 +7836,25 @@ func (s *containerResource) WithConfig(config *TestConfigDto) ContainerResource 
 	return s
 }
 
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *containerResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithContainerCertificatePaths adds container certificate path overrides used for certificate trust at run time.
 func (s *containerResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) ContainerResource {
 	if s.err != nil { return s }
@@ -7111,6 +7890,32 @@ func (s *containerResource) WithContainerFiles(destinationPath string, sourcePat
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerFilesCallback creates or updates files and folders in a container using entries produced by a callback.
+func (s *containerResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["destinationPath"] = serializeValue(destinationPath)
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			return cb(callbackArg[ContainerFileSystemCallbackContext](args, 0), callbackArg[*CancellationToken](args, 1))
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithContainerFilesCallbackOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7595,6 +8400,25 @@ func (s *containerResource) WithHttpProbe(probeType ProbeType, options ...*WithH
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpProbe", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHttpsCertificateConfiguration adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+func (s *containerResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -8231,6 +9055,32 @@ func (s *containerResource) WithRequiredCommand(command string, options ...*With
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *containerResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -9993,6 +10843,7 @@ type DotnetToolResource interface {
 	OnResourceReady(callback func(arg ResourceReadyEvent)) DotnetToolResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) DotnetToolResource
 	PublishAsDockerFile(configure func(obj ContainerResource)) DotnetToolResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) DotnetToolResource
 	TestWaitFor(dependency Resource) DotnetToolResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) DotnetToolResource
 	WaitFor(dependency Resource, options ...*WaitForOptions) DotnetToolResource
@@ -10006,6 +10857,7 @@ type DotnetToolResource interface {
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) DotnetToolResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) DotnetToolResource
 	WithConfig(config *TestConfigDto) DotnetToolResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) DotnetToolResource
 	WithContainerRegistry(registry Resource) DotnetToolResource
 	WithCorrelationId(correlationId string) DotnetToolResource
 	WithCreatedAt(createdAt string) DotnetToolResource
@@ -10030,6 +10882,7 @@ type DotnetToolResource interface {
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) DotnetToolResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) DotnetToolResource
 	WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) DotnetToolResource
+	WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) DotnetToolResource
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) DotnetToolResource
 	WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) DotnetToolResource
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) DotnetToolResource
@@ -10063,6 +10916,7 @@ type DotnetToolResource interface {
 	WithRemoteImageName(remoteImageName string) DotnetToolResource
 	WithRemoteImageTag(remoteImageTag string) DotnetToolResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) DotnetToolResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) DotnetToolResource
 	WithSessionLifetime() DotnetToolResource
 	WithStatus(status TestResourceStatus) DotnetToolResource
 	WithToolIgnoreExistingFeeds() DotnetToolResource
@@ -10292,6 +11146,25 @@ func (s *dotnetToolResource) PublishAsDockerFile(configure func(obj ContainerRes
 	return s
 }
 
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *dotnetToolResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // TestWaitFor waits for another resource (test version)
 func (s *dotnetToolResource) TestWaitFor(dependency Resource) DotnetToolResource {
 	if s.err != nil { return s }
@@ -10508,6 +11381,25 @@ func (s *dotnetToolResource) WithConfig(config *TestConfigDto) DotnetToolResourc
 	}
 	if config != nil { reqArgs["config"] = serializeValue(config) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *dotnetToolResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10884,6 +11776,25 @@ func (s *dotnetToolResource) WithHttpProbe(probeType ProbeType, options ...*With
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpProbe", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHttpsCertificateConfiguration adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+func (s *dotnetToolResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11441,6 +12352,32 @@ func (s *dotnetToolResource) WithRequiredCommand(command string, options ...*Wit
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *dotnetToolResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12694,6 +13631,7 @@ type ExecutableResource interface {
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ExecutableResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ExecutableResource
 	PublishAsDockerFile(configure func(obj ContainerResource)) ExecutableResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ExecutableResource
 	TestWaitFor(dependency Resource) ExecutableResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ExecutableResource
 	WaitFor(dependency Resource, options ...*WaitForOptions) ExecutableResource
@@ -12707,6 +13645,7 @@ type ExecutableResource interface {
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ExecutableResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ExecutableResource
 	WithConfig(config *TestConfigDto) ExecutableResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ExecutableResource
 	WithContainerRegistry(registry Resource) ExecutableResource
 	WithCorrelationId(correlationId string) ExecutableResource
 	WithCreatedAt(createdAt string) ExecutableResource
@@ -12731,6 +13670,7 @@ type ExecutableResource interface {
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ExecutableResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ExecutableResource
 	WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) ExecutableResource
+	WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) ExecutableResource
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ExecutableResource
 	WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) ExecutableResource
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) ExecutableResource
@@ -12764,6 +13704,7 @@ type ExecutableResource interface {
 	WithRemoteImageName(remoteImageName string) ExecutableResource
 	WithRemoteImageTag(remoteImageTag string) ExecutableResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExecutableResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExecutableResource
 	WithSessionLifetime() ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
 	WithUnionDependency(dependency any) ExecutableResource
@@ -12987,6 +13928,25 @@ func (s *executableResource) PublishAsDockerFile(configure func(obj ContainerRes
 	return s
 }
 
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *executableResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // TestWaitFor waits for another resource (test version)
 func (s *executableResource) TestWaitFor(dependency Resource) ExecutableResource {
 	if s.err != nil { return s }
@@ -13203,6 +14163,25 @@ func (s *executableResource) WithConfig(config *TestConfigDto) ExecutableResourc
 	}
 	if config != nil { reqArgs["config"] = serializeValue(config) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *executableResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -13579,6 +14558,25 @@ func (s *executableResource) WithHttpProbe(probeType ProbeType, options ...*With
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpProbe", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHttpsCertificateConfiguration adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+func (s *executableResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14139,6 +15137,32 @@ func (s *executableResource) WithRequiredCommand(command string, options ...*Wit
 	return s
 }
 
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *executableResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *executableResource) WithSessionLifetime() ExecutableResource {
 	if s.err != nil { return s }
@@ -14297,6 +15321,7 @@ type ExecuteCommandContext interface {
 	CancellationToken() (*CancellationToken, error)
 	Logger() Logger
 	ResourceName() (string, error)
+	Services() ServiceProvider
 	Err() error
 }
 
@@ -14376,6 +15401,25 @@ func (s *executeCommandContext) ResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// Services the service provider.
+func (s *executeCommandContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // ExecutionConfigurationBuilder is the public interface for handle type ExecutionConfigurationBuilder.
@@ -14550,11 +15594,13 @@ type ExternalServiceResource interface {
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ExternalServiceResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ExternalServiceResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ExternalServiceResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ExternalServiceResource
 	TestWaitFor(dependency Resource) ExternalServiceResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ExternalServiceResource
 	WithChildRelationship(child Resource) ExternalServiceResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ExternalServiceResource
 	WithConfig(config *TestConfigDto) ExternalServiceResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ExternalServiceResource
 	WithContainerRegistry(registry Resource) ExternalServiceResource
 	WithCorrelationId(correlationId string) ExternalServiceResource
 	WithCreatedAt(createdAt string) ExternalServiceResource
@@ -14589,6 +15635,7 @@ type ExternalServiceResource interface {
 	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ExternalServiceResource
 	WithRelationship(resourceBuilder Resource, type_ string) ExternalServiceResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExternalServiceResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExternalServiceResource
 	WithSessionLifetime() ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
 	WithUnionDependency(dependency any) ExternalServiceResource
@@ -14741,6 +15788,25 @@ func (s *externalServiceResource) OnResourceStopped(callback func(arg ResourceSt
 	return s
 }
 
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *externalServiceResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // TestWaitFor waits for another resource (test version)
 func (s *externalServiceResource) TestWaitFor(dependency Resource) ExternalServiceResource {
 	if s.err != nil { return s }
@@ -14822,6 +15888,25 @@ func (s *externalServiceResource) WithConfig(config *TestConfigDto) ExternalServ
 	}
 	if config != nil { reqArgs["config"] = serializeValue(config) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *externalServiceResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -15353,6 +16438,32 @@ func (s *externalServiceResource) WithRequiredCommand(command string, options ..
 	return s
 }
 
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *externalServiceResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *externalServiceResource) WithSessionLifetime() ExternalServiceResource {
 	if s.err != nil { return s }
@@ -15737,6 +16848,260 @@ func (s *httpCommandPrepareRequestContext) ResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
+// HttpsCertificateConfigurationCallbackAnnotationContext is the public interface for handle type HttpsCertificateConfigurationCallbackAnnotationContext.
+type HttpsCertificateConfigurationCallbackAnnotationContext interface {
+	handleReference
+	Arguments() CommandLineArgsEditor
+	CancellationToken() (*CancellationToken, error)
+	CertificatePath() *ReferenceExpression
+	Environment() EnvironmentEditor
+	ExecutionContext() DistributedApplicationExecutionContext
+	KeyPath() *ReferenceExpression
+	PfxPath() *ReferenceExpression
+	Resource() Resource
+	Err() error
+}
+
+// httpsCertificateConfigurationCallbackAnnotationContext is the unexported impl of HttpsCertificateConfigurationCallbackAnnotationContext.
+type httpsCertificateConfigurationCallbackAnnotationContext struct {
+	*resourceBuilderBase
+}
+
+// newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle wraps an existing handle as HttpsCertificateConfigurationCallbackAnnotationContext.
+func newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle(h *handle, c *client) HttpsCertificateConfigurationCallbackAnnotationContext {
+	return &httpsCertificateConfigurationCallbackAnnotationContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Arguments gets the editor used to manipulate the command-line arguments in polyglot callbacks.
+func (s *httpsCertificateConfigurationCallbackAnnotationContext) Arguments() CommandLineArgsEditor {
+	if s.err != nil { return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.arguments", reqArgs)
+	if err != nil {
+		return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.arguments returned unexpected type %T", result)
+		return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &commandLineArgsEditor{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// CancellationToken gets the `CancellationToken` that can be used to cancel the operation.
+func (s *httpsCertificateConfigurationCallbackAnnotationContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// CertificatePath a value provider that will resolve to a path to the certificate file.
+func (s *httpsCertificateConfigurationCallbackAnnotationContext) CertificatePath() *ReferenceExpression {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificatePath", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(*ReferenceExpression)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificatePath returned unexpected type %T", result))
+		return nil
+	}
+	return typed
+}
+
+// Environment gets the editor used to set environment variables in polyglot callbacks.
+func (s *httpsCertificateConfigurationCallbackAnnotationContext) Environment() EnvironmentEditor {
+	if s.err != nil { return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.environment", reqArgs)
+	if err != nil {
+		return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.environment returned unexpected type %T", result)
+		return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &environmentEditor{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ExecutionContext gets the `DistributedApplicationExecutionContext` for this session.
+func (s *httpsCertificateConfigurationCallbackAnnotationContext) ExecutionContext() DistributedApplicationExecutionContext {
+	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.executionContext", reqArgs)
+	if err != nil {
+		return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.executionContext returned unexpected type %T", result)
+		return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// KeyPath a value provider that will resolve to a path to the private key for the certificate.
+func (s *httpsCertificateConfigurationCallbackAnnotationContext) KeyPath() *ReferenceExpression {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(*ReferenceExpression)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath returned unexpected type %T", result))
+		return nil
+	}
+	return typed
+}
+
+// PfxPath a value provider that will resolve to a path to a PFX file for the key pair.
+func (s *httpsCertificateConfigurationCallbackAnnotationContext) PfxPath() *ReferenceExpression {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.pfxPath", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(*ReferenceExpression)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.pfxPath returned unexpected type %T", result))
+		return nil
+	}
+	return typed
+}
+
+// Resource gets the resource to which the annotation is applied.
+func (s *httpsCertificateConfigurationCallbackAnnotationContext) Resource() Resource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.resource", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(Resource)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.resource returned unexpected type %T", result))
+		return nil
+	}
+	return typed
+}
+
+// HttpsEndpointUpdateCallbackContext is the public interface for handle type HttpsEndpointUpdateCallbackContext.
+type HttpsEndpointUpdateCallbackContext interface {
+	handleReference
+	CancellationToken() (*CancellationToken, error)
+	Model() DistributedApplicationModel
+	Resource() Resource
+	Services() ServiceProvider
+	Err() error
+}
+
+// httpsEndpointUpdateCallbackContext is the unexported impl of HttpsEndpointUpdateCallbackContext.
+type httpsEndpointUpdateCallbackContext struct {
+	*resourceBuilderBase
+}
+
+// newHttpsEndpointUpdateCallbackContextFromHandle wraps an existing handle as HttpsEndpointUpdateCallbackContext.
+func newHttpsEndpointUpdateCallbackContextFromHandle(h *handle, c *client) HttpsEndpointUpdateCallbackContext {
+	return &httpsEndpointUpdateCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CancellationToken gets the `CancellationToken` for the operation.
+func (s *httpsEndpointUpdateCallbackContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// Model gets the `DistributedApplicationModel` instance.
+func (s *httpsEndpointUpdateCallbackContext) Model() DistributedApplicationModel {
+	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.model", reqArgs)
+	if err != nil {
+		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.model returned unexpected type %T", result)
+		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Resource gets the `IResource` that is being configured for HTTPS.
+func (s *httpsEndpointUpdateCallbackContext) Resource() Resource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.resource", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(Resource)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.resource returned unexpected type %T", result))
+		return nil
+	}
+	return typed
+}
+
+// Services gets the `IServiceProvider` instance from the application.
+func (s *httpsEndpointUpdateCallbackContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // IComputeResource is the public interface for handle type IComputeResource.
 type IComputeResource interface {
 	handleReference
@@ -15889,6 +17254,7 @@ type InputsDialogValidationContext interface {
 	AddValidationError(inputName string, errorMessage string) error
 	CancellationToken() (*CancellationToken, error)
 	Inputs() InteractionInputCollection
+	Services() ServiceProvider
 	Err() error
 }
 
@@ -15947,6 +17313,25 @@ func (s *inputsDialogValidationContext) Inputs() InteractionInputCollection {
 		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Services gets the service provider for resolving services during validation.
+func (s *inputsDialogValidationContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/InputsDialogValidationContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/InputsDialogValidationContext.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // InteractionInputCollection is the public interface for handle type InteractionInputCollection.
@@ -16179,11 +17564,13 @@ type ParameterResource interface {
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ParameterResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ParameterResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ParameterResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ParameterResource
 	TestWaitFor(dependency Resource) ParameterResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ParameterResource
 	WithChildRelationship(child Resource) ParameterResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ParameterResource
 	WithConfig(config *TestConfigDto) ParameterResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ParameterResource
 	WithContainerRegistry(registry Resource) ParameterResource
 	WithCorrelationId(correlationId string) ParameterResource
 	WithCreatedAt(createdAt string) ParameterResource
@@ -16219,6 +17606,7 @@ type ParameterResource interface {
 	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ParameterResource
 	WithRelationship(resourceBuilder Resource, type_ string) ParameterResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource
 	WithSessionLifetime() ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
 	WithUnionDependency(dependency any) ParameterResource
@@ -16371,6 +17759,25 @@ func (s *parameterResource) OnResourceStopped(callback func(arg ResourceStoppedE
 	return s
 }
 
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *parameterResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // TestWaitFor waits for another resource (test version)
 func (s *parameterResource) TestWaitFor(dependency Resource) ParameterResource {
 	if s.err != nil { return s }
@@ -16452,6 +17859,25 @@ func (s *parameterResource) WithConfig(config *TestConfigDto) ParameterResource 
 	}
 	if config != nil { reqArgs["config"] = serializeValue(config) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *parameterResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -16993,6 +18419,32 @@ func (s *parameterResource) WithRequiredCommand(command string, options ...*With
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *parameterResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -17807,6 +19259,7 @@ type ProjectResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ProjectResource
 	PublishAsDockerFile(options ...*PublishAsDockerFileOptions) ProjectResource
 	PublishWithContainerFiles(source ResourceWithContainerFiles, destinationPath string) ProjectResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ProjectResource
 	TestWaitFor(dependency Resource) ProjectResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ProjectResource
 	WaitFor(dependency Resource, options ...*WaitForOptions) ProjectResource
@@ -17820,6 +19273,7 @@ type ProjectResource interface {
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ProjectResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ProjectResource
 	WithConfig(config *TestConfigDto) ProjectResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ProjectResource
 	WithContainerRegistry(registry Resource) ProjectResource
 	WithCorrelationId(correlationId string) ProjectResource
 	WithCreatedAt(createdAt string) ProjectResource
@@ -17844,6 +19298,7 @@ type ProjectResource interface {
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ProjectResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ProjectResource
 	WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) ProjectResource
+	WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) ProjectResource
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ProjectResource
 	WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) ProjectResource
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) ProjectResource
@@ -17878,6 +19333,7 @@ type ProjectResource interface {
 	WithRemoteImageTag(remoteImageTag string) ProjectResource
 	WithReplicas(replicas float64) ProjectResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ProjectResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ProjectResource
 	WithSessionLifetime() ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
 	WithUnionDependency(dependency any) ProjectResource
@@ -18132,6 +19588,25 @@ func (s *projectResource) PublishWithContainerFiles(source ResourceWithContainer
 	return s
 }
 
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *projectResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // TestWaitFor waits for another resource (test version)
 func (s *projectResource) TestWaitFor(dependency Resource) ProjectResource {
 	if s.err != nil { return s }
@@ -18348,6 +19823,25 @@ func (s *projectResource) WithConfig(config *TestConfigDto) ProjectResource {
 	}
 	if config != nil { reqArgs["config"] = serializeValue(config) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *projectResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18724,6 +20218,25 @@ func (s *projectResource) WithHttpProbe(probeType ProbeType, options ...*WithHtt
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpProbe", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHttpsCertificateConfiguration adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+func (s *projectResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19293,6 +20806,32 @@ func (s *projectResource) WithRequiredCommand(command string, options ...*WithRe
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *projectResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19922,6 +21461,163 @@ func (s *reportingTask) UpdateTaskMarkdown(markdownString string, options ...*Up
 	}
 	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/updateTaskMarkdown", reqArgs)
 	return err
+}
+
+// RequiredCommandValidationContext is the public interface for handle type RequiredCommandValidationContext.
+type RequiredCommandValidationContext interface {
+	handleReference
+	CancellationToken() (*CancellationToken, error)
+	Failure(validationMessage string) RequiredCommandValidationResult
+	ResolvedPath() (string, error)
+	Services() ServiceProvider
+	Success() RequiredCommandValidationResult
+	Err() error
+}
+
+// requiredCommandValidationContext is the unexported impl of RequiredCommandValidationContext.
+type requiredCommandValidationContext struct {
+	*resourceBuilderBase
+}
+
+// newRequiredCommandValidationContextFromHandle wraps an existing handle as RequiredCommandValidationContext.
+func newRequiredCommandValidationContextFromHandle(h *handle, c *client) RequiredCommandValidationContext {
+	return &requiredCommandValidationContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CancellationToken gets a cancellation token that can be used to cancel the validation.
+func (s *requiredCommandValidationContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// Failure creates a failed validation result with the specified message.
+func (s *requiredCommandValidationContext) Failure(validationMessage string) RequiredCommandValidationResult {
+	if s.err != nil { return &requiredCommandValidationResult{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["validationMessage"] = serializeValue(validationMessage)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.failure", reqArgs)
+	if err != nil {
+		return &requiredCommandValidationResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.failure returned unexpected type %T", result)
+		return &requiredCommandValidationResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &requiredCommandValidationResult{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ResolvedPath gets the resolved full path to the command executable.
+func (s *requiredCommandValidationContext) ResolvedPath() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.resolvedPath", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// Services gets the service provider for accessing application services.
+func (s *requiredCommandValidationContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Success creates a successful validation result.
+func (s *requiredCommandValidationContext) Success() RequiredCommandValidationResult {
+	if s.err != nil { return &requiredCommandValidationResult{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.success", reqArgs)
+	if err != nil {
+		return &requiredCommandValidationResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.success returned unexpected type %T", result)
+		return &requiredCommandValidationResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &requiredCommandValidationResult{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// RequiredCommandValidationResult is the public interface for handle type RequiredCommandValidationResult.
+type RequiredCommandValidationResult interface {
+	handleReference
+	IsValid() (bool, error)
+	ValidationMessage() (string, error)
+	Err() error
+}
+
+// requiredCommandValidationResult is the unexported impl of RequiredCommandValidationResult.
+type requiredCommandValidationResult struct {
+	*resourceBuilderBase
+}
+
+// newRequiredCommandValidationResultFromHandle wraps an existing handle as RequiredCommandValidationResult.
+func newRequiredCommandValidationResultFromHandle(h *handle, c *client) RequiredCommandValidationResult {
+	return &requiredCommandValidationResult{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// IsValid gets a value indicating whether the command validation succeeded.
+func (s *requiredCommandValidationResult) IsValid() (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.isValid", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
+}
+
+// ValidationMessage gets an optional validation message describing why validation failed.
+func (s *requiredCommandValidationResult) ValidationMessage() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.validationMessage", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
 }
 
 // ResourceCommandService is the public interface for handle type ResourceCommandService.
@@ -20898,6 +22594,7 @@ type TestDatabaseResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) TestDatabaseResource
 	PublishAsConnectionString() TestDatabaseResource
 	PublishAsContainer() TestDatabaseResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) TestDatabaseResource
 	TestWaitFor(dependency Resource) TestDatabaseResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestDatabaseResource
 	WaitFor(dependency Resource, options ...*WaitForOptions) TestDatabaseResource
@@ -20914,8 +22611,10 @@ type TestDatabaseResource interface {
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) TestDatabaseResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestDatabaseResource
 	WithConfig(config *TestConfigDto) TestDatabaseResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) TestDatabaseResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestDatabaseResource
 	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) TestDatabaseResource
+	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) TestDatabaseResource
 	WithContainerName(name string) TestDatabaseResource
 	WithContainerNetworkAlias(alias string) TestDatabaseResource
 	WithContainerRegistry(registry Resource) TestDatabaseResource
@@ -20946,6 +22645,7 @@ type TestDatabaseResource interface {
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) TestDatabaseResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) TestDatabaseResource
 	WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) TestDatabaseResource
+	WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) TestDatabaseResource
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) TestDatabaseResource
 	WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) TestDatabaseResource
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) TestDatabaseResource
@@ -20985,6 +22685,7 @@ type TestDatabaseResource interface {
 	WithRemoteImageName(remoteImageName string) TestDatabaseResource
 	WithRemoteImageTag(remoteImageTag string) TestDatabaseResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestDatabaseResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestDatabaseResource
 	WithSessionLifetime() TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
 	WithUnionDependency(dependency any) TestDatabaseResource
@@ -21208,6 +22909,25 @@ func (s *testDatabaseResource) PublishAsContainer() TestDatabaseResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsContainer", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *testDatabaseResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21484,6 +23204,25 @@ func (s *testDatabaseResource) WithConfig(config *TestConfigDto) TestDatabaseRes
 	return s
 }
 
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *testDatabaseResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithContainerCertificatePaths adds container certificate path overrides used for certificate trust at run time.
 func (s *testDatabaseResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -21519,6 +23258,32 @@ func (s *testDatabaseResource) WithContainerFiles(destinationPath string, source
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerFilesCallback creates or updates files and folders in a container using entries produced by a callback.
+func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["destinationPath"] = serializeValue(destinationPath)
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			return cb(callbackArg[ContainerFileSystemCallbackContext](args, 0), callbackArg[*CancellationToken](args, 1))
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithContainerFilesCallbackOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22003,6 +23768,25 @@ func (s *testDatabaseResource) WithHttpProbe(probeType ProbeType, options ...*Wi
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpProbe", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHttpsCertificateConfiguration adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+func (s *testDatabaseResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22642,6 +24426,32 @@ func (s *testDatabaseResource) WithRequiredCommand(command string, options ...*W
 	return s
 }
 
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *testDatabaseResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *testDatabaseResource) WithSessionLifetime() TestDatabaseResource {
 	if s.err != nil { return s }
@@ -22986,6 +24796,7 @@ type TestRedisResource interface {
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) TestRedisResource
 	PublishAsConnectionString() TestRedisResource
 	PublishAsContainer() TestRedisResource
+	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) TestRedisResource
 	TestWaitFor(dependency Resource) TestRedisResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestRedisResource
 	WaitFor(dependency Resource, options ...*WaitForOptions) TestRedisResource
@@ -23006,8 +24817,10 @@ type TestRedisResource interface {
 	WithConnectionProperty(name string, value any) TestRedisResource
 	WithConnectionString(connectionString *ReferenceExpression) TestRedisResource
 	WithConnectionStringDirect(connectionString string) TestRedisResource
+	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) TestRedisResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestRedisResource
 	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) TestRedisResource
+	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) TestRedisResource
 	WithContainerName(name string) TestRedisResource
 	WithContainerNetworkAlias(alias string) TestRedisResource
 	WithContainerRegistry(registry Resource) TestRedisResource
@@ -23039,6 +24852,7 @@ type TestRedisResource interface {
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) TestRedisResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) TestRedisResource
 	WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) TestRedisResource
+	WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) TestRedisResource
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) TestRedisResource
 	WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) TestRedisResource
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) TestRedisResource
@@ -23081,6 +24895,7 @@ type TestRedisResource interface {
 	WithRemoteImageName(remoteImageName string) TestRedisResource
 	WithRemoteImageTag(remoteImageTag string) TestRedisResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestRedisResource
+	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestRedisResource
 	WithSessionLifetime() TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
 	WithUnionDependency(dependency any) TestRedisResource
@@ -23434,6 +25249,25 @@ func (s *testRedisResource) PublishAsContainer() TestRedisResource {
 	return s
 }
 
+// SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+func (s *testRedisResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsEndpointUpdateCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // TestWaitFor waits for another resource (test version)
 func (s *testRedisResource) TestWaitFor(dependency Resource) TestRedisResource {
 	if s.err != nil { return s }
@@ -23781,6 +25615,25 @@ func (s *testRedisResource) WithConnectionStringDirect(connectionString string) 
 	return s
 }
 
+// WithContainerBuildOptions configures container build options for a compute resource using an async callback.
+func (s *testRedisResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[ContainerBuildOptionsCallbackContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerBuildOptions", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithContainerCertificatePaths adds container certificate path overrides used for certificate trust at run time.
 func (s *testRedisResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestRedisResource {
 	if s.err != nil { return s }
@@ -23816,6 +25669,32 @@ func (s *testRedisResource) WithContainerFiles(destinationPath string, sourcePat
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerFilesCallback creates or updates files and folders in a container using entries produced by a callback.
+func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["destinationPath"] = serializeValue(destinationPath)
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			return cb(callbackArg[ContainerFileSystemCallbackContext](args, 0), callbackArg[*CancellationToken](args, 1))
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithContainerFilesCallbackOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24318,6 +26197,25 @@ func (s *testRedisResource) WithHttpProbe(probeType ProbeType, options ...*WithH
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpProbe", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHttpsCertificateConfiguration adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+func (s *testRedisResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[HttpsCertificateConfigurationCallbackAnnotationContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -25006,6 +26904,32 @@ func (s *testRedisResource) WithRequiredCommand(command string, options ...*With
 	return s
 }
 
+// WithRequiredCommandValidation declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+func (s *testRedisResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["command"] = serializeValue(command)
+	if validationCallback != nil {
+		cb := validationCallback
+		shim := func(args ...any) any {
+			return cb(callbackArg[RequiredCommandValidationContext](args, 0))
+		}
+		reqArgs["validationCallback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredCommandValidationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *testRedisResource) WithSessionLifetime() TestRedisResource {
 	if s.err != nil { return s }
@@ -25287,6 +27211,7 @@ func (s *testResourceContext) Value() (float64, error) {
 type UpdateCommandStateContext interface {
 	handleReference
 	ResourceSnapshot() (*UpdateCommandStateResourceSnapshot, error)
+	Services() ServiceProvider
 	Err() error
 }
 
@@ -25313,6 +27238,25 @@ func (s *updateCommandStateContext) ResourceSnapshot() (*UpdateCommandStateResou
 		return zero, err
 	}
 	return decodeAs[*UpdateCommandStateResourceSnapshot](result)
+}
+
+// Services the service provider.
+func (s *updateCommandStateContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // UserSecretsManager is the public interface for handle type UserSecretsManager.
@@ -25572,6 +27516,18 @@ func (o *WithContainerFilesOptions) ToMap() map[string]any {
 	return m
 }
 
+// WithContainerFilesCallbackOptions carries optional parameters for WithContainerFilesCallback.
+type WithContainerFilesCallbackOptions struct {
+	Options *ContainerFilesOptions `json:"options,omitempty"`
+}
+
+func (o *WithContainerFilesCallbackOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
 // WithDockerfileBuilderOptions carries optional parameters for WithDockerfileBuilder.
 type WithDockerfileBuilderOptions struct {
 	Stage *string `json:"stage,omitempty"`
@@ -25758,6 +27714,18 @@ type WithRequiredCommandOptions struct {
 }
 
 func (o *WithRequiredCommandOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.HelpLink != nil { m["helpLink"] = serializeValue(o.HelpLink) }
+	return m
+}
+
+// WithRequiredCommandValidationOptions carries optional parameters for WithRequiredCommandValidation.
+type WithRequiredCommandValidationOptions struct {
+	HelpLink *string `json:"helpLink,omitempty"`
+}
+
+func (o *WithRequiredCommandValidationOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.HelpLink != nil { m["helpLink"] = serializeValue(o.HelpLink) }
@@ -26322,6 +28290,66 @@ func (o *SaveStateJsonOptions) ToMap() map[string]any {
 	return m
 }
 
+// CreateFileOptions carries optional parameters for CreateFile.
+type CreateFileOptions struct {
+	Contents *string `json:"contents,omitempty"`
+	SourcePath *string `json:"sourcePath,omitempty"`
+	Owner *float64 `json:"owner,omitempty"`
+	Group *float64 `json:"group,omitempty"`
+	Mode *float64 `json:"mode,omitempty"`
+	ContinueOnError *bool `json:"continueOnError,omitempty"`
+}
+
+func (o *CreateFileOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Contents != nil { m["contents"] = serializeValue(o.Contents) }
+	if o.SourcePath != nil { m["sourcePath"] = serializeValue(o.SourcePath) }
+	if o.Owner != nil { m["owner"] = serializeValue(o.Owner) }
+	if o.Group != nil { m["group"] = serializeValue(o.Group) }
+	if o.Mode != nil { m["mode"] = serializeValue(o.Mode) }
+	if o.ContinueOnError != nil { m["continueOnError"] = serializeValue(o.ContinueOnError) }
+	return m
+}
+
+// CreateCertificateFileOptions carries optional parameters for CreateCertificateFile.
+type CreateCertificateFileOptions struct {
+	Contents *string `json:"contents,omitempty"`
+	SourcePath *string `json:"sourcePath,omitempty"`
+	Owner *float64 `json:"owner,omitempty"`
+	Group *float64 `json:"group,omitempty"`
+	Mode *float64 `json:"mode,omitempty"`
+	ContinueOnError *bool `json:"continueOnError,omitempty"`
+}
+
+func (o *CreateCertificateFileOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Contents != nil { m["contents"] = serializeValue(o.Contents) }
+	if o.SourcePath != nil { m["sourcePath"] = serializeValue(o.SourcePath) }
+	if o.Owner != nil { m["owner"] = serializeValue(o.Owner) }
+	if o.Group != nil { m["group"] = serializeValue(o.Group) }
+	if o.Mode != nil { m["mode"] = serializeValue(o.Mode) }
+	if o.ContinueOnError != nil { m["continueOnError"] = serializeValue(o.ContinueOnError) }
+	return m
+}
+
+// CreateDirectoryOptions carries optional parameters for CreateDirectory.
+type CreateDirectoryOptions struct {
+	Owner *float64 `json:"owner,omitempty"`
+	Group *float64 `json:"group,omitempty"`
+	Mode *float64 `json:"mode,omitempty"`
+}
+
+func (o *CreateDirectoryOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Owner != nil { m["owner"] = serializeValue(o.Owner) }
+	if o.Group != nil { m["group"] = serializeValue(o.Group) }
+	if o.Mode != nil { m["mode"] = serializeValue(o.Mode) }
+	return m
+}
+
 // GetValueAsyncOptions carries optional parameters for GetValueAsync.
 type GetValueAsyncOptions struct {
 	CancellationToken *CancellationToken `json:"-"`
@@ -26553,6 +28581,15 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", func(h *handle, c *client) any {
 		return newConnectionStringAvailableEventFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext", func(h *handle, c *client) any {
+		return newContainerBuildOptionsCallbackContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext", func(h *handle, c *client) any {
+		return newContainerFileSystemCallbackContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem", func(h *handle, c *client) any {
+		return newContainerFileSystemItemFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions", func(h *handle, c *client) any {
 		return newContainerImagePushOptionsFromHandle(h, c)
 	})
@@ -26655,6 +28692,12 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext", func(h *handle, c *client) any {
 		return newHttpCommandPrepareRequestContextFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext", func(h *handle, c *client) any {
+		return newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext", func(h *handle, c *client) any {
+		return newHttpsEndpointUpdateCallbackContextFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource", func(h *handle, c *client) any {
 		return newIComputeResourceFromHandle(h, c)
 	})
@@ -26717,6 +28760,12 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask", func(h *handle, c *client) any {
 		return newReportingTaskFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext", func(h *handle, c *client) any {
+		return newRequiredCommandValidationContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult", func(h *handle, c *client) any {
+		return newRequiredCommandValidationResultFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", func(h *handle, c *client) any {
 		return newResourceCommandServiceFromHandle(h, c)

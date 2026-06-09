@@ -297,6 +297,78 @@ impl std::fmt::Display for ProbeType {
     }
 }
 
+/// ContainerImageDestination
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContainerImageDestination {
+    #[default]
+    #[serde(rename = "Registry")]
+    Registry,
+    #[serde(rename = "Archive")]
+    Archive,
+}
+
+impl std::fmt::Display for ContainerImageDestination {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Registry => write!(f, "Registry"),
+            Self::Archive => write!(f, "Archive"),
+        }
+    }
+}
+
+/// ContainerImageFormat
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContainerImageFormat {
+    #[default]
+    #[serde(rename = "Docker")]
+    Docker,
+    #[serde(rename = "Oci")]
+    Oci,
+}
+
+impl std::fmt::Display for ContainerImageFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Docker => write!(f, "Docker"),
+            Self::Oci => write!(f, "Oci"),
+        }
+    }
+}
+
+/// ContainerTargetPlatform
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContainerTargetPlatform {
+    #[default]
+    #[serde(rename = "LinuxAmd64")]
+    LinuxAmd64,
+    #[serde(rename = "LinuxArm64")]
+    LinuxArm64,
+    #[serde(rename = "AllLinux")]
+    AllLinux,
+    #[serde(rename = "LinuxArm")]
+    LinuxArm,
+    #[serde(rename = "Linux386")]
+    Linux386,
+    #[serde(rename = "WindowsAmd64")]
+    WindowsAmd64,
+    #[serde(rename = "WindowsArm64")]
+    WindowsArm64,
+}
+
+impl std::fmt::Display for ContainerTargetPlatform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LinuxAmd64 => write!(f, "LinuxAmd64"),
+            Self::LinuxArm64 => write!(f, "LinuxArm64"),
+            Self::AllLinux => write!(f, "AllLinux"),
+            Self::LinuxArm => write!(f, "LinuxArm"),
+            Self::Linux386 => write!(f, "Linux386"),
+            Self::WindowsAmd64 => write!(f, "WindowsAmd64"),
+            Self::WindowsArm64 => write!(f, "WindowsArm64"),
+        }
+    }
+}
+
 /// EndpointProperty
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EndpointProperty {
@@ -1908,6 +1980,21 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures a resource to use a session lifetime.
     pub fn with_session_lifetime(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -2417,6 +2504,28 @@ impl CSharpAppResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+    pub fn with_https_certificate_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsCertificateConfiguration", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -2681,6 +2790,17 @@ impl CSharpAppResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -3098,6 +3218,332 @@ impl ConnectionStringAvailableEvent {
     }
 }
 
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext
+pub struct ContainerBuildOptionsCallbackContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ContainerBuildOptionsCallbackContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ContainerBuildOptionsCallbackContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the resource being built.
+    pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.resource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets the service provider.
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
+    /// Gets the logger instance.
+    pub fn logger(&self) -> Result<ILogger, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.logger", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ILogger::new(handle, self.client.clone()))
+    }
+
+    /// Gets the cancellation token.
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+
+    /// Gets the distributed application execution context.
+    pub fn execution_context(&self) -> Result<DistributedApplicationExecutionContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.executionContext", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DistributedApplicationExecutionContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets or sets the destination for the container image.
+    pub fn destination(&self) -> Result<ContainerImageDestination, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.destination", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the Destination property
+    pub fn set_destination(&self, value: ContainerImageDestination) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setDestination", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerBuildOptionsCallbackContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets or sets the output path for the container archive.
+    pub fn output_path(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.outputPath", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the OutputPath property
+    pub fn set_output_path(&self, value: &str) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setOutputPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerBuildOptionsCallbackContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets or sets the container image format.
+    pub fn image_format(&self) -> Result<ContainerImageFormat, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.imageFormat", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the ImageFormat property
+    pub fn set_image_format(&self, value: ContainerImageFormat) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setImageFormat", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerBuildOptionsCallbackContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets or sets the target platform for the container.
+    pub fn target_platform(&self) -> Result<ContainerTargetPlatform, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.targetPlatform", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the TargetPlatform property
+    pub fn set_target_platform(&self, value: ContainerTargetPlatform) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setTargetPlatform", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerBuildOptionsCallbackContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets or sets the local image name for the built container.
+    pub fn local_image_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageName", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the LocalImageName property
+    pub fn set_local_image_name(&self, value: &str) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerBuildOptionsCallbackContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets or sets the local image tag for the built container.
+    pub fn local_image_tag(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageTag", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the LocalImageTag property
+    pub fn set_local_image_tag(&self, value: &str) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageTag", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerBuildOptionsCallbackContext::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext
+pub struct ContainerFileSystemCallbackContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ContainerFileSystemCallbackContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ContainerFileSystemCallbackContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// A `IServiceProvider` that can be used to resolve services in the callback.
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
+    /// The app model resource the callback is associated with.
+    pub fn model(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.model", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Creates a container file entry with inline contents or a host source path.
+    pub fn create_file(&self, name: &str, contents: Option<&str>, source_path: Option<&str>, owner: Option<f64>, group: Option<f64>, mode: Option<f64>, continue_on_error: Option<bool>) -> Result<ContainerFileSystemItem, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        if let Some(ref v) = contents {
+            args.insert("contents".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = source_path {
+            args.insert("sourcePath".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = owner {
+            args.insert("owner".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = group {
+            args.insert("group".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = mode {
+            args.insert("mode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = continue_on_error {
+            args.insert("continueOnError".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/createFile", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerFileSystemItem::new(handle, self.client.clone()))
+    }
+
+    /// Creates a PEM container certificate file entry with the OpenSSL subject-hash symlink.
+    pub fn create_certificate_file(&self, name: &str, contents: Option<&str>, source_path: Option<&str>, owner: Option<f64>, group: Option<f64>, mode: Option<f64>, continue_on_error: Option<bool>) -> Result<ContainerFileSystemItem, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        if let Some(ref v) = contents {
+            args.insert("contents".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = source_path {
+            args.insert("sourcePath".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = owner {
+            args.insert("owner".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = group {
+            args.insert("group".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = mode {
+            args.insert("mode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = continue_on_error {
+            args.insert("continueOnError".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/createCertificateFile", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerFileSystemItem::new(handle, self.client.clone()))
+    }
+
+    /// Creates a container directory entry containing the specified child entries.
+    pub fn create_directory(&self, name: &str, entries: Vec<ContainerFileSystemItem>, owner: Option<f64>, group: Option<f64>, mode: Option<f64>) -> Result<ContainerFileSystemItem, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        let handles: Vec<Value> = entries.iter().map(|item| item.handle().to_json()).collect();
+        args.insert("entries".to_string(), Value::Array(handles));
+        if let Some(ref v) = owner {
+            args.insert("owner".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = group {
+            args.insert("group".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = mode {
+            args.insert("mode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/createDirectory", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerFileSystemItem::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem
+pub struct ContainerFileSystemItem {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ContainerFileSystemItem {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ContainerFileSystemItem {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions
 pub struct ContainerImagePushOptions {
     handle: Handle,
@@ -3420,6 +3866,21 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures a resource to use a session lifetime.
     pub fn with_session_lifetime(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -3562,6 +4023,17 @@ impl ContainerRegistryResource {
             args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -3737,6 +4209,17 @@ impl ContainerRegistryResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -4228,6 +4711,21 @@ impl ContainerResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Creates or updates files and folders in a container using entries produced by a callback.
+    pub fn with_container_files_callback(&self, destination_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("destinationPath".to_string(), serde_json::to_value(&destination_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerFilesCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use a programmatically generated Dockerfile
     pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -4313,6 +4811,21 @@ impl ContainerResource {
             args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -4815,6 +5328,28 @@ impl ContainerResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+    pub fn with_https_certificate_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsCertificateConfiguration", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -5085,6 +5620,17 @@ impl ContainerResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -6122,6 +6668,21 @@ impl DotnetToolResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures a resource to use a session lifetime.
     pub fn with_session_lifetime(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -6620,6 +7181,28 @@ impl DotnetToolResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+    pub fn with_https_certificate_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsCertificateConfiguration", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -6874,6 +7457,17 @@ impl DotnetToolResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -7901,6 +8495,21 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures a resource to use a session lifetime.
     pub fn with_session_lifetime(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -8399,6 +9008,28 @@ impl ExecutableResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+    pub fn with_https_certificate_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsCertificateConfiguration", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -8653,6 +9284,17 @@ impl ExecutableResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -8954,6 +9596,15 @@ impl ExecuteCommandContext {
         &self.client
     }
 
+    /// The service provider.
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
     /// The resource name.
     pub fn resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9067,6 +9718,21 @@ impl ExternalServiceResource {
             args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -9213,6 +9879,17 @@ impl ExternalServiceResource {
             args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -9388,6 +10065,17 @@ impl ExternalServiceResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -9701,6 +10389,163 @@ impl HttpCommandPrepareRequestContext {
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(InteractionInputCollection::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext
+pub struct HttpsCertificateConfigurationCallbackAnnotationContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for HttpsCertificateConfigurationCallbackAnnotationContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl HttpsCertificateConfigurationCallbackAnnotationContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the `DistributedApplicationExecutionContext` for this session.
+    pub fn execution_context(&self) -> Result<DistributedApplicationExecutionContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.executionContext", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DistributedApplicationExecutionContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the resource to which the annotation is applied.
+    pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.resource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// A value provider that will resolve to a path to the certificate file.
+    pub fn certificate_path(&self) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificatePath", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// A value provider that will resolve to a path to the private key for the certificate.
+    pub fn key_path(&self) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// A value provider that will resolve to a path to a PFX file for the key pair.
+    pub fn pfx_path(&self) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.pfxPath", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the `CancellationToken` that can be used to cancel the operation.
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+
+    /// Gets the editor used to manipulate the command-line arguments in polyglot callbacks.
+    pub fn arguments(&self) -> Result<CommandLineArgsEditor, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.arguments", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CommandLineArgsEditor::new(handle, self.client.clone()))
+    }
+
+    /// Gets the editor used to set environment variables in polyglot callbacks.
+    pub fn environment(&self) -> Result<EnvironmentEditor, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.environment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EnvironmentEditor::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext
+pub struct HttpsEndpointUpdateCallbackContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for HttpsEndpointUpdateCallbackContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl HttpsEndpointUpdateCallbackContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the `IServiceProvider` instance from the application.
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
+    /// Gets the `IResource` that is being configured for HTTPS.
+    pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.resource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets the `DistributedApplicationModel` instance.
+    pub fn model(&self) -> Result<DistributedApplicationModel, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.model", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DistributedApplicationModel::new(handle, self.client.clone()))
+    }
+
+    /// Gets the `CancellationToken` for the operation.
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
     }
 }
 
@@ -11616,6 +12461,15 @@ impl InputsDialogValidationContext {
         Ok(CancellationToken::new(handle, self.client.clone()))
     }
 
+    /// Gets the service provider for resolving services during validation.
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/InputsDialogValidationContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
     /// Adds a validation error for the input with the specified name.
     pub fn add_validation_error(&self, input_name: &str, error_message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -11809,6 +12663,21 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures a resource to use a session lifetime.
     pub fn with_session_lifetime(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -11951,6 +12820,17 @@ impl ParameterResource {
             args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -12126,6 +13006,17 @@ impl ParameterResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -12965,6 +13856,21 @@ impl ProjectResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Configures a resource to use a session lifetime.
     pub fn with_session_lifetime(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -13474,6 +14380,28 @@ impl ProjectResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+    pub fn with_https_certificate_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsCertificateConfiguration", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -13738,6 +14666,17 @@ impl ProjectResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -14165,6 +15104,119 @@ impl ReferenceExpressionBuilder {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/build", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext
+pub struct RequiredCommandValidationContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for RequiredCommandValidationContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl RequiredCommandValidationContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the resolved full path to the command executable.
+    pub fn resolved_path(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.resolvedPath", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the service provider for accessing application services.
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
+    /// Gets a cancellation token that can be used to cancel the validation.
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+
+    /// Creates a successful validation result.
+    pub fn success(&self) -> Result<RequiredCommandValidationResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.success", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(RequiredCommandValidationResult::new(handle, self.client.clone()))
+    }
+
+    /// Creates a failed validation result with the specified message.
+    pub fn failure(&self, validation_message: &str) -> Result<RequiredCommandValidationResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("validationMessage".to_string(), serde_json::to_value(&validation_message).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.failure", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(RequiredCommandValidationResult::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult
+pub struct RequiredCommandValidationResult {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for RequiredCommandValidationResult {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl RequiredCommandValidationResult {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets a value indicating whether the command validation succeeded.
+    pub fn is_valid(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.isValid", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets an optional validation message describing why validation failed.
+    pub fn validation_message(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.validationMessage", args)?;
         Ok(serde_json::from_value(result)?)
     }
 }
@@ -14966,6 +16018,21 @@ impl TestDatabaseResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Creates or updates files and folders in a container using entries produced by a callback.
+    pub fn with_container_files_callback(&self, destination_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("destinationPath".to_string(), serde_json::to_value(&destination_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerFilesCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use a programmatically generated Dockerfile
     pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15051,6 +16118,21 @@ impl TestDatabaseResource {
             args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -15553,6 +16635,28 @@ impl TestDatabaseResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+    pub fn with_https_certificate_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsCertificateConfiguration", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15823,6 +16927,17 @@ impl TestDatabaseResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -16471,6 +17586,21 @@ impl TestRedisResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Creates or updates files and folders in a container using entries produced by a callback.
+    pub fn with_container_files_callback(&self, destination_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("destinationPath".to_string(), serde_json::to_value(&destination_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerFilesCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use a programmatically generated Dockerfile
     pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -16556,6 +17686,21 @@ impl TestRedisResource {
             args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -17078,6 +18223,28 @@ impl TestRedisResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+    pub fn with_https_certificate_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsCertificateConfiguration", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -17359,6 +18526,17 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds a child database to a test Redis resource
@@ -18082,6 +19260,21 @@ impl TestVaultResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Creates or updates files and folders in a container using entries produced by a callback.
+    pub fn with_container_files_callback(&self, destination_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ContainerFilesOptions>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("destinationPath".to_string(), serde_json::to_value(&destination_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerFilesCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Configures the resource to use a programmatically generated Dockerfile
     pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -18167,6 +19360,21 @@ impl TestVaultResource {
             args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+    pub fn with_required_command_validation(&self, command: &str, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = help_link {
+            args.insert("helpLink".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequiredCommandValidation", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -18669,6 +19877,28 @@ impl TestVaultResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+    pub fn with_https_certificate_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsCertificateConfiguration", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+    pub fn subscribe_https_endpoints_update(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -18939,6 +20169,17 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures container build options for a compute resource using an async callback.
+    pub fn with_container_build_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -19256,6 +20497,15 @@ impl UpdateCommandStateContext {
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot", args)?;
         Ok(serde_json::from_value(result)?)
+    }
+
+    /// The service provider.
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 }
 

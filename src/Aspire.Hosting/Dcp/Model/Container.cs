@@ -365,6 +365,7 @@ internal sealed class ContainerCreateFileSystem : IEquatable<ContainerCreateFile
 
 internal static class ContainerFileSystemItemExtensions
 {
+    [AspireExportIgnore(Reason = "Internal conversion to the DCP ContainerFileSystemEntry model, which is not part of the ATS surface.")]
     public static ContainerFileSystemEntry ToContainerFileSystemEntry(this ContainerFileSystemItem item)
     {
         var type = item switch

@@ -73,6 +73,21 @@ void main() throws Exception {
         containerFilesOptions.setDefaultGroup(1000.0);
         containerFilesOptions.setUmask(18.0);
         container.withContainerFiles("/usr/lib/aspire/container-files", ".", containerFilesOptions);
+        var callbackContainerFilesOptions = new ContainerFilesOptions();
+        callbackContainerFilesOptions.setDefaultOwner(1000.0);
+        callbackContainerFilesOptions.setDefaultGroup(1000.0);
+        callbackContainerFilesOptions.setUmask(18.0);
+        container.withContainerFilesCallback("/usr/lib/aspire/container-files", (filesCtx, filesCancellationToken) -> {
+            var filesServices = filesCtx.services();
+            var filesLoggerFactory = filesServices.getLoggerFactory();
+            var filesLogger = filesLoggerFactory.createLogger("ValidationAppHost.ContainerFilesCallback");
+            filesLogger.logInformation("ContainerFilesCallback services");
+            var appConfig = filesCtx.createFile("app.conf", new CreateFileOptions().contents("key=value").mode(420.0));
+            var nestedConfig = filesCtx.createFile("nested.conf", new CreateFileOptions().contents("nested=true"));
+            var confDir = filesCtx.createDirectory("conf.d", new ContainerFileSystemItem[] { nestedConfig }, new CreateDirectoryOptions().mode(493.0));
+            var cert = filesCtx.createCertificateFile("server.pem", new CreateCertificateFileOptions().contents("-----BEGIN CERTIFICATE-----"));
+            return new ContainerFileSystemItem[] { appConfig, confDir, cert };
+        }, callbackContainerFilesOptions);
         container.withImageRegistry("docker.io");
         dockerContainer.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
         dockerContainer.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8080.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("http").createIfNotExists(false));
@@ -129,6 +144,14 @@ void main() throws Exception {
         });
         container.withMcpServer(new WithMcpServerOptions().path("/mcp"));
         container.withRequiredCommand("docker");
+        container.withRequiredCommandValidation("docker", (validationCtx) -> {
+            var _validationResolvedPath = validationCtx.resolvedPath();
+            var validationServices = validationCtx.services();
+            var validationLoggerFactory = validationServices.getLoggerFactory();
+            var validationLogger = validationLoggerFactory.createLogger("ValidationAppHost.RequiredCommandValidation");
+            validationLogger.logInformation("RequiredCommandValidation services");
+            return validationCtx.success();
+        });
         tool.withToolIgnoreExistingFeeds();
         tool.withToolIgnoreFailedSources();
         tool.withToolPackage("dotnet-ef");
@@ -248,6 +271,10 @@ void main() throws Exception {
         var commandOptions = new CommandOptions();
         commandOptions.setUpdateState((Function<UpdateCommandStateContext, ResourceCommandState>) (ctx) -> {
             var snapshot = ctx.resourceSnapshot();
+            var updateStateServices = ctx.services();
+            var updateStateLoggerFactory = updateStateServices.getLoggerFactory();
+            var updateStateLogger = updateStateLoggerFactory.createLogger("ValidationAppHost.UpdateCommandState");
+            updateStateLogger.logInformation("UpdateCommandState services");
             return snapshot.getHealthStatus() == HealthStatus.HEALTHY ? ResourceCommandState.ENABLED : ResourceCommandState.DISABLED;
         });
         container.withCommand("noop", "Noop", (_ctx) -> {
@@ -261,8 +288,19 @@ void main() throws Exception {
         messageArgument.setInputType(InputType.TEXT);
         messageArgument.setRequired(true);
         echoCommandOptions.setArguments(new InteractionInput[] { messageArgument });
+        echoCommandOptions.setValidateArguments((Function<InputsDialogValidationContext, Object>) (ctx) -> {
+            var validationServices = ctx.services();
+            var validationLoggerFactory = validationServices.getLoggerFactory();
+            var validationLogger = validationLoggerFactory.createLogger("ValidationAppHost.ValidateCommandArguments");
+            validationLogger.logInformation("Validate command arguments services");
+            return null;
+        });
         container.withCommand("echo", "Echo", (ctx) -> {
             var commandArguments = ctx.arguments().toArray();
+            var echoServices = ctx.services();
+            var echoLoggerFactory = echoServices.getLoggerFactory();
+            var echoLogger = echoLoggerFactory.createLogger("ValidationAppHost.EchoCommand");
+            echoLogger.logInformation("Echo command services");
             var result = new ExecuteCommandResult();
             result.setSuccess("hello".equals(commandArguments[0].getValue()));
             return result;
@@ -277,6 +315,42 @@ void main() throws Exception {
                     .cancellationToken(cancellationToken));
         });
         container.withHealthCheck("custom_check");
+        container.withHttpsCertificateConfiguration((certCtx) -> {
+            var _certResource = certCtx.resource();
+            var _certIsRunMode = certCtx.executionContext().isRunMode();
+            var certificatePath = certCtx.certificatePath();
+            var keyPath = certCtx.keyPath();
+            var certArgs = certCtx.arguments();
+            certArgs.add("--certificate");
+            certArgs.add(certificatePath);
+            certArgs.add("--key");
+            certArgs.add(keyPath);
+            var certEnv = certCtx.environment();
+            certEnv.set("Kestrel__Certificates__Path", certificatePath);
+            certEnv.set("Kestrel__Certificates__KeyPath", keyPath);
+        });
+        container.subscribeHttpsEndpointsUpdate((httpsCtx) -> {
+            var _httpsResource = httpsCtx.resource();
+            var _httpsModel = httpsCtx.model();
+            var httpsServices = httpsCtx.services();
+            var httpsLoggerFactory = httpsServices.getLoggerFactory();
+            var httpsLogger = httpsLoggerFactory.createLogger("ValidationAppHost.HttpsEndpointsUpdate");
+            httpsLogger.logInformation("HttpsEndpointsUpdate services");
+        });
+        container.withContainerBuildOptions((buildCtx) -> {
+            buildCtx.setDestination(ContainerImageDestination.REGISTRY);
+            buildCtx.setImageFormat(ContainerImageFormat.OCI);
+            buildCtx.setTargetPlatform(ContainerTargetPlatform.LINUX_AMD64);
+            buildCtx.setOutputPath("./artifacts/container-image");
+            buildCtx.setLocalImageName("validation-image");
+            buildCtx.setLocalImageTag("latest");
+            var _buildResource = buildCtx.resource();
+            var _buildExecutionContext = buildCtx.executionContext();
+            var buildServices = buildCtx.services();
+            var buildLoggerFactory = buildServices.getLoggerFactory();
+            var buildLogger = buildLoggerFactory.createLogger("ValidationAppHost.ContainerBuildOptions");
+            buildLogger.logInformation("ContainerBuildOptions services");
+        });
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();
         httpCmdOptions.setMethodName("POST");

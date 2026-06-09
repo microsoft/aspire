@@ -374,7 +374,7 @@ public sealed class UpdateCommandStateContext
     /// <summary>
     /// The service provider.
     /// </summary>
-    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
+    [AspireExport(MethodName = "services")]
     public required IServiceProvider ServiceProvider { get; init; }
 }
 
@@ -432,7 +432,7 @@ public sealed class ExecuteCommandContext
     /// <summary>
     /// The service provider.
     /// </summary>
-    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command callbacks.")]
+    [AspireExport(MethodName = "services")]
     public required IServiceProvider ServiceProvider { get; init; }
 
     /// <summary>

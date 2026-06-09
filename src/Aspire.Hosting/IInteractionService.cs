@@ -614,7 +614,6 @@ public sealed class InputsDialogValidationContext
     /// <summary>
     /// Gets the service provider for resolving services during validation.
     /// </summary>
-    [AspireExportIgnore(Reason = "IServiceProvider is not part of the polyglot validation surface.")]
     public required IServiceProvider Services { get; init; }
 
     /// <summary>
