@@ -62,11 +62,12 @@
 .PARAMETER MaxDownloadAttempts
     Total number of attempts per artifact download before giving up. Defaults
     to 4 (i.e. the initial attempt plus up to 3 retries). Retries cover
-    transient artifact-store failures — both HTTP 5xx responses and
+    transient artifact-store failures — HTTP 408, 429, and 5xx responses;
     transport-level errors such as "An existing connection was forcibly closed
-    by the remote host" that drop the connection mid-transfer. (`Invoke-WebRequest
-    -MaximumRetryCount` only retries on HTTP status codes, not on those
-    transport exceptions, so the retry is implemented explicitly here.)
+    by the remote host"; and corrupt zip downloads that fail the integrity check.
+    Non-transient HTTP 4xx responses fail immediately. (`Invoke-WebRequest
+    -MaximumRetryCount` only retries on HTTP status codes, not on transport
+    exceptions or corrupt downloads, so the retry is implemented explicitly here.)
 
 .PARAMETER RetryBaseDelaySeconds
     Base delay for exponential backoff between download retries. The wait before
@@ -249,14 +250,24 @@ $DownloadOneArtifact = {
             # modes; AzDO log scrubbing masks $(System.AccessToken), but the
             # -AccessToken parameter is also designed for non-AzDO use where
             # nothing scrubs.
-            $status = $null
-            try { $status = $_.Exception.Response.StatusCode } catch { }
-            $statusPart = if ($null -ne $status) { " (HTTP $status)" } else { "" }
+            $errorMessage = $_.Exception.Message
+            $statusCode = $null
+            try {
+                if ($null -ne $_.Exception.Response -and $null -ne $_.Exception.Response.StatusCode) {
+                    $statusCode = [int]$_.Exception.Response.StatusCode
+                }
+            } catch { }
+            $statusPart = if ($null -ne $statusCode) { " (HTTP $statusCode)" } else { "" }
+            $isRetryable = ($null -eq $statusCode) -or ($statusCode -eq 408) -or ($statusCode -eq 429) -or ($statusCode -ge 500)
+
+            if (-not $isRetryable) {
+                throw "Download of '$ArtifactName' from $DownloadUrl$statusPart failed with non-retryable HTTP $statusCode. Temp file (may be partial or corrupt): $tempZip. $errorMessage"
+            }
 
             if ($attempt -ge $MaxDownloadAttempts) {
                 # Final attempt failed. Preserve $tempZip (do NOT remove it) so a
                 # developer can inspect partial / corrupt download contents.
-                throw "Download of '$ArtifactName' from $DownloadUrl$statusPart failed after $attempt attempt(s). Temp file (may be partial or corrupt): $tempZip. $($_.Exception.Message)"
+                throw "Download of '$ArtifactName' from $DownloadUrl$statusPart failed after $attempt attempt(s). Temp file (may be partial or corrupt): $tempZip. $errorMessage"
             }
 
             # Remove the partial/corrupt temp file before retrying so a
@@ -265,7 +276,7 @@ $DownloadOneArtifact = {
             Remove-Item -LiteralPath $tempZip -Force -ErrorAction SilentlyContinue
 
             $delay = [int]($RetryBaseDelaySeconds * [math]::Pow(2, $attempt - 1))
-            Write-Host "##[warning]Download attempt $attempt/$MaxDownloadAttempts failed for '$ArtifactName'$statusPart; retrying in ${delay}s. $($_.Exception.Message)"
+            Write-Host "##[warning]Download attempt $attempt/$MaxDownloadAttempts failed for '$ArtifactName'$statusPart; retrying in ${delay}s. $errorMessage"
             if ($delay -gt 0) { Start-Sleep -Seconds $delay }
         }
     }

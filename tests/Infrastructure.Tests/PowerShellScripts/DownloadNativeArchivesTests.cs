@@ -245,9 +245,8 @@ public sealed class DownloadNativeArchivesTests : IDisposable
 
         using var server = new MockAzdoServer();
         // The download responds 500 for its first two attempts, then serves the
-        // zip — mirrors AzDO's artifact store dropping a connection mid-transfer
-        // (the failure seen in build 2995658). Without retry, the first failure
-        // would fail the whole assemble stage.
+        // zip — exercises retrying HTTP failures. Without retry, the first
+        // failure would fail the whole assemble stage.
         server.AddFlakyArtifact("native_archives_osx_x64", failTimes: 2, new[]
         {
             ("Release/Shipping/aspire-cli-osx-x64-13.4.0.tar.gz", "tar-content"),
@@ -272,6 +271,69 @@ public sealed class DownloadNativeArchivesTests : IDisposable
         Assert.True(File.Exists(Path.Combine(
             archivesDir,
             "native_archives_osx_x64", "Release", "Shipping", "aspire-cli-osx-x64-13.4.0.tar.gz")));
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task FailsFastForNonTransientHttpDownloadFailure()
+    {
+        var (archivesDir, nupkgsDir) = CreateTargetDirs();
+
+        using var server = new MockAzdoServer();
+        // The artifact list is valid, but the artifact download URL returns 404.
+        // That is a configuration/auth-style failure, not a transient artifact
+        // store failure, so retrying would only delay the actionable error.
+        server.SetArtifacts(new MockArtifact("native_archives_missing"));
+        server.Start();
+
+        var result = await RunScript(
+            collectionUri: server.CollectionUri,
+            project: "internal",
+            buildId: "12345",
+            archivesTargetDir: archivesDir,
+            nupkgsTargetDir: nupkgsDir,
+            accessToken: "fake-token",
+            maxDownloadAttempts: 4);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("non-retryable HTTP 404", result.Output);
+        Assert.DoesNotContain("Download attempt 1/4 failed for 'native_archives_missing'", result.Output);
+        Assert.DoesNotContain("after 4 attempt(s)", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task RetriesConnectionClosedDuringDownload_ThenSucceeds()
+    {
+        var (archivesDir, nupkgsDir) = CreateTargetDirs();
+
+        using var server = new MockAzdoServer();
+        // First attempt advertises a full zip response but closes the connection
+        // after writing only a prefix. That deterministically exercises the
+        // no-successful-response transport failure path, without sleeps or timing
+        // races. Second attempt serves a valid zip.
+        server.AddTruncatedThenValidArtifact("native_archives_osx_arm64", truncateTimes: 1, new[]
+        {
+            ("Release/Shipping/aspire-cli-osx-arm64-13.4.0.tar.gz", "tar-content"),
+            ("Release/Shipping/Aspire.Cli.osx-arm64.13.4.0.nupkg", "nupkg-content"),
+        });
+        server.Start();
+
+        var result = await RunScript(
+            collectionUri: server.CollectionUri,
+            project: "internal",
+            buildId: "12345",
+            archivesTargetDir: archivesDir,
+            nupkgsTargetDir: nupkgsDir,
+            accessToken: "fake-token",
+            maxDownloadAttempts: 4);
+
+        result.EnsureSuccessful();
+        Assert.Contains("Download attempt 1/4 failed for 'native_archives_osx_arm64'", result.Output);
+        Assert.Contains("archives=1 nupkgs=1", result.Output);
+        Assert.True(File.Exists(Path.Combine(
+            archivesDir,
+            "native_archives_osx_arm64", "Release", "Shipping", "aspire-cli-osx-arm64-13.4.0.tar.gz")));
     }
 
     [Fact]
@@ -379,6 +441,7 @@ public sealed class DownloadNativeArchivesTests : IDisposable
         private readonly Dictionary<string, byte[]> _artifactZips = new();
         private readonly HashSet<string> _failingArtifacts = new();
         private readonly Dictionary<string, int> _flakyRemaining = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _truncatedRemaining = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _corruptRemaining = new(StringComparer.Ordinal);
         private List<MockArtifact> _artifacts = new();
         private CancellationTokenSource? _cts;
@@ -437,6 +500,19 @@ public sealed class DownloadNativeArchivesTests : IDisposable
             _artifacts.Add(new MockArtifact(name));
             _artifactZips[name] = BuildZip(zipEntries);
             _flakyRemaining[name] = failTimes;
+        }
+
+        /// <summary>
+        /// Registers an artifact whose first <paramref name="truncateTimes"/>
+        /// requests return HTTP 200 with a Content-Length for the full zip but
+        /// close the connection after writing only a prefix. This exercises a
+        /// deterministic mid-transfer failure without relying on timing.
+        /// </summary>
+        public void AddTruncatedThenValidArtifact(string name, int truncateTimes, IEnumerable<(string path, string content)> zipEntries)
+        {
+            _artifacts.Add(new MockArtifact(name));
+            _artifactZips[name] = BuildZip(zipEntries);
+            _truncatedRemaining[name] = truncateTimes;
         }
 
         /// <summary>
@@ -530,6 +606,22 @@ public sealed class DownloadNativeArchivesTests : IDisposable
                     _flakyRemaining[fileName] = remaining - 1;
                     ctx.Response.StatusCode = 500;
                     ctx.Response.Close();
+                    return;
+                }
+                // Truncated artifacts start like successful downloads, then close
+                // early. Content-Length stays at the full zip size so the client
+                // sees a deterministic mid-response transport failure instead of
+                // an HTTP status retry.
+                if (_truncatedRemaining.TryGetValue(fileName, out var truncateLeft) && truncateLeft > 0
+                    && _artifactZips.TryGetValue(fileName, out var zipBytes))
+                {
+                    _truncatedRemaining[fileName] = truncateLeft - 1;
+                    var prefixLength = Math.Min(16, zipBytes.Length - 1);
+                    ctx.Response.ContentType = "application/zip";
+                    ctx.Response.ContentLength64 = zipBytes.Length;
+                    ctx.Response.OutputStream.Write(zipBytes, 0, prefixLength);
+                    ctx.Response.OutputStream.Flush();
+                    ctx.Response.Abort();
                     return;
                 }
                 // Corrupt artifacts respond 200 with non-zip bytes for their first
