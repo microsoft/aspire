@@ -87,6 +87,7 @@ Group files by area to guide how deeply to review each:
 | Integrations/Components | `src/Components/**` | Client configuration, DI registration, connection handling |
 | CLI | `src/Aspire.Cli/**` | Command parsing, error handling, exit codes |
 | Tests | `tests/**` | Flaky test patterns (see below), test isolation, assertions |
+| Deployment | `src/Aspire.Hosting.Azure*/**`, `src/Aspire.Hosting.Docker/**`, `src/Aspire.Hosting.Kubernetes/**`, `tests/Aspire.Hosting.*Kubernetes.Tests/**`, `tests/Aspire.Cli.EndToEnd.Tests/**/Kubernetes*`, `tests/Aspire.Deployment.EndToEnd.Tests/**` | Kubernetes/Helm, Docker, and Azure artifacts plus real deployment behavior, provisioning, cleanup |
 | Build/Infra | `eng/**`, `*.props`, `*.targets` | Unintended side effects, breaking conditional logic |
 | API files | `src/*/api/*.cs` | Should never be manually edited — flag if modified |
 | Extension | `extension/**` | Localization, TypeScript usage |
@@ -98,6 +99,40 @@ Read the diff carefully. For each changed file, also read surrounding context to
 
 - **If the branch is checked out directly**: read files from the current workspace.
 - **If reviewing from GitHub diff only**: use `mcp_github_get_file_contents` to fetch specific files from the PR branch when additional context is needed.
+
+### Impact Analysis for Tests and Regressions
+
+Before deciding whether tests are sufficient, perform a code-based impact analysis. Do not stop at "tests pass" or "there are tests"; map the changed code paths to the behaviors that could regress, then compare that list to the test changes.
+
+For each non-trivial production change, identify:
+
+1. **Changed behavior** — what behavior changed, using concrete code paths, methods, or configuration names from the diff.
+2. **Affected surfaces** — which user or system surfaces can observe the change: public API, AppHost model, DCP/runtime orchestration, CLI, dashboard, deployment output, VS Code extension, generated artifacts, logs/telemetry, configuration, persistence, networking, or security-sensitive flows.
+3. **Regression risks** — the specific ways the changed behavior could break existing scenarios, including timing/order changes, persisted state compatibility, restarts/retries, resource cleanup, cross-resource references, environment variables, connection strings, endpoint URLs, port allocation, and platform/container-runtime differences.
+4. **Expected regression coverage** — the focused tests or scenario tests that should fail without the fix or would catch the risky behavior changing again.
+5. **Coverage gaps** — any impacted behavior that is not covered by the PR's tests or by clearly relevant existing tests.
+
+Use the impact analysis to drive coverage review. A PR can have many tests and still be missing the regression test that matters. Conversely, do not demand every test category when the impact analysis shows the change does not affect that surface.
+
+When the impact analysis is useful to explain a test finding, present it concisely in the finding: identify the impacted code path, the regression risk, and the missing test shape. For example: "This changes `DcpExecutor.PrepareServices()` port allocation timing, but there is no regression test showing a dependent resource can resolve the endpoint before workload creation."
+
+### Test Coverage Review
+
+Every review must evaluate whether the PR has appropriate tests for the type of behavior being changed. Do not require tests for purely mechanical refactors, comments, or documentation-only changes, but do flag missing or insufficient coverage when production behavior changes and there is no explicit, convincing justification in the PR. Regression coverage is especially important: bug fixes and behavior changes should include tests that would have failed before the fix, not just broad happy-path coverage or regenerated snapshots.
+
+Use this mapping when deciding whether coverage is appropriate:
+
+| Change type | Expected coverage to look for |
+|-------------|-------------------------------|
+| Core logic, resource model, integrations, parsers, validation, error handling, public API behavior | Unit or integration tests in the matching `tests/*.*Tests/` project |
+| User-visible Aspire CLI commands, prompts, terminal workflows, install/update behavior, or command output contracts | CLI end-to-end coverage under `tests/Aspire.Cli.EndToEnd.Tests/`, in addition to focused unit tests where practical |
+| Dashboard UI, browser-only behavior, authentication flows, layout, or interactions that bUnit cannot realistically exercise | Dashboard Playwright coverage under `tests/Aspire.Dashboard.Tests/Integration/Playwright/`, in addition to `tests/Aspire.Dashboard.Tests/` or `tests/Aspire.Dashboard.Components.Tests/` coverage for logic/components |
+| Deployment, publish, provisioning, generated Kubernetes/Helm/Bicep/Docker artifacts, Azure resource wiring, or deployed endpoint behavior | Deployment end-to-end coverage under `tests/Aspire.Deployment.EndToEnd.Tests/` when the behavior depends on actual deployment; generated artifact snapshot tests alone are not sufficient for deployment behavior changes |
+| VS Code extension commands, tree views, debugger flows, RPC/DCP/MCP integration, extension UI, or CLI integration visible through VS Code | VS Code extension E2E coverage under `extension/src/test-e2e/`, in addition to Mocha unit tests under `extension/src/test/` where practical |
+
+For deployment changes, be especially strict: emitting or updating Helm charts, Kubernetes YAML, Docker Compose, Bicep, JSON manifests, or snapshot files only proves the serializer output. If the PR changes deployment behavior, resource connectivity, provisioning order, infrastructure composition, environment variables, endpoint exposure, health, cleanup, or upgrade behavior, look for a deployment test that actually deploys and verifies the scenario. It is acceptable for the PR to update or refactor an existing deployment E2E test instead of adding a brand-new one, but the resulting test must exercise the changed behavior.
+
+When specialized coverage is missing and the appropriate shape is unclear, use or reference the relevant skill for review context: `cli-e2e-testing`, `dashboard-testing`, `deployment-e2e-testing`, or `vscode-extension`.
 
 ### What to Flag
 
@@ -122,6 +157,7 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
     - Using `== null` instead of `is null`
 13. **Code comment guidance** — apply the `AGENTS.md` Code comments guidance when reviewing changed code. Flag only concrete problems, such as comments that contradict the code, workaround comments without a tracking link, parser/protocol/log parsing that omits the raw shape needed to understand edge cases, or comments around privacy/security-sensitive behavior that fail to explain the opt-in, scope, or WHY. Do not flag subjective missing comments or ask for comments on obvious code.
 14. **Test problems** — flaky patterns per the test review guidelines: thread-unsafe test fakes, log-based readiness checks instead of `WaitForHealthyAsync()`, shared timeout budgets, hardcoded ports, `Directory.SetCurrentDirectory` usage, commented-out tests.
+15. **Missing or insufficient test coverage** — production behavior changed without appropriate coverage for the affected surface, or a bug fix lacks a focused regression test that would have failed before the fix. Be specific about the impacted code path, the regression risk, which behavior is untested, and which coverage type is expected. For deployment changes, explicitly flag PRs that only update generated manifests or snapshots when a deployment E2E test should verify the deployed behavior.
 
 ### What NOT to Flag
 
@@ -129,6 +165,7 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 - Missing XML doc comments (unless a public API is completely undocumented)
 - Suggestions for refactoring unrelated code
 - Missing API file regeneration (this is expected during development)
+- Missing tests for documentation-only changes, comment-only changes, mechanical renames, or refactors that demonstrably preserve behavior
 
 ### Reviewing refactored / moved code
 

@@ -1,0 +1,159 @@
+# Builds, signs, and publishes the VS Code extension VSIX as a standalone
+# parallel stage. Previously this work ran inside the managed Windows `build`
+# job and was therefore on the wall-clock critical path through Assemble.
+# Extracting it lets the extension build run in parallel with the managed
+# .NET build and the native CLI builds; the Assemble stage already downloads
+# `aspire-vscode-extension` from a pipeline artifact, so no consumer changes
+# are needed beyond adding this stage to Assemble's dependsOn.
+#
+# The extension's only build inputs are extension/ (Node.js, yarn, vsce) and
+# the signVsix.proj signing project. It does NOT consume any managed-built
+# nupkg or native CLI archive, so it is genuinely independent of the other
+# build stages.
+
+parameters:
+  - name: packageVSCodeExtensionAsPreRelease
+    type: boolean
+    default: false
+
+jobs:
+- template: /eng/common/templates-official/jobs/jobs.yml@self
+  parameters:
+    enableMicrobuild: true
+    enablePublishUsingPipelines: false
+    enablePublishBuildAssets: false
+    publishAssetsImmediately: false
+    enableTelemetry: true
+    enablePublishBuildArtifacts: true
+    enablePublishTestResults: false
+    workspace:
+      clean: all
+
+    jobs:
+    - job: BuildExtension
+      displayName: Extension
+      timeoutInMinutes: 30
+
+      pool:
+        name: NetCore1ESPool-Internal
+        image: windows.vs2026preview.scout.amd64
+        os: windows
+
+      variables:
+        - name: _buildScript
+          value: $(Build.SourcesDirectory)/build.cmd -ci
+
+      preSteps:
+        - checkout: self
+          fetchDepth: 1
+          clean: true
+
+      steps:
+        - task: UseNode@1
+          displayName: 🟣Install node.js
+          inputs:
+            version: '22.x'
+
+        - task: npmAuthenticate@0
+          displayName: 🟣NPM authenticate
+          inputs:
+            workingFile: $(Build.SourcesDirectory)\.npmrc
+
+        - task: PowerShell@2
+          displayName: 🟣Set .npmrc environment
+          inputs:
+            targetType: 'inline'
+            script: Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$(Build.SourcesDirectory)\.npmrc"
+
+        - template: /eng/pipelines/templates/install-corepack.yml
+          parameters:
+            displayPrefix: '🟣'
+
+        - task: PowerShell@2
+          displayName: 🟣Install vsce
+          inputs:
+            targetType: 'inline'
+            script: |
+              npm install -g @vscode/vsce@3.7.1
+              vsce --version
+            workingDirectory: '$(Build.SourcesDirectory)'
+
+        # Build only the extension. SkipManagedBuild + SkipNativeBuild +
+        # SkipTestProjects + SkipPlaygroundProjects narrows ProjectToBuild down
+        # to extension/Extension.proj (gated by BuildExtension=true in
+        # eng/Build.props). We still go through Arcade's -restore so the SDK
+        # toolset and MicroBuild signing plugin are wired up for the signVsix
+        # step below.
+        - script: $(_buildScript)
+                  -restore -build
+                  -pack
+                  -configuration $(_BuildConfig)
+                  /bl:$(Build.Arcade.LogsPath)/buildExtension.binlog
+                  $(_OfficialBuildIdArgs)
+                  $(_InternalBuildArgs)
+                  /p:SkipManagedBuild=true
+                  /p:SkipNativeBuild=true
+                  /p:SkipTestProjects=true
+                  /p:SkipPlaygroundProjects=true
+                  /p:BuildExtension=true
+                  /p:PackageVSCodeExtensionAsPreRelease=${{ lower(eq(parameters.packageVSCodeExtensionAsPreRelease, true)) }}
+          displayName: 🟣Build extension
+
+        # Sign the VS Code extension .signature.p7s file using MicroBuild with
+        # the VSCodePublisher certificate. See the same step in BuildAndTest.yml
+        # for the historical context; this stage now owns it.
+        - script: $(Build.SourcesDirectory)/dotnet.cmd
+                  build
+                  extension/signing/signVsix.proj
+                  -c $(_BuildConfig)
+                  /bl:$(Build.Arcade.LogsPath)/signVsix.binlog
+                  /p:SignType=$(_SignType)
+                  "/p:MicroBuildOutputFolderOverride=%MicroBuildOutputFolderOverride%"
+          displayName: 🟣Sign VS Code extension
+          condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
+        - pwsh: |
+            $vsixDir = '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/vscode'
+            $vsixFiles = Get-ChildItem -Path "$vsixDir/*.vsix" -ErrorAction SilentlyContinue
+            if ($vsixFiles.Count -eq 0) {
+              Write-Host "##[warning]No .vsix files found - VS Code extension may not have been built"
+              exit 0
+            }
+            foreach ($vsix in $vsixFiles) {
+              $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
+              $manifestPath = Join-Path $vsixDir "$baseName.manifest"
+              $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
+
+              if (-not (Test-Path $manifestPath)) {
+                Write-Host "##[error]Manifest file not found: $manifestPath"
+                exit 1
+              }
+              if (-not (Test-Path $signaturePath)) {
+                Write-Host "##[error]Signature file not found: $signaturePath"
+                exit 1
+              }
+
+              $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
+              if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
+                $firstByte = if ($bytes.Length -gt 0) { "0x{0:X2}" -f $bytes[0] } else { "empty" }
+                Write-Host "##[error]$baseName.signature.p7s does NOT appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)"
+                exit 1
+              }
+
+              Write-Host "Verifying signature for $($vsix.Name)..."
+              npx vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "##[error]Signature verification failed for $($vsix.Name)"
+                exit 1
+              }
+              Write-Host "✅ $($vsix.Name) signature verified successfully"
+            }
+          displayName: 🟣Verify VS Code extension signature
+          condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
+        - task: 1ES.PublishBuildArtifacts@1
+          displayName: 🟣Publish vscode extension
+          condition: always()
+          inputs:
+            PathtoPublish: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/vscode'
+            ArtifactName: aspire-vscode-extension

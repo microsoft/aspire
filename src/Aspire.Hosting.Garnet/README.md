@@ -1,20 +1,22 @@
-# Aspire.Hosting.Garnet library
+# Garnet hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a Garnet cache resource.
+Use this integration to model, configure, and orchestrate a Garnet cache resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Garnet Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Garnet` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Garnet
+```bash
+aspire add Aspire.Hosting.Garnet
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Garnet resource and consume the connection using the following methods:
+In the AppHost, add a Garnet resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var garnet = builder.AddGarnet("cache");
@@ -23,10 +25,13 @@ var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(garnet);
 ```
 
-The `WithReference` method configures a connection in the `MyService` project named `cache`. In the _Program.cs_ file of `MyService`, the redis connection can be consumed using the client library [Aspire.StackExchange.Redis](https://www.nuget.org/packages/Aspire.StackExchange.Redis):
+**TypeScript**
 
-```csharp
-builder.AddRedisClient("cache");
+```typescript
+const garnet = await builder.addGarnet("cache");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(garnet);
 ```
 
 ## Connection Properties
@@ -48,9 +53,10 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/caching/garnet/garnet-host/
 * https://github.com/microsoft/garnet/blob/main/README.md
-* https://stackexchange.github.io/StackExchange.Redis/Basics
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
+* https://microsoft.github.io/garnet/
 
 ## Feedback & contributing
 

@@ -1336,7 +1336,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 displayName: "My command",
                 executeCommand: e =>
                 {
-                    var interactionService = e.ServiceProvider.GetRequiredService<IInteractionService>();
+                    var interactionService = e.Services.GetRequiredService<IInteractionService>();
                     isAvailableDuringExecution = interactionService.IsAvailable;
                     return Task.FromResult(CommandResults.Success());
                 });
@@ -1366,7 +1366,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 displayName: "My command",
                 executeCommand: e =>
                 {
-                    var interactionService = e.ServiceProvider.GetRequiredService<IInteractionService>();
+                    var interactionService = e.Services.GetRequiredService<IInteractionService>();
                     isAvailableDuringExecution = interactionService.IsAvailable;
                     return Task.FromResult(CommandResults.Success());
                 });

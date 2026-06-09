@@ -872,7 +872,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     new()
                     {
                         Model = context.Resource,
-                        ServiceProvider = _executionContext.ServiceProvider,
+                        Services = _executionContext.Services,
                         HttpsCertificateContext = context.HttpsCertificateContext,
                     },
                     cancellationToken).ConfigureAwait(false);
@@ -926,7 +926,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     {
         if (modelContainerResource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault() is { } dockerfileBuildAnnotation)
         {
-            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.ServiceProvider, cancellationToken).ConfigureAwait(false);
+            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.Services, cancellationToken).ConfigureAwait(false);
 
             var dcpBuildArgs = new List<EnvVar>();
 
@@ -976,7 +976,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
 #pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
             var buildOptionsContext = await modelContainerResource.ProcessContainerBuildOptionsCallbackAsync(
-                executionContext.ServiceProvider,
+                executionContext.Services,
                 logger,
                 executionContext,
                 cancellationToken).ConfigureAwait(false);

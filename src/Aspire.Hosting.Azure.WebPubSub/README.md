@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.WebPubSub library
+# Azure Web PubSub hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Azure Web PubSub.
+Use this integration to model, configure, and orchestrate Azure Web PubSub in an Aspire solution.
 
 ## Getting started
 
@@ -8,23 +8,34 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 - Azure subscription - [create one for free](https://azure.microsoft.com/free/)
 
-### Install the package
+### Add the integration
 
-Install the Aspire Azure Web PubSub Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.WebPubSub` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.WebPubSub
+```bash
+aspire add Aspire.Hosting.Azure.WebPubSub
 ```
 
 ## Usage example
 
-In the _AppHost.cs_ file of `AppHost`, add a WebPubSub connection and consume the connection using the following methods:
+In the AppHost, add a WebPubSub connection and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var wps = builder.AddAzureWebPubSub("wps1");
 
 var web = builder.AddProject<Projects.WebPubSubWeb>("webfrontend")
                        .WithReference(wps);
+```
+
+**TypeScript**
+
+```typescript
+const wps = await builder.addAzureWebPubSub("wps1");
+
+const web = await builder.addNodeApp("webfrontend", "../web-frontend", "server.js")
+                       .withReference(wps);
 ```
 
 ## Connection Properties
@@ -39,7 +50,9 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-web-pubsub/azure-web-pubsub-host/
+* https://learn.microsoft.com/azure/azure-web-pubsub/overview
 
 ## Feedback & contributing
 

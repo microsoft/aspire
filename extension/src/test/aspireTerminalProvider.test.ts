@@ -1,10 +1,11 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
-import { AspireTerminalProvider, quoteShellArg } from '../utils/AspireTerminalProvider';
+import { AspireTerminalProvider, quoteShellArg, shellArg } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
 import { EnvironmentVariables } from '../utils/environment';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
 
 suite('AspireTerminalProvider tests', () => {
     let terminalProvider: AspireTerminalProvider;
@@ -67,6 +68,86 @@ suite('AspireTerminalProvider tests', () => {
 
         process.env[name] = value;
     }
+
+    suite('getAspireTerminal', () => {
+        test('creates Windows terminal with PowerShell 7 when it is available', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            let probeCount = 0;
+            terminalProvider = new AspireTerminalProvider(subscriptions, () => {
+                probeCount++;
+                return true;
+            });
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const terminal = {
+                dispose: () => { }
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').returns(terminal);
+
+            try {
+                const result = terminalProvider.getAspireTerminal(true);
+
+                assert.strictEqual(result.terminal, terminal);
+                assert.strictEqual(createTerminalStub.calledOnce, true);
+                assert.strictEqual((createTerminalStub.firstCall.args[0] as vscode.TerminalOptions).shellPath, 'pwsh.exe');
+                assert.strictEqual(probeCount, 1);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+                platformStub.restore();
+            }
+        });
+
+        test('falls back to Windows PowerShell when PowerShell 7 is unavailable', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            let probeCount = 0;
+            terminalProvider = new AspireTerminalProvider(subscriptions, () => {
+                probeCount++;
+                return false;
+            });
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const terminal = {
+                dispose: () => { }
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').returns(terminal);
+
+            try {
+                terminalProvider.getAspireTerminal(true);
+                assert.strictEqual(createTerminalStub.calledOnce, true);
+                assert.strictEqual((createTerminalStub.firstCall.args[0] as vscode.TerminalOptions).shellPath, 'powershell.exe');
+                assert.strictEqual(probeCount, 1);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+                platformStub.restore();
+            }
+        });
+
+        test('uses default terminal profile on non-Windows hosts', () => {
+            const platformStub = sinon.stub(process, 'platform').value('darwin');
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const terminal = {
+                dispose: () => { }
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').returns(terminal);
+
+            try {
+                terminalProvider.getAspireTerminal(true);
+
+                assert.strictEqual(createTerminalStub.calledOnce, true);
+                assert.strictEqual((createTerminalStub.firstCall.args[0] as vscode.TerminalOptions).shellPath, undefined);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+                platformStub.restore();
+            }
+        });
+    });
 
     suite('sendAspireCommandToAspireTerminal', () => {
         const expectedCommand = process.platform === 'win32' ? '& "aspire" logs' : 'aspire logs';
@@ -165,6 +246,110 @@ suite('AspireTerminalProvider tests', () => {
             }
         });
 
+        test('quotes structured subcommand arguments with shell metacharacters', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const appHostPath = `/workspace/'; touch /tmp/aspire-rce #/$(whoami)/"bad"/AppHost.csproj`;
+            let executedCommand: string | undefined;
+            const terminal = {
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                sendText: () => { },
+                show: () => { }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal(['stop', '--apphost', shellArg(appHostPath)]);
+
+                const expectedSubcommand = `stop --apphost ${quoteShellArg(appHostPath)}`;
+                const expectedCommand = process.platform === 'win32'
+                    ? `& "aspire" ${expectedSubcommand}`
+                    : `aspire ${expectedSubcommand}`;
+                assert.strictEqual(executedCommand, expectedCommand);
+                assert.strictEqual(executedCommand.includes(`--apphost ${appHostPath}`), false);
+            }
+            finally {
+                getAspireTerminalStub.restore();
+            }
+        });
+
+        test('rejects terminal control characters before falling back to sendText', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').throws(new Error('Terminal should not be created'));
+
+            try {
+                await assert.rejects(
+                    () => terminalProvider.sendAspireCommandToAspireTerminal(['stop', '--apphost', shellArg('/workspace/AppHost.csproj\x03\necho pwned')]),
+                    { message: terminalCommandArgumentControlCharacters });
+                await assert.rejects(
+                    () => terminalProvider.sendAspireCommandToAspireTerminal('resource "web" "restart"', true, ['--', 'safe\r\necho pwned']),
+                    { message: terminalCommandArgumentControlCharacters });
+                assert.strictEqual(getAspireTerminalStub.called, false);
+            }
+            finally {
+                getAspireTerminalStub.restore();
+            }
+        });
+
+        test('allows tabs inside quoted structured arguments', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const appHostPath = '/workspace/apps/Store\tTabbed/AppHost.csproj';
+            let executedCommand: string | undefined;
+            const terminal = {
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                sendText: () => { },
+                show: () => { }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal(['stop', '--apphost', shellArg(appHostPath)]);
+
+                const expectedSubcommand = `stop --apphost ${quoteShellArg(appHostPath)}`;
+                const expectedCommand = process.platform === 'win32'
+                    ? `& "aspire" ${expectedSubcommand}`
+                    : `aspire ${expectedSubcommand}`;
+                assert.strictEqual(executedCommand, expectedCommand);
+            }
+            finally {
+                getAspireTerminalStub.restore();
+            }
+        });
+
+        test('rejects unsafe bare structured subcommand literals before creating a terminal', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').throws(new Error('Terminal should not be created'));
+            const unsafeLiterals = ['resource; touch /tmp/pwned', '$(whoami)', '`whoami`', '--apphost=/tmp/AppHost.csproj', 'logs --follow'];
+
+            try {
+                for (const unsafeLiteral of unsafeLiterals) {
+                    await assert.rejects(
+                        () => terminalProvider.sendAspireCommandToAspireTerminal(['resource', unsafeLiteral, shellArg('web')]),
+                        { message: terminalCommandUnsafeLiteral });
+                }
+
+                assert.strictEqual(getAspireTerminalStub.called, false);
+            }
+            finally {
+                getAspireTerminalStub.restore();
+            }
+        });
+
         test('sends Ctrl+C before command when shell integration is unavailable', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
             const sentTexts: { text: string; shouldExecute?: boolean }[] = [];
@@ -196,7 +381,7 @@ suite('AspireTerminalProvider tests', () => {
             }
         });
 
-        test('records suppressed execution mode and does not send command when E2E suppression is enabled', async () => {
+        test('records suppressed execution mode without creating a terminal when E2E suppression is enabled', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
             const originalEnableBridge = process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE;
             const originalStateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
@@ -233,6 +418,7 @@ suite('AspireTerminalProvider tests', () => {
 
                 assert.strictEqual(executedCommand, undefined);
                 assert.deepStrictEqual(sentTexts, []);
+                assert.strictEqual(getAspireTerminalStub.called, false);
                 assert.deepStrictEqual(terminalEvents.map(event => (event as { executionMode: string }).executionMode), ['suppressed']);
                 assert.deepStrictEqual(terminalEvents.map(event => (event as { executionSuppressed: boolean }).executionSuppressed), [true]);
             }
@@ -405,9 +591,11 @@ suite('AspireTerminalProvider tests', () => {
                 { name: 'backslash followed by quote', input: 'a\\"b', expected: '"a\\`"b"' },
                 { name: 'pipe and chaining', input: 'a | b; c && d', expected: '"a | b; c && d"' },
                 { name: 'redirection', input: '> out.txt < in.txt', expected: '"> out.txt < in.txt"' },
-                { name: 'newline', input: 'line1\nline2', expected: '"line1\nline2"' },
+                { name: 'tab', input: 'hello\tworld', expected: '"hello\tworld"' },
                 { name: 'mixed dollar quote backtick', input: '`$x"y"`', expected: '"```$x`"y`"``"' },
                 { name: 'attempted PowerShell break-out', input: '"; Remove-Item C:\\ -Recurse #', expected: '"`"; Remove-Item C:\\ -Recurse #"' },
+                { name: 'attempted smart double quote break-out', input: 'safe\u201C; Remove-Item C:\\ -Recurse #', expected: '"safe`\u201C; Remove-Item C:\\ -Recurse #"' },
+                { name: 'attempted smart single quote break-out', input: 'safe\u2018; Remove-Item C:\\ -Recurse #', expected: '"safe`\u2018; Remove-Item C:\\ -Recurse #"' },
                 { name: 'subshell with backticks and dollar', input: '`echo $(rm -rf /)`', expected: '"``echo `$(rm -rf /)``"' },
                 { name: 'empty string', input: '', expected: '""' },
                 { name: 'only special characters', input: '`$"', expected: '"```$`""' },
@@ -433,7 +621,7 @@ suite('AspireTerminalProvider tests', () => {
                 { name: 'glob characters', input: '* ? [a-z]', expected: `'* ? [a-z]'` },
                 { name: 'pipe and chaining', input: 'a | b; c && d', expected: `'a | b; c && d'` },
                 { name: 'redirection', input: '> out.txt < in.txt', expected: `'> out.txt < in.txt'` },
-                { name: 'newline', input: 'line1\nline2', expected: `'line1\nline2'` },
+                { name: 'tab', input: 'hello\tworld', expected: `'hello\tworld'` },
                 { name: 'attempted bash break-out', input: `'; rm -rf / #`, expected: `''"'"'; rm -rf / #'` },
                 { name: 'backslash', input: 'a\\b', expected: `'a\\b'` },
                 { name: 'empty string', input: '', expected: `''` },
@@ -448,6 +636,15 @@ suite('AspireTerminalProvider tests', () => {
             test('darwin uses identical posix quoting', () => {
                 assert.strictEqual(quoteShellArg(`it's fine`, 'darwin'), `'it'"'"'s fine'`);
             });
+        });
+
+        test('rejects terminal control characters on every platform', () => {
+            const cases = ['line1\nline2', 'line1\rline2', 'prefix\x03suffix', 'prefix\x1bsuffix', 'prefix\x7fsuffix'];
+
+            for (const value of cases) {
+                assert.throws(() => quoteShellArg(value, 'linux'), { message: terminalCommandArgumentControlCharacters });
+                assert.throws(() => quoteShellArg(value, 'win32'), { message: terminalCommandArgumentControlCharacters });
+            }
         });
     });
 });

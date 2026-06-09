@@ -365,7 +365,7 @@ public class ResourceCommandService
                 var context = new ExecuteCommandContext
                 {
                     ResourceName = resourceId,
-                    ServiceProvider = _serviceProvider,
+                    Services = _serviceProvider,
                     CancellationToken = cancellationToken,
                     Logger = logger,
                     Arguments = arguments

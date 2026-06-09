@@ -1,38 +1,41 @@
-# Aspire.Hosting.EntityFrameworkCore library
+# Entity Framework Core hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Entity Framework Core migration management.
+Use this integration to model, configure, and orchestrate Entity Framework Core migration management in an Aspire solution.
 
 ## Getting started
 
 ### Prerequisites
 
-The target project must reference `Microsoft.EntityFrameworkCore.Design`. Add the following to your project file:
+The target project must expose EF Core design-time services so migration commands can create design-time `DbContext` instances.
 
-```xml
-<ItemGroup>
-  <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="x.y.z" />
-</ItemGroup>
-```
+### Add the integration
 
-Note: Using `dotnet add package` will add the reference with `PrivateAssets="All"` which may not work correctly with the migration commands.
+From your AppHost directory, add the `Aspire.Hosting.EntityFrameworkCore` integration with the Aspire CLI:
 
-### Install the package
-
-In your AppHost project, install the Aspire EntityFrameworkCore Hosting library with [NuGet](https://www.nuget.org):
-
-```dotnetcli
-dotnet add package Aspire.Hosting.EntityFrameworkCore
+```bash
+aspire add Aspire.Hosting.EntityFrameworkCore
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add EF migrations to a project resource:
+In the AppHost, add EF migrations to a project resource:
+
+**C#**
 
 ```csharp
 var api = builder.AddProject<Projects.Api>("api");
 
 // Add EF migrations for a specific DbContext
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext");
+```
+
+**TypeScript**
+
+```typescript
+const api = await builder.addProject("api", "../Api");
+
+// Add EF migrations for a specific DbContext
+const apiMigrations = await api.addEFMigrations("api-migrations", "MyApp.Data.MyDbContext");
 ```
 
 ### Resource Commands
@@ -48,20 +51,20 @@ When `AddEFMigrations` is called, the migration resource appears in the Aspire D
 | Remove Migration | Remove the last migration |
 | Get Database Status | Show the current migration status |
 
-> **Note:** After adding or removing a migration, all commands are disabled until the target project is recompiled. This prevents executing commands against stale assemblies.
+> **Note:** After adding or removing a migration, all commands are disabled until the target app is rebuilt. This prevents executing commands against stale assemblies.
 
-### Automatic Tool Installation
+### Automatic tool installation
 
-The `dotnet-ef` tool is automatically downloaded and executed using `dotnet tool exec` when commands are run. You don't need to install it globally or in a local tool manifest.
+The EF migration command-line tool is downloaded and executed on demand when commands run. You don't need to install it globally.
 
-### Configuring the dotnet-ef Tool
+### Configuring the migration tool
 
-You can customize the `dotnet-ef` tool version, NuGet sources, or allow prerelease versions:
+You can customize the migration tool version, package sources, or allow prerelease versions:
 
 ```csharp
 var api = builder.AddProject<Projects.Api>("api");
 
-// Use a specific version of dotnet-ef
+// Use a specific migration tool version
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext",
     configureToolResource: tool =>
     {
@@ -75,12 +78,11 @@ var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContex
         tool.WithToolPrerelease();
     });
 
-// Use a custom NuGet source
+// Use a custom package source
 var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext",
     configureToolResource: tool =>
     {
-        tool.WithToolSource("https://api.nuget.org/v3/index.json")
-            .WithToolSource("https://my-feed.example.com/v3/index.json");
+        tool.WithToolSource("https://my-feed.example.com/v3/index.json");
     });
 ```
 
@@ -124,13 +126,8 @@ When migrations are in a different project than the startup project, use `WithMi
 ```csharp
 var startup = builder.AddProject<Projects.Api>("api");
 
-// Using a project metadata type (recommended)
 var apiMigrations = startup.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext")
     .WithMigrationsProject<Projects.Data>();
-
-// Or using a project path
-var apiMigrations = startup.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContext")
-    .WithMigrationsProject("../MyApp.Data/MyApp.Data.csproj");
 ```
 
 ### Multiple DbContexts
@@ -177,8 +174,7 @@ var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContex
     .PublishAsMigrationBundle(publishContainer: true);
 ```
 
-- The generated `Dockerfile` uses `mcr.microsoft.com/dotnet/runtime:10.0` (or
-  `mcr.microsoft.com/dotnet/runtime-deps:10.0` when `selfContained: true`).
+- The generated `Dockerfile` uses the runtime image selected by the integration for the configured target runtime.
 - The `targetRuntime` argument defaults to `linux-x64` when `publishContainer: true`; override it
   explicitly to publish for a different architecture (e.g., `linux-arm64`).
 - The container reads its connection string from the standard environment variable that aspire wires
@@ -245,17 +241,17 @@ does not add any compute resource to the deployment manifest. Execute the bundle
 for your deployment flow:
 
 ```bash
-./<publish-output>/efmigrations/api-migrations --connection "$CONNECTION_STRING" --verbove
+./<publish-output>/efmigrations/api-migrations --connection "$CONNECTION_STRING" --verbose
 ```
 
 Similarly you can use `PublishAsMigrationScript()` if you also want a raw SQL script produced.
 
 ## Additional documentation
 
-<!-- TODO: Update this to the EntityFrameworkCore-specific page once published, https://github.com/microsoft/aspire.dev/issues/536 -->
-https://learn.microsoft.com/dotnet/aspire/
+https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/databases/efcore/migrations/
 https://learn.microsoft.com/ef/core/managing-schemas/migrations/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

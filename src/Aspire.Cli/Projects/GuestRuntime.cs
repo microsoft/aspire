@@ -144,6 +144,7 @@ internal sealed class GuestRuntime
     /// <param name="watchMode">Whether to run in watch mode for hot reload.</param>
     /// <param name="launcher">Strategy for launching the process.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="noBuild">Whether to skip pre-execution build/check commands.</param>
     /// <param name="afterAppHostLaunchedAsync">Callback invoked after the AppHost execute command has launched.</param>
     /// <returns>A tuple of the exit code and captured output (null when launched via extension).</returns>
     public async Task<(int ExitCode, OutputCollector? Output)> RunAsync(
@@ -153,6 +154,7 @@ internal sealed class GuestRuntime
         bool watchMode,
         IGuestProcessLauncher launcher,
         CancellationToken cancellationToken,
+        bool noBuild = false,
         Func<Task>? afterAppHostLaunchedAsync = null)
     {
         var useWatchCommand = watchMode && _spec.WatchExecute is not null;
@@ -161,7 +163,7 @@ internal sealed class GuestRuntime
             : _spec.Execute;
 
         await EnsureMigrationFilesExistAsync(directory, cancellationToken);
-        if (!useWatchCommand)
+        if (!useWatchCommand && !noBuild)
         {
             var preExecuteResult = await RunPreExecuteCommandsAsync(appHostFile, directory, environmentVariables, launcher, cancellationToken);
             if (preExecuteResult.ExitCode != 0)
@@ -185,6 +187,7 @@ internal sealed class GuestRuntime
     /// <param name="publishArgs">Additional arguments for publishing.</param>
     /// <param name="launcher">Strategy for launching the process.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="noBuild">Whether to skip pre-execution build/check commands.</param>
     /// <returns>A tuple of the exit code and captured output.</returns>
     public async Task<(int ExitCode, OutputCollector? Output)> PublishAsync(
         FileInfo appHostFile,
@@ -192,15 +195,19 @@ internal sealed class GuestRuntime
         IDictionary<string, string> environmentVariables,
         string[]? publishArgs,
         IGuestProcessLauncher launcher,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool noBuild = false)
     {
         var commandSpec = _spec.PublishExecute ?? _spec.Execute;
 
         await EnsureMigrationFilesExistAsync(directory, cancellationToken);
-        var preExecuteResult = await RunPreExecuteCommandsAsync(appHostFile, directory, environmentVariables, launcher, cancellationToken);
-        if (preExecuteResult.ExitCode != 0)
+        if (!noBuild)
         {
-            return preExecuteResult;
+            var preExecuteResult = await RunPreExecuteCommandsAsync(appHostFile, directory, environmentVariables, launcher, cancellationToken);
+            if (preExecuteResult.ExitCode != 0)
+            {
+                return preExecuteResult;
+            }
         }
 
         var phase = _spec.PublishExecute is not null

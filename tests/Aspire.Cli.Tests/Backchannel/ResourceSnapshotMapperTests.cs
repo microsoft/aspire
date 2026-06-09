@@ -176,6 +176,70 @@ public class ResourceSnapshotMapperTests
     }
 
     [Fact]
+    public void MapToResourceJson_IncludeDisabledStream_StampsRegistrationOrderOnCommands()
+    {
+        // Commands are provided in non-alphabetical order so RegistrationOrder must reflect
+        // registration (set-parameter before delete-parameter), not key order.
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "parameter",
+            DisplayName = "parameter",
+            ResourceType = "Parameter",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand { Name = "set-parameter", State = KnownCommandState.Enabled, Description = "Set", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "custom-action", State = KnownCommandState.Enabled, Description = "Custom", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "delete-parameter", State = KnownCommandState.Enabled, Description = "Delete", Visibility = KnownCommandVisibility.Api }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
+
+        // Keys stay alphabetical for a stable JSON shape...
+        Assert.Equal(
+            ["custom-action", "delete-parameter", "set-parameter"],
+            result.Commands!.Keys);
+
+        // ...while RegistrationOrder reflects the registration order the dashboard uses.
+        Assert.Equal(0, result.Commands["set-parameter"].RegistrationOrder);
+        Assert.Equal(1, result.Commands["custom-action"].RegistrationOrder);
+        Assert.Equal(2, result.Commands["delete-parameter"].RegistrationOrder);
+    }
+
+    [Fact]
+    public void MapToResourceJson_DefaultStream_SortsCommandsAlphabeticallyAndStampsRegistrationOrder()
+    {
+        // The default/API stream keeps alphabetical keys but still stamps RegistrationOrder,
+        // exactly like the include-disabled stream.
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "parameter",
+            DisplayName = "parameter",
+            ResourceType = "Parameter",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand { Name = "set-parameter", State = KnownCommandState.Enabled, Description = "Set", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "custom-action", State = KnownCommandState.Enabled, Description = "Custom", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "delete-parameter", State = KnownCommandState.Enabled, Description = "Delete", Visibility = KnownCommandVisibility.Api }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
+
+        // Keys stay alphabetical for a stable JSON shape...
+        Assert.Equal(
+            ["custom-action", "delete-parameter", "set-parameter"],
+            result.Commands!.Keys);
+
+        // ...and RegistrationOrder reflects the registration order even on the default stream.
+        Assert.Equal(0, result.Commands["set-parameter"].RegistrationOrder);
+        Assert.Equal(1, result.Commands["custom-action"].RegistrationOrder);
+        Assert.Equal(2, result.Commands["delete-parameter"].RegistrationOrder);
+    }
+
+    [Fact]
     public void MapToResourceJson_WithSecretCommandArgument_OmitsValue()
     {
         var snapshot = new ResourceSnapshot

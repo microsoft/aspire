@@ -103,6 +103,18 @@ suite('AppHostResourceParser registry', () => {
         assert.ok(parser!.getSupportedExtensions().includes('.ts'));
     });
 
+    test('getParserForDocument returns JS/TS parser for Node module AppHost files', async () => {
+        for (const extension of ['.mts', '.cts', '.mjs', '.cjs']) {
+            const doc = createMockDocument(
+                'import { createBuilder } from "@aspire/sdk";\nconst builder = await createBuilder();\nawait builder.addRedis("cache");',
+                `/test/apphost${extension}`
+            );
+            const parser = await getParserForDocument(doc);
+            assert.ok(parser, `Should find a parser for ${extension}`);
+            assert.ok(parser!.getSupportedExtensions().includes(extension));
+        }
+    });
+
     test('getParserForDocument returns undefined for non-AppHost .cs file', async () => {
         const doc = createMockDocument(
             'using System;\nclass Program { static void Main() { } }',

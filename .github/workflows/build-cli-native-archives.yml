@@ -39,7 +39,8 @@ jobs:
     #   pull_request          -> pr-<PR_NUMBER>
     #   refs/heads/release/*  -> staging
     #   refs/heads/internal/release/* -> staging
-    #   anything else (push to main, schedule, workflow_dispatch) -> daily
+    #   refs/heads/main      -> local
+    #   anything else (schedule, workflow_dispatch on other refs) -> daily
     # The AzDO 'stable' branch (DotNetFinalVersionKind == 'release') is
     # intentionally omitted: stable archives are produced only by the AzDO
     # release pipeline, never by GH Actions.
@@ -47,7 +48,7 @@ jobs:
     # CLI's IdentityChannelReader can return the channel verbatim, with no
     # separate parse of the version suffix at runtime.
     env:
-      ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || 'daily' }}
+      ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || github.ref == 'refs/heads/main' && 'local' || 'daily' }}
 
     steps:
       - name: Checkout code

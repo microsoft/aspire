@@ -106,7 +106,7 @@ internal record QueueLoadOptions(
     CancellationToken CancellationToken,
     InteractionInput Input,
     InteractionInputCollection AllInputs,
-    IServiceProvider ServiceProvider);
+    IServiceProvider Services);
 
 internal sealed class InputLoadingState(InputLoadOptions options)
 {
@@ -173,7 +173,7 @@ internal sealed class InputLoadingState(InputLoadOptions options)
                 {
                     AllInputs = options.AllInputs,
                     Input = options.Input,
-                    Services = options.ServiceProvider,
+                    Services = options.Services,
                     CancellationToken = currentToken
                 }).ConfigureAwait(false);
                 lock (_lock)

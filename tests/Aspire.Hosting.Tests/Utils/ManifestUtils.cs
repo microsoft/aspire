@@ -28,7 +28,7 @@ public sealed class ManifestUtils
         var options = new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish);
         var executionContext = new DistributedApplicationExecutionContext(options);
         serviceCollection.AddSingleton(executionContext);
-        options.ServiceProvider = serviceCollection.BuildServiceProvider();
+        options.Services = serviceCollection.BuildServiceProvider();
         
         writer.WriteStartObject();
         var context = new ManifestPublishingContext(executionContext, Path.Combine(manifestDirectory, "manifest.json"), writer);
@@ -50,7 +50,7 @@ public sealed class ManifestUtils
         var writer = new Utf8JsonWriter(ms, new() { Indented = true });
         var options = new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish)
         {
-            ServiceProvider = new ServiceCollection().BuildServiceProvider()
+            Services = new ServiceCollection().BuildServiceProvider()
         };
         var executionContext = new DistributedApplicationExecutionContext(options);
         var context = new ManifestPublishingContext(executionContext, Path.Combine(manifestDirectory, "manifest.json"), writer);
@@ -69,7 +69,7 @@ public sealed class ManifestUtils
         var writer = new Utf8JsonWriter(ms);
         var options = new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish)
         {
-            ServiceProvider = new ServiceCollection().BuildServiceProvider()
+            Services = new ServiceCollection().BuildServiceProvider()
         };
         var executionContext = new DistributedApplicationExecutionContext(options);
         var context = new ManifestPublishingContext(executionContext, Path.Combine(Environment.CurrentDirectory, "manifest.json"), writer);

@@ -1,26 +1,37 @@
-# Aspire.Hosting.SqlServer library
+# SQL Server hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a SQL Server database resource.
+Use this integration to model, configure, and orchestrate a SQL Server database resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire SQL Server Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.SqlServer` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.SqlServer
+```bash
+aspire add Aspire.Hosting.SqlServer
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a SQL Server resource and consume the connection using the following methods:
+In the AppHost, add a SQL Server resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
-var db = builder.AddSqlServer("sql").AddDatabase("db")
+var db = builder.AddSqlServer("sql").AddDatabase("db");
 
 var myService = builder.AddProject<Projects.MyService>()
    .WithReference(db);
+```
+
+**TypeScript**
+
+```typescript
+const db = await builder.addSqlServer("sql").addDatabase("db");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+   .withReference(db);
 ```
 
 ## Connection Properties
@@ -53,8 +64,9 @@ The SQL Server database resource inherits all properties from its parent `SqlSer
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
 
 ## Additional documentation
-https://aspire.dev/integrations/databases/sql-server/
-https://aspire.dev/integrations/databases/efcore/sql-server/
+
+https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/databases/sql-server/sql-server-host/
 
 ## Feedback & contributing
 
