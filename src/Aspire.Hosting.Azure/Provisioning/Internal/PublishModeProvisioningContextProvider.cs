@@ -24,7 +24,7 @@ internal sealed class PublishModeProvisioningContextProvider(
     IHostEnvironment environment,
     ILogger<PublishModeProvisioningContextProvider> logger,
     IArmClientProvider armClientProvider,
-    IUserPrincipalProvider userPrincipalProvider,
+    IAzurePrincipalProvider azurePrincipalProvider,
     ITokenCredentialProvider tokenCredentialProvider,
     IDeploymentStateManager deploymentStateManager,
     DistributedApplicationExecutionContext distributedApplicationExecutionContext,
@@ -34,7 +34,7 @@ internal sealed class PublishModeProvisioningContextProvider(
         environment,
         logger,
         armClientProvider,
-        userPrincipalProvider,
+        azurePrincipalProvider,
         tokenCredentialProvider,
         deploymentStateManager,
         distributedApplicationExecutionContext)

@@ -6,7 +6,13 @@ using Azure.Core;
 
 namespace Aspire.Hosting.Azure.Provisioning;
 
-internal sealed record UserPrincipal(Guid Id, string Name);
+// Represents the Azure identity that the provisioner is acting as.
+// `Type` carries the Microsoft Entra principal type ("User", "ServicePrincipal", or "Group")
+// and matches the values accepted by the `principalType` property on
+// Microsoft.Authorization/roleAssignments. Defaults to "User" to preserve historical behavior
+// for credentials whose access tokens don't include the `idtyp` claim.
+// See: https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference#payload-claims
+internal sealed record AzurePrincipal(Guid Id, string Name, string Type = "User");
 
 internal sealed class ProvisioningContext(
     TokenCredential credential,
@@ -15,7 +21,7 @@ internal sealed class ProvisioningContext(
     IResourceGroupResource resourceGroup,
     ITenantResource tenant,
     AzureLocation location,
-    UserPrincipal principal,
+    AzurePrincipal principal,
     DistributedApplicationExecutionContext executionContext)
 {
     public TokenCredential Credential => credential;
@@ -24,6 +30,6 @@ internal sealed class ProvisioningContext(
     public ITenantResource Tenant => tenant;
     public IResourceGroupResource ResourceGroup => resourceGroup;
     public AzureLocation Location => location;
-    public UserPrincipal Principal => principal;
+    public AzurePrincipal Principal => principal;
     public DistributedApplicationExecutionContext ExecutionContext => executionContext;
 }
