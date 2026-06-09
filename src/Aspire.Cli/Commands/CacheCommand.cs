@@ -2,46 +2,34 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.CommandLine.Help;
 using System.Globalization;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class CacheCommand : BaseCommand
+internal sealed class CacheCommand : ParentCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
-    public CacheCommand(IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-        : base("cache", CacheCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+    public CacheCommand(
+        CommonCommandServices services)
+        : base("cache", CacheCommandStrings.Description, services)
     {
-        var clearCommand = new ClearCommand(InteractionService, features, updateNotifier, executionContext, telemetry);
+        var clearCommand = new ClearCommand(services);
 
         Subcommands.Add(clearCommand);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
-    {
-        new HelpAction().Invoke(parseResult);
-        return Task.FromResult(ExitCodeConstants.InvalidCommand);
-    }
-
     internal sealed class ClearCommand : BaseCommand
     {
-        public ClearCommand(IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-            : base("clear", CacheCommandStrings.ClearCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        public ClearCommand(CommonCommandServices services)
+            : base("clear", CacheCommandStrings.ClearCommand_Description, services)
         {
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             try
             {
@@ -51,6 +39,14 @@ internal sealed class CacheCommand : BaseCommand
                 filesDeleted += ClearDirectoryContents(ExecutionContext.CacheDirectory);
                 filesDeleted += ClearDirectoryContents(ExecutionContext.SdksDirectory);
                 filesDeleted += ClearDirectoryContents(ExecutionContext.PackagesDirectory);
+                // Wipe the staging NuGet package cache too. Producers (PrebuiltAppHostServer's
+                // temporary nuget.config for the staging channel) deposit SHA-keyed package
+                // caches under <ASPIRE_HOME>/.nugetpackages/<sha>; clearing them lets users
+                // recover wedged staging restores without filesystem surgery. We hand the parent
+                // directory to ClearDirectoryContents so each SHA subdirectory is wiped while
+                // the parent itself stays in place for the next staging restore.
+                filesDeleted += ClearDirectoryContents(
+                    new DirectoryInfo(CliPathHelper.GetStagingNuGetPackagesDirectory(ExecutionContext.AspireHomeDirectory)));
                 filesDeleted += ClearDirectoryContents(
                     ExecutionContext.LogsDirectory,
                     skipFile: f => f.FullName.Equals(currentLogFilePath, StringComparison.OrdinalIgnoreCase));
@@ -64,14 +60,14 @@ internal sealed class CacheCommand : BaseCommand
                     InteractionService.DisplaySuccess(CacheCommandStrings.CacheCleared);
                 }
 
-                return Task.FromResult(ExitCodeConstants.Success);
+                return Task.FromResult(CommandResult.Success());
             }
             catch (Exception ex)
             {
                 var errorMessage = string.Format(CultureInfo.CurrentCulture, CacheCommandStrings.CacheClearFailed, ex.Message);
                 Telemetry.RecordError(errorMessage, ex);
                 InteractionService.DisplayError(errorMessage);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return Task.FromResult(CommandResult.Failure(CliExitCodes.InvalidCommand));
             }
         }
 

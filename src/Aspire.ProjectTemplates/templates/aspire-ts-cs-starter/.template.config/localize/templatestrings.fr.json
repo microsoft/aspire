@@ -1,6 +1,6 @@
 {
   "author": "Microsoft",
-  "name": "Application de démarrage Aspire (ASP.NET Core/React)",
+  "name": "Application de démarrage Aspire (ASP.NET Core/React, C# AppHost)",
   "description": "Modèle de projet pour créer une application Aspire avec un front-end React et un service backend d’API Minimal en C#, avec une mise en cache Redis optionnelle.",
   "symbols/Framework/description": "Infrastructure cible du projet.",
   "symbols/Framework/choices/net8.0/description": "Cible net8.0",

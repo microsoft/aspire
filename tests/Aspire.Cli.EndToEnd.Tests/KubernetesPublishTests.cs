@@ -20,8 +20,8 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
     private const string ProjectName = "AspireKubernetesPublishTest";
     private const string ClusterNamePrefix = "aspire-e2e";
 
-    private static string KindVersion => Environment.GetEnvironmentVariable("KIND_VERSION") ?? "v0.31.0";
-    private static string HelmVersion => Environment.GetEnvironmentVariable("HELM_VERSION") ?? "v3.17.3";
+    private static string KindVersion => KubernetesE2EVersions.KindVersion;
+    private static string HelmVersion => KubernetesE2EVersions.HelmVersion;
 
     private static string GenerateUniqueClusterName() =>
         $"{ClusterNamePrefix}-{Guid.NewGuid():N}"[..32]; // KinD cluster names max 32 chars
@@ -42,11 +42,9 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
         output.WriteLine($"Using cluster name: {clusterName}");
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -291,9 +289,6 @@ builder.Build().Run();
             await auto.TypeAsync($"kind delete cluster --name={clusterName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
-
-            await auto.TypeAsync("exit");
-            await auto.EnterAsync();
         }
         finally
         {
@@ -316,7 +311,5 @@ builder.Build().Run();
                 output.WriteLine($"Cleanup: Failed to delete KinD cluster '{clusterName}': {ex.Message}");
             }
         }
-
-        await pendingRun;
     }
 }

@@ -77,22 +77,54 @@ internal static class LexicalScoring
         var score = 0.0f;
         var textSpan = lowerText.AsSpan();
 
+        // Cap on how many occurrences we ever count toward the multi-occurrence bonus.
+        // The bonus saturates at maxOccurrenceBonus, so beyond that one extra occurrence
+        // there is no scoring reason to keep walking. Content fields can run several KB
+        // and ScoreField is invoked once per (doc × field × query token), so capping the
+        // per-field scan compounds across the whole corpus.
+        var occurrenceLimit = maxOccurrenceBonus + 1;
+
         foreach (var token in queryTokens)
         {
-            var index = textSpan.IndexOf(token, StringComparison.Ordinal);
-            if (index < 0)
+            // Single forward scan: walk match-by-match, remember the first match
+            // for the word-boundary bonus, and stop as soon as we've counted enough
+            // occurrences to saturate the multi-occurrence bonus. The previous version
+            // did IndexOf to find first match and then a second full-scan count,
+            // doubling the bytes scanned in fields that contained a match.
+            var startIndex = 0;
+            var firstMatchIndex = -1;
+            var count = 0;
+
+            while (startIndex < textSpan.Length && count < occurrenceLimit)
+            {
+                var nextIndex = textSpan[startIndex..].IndexOf(token, StringComparison.Ordinal);
+                if (nextIndex < 0)
+                {
+                    break;
+                }
+
+                var absoluteIndex = startIndex + nextIndex;
+                if (firstMatchIndex < 0)
+                {
+                    firstMatchIndex = absoluteIndex;
+                }
+
+                count++;
+                startIndex = absoluteIndex + token.Length;
+            }
+
+            if (count == 0)
             {
                 continue;
             }
 
             score += baseMatchScore;
 
-            if (IsWordBoundaryMatch(textSpan, token, index, wordCharacterMode))
+            if (IsWordBoundaryMatch(textSpan, token, firstMatchIndex, wordCharacterMode))
             {
                 score += wordBoundaryBonus;
             }
 
-            var count = CountOccurrences(textSpan, token);
             if (count > 1)
             {
                 score += Math.Min(count - 1, maxOccurrenceBonus) * multipleOccurrenceBonus;
@@ -100,32 +132,6 @@ internal static class LexicalScoring
         }
 
         return score;
-    }
-
-    /// <summary>
-    /// Counts the number of occurrences of a token in a span.
-    /// </summary>
-    /// <param name="text">The text to search.</param>
-    /// <param name="token">The token to count.</param>
-    /// <returns>The number of occurrences.</returns>
-    public static int CountOccurrences(ReadOnlySpan<char> text, string token)
-    {
-        var count = 0;
-        var startIndex = 0;
-
-        while (startIndex < text.Length)
-        {
-            var nextIndex = text[startIndex..].IndexOf(token, StringComparison.Ordinal);
-            if (nextIndex < 0)
-            {
-                break;
-            }
-
-            count++;
-            startIndex += nextIndex + token.Length;
-        }
-
-        return count;
     }
 
     /// <summary>

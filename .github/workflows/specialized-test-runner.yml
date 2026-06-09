@@ -29,7 +29,6 @@ on:
       enablePlaywrightInstall:
         required: true
         type: boolean
-        default: false
         description: 'Controls whether to install Playwright browsers during project build'
       ignoreTestFailures:
         required: false
@@ -60,12 +59,12 @@ jobs:
           ATTR="${{ inputs.attributeName }}"
           case "$ATTR" in
             QuarantinedTest)
-              echo "msbuild_prop=/p:RunQuarantinedTests=true" >> $GITHUB_OUTPUT
-              echo "discovery_filter=quarantined=true" >> $GITHUB_OUTPUT
+              echo "msbuild_prop=/p:RunQuarantinedTests=true" >> "$GITHUB_OUTPUT"
+              echo "discovery_filter=quarantined=true" >> "$GITHUB_OUTPUT"
               ;;
             OuterloopTest)
-              echo "msbuild_prop=/p:RunOuterloopTests=true" >> $GITHUB_OUTPUT
-              echo "discovery_filter=outerloop=true" >> $GITHUB_OUTPUT
+              echo "msbuild_prop=/p:RunOuterloopTests=true" >> "$GITHUB_OUTPUT"
+              echo "discovery_filter=outerloop=true" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "::error::Unknown attributeName '$ATTR'. Expected QuarantinedTest or OuterloopTest."
@@ -74,7 +73,7 @@ jobs:
           esac
 
       - name: Identify relevant test projects
-        run: ./eng/scripts/generate-specialized-test-projects-list.sh ${{ inputs.attributeName }} ${{ github.workspace }}/artifacts/BeforeBuildProps.props
+        run: ./eng/scripts/generate-specialized-test-projects-list.sh "${{ inputs.attributeName }}" "${{ github.workspace }}/artifacts/BeforeBuildProps.props"
 
       - name: Restore
         run: ./restore.sh
@@ -194,8 +193,14 @@ jobs:
 
   # --- Test execution via shared split-tests workflow ---
 
+  build_cli_e2e_image:
+    name: Build CLI E2E Docker image
+    needs: [generate_tests_matrix]
+    if: ${{ github.repository_owner == 'microsoft' && fromJson(needs.generate_tests_matrix.outputs.tests_matrix_requires_cli_archive).include[0] != null }}
+    uses: ./.github/workflows/build-cli-e2e-image.yml
+
   run_tests:
-    needs: [generate_tests_matrix, build_packages, build_cli_archives]
+    needs: [generate_tests_matrix, build_packages, build_cli_archives, build_cli_e2e_image]
     # Allow tests to run even if build_cli_archives partially fails (e.g., one RID
     # like osx-arm64 has an infra issue but linux-x64 succeeded). Tests that need
     # a failed RID's archive will fail at the download step.
@@ -205,7 +210,8 @@ jobs:
         github.repository_owner == 'microsoft' &&
         !cancelled() &&
         needs.generate_tests_matrix.result == 'success' &&
-        (needs.build_packages.result == 'success' || needs.build_packages.result == 'skipped')
+        (needs.build_packages.result == 'success' || needs.build_packages.result == 'skipped') &&
+        (needs.build_cli_e2e_image.result == 'success' || needs.build_cli_e2e_image.result == 'skipped')
       }}
     uses: ./.github/workflows/run-tests-core.yml
     with:
@@ -228,6 +234,7 @@ jobs:
       - generate_tests_matrix
       - build_packages
       - build_cli_archives
+      - build_cli_e2e_image
       - run_tests
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -278,6 +285,10 @@ jobs:
               needs.run_tests.result == 'failure' ||
               needs.run_tests.result == 'cancelled' ||
               needs.run_tests.result == 'skipped' ||
+              (fromJson(needs.generate_tests_matrix.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
+               needs.build_cli_e2e_image.result == 'skipped') ||
+              (needs.build_cli_e2e_image.result == 'failure') ||
+              (needs.build_cli_e2e_image.result == 'cancelled') ||
               (needs.build_packages.result == 'failure') ||
               (needs.build_packages.result == 'cancelled')
             )

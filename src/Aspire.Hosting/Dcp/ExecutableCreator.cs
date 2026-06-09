@@ -29,6 +29,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     private readonly DistributedApplicationOptions _distributedApplicationOptions;
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly Locations _locations;
+    private readonly IAspireStore _aspireStore;
     private readonly ILogger<ExecutableCreator> _logger;
     private readonly DcpAppResourceStore _appResources;
 
@@ -39,6 +40,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         DistributedApplicationOptions distributedApplicationOptions,
         DistributedApplicationExecutionContext executionContext,
         Locations locations,
+        IAspireStore aspireStore,
         ILogger<ExecutableCreator> logger,
         DcpAppResourceStore appResources)
     {
@@ -48,6 +50,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         _distributedApplicationOptions = distributedApplicationOptions;
         _executionContext = executionContext;
         _locations = locations;
+        _aspireStore = aspireStore;
         _logger = logger;
         _appResources = appResources;
     }
@@ -61,8 +64,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
     public bool IsReadyToCreate(RenderedModelResource<Executable> resource, EmptyCreationContext context)
     {
-        var explicitStartup = resource.ModelResource.TryGetAnnotationsOfType<ExplicitStartupAnnotation>(out _);
-        return !explicitStartup;
+        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
     }
 
     public async Task CreateObjectAsync(RenderedModelResource<Executable> er, EmptyCreationContext context, ILogger resourceLogger, IDcpObjectFactory factory, CancellationToken cancellationToken)
@@ -92,7 +94,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         spec.PemCertificates = pemCertificates;
 
-        var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments);
+        var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments, spec.Args?.Count ?? 0);
         var executableArgs = launchArgs.Where(a => a.Executable).Select(a => a.Value).ToList();
         var displayArgs = launchArgs.Where(a => a.Display).ToList();
         if (executableArgs.Count > 0)
@@ -101,13 +103,13 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             spec.Args.AddRange(executableArgs);
         }
         // Arg annotations are what is displayed in the dashboard.
-        er.DcpResource.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, displayArgs.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive)));
+        er.DcpResource.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, displayArgs.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive, effectiveArgumentIndex: a.EffectiveArgumentIndex)));
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
 
         if (configuration.Exception is not null)
         {
-            throw new FailedToApplyEnvironmentException();
+            throw new FailedToApplyEnvironmentException($"Failed to apply configuration to executable {er.ModelResource.Name}", configuration.Exception);
         }
 
         // Invoke the debug configuration callback now that endpoints are allocated.
@@ -157,7 +159,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 exe.Spec.WorkingDirectory = Path.GetDirectoryName(projectMetadata.ProjectPath);
 
                 exe.Annotate(CustomResource.OtelServiceNameAnnotation, project.Name);
-                exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, exeInstance.Suffix);
+                exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, project.GetOtelServiceInstanceId(exeInstance));
                 exe.Annotate(CustomResource.ResourceNameAnnotation, project.Name);
                 exe.Annotate(CustomResource.ResourceReplicaCount, replicas.ToString(CultureInfo.InvariantCulture));
                 exe.Annotate(CustomResource.ResourceReplicaIndex, i.ToString(CultureInfo.InvariantCulture));
@@ -167,8 +169,15 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 var projectArgs = new List<string>();
 
                 var isInDebugSession = !string.IsNullOrEmpty(_configuration[DcpExecutor.DebugSessionPortVar]);
+                var persistent = project.GetLifetimeType() == Lifetime.Persistent;
+                exe.Spec.Persistent = persistent;
+                if (persistent)
+                {
+                    ApplyMonitorProcess(project, exe.Spec);
+                }
 
-                if (project.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation))
+                SupportsDebuggingAnnotation? supportsDebuggingAnnotation = null;
+                if (!persistent && project.SupportsDebugging(_configuration, out supportsDebuggingAnnotation))
                 {
                     exe.Spec.ExecutionType = ExecutionType.IDE;
                     exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
@@ -181,8 +190,30 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     // Non-project launch types (e.g. azure-functions) have their launch configuration
                     // applied later in CreateExecutableAsync() after endpoints are allocated,
                     // unless the IDE didn't send DEBUG_SESSION_INFO (handled by the fallback branch below).
+
+                    // File-based apps (.cs files) are not supported by all IDEs (e.g. Visual Studio
+                    // returns 500 for them). Populate fallback process args so that when the IDE
+                    // rejects the launch request and DCP falls back to ExecutionType.Process, the
+                    // executable starts with the correct `dotnet run --file` arguments.
+                    if (projectMetadata.IsFileBasedApp)
+                    {
+                        projectArgs.Add("run");
+                        projectArgs.Add("--file");
+                        projectArgs.Add(projectMetadata.ProjectPath);
+                        projectArgs.Add("--no-cache");
+                        if (projectMetadata.SuppressBuild)
+                        {
+                            projectArgs.Add("--no-build");
+                        }
+                        projectArgs.Add("--no-launch-profile");
+
+                        if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
+                        {
+                            projectArgs.AddRange(new[] { "--configuration", _distributedApplicationOptions.Configuration });
+                        }
+                    }
                 }
-                else if (ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation))
+                else if (!persistent && ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation))
                 {
                     // Fall back to IDE execution with a standard ProjectLaunchConfiguration when:
                     // 1. No SupportsDebuggingAnnotation exists (e.g. AddResource-based ProjectResource
@@ -247,6 +278,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
                 exe.SetAnnotationAsObjectList(CustomResource.ResourceProjectArgsAnnotation, projectArgs);
 
+                if (project.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+                {
+                    exe.Spec.Start = false;
+                }
+
                 var exeAppResource = new RenderedModelResource<Executable>(project, exe);
                 DcpModelUtilities.AddServicesProducedInfo(exeAppResource, _appResources.Get());
                 _appResources.Add(exeAppResource);
@@ -269,10 +305,17 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             // The working directory is always relative to the app host project directory (if it exists).
             exe.Spec.WorkingDirectory = executable.WorkingDirectory;
             exe.Annotate(CustomResource.OtelServiceNameAnnotation, executable.Name);
-            exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, exeInstance.Suffix);
+            exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, executable.GetOtelServiceInstanceId(exeInstance));
             exe.Annotate(CustomResource.ResourceNameAnnotation, executable.Name);
 
-            if (executable.SupportsDebugging(_configuration, out _))
+            var persistent = executable.GetLifetimeType() == Lifetime.Persistent;
+            if (persistent)
+            {
+                exe.Spec.Persistent = true;
+                ApplyMonitorProcess(executable, exe.Spec);
+            }
+
+            if (!persistent && executable.SupportsDebugging(_configuration, out _))
             {
                 // Just mark as IDE execution here - the actual launch configuration callback
                 // will be invoked in CreateExecutableAsync after endpoints are allocated.
@@ -284,6 +327,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 exe.Spec.ExecutionType = ExecutionType.Process;
             }
 
+            if (executable.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+            {
+                exe.Spec.Start = false;
+            }
+
             DcpExecutor.SetInitialResourceState(executable, exe);
 
             var exeAppResource = new RenderedModelResource<Executable>(executable, exe);
@@ -292,12 +340,20 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
     }
 
+    private static void ApplyMonitorProcess(IResource resource, ExecutableSpec spec)
+    {
+        if (resource.TryGetParentProcessLifetime(out var parentProcessId, out var parentProcessTimestamp))
+        {
+            spec.MonitorPid = parentProcessId;
+            spec.MonitorTimestamp = parentProcessTimestamp;
+        }
+    }
+
     private async Task<ExecutableConfiguration> BuildExecutableConfiguration(RenderedModelResource<Executable> er, ILogger resourceLogger, CancellationToken cancellationToken)
     {
         var exe = (Executable)er.DcpResource;
 
-        // Build the base paths for certificate output in the DCP session directory.
-        var certificatesRootDir = Path.Join(_locations.DcpSessionDir, exe.Metadata.Name);
+        var certificatesRootDir = GetCertificatesRootDirectory(er, exe);
         var bundleOutputPath = Path.Join(certificatesRootDir, "cert.pem");
         var customBundleOutputPath = Path.Join(certificatesRootDir, "bundles");
         var certificatesOutputPath = Path.Join(certificatesRootDir, "certs");
@@ -405,13 +461,31 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         return (configuration, pemCertificates);
     }
 
-    private static List<(string Value, bool IsSensitive, bool Executable, bool Display)> BuildLaunchArgs(RenderedModelResource<Executable> er, ExecutableSpec spec, IEnumerable<(string Value, bool IsSensitive)> appHostArgs)
+    private string GetCertificatesRootDirectory(RenderedModelResource<Executable> er, Executable exe)
+    {
+        if (er.ModelResource.GetLifetimeType() == Lifetime.Persistent)
+        {
+            return Path.Join(_aspireStore.BasePath, "dcp", "executables", exe.Metadata.Name, "certificates");
+        }
+
+        return Path.Join(_locations.DcpSessionDir, exe.Metadata.Name);
+    }
+
+    private static List<LaunchArgument> BuildLaunchArgs(RenderedModelResource<Executable> er, ExecutableSpec spec, IEnumerable<(string Value, bool IsSensitive)> appHostArgs, int executableArgumentStartIndex)
     {
         // Launch args is the final list of args that are displayed in the UI and possibly added to the executable spec.
         // They're built from app host resource model args and any args in the effective launch profile.
         // Follows behavior in the IDE execution spec when in IDE execution mode:
         // https://github.com/microsoft/aspire/blob/main/docs/specs/IDE-execution.md#project-launch-configuration-type-project
-        var launchArgs = new List<(string Value, bool IsSensitive, bool Executable, bool Display)>();
+        var appHostArgList = appHostArgs.ToList();
+        var launchArgs = new List<LaunchArgument>();
+        var nextExecutableArgumentIndex = executableArgumentStartIndex;
+
+        LaunchArgument CreateLaunchArgument(string value, bool isSensitive, bool executable, bool display)
+        {
+            var effectiveArgumentIndex = executable ? nextExecutableArgumentIndex++ : (int?)null;
+            return new(value, isSensitive, executable, display, effectiveArgumentIndex);
+        }
 
         // If the executable is a project then include any command line args from the launch profile.
         if (er.ModelResource is ProjectResource project)
@@ -419,34 +493,34 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             // Args in the launch profile is used when:
             // 1. The project is run as an executable. Launch profile args are combined with app host supplied args.
             // 2. The project is run by the IDE and no app host args are specified.
-            if (spec.ExecutionType == ExecutionType.Process || (spec.ExecutionType == ExecutionType.IDE && !appHostArgs.Any()))
+            if (spec.ExecutionType == ExecutionType.Process || (spec.ExecutionType == ExecutionType.IDE && appHostArgList.Count == 0))
             {
                 // When the .NET project is launched from an IDE the launch profile args are automatically added.
                 // We still want to display the args in the dashboard so only add them to the custom arg annotations.
                 var executableArg = spec.ExecutionType != ExecutionType.IDE;
 
                 var launchProfileArgs = GetLaunchProfileArgs(project.GetEffectiveLaunchProfile()?.LaunchProfile);
-                if (launchProfileArgs.Count > 0 && appHostArgs.Any())
+                if (launchProfileArgs.Count > 0 && appHostArgList.Count > 0)
                 {
                     // If there are app host args, add a double-dash to separate them from the launch args.
                     launchProfileArgs.Insert(0, "--");
                 }
 
-                launchArgs.AddRange(launchProfileArgs.Select(a => (a, isSensitive: false, executableArg, true)));
+                launchArgs.AddRange(launchProfileArgs.Select(a => CreateLaunchArgument(a, isSensitive: false, executableArg, display: true)));
             }
         }
-        else if (er.ModelResource is DotnetToolResource tool)
+        else if (er.ModelResource is DotnetToolResource)
         {
-            var argSeparator = appHostArgs.Select((a, i) => (index: i, value: a.Value))
+            var argSeparator = appHostArgList.Select((a, i) => (index: i, value: a.Value))
                 .FirstOrDefault(x => x.value == DotnetToolResourceExtensions.ArgumentSeparator);
 
-            var args = appHostArgs.Select((a, i) => (arg: a, display: i > argSeparator.index));
-            launchArgs.AddRange(args.Select(x => (x.arg.Value, x.arg.IsSensitive, true, x.display)));
+            var args = appHostArgList.Select((a, i) => (arg: a, display: i > argSeparator.index));
+            launchArgs.AddRange(args.Select(x => CreateLaunchArgument(x.arg.Value, x.arg.IsSensitive, executable: true, x.display)));
             return launchArgs;
         }
 
         // In the situation where args are combined (process execution) the app host args are added after the launch profile args.
-        launchArgs.AddRange(appHostArgs.Select(a => (a.Value, a.IsSensitive, true, true)));
+        launchArgs.AddRange(appHostArgList.Select(a => CreateLaunchArgument(a.Value, a.IsSensitive, executable: true, display: true)));
 
         return launchArgs;
     }
@@ -505,4 +579,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         resource.AddLifeCycleCommands();
         _nameGenerator.EnsureDcpInstancesPopulated(resource);
     }
+
+    private sealed record LaunchArgument(string Value, bool IsSensitive, bool Executable, bool Display, int? EffectiveArgumentIndex);
 }

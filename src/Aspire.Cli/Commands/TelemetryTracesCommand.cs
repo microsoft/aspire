@@ -5,14 +5,14 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Otlp.Serialization;
 using Aspire.Cli.Utils;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
+using Aspire.Otlp.Serialization;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -23,7 +23,6 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class TelemetryTracesCommand : BaseCommand
 {
-    private readonly IInteractionService _interactionService;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<TelemetryTracesCommand> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -39,26 +38,23 @@ internal sealed class TelemetryTracesCommand : BaseCommand
     private static readonly Option<bool?> s_hasErrorOption = TelemetryCommandHelpers.CreateHasErrorOption();
     private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
     private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
+    private static readonly Option<string?> s_searchOption = TelemetryCommandHelpers.CreateSearchOption();
 
     public TelemetryTracesCommand(
-        IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
+        IProjectLocator projectLocator,
         IHttpClientFactory httpClientFactory,
         ResourceColorMap resourceColorMap,
         TimeProvider timeProvider,
-        ILogger<TelemetryTracesCommand> logger)
-        : base("traces", TelemetryCommandStrings.TracesDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<TelemetryTracesCommand> logger,
+        CommonCommandServices services)
+        : base("traces", TelemetryCommandStrings.TracesDescription, services)
     {
-        _interactionService = interactionService;
         _httpClientFactory = httpClientFactory;
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -68,9 +64,10 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         Options.Add(s_hasErrorOption);
         Options.Add(s_dashboardUrlOption);
         Options.Add(s_apiKeyOption);
+        Options.Add(s_searchOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -82,39 +79,39 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var hasError = parseResult.GetValue(s_hasErrorOption);
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
+        var search = parseResult.GetValue(s_searchOption);
 
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
         {
-            _interactionService.DisplayError(TelemetryCommandStrings.LimitMustBePositive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
+            _connectionResolver, InteractionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
 
         if (!dashboardApi.Success)
         {
-            return dashboardApi.ExitCode;
+            return CommandResult.FromExitCode(dashboardApi.ExitCode);
         }
 
         try
         {
             if (!string.IsNullOrEmpty(traceId))
             {
-                return await FetchSingleTraceAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, traceId, format, dashboardApi.DashboardUrl!, cancellationToken);
+                return CommandResult.FromExitCode(await FetchSingleTraceAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, traceId, format, dashboardApi.DashboardUrl!, cancellationToken));
             }
             else
             {
-                return await FetchTracesAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, hasError, limit, format, dashboardApi.DashboardUrl!, cancellationToken);
+                return CommandResult.FromExitCode(await FetchTracesAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, hasError, limit, format, dashboardApi.DashboardUrl!, search, cancellationToken));
             }
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch traces from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
-            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
-            return ExitCodeConstants.DashboardFailure;
+            TelemetryCommandHelpers.DisplayTelemetryError(InteractionService, errorInfo);
+            return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }
     }
 
@@ -143,8 +140,8 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.TraceNotFound, traceId));
-            return ExitCodeConstants.InvalidCommand;
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.TraceNotFound, traceId));
+            return CliExitCodes.InvalidCommand;
         }
 
         TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
@@ -153,15 +150,27 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
         if (format == OutputFormat.Json)
         {
-            // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+            var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+            var resourceSpans = apiResponse?.Data?.ResourceSpans;
+            var traces = SharedAIHelpers.GetTracesFromOtlpData(resourceSpans);
+            var trace = traces.FirstOrDefault();
+            if (trace is null)
+            {
+                // Shouldn't happen since API would return 404 if trace not found.
+                InteractionService.DisplayRawText("[]", ConsoleOutput.Standard);
+            }
+            else
+            {
+                Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allOtlpResources);
+                InteractionService.DisplayRawText(SharedAIHelpers.SerializeTraceToJson(trace, getResourceName, dashboardUrl), ConsoleOutput.Standard);
+            }
         }
         else
         {
             DisplayTraceDetails(json, traceId, allOtlpResources, dashboardUrl);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> FetchTracesAsync(
@@ -172,6 +181,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         int? limit,
         OutputFormat format,
         string dashboardUrl,
+        string? search,
         CancellationToken cancellationToken)
     {
         using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
@@ -182,8 +192,8 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         // If a resource was specified but not found, return error
         if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
         {
-            _interactionService.DisplayError($"Resource '{resource}' not found.");
-            return ExitCodeConstants.InvalidCommand;
+            InteractionService.DisplayError($"Resource '{resource}' not found.");
+            return CliExitCodes.InvalidCommand;
         }
 
         var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
@@ -191,7 +201,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         // Pre-resolve colors so assignment is deterministic regardless of data order
         TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
 
-        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, hasError: hasError, limit: limit);
+        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, hasError: hasError, limit: limit, search: search);
 
         _logger.LogDebug("Fetching traces from {Url}", url);
 
@@ -202,15 +212,17 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
         if (format == OutputFormat.Json)
         {
-            // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+            var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+            var resourceSpans = apiResponse?.Data?.ResourceSpans;
+            Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allOtlpResources);
+            InteractionService.DisplayRawText(SharedAIHelpers.SerializeTracesToJson(resourceSpans, getResourceName, dashboardUrl), ConsoleOutput.Standard);
         }
         else
         {
             DisplayTracesTable(json, allOtlpResources, dashboardUrl);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private void DisplayTracesTable(string json, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl)
@@ -220,7 +232,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
         if (resourceSpans is null or { Length: 0 })
         {
-            TelemetryCommandHelpers.DisplayNoData(_interactionService, "traces");
+            TelemetryCommandHelpers.DisplayNoData(InteractionService, "traces");
             return;
         }
 
@@ -278,13 +290,13 @@ internal sealed class TelemetryTracesCommand : BaseCommand
                 ? FormatHelpers.FormatConsoleTime(_timeProvider, OtlpHelpers.UnixNanoSecondsToDateTime(info.StartTimeNano.Value))
                 : "";
             var shortTraceId = OtlpHelpers.ToShortenedId(info.TraceId);
-            var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, info.TraceId, $"[grey]{shortTraceId}[/]");
-            var nameColumn = $"[{resourceColor}]{info.Resource.EscapeMarkup()}[/]: {info.FirstSpanName.EscapeMarkup()} {traceLink}";
+            var traceLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, dashboardUrl, info.TraceId, shortTraceId);
+            var nameColumn = $"[{resourceColor}]{info.Resource.EscapeMarkup()}[/]: {info.FirstSpanName.EscapeMarkup()} [grey]{traceLink}[/]";
             table.AddRow(timestamp, nameColumn, info.SpanCount.ToString(CultureInfo.InvariantCulture), durationStr, statusText);
         }
 
-        _interactionService.DisplayRenderable(table);
-        _interactionService.DisplayMarkupLine($"[grey]Showing {traceInfos.Count} of {response?.TotalCount ?? traceInfos.Count} traces[/]");
+        InteractionService.DisplayRenderable(table);
+        InteractionService.DisplayMarkupLine($"[grey]Showing {traceInfos.Count} of {response?.TotalCount ?? traceInfos.Count} traces[/]");
     }
 
     private void DisplayTraceDetails(string json, string traceId, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl)
@@ -316,12 +328,12 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
 
         var shortTraceId = OtlpHelpers.ToShortenedId(traceId);
-        var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, shortTraceId);
+        var traceLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, dashboardUrl, traceId, shortTraceId);
 
         if (spans.Count == 0)
         {
-            _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
-            _interactionService.DisplayMarkupLine("[dim]No spans found[/]");
+            InteractionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
+            InteractionService.DisplayMarkupLine("[dim]No spans found[/]");
             return;
         }
 
@@ -330,9 +342,9 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var totalDuration = rootSpans.Count > 0 ? rootSpans.Max(s => s.Duration) : spans.Max(s => s.Duration);
 
         // Header
-        _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
-        _interactionService.DisplayMarkupLine($"[bold]Duration:[/] {TelemetryCommandHelpers.FormatDuration(totalDuration)}  [bold]Spans:[/] {spans.Count}");
-        _interactionService.DisplayEmptyLine();
+        InteractionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
+        InteractionService.DisplayMarkupLine($"[bold]Duration:[/] {TelemetryCommandHelpers.FormatDuration(totalDuration)}  [bold]Spans:[/] {spans.Count}");
+        InteractionService.DisplayEmptyLine();
 
         // Build tree and display
         DisplaySpanTree(spans, dashboardUrl, traceId);
@@ -376,10 +388,10 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         {
             if (lastResource != null)
             {
-                _interactionService.DisplayEmptyLine(); // Blank line between resources
+                InteractionService.DisplayEmptyLine(); // Blank line between resources
             }
             var resourceColor = _resourceColorMap.GetColor(span.ResourceName);
-            _interactionService.DisplayMarkupLine($"{indent}[bold {resourceColor}]{span.ResourceName.EscapeMarkup()}[/]");
+            InteractionService.DisplayMarkupLine($"{indent}[bold {resourceColor}]{span.ResourceName.EscapeMarkup()}[/]");
             lastResource = span.ResourceName;
         }
 
@@ -392,7 +404,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var statusText = span.HasError ? "ERR" : "OK";
         var durationStr = TelemetryCommandHelpers.FormatDuration(span.Duration).PadLeft(8);
         var shortenedSpanId = OtlpHelpers.ToShortenedId(span.SpanId);
-        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, $"[dim]{shortenedSpanId}[/]", spanId: span.SpanId);
+        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, dashboardUrl, traceId, shortenedSpanId, spanId: span.SpanId);
         var escapedName = span.Name.EscapeMarkup();
 
         // Truncate long names
@@ -401,7 +413,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             ? escapedName[..(maxNameLength - 3)] + "..."
             : escapedName;
 
-        _interactionService.DisplayMarkupLine($"{indent}{connector} {spanIdLink} {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]");
+        InteractionService.DisplayMarkupLine($"{indent}{connector} [dim]{spanIdLink}[/] {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]");
 
         // Render children
         if (childrenByParent.TryGetValue(span.SpanId, out var children))

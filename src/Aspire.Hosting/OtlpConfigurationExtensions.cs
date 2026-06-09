@@ -132,7 +132,7 @@ public static class OtlpConfigurationExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures OTLP telemetry export")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
     public static IResourceBuilder<T> WithOtlpExporter<T>(this IResourceBuilder<T> builder) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -140,6 +140,21 @@ public static class OtlpConfigurationExtensions
         AddOtlpEnvironment(builder.Resource, builder.ApplicationBuilder.Configuration, builder.ApplicationBuilder.Environment);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Configures OTLP telemetry export
+    /// </summary>
+    [AspireExport("withOtlpExporter")]
+    internal static IResourceBuilder<T> WithOtlpExporterForPolyglot<T>(
+        this IResourceBuilder<T> builder,
+        OtlpProtocol? protocol = null) where T : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return protocol is null
+            ? builder.WithOtlpExporter()
+            : builder.WithOtlpExporter(protocol.Value);
     }
 
     /// <summary>
@@ -154,7 +169,7 @@ public static class OtlpConfigurationExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="protocol">The protocol to use for the OTLP exporter. If not set, it will try gRPC then Http.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withOtlpExporterProtocol", Description = "Configures OTLP telemetry export with specific protocol")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
     public static IResourceBuilder<T> WithOtlpExporter<T>(this IResourceBuilder<T> builder, OtlpProtocol protocol) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -179,7 +194,7 @@ public static class OtlpConfigurationExtensions
         DistributedApplicationModel? model;
         try
         {
-            model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+            model = context.ExecutionContext.Services.GetService<DistributedApplicationModel>();
         }
         catch (InvalidOperationException)
         {

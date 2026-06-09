@@ -3,17 +3,27 @@
 
 using System.IO.Compression;
 using System.Xml.Linq;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Packaging;
 
-internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
 {
+    // Threaded so the local-folder integration listing can honor the same
+    // ShowDeprecatedPackages flag that NuGetPackageCache honors on the feed-based path.
+    // Without this, flipping the flag silently has no effect on local hive / PR hive listings
+    // (https://github.com/microsoft/aspire/issues — divergence between two paths through the same intent).
+    private readonly IFeatures _features = features;
+
+    private const string GuestAppHostSdkPackageId = "Aspire.Hosting";
+
     public string Name { get; } = name;
     public PackageChannelQuality Quality { get; } = quality;
     public PackageMapping[]? Mappings { get; } = mappings;
@@ -23,6 +33,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public string? PinnedVersion { get; } = pinnedVersion;
 
     public string SourceDetails { get; } = ComputeSourceDetails(mappings);
+
+    public bool ShouldPersistChannelName() =>
+        Type is PackageChannelType.Explicit && !string.Equals(Name, PackageChannelNames.Stable, StringComparisons.ChannelName);
 
     private static string ComputeSourceDetails(PackageMapping[]? mappings)
     {
@@ -72,12 +85,15 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .DistinctBy(p => $"{p.Id}-{p.Version}");
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
-        // prerelease packages. This filters out this noise.
+        // prerelease packages. Keep the current CLI/SDK version so shipped CLIs can resolve their
+        // matching template package from daily/staging feeds, then filter out the remaining noise.
+        var currentCliVersion = VersionHelper.GetDefaultSdkVersion();
         var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
         {
             { Quality: PackageChannelQuality.Both } => true,
             { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
             { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
+            { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: false } } when string.Equals(p.Version, currentCliVersion, StringComparison.OrdinalIgnoreCase) => true,
             _ => false
         });
 
@@ -86,6 +102,12 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        var localPackageSource = GetLocalAspirePackageSource();
+        if (localPackageSource is not null)
+        {
+            return GetIntegrationPackagesFromLocalPackageSource(localPackageSource, cancellationToken);
+        }
+
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
         using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
@@ -124,6 +146,68 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
 
         return filteredPackages;
+    }
+
+    private DirectoryInfo? GetLocalAspirePackageSource()
+    {
+        if (Type is not PackageChannelType.Explicit || Mappings is null)
+        {
+            return null;
+        }
+
+        foreach (var mapping in Mappings)
+        {
+            if (IsScopedAspireMapping(mapping) && Directory.Exists(mapping.Source))
+            {
+                return new DirectoryInfo(mapping.Source);
+            }
+        }
+
+        return null;
+    }
+
+    private IEnumerable<NuGetPackage> GetIntegrationPackagesFromLocalPackageSource(DirectoryInfo packageSource, CancellationToken cancellationToken)
+    {
+        // Mirror NuGetPackageCache.GetIntegrationPackagesAsync: a user who flipped
+        // ShowDeprecatedPackages to see deprecated packages on stable/staging/daily
+        // must also see them on local-hive / PR-hive listings. Previously the deprecation
+        // check was hardcoded into IsIntegrationPackageId and silently dropped them here.
+        var showDeprecatedPackages = _features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
+
+        var packageMetadata = packageSource
+            .EnumerateFiles("*.nupkg", SearchOption.TopDirectoryOnly)
+            .Select(file =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return GetPackageFileMetadata(file.FullName);
+            })
+            .OfType<PackageFileMetadata>()
+            .Where(metadata => IsIntegrationPackageId(metadata.PackageId))
+            .Where(metadata => showDeprecatedPackages || !DeprecatedPackages.IsDeprecated(metadata.PackageId))
+            .Where(IsAllowedByQuality);
+
+        if (PinnedVersion is not null)
+        {
+            packageMetadata = packageMetadata
+                .Where(metadata => string.Equals(metadata.Version.ToString(), PinnedVersion, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var source = PathNormalizer.NormalizePathForStorage(packageSource.FullName);
+
+        return packageMetadata
+            .GroupBy(metadata => metadata.PackageId, StringComparers.NuGetPackageId)
+            .Select(group => group.OrderByDescending(metadata => metadata.Version, SemVersion.PrecedenceComparer).First())
+            .OrderBy(metadata => metadata.PackageId, StringComparers.NuGetPackageId)
+            .Select(metadata => new NuGetPackage { Id = metadata.PackageId, Version = PinnedVersion ?? metadata.Version.ToString(), Source = source })
+            .ToArray();
+
+        bool IsAllowedByQuality(PackageFileMetadata metadata) => new { metadata.Version, Quality } switch
+        {
+            { Quality: PackageChannelQuality.Both } => true,
+            { Quality: PackageChannelQuality.Stable, Version: { IsPrerelease: false } } => true,
+            { Quality: PackageChannelQuality.Prerelease, Version: { IsPrerelease: true } } => true,
+            _ => false
+        };
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
@@ -195,6 +279,31 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         });
 
         return filteredPackages;
+    }
+
+    public async Task<NuGetPackage?> GetLatestGuestAppHostSdkPackageAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        // Guest AppHost sdk.version resolves to the base Aspire.Hosting package because
+        // the managed server restores that package to evaluate and generate the AppHost.
+        var packages = await GetPackagesAsync(GuestAppHostSdkPackageId, workingDirectory, cancellationToken);
+
+        NuGetPackage? latestPackage = null;
+        SemVersion? latestVersion = null;
+        foreach (var package in packages)
+        {
+            if (!SemVersion.TryParse(package.Version, SemVersionStyles.Strict, out var version))
+            {
+                continue;
+            }
+
+            if (latestVersion is null || SemVersion.PrecedenceComparer.Compare(version, latestVersion) > 0)
+            {
+                latestPackage = package;
+                latestVersion = version;
+            }
+        }
+
+        return latestPackage;
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
@@ -289,7 +398,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .SelectMany(mapping => CreateScopedMappings(mapping, requestedPackageIds, logger))
             .ToArray();
 
-        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger);
+        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, _features, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger);
     }
 
     private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds, ILogger? logger)
@@ -429,18 +538,42 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             !string.Equals(mapping.PackageFilter, PackageMapping.AllPackages, StringComparison.Ordinal);
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+    private static bool IsIntegrationPackageId(string packageId)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger);
+        // NuGet package IDs are case-insensitive, so prefix checks use OrdinalIgnoreCase
+        // to stay consistent with StringComparers.NuGetPackageId used elsewhere in this
+        // file. .nupkg files on disk normally carry the canonical casing, but matching
+        // case-insensitively avoids silently dropping integrations whose file names were
+        // produced with a non-canonical casing (e.g. a third-party hive build).
+        //
+        // This method classifies a package id by namespace only. The deprecation filter
+        // is applied separately in GetIntegrationPackagesFromLocalPackageSource so it can
+        // be gated on the ShowDeprecatedPackages feature flag, matching the feed-based
+        // path in NuGetPackageCache.
+        var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.OrdinalIgnoreCase);
+
+        var isExcluded = packageId.StartsWith("Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Sdk", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Orchestration", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Testing", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Msi", StringComparison.OrdinalIgnoreCase);
+
+        return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 
-    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, ILogger? logger = null)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+    {
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger);
+    }
+
+    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null)
     {
         // The reason that PackageChannelQuality.Both is because there are situations like
         // in community toolkit where there is a newer beta version available for a package
         // in the case of implicit feeds we want to be able to show that, along side the stable
         // version. Not really an issue for template selection though (unless we start allowing)
         // for broader templating options.
-        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, logger: logger);
+        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger: logger);
     }
 }

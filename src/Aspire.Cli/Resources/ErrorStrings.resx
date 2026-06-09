@@ -120,6 +120,9 @@
   <data name="MinimumSdkVersionNotMet" xml:space="preserve">
     <value>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</value>
   </data>
+  <data name="DotNetSdkUnavailableAppHostDiscoveryWarning" xml:space="preserve">
+    <value>Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</value>
+  </data>
   <data name="InvalidLocaleProvided" xml:space="preserve">
     <value>Invalid locale {0} provided will not be used.</value>
   </data>
@@ -135,6 +138,9 @@
   </data>
   <data name="ExtensionIncompatibleWithCli" xml:space="preserve">
     <value>Aspire Extension is incompatible with the CLI. The Extension must be updated to a version that supports the {0} capability.</value>
+  </data>
+  <data name="CertificateGenerationFailed" xml:space="preserve">
+    <value>Failed to generate HTTPS development certificate (result: {0}).</value>
   </data>
   <data name="CertificatesMayNotBeFullyTrusted" xml:space="preserve">
     <value>Developer certificates may not be fully trusted (trust exit code was: {0}).</value>
@@ -154,6 +160,9 @@
   <data name="FailedToSearchForPackages" xml:space="preserve">
     <value>Failed to search for packages. Exit code: {0}.</value>
     <comment>{0} is a number</comment>
+  </data>
+  <data name="FailedToParsePackageSearchResults" xml:space="preserve">
+    <value>Failed to parse package search results.</value>
   </data>
   <data name="AppHostWasSpecifiedButDoesntExist" xml:space="preserve">
     <value>AppHost file was specified in '{0}' but it does not exist at '{1}'.</value>
@@ -201,6 +210,16 @@
   <data name="ConfigurationValueRequired" xml:space="preserve">
     <value>Configuration value is required.</value>
   </data>
+  <data name="GlobalAppHostPathCannotBeSetWithConfigCommand" xml:space="preserve">
+    <value>The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</value>
+  </data>
+  <data name="LegacyAppHostPathCannotBeSetWithConfigCommand" xml:space="preserve">
+    <value>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</value>
+  </data>
+  <data name="GlobalAppHostPathIgnored" xml:space="preserve">
+    <value>Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</value>
+    <comment>{0} is the global settings file path, {1} is the configured key such as appHost.path or appHostPath.</comment>
+  </data>
   <data name="ConfigurationKeyNotFound" xml:space="preserve">
     <value>Configuration key {0} not found.</value>
   </data>
@@ -242,5 +261,31 @@
   <data name="InvalidJsonInConfigFile" xml:space="preserve">
     <value>The configuration file '{0}' contains invalid JSON: {1}</value>
     <comment>{0} is the file path, {1} is the exception message</comment>
+  </data>
+  <data name="CodegenVersionSkewWarning" xml:space="preserve">
+    <value>The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</value>
+    <comment>{0} is the CLI version, {1} is the SDK version configured in aspire.config.json.</comment>
+  </data>
+  <data name="CodegenIncompatibleSdkSummary" xml:space="preserve">
+    <value>{0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again.</value>
+    <comment>{0} is the AppHost language display name, e.g. 'TypeScript (Node.js)'.</comment>
+  </data>
+  <data name="CodegenDebugHint" xml:space="preserve">
+    <value>Run with '--debug' for full diagnostic details.</value>
+  </data>
+  <data name="CodegenDebugHeader" xml:space="preserve">
+    <value>Diagnostic details:</value>
+  </data>
+  <data name="ConfiguredAppHostPathHasInvalidCharacters" xml:space="preserve">
+    <value>The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</value>
+    <comment>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</comment>
+  </data>
+  <data name="ConfiguredAppHostPathMustBeString" xml:space="preserve">
+    <value>The configured AppHost path in '{0}' ('{1}') must be a JSON string.</value>
+    <comment>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</comment>
+  </data>
+  <data name="ConfigurationFileMustBeJsonObject" xml:space="preserve">
+    <value>The configuration file '{0}' must contain a JSON object.</value>
+    <comment>{0} is the configuration file path that the user authored.</comment>
   </data>
 </root>

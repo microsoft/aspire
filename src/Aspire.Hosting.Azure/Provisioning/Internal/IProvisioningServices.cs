@@ -4,6 +4,8 @@
 using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
+using Azure.ResourceManager.Authorization;
+using Azure.ResourceManager.Authorization.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
 using Azure.Security.KeyVault.Secrets;
@@ -95,6 +97,11 @@ internal interface IArmClient
     /// Gets detailed information about available resource groups including their locations.
     /// </summary>
     Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets role assignments collection for the specified scope.
+    /// </summary>
+    IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope);
 }
 
 /// <summary>
@@ -177,6 +184,21 @@ internal interface IResourceGroupResource
 }
 
 /// <summary>
+/// Abstraction for Azure RoleAssignmentCollection.
+/// </summary>
+internal interface IRoleAssignmentCollection
+{
+    /// <summary>
+    /// Creates or updates a role assignment.
+    /// </summary>
+    Task<ArmOperation<RoleAssignmentResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string roleAssignmentName,
+        RoleAssignmentCreateOrUpdateContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Abstraction for Azure ArmDeploymentCollection.
 /// </summary>
 internal interface IArmDeploymentCollection
@@ -221,15 +243,4 @@ internal interface IUserPrincipalProvider
     /// Gets the user principal.
     /// </summary>
     Task<UserPrincipal> GetUserPrincipalAsync(CancellationToken cancellationToken = default);
-}
-
-/// <summary>
-/// Provides access to Azure token credentials.
-/// </summary>
-internal interface ITokenCredentialProvider
-{
-    /// <summary>
-    /// Gets the token credential for Azure authentication.
-    /// </summary>
-    TokenCredential TokenCredential { get; }
 }

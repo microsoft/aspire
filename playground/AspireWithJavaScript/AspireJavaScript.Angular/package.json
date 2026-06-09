@@ -42,6 +42,12 @@
     "run-script-os": "^1.1.6"
   },
   "overrides": {
-    "vite": "7.3.2"
+    "vite": "7.3.2",
+    "postcss": "8.5.10",
+    "uuid": "14.0.0",
+    "webpack-dev-server": "^5.2.4",
+    "tmp": "^0.2.6",
+    "hono": "4.12.21",
+    "ws": "8.21.0"
   }
 }

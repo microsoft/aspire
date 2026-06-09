@@ -7,6 +7,16 @@
         <target state="needs-review-translation">Elenca apphost Aspire in esecuzione.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FollowOptionDescription">
+        <source>Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</source>
+        <target state="new">Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowRequiresJson">
+        <source>The --follow option only supports JSON output. Use --format json.</source>
+        <target state="new">The --follow option only supports JSON output. Use --format json.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HeaderCliPid">
         <source>CLI PID</source>
         <target state="translated">CLI PID</target>
@@ -27,14 +37,14 @@
         <target state="translated">PID</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderSdk">
+        <source>SDK</source>
+        <target state="new">SDK</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Output in formato JSON.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesOptionDescription">
-        <source>Include resource details for each running AppHost. Only applies to JSON output.</source>
-        <target state="new">Include resource details for each running AppHost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

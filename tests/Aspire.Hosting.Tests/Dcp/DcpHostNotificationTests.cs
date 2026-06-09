@@ -1,13 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -473,19 +478,20 @@ public sealed class DcpHostNotificationTests
 
         // Assert
         Assert.DoesNotContain("--tls-cert-thumbprint", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-cert-file", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-key-file", processSpec.Arguments);
     }
 
     [Fact]
-    public async Task CreateDcpProcessSpec_WithTlsCertThumbprint_IncludesThumbprintArgument()
+    public async Task CreateDcpProcessSpec_WithDcpDeveloperCertificateDefault_IncludesDeveloperCertificateArguments()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "Developer certificate thumbprint is only supported on Windows.");
-
-        // Arrange
-        using var certificate = CreateUntrustedCertificate();
+        var activities = new ConcurrentBag<Activity>();
+        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+        using var certificate = CreateExportableCertificate();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [KnownConfigNames.DcpDeveloperCertificate] = "true"
+                [KnownConfigNames.ProfilingEnabled] = "true"
             })
             .Build();
         var dcpHost = CreateDcpHostForProcessSpecTests(
@@ -500,15 +506,41 @@ public sealed class DcpHostNotificationTests
 
         // Assert
         Assert.Contains($"--tls-cert-thumbprint \"{certificate.Thumbprint}\"", processSpec.Arguments);
+        var certificateActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.DcpPrepareTlsCertificate);
+        Assert.Equal(true, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsDeveloperCertificateEnabled));
+        Assert.Equal(ProfilingTelemetry.Values.DcpTlsCertificateResultPrepared, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificateResult));
+        Assert.Equal(true, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificatePrepared));
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.DoesNotContain("--tls-cert-file", processSpec.Arguments);
+            Assert.DoesNotContain("--tls-key-file", processSpec.Arguments);
+            Assert.Equal(ProfilingTelemetry.Values.DcpTlsCertificateModeThumbprint, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificateMode));
+        }
+        else
+        {
+            var certificatePath = GetQuotedArgumentValue(processSpec.Arguments, "--tls-cert-file");
+            var keyPath = GetQuotedArgumentValue(processSpec.Arguments, "--tls-key-file");
+
+            Assert.Equal(certificate.ExportCertificatePem(), File.ReadAllText(certificatePath));
+            Assert.Contains("PRIVATE KEY", File.ReadAllText(keyPath));
+            Assert.Equal(ProfilingTelemetry.Values.DcpTlsCertificateModeFiles, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificateMode));
+        }
     }
 
     [Fact]
     public async Task CreateDcpProcessSpec_WithDcpDeveloperCertificateDisabled_DoesNotIncludeThumbprintArgument()
     {
-        // Arrange - config not set, so PrepareDcpTlsCertificateAsync should not set the thumbprint
         using var certificate = CreateUntrustedCertificate();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.DcpDeveloperCertificate] = "false"
+            })
+            .Build();
         var dcpHost = CreateDcpHostForProcessSpecTests(
-            developerCertificateService: new TestDeveloperCertificateService([certificate], false, false, false));
+            developerCertificateService: new TestDeveloperCertificateService([certificate], false, false, false),
+            configuration: configuration);
         var locations = CreateTestLocations();
 
         await dcpHost.PrepareDcpTlsCertificateAsync(CancellationToken.None);
@@ -516,8 +548,10 @@ public sealed class DcpHostNotificationTests
         // Act
         var processSpec = dcpHost.CreateDcpProcessSpec(locations);
 
-        // Assert - thumbprint should not appear because config is not enabled
+        // Assert - thumbprint should not appear because config is explicitly disabled
         Assert.DoesNotContain("--tls-cert-thumbprint", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-cert-file", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-key-file", processSpec.Arguments);
     }
 
     [Fact]
@@ -534,6 +568,86 @@ public sealed class DcpHostNotificationTests
 
         // Assert
         Assert.Contains("--container-runtime \"podman\"", processSpec.Arguments);
+    }
+
+    [Fact]
+    public void CreateDcpProcessSpec_DoesNotInheritExcludedEnvironmentVariables()
+    {
+        var excludedVars = new Dictionary<string, string>
+        {
+            ["aspnetcore_urls"] = "http://localhost:5000",
+            ["DOTNET_LAUNCH_PROFILE"] = "MyProfile",
+            ["ASPNETCORE_ENVIRONMENT"] = "Development",
+            ["DOTNET_ENVIRONMENT"] = "Development",
+            ["aspire_loglevel"] = "Debug",
+        };
+
+        var options = new RemoteInvokeOptions();
+        foreach (var (key, value) in excludedVars)
+        {
+            options.StartInfo.Environment[key] = value;
+        }
+
+        options.StartInfo.Environment["MY_CUSTOM_SETTING"] = "keep-me";
+        options.StartInfo.Environment["ASPNETCORE_URLS_FOO"] = "keep-me-too";
+        options.StartInfo.Environment["ASPIRE_LOGLEVEL_EXTRA"] = "keep-me-three";
+
+        RemoteExecutor.Invoke(static () =>
+        {
+            // Use the test assembly as a dummy CliPath since CreateDcpProcessSpec
+            // validates the file exists.
+            var dummyPath = typeof(DcpHostNotificationTests).Assembly.Location;
+            var dcpOptions = new DcpOptions { CliPath = dummyPath, DashboardPath = "/dummy/dashboard" };
+            var dcpHost = CreateDcpHostForProcessSpecTests(dcpOptions: dcpOptions);
+            var locations = CreateTestLocations();
+
+            var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+            string[] expectedExcluded =
+            [
+                "aspnetcore_urls",
+                "DOTNET_LAUNCH_PROFILE",
+                "ASPNETCORE_ENVIRONMENT",
+                "DOTNET_ENVIRONMENT",
+                "aspire_loglevel",
+            ];
+
+            foreach (var key in expectedExcluded)
+            {
+                Assert.False(processSpec.EnvironmentVariables.ContainsKey(key),
+                    $"DCP process should not inherit '{key}' from the app host.");
+            }
+
+            Assert.True(processSpec.EnvironmentVariables.ContainsKey("MY_CUSTOM_SETTING"),
+                "DCP process should inherit environment variables that are not in the exclusion list.");
+            Assert.Equal("keep-me", processSpec.EnvironmentVariables["MY_CUSTOM_SETTING"]);
+            Assert.Equal("keep-me-too", processSpec.EnvironmentVariables["ASPNETCORE_URLS_FOO"]);
+            Assert.Equal("keep-me-three", processSpec.EnvironmentVariables["ASPIRE_LOGLEVEL_EXTRA"]);
+        }, options).Dispose();
+    }
+
+    [Fact]
+    public void CreateDcpProcessSpec_MapsAspireProfilingConfigurationToDcpOtelEnvironmentVariables()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.ProfilingEnabled] = "true",
+                [KnownConfigNames.ProfilingSessionId] = "profile-session",
+                [KnownConfigNames.Legacy.StartupTraceParent] = "00-11111111111111111111111111111111-2222222222222222-01",
+                [KnownConfigNames.Legacy.StartupTraceState] = "vendor=value"
+            })
+            .Build();
+
+        var dcpHost = CreateDcpHostForProcessSpecTests(configuration: configuration);
+        var locations = CreateTestLocations();
+
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        Assert.Equal("true", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupProfilingEnabled]);
+        Assert.Equal("profile-session", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelProfilingSessionId]);
+        Assert.Equal("00-11111111111111111111111111111111-2222222222222222-01", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceParent]);
+        Assert.Equal("vendor=value", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceState]);
     }
 
     private static DcpHost CreateDcpHostForProcessSpecTests(
@@ -602,6 +716,48 @@ public sealed class DcpHostNotificationTests
         }
 
         throw new FileNotFoundException("Could not locate test certificate file 'testCert.pfx' in expected locations.");
+    }
+
+    private static X509Certificate2 CreateExportableCertificate()
+    {
+        var subject = new X500DistinguishedName($"CN=aspire-test-{Guid.NewGuid():N}");
+
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509Extension("1.3.6.1.4.1.311.84.1.1", [0], critical: false));
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), password: null, X509KeyStorageFlags.Exportable);
+    }
+
+    private static string GetQuotedArgumentValue(string? arguments, string option)
+    {
+        if (arguments is null)
+        {
+            throw new InvalidOperationException("Expected process arguments to be set.");
+        }
+
+        var prefix = $"{option} \"";
+        var start = arguments.IndexOf(prefix, StringComparison.Ordinal);
+        Assert.NotEqual(-1, start);
+        start += prefix.Length;
+
+        var end = arguments.IndexOf('"', start);
+        Assert.NotEqual(-1, end);
+
+        return arguments[start..end];
+    }
+
+    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == sourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activityStopped
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
     }
 
     [Fact]

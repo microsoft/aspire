@@ -21,7 +21,7 @@ public class WithEnvironmentTests
                                {
                                    Assert.NotNull(context.Resource);
 
-                                   var sp = context.ExecutionContext.ServiceProvider;
+                                   var sp = context.ExecutionContext.Services;
                                    context.EnvironmentVariables["SP_AVAILABLE"] = sp is not null ? "true" : "false";
                                });
 
@@ -230,7 +230,7 @@ public class WithEnvironmentTests
                                {
                                    ep.AllocatedEndpoint = new AllocatedEndpoint(ep, "localhost", 17454);
 
-                                   ep.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(ep, "container1.dev.internal", 10005, EndpointBindingMode.SingleAddress, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                                   ep.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(ep, "container1.dev.internal", 10005, EndpointBindingMode.SingleAddress, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
                                });
 
         var endpoint = container.GetEndpoint("primary");

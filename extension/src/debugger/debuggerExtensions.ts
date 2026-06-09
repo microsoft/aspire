@@ -1,14 +1,16 @@
 import path from "path";
 import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration } from "../dcp/types";
 import { debugProject, runProject } from "../loc/strings";
-import { mergeEnvs } from "../utils/environment";
+import { getEnvironmentWithoutE2EBridgeVariables, mergeEnvs } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
 import { projectDebuggerExtension } from "./languages/dotnet";
-import { isAzureFunctionsExtensionInstalled, isCsharpInstalled, isPythonInstalled } from '../capabilities';
+import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isPythonInstalled } from '../capabilities';
 import { pythonDebuggerExtension } from "./languages/python";
 import { nodeDebuggerExtension } from "./languages/node";
 import { browserDebuggerExtension } from "./languages/browser";
 import { azureFunctionsDebuggerExtension } from "./languages/azureFunctions";
+import { goDebuggerExtension } from "./languages/go";
+import { bunDebuggerExtension } from "./languages/bun";
 import { isDirectory } from "../utils/io";
 
 // Represents a resource-specific debugger extension for when the default session configuration is not sufficient to launch the resource.
@@ -36,7 +38,7 @@ export async function createDebugSessionConfiguration(debugSessionConfig: Aspire
         program: projectPath,
         args: args,
         cwd: await isDirectory(projectPath) ? projectPath : path.dirname(projectPath),
-        env: mergeEnvs(process.env, env),
+        env: mergeEnvs(getEnvironmentWithoutE2EBridgeVariables(), env),
         justMyCode: false,
         stopAtEntry: false,
         noDebug: !launchOptions.debug,
@@ -80,9 +82,16 @@ export function getResourceDebuggerExtensions(): ResourceDebuggerExtension[] {
         extensions.push(pythonDebuggerExtension);
     }
 
+    if (isGoInstalled()) {
+        extensions.push(goDebuggerExtension);
+    }
+
     extensions.push(nodeDebuggerExtension);
     extensions.push(browserDebuggerExtension);
 
+    if (isBunInstalled()) {
+        extensions.push(bunDebuggerExtension);
+    }
+
     return extensions;
 }
-

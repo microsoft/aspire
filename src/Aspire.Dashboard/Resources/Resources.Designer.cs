@@ -124,6 +124,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to &quot;{0}&quot; canceled.
+        /// </summary>
+        public static string ResourceCommandCanceled {
+            get {
+                return ResourceManager.GetString("ResourceCommandCanceled", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to &quot;{0}&quot; failed.
         /// </summary>
         public static string ResourceCommandFailed {

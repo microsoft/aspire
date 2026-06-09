@@ -11,9 +11,9 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class KubernetesDeployTestHelpers
 {
-    private static string KindVersion => Environment.GetEnvironmentVariable("KIND_VERSION") ?? "v0.31.0";
-    private static string HelmVersion => Environment.GetEnvironmentVariable("HELM_VERSION") ?? "v3.17.3";
-    private static string KubectlVersion => Environment.GetEnvironmentVariable("KUBECTL_VERSION") ?? "v1.34.3";
+    private static string KindVersion => KubernetesE2EVersions.KindVersion;
+    private static string HelmVersion => KubernetesE2EVersions.HelmVersion;
+    private static string KubectlVersion => KubernetesE2EVersions.KubectlVersion;
 
     /// <summary>
     /// Generates a unique KinD cluster name (max 32 chars).
@@ -187,8 +187,7 @@ internal static class KubernetesDeployTestHelpers
             s => new CellPatternSearcher().Find("Use Redis Cache").Search(s).Count > 0,
             timeout: TimeSpan.FromSeconds(10),
             description: "Redis cache prompt");
-        await auto.DownAsync(); // Navigate to "No"
-        await auto.EnterAsync();
+        await auto.TypeAsync("n");
 
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Do you want to create a test project?").Search(s).Count > 0,
@@ -231,7 +230,6 @@ internal static class KubernetesDeployTestHelpers
         // Dismiss agent init prompt (same as DeclineAgentInitPromptAsync)
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
-        await auto.EnterAsync();
         await auto.WaitForAnyPromptAsync(counter);
 
         // Step 2: cd into the project

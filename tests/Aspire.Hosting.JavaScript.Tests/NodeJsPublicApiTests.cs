@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -222,11 +222,11 @@ public class NodeJsPublicApiTests
     }
 
     [Fact]
-    public void PublishAsNpmScriptShouldThrowWhenBuilderIsNull()
+    public void PublishAsPackageScriptShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<JavaScriptAppResource> builder = null!;
 
-        var action = () => builder.PublishAsNpmScript("start");
+        var action = () => builder.PublishAsPackageScript("start");
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(builder), exception.ParamName);
@@ -235,18 +235,18 @@ public class NodeJsPublicApiTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void PublishAsNpmScriptShouldThrowWhenStartScriptNameIsNullOrEmpty(bool isNull)
+    public void PublishAsPackageScriptShouldThrowWhenScriptNameIsNullOrEmpty(bool isNull)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var app = builder.AddJavaScriptApp("app", ".");
-        var startScriptName = isNull ? null! : string.Empty;
+        var scriptName = isNull ? null! : string.Empty;
 
-        var action = () => app.PublishAsNpmScript(startScriptName);
+        var action = () => app.PublishAsPackageScript(scriptName);
 
         var exception = isNull
             ? Assert.Throws<ArgumentNullException>(action)
             : Assert.Throws<ArgumentException>(action);
-        Assert.Equal(nameof(startScriptName), exception.ParamName);
+        Assert.Equal(nameof(scriptName), exception.ParamName);
     }
 
     [Fact]

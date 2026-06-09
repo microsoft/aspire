@@ -36,29 +36,29 @@ internal static class SettingsSchemaBuilder
         {
             return "string";
         }
-        
+
         if (underlyingType == typeof(bool))
         {
             return "boolean";
         }
-        
-        if (underlyingType == typeof(int) || underlyingType == typeof(long) || 
-            underlyingType == typeof(decimal) || underlyingType == typeof(double) || 
+
+        if (underlyingType == typeof(int) || underlyingType == typeof(long) ||
+            underlyingType == typeof(decimal) || underlyingType == typeof(double) ||
             underlyingType == typeof(float))
         {
             return "number";
         }
-        
+
         if (typeof(System.Collections.IDictionary).IsAssignableFrom(underlyingType))
         {
             return "object";
         }
-        
+
         if (typeof(System.Collections.IEnumerable).IsAssignableFrom(underlyingType) && underlyingType != typeof(string))
         {
             return "array";
         }
-        
+
         return "object";
     }
 
@@ -94,6 +94,11 @@ internal static class SettingsSchemaBuilder
 
             // Skip JsonIgnore properties (like convenience accessors)
             if (prop.GetCustomAttribute<JsonIgnoreAttribute>() is not null)
+            {
+                continue;
+            }
+
+            if (prop.GetCustomAttribute<HiddenFromConfigurationSchemaAttribute>() is not null)
             {
                 continue;
             }

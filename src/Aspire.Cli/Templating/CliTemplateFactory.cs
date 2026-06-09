@@ -10,12 +10,23 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Templating;
 
 internal sealed partial class CliTemplateFactory : ITemplateFactory
 {
+    private static readonly string[] s_emptyAppHostLanguages =
+    [
+        KnownLanguageId.CSharp,
+        KnownLanguageId.TypeScript,
+        KnownLanguageId.Python,
+        KnownLanguageId.Go,
+        KnownLanguageId.Java,
+        KnownLanguageId.Rust
+    ];
+
     private static readonly HashSet<string> s_binaryTemplateExtensions =
     [
         ".png",
@@ -95,8 +106,8 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         [
             new CallbackTemplate(
                 KnownTemplateId.TypeScriptStarter,
-                "Starter App (Express/React)",
-                projectName => $"./{projectName}",
+                "Starter App (Express/React, TypeScript AppHost)",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyTypeScriptStarterTemplateAsync,
                 runtime: TemplateRuntime.Cli,
@@ -104,43 +115,74 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
             new CallbackTemplate(
                 KnownTemplateId.CSharpEmptyAppHost,
-                "Empty AppHost",
-                projectName => $"./{projectName}",
+                "Empty AppHost (Choose language...)",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
-                supportsLanguageCallback: static languageId =>
-                    languageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
-                    languageId.Equals(KnownLanguageId.TypeScript, StringComparison.OrdinalIgnoreCase) ||
-                    languageId.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase) ||
-                    languageId.Equals(KnownLanguageId.Python, StringComparison.OrdinalIgnoreCase),
-                selectableAppHostLanguages: [KnownLanguageId.CSharp, KnownLanguageId.TypeScript, KnownLanguageId.Python],
+                supportsLanguageCallback: IsSelectableEmptyAppHostLanguage,
+                selectableAppHostLanguages: GetSelectableEmptyAppHostLanguages(),
                 isEmpty: true),
 
             new CallbackTemplate(
                 KnownTemplateId.TypeScriptEmptyAppHost,
                 "Empty (TypeScript AppHost)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
                 languageId: KnownLanguageId.TypeScript,
-                isEmpty: true),
+                isEmpty: true,
+                showInPrompt: false),
+
+            new CallbackTemplate(
+                KnownTemplateId.PythonEmptyAppHost,
+                "Empty (Python AppHost)",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyEmptyAppHostTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Python,
+                isEmpty: true,
+                showInPrompt: false),
 
             new CallbackTemplate(
                 KnownTemplateId.JavaEmptyAppHost,
                 "Empty (Java AppHost)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
                 languageId: KnownLanguageId.Java,
-                isEmpty: true),
+                isEmpty: true,
+                showInPrompt: false),
+
+            new CallbackTemplate(
+                KnownTemplateId.GoEmptyAppHost,
+                "Empty (Go AppHost)",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyEmptyAppHostTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Go,
+                isEmpty: true,
+                showInPrompt: false),
+
+            new CallbackTemplate(
+                KnownTemplateId.RustEmptyAppHost,
+                "Empty (Rust AppHost)",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyEmptyAppHostTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Rust,
+                isEmpty: true,
+                showInPrompt: false),
 
             new CallbackTemplate(
                 KnownTemplateId.PythonStarter,
-                "Starter App (FastAPI/React)",
-                projectName => $"./{projectName}",
+                "Starter App (FastAPI/React, TypeScript AppHost)",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd =>
                 {
                     AddOptionIfMissing(cmd, _localhostTldOption);
@@ -148,10 +190,31 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 },
                 ApplyPythonStarterTemplateAsync,
                 runtime: TemplateRuntime.Cli,
-                languageId: KnownLanguageId.TypeScript)
+                languageId: KnownLanguageId.TypeScript),
+
+            new CallbackTemplate(
+                KnownTemplateId.GoStarter,
+                "Starter App (Go API + Redis, Go AppHost)",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyGoStarterTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Go)
         ];
 
         return templates.Where(IsTemplateAvailable);
+    }
+
+    private IReadOnlyList<string> GetSelectableEmptyAppHostLanguages()
+    {
+        return s_emptyAppHostLanguages
+            .Where(IsSelectableEmptyAppHostLanguage)
+            .ToArray();
+    }
+
+    private bool IsSelectableEmptyAppHostLanguage(string languageId)
+    {
+        return _languageDiscovery.GetLanguageById(new LanguageId(languageId)) is not null;
     }
 
     private bool IsTemplateAvailable(ITemplate template)
@@ -164,36 +227,48 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         return _languageDiscovery.GetLanguageById(new LanguageId(template.LanguageId)) is not null;
     }
 
-    private static string ApplyTokens(string content, string projectName, string projectNameLower, string aspireVersion, TemplatePorts ports, string hostName = "localhost")
+    private async Task<string?> ResolveOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        var isExtensionHost = ExtensionHelper.IsExtensionHost(_interactionService, out _, out _);
+        var createProjectNameSubdirectory = await OutputPathHelper.PromptExtensionCreateProjectNameSubdirectoryAsync(
+            _interactionService,
+            isExtensionHost,
+            inputs.Output is not null,
+            projectName,
+            cancellationToken);
+
+        var outputPathResolver = OutputPathHelper.CreateProjectNameSubdirectoryOutputPathResolver(createProjectNameSubdirectory, projectName);
+        return await OutputPathHelper.ResolveOutputPathAsync(
+            inputs.Output,
+            _executionContext.WorkingDirectory.FullName,
+            async () =>
+            {
+                var defaultOutputPath = pathDeriver(_executionContext, projectName);
+                var outputPathValidator = OutputPathHelper.CreateOutputPathValidator(_executionContext.WorkingDirectory.FullName);
+                return await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, cancellationToken, outputPathResolver);
+            },
+            _interactionService);
+    }
+
+    private static string ApplyTokens(string content, string projectName, string projectNameLower, string aspireVersion, AppHostProfilePorts ports, string hostName = "localhost")
     {
         return content
             .Replace("{{projectName}}", projectName)
             .Replace("{{projectNameLower}}", projectNameLower)
             .Replace("{{aspireVersion}}", aspireVersion)
             .Replace("{{hostName}}", hostName)
-            .Replace("{{httpPort}}", ports.HttpPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{httpsPort}}", ports.HttpsPort.ToString(CultureInfo.InvariantCulture))
+            .Replace("{{httpPort}}", ports.DashboardHttpPort.ToString(CultureInfo.InvariantCulture))
+            .Replace("{{httpsPort}}", ports.DashboardHttpsPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{otlpHttpPort}}", ports.OtlpHttpPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{otlpHttpsPort}}", ports.OtlpHttpsPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{resourceHttpPort}}", ports.ResourceHttpPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{resourceHttpsPort}}", ports.ResourceHttpsPort.ToString(CultureInfo.InvariantCulture));
+            .Replace("{{resourceHttpPort}}", ports.ResourceServiceHttpPort.ToString(CultureInfo.InvariantCulture))
+            .Replace("{{resourceHttpsPort}}", ports.ResourceServiceHttpsPort.ToString(CultureInfo.InvariantCulture));
     }
 
-    private static TemplatePorts GenerateRandomPorts()
+    private static AppHostProfilePorts GenerateRandomPorts()
     {
-        return new TemplatePorts(
-            HttpPort: Random.Shared.Next(15000, 15300),
-            HttpsPort: Random.Shared.Next(17000, 17300),
-            OtlpHttpPort: Random.Shared.Next(19000, 19300),
-            OtlpHttpsPort: Random.Shared.Next(21000, 21300),
-            ResourceHttpPort: Random.Shared.Next(20000, 20300),
-            ResourceHttpsPort: Random.Shared.Next(22000, 22300));
+        return AppHostProfilePortGenerator.Generate(Random.Shared);
     }
-
-    private sealed record TemplatePorts(
-        int HttpPort, int HttpsPort,
-        int OtlpHttpPort, int OtlpHttpsPort,
-        int ResourceHttpPort, int ResourceHttpsPort);
 
     private static void AddOptionIfMissing(System.CommandLine.Command command, System.CommandLine.Option option)
     {

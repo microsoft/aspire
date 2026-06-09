@@ -5,11 +5,9 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
@@ -25,7 +23,6 @@ internal sealed class ExportCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
 
-    private readonly IInteractionService _interactionService;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<ExportCommand> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -53,22 +50,18 @@ internal sealed class ExportCommand : BaseCommand
     };
 
     public ExportCommand(
-        IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
+        IProjectLocator projectLocator,
         IHttpClientFactory httpClientFactory,
         TimeProvider timeProvider,
-        ILogger<ExportCommand> logger)
-        : base("export", ExportCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<ExportCommand> logger,
+        CommonCommandServices services)
+        : base("export", ExportCommandStrings.Description, services)
     {
-        _interactionService = interactionService;
         _httpClientFactory = httpClientFactory;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -78,7 +71,7 @@ internal sealed class ExportCommand : BaseCommand
         Options.Add(s_includeHiddenOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -92,8 +85,7 @@ internal sealed class ExportCommand : BaseCommand
         // Validate mutual exclusivity of --apphost and --dashboard-url
         if (passedAppHostProjectFile is not null && dashboardUrl is not null)
         {
-            _interactionService.DisplayError(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
         }
 
         // Default file name if not specified
@@ -111,34 +103,33 @@ internal sealed class ExportCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: false, ExecutionContext.LogFilePath, cancellationToken);
+            _connectionResolver, InteractionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: false, cancellationToken);
 
         if (!dashboardApi.Success)
         {
-            return dashboardApi.ExitCode;
+            return CommandResult.FromExitCode(dashboardApi.ExitCode);
         }
 
         if (dashboardApi.BaseUrl is null)
         {
-            _interactionService.DisplayMessage(KnownEmojis.Warning, ExportCommandStrings.DashboardNotAvailable);
+            InteractionService.DisplayMessage(KnownEmojis.Warning, ExportCommandStrings.DashboardNotAvailable);
         }
 
         try
         {
-            return await ExportDataAsync(resourceName, includeHidden, dashboardApi.Connection, dashboardApi.BaseUrl, dashboardApi.ApiToken, outputPath, cancellationToken);
+            return CommandResult.FromExitCode(await ExportDataAsync(resourceName, includeHidden, dashboardApi.Connection, dashboardApi.BaseUrl, dashboardApi.ApiToken, outputPath, cancellationToken));
         }
         catch (HttpRequestException ex) when (dashboardUrl is not null)
         {
             _logger.LogError(ex, "Failed to export telemetry data from dashboard");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, true, _httpClientFactory, _logger, cancellationToken);
-            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
-            return ExitCodeConstants.DashboardFailure;
+            TelemetryCommandHelpers.DisplayTelemetryError(InteractionService, errorInfo);
+            return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to export telemetry data");
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.FailedToExport, ex.Message));
-            return ExitCodeConstants.DashboardFailure;
+            return CommandResult.Failure(CliExitCodes.DashboardFailure, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.FailedToExport, ex.Message));
         }
     }
 
@@ -158,7 +149,7 @@ internal sealed class ExportCommand : BaseCommand
         // Always fetch all snapshots so we know which resources are hidden.
 
         // Get telemetry resources and resource snapshots
-        var (telemetryResources, allSnapshots) = await _interactionService.ShowStatusAsync(ExportCommandStrings.GatheringResources, async () =>
+        var (telemetryResources, allSnapshots) = await InteractionService.ShowStatusAsync(ExportCommandStrings.GatheringResources, async () =>
         {
             var resources = isDashboardAvailable
                 ? await TelemetryCommandHelpers.GetAllResourcesAsync(client!, baseUrl!, cancellationToken).ConfigureAwait(false)
@@ -177,14 +168,14 @@ internal sealed class ExportCommand : BaseCommand
         {
             if (!ResourceSnapshotMapper.WhereMatchesResourceName(snapshots, resourceName).Any())
             {
-                _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ResourceNotFound, resourceName));
-                return ExitCodeConstants.InvalidCommand;
+                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ResourceNotFound, resourceName));
+                return CliExitCodes.InvalidCommand;
             }
         }
         else if (resourceName is null && connection is not null && snapshots.Count == 0)
         {
-            _interactionService.DisplayMessage(KnownEmojis.Information, ExportCommandStrings.NoResourcesFound);
-            return ExitCodeConstants.Success;
+            InteractionService.DisplayMessage(KnownEmojis.Information, ExportCommandStrings.NoResourcesFound);
+            return CliExitCodes.Success;
         }
 
         // Resolve which telemetry resources match the filter
@@ -208,7 +199,7 @@ internal sealed class ExportCommand : BaseCommand
         // Export console logs from backchannel
         if (connection is not null)
         {
-            await _interactionService.ShowStatusAsync(ExportCommandStrings.GatheringConsoleLogs, async () =>
+            await InteractionService.ShowStatusAsync(ExportCommandStrings.GatheringConsoleLogs, async () =>
             {
                 await AddConsoleLogsAsync(exportArchive, connection, resourceName, snapshots, hiddenResourceNames, cancellationToken).ConfigureAwait(false);
                 return true;
@@ -218,14 +209,14 @@ internal sealed class ExportCommand : BaseCommand
         if (isDashboardAvailable && hasTelemetryData)
         {
             // Export structured logs from Dashboard API
-            await _interactionService.ShowStatusAsync(ExportCommandStrings.GatheringStructuredLogs, async () =>
+            await InteractionService.ShowStatusAsync(ExportCommandStrings.GatheringStructuredLogs, async () =>
             {
                 await AddStructuredLogsAsync(exportArchive, client!, baseUrl!, resolvedTelemetryResources, allOtlpResources, cancellationToken).ConfigureAwait(false);
                 return true;
             });
 
             // Export traces from Dashboard API
-            await _interactionService.ShowStatusAsync(ExportCommandStrings.GatheringTraces, async () =>
+            await InteractionService.ShowStatusAsync(ExportCommandStrings.GatheringTraces, async () =>
             {
                 await AddTracesAsync(exportArchive, client!, baseUrl!, resolvedTelemetryResources, allOtlpResources, cancellationToken).ConfigureAwait(false);
                 return true;
@@ -235,8 +226,8 @@ internal sealed class ExportCommand : BaseCommand
         var fullPath = Path.GetFullPath(outputPath);
         exportArchive.WriteToFile(fullPath);
 
-        _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, fullPath));
-        return ExitCodeConstants.Success;
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, fullPath));
+        return CliExitCodes.Success;
     }
 
     private static void AddResources(ExportArchive exportArchive, IReadOnlyList<ResourceSnapshot> snapshots, string? resourceName)

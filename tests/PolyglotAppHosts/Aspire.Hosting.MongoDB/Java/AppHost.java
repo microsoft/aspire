@@ -25,11 +25,11 @@ void main() throws Exception {
         builder.addMongoDB("mongo-express-named")
             .withMongoExpress(new WithMongoExpressOptions().containerName("my-mongo-express"));
         // Test 8: Custom password parameter with addParameter
-        var customPassword = builder.addParameter("mongo-password", true);
+        var customPassword = builder.addParameter("mongo-password", new AddParameterOptions().secret(true));
         builder.addMongoDB("mongo-custom-pass", new AddMongoDBOptions().password(customPassword));
         // Test 9: Chained configuration - multiple With* methods
         var mongoChained = builder.addMongoDB("mongo-chained");
-        mongoChained.withLifetime(ContainerLifetime.PERSISTENT);
+        mongoChained.withPersistentLifetime();
         mongoChained.withDataVolume(new WithDataVolumeOptions().name("mongo-chained-data"));
         // Test 10: Add multiple databases to same server
         mongoChained.addDatabase("app-db");

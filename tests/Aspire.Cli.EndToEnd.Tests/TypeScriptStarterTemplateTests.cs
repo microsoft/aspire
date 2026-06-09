@@ -24,11 +24,9 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -38,14 +36,15 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
 
         // Step 1.5: Verify starter creation also restored the generated TypeScript SDK.
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "TsStarterApp");
-        var modulesDir = Path.Combine(projectRoot, ".modules");
+        GitIgnoreAssertions.AssertContainsEntry(projectRoot, ".aspire/");
+        var modulesDir = Path.Combine(projectRoot, ".aspire/modules");
 
         if (!Directory.Exists(modulesDir))
         {
-            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
+            throw new InvalidOperationException($".aspire/modules directory was not created at {modulesDir}");
         }
 
-        var aspireModulePath = Path.Combine(modulesDir, "aspire.ts");
+        var aspireModulePath = Path.Combine(modulesDir, "aspire.mts");
         if (!File.Exists(aspireModulePath))
         {
             throw new InvalidOperationException($"Expected generated file not found: {aspireModulePath}");
@@ -56,12 +55,9 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
+        await auto.RunCommandAsync("npm run build", counter, TimeSpan.FromMinutes(2));
+
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

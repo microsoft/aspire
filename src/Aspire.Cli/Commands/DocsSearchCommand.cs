@@ -4,11 +4,9 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -39,14 +37,10 @@ internal sealed class DocsSearchCommand : BaseCommand
     };
 
     public DocsSearchCommand(
-        IInteractionService interactionService,
         IDocsSearchService docsSearchService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
-        ILogger<DocsSearchCommand> logger)
-        : base("search", DocsCommandStrings.SearchDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<DocsSearchCommand> logger,
+        CommonCommandServices services)
+        : base("search", DocsCommandStrings.SearchDescription, services)
     {
         _docsSearchService = docsSearchService;
         _logger = logger;
@@ -56,9 +50,7 @@ internal sealed class DocsSearchCommand : BaseCommand
         Options.Add(s_limitOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -76,7 +68,7 @@ internal sealed class DocsSearchCommand : BaseCommand
         if (response is null || response.Results.Count is 0)
         {
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DocsCommandStrings.NoResultsFound, query));
-            return ExitCodeConstants.Success; // Not an error, just no results
+            return CommandResult.Success(); // Not an error, just no results
         }
 
         if (format is OutputFormat.Json)
@@ -108,6 +100,6 @@ internal sealed class DocsSearchCommand : BaseCommand
             InteractionService.DisplayRenderable(table);
         }
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

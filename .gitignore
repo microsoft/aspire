@@ -2,6 +2,7 @@ syntax: glob
 
 ### GitHub Agentic Workflows ###
 .github/aw/logs/
+.worktrees/
 
 ### VisualStudio ###
 
@@ -20,6 +21,7 @@ syntax: glob
 
 artifacts/
 artifacts_stage_1/
+BenchmarkDotNet.Artifacts/
 [Dd]ebug/
 [Rr]elease/
 x64/ !eng/common/cross/x64/
@@ -129,9 +131,6 @@ config.ps1
 # Node.js modules
 node_modules/
 
-# Generated Aspire polyglot modules
-.modules/
-
 # Maven build outputs
 target/
 dependency-reduced-pom.xml
@@ -171,16 +170,23 @@ tests/PolyglotAppHosts/**/Java/**/*.class
 
 # Publisher Outputs
 playground/**/publish/
+playground/**/aspire-output/
+playground/**/aspire-manifest.json
 
 # TypeScript AppHost
 playground/**/dist/
 tests/PolyglotAppHosts/**/TypeScript/dist/
+
+# Go AppHost
+tests/PolyglotAppHosts/**/Go/apphost
+tests/PolyglotAppHosts/**/Go/apphost.exe
 
 # Verify
 *.received.*
 
 #Aspire CLI
 .aspire/
+.modules/
 
 # Release notes automation output
 tools/ReleaseNotes/analysis-output/
@@ -190,8 +196,14 @@ tools/ReleaseNotes/release-notes-*.md
 extension/dist/
 extension/.localization/
 extension/out/
+extension/.test-artifacts/
+extension/.test-extensions/
+extension/.test-results/
+extension/.test-storage/
+extension/.test-workspaces/
 extension/node_modules/
-extension/.vscode-test/
+extension/.corepack-cache/
+**/.vscode-test/
 extension/.version
 
 # Generated extension localization files (regenerated from XLF during build)
@@ -205,3 +217,5 @@ extension/package.nls.*.json
 # Azure Functions local settings (may contain encrypted secrets)
 local.settings.json
 diagnostics.log
+.squad/
+tags

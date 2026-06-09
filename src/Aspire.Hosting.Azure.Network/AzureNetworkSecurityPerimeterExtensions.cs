@@ -21,6 +21,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the Network Security Perimeter resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureNetworkSecurityPerimeterResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// This example adds a Network Security Perimeter and associates a storage resource:
     /// <code>
@@ -29,7 +30,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// storage.WithNetworkSecurityPerimeter(nsp);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an Azure Network Security Perimeter resource to the application model.")]
+    [AspireExport]
     public static IResourceBuilder<AzureNetworkSecurityPerimeterResource> AddNetworkSecurityPerimeter(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -55,6 +56,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// <param name="builder">The Network Security Perimeter resource builder.</param>
     /// <param name="rule">The access rule configuration.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureNetworkSecurityPerimeterResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// This example adds inbound and outbound access rules:
     /// <code>
@@ -73,7 +75,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     ///     });
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an access rule to an Azure Network Security Perimeter resource.")]
+    [AspireExport]
     public static IResourceBuilder<AzureNetworkSecurityPerimeterResource> WithAccessRule(
         this IResourceBuilder<AzureNetworkSecurityPerimeterResource> builder,
         AzureNspAccessRule rule)
@@ -129,7 +131,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// keyVault.WithNetworkSecurityPerimeter(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
     /// </code>
     /// </example>
-    [AspireExport("associateWithNetworkSecurityPerimeter", Description = "Associates an Azure PaaS resource with a Network Security Perimeter.")]
+    [AspireExport("associateWithNetworkSecurityPerimeter", MethodName = "withNetworkSecurityPerimeter")]
     public static IResourceBuilder<T> WithNetworkSecurityPerimeter<T>(
         this IResourceBuilder<T> target,
         IResourceBuilder<AzureNetworkSecurityPerimeterResource> nsp,

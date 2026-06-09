@@ -51,8 +51,11 @@ public static class TestDistributedApplicationBuilder
         return CreateCore(args, configureOptions, testOutputHelper);
     }
 
-    public static IDistributedApplicationTestingBuilder CreateWithTestContainerRegistry(ITestOutputHelper testOutputHelper) =>
-        Create(o => o.ContainerRegistryOverride = ComponentTestConstants.AspireTestContainerRegistry, testOutputHelper);
+    public static IDistributedApplicationTestingBuilder CreateWithTestContainerRegistry(ITestOutputHelper testOutputHelper, params string[] args) =>
+        Create(
+            options => options.ContainerRegistryOverride = ComponentTestConstants.AspireTestContainerRegistry,
+            testOutputHelper,
+            args);
 
     private static IDistributedApplicationTestingBuilder CreateCore(string[] args, Action<DistributedApplicationOptions>? configureOptions, ITestOutputHelper? testOutputHelper = null)
     {

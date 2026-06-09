@@ -25,22 +25,53 @@ parameters:
   - name: dockerCliVersion
     type: string
     default: '28.0.0'
-  - name: publishVSCodeExtension
+  - name: packageVSCodeExtensionAsPreRelease
     type: boolean
     default: false
-  - name: vscePublishToken
-    type: string
-    default: ''
-  - name: vscePublishPreRelease
+  # Set to false on jobs that do not pack the native Aspire CLI npm tarballs
+  # into the managed Shipping directory (e.g. the perf-restructured Windows
+  # Build job, which builds managed packages with /p:SkipNativeBuild=true and
+  # leaves native pack + npm tgz staging to the downstream Assemble stage).
+  # The signature validation still runs in whichever stage owns staging — see
+  # the equivalent step in azure-pipelines.yml's Assemble job.
+  - name: validateNpmPackageSignatures
+    type: boolean
+    default: true
+  # Set to false on jobs that delegate VS Code extension build / sign / verify
+  # / publish to a separate parallel stage (build_extension). The managed
+  # Windows Build job uses this to keep the extension off its critical path.
+  - name: buildExtension
+    type: boolean
+    default: true
+  # Set to true on jobs that should run Arcade's Publish target inline as part
+  # of the build script (-publish). The official pipeline runs `assemble` as
+  # a downstream stage that owns -publish (so this stays false there); the
+  # unofficial pipeline is monolithic — one Windows job does everything — and
+  # has no downstream assemble stage, so it sets this to true to keep
+  # Publishing.props validations (asset manifest emission, native archive
+  # presence, VSIX inputs, dashboard zips) running on manual `/azp run`
+  # validations of template/script changes.
+  - name: runPublish
+    type: boolean
+    default: false
+  # Set to true on jobs that should run Aspire.Templates.Tests inline after the
+  # main build (the unofficial pipeline does this — it has no separate
+  # template_tests stage). The restructured official pipeline runs templates in
+  # its own parallel `template_tests` stage and leaves this default off so the
+  # critical-path Windows Build job stays small.
+  - name: runTemplateTests
     type: boolean
     default: false
 
 steps:
   # Internal pipeline: Build with pack+sign
-  # Native archives are produced by the build_sign_native stage for all platforms
-  # (macOS, Linux, Windows). This job builds all managed packages, signs them,
-  # and publishes.
-  - ${{ if ne(parameters.runAsPublic, 'true') }}:
+  # The managed Windows build runs in parallel with build_sign_native.
+  # We do NOT pass `-publish` here when the caller has a downstream stage
+  # (`assemble`) that owns the unified -publish (which emits the BAR
+  # AssetManifest covering managed + native packages). Monolithic callers
+  # (the unofficial pipeline) set runPublish=true so Arcade's Publish target
+  # — and the Publishing.props validations it triggers — still run inline.
+  - ${{ if and(ne(parameters.runAsPublic, 'true'), eq(parameters.runPublish, true)) }}:
     - script: ${{ parameters.buildScript }}
               -restore -build
               -pack
@@ -52,8 +83,34 @@ steps:
               $(_InternalBuildArgs)
               /p:SkipNativeBuild=true
               /p:SkipTestProjects=true
-              /p:BuildExtension=true
+              /p:SkipPlaygroundProjects=true
+              /p:BuildExtension=${{ lower(eq(parameters.buildExtension, true)) }}
+              /p:PackageVSCodeExtensionAsPreRelease=${{ lower(eq(parameters.packageVSCodeExtensionAsPreRelease, true)) }}
       displayName: 🟣Build
+
+  - ${{ if and(ne(parameters.runAsPublic, 'true'), ne(parameters.runPublish, true)) }}:
+    - script: ${{ parameters.buildScript }}
+              -restore -build
+              -pack
+              -sign $(_SignArgs)
+              -configuration ${{ parameters.buildConfig }}
+              /bl:${{ parameters.repoLogPath }}/build.binlog
+              $(_OfficialBuildIdArgs)
+              $(_InternalBuildArgs)
+              /p:SkipNativeBuild=true
+              /p:SkipTestProjects=true
+              /p:SkipPlaygroundProjects=true
+              /p:BuildExtension=${{ lower(eq(parameters.buildExtension, true)) }}
+              /p:PackageVSCodeExtensionAsPreRelease=${{ lower(eq(parameters.packageVSCodeExtensionAsPreRelease, true)) }}
+      displayName: 🟣Build
+
+  - ${{ if ne(parameters.runAsPublic, 'true') }}:
+    - ${{ if eq(parameters.validateNpmPackageSignatures, true) }}:
+      - pwsh: |
+          & "$(Build.SourcesDirectory)/eng/scripts/validate-npm-package-signatures.ps1" `
+            -ShippingDir '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping'
+        displayName: 🟣Validate npm package signatures
+        condition: and(succeeded(), eq(variables['_SignType'], 'real'))
 
     # Log MicroBuild environment for debugging
     # MicroBuildOutputFolderOverride is set by the MicroBuildSigningPlugin task in eng/common/templates-official/job/onelocbuild.yml
@@ -83,138 +140,91 @@ steps:
     # This must happen after the main build (which creates the manifest) but before publishing
     # MicroBuild is already installed by the install-microbuild.yml step that runs before our build
     # Pass MicroBuildOutputFolderOverride as a property to ensure MSBuild can find the signing plugin
-    - script: ${{ parameters.dotnetScript }}
-              build
-              extension/signing/signVsix.proj
-              -c ${{ parameters.buildConfig }}
-              /bl:${{ parameters.repoLogPath }}/signVsix.binlog
-              /p:SignType=$(_SignType)
-              "/p:MicroBuildOutputFolderOverride=%MicroBuildOutputFolderOverride%"
-      displayName: 🟣Sign VS Code extension
-      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
-
-    # Verify the VS Code extension signature using vsce verify-signature
-    - pwsh: |
-        $vsixDir = '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
-        $vsixFiles = Get-ChildItem -Path "$vsixDir/*.vsix" -ErrorAction SilentlyContinue
-        if ($vsixFiles.Count -eq 0) {
-          Write-Host "##[warning]No .vsix files found - VS Code extension may not have been built"
-          exit 0
-        }
-        foreach ($vsix in $vsixFiles) {
-          $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
-          $manifestPath = Join-Path $vsixDir "$baseName.manifest"
-          $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
-
-          if (-not (Test-Path $manifestPath)) {
-            Write-Host "##[error]Manifest file not found: $manifestPath"
-            exit 1
-          }
-          if (-not (Test-Path $signaturePath)) {
-            Write-Host "##[error]Signature file not found: $signaturePath"
-            exit 1
-          }
-
-          # First verify the .signature.p7s is in PKCS#7 format (binary)
-          $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
-          if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
-            $firstByte = if ($bytes.Length -gt 0) { "0x{0:X2}" -f $bytes[0] } else { "empty" }
-            Write-Host "##[error]$baseName.signature.p7s does NOT appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)"
-            exit 1
-          }
-
-          Write-Host "Verifying signature for $($vsix.Name)..."
-          npx vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "##[error]Signature verification failed for $($vsix.Name)"
-            exit 1
-          }
-          Write-Host "✅ $($vsix.Name) signature verified successfully"
-        }
-      displayName: 🟣Verify VS Code extension signature
-      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
-
-    # Publish the signed VS Code extension to the Marketplace
-    # Requires vscePublishToken parameter to be set with a Personal Access Token for the VS Marketplace
-    - ${{ if and(eq(parameters.publishVSCodeExtension, true), ne(parameters.vscePublishToken, '')) }}:
-      # Verify the PAT is valid before attempting to publish
-      - pwsh: |
-          Write-Host "Verifying VS Code Marketplace PAT..."
-          $publisher = "microsoft-aspire"
-          npx vsce verify-pat $publisher
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "##[error]PAT verification failed for publisher '$publisher'. Ensure the token has 'Marketplace: Manage' scope."
-            exit 1
-          }
-          Write-Host "✅ PAT verified successfully for publisher '$publisher'"
-        displayName: 🟣Verify VS Code Marketplace PAT
+    - ${{ if eq(parameters.buildExtension, true) }}:
+      - script: ${{ parameters.dotnetScript }}
+                build
+                extension/signing/signVsix.proj
+                -c ${{ parameters.buildConfig }}
+                /bl:${{ parameters.repoLogPath }}/signVsix.binlog
+                /p:SignType=$(_SignType)
+                "/p:MicroBuildOutputFolderOverride=%MicroBuildOutputFolderOverride%"
+        displayName: 🟣Sign VS Code extension
         condition: and(succeeded(), eq(variables['_SignType'], 'real'))
-        env:
-          VSCE_PAT: ${{ parameters.vscePublishToken }}
 
+      # Verify the VS Code extension signature using vsce verify-signature
       - pwsh: |
           $vsixDir = '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
-          $preRelease = '${{ parameters.vscePublishPreRelease }}'
           $vsixFiles = Get-ChildItem -Path "$vsixDir/*.vsix" -ErrorAction SilentlyContinue
           if ($vsixFiles.Count -eq 0) {
-            Write-Host "##[error]No .vsix files found to publish"
-            exit 1
+            Write-Host "##[warning]No .vsix files found - VS Code extension may not have been built"
+            exit 0
           }
           foreach ($vsix in $vsixFiles) {
             $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
             $manifestPath = Join-Path $vsixDir "$baseName.manifest"
             $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
 
-            $publishArgs = @("vsce", "publish", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)
-            if ($preRelease -eq 'True') {
-              $publishArgs += "--pre-release"
-              Write-Host "Publishing $($vsix.Name) to VS Code Marketplace as PRE-RELEASE..."
-            } else {
-              Write-Host "Publishing $($vsix.Name) to VS Code Marketplace..."
-            }
-
-            & npx @publishArgs
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "##[error]Failed to publish $($vsix.Name)"
+            if (-not (Test-Path $manifestPath)) {
+              Write-Host "##[error]Manifest file not found: $manifestPath"
               exit 1
             }
-            Write-Host "✅ $($vsix.Name) published successfully"
+            if (-not (Test-Path $signaturePath)) {
+              Write-Host "##[error]Signature file not found: $signaturePath"
+              exit 1
+            }
+
+            # First verify the .signature.p7s is in PKCS#7 format (binary)
+            $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
+            if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
+              $firstByte = if ($bytes.Length -gt 0) { "0x{0:X2}" -f $bytes[0] } else { "empty" }
+              Write-Host "##[error]$baseName.signature.p7s does NOT appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)"
+              exit 1
+            }
+
+            Write-Host "Verifying signature for $($vsix.Name)..."
+            npx vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "##[error]Signature verification failed for $($vsix.Name)"
+              exit 1
+            }
+            Write-Host "✅ $($vsix.Name) signature verified successfully"
           }
-        displayName: 🟣Publish VS Code extension to Marketplace
+        displayName: 🟣Verify VS Code extension signature
         condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
+      - task: 1ES.PublishBuildArtifacts@1
+        displayName: 🟣Publish vscode extension
+        condition: always()
+        inputs:
+          PathtoPublish: '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
+          ArtifactName: aspire-vscode-extension
+
+    # Template tests run inline here when the caller doesn't have a separate
+    # template_tests stage (the unofficial pipeline). The restructured official
+    # pipeline owns templates in its own parallel stage and leaves this off.
+    - ${{ if eq(parameters.runTemplateTests, true) }}:
+      - script: ${{ parameters.dotnetScript }}
+                build
+                tests/workloads.proj
+                /p:SkipPackageCheckForTemplatesTesting=true
+        displayName: 🟣Prepare sdks for templates testing
+
+      - script: ${{ parameters.buildScript }}
+                -build
+                -restore
+                -test
+                -configuration ${{ parameters.buildConfig }}
+                /bl:${{ parameters.repoLogPath }}/BuildTemplatesTests.binlog
+                $(_OfficialBuildIdArgs)
+                $(_InternalBuildArgs)
+                /p:SkipTests=false
+                -projects $(Build.SourcesDirectory)\tests\Aspire.Templates.Tests\Aspire.Templates.Tests.csproj
         env:
-          VSCE_PAT: ${{ parameters.vscePublishToken }}
-
-    - task: 1ES.PublishBuildArtifacts@1
-      displayName: 🟣Publish vscode extension
-      condition: always()
-      inputs:
-        PathtoPublish: '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
-        ArtifactName: aspire-vscode-extension
-
-    - script: ${{ parameters.dotnetScript }}
-              build
-              tests/workloads.proj
-              /p:SkipPackageCheckForTemplatesTesting=true
-      displayName: 🟣Prepare sdks for templates testing
-
-    - script: ${{ parameters.buildScript }}
-              -build
-              -restore
-              -test
-              -configuration ${{ parameters.buildConfig }}
-              /bl:${{ parameters.repoLogPath }}/BuildTemplatesTests.binlog
-              $(_OfficialBuildIdArgs)
-              $(_InternalBuildArgs)
-              /p:SkipTests=false
-              -projects $(Build.SourcesDirectory)\tests\Aspire.Templates.Tests\Aspire.Templates.Tests.csproj
-      env:
-        RunOnlyBasicBuildTemplateTests: true
-        # test root path for template test projects
-        DEV_TEMP: $(Build.SourcesDirectory)\..
-        DOTNET_ROOT: $(Build.SourcesDirectory)\.dotnet
-        TEST_LOG_PATH: $(Build.SourcesDirectory)\artifacts\log\$(_BuildConfig)\Aspire.Templates.Tests
-      displayName: 🟣Run Template tests
+          RunOnlyBasicBuildTemplateTests: true
+          DEV_TEMP: $(Build.SourcesDirectory)\..
+          DOTNET_ROOT: $(Build.SourcesDirectory)\.dotnet
+          TEST_LOG_PATH: $(Build.SourcesDirectory)\artifacts\log\$(_BuildConfig)\Aspire.Templates.Tests
+        displayName: 🟣Run Template tests
 
   # Public pipeline - helix tests
   - ${{ if eq(parameters.runAsPublic, 'true') }}:

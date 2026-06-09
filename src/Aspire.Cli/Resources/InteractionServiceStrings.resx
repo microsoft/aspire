@@ -179,6 +179,15 @@
   <data name="ProjectOptionDoesntExist" xml:space="preserve">
     <value>The --apphost option specified a project that does not exist.</value>
   </data>
+  <data name="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts" xml:space="preserve">
+    <value>The --apphost option specified a directory that contains multiple AppHost project files.</value>
+  </data>
+  <data name="ProjectOptionSpecifiedDirectoryContainsNoAppHosts" xml:space="preserve">
+    <value>The --apphost option specified a directory that does not contain any AppHost project files.</value>
+  </data>
+  <data name="NoSupportedAppHostsFound" xml:space="preserve">
+    <value>No supported app hosts were found.</value>
+  </data>
   <data name="ProjectOptionNotSpecifiedMultipleAppHostsFound" xml:space="preserve">
     <value>The --apphost option was not specified and multiple AppHost project files were detected.</value>
   </data>
@@ -186,10 +195,10 @@
     <value>The project argument was not specified and no AppHost project files were detected.</value>
   </data>
   <data name="ProjectCouldNotBeBuilt" xml:space="preserve">
-    <value>The project could not be built. See logs at {0}</value>
+    <value>The project could not be built.</value>
   </data>
   <data name="ProjectCouldNotBeCreated" xml:space="preserve">
-    <value>The app could not be created. See logs at {0}</value>
+    <value>The app could not be created.</value>
   </data>
   <data name="OperationCancelled" xml:space="preserve">
     <value>The operation was canceled.</value>
@@ -198,10 +207,10 @@
     <value>The specified project file is not an Aspire AppHost project.</value>
   </data>
   <data name="ErrorConnectingToAppHost" xml:space="preserve">
-    <value>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</value>
+    <value>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</value>
   </data>
   <data name="AppHostConnectionLost" xml:space="preserve">
-    <value>The connection to the AppHost was lost: {0}.</value>
+    <value>The connection to the AppHost was lost: {0}</value>
   </data>
   <data name="AppHostConnectionLostGeneric" xml:space="preserve">
     <value>The connection to the application was lost.</value>
@@ -217,6 +226,10 @@
     <value>See logs at {0}</value>
     <comment>{0} is the log file path</comment>
   </data>
+  <data name="SeeAppHostLogsAt" xml:space="preserve">
+    <value>See AppHost logs at {0}</value>
+    <comment>{0} is the log file path of the CLI process managing the AppHost</comment>
+  </data>
   <data name="WaitingForDebuggerToAttachToAppHost" xml:space="preserve">
     <value>Waiting for debugger to attach to AppHost process</value>
   </data>
@@ -225,8 +238,8 @@
     <comment>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</comment>
   </data>
   <data name="MoreInfoNewCliVersion" xml:space="preserve">
-    <value>[dim]For more information, see: [link]{0}[/][/]</value>
-    <comment>Do not translate [dim] and [link]. Also leave [/] as-is. {0} is a URL</comment>
+    <value>[dim]For more information, see: {0}[/]</value>
+    <comment>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</comment>
   </data>
   <data name="ToUpdateRunCommand" xml:space="preserve">
     <value>[dim]To update, run: {0}[/]</value>

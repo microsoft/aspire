@@ -6,6 +6,7 @@ using System.Diagnostics;
 using Aspire.Cli.Commands;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Testing;
 
@@ -17,12 +18,10 @@ public class NuGetPackagePrefetcherTests
     public void CliExecutionContextSetsCommand()
     {
         var workingDir = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDir = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "hives"));
-    var cacheDir = new DirectoryInfo(Path.Combine(workingDir.FullName, ".aspire", "cache"));
-    var executionContext = new CliExecutionContext(workingDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
-        
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workingDir);
+
         Assert.Null(executionContext.Command);
-        
+
         var testCommand = new TestCommand();
         executionContext.Command = testCommand;
         Assert.Same(testCommand, executionContext.Command);
@@ -187,15 +186,7 @@ public class NuGetPackagePrefetcherTests
     private static CliExecutionContext CreateExecutionContext()
     {
         var workingDir = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDir = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(workingDir.FullName, ".aspire", "cache"));
-        return new CliExecutionContext(
-            workingDir,
-            hivesDir,
-            cacheDir,
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log");
+        return TestExecutionContextHelper.CreateExecutionContext(workingDir);
     }
 }
 
@@ -236,27 +227,27 @@ internal static class TestNuGetPrefetcher
 // Test command implementations
 internal sealed class TestCommand : BaseCommand
 {
-    public TestCommand(string name = "test") : base(name, "Test command", null!, null!, null!, null!, null!)
+    public TestCommand(string name = "test") : base(name, "Test command", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!))
     {
     }
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return Task.FromResult(0);
+        return Task.FromResult(CommandResult.Success());
     }
 }
 
 internal sealed class TestCommandWithInterface : BaseCommand, IPackageMetaPrefetchingCommand
 {
-    public TestCommandWithInterface() : base("test-interface", "Test command with interface", null!, null!, null!, null!, null!)
+    public TestCommandWithInterface() : base("test-interface", "Test command with interface", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!))
     {
     }
 
     public bool PrefetchesTemplatePackageMetadata => true;
     public bool PrefetchesCliPackageMetadata => true;
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return Task.FromResult(0);
+        return Task.FromResult(CommandResult.Success());
     }
 }

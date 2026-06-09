@@ -99,6 +99,86 @@ internal static class ResourceViewModelExtensions
         return resource.TryGetCustomDataBoolArray(KnownProperties.Resource.AppArgsSensitivity, out argParams);
     }
 
+    public static bool TryGetWaitingForDependencies(this ResourceViewModel resource, out ImmutableArray<string> dependencies)
+    {
+        return resource.TryGetCustomDataStringArray(KnownProperties.Resource.WaitingFor, out dependencies) && dependencies.Length > 0;
+    }
+
+    public static bool TryGetResolvedWaitingForDependencies(
+        this ResourceViewModel resource,
+        IEnumerable<ResourceViewModel> allResources,
+        out ImmutableArray<string> dependencies)
+    {
+        if (!resource.TryGetWaitingForDependencies(out var waitingForDependencies))
+        {
+            dependencies = default;
+            return false;
+        }
+
+        var builder = ImmutableArray.CreateBuilder<string>(waitingForDependencies.Length);
+        var seenDependencies = new HashSet<string>(StringComparers.ResourceName);
+
+        foreach (var dependency in waitingForDependencies)
+        {
+            var resolvedDependency = dependency;
+            var matchingResource = FindResourceByName(dependency, allResources);
+            if (matchingResource is null)
+            {
+                matchingResource = FindSingleResourceByDisplayName(dependency, allResources);
+            }
+
+            if (matchingResource is not null)
+            {
+                resolvedDependency = ResourceViewModel.GetResourceName(matchingResource, allResources);
+            }
+
+            if (seenDependencies.Add(resolvedDependency))
+            {
+                builder.Add(resolvedDependency);
+            }
+        }
+
+        dependencies = builder.ToImmutable();
+        return dependencies.Length > 0;
+    }
+
+    private static ResourceViewModel? FindResourceByName(string name, IEnumerable<ResourceViewModel> allResources)
+    {
+        foreach (var resource in allResources)
+        {
+            if (string.Equals(resource.Name, name, StringComparisons.ResourceName))
+            {
+                return resource;
+            }
+        }
+
+        return null;
+    }
+
+    private static ResourceViewModel? FindSingleResourceByDisplayName(string displayName, IEnumerable<ResourceViewModel> allResources)
+    {
+        ResourceViewModel? matchingResource = null;
+        var matchCount = 0;
+
+        foreach (var resource in allResources)
+        {
+            if (!string.Equals(resource.DisplayName, displayName, StringComparisons.ResourceName))
+            {
+                continue;
+            }
+
+            matchCount++;
+            if (matchCount > 1)
+            {
+                return null;
+            }
+
+            matchingResource = resource;
+        }
+
+        return matchCount == 1 ? matchingResource : null;
+    }
+
     private static bool TryGetCustomDataString(this ResourceViewModel resource, string key, [NotNullWhen(returnValue: true)] out string? s)
     {
         if (resource.Properties.TryGetValue(key, out var property) && property.Value.TryConvertToString(out var valueString))

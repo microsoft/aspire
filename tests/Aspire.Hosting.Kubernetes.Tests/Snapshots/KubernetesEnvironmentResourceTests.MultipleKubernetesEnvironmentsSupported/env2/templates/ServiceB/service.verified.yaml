@@ -4,13 +4,13 @@ kind: "Service"
 metadata:
   name: "serviceb-service"
   labels:
-    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
     app.kubernetes.io/component: "ServiceB"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 spec:
   type: "ClusterIP"
   selector:
-    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
     app.kubernetes.io/component: "ServiceB"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
   ports:

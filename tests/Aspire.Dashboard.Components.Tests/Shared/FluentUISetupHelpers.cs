@@ -56,6 +56,8 @@ internal static class FluentUISetupHelpers
     {
         var module = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/AnchoredRegion/FluentAnchoredRegion.razor.js"));
         module.SetupVoid("goToNextFocusableElement", _ => true);
+        module.SetupVoid("initializeKeyboardNavigation", _ => true);
+        module.SetupVoid("removeKeyboardNavigation", _ => true);
     }
 
     public static void SetupFluentDivider(TestContext context)
@@ -119,6 +121,19 @@ internal static class FluentUISetupHelpers
     {
         var textboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/TextField/FluentTextField.razor.js"));
         textboxModule.SetupVoid("setControlAttribute", _ => true);
+        textboxModule.SetupVoid("ensureCurrentValueMatch", _ => true);
+    }
+
+    public static void SetupFluentButton(TestContext context)
+    {
+        var buttonModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Button/FluentButton.razor.js"));
+        buttonModule.SetupVoid("updateProxy", _ => true);
+    }
+
+    public static void SetupFluentCombobox(TestContext context)
+    {
+        var comboboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/List/FluentCombobox.razor.js"));
+        comboboxModule.SetupVoid("setControlAttribute", _ => true);
     }
 
     public static void AddCommonDashboardServices(

@@ -6,8 +6,8 @@
     This script:
     1. Cleans ~/.aspire to ensure no stale state
     2. Extracts the CLI archive to a temp location
-    3. Runs 'aspire --version' to validate the binary executes
-    4. Runs 'aspire new aspire-starter' to test bundle self-extraction + project creation
+    3. Verifies the archive shape contains the native CLI payload and no install-route sidecar
+    4. Runs 'aspire --version' to validate the binary executes
     5. Cleans up temp directories
 
 .PARAMETER ArchivePath
@@ -28,6 +28,95 @@ function Write-Step  { param([string]$msg) Write-Host "▶ $msg" -ForegroundColo
 function Write-Ok    { param([string]$msg) Write-Host "✅ $msg" -ForegroundColor Green }
 function Write-Err   { param([string]$msg) Write-Host "❌ $msg" -ForegroundColor Red }
 
+function Get-ExecutableFileName([string]$BaseName) {
+    if (Test-IsWindows) {
+        return "$BaseName.exe"
+    }
+
+    return $BaseName
+}
+
+function Get-UserHome {
+    if ($env:USERPROFILE) {
+        return $env:USERPROFILE
+    }
+
+    if ($env:HOME) {
+        return $env:HOME
+    }
+
+    throw "Unable to determine the user home directory."
+}
+
+function Test-IsWindows {
+    return [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+}
+
+function Set-ExecutablePermission([string]$Path) {
+    if (Test-IsWindows) {
+        return
+    }
+
+    & chmod +x $Path
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to mark '$Path' as executable."
+    }
+}
+
+function Get-ArchiveRidFamily([string]$ArchiveFileName) {
+    switch -Wildcard ($ArchiveFileName) {
+        '*win-*'   { 'win';   break }
+        '*osx-*'   { 'osx';   break }
+        '*linux-*' { 'linux'; break }
+        default    { $null }
+    }
+}
+
+function Get-ArchiveRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$ExtractDir
+    )
+
+    $cliName = Get-ExecutableFileName "aspire"
+    $rootCli = Join-Path $ExtractDir $cliName
+    if (Test-Path $rootCli) {
+        return $ExtractDir
+    }
+
+    $candidateDirectories = @(Get-ChildItem -Path $ExtractDir -Directory -Force -ErrorAction SilentlyContinue)
+    if ($candidateDirectories.Count -eq 1) {
+        $candidateRoot = $candidateDirectories[0].FullName
+        if (Test-Path (Join-Path $candidateRoot $cliName)) {
+            return $candidateRoot
+        }
+    }
+
+    throw "Could not find '$cliName' in extracted archive '$ExtractDir'."
+}
+
+function Test-ArchiveSidecar {
+    # Per-RID CLI archives must ship sidecar-free; each install route writes
+    # its own .aspire-install.json. See docs/specs/install-routes.md.
+    param(
+        [Parameter(Mandatory = $true)][string]$ExtractDir,
+        [Parameter(Mandatory = $true)][string]$ArchiveFileName
+    )
+
+    $ridFamily = Get-ArchiveRidFamily $ArchiveFileName
+
+    if ($null -eq $ridFamily) {
+        throw "Archive RID family not recognized in filename '$ArchiveFileName'. Expected the filename to contain 'win-', 'osx-', or 'linux-'."
+    }
+
+    $strays = Get-ChildItem -Path $ExtractDir -Recurse -File -Filter '.aspire-install.json' -Force -ErrorAction SilentlyContinue
+    if ($strays) {
+        $strayPaths = $strays | ForEach-Object { $_.FullName.Substring($ExtractDir.Length + 1).Replace('\', '/') }
+        throw "$ridFamily-* archive '$ArchiveFileName' must not contain '.aspire-install.json' (per-RID archives are shared across install routes; each route authors its own sidecar after extraction). Found: $($strayPaths -join ', ')"
+    }
+    Write-Step "$ridFamily-* archive correctly omits the install-route sidecar."
+}
+
+$userHome = Get-UserHome
 $verifyTmpDir = $null
 $aspireBackup = $null
 
@@ -37,7 +126,7 @@ function Invoke-Cleanup {
         Remove-Item -Recurse -Force $verifyTmpDir -ErrorAction SilentlyContinue
     }
     # Restore ~/.aspire if we backed it up
-    $aspireDir = Join-Path $env:USERPROFILE ".aspire"
+    $aspireDir = Join-Path $userHome ".aspire"
     if ($aspireBackup -and (Test-Path $aspireBackup)) {
         if (Test-Path $aspireDir) {
             Remove-Item -Recurse -Force $aspireDir -ErrorAction SilentlyContinue
@@ -72,7 +161,7 @@ try {
 
     # Step 1: Back up and clean ~/.aspire
     Write-Step "Cleaning ~/.aspire state..."
-    $aspireDir = Join-Path $env:USERPROFILE ".aspire"
+    $aspireDir = Join-Path $userHome ".aspire"
     if (Test-Path $aspireDir) {
         $aspireBackup = Join-Path ([System.IO.Path]::GetTempPath()) "aspire-backup-$([System.IO.Path]::GetRandomFileName())"
         Move-Item $aspireDir $aspireBackup
@@ -101,26 +190,27 @@ try {
         exit 1
     }
 
-    # Find the aspire binary
-    $aspireBin = Join-Path $extractDir "aspire.exe"
-    if (-not (Test-Path $aspireBin)) {
-        $aspireBin = Join-Path $extractDir "aspire"
-        if (-not (Test-Path $aspireBin)) {
-            Write-Err "Could not find 'aspire' binary in extracted archive."
-            Get-ChildItem $extractDir | Format-Table
-            exit 1
-        }
-    }
+    $archiveRoot = Get-ArchiveRoot -ExtractDir $extractDir
+    $aspireBin = Join-Path $archiveRoot (Get-ExecutableFileName "aspire")
     Write-Ok "Extracted CLI binary: $aspireBin"
+
+    # Assert the source sidecar matches the archive's RID family before mutating the
+    # extracted shape. After Copy-Item moves the binary out, the archive layout is
+    # no longer observable. Scan the full extraction directory, not $archiveRoot:
+    # the sidecar contract is about the archive itself, and Get-ArchiveRoot may
+    # return a single sub-directory (when the archive nests its binary), which
+    # would let a stray sidecar at the true archive root slip past.
+    Test-ArchiveSidecar -ExtractDir $extractDir -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
 
     # Install to ~/.aspire/bin so self-extraction works correctly
     Write-Step "Installing CLI to ~/.aspire/bin..."
-    $aspireDir = Join-Path $env:USERPROFILE ".aspire"
+    $aspireDir = Join-Path $userHome ".aspire"
     $aspireBinDir = Join-Path $aspireDir "bin"
     New-Item -ItemType Directory -Path $aspireBinDir -Force | Out-Null
     Copy-Item $aspireBin (Join-Path $aspireBinDir (Split-Path $aspireBin -Leaf))
     $aspireBin = Join-Path $aspireBinDir (Split-Path $aspireBin -Leaf)
-    $env:PATH = "$aspireBinDir;$env:PATH"
+    Set-ExecutablePermission $aspireBin
+    $env:PATH = "$aspireBinDir$([System.IO.Path]::PathSeparator)$env:PATH"
     Write-Ok "CLI installed to ~/.aspire/bin"
 
     # Step 3: Verify aspire --version
@@ -134,26 +224,20 @@ try {
     Write-Host "  Version: $versionOutput"
     Write-Ok "'aspire --version' succeeded"
 
-    # Step 4: Create a new project with aspire new
-    # This exercises bundle self-extraction and aspire-managed (template search + download + scaffolding)
-    $projectDir = Join-Path $verifyTmpDir "VerifyApp"
-    New-Item -ItemType Directory -Path $projectDir -Force | Out-Null
-
-    Write-Step "Running 'aspire new aspire-starter --name VerifyApp --output $projectDir --non-interactive --nologo'..."
-    & $aspireBin new aspire-starter --name VerifyApp --output $projectDir --non-interactive --nologo 2>&1 | Write-Host
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err "'aspire new' failed with exit code $LASTEXITCODE"
-        exit 1
-    }
-
-    # Verify the project was created
-    $appHostDir = Join-Path $projectDir "VerifyApp.AppHost"
-    if (-not (Test-Path $appHostDir)) {
-        Write-Err "Expected project directory 'VerifyApp.AppHost' not found after 'aspire new'"
-        Get-ChildItem $projectDir | Format-Table
-        exit 1
-    }
-    Write-Ok "'aspire new' created project successfully"
+    # Note: 'aspire new aspire-starter' was previously invoked here to exercise the
+    # template engine + bundle self-extraction path. It has been removed because the
+    # template lookup is not actually offline — it queries NuGet feeds via
+    # TemplateNuGetConfigService.ResolveTemplatePackageAsync. The step only ever
+    # succeeded on release branches because builds were mis-baked with
+    # AspireCliChannel=stable, which routed the lookup to nuget.org and found a
+    # previously-shipped Aspire.ProjectTemplates version. Once #17528 corrected the
+    # release-branch builds to bake AspireCliChannel=staging, the implicit identity
+    # channel switched to a staging feed that is not reachable from the 1ES signed-
+    # build agent, and the step started failing with "No template versions were
+    # found." This mirrors the prior removal of the TypeScript starter check
+    # (#17274 / tracked in #17345) for the same egress reason. Re-adding meaningful
+    # starter coverage in the signed-build verifier requires either an internal
+    # NuGet mirror or a no-network template path.
 
     Write-Host ""
     Write-Host "=========================================="

@@ -46,6 +46,11 @@ public static partial class AzureAppServiceEnvironmentExtensions
                 name: AppServicePipelineStepMarker.StepName,
                 action: ctx =>
                 {
+                    if (!ctx.ExecutionContext.IsPublishMode)
+                    {
+                        return Task.CompletedTask;
+                    }
+
                     if (!ctx.Model.Resources.OfType<AzureAppServiceEnvironmentResource>().Any())
                     {
                         foreach (var r in ctx.Model.GetComputeResources())
@@ -76,7 +81,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport(Description = "Adds an Azure App Service environment resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> AddAzureAppServiceEnvironment(this IDistributedApplicationBuilder builder, string name)
     {
         builder.AddAzureAppServiceInfrastructureCore();
@@ -87,8 +93,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
         var resource = new AzureAppServiceEnvironmentResource(name, static infra =>
         {
-            var prefix = infra.AspireResource.Name;
             var resource = (AzureAppServiceEnvironmentResource)infra.AspireResource;
+            var prefix = Infrastructure.NormalizeBicepIdentifier(resource.Name);
 
             // This tells azd to avoid creating infrastructure
             var userPrincipalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.UserPrincipalId, typeof(string)) { Value = new BicepValue<string>(string.Empty) };
@@ -101,12 +107,30 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
             infra.Add(tags);
 
-            var identity = new UserAssignedIdentity(Infrastructure.NormalizeBicepIdentifier($"{prefix}-mi"))
-            {
-                Tags = tags
-            };
+            UserAssignedIdentity? newIdentity = null;
+            BicepValue<string> managedIdentityIdOutputValue;
+            BicepValue<string> managedIdentityClientIdOutputValue;
 
-            infra.Add(identity);
+            if (resource.TryGetLastAnnotation<AzureAppServiceEnvironmentAcrPullIdentityAnnotation>(out var identityAnnotation))
+            {
+                // The user has supplied an existing identity (commonly via AddAzureUserAssignedIdentity +
+                // .WithRoleAssignments(acr, AcrPull)). Skip creating env_mi + the AcrPull role assignment
+                // here and have the env module read the identity id/client id from parameters wired to the
+                // identity module's outputs.
+                managedIdentityIdOutputValue = identityAnnotation.Identity.Id.AsProvisioningParameter(infra);
+                managedIdentityClientIdOutputValue = identityAnnotation.Identity.ClientId.AsProvisioningParameter(infra);
+            }
+            else
+            {
+                newIdentity = new UserAssignedIdentity($"{prefix}_mi")
+                {
+                    Tags = tags
+                };
+
+                infra.Add(newIdentity);
+                managedIdentityIdOutputValue = newIdentity.Id.ToBicepExpression();
+                managedIdentityClientIdOutputValue = newIdentity.ClientId.ToBicepExpression();
+            }
 
             AzureProvisioningResource? registry = null;
             if (resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReferenceAnnotation) &&
@@ -127,26 +151,40 @@ public static partial class AzureAppServiceEnvironmentExtensions
             var containerRegistry = (ContainerRegistryService)registry.AddAsExistingResource(infra);
             infra.Add(containerRegistry);
 
-            var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, identity);
-
-            // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
-            pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, identity.Id, pullRa.RoleDefinitionId);
-            infra.Add(pullRa);
-
-            var plan = new AppServicePlan(Infrastructure.NormalizeBicepIdentifier($"{prefix}-asplan"))
+            if (newIdentity is not null)
             {
-                Sku = new AppServiceSkuDescription
-                {
-                    Name = "P0V3",
-                    Tier = "Premium"
-                },
-                Kind = "Linux",
-                IsReserved = true,
-                // Enable perSiteScaling so each app service can scale independently
-                IsPerSiteScaling = true
-            };
+                var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, newIdentity);
 
-            infra.Add(plan);
+                // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
+                pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, newIdentity.Id, pullRa.RoleDefinitionId);
+                infra.Add(pullRa);
+            }
+
+            AppServicePlan plan;
+            if (resource.IsExisting())
+            {
+                // The Aspire resource models the App Service Plan. When users mark it existing,
+                // keep provisioning the supporting app resources but reference the supplied plan
+                // instead of declaring a new Microsoft.Web/serverfarms resource.
+                plan = (AppServicePlan)resource.AddAsExistingResource(infra);
+            }
+            else
+            {
+                plan = new AppServicePlan($"{prefix}_asplan")
+                {
+                    Sku = new AppServiceSkuDescription
+                    {
+                        Name = "P0V3",
+                        Tier = "Premium"
+                    },
+                    Kind = "Linux",
+                    IsReserved = true,
+                    // Enable perSiteScaling so each app service can scale independently
+                    IsPerSiteScaling = true
+                };
+
+                infra.Add(plan);
+            }
 
             infra.Add(new ProvisioningOutput("name", typeof(string))
             {
@@ -176,22 +214,22 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
             infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID", typeof(string))
             {
-                Value = identity.Id.ToBicepExpression()
+                Value = managedIdentityIdOutputValue
             });
 
             infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_CLIENT_ID", typeof(string))
             {
-                Value = identity.ClientId.ToBicepExpression()
+                Value = managedIdentityClientIdOutputValue
             });
 
             if (resource.EnableDashboard)
             {
                 // Add aspire dashboard website
-                var website = AzureAppServiceEnvironmentUtility.AddDashboard(infra, identity, plan.Id);
+                var website = AzureAppServiceEnvironmentUtility.AddDashboard(infra, managedIdentityClientIdOutputValue, plan.Id);
 
                 infra.Add(new ProvisioningOutput("AZURE_APP_SERVICE_DASHBOARD_URI", typeof(string))
                 {
-                    Value = BicepFunction.Interpolate($"https://{AzureAppServiceEnvironmentUtility.GetDashboardHostName(prefix)}.azurewebsites.net")
+                    Value = BicepFunction.Interpolate($"https://{AzureAppServiceEnvironmentUtility.GetDashboardHostName(resource.Name)}.azurewebsites.net")
                 });
             }
 
@@ -206,7 +244,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
                 else
                 {
                     // Create Log Analytics workspace
-                    var logAnalyticsWorkspace = new OperationalInsightsWorkspace(prefix + "_law")
+                    var logAnalyticsWorkspace = new OperationalInsightsWorkspace($"{prefix}_law")
                     {
                         Sku = new OperationalInsightsWorkspaceSku()
                         {
@@ -217,7 +255,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
                     infra.Add(logAnalyticsWorkspace);
 
                     // Create Application Insights resource linked to the Log Analytics workspace
-                    applicationInsights = new ApplicationInsightsComponent(prefix + "_ai")
+                    applicationInsights = new ApplicationInsightsComponent($"{prefix}_ai")
                     {
                         ApplicationType = ApplicationInsightsApplicationType.Web,
                         Kind = "web",
@@ -269,6 +307,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
     /// <param name="upgrade">Whether to upgrade HTTP endpoints to HTTPS. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// When disabled (<c>false</c>), HTTP endpoints will use HTTP scheme and port 80 in Azure App Service.
     /// Note that Azure App Service forces HTTP to HTTPS redirects at the platform level,
@@ -281,7 +320,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     ///     .WithHttpsUpgrade(false);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures whether HTTP endpoints are automatically upgraded to HTTPS in Azure App Service")]
+    [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool upgrade = true)
     {
         builder.Resource.PreserveHttpEndpoints = !upgrade;
@@ -294,7 +333,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
     /// <param name="enable">Whether to include the Aspire dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
-    [AspireExport(Description = "Configures whether the Aspire dashboard is included in the Azure App Service environment")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDashboard(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool enable = true)
     {
         builder.Resource.EnableDashboard = enable;
@@ -306,7 +346,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// </summary>
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport(Description = "Enables Azure Application Insights for the Azure App Service environment")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -315,12 +355,34 @@ public static partial class AzureAppServiceEnvironmentExtensions
     }
 
     /// <summary>
+    /// Enables Azure Application Insights for the Azure App Service environment
+    /// </summary>
+    [AspireExport("withAzureApplicationInsights")]
+    internal static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsightsForPolyglot(
+        this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>), typeof(IResourceBuilder<AzureApplicationInsightsResource>))] object? applicationInsights = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return applicationInsights switch
+        {
+            null => builder.WithAzureApplicationInsights(),
+            string applicationInsightsLocation => builder.WithAzureApplicationInsights(applicationInsightsLocation),
+            IResourceBuilder<ParameterResource> applicationInsightsLocationParameter => builder.WithAzureApplicationInsights(applicationInsightsLocationParameter),
+            IResourceBuilder<AzureApplicationInsightsResource> applicationInsightsBuilder => builder.WithAzureApplicationInsights(applicationInsightsBuilder),
+            _ => throw new ArgumentException(
+                "Application Insights must be omitted, a location string, a location parameter, or an Application Insights resource builder.",
+                nameof(applicationInsights))
+        };
+    }
+
+    /// <summary>
     /// Configures whether Azure Application Insights should be enabled for the Azure App Service.
     /// </summary>
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="applicationInsightsLocation">The location for Application Insights.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport("withAzureApplicationInsightsLocation", Description = "Enables Azure Application Insights for the Azure App Service environment with a specific location")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, string applicationInsightsLocation)
     {
         builder.WithAzureApplicationInsights();
@@ -334,7 +396,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="applicationInsightsLocation">The location parameter for Application Insights.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport("withAzureApplicationInsightsLocationParameter", Description = "Enables Azure Application Insights for the Azure App Service environment using a location parameter")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, IResourceBuilder<ParameterResource> applicationInsightsLocation)
     {
         builder.WithAzureApplicationInsights();
@@ -348,7 +410,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource builder to configure.</param>
     /// <param name="applicationInsightsBuilder">The Application Insights resource builder.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport("withAzureApplicationInsightsResource", Description = "Enables Azure Application Insights for the Azure App Service environment using an existing Application Insights resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, IResourceBuilder<AzureApplicationInsightsResource> applicationInsightsBuilder)
     {
         builder.WithAzureApplicationInsights();
@@ -362,7 +424,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="deploymentSlot">The deployment slot parameter for all App Services in the App Service Environment.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport("withDeploymentSlotParameter", Description = "Configures the deployment slot for all Azure App Services in the environment using a parameter")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withDeploymentSlot dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlot(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, IResourceBuilder<ParameterResource> deploymentSlot)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -373,18 +435,107 @@ public static partial class AzureAppServiceEnvironmentExtensions
     }
 
     /// <summary>
+    /// Configures the deployment slot for all Azure App Services in the environment
+    /// </summary>
+    [AspireExport("withDeploymentSlot")]
+    internal static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlotForPolyglot(
+        this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object deploymentSlot)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(deploymentSlot);
+
+        return deploymentSlot switch
+        {
+            string deploymentSlotName => builder.WithDeploymentSlot(deploymentSlotName),
+            IResourceBuilder<ParameterResource> deploymentSlotParameter => builder.WithDeploymentSlot(deploymentSlotParameter),
+            _ => throw new ArgumentException("Deployment slot must be a string or a parameter resource builder.", nameof(deploymentSlot))
+        };
+    }
+
+    /// <summary>
     /// Configures the slot to which the Azure App Services should be deployed.
     /// </summary>
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="deploymentSlot">The deployment slot for all App Services in the App Service Environment.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport(Description = "Configures the deployment slot for all Azure App Services in the environment")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withDeploymentSlot dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlot(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, string deploymentSlot)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(deploymentSlot);
 
         builder.Resource.DeploymentSlot = deploymentSlot;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the Azure App Service environment to use the supplied <see cref="AzureUserAssignedIdentityResource"/>
+    /// as the managed identity that App Service apps use to pull images from the configured container registry
+    /// (the <c>AcrPull</c> identity), instead of having Aspire create a new identity and a new <c>AcrPull</c>
+    /// role assignment.
+    /// </summary>
+    /// <param name="builder">The Azure App Service environment to configure.</param>
+    /// <param name="identityBuilder">
+    /// The resource builder for the user-assigned identity that should be used for image pulls. The supplied
+    /// identity must already have the <c>AcrPull</c> role on the configured container registry.
+    /// </param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// When this is set, Aspire will not create a new identity or an <c>AcrPull</c> role assignment for the
+    /// container registry. The caller is responsible for ensuring the supplied identity already has the required
+    /// <c>AcrPull</c> role assignment on the registry, for example by chaining
+    /// <c>.WithRoleAssignments(acr, ContainerRegistryBuiltInRole.AcrPull)</c> when adding the identity.
+    /// </para>
+    /// <para>
+    /// Unlike the equivalent method on Azure Container Apps, App Service reuses this single identity for more than
+    /// just image pulls. The same identity is also attached to every generated App Service web app as a user-assigned
+    /// managed identity, and is used by the Aspire OTLP sidecar to authenticate telemetry to the Aspire dashboard
+    /// (it is added to the dashboard's <c>ALLOWED_MANAGED_IDENTITIES</c> and exposed to each app via the OTEL
+    /// client-id app setting). If you supply an existing identity here, it will take on all of these roles.
+    /// </para>
+    /// <para>
+    /// This is commonly combined with <c>AsExisting</c> on the App Service environment (App Service Plan) and on
+    /// the container registry to deploy websites into a pre-provisioned set of Azure resources without Aspire
+    /// emitting any new ACR-pull identity or ACR-pull role-assignment resources. See
+    /// <see href="https://github.com/microsoft/aspire/issues/14382"/> for the scenario this addresses.
+    /// </para>
+    /// <para>
+    /// Only the combination of an existing App Service Plan, an existing container registry, and this method
+    /// avoids emitting any new identity or role-assignment resources in the env module. Other combinations still
+    /// work but will emit additional resources:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><description>
+    ///   If the App Service Plan is marked <c>AsExisting</c> but no identity is supplied here, Aspire still emits
+    ///   a new <c>UserAssignedIdentity</c> and an <c>AcrPull</c> role assignment on the configured registry.
+    ///   </description></item>
+    ///   <item><description>
+    ///   If this method is used but the container registry is not existing (either the Aspire-generated default
+    ///   registry or a user-added registry without <c>AsExisting</c>), the registry itself is still provisioned.
+    ///   To wire the supplied identity to that newly-created registry, chain
+    ///   <c>.WithRoleAssignments(acr, ContainerRegistryBuiltInRole.AcrPull)</c> on the identity.
+    ///   </description></item>
+    /// </list>
+    /// <para>
+    /// If the Aspire dashboard is enabled, Aspire still provisions the dashboard website and its contributor
+    /// identity. Use <see cref="WithDashboard(IResourceBuilder{AzureAppServiceEnvironmentResource}, bool)"/> with
+    /// <see langword="false"/> when targeting a fully pre-provisioned App Service Plan that should not receive a
+    /// dashboard.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="identityBuilder"/> is <see langword="null"/>.</exception>
+    [AspireExport]
+    public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAcrPullIdentity(
+        this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
+        IResourceBuilder<AzureUserAssignedIdentityResource> identityBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(identityBuilder);
+
+        builder.WithAnnotation(new AzureAppServiceEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource));
+
         return builder;
     }
 

@@ -24,10 +24,18 @@ export interface AppHostResourceParser {
     getSupportedExtensions(): string[];
 
     /** Returns true if the given document is an AppHost file for this language. */
-    isAppHostFile(document: vscode.TextDocument): boolean;
+    isAppHostFile(document: vscode.TextDocument): Promise<boolean>;
 
     /** Parse resource definitions from the document. */
-    parseResources(document: vscode.TextDocument): ParsedResource[];
+    parseResources(document: vscode.TextDocument): Promise<ParsedResource[]>;
+
+    /**
+     * Locates the line containing the builder construction statement
+     * (e.g. `var builder = DistributedApplication.CreateBuilder(args);` for C#,
+     * `const builder = createBuilder();` for TS/JS).
+     * Returns the 0-based line of the start of the statement, or `undefined` if not found.
+     */
+    findBuilderStatementLine?(document: vscode.TextDocument): Promise<number | undefined>;
 }
 
 const _parsers: AppHostResourceParser[] = [];
@@ -36,9 +44,15 @@ export function registerParser(parser: AppHostResourceParser): void {
     _parsers.push(parser);
 }
 
-export function getParserForDocument(document: vscode.TextDocument): AppHostResourceParser | undefined {
+export async function getParserForDocument(document: vscode.TextDocument): Promise<AppHostResourceParser | undefined> {
     const ext = getFileExtension(document.uri.fsPath);
-    return _parsers.find(p => p.getSupportedExtensions().includes(ext) && p.isAppHostFile(document));
+    for (const parser of _parsers) {
+        if (parser.getSupportedExtensions().includes(ext) && await parser.isAppHostFile(document)) {
+            return parser;
+        }
+    }
+
+    return undefined;
 }
 
 export function getAllParsers(): readonly AppHostResourceParser[] {
@@ -66,7 +80,11 @@ function getFileExtension(filePath: string): string {
 function extensionToLanguageId(ext: string): string | undefined {
     switch (ext) {
         case '.cs': return 'csharp';
+        case '.mts':
+        case '.cts':
         case '.ts': return 'typescript';
+        case '.mjs':
+        case '.cjs':
         case '.js': return 'javascript';
         default: return undefined;
     }

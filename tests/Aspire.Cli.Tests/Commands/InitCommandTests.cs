@@ -1,16 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
+using System.Text.Json.Nodes;
+using System.Xml.Linq;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Commands;
-using Aspire.Cli.Interaction;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -18,548 +20,356 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class InitCommandTests(ITestOutputHelper outputHelper)
 {
+    /// <summary>
+    /// Configures the test packaging service factory to return a single implicit channel
+    /// whose template package cache yields one Aspire.ProjectTemplates entry, and pins the
+    /// running CLI's identity channel to <c>default</c> so the resolver matches that implicit
+    /// channel by name. Init's project-mode path uses
+    /// <see cref="CliExecutionContext.IdentityChannel"/> as the channel override; this helper keeps
+    /// tests that don't care about channel selection on a single, predictable channel.
+    /// </summary>
+    private static void ConfigureImplicitTemplateChannel(CliServiceCollectionTestOptions options, string version = "13.3.0")
+    {
+        options.CliExecutionContextFactory = _ =>
+            BuildExecutionContext(options.WorkingDirectory, channel: "default");
+
+        options.PackagingServiceFactory = _ =>
+        {
+            var fakeCache = new FakeNuGetPackageCache
+            {
+                GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                        [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = version }])
+            };
+
+            var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+
+            var packagingService = new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
+            };
+
+            return packagingService;
+        };
+    }
+
     [Theory]
     [InlineData("Test.csproj")]
     [InlineData("Test.fsproj")]
     [InlineData("Test.vbproj")]
-    public async Task InitCommand_WhenSolutionAndProjectInSameDirectory_ReturnsError(string projectFileName)
+    public async Task InitCommand_WhenSolutionAndProjectInSameDirectory_CreatesProjectModeAppHost(string projectFileName)
     {
-        // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Create a solution file and a project file in the same directory
         var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
         File.WriteAllText(solutionFile.FullName, "Fake solution file");
 
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, projectFileName));
         File.WriteAllText(projectFile.FullName, "<Project />");
 
+        string? capturedTemplateName = null;
+        string? capturedName = null;
+        string? capturedOutputPath = null;
+
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                // GetSolutionProjectsAsync should not be called because the check
-                // happens before reading solution projects
-                runner.GetSolutionProjectsAsyncCallback = (_, _, _) =>
-                {
-                    throw new InvalidOperationException("GetSolutionProjectsAsync should not be called when solution and project are in the same directory.");
-                };
-                return runner;
-            };
-        });
-
-        using var serviceProvider = services.BuildServiceProvider();
-        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
-
-        // Act
-        var parseResult = initCommand.Parse("init");
-        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
-
-        // Assert
-        Assert.Equal(ExitCodeConstants.FailedToCreateNewProject, exitCode);
-    }
-
-    [Fact]
-    public async Task InitCommand_WhenSolutionDirectoryHasNoProjectFiles_Proceeds()
-    {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        // Create a solution file only (no project files in the same directory)
-        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
-        File.WriteAllText(solutionFile.FullName, "Fake solution file");
-
-        var getSolutionProjectsCalled = false;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.DotNetCliRunnerFactory = (sp) =>
+            ConfigureImplicitTemplateChannel(options);
+            options.DotNetCliRunnerFactory = _ =>
             {
                 var runner = new TestDotNetCliRunner();
                 runner.GetSolutionProjectsAsyncCallback = (_, _, _) =>
                 {
-                    getSolutionProjectsCalled = true;
-                    // Return success with no projects - the test verifies the check passed
-                    return (0, Array.Empty<FileInfo>());
+                    throw new InvalidOperationException("GetSolutionProjectsAsync should not be called by init.");
                 };
-                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                runner.NewProjectAsyncCallback = (templateName, name, outputPath, _, _) =>
                 {
-                    // Create the expected directories so the code can find them
-                    var appHostDir = Path.Combine(outputPath, "Test.AppHost");
-                    var serviceDefaultsDir = Path.Combine(outputPath, "Test.ServiceDefaults");
-                    Directory.CreateDirectory(appHostDir);
-                    Directory.CreateDirectory(serviceDefaultsDir);
-                    File.WriteAllText(Path.Combine(appHostDir, "Test.AppHost.csproj"), "<Project />");
-                    File.WriteAllText(Path.Combine(serviceDefaultsDir, "Test.ServiceDefaults.csproj"), "<Project />");
+                    capturedTemplateName = templateName;
+                    capturedName = name;
+                    capturedOutputPath = outputPath;
+                    // Simulate template creating the directory
+                    Directory.CreateDirectory(outputPath);
                     return 0;
                 };
                 return runner;
             };
-            options.PackagingServiceFactory = _ => CreatePackagingServiceWithTemplatePackages();
         });
 
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        // Act
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        // Assert - the command should have proceeded past the directory check and created projects
-        Assert.True(getSolutionProjectsCalled, "GetSolutionProjectsAsync should have been called when no project files are in the solution directory.");
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.AppHost", "Test.AppHost.csproj")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.ServiceDefaults", "Test.ServiceDefaults.csproj")));
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("aspire-apphost", capturedTemplateName);
+        Assert.Equal("Test.AppHost", capturedName);
+        Assert.Contains("Test.AppHost", capturedOutputPath);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")));
     }
 
     [Fact]
-    public void InitContext_RequiredAppHostFramework_ReturnsHighestTfm()
+    public async Task InitCommand_WhenSolutionDirectoryHasNoProjectFiles_CreatesProjectModeAppHost()
     {
-        // Arrange
-        var initContext = new InitContext();
-
-        // Act & Assert - No projects selected returns default
-        Assert.Equal("net9.0", initContext.RequiredAppHostFramework);
-
-        // Set up projects with different TFMs
-        initContext.ExecutableProjectsToAddToAppHost = new List<ExecutableProjectInfo>
-        {
-            new() { ProjectFile = new FileInfo("/test/project1.csproj"), TargetFramework = "net8.0" },
-            new() { ProjectFile = new FileInfo("/test/project2.csproj"), TargetFramework = "net9.0" },
-            new() { ProjectFile = new FileInfo("/test/project3.csproj"), TargetFramework = "net10.0" }
-        };
-
-        // Act
-        var result = initContext.RequiredAppHostFramework;
-
-        // Assert
-        Assert.Equal("net10.0", result);
-
-        // Test with only lower versions
-        initContext.ExecutableProjectsToAddToAppHost = new List<ExecutableProjectInfo>
-        {
-            new() { ProjectFile = new FileInfo("/test/project1.csproj"), TargetFramework = "net8.0" },
-            new() { ProjectFile = new FileInfo("/test/project2.csproj"), TargetFramework = "net9.0" }
-        };
-
-        result = initContext.RequiredAppHostFramework;
-        Assert.Equal("net9.0", result);
-
-        // Test with only net8.0
-        initContext.ExecutableProjectsToAddToAppHost = new List<ExecutableProjectInfo>
-        {
-            new() { ProjectFile = new FileInfo("/test/project1.csproj"), TargetFramework = "net8.0" }
-        };
-
-        result = initContext.RequiredAppHostFramework;
-        Assert.Equal("net8.0", result);
-    }
-
-    [Fact]
-    public async Task InitCommand_WhenGetSolutionProjectsFails_SetsOutputCollectorAndCallsCallbacks()
-    {
-        // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Create a solution file to trigger InitializeExistingSolutionAsync path
         var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
         File.WriteAllText(solutionFile.FullName, "Fake solution file");
 
-        const string testErrorMessage = "Test error from dotnet sln list";
-        var standardOutputCallbackInvoked = false;
-        var standardErrorCallbackInvoked = false;
+        string? capturedTemplateName = null;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            // Mock the runner to return an error when GetSolutionProjectsAsync is called
-            options.DotNetCliRunnerFactory = (sp) =>
+            ConfigureImplicitTemplateChannel(options);
+            options.DotNetCliRunnerFactory = _ =>
             {
                 var runner = new TestDotNetCliRunner();
-
-                runner.GetSolutionProjectsAsyncCallback = (solutionFile, invocationOptions, cancellationToken) =>
+                runner.GetSolutionProjectsAsyncCallback = (_, _, _) =>
                 {
-                    // Verify that the OutputCollector callbacks are wired up
-                    Assert.NotNull(invocationOptions.StandardOutputCallback);
-                    Assert.NotNull(invocationOptions.StandardErrorCallback);
-
-                    // Simulate calling the callbacks to verify they work
-                    invocationOptions.StandardOutputCallback?.Invoke("Some output");
-                    standardOutputCallbackInvoked = true;
-
-                    invocationOptions.StandardErrorCallback?.Invoke(testErrorMessage);
-                    standardErrorCallbackInvoked = true;
-
-                    // Return a non-zero exit code to trigger the error path
-                    return (1, Array.Empty<FileInfo>());
+                    throw new InvalidOperationException("GetSolutionProjectsAsync should not be called by init.");
                 };
-
-                return runner;
-            };
-        });
-
-        using var serviceProvider = services.BuildServiceProvider();
-        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
-
-        // Act - Invoke init command
-        var parseResult = initCommand.Parse("init");
-        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
-
-        // Assert
-        Assert.Equal(1, exitCode); // Should return the error exit code
-        Assert.True(standardOutputCallbackInvoked, "StandardOutputCallback should have been invoked");
-        Assert.True(standardErrorCallbackInvoked, "StandardErrorCallback should have been invoked");
-    }
-
-    [Fact]
-    public async Task InitCommand_WhenNewProjectFails_SetsOutputCollectorAndCallsCallbacks()
-    {
-        // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        // Create a solution file to trigger InitializeExistingSolutionAsync path
-        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
-        File.WriteAllText(solutionFile.FullName, "Fake solution file");
-
-        const string testErrorMessage = "Test error from dotnet new";
-        var standardOutputCallbackInvoked = false;
-        var standardErrorCallbackInvoked = false;
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            // Mock the runner
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-
-                runner.GetSolutionProjectsAsyncCallback = (solutionFile, invocationOptions, cancellationToken) =>
+                runner.NewProjectAsyncCallback = (templateName, name, outputPath, _, _) =>
                 {
-                    return (0, Array.Empty<FileInfo>());
-                };
-
-                runner.GetProjectItemsAndPropertiesAsyncCallback = (projectFile, items, properties, invocationOptions, cancellationToken) =>
-                {
-                    return (0, null);
-                };
-
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, cancellationToken) =>
-                {
-                    return (0, "10.0.0");
-                };
-
-                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, cancellationToken) =>
-                {
-                    // Verify that the OutputCollector callbacks are wired up
-                    Assert.NotNull(invocationOptions.StandardOutputCallback);
-                    Assert.NotNull(invocationOptions.StandardErrorCallback);
-
-                    // Simulate calling the callbacks to verify they work
-                    invocationOptions.StandardOutputCallback?.Invoke("Some output");
-                    standardOutputCallbackInvoked = true;
-
-                    invocationOptions.StandardErrorCallback?.Invoke(testErrorMessage);
-                    standardErrorCallbackInvoked = true;
-
-                    // Return a non-zero exit code to trigger the error path
-                    return 1;
-                };
-
-                return runner;
-            };
-
-            options.InteractionServiceFactory = (sp) =>
-            {
-                var interactionService = new TestInteractionService();
-                return interactionService;
-            };
-
-            // Mock packaging service
-            options.PackagingServiceFactory = _ => CreatePackagingServiceWithTemplatePackages();
-        });
-
-        using var serviceProvider = services.BuildServiceProvider();
-        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
-
-        // Act - Invoke init command
-        var parseResult = initCommand.Parse("init");
-        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
-
-        // Assert
-        Assert.Equal(1, exitCode); // Should return the error exit code
-        Assert.True(standardOutputCallbackInvoked, "StandardOutputCallback should have been invoked");
-        Assert.True(standardErrorCallbackInvoked, "StandardErrorCallback should have been invoked");
-    }
-
-    [Fact]
-    public async Task InitCommand_WithSingleFileAppHost_DoesNotPromptForProjectNameOrOutputPath()
-    {
-        // Arrange
-        var promptedForProjectName = false;
-        var promptedForOutputPath = false;
-
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            // Set up prompter to track if prompts are called
-            options.NewCommandPrompterFactory = (sp) =>
-            {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestNewCommandPrompter(interactionService);
-
-                prompter.PromptForProjectNameCallback = (defaultName) =>
-                {
-                    promptedForProjectName = true;
-                    throw new InvalidOperationException("PromptForProjectName should not be called for init command with single-file AppHost");
-                };
-
-                prompter.PromptForOutputPathCallback = (path) =>
-                {
-                    promptedForOutputPath = true;
-                    throw new InvalidOperationException("PromptForOutputPath should not be called for init command with single-file AppHost");
-                };
-
-                // PromptForTemplatesVersion is expected to be called
-                prompter.PromptForTemplatesVersionCallback = (packages) => packages.First();
-
-                return prompter;
-            };
-
-            // Mock the runner to avoid actual template installation and project creation
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-
-                // Mock template installation
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, cancellationToken) =>
-                {
-                    return (ExitCode: 0, TemplateVersion: "10.0.0");
-                };
-
-                // Mock project creation
-                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, cancellationToken) =>
-                {
-                    // Verify the expected values are being used
-                    Assert.Equal(workspace.WorkspaceRoot.Name, projectName);
-                    Assert.Equal(workspace.WorkspaceRoot.FullName, Path.GetFullPath(outputPath));
-
-                    // Create a minimal file to simulate successful template creation
-                    var appHostFile = Path.Combine(outputPath, "apphost.cs");
-                    File.WriteAllText(appHostFile, "// Test apphost file");
-
+                    capturedTemplateName = templateName;
+                    Directory.CreateDirectory(outputPath);
                     return 0;
                 };
-
-                // Mock package search for template version selection
-                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, invocationOptions, cancellationToken) =>
-                {
-                    var package = new Aspire.Shared.NuGetPackageCli
-                    {
-                        Id = "Aspire.ProjectTemplates",
-                        Source = "nuget",
-                        Version = "10.0.0"
-                    };
-
-                    return (0, new[] { package });
-                };
-
                 return runner;
             };
-
-            // Mock packaging service to return fake channels
-            options.PackagingServiceFactory = _ => CreatePackagingServiceWithTemplatePackages();
         });
 
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        // Act - Invoke init command (suppress agent init to isolate the prompt behavior being tested)
-        var parseResult = initCommand.Parse("init --suppress-agent-init");
+        var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        // Assert
-        Assert.Equal(0, exitCode);
-        Assert.False(promptedForProjectName, "Should not have prompted for project name");
-        Assert.False(promptedForOutputPath, "Should not have prompted for output path");
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("aspire-apphost", capturedTemplateName);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")));
     }
 
-    private static TestPackagingService CreatePackagingServiceWithTemplatePackages() => new()
+    [Fact]
+    public async Task InitCommand_WhenNoSolutionExists_CreatesSingleFileAppHostAndAspireConfig()
     {
-        GetChannelsAsyncCallback = _ =>
-        {
-            var cache = new FakeNuGetPackageCache
-            {
-                GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
-                    Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([
-                        new Aspire.Shared.NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "10.0.0" }
-                    ])
-            };
-            return Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)]);
-        }
-    };
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-    private static TestPackagingService CreatePackagingServiceWithChannelTracking(Action<string> onChannelUsed)
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
+
+        var config = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")))!.AsObject();
+        var appHost = config["appHost"]!.AsObject();
+        Assert.Equal("apphost.cs", appHost["path"]!.GetValue<string>());
+        Assert.Null(appHost["language"]);
+    }
+
+    [Fact]
+    public async Task InitCommand_SingleFileSkeleton_CreatesAppHostRunJsonWithDashboardEnvVars()
     {
-        FakeNuGetPackageCache CreateTrackingCache(string channelName) => new()
-        {
-            GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+        // Regression for https://github.com/microsoft/aspire/issues/15986: without
+        // apphost.run.json, `dotnet run apphost.cs` after `aspire init` crashes because
+        // the dashboard env vars (ASPNETCORE_URLS, ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL)
+        // are not set. Init must emit apphost.run.json alongside aspire.config.json so
+        // the file-based runner picks up a launch profile.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var runJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json");
+        Assert.True(File.Exists(runJsonPath), "apphost.run.json should be created so `dotnet run apphost.cs` works.");
+
+        var runJson = JsonNode.Parse(File.ReadAllText(runJsonPath))!.AsObject();
+        var profiles = runJson["profiles"]!.AsObject();
+
+        var https = profiles["https"]!.AsObject();
+        Assert.Equal("Project", https["commandName"]!.GetValue<string>());
+        Assert.True(https["dotnetRunMessages"]!.GetValue<bool>());
+        var httpsUrls = https["applicationUrl"]!.GetValue<string>();
+        Assert.StartsWith("https://localhost:", httpsUrls);
+        var httpsEnv = https["environmentVariables"]!.AsObject();
+        Assert.Equal("Development", httpsEnv["ASPNETCORE_ENVIRONMENT"]!.GetValue<string>());
+        Assert.Equal("Development", httpsEnv["DOTNET_ENVIRONMENT"]!.GetValue<string>());
+        Assert.StartsWith("https://localhost:", httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.StartsWith("https://localhost:", httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+
+        var http = profiles["http"]!.AsObject();
+        Assert.Equal("Project", http["commandName"]!.GetValue<string>());
+        var httpEnv = http["environmentVariables"]!.AsObject();
+        Assert.Equal("Development", httpEnv["ASPNETCORE_ENVIRONMENT"]!.GetValue<string>());
+        Assert.StartsWith("http://localhost:", httpEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.StartsWith("http://localhost:", httpEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("true", httpEnv["ASPIRE_ALLOW_UNSECURED_TRANSPORT"]!.GetValue<string>());
+
+        // The two files must agree on ports — otherwise `aspire run` and
+        // `dotnet run apphost.cs` would bind to different dashboard URLs.
+        var aspireConfig = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")))!.AsObject();
+        var aspireProfiles = aspireConfig["profiles"]!.AsObject();
+        Assert.Equal(
+            aspireProfiles["https"]!["applicationUrl"]!.GetValue<string>(),
+            httpsUrls);
+        Assert.Equal(
+            aspireProfiles["http"]!["applicationUrl"]!.GetValue<string>(),
+            http["applicationUrl"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task InitCommand_SingleFileSkeleton_AppHostRunJsonAdoptsPortsFromExistingAspireConfig()
+    {
+        // If aspire.config.json already exists with a `profiles` section (e.g. user
+        // re-ran `aspire init` after editing it, or copied a stale file in), the new
+        // apphost.run.json must adopt those same ports — the two files should never
+        // disagree on dashboard / OTLP / resource service endpoints.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        const string existingAspireConfig = """
             {
-                onChannelUsed(channelName);
-                return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([
-                    new Aspire.Shared.NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "10.0.0" }
-                ]);
+              "appHost": {
+                "path": "apphost.cs"
+              },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://localhost:18000;http://localhost:18001",
+                  "environmentVariables": {
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:18002",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:18003"
+                  }
+                },
+                "http": {
+                  "applicationUrl": "http://localhost:18001",
+                  "environmentVariables": {
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:18005",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:18006",
+                    "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+                  }
+                }
+              }
             }
-        };
+            """;
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), existingAspireConfig);
 
-        return new TestPackagingService
-        {
-            GetChannelsAsyncCallback = _ =>
-            {
-                var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], CreateTrackingCache("stable"));
-                var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], CreateTrackingCache("daily"));
-                return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
-            }
-        };
-    }
-
-    [Fact]
-    public async Task InitCommandWithChannelOptionUsesSpecifiedChannel()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        
-        string? channelNameUsed = null;
-        bool promptedForVersion = false;
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.NewCommandPrompterFactory = (sp) =>
-            {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestNewCommandPrompter(interactionService);
-                
-                prompter.PromptForTemplatesVersionCallback = (packages) =>
-                {
-                    promptedForVersion = true;
-                    throw new InvalidOperationException("Should not prompt for version when --channel is specified");
-                };
-                
-                return prompter;
-            };
-
-            options.PackagingServiceFactory = _ => CreatePackagingServiceWithChannelTracking((channelName) => channelNameUsed = channelName);
-            
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
-                {
-                    return (0, version);
-                };
-                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
-                {
-                    var appHostFile = Path.Combine(outputPath, "apphost.cs");
-                    File.WriteAllText(appHostFile, "// Test apphost file");
-                    return 0;
-                };
-                return runner;
-            };
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<InitCommand>();
-        var result = command.Parse("init --channel stable");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        
-        // Assert
-        Assert.Equal(0, exitCode);
-        Assert.Equal("stable", channelNameUsed);
-        Assert.False(promptedForVersion);
-    }
-
-    [Fact]
-    public async Task InitCommandWithInvalidChannelShowsError()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.PackagingServiceFactory = _ => CreatePackagingServiceWithChannelTracking(_ => { });
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<InitCommand>();
-        var result = command.Parse("init --channel invalid-channel");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        
-        // Assert - should fail with non-zero exit code for invalid channel
-        Assert.NotEqual(0, exitCode);
-    }
-
-    [Fact]
-    public async Task InitCommand_WhenCSharpInitializationFails_DisplaysCreationErrorMessage()
-    {
-        TestInteractionService? testInteractionService = null;
-
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        // Create a solution file only (no project files in the same directory)
-        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
-        File.WriteAllText(solutionFile.FullName, "Fake solution file");
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = (sp) =>
-            {
-                testInteractionService = new TestInteractionService();
-                return testInteractionService;
-            };
-
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.GetSolutionProjectsAsyncCallback = (_, _, _) =>
-                {
-                    return (0, Array.Empty<FileInfo>());
-                };
-                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
-                {
-                    return 1; // Simulate failure for C# template
-                };
-                return runner;
-            };
-            options.PackagingServiceFactory = _ => CreatePackagingServiceWithTemplatePackages();
-        });
-
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        var expectedMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, executionContext.LogFilePath);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
-        Assert.NotEqual(0, exitCode);
-        Assert.NotNull(testInteractionService);
-        Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
+        var runJson = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json")))!.AsObject();
+        var profiles = runJson["profiles"]!.AsObject();
+        var https = profiles["https"]!.AsObject();
+        var http = profiles["http"]!.AsObject();
+
+        Assert.Equal("https://localhost:18000;http://localhost:18001", https["applicationUrl"]!.GetValue<string>());
+        Assert.Equal("https://localhost:18002", https["environmentVariables"]!["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("https://localhost:18003", https["environmentVariables"]!["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("http://localhost:18001", http["applicationUrl"]!.GetValue<string>());
+        Assert.Equal("http://localhost:18005", http["environmentVariables"]!["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("http://localhost:18006", http["environmentVariables"]!["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
     }
 
     [Fact]
-    public async Task InitCommand_WhenTypeScriptInitializationFails_DisplaysCreationErrorMessage()
+    public async Task InitCommand_SingleFileSkeleton_PreservesUnparseableExistingProfiles()
     {
-        TestInteractionService? testInteractionService = null;
+        // Regression guard for behavioral safety: if aspire.config.json already has a
+        // `profiles` section that doesn't match the expected 6-port shape (e.g. user-customized,
+        // missing one of the env vars, or an https-only setup), `aspire init` must NOT
+        // overwrite those profiles. The user has clearly customized their config and we
+        // shouldn't trash their data — even at the cost of apphost.run.json potentially
+        // binding to different dashboard ports.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
+        const string customAspireConfig = """
+            {
+              "appHost": {
+                "path": "apphost.cs"
+              },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://localhost:18000",
+                  "environmentVariables": {
+                    "MY_CUSTOM_VAR": "custom-value"
+                  }
+                }
+              }
+            }
+            """;
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        File.WriteAllText(aspireConfigPath, customAspireConfig);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // The user's customizations must be preserved verbatim — only the appHost.path
+        // is allowed to be touched (since that's the primary purpose of DropAspireConfig).
+        var aspireConfig = JsonNode.Parse(File.ReadAllText(aspireConfigPath))!.AsObject();
+        var preservedProfiles = aspireConfig["profiles"]!.AsObject();
+        Assert.False(preservedProfiles.ContainsKey("http"), "http profile should NOT have been added.");
+        var preservedHttps = preservedProfiles["https"]!.AsObject();
+        Assert.Equal("https://localhost:18000", preservedHttps["applicationUrl"]!.GetValue<string>());
+        var preservedEnv = preservedHttps["environmentVariables"]!.AsObject();
+        Assert.Equal("custom-value", preservedEnv["MY_CUSTOM_VAR"]!.GetValue<string>());
+        Assert.False(preservedEnv.ContainsKey("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"), "OTLP env var should NOT have been added to user's custom profile.");
+
+        // apphost.run.json still gets written so `dotnet run apphost.cs` works (with fresh
+        // ports — accepted divergence in this edge case).
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json")));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenDeprecatedCompatibilityOptionsProvided_SucceedsAndWarns()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        Assert.True(initCommand.Options.Single(o => o.Name == "--source").Hidden);
+        Assert.True(initCommand.Options.Single(o => o.Name == "--version").Hidden);
+        Assert.True(initCommand.Options.Single(o => o.Name == "--channel").Hidden);
+
+        var parseResult = initCommand.Parse("init --source https://example.test/v3/index.json --version 13.0.0 --channel daily --suppress-agent-init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message.Contains("`aspire init --source` is deprecated", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message.Contains("`aspire init --version` is deprecated", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message.Contains("`aspire init --channel` is deprecated", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenTypeScriptSelected_CreatesAppHostAndAspireConfig()
+    {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.InteractionServiceFactory = (sp) =>
-            {
-                testInteractionService = new TestInteractionService();
-                return testInteractionService;
-            };
-
             options.LanguageServiceFactory = (sp) =>
             {
                 var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
@@ -567,19 +377,12 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                     LanguageId: new LanguageId(KnownLanguageId.TypeScript),
                     DisplayName: "TypeScript (Node.js)",
                     PackageName: "@aspire/app-host",
-                    DetectionPatterns: ["apphost.ts"],
-                    CodeGenerator: "typescript",
-                    AppHostFileName: "apphost.ts"));
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
                 return new TestLanguageService { DefaultProject = tsProject };
             };
-        });
-
-        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
-        {
-            ScaffoldAsyncCallback = (context, cancellationToken) =>
-            {
-                return Task.FromResult(false); // Simulate failure for TypeScript scaffolding
-            }
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
         });
 
         using var serviceProvider = services.BuildServiceProvider();
@@ -588,93 +391,1662 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        var expectedMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, executionContext.LogFilePath);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts")));
 
-        Assert.NotEqual(0, exitCode);
-        Assert.NotNull(testInteractionService);
-        Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
+        var config = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")))!.AsObject();
+        var appHost = config["appHost"]!.AsObject();
+        Assert.Equal("apphost.mts", appHost["path"]!.GetValue<string>());
+        Assert.Equal("typescript/nodejs", appHost["language"]!.GetValue<string>());
     }
 
     [Fact]
-    public async Task InitCommandNonInteractive_NoSuppressAgentInitOption_DefaultsToRunAgentInit()
+    public async Task InitCommand_WhenLegacyTypeScriptAppHostExists_DoesNotCreateMtsAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var existingAppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        const string existingAppHostContent = "console.log('existing commonjs-compatible project');";
+        File.WriteAllText(existingAppHostPath, existingAppHostContent);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), """{ "type": "commonjs" }""");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --language typescript");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(existingAppHostContent, File.ReadAllText(existingAppHostPath));
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts")));
+        Assert.Equal("""{ "type": "commonjs" }""", File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json")));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenBrownfieldTypeScriptSelected_DisplaysNestedAppHostPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{}");
+
+        var interactionService = new TestInteractionService();
+        var scaffoldingService = new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, _) =>
+            {
+                var scaffoldDirectory = ScaffoldingService.GetScaffoldDirectory(context.TargetDirectory, context.Language);
+                Directory.CreateDirectory(scaffoldDirectory.FullName);
+                File.WriteAllText(Path.Combine(scaffoldDirectory.FullName, context.Language.AppHostFileName!), string.Empty);
+                return Task.FromResult(true);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.LanguageServiceFactory = (sp) =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => scaffoldingService;
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --language typescript");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-apphost", "apphost.mts")));
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message == "Created aspire-apphost/apphost.mts");
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAspireifySkillSelected_PrintsToolSpecificFollowUpCommands()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var subtleMessages = new List<string>();
+        interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
+        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
+        {
+            var items = choices.Cast<object>().ToList();
+
+            if (items.FirstOrDefault() is SkillLocation)
+            {
+                return [SkillLocation.Standard, SkillLocation.ClaudeCode, SkillLocation.OpenCode];
+            }
+
+            return items
+                .OfType<SkillDefinition>()
+                .Where(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName))
+                .Cast<object>()
+                .ToList();
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => global::Aspire.Cli.Tests.TestHelpers.CreateInteractiveHostEnvironment();
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --language typescript");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message == "Aspire AppHost created! To complete setup, run one of:");
+        Assert.DoesNotContain(subtleMessages, m => m.Contains("copilot", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("  claude \"run the aspireify skill\"", subtleMessages);
+        Assert.Contains("  opencode --prompt \"run the aspireify skill\"", subtleMessages);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAspireifySkillNotSelected_DoesNotPrintFollowUpCommands()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var subtleMessages = new List<string>();
+        interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
+        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
+        {
+            var items = choices.Cast<object>().ToList();
+
+            if (items.FirstOrDefault() is SkillLocation)
+            {
+                return [SkillLocation.Standard];
+            }
+
+            return items
+                .OfType<SkillDefinition>()
+                .Where(static skill => skill.HasName(CommonAgentApplicators.AspireSkillName))
+                .Cast<object>()
+                .ToList();
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => global::Aspire.Cli.Tests.TestHelpers.CreateInteractiveHostEnvironment();
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --language typescript");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.DoesNotContain(interactionService.DisplayedMessages, m => m.Message.Contains("To complete setup", StringComparison.Ordinal));
+        Assert.DoesNotContain(subtleMessages, m => m.Contains("run the aspireify skill", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenNoSolutionExists_SingleFileSkeletonPinsSdkVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var appHostContent = await File.ReadAllTextAsync(appHostPath);
+
+        // The single-file skeleton must pin the SDK version with @<version> so downstream
+        // CLI operations (ProjectUpdater / FallbackProjectParser) can locate and update
+        // the directive.
+        var firstLine = appHostContent.Split('\n')[0].TrimEnd('\r');
+        Assert.StartsWith("#:sdk Aspire.AppHost.Sdk@", firstLine, StringComparison.Ordinal);
+        Assert.NotEqual("#:sdk Aspire.AppHost.Sdk@", firstLine);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAspireConfigAlreadyExists_MergesAppHostSection()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Pre-write an aspire.config.json with custom properties a user might have edited in.
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var existingConfig = new JsonObject
+        {
+            ["channel"] = "stable",
+            ["features"] = new JsonObject { ["polyglotSupportEnabled"] = true }
+        };
+        await File.WriteAllTextAsync(configPath, existingConfig.ToJsonString());
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var merged = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!.AsObject();
+        Assert.Equal("apphost.cs", merged["appHost"]!.AsObject()["path"]!.GetValue<string>());
+        // Pre-existing properties must be preserved.
+        Assert.Equal("stable", merged["channel"]!.GetValue<string>());
+        Assert.True(merged["features"]!.AsObject()["polyglotSupportEnabled"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAspireConfigIsMalformed_FailsCleanly()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Write a malformed aspire.config.json. The CLI configuration layer
+        // (ConfigurationHelper.AddSettingsFile) should surface a friendly
+        // InvalidOperationException identifying the offending file rather than a raw
+        // JsonReaderException stack trace.
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, "{ this is not json");
+
+        var ex = Assert.ThrowsAny<InvalidOperationException>(() =>
+        {
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+            using var serviceProvider = services.BuildServiceProvider();
+            return serviceProvider.GetRequiredService<InitCommand>();
+        });
+
+        Assert.Contains(AspireConfigFile.FileName, ex.Message, StringComparison.Ordinal);
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAppHostAlreadyExists_DoesNotOverwriteIt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        const string preExistingContent = "// user-authored apphost\n";
+        await File.WriteAllTextAsync(appHostPath, preExistingContent);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(preExistingContent, await File.ReadAllTextAsync(appHostPath));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenSolutionExistsAndChannelIsImplicit_LeavesNuGetConfigNull()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        FileInfo? capturedNuGetConfigFile = new FileInfo("sentinel");
+        string? capturedNuGetSource = "sentinel";
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            ConfigureImplicitTemplateChannel(options);
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, nugetConfigFile, nugetSource, _, _, _) =>
+                {
+                    capturedNuGetConfigFile = nugetConfigFile;
+                    capturedNuGetSource = nugetSource;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Null(capturedNuGetConfigFile);
+        // The implicit channel surfaces the package's Source field as the nugetSource even when no
+        // temporary config is generated, so nugetSource may be non-null. The contract this test guards
+        // is that nugetConfigFile stays null on the implicit channel.
+
+        // The fix must also leave the solution-directory NuGet.config alone on the implicit
+        // channel — TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync
+        // short-circuits when the matched channel is not Explicit. A regression that dropped
+        // the channel-type guard would silently create a workspace NuGet.config here.
+        Assert.False(
+            File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")),
+            "implicit channel must not write a workspace nuget.config in the solution directory.");
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenSolutionExistsAndPrHivesPresent_DoesNotWidenToAllChannels()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        // Simulate a stale PR hive on disk so executionContext.GetHiveCount() returns > 0.
+        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        Directory.CreateDirectory(Path.Combine(hivesDir.FullName, "pr-12345", "packages"));
+
+        string? capturedTemplateVersion = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ =>
+                BuildExecutionContext(options.WorkingDirectory, channel: "default");
+
+            options.PackagingServiceFactory = _ =>
+            {
+                // Implicit channel offers the expected stable version; PR hive channel offers a much
+                // newer version that should NOT be selected because init opts out of PR-hive widening.
+                var implicitCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                            [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "13.3.0" }])
+                };
+                var prHiveCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                            [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = "99.0.0-pr.12345" }])
+                };
+
+                var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures());
+                var prHiveChannel = PackageChannel.CreateExplicitChannel(
+                    "pr-12345",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", hivesDir.FullName + "/pr-12345/packages")],
+                    prHiveCache,
+                    features: new TestFeatures());
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel, prHiveChannel])
+                };
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) =>
+                {
+                    capturedTemplateVersion = version;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("13.3.0", capturedTemplateVersion);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenChannelTemplateSearchFails_DisplaysFriendlyError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ =>
+                BuildExecutionContext(options.WorkingDirectory, channel: "default");
+
+            options.InteractionServiceFactory = _ => interactionService;
+
+            // Fake cache throws NuGetPackageCacheException to simulate offline / inaccessible feed.
+            options.PackagingServiceFactory = _ =>
+            {
+                var fakeCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        throw new NuGetPackageCacheException("Package search failed: simulated network failure")
+                };
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
+                };
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    throw new InvalidOperationException("InstallTemplateAsync should not run when channel search fails.");
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToInstallTemplates, exitCode);
+        Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("simulated network failure", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// When the user does not pass <c>--channel</c>, the project-mode init path must resolve
+    /// its template package against the channel baked into the running CLI binary (exposed
+    /// as <see cref="CliExecutionContext.IdentityChannel"/>). One named explicit channel is registered
+    /// per theory row and uniquely sourced; the assertion captures the package source seen by
+    /// <c>dotnet new install</c> and verifies it came from the matching channel — proving the
+    /// resolver picked the binary's identity channel rather than the implicit default or any
+    /// other registered channel.
+    /// </summary>
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("staging")]
+    [InlineData("daily")]
+    [InlineData("pr-12345")]
+    public async Task InitCommand_ProjectMode_NoChannelOverride_ResolvesAgainstCliExecutionContextChannel(string contextChannel)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        string? capturedNuGetSource = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, nugetSource, _, _, _) =>
+                {
+                    capturedNuGetSource = nugetSource;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(SourceForChannel(contextChannel), capturedNuGetSource);
+    }
+
+    /// <summary>
+    /// Exercises the full produce → bake → resolve pipeline for PR builds: a CLI binary built
+    /// with identity channel <c>pr</c> and PR number 12345 must resolve its init-time template
+    /// against the <c>pr-12345</c> hive. This is a joint-contract test — per-layer unit tests
+    /// can pass while the producer emits <c>pr</c>, the consumer expects <c>pr-12345</c>, and
+    /// only an end-to-end run catches the mismatch.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_ProjectMode_PrBuildResolvesToPrNumberedHive()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        string? capturedNuGetSource = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => BuildExecutionContext(workspace.WorkspaceRoot, channel: "pr-12345");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("pr-12345");
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, nugetSource, _, _, _) =>
+                {
+                    capturedNuGetSource = nugetSource;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(SourceForChannel("pr-12345"), capturedNuGetSource);
+    }
+
+    /// <summary>
+    /// When the user does not pass <c>--channel</c>, the single-file init path must wire the
+    /// workspace <c>nuget.config</c> to the channel baked into the running CLI binary
+    /// (exposed as <see cref="CliExecutionContext.IdentityChannel"/>). One named explicit channel is
+    /// registered per theory row with a uniquely-sourced feed; the assertion reads the
+    /// workspace <c>nuget.config</c> emitted by <c>NuGetConfigMerger</c> and verifies it
+    /// carries the matching feed URL — proving the resolver picked the binary's identity
+    /// channel rather than skipping the merge or selecting a different registered channel.
+    /// </summary>
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("staging")]
+    [InlineData("daily")]
+    [InlineData("pr-12345")]
+    public async Task InitCommand_SingleFileMode_NoChannelOverride_WiresNuGetConfigToCliExecutionContextChannel(string contextChannel)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.CliHostEnvironmentFactory = (sp) =>
-            {
-                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
-                return new CliHostEnvironment(configuration, nonInteractive: true);
-            };
-
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
-                {
-                    return (0, version);
-                };
-                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
-                {
-                    File.WriteAllText(Path.Combine(outputPath, "apphost.cs"), "// Test apphost file");
-                    return 0;
-                };
-                return runner;
-            };
-
-            options.PackagingServiceFactory = _ => CreatePackagingServiceWithTemplatePackages();
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
         });
 
-        using var provider = services.BuildServiceProvider();
-        var command = provider.GetRequiredService<InitCommand>();
-        var result = command.Parse("init");
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md")));
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath), $"nuget.config should be created in workspace for channel '{contextChannel}'.");
+
+        AssertNuGetConfigHasChannelShape(nugetConfigPath, contextChannel);
     }
 
-    [Fact]
-    public async Task InitCommandNonInteractive_SuppressAgentInitTrue_SkipsAgentInit()
+    /// <summary>
+    /// Regression for the daily-CLI scenario: when `aspire init` runs under a CLI identity
+    /// that matches a registered non-stable Explicit channel (<c>daily</c>, <c>staging</c>, <c>pr-{N}</c>),
+    /// the produced <c>aspire.config.json</c> must carry that channel at the top level so
+    /// subsequent <c>aspire add</c> / <c>integration list</c> / <c>integration search</c>
+    /// calls resolve packages against the matching channel rather than the implicit feed.
+    /// </summary>
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("staging")]
+    [InlineData("daily")]
+    [InlineData("pr-12345")]
+    [InlineData("local")]
+    public async Task InitCommand_SingleFileMode_WritesIdentityChannelIntoAspireConfig(string contextChannel)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.CliHostEnvironmentFactory = (sp) =>
-            {
-                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
-                return new CliHostEnvironment(configuration, nonInteractive: true);
-            };
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+        });
 
-            options.DotNetCliRunnerFactory = (sp) =>
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        Assert.True(File.Exists(configPath));
+
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
+        if (string.Equals(contextChannel, PackageChannelNames.Stable, StringComparisons.ChannelName))
+        {
+            Assert.Null(config["channel"]);
+        }
+        else
+        {
+            Assert.Equal(contextChannel, config["channel"]!.GetValue<string>());
+        }
+    }
+
+    /// <summary>
+    /// A pre-existing `aspire.config.json#channel` must not be overwritten by init. Users
+    /// who hand-edit the channel (or migrate a project from a different CLI build) own
+    /// that value; init should only fill it in when absent.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_SingleFileMode_PreservesExistingChannelInAspireConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var existing = new JsonObject { ["channel"] = "pr-99999" };
+        await File.WriteAllTextAsync(configPath, existing.ToJsonString());
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "daily");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var config = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!.AsObject();
+        Assert.Equal("pr-99999", config["channel"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// When the running CLI's <see cref="CliExecutionContext.IdentityChannel"/> doesn't match
+    /// any registered channel (e.g. <c>local</c> on a production CLI, or a stale <c>pr-{N}</c>
+    /// without the matching hive), init must NOT persist a channel value. Persisting a
+    /// name no package source mapping satisfies would zero out polyglot
+    /// <c>aspire add</c> discovery via <c>IntegrationPackageSearchService</c>'s name filter.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_SingleFileMode_DoesNotPersistChannelWhenIdentityUnregistered()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "pr-99999");
+            // Only `daily` is registered; identity `pr-99999` has no match.
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
+        Assert.Null(config["channel"]);
+    }
+
+    /// <summary>
+    /// When the running CLI's identity matches a registered Implicit channel (production
+    /// <c>default</c> → nuget.org), init must NOT persist a channel value. Implicit channels
+    /// are the default fallback; pinning them at the project level is redundant and would
+    /// restrict polyglot <c>aspire add</c> discovery to a single channel —
+    /// the regression tracked by https://github.com/microsoft/aspire/issues/17295.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_SingleFileMode_DoesNotPersistChannelWhenIdentityMatchesImplicit()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            // PackageChannel.CreateImplicitChannel names the channel "default".
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "default");
+            options.PackagingServiceFactory = _ =>
+            {
+                var fakeCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        Task.FromResult<IEnumerable<NuGetPackageCli>>([])
+                };
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
+                };
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
+        Assert.Null(config["channel"]);
+    }
+
+    /// <summary>
+    /// Polyglot equivalent of <see cref="InitCommand_SingleFileMode_WritesIdentityChannelIntoAspireConfig"/>:
+    /// when the identity matches a registered non-default Explicit channel, init must propagate
+    /// the resolved channel name through <see cref="ScaffoldContext.Channel"/> so the scaffolder
+    /// persists it into <c>aspire.config.json#channel</c>. Without this, polyglot
+    /// <c>aspire add</c> falls back to the implicit feed regardless of the CLI build.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_PolyglotMode_PassesResolvedNonDefaultChannelToScaffolder()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        ScaffoldContext? capturedContext = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "daily");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+            options.LanguageServiceFactory = sp =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (ctx, _) =>
+                {
+                    capturedContext = ctx;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedContext);
+        Assert.Equal("daily", capturedContext!.Channel);
+    }
+
+    /// <summary>
+    /// The stable channel is an explicit PackagingService channel, but it is also the
+    /// default public-feed behavior. Persisting it would make package discovery use
+    /// only the synthetic NuGet.org config and hide packages from ambient private feeds.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_PolyglotMode_DoesNotPassStableChannelToScaffolder()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        ScaffoldContext? capturedContext = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "stable");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("stable");
+            options.LanguageServiceFactory = sp =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (ctx, _) =>
+                {
+                    capturedContext = ctx;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedContext);
+        Assert.Null(capturedContext!.Channel);
+    }
+
+    /// <summary>
+    /// Polyglot pre-existing-channel preservation. <c>ScaffoldingService.cs:93-95</c> writes
+    /// <c>config.Channel = context.Channel</c> unconditionally when non-empty, so if init
+    /// passed the resolved identity channel into <see cref="ScaffoldContext.Channel"/> without
+    /// first checking the file, a user-edited polyglot <c>aspire.config.json#channel</c>
+    /// would be silently overwritten on subsequent <c>aspire init</c> runs.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_PolyglotMode_PreservesExistingChannelInAspireConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var existing = new JsonObject { ["channel"] = "pr-99999" };
+        await File.WriteAllTextAsync(configPath, existing.ToJsonString());
+
+        ScaffoldContext? capturedContext = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "daily");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+            options.LanguageServiceFactory = sp =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (ctx, _) =>
+                {
+                    capturedContext = ctx;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedContext);
+        // Init must suppress the channel pass-through so the scaffolder doesn't overwrite
+        // the user-edited value via `config.Channel = context.Channel`.
+        Assert.Null(capturedContext!.Channel);
+    }
+
+    /// <summary>
+    /// Polyglot equivalent of the unregistered-identity guard: when identity doesn't match
+    /// any registered channel, init must NOT pass it through to the scaffolder. Otherwise
+    /// the scaffolder would pin a name no PSM rule satisfies and polyglot <c>aspire add</c>
+    /// would return zero packages.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_PolyglotMode_DoesNotPassChannelWhenIdentityUnregistered()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        ScaffoldContext? capturedContext = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "pr-99999");
+            // Only `daily` is registered; identity `pr-99999` has no match.
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+            options.LanguageServiceFactory = sp =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (ctx, _) =>
+                {
+                    capturedContext = ctx;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedContext);
+        Assert.Null(capturedContext!.Channel);
+    }
+
+    /// <summary>
+    /// Negative-shape tripwire: <c>aspire init</c> must never read the <c>channel</c> key from
+    /// the global <see cref="IConfigurationService"/>. The injected configuration service throws
+    /// on any <c>GetConfigurationAsync(key, ...)</c> or <c>GetConfigurationFromDirectoryAsync</c>
+    /// call where the key is <c>channel</c>; if init invokes either, the test fails with the
+    /// thrown message. Runs in project mode (with a solution file present) so the
+    /// template-package resolver is exercised.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_DoesNotConsultGlobalConfigurationServiceForChannelKey()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var tripwireConfigService = new global::Aspire.Cli.Tests.TestServices.TestConfigurationService
+        {
+            OnGetConfiguration = key =>
+            {
+                if (string.Equals(key, "channel", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "aspire init must not consult IConfigurationService for the 'channel' key. " +
+                        "Channel resolution sources from CliExecutionContext.IdentityChannel only.");
+                }
+                return null;
+            },
+            OnGetConfigurationFromDirectory = (key, _) =>
+            {
+                if (string.Equals(key, "channel", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "aspire init must not consult IConfigurationService.GetConfigurationFromDirectoryAsync " +
+                        "for the 'channel' key. Channel resolution sources from CliExecutionContext.IdentityChannel only.");
+                }
+                return null;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "stable");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("stable");
+            options.ConfigurationServiceFactory = _ => tripwireConfigService;
+
+            options.DotNetCliRunnerFactory = _ =>
             {
                 var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) => (0, version);
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
                 {
-                    return (0, version);
-                };
-                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
-                {
-                    File.WriteAllText(Path.Combine(outputPath, "apphost.cs"), "// Test apphost file");
+                    Directory.CreateDirectory(outputPath);
                     return 0;
                 };
                 return runner;
             };
-
-            options.PackagingServiceFactory = _ => CreatePackagingServiceWithTemplatePackages();
         });
 
-        using var provider = services.BuildServiceProvider();
-        var command = provider.GetRequiredService<InitCommand>();
-        var result = command.Parse("init --suppress-agent-init");
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
-        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md")));
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    /// <summary>
+    /// Fresh-machine regression. On a developer machine that has never used Aspire,
+    /// <c>~/.aspire/hives/</c> does not exist (so no per-hive channels are registered).
+    /// A locally-built CLI bakes <c>local</c> as its identity channel via
+    /// <c>[AssemblyMetadata("AspireCliChannel", "local")]</c>, and <see cref="CliExecutionContext.IdentityChannel"/>
+    /// returns that value verbatim. <c>aspire init</c> currently passes
+    /// <see cref="CliExecutionContext.IdentityChannel"/> as the channel-override into
+    /// <c>TemplateNuGetConfigService.ResolveTemplatePackageAsync</c>, which name-matches against
+    /// the channels produced by <see cref="PackagingService.GetChannelsAsync"/>: <c>default</c>
+    /// (implicit), <c>stable</c>, <c>daily</c>, optional <c>staging</c>, and one entry per hive
+    /// directory. With no <c>local</c> hive on disk, the lookup would otherwise throw
+    /// <see cref="Aspire.Cli.Exceptions.ChannelNotFoundException"/> and clean-machine
+    /// <c>aspire init</c> would fail.
+    ///
+    /// Pinned behavior: when the running CLI's identity channel is <c>local</c> AND no matching
+    /// named channel is registered, init falls back to the implicit channel rather than throwing.
+    /// This mirrors how the <c>local</c> channel gracefully degrades to public-feed package
+    /// resolution when no local hive has been scaffolded yet.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_OnLocalChannelCli_WithNoLocalHive_FallsBackToImplicitChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        // Simulate a fresh machine: hives directory does not exist, no per-hive channels.
+        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        Assert.False(hivesDir.Exists, "Test precondition: hives directory must not exist on a fresh machine.");
+
+        string? capturedTemplateVersion = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            // Pin the running CLI's identity channel to "local" — the value baked into a CLI
+            // built without an explicit /p:AspireCliChannel= override.
+            options.CliExecutionContextFactory = _ =>
+                BuildExecutionContext(options.WorkingDirectory, channel: "local");
+
+            options.PackagingServiceFactory = _ =>
+            {
+                // Only the implicit channel is registered — no `local` named channel, no PR hives.
+                // This matches what PackagingService.GetChannelsAsync returns on a clean machine
+                // for a CLI whose channel is `local` (where stable/daily/staging are also present
+                // but irrelevant — they don't match the `local` channel name).
+                var fakeCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                            [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "13.3.0" }])
+                };
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
+                };
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) =>
+                {
+                    capturedTemplateVersion = version;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("13.3.0", capturedTemplateVersion);
+    }
+
+    /// <summary>
+    /// Project-mode counterpart to
+    /// <see cref="InitCommand_SingleFileMode_NoChannelOverride_WiresNuGetConfigToCliExecutionContextChannel"/>.
+    /// When the user does not pass <c>--channel</c>, the project-mode init path must wire a
+    /// <c>NuGet.config</c> in the solution directory to the channel baked into the running CLI
+    /// binary (exposed as <see cref="CliExecutionContext.IdentityChannel"/>) BEFORE invoking
+    /// <c>dotnet new aspire-apphost</c>, so the aspire-apphost template's built-in
+    /// <c>restore</c> post-action (template.json, conditioned on <c>!skipRestore</c>) can
+    /// resolve <c>Aspire.AppHost.Sdk/&lt;version&gt;</c> from the channel-matched hive
+    /// instead of probing only the user-level feeds. Without the right ordering the
+    /// post-action restore silently fails (it runs with <c>continueOnError=true</c>),
+    /// wasting work and emitting confusing errors. The capture inside
+    /// <c>NewProjectAsyncCallback</c> guards both the ordering and the file content; the
+    /// final structural assertion guards <c>&lt;clear/&gt;</c> + <c>Aspire*</c> mapping
+    /// correctness.
+    /// </summary>
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("staging")]
+    [InlineData("daily")]
+    [InlineData("pr-12345")]
+    public async Task InitCommand_ProjectMode_NoChannelOverride_WiresNuGetConfigInSolutionDirToCliExecutionContextChannel(string contextChannel)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        string? nugetConfigContentAtNewProjectTime = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) => (0, version);
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    // The aspire-apphost template's restore post-action depends on the
+                    // workspace nuget.config being on disk AND containing the channel
+                    // source before `dotnet new` runs; capture the actual file content
+                    // (not just existence) so a regression that writes a stale file first
+                    // and updates it afterward would still be caught.
+                    nugetConfigContentAtNewProjectTime = File.Exists(nugetConfigPath)
+                        ? File.ReadAllText(nugetConfigPath)
+                        : null;
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        Assert.True(File.Exists(nugetConfigPath), $"nuget.config should be created in the solution directory for channel '{contextChannel}'.");
+        Assert.NotNull(nugetConfigContentAtNewProjectTime);
+        Assert.Contains(SourceForChannel(contextChannel), nugetConfigContentAtNewProjectTime!);
+
+        AssertNuGetConfigHasChannelShape(nugetConfigPath, contextChannel);
+    }
+
+    /// <summary>
+    /// Guards the recover-on-rerun contract: a user who ran a previously broken CLI (which
+    /// produced an AppHost project but did NOT write a workspace NuGet.config) reruns
+    /// <c>aspire init</c> against the fixed CLI and now has a working workspace. The fix
+    /// in <c>DropCSharpProjectSkeletonAsync</c> writes the workspace NuGet.config BEFORE the
+    /// AppHost-dir-already-exists early return — moving the write below the guard would
+    /// silently regress this scenario because the early return reports Success without
+    /// running channel-aware setup.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_ProjectMode_RerunWithExistingAppHostDirAndMissingNuGetConfig_CreatesNuGetConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        // Simulate the post-broken-init starting state: AppHost dir already exists, no workspace nuget.config.
+        var appHostDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.AppHost"));
+        appHostDir.Create();
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+
+        var contextChannel = "staging";
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+            // No DotNetCliRunner override — InstallTemplate / NewProject must NOT be invoked
+            // because the AppHost dir already exists. The default TestDotNetCliRunner throws
+            // on any unhandled callback, so this also guards the contract that nothing
+            // template-related runs on the rerun-recovery path.
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath), "rerun must create the workspace nuget.config even though the AppHost dir already exists.");
+        AssertNuGetConfigHasChannelShape(nugetConfigPath, contextChannel);
+    }
+
+    /// <summary>
+    /// Single-file counterpart of
+    /// <see cref="InitCommand_ProjectMode_RerunWithExistingAppHostDirAndMissingNuGetConfig_CreatesNuGetConfig"/>.
+    /// When <c>apphost.cs</c> already exists from a previous broken CLI but no workspace
+    /// NuGet.config was written, the rerun must still drop the NuGet.config in the working
+    /// directory so the existing apphost can resolve the channel-pinned SDK.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_SingleFileMode_RerunWithExistingAppHostFileAndMissingNuGetConfig_CreatesNuGetConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Simulate the post-broken-init starting state: apphost.cs exists, no nuget.config.
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        File.WriteAllText(appHostPath, "#:sdk Aspire.AppHost.Sdk@13.4.0-staging.x\nbuilder.Build().Run();");
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+
+        var contextChannel = "staging";
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath), "rerun must create the workspace nuget.config even though apphost.cs already exists.");
+        AssertNuGetConfigHasChannelShape(nugetConfigPath, contextChannel);
+    }
+
+    /// <summary>
+    /// When the solution file lives in a subdirectory of the CLI's working directory,
+    /// <c>SolutionLocator</c> still finds it (it searches with <c>SearchOption.AllDirectories</c>),
+    /// and the workspace NuGet.config must be written next to the solution — not at the
+    /// working directory root. A mutation that passed <c>workingDirectory.FullName</c> instead
+    /// of <c>solutionDir.FullName</c> to <c>CreateOrUpdateNuGetConfigWithoutPromptAsync</c>
+    /// would put the file in the wrong place and the AppHost wouldn't resolve.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_ProjectMode_SolutionInSubdirectory_WritesNuGetConfigNextToSolutionNotInWorkingDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionDir = workspace.WorkspaceRoot.CreateSubdirectory("nested");
+        var solutionFile = new FileInfo(Path.Combine(solutionDir.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var contextChannel = "staging";
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) => (0, version);
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(File.Exists(Path.Combine(solutionDir.FullName, "nuget.config")),
+            "nuget.config must be written in the solution directory, not the working directory.");
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")),
+            "nuget.config must NOT be written in the working directory when the solution lives in a subdirectory.");
+        AssertNuGetConfigHasChannelShape(Path.Combine(solutionDir.FullName, "nuget.config"), contextChannel);
+    }
+
+    /// <summary>
+    /// When a NuGet.config already exists in the solution directory with the user's own
+    /// package source, <c>aspire init</c> must merge the channel feed in (via
+    /// <c>NuGetConfigMerger.UpdateExistingNuGetConfigAsync</c>) instead of clobbering the
+    /// file. The merger has its own unit tests; this test guards the InitCommand-level
+    /// integration so a regression in how the helper is invoked from the command path
+    /// (wrong arg, missing call, accidental overwrite) doesn't slip through.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_ProjectMode_WithPreExistingNuGetConfig_PreservesUserSourcesAndAddsChannelSource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        const string userFeedUrl = "https://contoso.example.invalid/v3/index.json";
+        const string nugetConfigContent = $$"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <add key="contoso" value="{{userFeedUrl}}" />
+              </packageSources>
+            </configuration>
+            """;
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        File.WriteAllText(nugetConfigPath, nugetConfigContent);
+
+        var contextChannel = "staging";
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) => (0, version);
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var merged = File.ReadAllText(nugetConfigPath);
+        Assert.Contains(userFeedUrl, merged);
+        Assert.Contains(SourceForChannel(contextChannel), merged);
+    }
+
+    /// <summary>
+    /// When multiple explicit channels are registered (mirroring real
+    /// <c>PackagingService</c> which exposes stable + optional staging + daily + PR hives
+    /// simultaneously), the helper must select the channel whose name matches
+    /// <c>CliExecutionContext.IdentityChannel</c> — not just "the first explicit channel".
+    /// A mutation that took the first explicit channel would silently wire a daily-channel
+    /// CLI to stable sources.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_ProjectMode_MultipleExplicitChannels_PicksChannelMatchingIdentity()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var contextChannel = "daily";
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            // Register stable + staging + daily simultaneously. The matching channel ("daily")
+            // is not the first one in the list.
+            options.PackagingServiceFactory = _ => CreateMultiChannelPackagingService("stable", "staging", "daily");
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) => (0, version);
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        var content = File.ReadAllText(nugetConfigPath);
+
+        Assert.Contains(SourceForChannel("daily"), content);
+        Assert.DoesNotContain(SourceForChannel("stable"), content);
+        Assert.DoesNotContain(SourceForChannel("staging"), content);
+        AssertNuGetConfigHasChannelShape(nugetConfigPath, "daily");
+    }
+
+    /// <summary>
+    /// Locally-built CLI (IdentityChannel == <c>local</c>) on a machine where no <c>local</c>
+    /// channel is registered (e.g. <c>~/.aspire/hives/local</c> isn't materialized). The fix
+    /// helper must short-circuit (return <see langword="false"/>) instead of throwing — a
+    /// regression that threw on the no-matching-channel branch would crash every locally-built
+    /// CLI run. <c>DropCSharpProjectSkeletonAsync</c> additionally falls back to the implicit
+    /// channel for template install via its <c>ChannelNotFoundException</c> handler, so init
+    /// must still complete successfully.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_ProjectMode_LocalIdentityChannelWithNoLocalChannelRegistered_DoesNotWriteNuGetConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ =>
+                BuildExecutionContext(workspace.WorkspaceRoot, channel: PackageChannelNames.Local);
+
+            // Packaging service exposes only the implicit channel — no "local" channel.
+            options.PackagingServiceFactory = _ =>
+            {
+                var fakeCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                            [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "13.3.0" }])
+                };
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
+                };
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) => (0, version);
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(
+            File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")),
+            "no workspace nuget.config should be written when no matching channel exists for IdentityChannel='local'.");
+    }
+
+    /// <summary>
+    /// <c>SolutionLocator</c> handles both <c>.sln</c> and <c>.slnx</c> formats
+    /// (<c>SolutionLocator.GetSolutionFilesInDirectoryAndSubfoldersAsync</c>). The
+    /// project-mode theory above covers <c>.sln</c>; this guards that the <c>.slnx</c>
+    /// path produces an equivalently-wired workspace NuGet.config so a future divergence
+    /// (e.g. a switch on extension that skipped the nuget.config write) would be caught.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_ProjectMode_WithSlnxSolutionFile_WiresWorkspaceNuGetConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.slnx"));
+        File.WriteAllText(solutionFile.FullName, """<Solution />""");
+
+        var contextChannel = "staging";
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) => (0, version);
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath));
+        AssertNuGetConfigHasChannelShape(nugetConfigPath, contextChannel);
+    }
+
+    private static CliExecutionContext CreateExecutionContextForChannel(DirectoryInfo workingDirectory, string contextChannel)
+    {
+        return BuildExecutionContext(workingDirectory, channel: contextChannel);
+    }
+
+    private static CliExecutionContext BuildExecutionContext(DirectoryInfo workingDirectory, string channel)
+    {
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
+            identityChannel: channel);
+    }
+
+    private static TestPackagingService CreateNamedChannelPackagingService(string channelName)
+        => CreateMultiChannelPackagingService(channelName);
+
+    /// <summary>
+    /// Returns a <see cref="TestPackagingService"/> exposing one named explicit channel per
+    /// entry in <paramref name="channelNames"/>, each with two mappings (<c>Aspire* → channelSource</c>
+    /// and <c>* → fallbackSource</c>) so consumers can assert <c>&lt;packageSourceMapping&gt;</c>
+    /// shape — not just that one URL appears in the file. The real <see cref="PackagingService"/>
+    /// exposes multiple explicit channels simultaneously (stable, optional staging, daily,
+    /// PR hives), so registering more than one here lets a test prove the resolver picks the
+    /// channel matching <see cref="CliExecutionContext.IdentityChannel"/> rather than just
+    /// taking the first explicit channel.
+    /// </summary>
+    private static TestPackagingService CreateMultiChannelPackagingService(params string[] channelNames)
+    {
+        var channels = channelNames.Select(channelName =>
+        {
+            var channelSource = SourceForChannel(channelName);
+            var fallbackSource = FallbackSourceForChannel(channelName);
+            var version = "13.3.0";
+
+            var fakeCache = new FakeNuGetPackageCache
+            {
+                GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                        [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = channelSource, Version = version }])
+            };
+
+            return PackageChannel.CreateExplicitChannel(
+                channelName,
+                PackageChannelQuality.Both,
+                [new PackageMapping("Aspire*", channelSource), new PackageMapping(PackageMapping.AllPackages, fallbackSource)],
+                fakeCache,
+                features: new TestFeatures());
+        }).ToArray();
+
+        return new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(channels)
+        };
+    }
+
+    private static string SourceForChannel(string channelName)
+        => $"https://feeds.test.invalid/{channelName}/v3/index.json";
+
+    private static string FallbackSourceForChannel(string channelName)
+        => $"https://feeds.test.invalid/{channelName}-fallback/v3/index.json";
+
+    /// <summary>
+    /// Asserts that the workspace NuGet.config written by
+    /// <c>TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync</c>
+    /// carries the structural elements the fix depends on: the channel feed URL is registered
+    /// as a package source, a <c>&lt;clear/&gt;</c> element neutralizes any inherited
+    /// parent-directory NuGet config (without which a user-level config disabling our hive
+    /// would shadow the mapping), and the <c>Aspire*</c> pattern routes to the channel
+    /// feed via <c>&lt;packageSourceMapping&gt;</c>.
+    /// </summary>
+    private static void AssertNuGetConfigHasChannelShape(string nugetConfigPath, string channelName)
+    {
+        var channelSource = SourceForChannel(channelName);
+        var root = XDocument.Load(nugetConfigPath).Root ?? throw new InvalidOperationException("Empty NuGet.config.");
+
+        var packageSources = root.Element("packageSources");
+        Assert.NotNull(packageSources);
+        Assert.NotNull(packageSources!.Element("clear"));
+        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == channelSource);
+
+        var packageSourceMapping = root.Element("packageSourceMapping");
+        Assert.NotNull(packageSourceMapping);
+        var aspirePatternSource = packageSourceMapping!.Elements("packageSource")
+            .FirstOrDefault(ps => ps.Elements("package").Any(p => (string?)p.Attribute("pattern") == "Aspire*"));
+        Assert.NotNull(aspirePatternSource);
+        Assert.Equal(channelSource, (string?)aspirePatternSource!.Attribute("key"));
+    }
+
+    private sealed class TestScaffoldingService : IScaffoldingService
+    {
+        public Func<ScaffoldContext, CancellationToken, Task<bool>>? ScaffoldAsyncCallback { get; set; }
+
+        public Task<bool> ScaffoldAsync(ScaffoldContext context, CancellationToken cancellationToken)
+        {
+            if (ScaffoldAsyncCallback is not null)
+            {
+                return ScaffoldAsyncCallback(context, cancellationToken);
+            }
+
+            var appHostFileName = context.Language.AppHostFileName ?? "apphost";
+            File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, appHostFileName), string.Empty);
+
+            var config = new JsonObject
+            {
+                ["appHost"] = new JsonObject
+                {
+                    ["path"] = appHostFileName,
+                    ["language"] = context.Language.LanguageId.Value
+                }
+            };
+            File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, AspireConfigFile.FileName), config.ToJsonString());
+
+            return Task.FromResult(true);
+        }
     }
 }

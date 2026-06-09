@@ -8,16 +8,6 @@ namespace Aspire.Cli.Utils.Markdown;
 internal partial class MarkdownToSpectreConverter
 {
     /// <summary>
-    /// Converts markdown links to plain text.
-    /// </summary>
-    /// <param name="markdown">The markdown text to convert.</param>
-    /// <returns>The text with markdown links converted to the plain text format <c>text (url)</c>.</returns>
-    public static string ConvertLinksToPlainText(string markdown)
-    {
-        return LinkRegex().Replace(markdown, "$1 ($2)");
-    }
-
-    /// <summary>
     /// Converts markdown to a lossy plain-text representation suitable for redirected or non-interactive output.
     /// </summary>
     /// <param name="markdown">The markdown text to convert.</param>

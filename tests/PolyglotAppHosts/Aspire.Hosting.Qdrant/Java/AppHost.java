@@ -2,7 +2,7 @@ import aspire.*;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
-        var customApiKey = builder.addParameter("qdrant-key", true);
+        var customApiKey = builder.addParameter("qdrant-key", new AddParameterOptions().secret(true));
         builder.addQdrant("qdrant-custom", new AddQdrantOptions().apiKey(customApiKey).grpcPort(16334.0).httpPort(16333.0));
         var qdrant = builder.addQdrant("qdrant");
         qdrant.withDataVolume(new WithDataVolumeOptions().name("qdrant-data")).withDataBindMount(".", true);

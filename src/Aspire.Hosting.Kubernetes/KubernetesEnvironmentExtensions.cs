@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Extensions;
-using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Hosting;
@@ -16,10 +19,56 @@ public static class KubernetesEnvironmentExtensions
 {
     internal static IDistributedApplicationBuilder AddKubernetesInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
-        builder.Services.TryAddEventingSubscriber<KubernetesInfrastructure>();
         builder.Services.TryAddSingleton<IHelmRunner, DefaultHelmRunner>();
 
+        // Register the pipeline step idempotently. AddKubernetesInfrastructureCore can be
+        // called more than once (e.g. when AddKubernetesEnvironment is called for multiple
+        // environments). The marker singleton ensures we only add the step the first time.
+        //
+        // The per-environment work (creating Kubernetes service resources and DeploymentTargetAnnotations)
+        // is registered as a separate per-environment pipeline step on KubernetesEnvironmentResource.
+        // This global step only validates that no resource has a PublishAsKubernetesService annotation
+        // when there are no KubernetesEnvironmentResource instances or Kubernetes-backed
+        // compute environments in the model.
+        if (builder.Services.All(d => d.ServiceType != typeof(KubernetesPipelineStepMarker)))
+        {
+            builder.Services.AddSingleton<KubernetesPipelineStepMarker>();
+
+            builder.Pipeline.AddStep(
+                name: KubernetesPipelineStepMarker.StepName,
+                action: ctx =>
+                {
+                    if (!ctx.ExecutionContext.IsPublishMode)
+                    {
+                        return Task.CompletedTask;
+                    }
+
+                    var hasKubernetesEnvironment = ctx.Model.Resources.OfType<KubernetesEnvironmentResource>().Any() ||
+                        ctx.Model.Resources.OfType<IComputeEnvironmentResource>()
+                            .Any(r => r.HasAnnotationOfType<KubernetesEnvironmentAnnotation>());
+
+                    if (!hasKubernetesEnvironment)
+                    {
+                        foreach (var r in ctx.Model.GetComputeResources())
+                        {
+                            if (r.HasAnnotationOfType<KubernetesServiceCustomizationAnnotation>())
+                            {
+                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as a Kubernetes service, but there are no '{nameof(KubernetesEnvironmentResource)}' resources or Kubernetes-backed compute environments. Ensure you have added one by calling '{nameof(AddKubernetesEnvironment)}'.");
+                            }
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                },
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
+        }
+
         return builder;
+    }
+
+    private sealed class KubernetesPipelineStepMarker
+    {
+        public const string StepName = "validate-kubernetes";
     }
 
     /// <summary>
@@ -28,7 +77,8 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the Kubernetes environment resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesEnvironmentResource}"/>.</returns>
-    [AspireExport(Description = "Adds a Kubernetes publishing environment")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<KubernetesEnvironmentResource> AddKubernetesEnvironment(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -66,6 +116,7 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="configure">An optional callback to configure Helm chart settings such as namespace, release name, and chart version.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Helm is the default deployment engine. Call this method to customize Helm-specific settings.
     /// </remarks>
@@ -81,7 +132,7 @@ public static class KubernetesEnvironmentExtensions
     ///     });
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures Helm chart deployment settings", RunSyncOnBackgroundThread = true)]
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithHelm(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         Action<HelmChartOptions>? configure = null)
@@ -106,7 +157,8 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="KubernetesEnvironmentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures properties of a Kubernetes environment", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithProperties(this IResourceBuilder<KubernetesEnvironmentResource> builder, Action<KubernetesEnvironmentResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -123,12 +175,13 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="enabled">Whether to enable the dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// When enabled, an Aspire Dashboard container is deployed alongside the application resources
     /// in the Kubernetes cluster. All resources with OTLP telemetry support are automatically
     /// configured to send telemetry data to the dashboard.
     /// </remarks>
-    [AspireExport(Description = "Enables or disables the Aspire dashboard for the Kubernetes environment")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithDashboard(this IResourceBuilder<KubernetesEnvironmentResource> builder, bool enabled = true)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -144,11 +197,12 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the dashboard resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Use this overload to customize the dashboard container, for example to set a specific host port
     /// or enable forwarded headers for ingress access.
     /// </remarks>
-    [AspireExport("configureDashboard", MethodName = "configureDashboard", Description = "Configures the Aspire dashboard resource for the Kubernetes environment", RunSyncOnBackgroundThread = true)]
+    [AspireExport("configureDashboard", MethodName = "configureDashboard", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithDashboard(this IResourceBuilder<KubernetesEnvironmentResource> builder, Action<IResourceBuilder<KubernetesAspireDashboardResource>> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -167,6 +221,7 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="name">The name of the node pool. This value is used as the <c>nodeSelector</c> value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesNodePoolResource}"/> for the new node pool.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// For vanilla Kubernetes, this creates a named reference to an existing node pool.
     /// For managed Kubernetes services (e.g., AKS), the cloud-specific <c>AddNodePool</c> overload
@@ -183,7 +238,7 @@ public static class KubernetesEnvironmentExtensions
     ///     .WithNodePool(gpuPool);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a named node pool to a Kubernetes environment")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesNodePoolResource> AddNodePool(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         [ResourceName] string name)
@@ -211,6 +266,7 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="nodePool">The node pool to schedule the workload on.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// var k8s = builder.AddKubernetesEnvironment("k8s");
@@ -221,7 +277,7 @@ public static class KubernetesEnvironmentExtensions
     ///     .WithNodePool(gpuPool);
     /// </code>
     /// </example>
-    [AspireExport("withKubernetesNodePool", Description = "Schedules a workload on a specific Kubernetes node pool")]
+    [AspireExport("withKubernetesNodePool", MethodName = "withNodePool")]
     public static IResourceBuilder<T> WithNodePool<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<KubernetesNodePoolResource> nodePool)

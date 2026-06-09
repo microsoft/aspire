@@ -32,6 +32,11 @@
         <target state="translated">AppHost</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostConnectionLostWaitingForExit">
+        <source>The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</source>
+        <target state="new">The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
         <source>AppHost process exited with code {0}.</source>
         <target state="needs-review-translation">AppHost 进程已退出，代码为 {0}。</target>
@@ -68,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardFailedToStart">
-        <source>Aspire Dashboard failed to start.</source>
-        <target state="translated">Aspire 仪表板启动失败。</target>
+        <source>Aspire Dashboard failed to start or is disabled.</source>
+        <target state="needs-review-translation">Aspire 仪表板启动失败。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
@@ -106,6 +111,11 @@
         <source>The health of the resource, eg Healthy</source>
         <target state="translated">资源的运行状况，例如“正常”</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InvalidAppHostStartupTimeoutEnvironmentVariable">
+        <source>The {0} environment variable must be a positive number of seconds.</source>
+        <target state="new">The {0} environment variable must be a positive number of seconds.</target>
+        <note>Do not localize the {0} placeholder. It is an environment variable name.</note>
       </trans-unit>
       <trans-unit id="IsCompatibleAppHostIsNull">
         <source>IsCompatibleAppHost is null</source>
@@ -153,13 +163,18 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file</source>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="needs-review-translation">Aspire AppHost 项目文件的路径。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeRun">
         <source>The project could not be run. See logs at {0}</source>
         <target state="translated">无法运行该项目。请参阅 {0} 处的日志</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RecentAppHostStartupOutput">
+        <source>Recent AppHost startup output</source>
+        <target state="new">Recent AppHost startup output</target>
         <note />
       </trans-unit>
       <trans-unit id="Resource">
@@ -193,8 +208,13 @@
         <note />
       </trans-unit>
       <trans-unit id="StartingDebugSessionInExtension">
-        <source>Detected aspire run inside the Aspire extension, starting a debug session in VS Code...</source>
-        <target state="translated">检测到 Aspire 在 Aspire 扩展内运行，正在 VS Code 中启动调试会话...</target>
+        <source>Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</source>
+        <target state="new">Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartingRunSessionInExtension">
+        <source>Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</source>
+        <target state="new">Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</target>
         <note />
       </trans-unit>
       <trans-unit id="State">
@@ -203,9 +223,9 @@
         <note>The state of the resource, eg Running</note>
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
-        <source>Timeout waiting for AppHost to start.</source>
-        <target state="needs-review-translation">等待 AppHost 启动超时。</target>
-        <note />
+        <source>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</source>
+        <target state="new">Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</target>
+        <note>Do not localize the {1} placeholder. It is an environment variable name.</note>
       </trans-unit>
       <trans-unit id="Type">
         <source>Type</source>

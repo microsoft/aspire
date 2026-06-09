@@ -67,6 +67,19 @@ public class DockerfileBuildAnnotation(string contextPath, string dockerfilePath
     public bool HasEntrypoint { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the default <c>.dockerignore</c> content to emit alongside the published
+    /// Dockerfile using BuildKit's per-Dockerfile ignore convention
+    /// (<c>&lt;dockerfile-name&gt;.dockerignore</c> next to the Dockerfile).
+    /// </summary>
+    /// <remarks>
+    /// When the build context root already contains a <c>.dockerignore</c> authored by the user,
+    /// generated per-Dockerfile files are removed so the user's file is honored. User-authored
+    /// per-Dockerfile ignore files are preserved because BuildKit gives them precedence over the
+    /// context-root file. See https://docs.docker.com/build/concepts/context/#filename-and-location.
+    /// </remarks>
+    public string? BuildContextIgnoreContent { get; set; }
+
+    /// <summary>
     /// Materializes the Dockerfile from the factory if it hasn't been materialized yet.
     /// This method is thread-safe and ensures the Dockerfile is only written once.
     /// </summary>
@@ -103,5 +116,89 @@ public class DockerfileBuildAnnotation(string contextPath, string dockerfilePath
         {
             _materializationLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Emits all generated Dockerfile artifacts for this annotation.
+    /// </summary>
+    /// <param name="context">The context containing services and resource information.</param>
+    /// <param name="dockerfilePath">
+    /// The optional Dockerfile path to emit to. When specified, the materialized Dockerfile is copied
+    /// to this path and any generated sibling files are emitted next to it. When omitted, artifacts
+    /// are emitted next to <see cref="DockerfilePath"/>.
+    /// </param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <remarks>
+    /// This method materializes a Dockerfile from <see cref="DockerfileFactory"/> when present, then
+    /// emits generated companion files such as BuildKit's per-Dockerfile <c>.dockerignore</c> sibling.
+    /// Use this instead of calling <see cref="MaterializeDockerfileAsync"/> directly when the caller
+    /// intends to pass the resulting Dockerfile path to a Docker/BuildKit-compatible builder.
+    /// </remarks>
+    public async Task EmitDockerfileArtifactsAsync(DockerfileFactoryContext context, string? dockerfilePath = null)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var cancellationToken = context.CancellationToken;
+
+        await MaterializeDockerfileAsync(context, cancellationToken).ConfigureAwait(false);
+
+        if (dockerfilePath is not null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(dockerfilePath);
+
+            var targetDirectory = Path.GetDirectoryName(Path.GetFullPath(dockerfilePath));
+            if (targetDirectory is not null)
+            {
+                Directory.CreateDirectory(targetDirectory);
+            }
+
+            if (!PathEquals(DockerfilePath, dockerfilePath))
+            {
+                File.Copy(DockerfilePath, dockerfilePath, overwrite: true);
+            }
+        }
+
+        await EmitBuildContextIgnoreAsync(dockerfilePath ?? DockerfilePath, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EmitBuildContextIgnoreAsync(string dockerfilePath, CancellationToken cancellationToken)
+    {
+        if (BuildContextIgnoreContent is not { } content)
+        {
+            return;
+        }
+
+        var perDockerfileIgnore = $"{dockerfilePath}.dockerignore";
+        var contextRootIgnore = Path.Combine(ContextPath, ".dockerignore");
+        if (File.Exists(contextRootIgnore))
+        {
+            if (File.Exists(perDockerfileIgnore) &&
+                await IsGeneratedBuildContextIgnoreAsync(perDockerfileIgnore, content, cancellationToken).ConfigureAwait(false))
+            {
+                // BuildKit gives per-Dockerfile ignore files precedence over the context-root
+                // .dockerignore, so only remove siblings that match content Aspire generated.
+                File.Delete(perDockerfileIgnore);
+            }
+
+            return;
+        }
+
+        await File.WriteAllTextAsync(perDockerfileIgnore, content, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool PathEquals(string path, string otherPath)
+    {
+        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        return string.Equals(Path.GetFullPath(path), Path.GetFullPath(otherPath), comparison);
+    }
+
+    private static async Task<bool> IsGeneratedBuildContextIgnoreAsync(string path, string content, CancellationToken cancellationToken)
+    {
+        var existingContent = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+
+        return string.Equals(existingContent, content, StringComparison.Ordinal);
     }
 }

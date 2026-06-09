@@ -16,7 +16,8 @@ public static class AzureEnvironmentResourceExtensions
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{AzureEnvironmentResource}"/>.</returns>
-    [AspireExport(Description = "Adds the shared Azure environment resource to the application model")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureEnvironmentResource> AddAzureEnvironment(this IDistributedApplicationBuilder builder)
     {
@@ -56,11 +57,12 @@ public static class AzureEnvironmentResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{TResource}"/>.</param>
     /// <param name="location">The Azure location.</param>
     /// <returns>The <see cref="IResourceBuilder{AzureEnvironmentResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method is used to set the location of the Azure environment resource.
     /// The location is used to determine where the resources will be deployed.
     /// </remarks>
-    [AspireExport(Description = "Sets the Azure location for the shared Azure environment resource")]
+    [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureEnvironmentResource> WithLocation(
         this IResourceBuilder<AzureEnvironmentResource> builder,
@@ -80,11 +82,12 @@ public static class AzureEnvironmentResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{TResource}"/>.</param>
     /// <param name="resourceGroup">The Azure resource group name.</param>
     /// <returns>The <see cref="IResourceBuilder{AzureEnvironmentResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method is used to set the resource group name of the Azure environment resource.
     /// The resource group name is used to determine where the resources will be deployed.
     /// </remarks>
-    [AspireExport(Description = "Sets the Azure resource group for the shared Azure environment resource")]
+    [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureEnvironmentResource> WithResourceGroup(
         this IResourceBuilder<AzureEnvironmentResource> builder,

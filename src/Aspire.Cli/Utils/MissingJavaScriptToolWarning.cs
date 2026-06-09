@@ -41,7 +41,7 @@ internal static class MissingJavaScriptToolWarning
     {
         if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
         {
-            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory);
+            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, logger: null);
             return (TypeScriptAppHostToolchainResolver.GetInstallCommand(toolchain), TypeScriptAppHostToolchainResolver.GetDisplayName(toolchain));
         }
 

@@ -72,7 +72,7 @@
        a reference to Aspire.Dashboard.Sdk and Aspire.Hosting.Orchestration for the build-time platform using
        the same version. This is done here dynamically to avoid having to pull in DCP and Dashboard packages
        for all of the platforms. This mechanism can be disabled by setting `SkipAddAspireDefaultReferences` to `true` -->
-  <Target Name="AddReferenceToDashboardAndDCP" BeforeTargets="Restore;CollectPackageReferences" AfterTargets="AddImplicitAspireAppHostPackage" Condition="'$(SkipAddAspireDefaultReferences)' != 'true'">
+  <Target Name="AddReferenceToDashboardAndDCP" BeforeTargets="Restore;CollectPackageReferences" AfterTargets="AddImplicitAspireAppHostPackage" Condition="'$(SkipAddAspireDefaultReferences)' != 'true' and '$(AspireUseCliBundle)' != 'true'">
 
     <!-- First, we assume project is not using Central Package Management, and we try to extract the version
          from PackageReference Items. -->
@@ -124,15 +124,45 @@
       <_DashboardAndDCPSupportedTargetingRIDs Include="osx-arm64" />
     </ItemGroup>
 
+    <PropertyGroup>
+      <_AspireUseSdkPickBestRid Condition="'$(_AspireUseSdkPickBestRid)' == '' and '$(NETCoreSdkVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(NETCoreSdkVersion)', '10.0.100'))">true</_AspireUseSdkPickBestRid>
+      <!-- AddReferenceToDashboardAndDCP can run more than once in a build, so reset transient
+           outputs before deciding whether the out-of-proc fallback is needed. -->
+      <_AspireRunRidToolFallback>false</_AspireRunRidToolFallback>
+      <_DashboardAndDcpRID />
+    </PropertyGroup>
+    <ItemGroup>
+      <_AspireRidToolOutput Remove="@(_AspireRidToolOutput)" />
+    </ItemGroup>
+
+    <!-- .NET 10 SDKs provide the RID-selection task in-process, which is much faster than spawning
+         the out-of-proc Aspire.RuntimeIdentifier.Tool. If the in-proc task fails for any reason
+         (for example, a missing runtime graph file or an unrecognized target RID), we downgrade
+         the failure to a warning and fall through to the legacy tool so the build can still
+         resolve a RID. -->
+    <Microsoft.NET.Build.Tasks.PickBestRid Condition="'$(_AspireUseSdkPickBestRid)' == 'true'"
+                                           RuntimeGraphPath="$(BundledRuntimeIdentifierGraphFile)"
+                                           TargetRid="$(NETCoreSdkRuntimeIdentifier)"
+                                           SupportedRids="@(_DashboardAndDCPSupportedTargetingRIDs)"
+                                           ContinueOnError="WarnAndContinue">
+      <Output TaskParameter="MatchingRid" PropertyName="_DashboardAndDcpRID" />
+    </Microsoft.NET.Build.Tasks.PickBestRid>
+
+    <!-- Run the out-of-proc Aspire.RuntimeIdentifier.Tool fallback when the in-proc task is unavailable
+         (older SDKs) or when it failed to produce a RID. -->
+    <PropertyGroup>
+      <_AspireRunRidToolFallback Condition="'$(_DashboardAndDcpRID)' == ''">true</_AspireRunRidToolFallback>
+    </PropertyGroup>
+
     <!-- If running in .NET Core, DOTNET_HOST_PATH is set to point to the dotnet executable being used
     for the build. -->
-    <PropertyGroup>
+    <PropertyGroup Condition="'$(_AspireRunRidToolFallback)' == 'true'">
       <_DotNetHostPath>$(DOTNET_HOST_PATH)</_DotNetHostPath>
     </PropertyGroup>
 
     <!-- If running on .NET Framework MSBuild, then DOTNET_HOST_PATH won't be set, so we need to construct
     the path using well-known properties. -->
-    <PropertyGroup Condition="'$(_DotNetHostPath)' == ''">
+    <PropertyGroup Condition="'$(_AspireRunRidToolFallback)' == 'true' and '$(_DotNetHostPath)' == ''">
       <_DotNetHostDirectory>$(NetCoreRoot)</_DotNetHostDirectory>
       <_DotNetHostFileName>dotnet</_DotNetHostFileName>
       <_DotNetHostFileName Condition="'$(OS)' == 'Windows_NT'">dotnet.exe</_DotNetHostFileName>
@@ -141,7 +171,8 @@
     </PropertyGroup>
 
     <!-- Call Aspire.RuntimeIdentifier.Tool to get the RIDs for Dashboard and DCP packages -->
-    <Exec Command="&quot;$(_DotNetHostPath)&quot; exec &quot;$(AspireRidToolExecutable)&quot; --runtimeGraphPath &quot;$(BundledRuntimeIdentifierGraphFile)&quot; --supportedRids &quot;@(_DashboardAndDCPSupportedTargetingRIDs -> '%(Identity)', ',')&quot; --netcoreSdkRuntimeIdentifier &quot;$(NETCoreSdkRuntimeIdentifier)&quot;"
+    <Exec Condition="'$(_AspireRunRidToolFallback)' == 'true'"
+          Command="&quot;$(_DotNetHostPath)&quot; exec &quot;$(AspireRidToolExecutable)&quot; --runtimeGraphPath &quot;$(BundledRuntimeIdentifierGraphFile)&quot; --supportedRids &quot;@(_DashboardAndDCPSupportedTargetingRIDs -> '%(Identity)', ',')&quot; --netcoreSdkRuntimeIdentifier &quot;$(NETCoreSdkRuntimeIdentifier)&quot;"
           ConsoleToMSBuild="true"
           StandardOutputImportance="Low"
           IgnoreExitCode="true">
@@ -149,12 +180,13 @@
       <Output TaskParameter="ConsoleOutput" ItemName="_AspireRidToolOutput" />
     </Exec>
 
-    <Error Condition="$(_AspireRidToolExitCode) != 0" Text="Failed to run Aspire.RuntimeIdentifier.Tool. Exit code: $(_AspireRidToolExitCode). Output: @(_AspireRidToolOutput)" />
+    <Error Condition="'$(_AspireRunRidToolFallback)' == 'true' and $(_AspireRidToolExitCode) != 0" Text="Failed to run Aspire.RuntimeIdentifier.Tool. Exit code: $(_AspireRidToolExitCode). Output: @(_AspireRidToolOutput)" />
 
-    <PropertyGroup>
+    <PropertyGroup Condition="'$(_AspireRunRidToolFallback)' == 'true'">
       <_DashboardAndDcpRID>@(_AspireRidToolOutput)</_DashboardAndDcpRID>
     </PropertyGroup>
 
+    <Error Condition="'$(_DashboardAndDcpRID)' == ''" Text="Failed to resolve a RID for Aspire Dashboard and DCP package references. NETCoreSdkRuntimeIdentifier='$(NETCoreSdkRuntimeIdentifier)', NETCoreSdkVersion='$(NETCoreSdkVersion)', UsedSdkPickBestRidTask='$(_AspireUseSdkPickBestRid)', UsedRidToolFallback='$(_AspireRunRidToolFallback)', SupportedRids='@(_DashboardAndDCPSupportedTargetingRIDs)'." />
 
     <!-- Now that we have the version, we add the package references -->
     <ItemGroup>

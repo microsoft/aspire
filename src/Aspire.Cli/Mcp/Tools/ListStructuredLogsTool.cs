@@ -5,8 +5,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Aspire.Cli.Commands;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Otlp.Serialization;
 using Aspire.Dashboard.Utils;
+using Aspire.Otlp.Serialization;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -33,6 +33,10 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
                 "resourceName": {
                   "type": "string",
                   "description": "The resource name. This limits logs returned to the specified resource. If no resource name is specified then structured logs for all resources are returned."
+                },
+                "search": {
+                  "type": "string",
+                  "description": "Full-text search to filter logs. Searches across log text, attribute values, names, source, IDs, and other fields."
                 }
               }
             }
@@ -50,6 +54,13 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
             resourceNameElement.ValueKind == JsonValueKind.String)
         {
             resourceName = resourceNameElement.GetString();
+        }
+
+        string? search = null;
+        if (arguments?.TryGetValue("search", out var searchElement) == true &&
+            searchElement.ValueKind == JsonValueKind.String)
+        {
+            search = searchElement.GetString();
         }
 
         try
@@ -70,7 +81,7 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
             }
 
             // Fetch all logs from the API. Limiting of returned telemetry to the MCP caller happens later.
-            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
+            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit, search: search);
 
             logger.LogDebug("Fetching structured logs from {Url}", url);
 

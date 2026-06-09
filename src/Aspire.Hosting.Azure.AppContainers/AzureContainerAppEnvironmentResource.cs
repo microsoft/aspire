@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
@@ -50,24 +51,29 @@ public class AzureContainerAppEnvironmentResource :
                 Name = $"prepare-azure-container-apps-{name}",
                 Description = $"Prepares Azure Container Apps deployment targets for {name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
-                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName],
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
 
             steps.Add(prepareStep);
 
-            // Add print-dashboard-url step
-            var printDashboardUrlStep = new PipelineStep
+            if (EnableDashboard)
             {
-                Name = $"print-dashboard-url-{name}",
-                Description = $"Prints the deployment summary and dashboard URL for {name}.",
-                Action = ctx => PrintDashboardUrlAsync(ctx),
-                Tags = ["print-summary"],
-                DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
-            };
+                // The dashboard URL is only meaningful when the dashboard is provisioned.
+                // Avoid registering the summary step when WithDashboard(false) is used, otherwise
+                // we would emit a link to a dashboard that does not exist in the environment.
+                var printDashboardUrlStep = new PipelineStep
+                {
+                    Name = $"print-dashboard-url-{name}",
+                    Description = $"Prints the deployment summary and dashboard URL for {name}.",
+                    Action = ctx => PrintDashboardUrlAsync(ctx),
+                    Tags = ["print-summary"],
+                    DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
+                    RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                };
 
-            steps.Add(printDashboardUrlStep);
+                steps.Add(printDashboardUrlStep);
+            }
 
             // Expand deployment target steps for all compute resources
             // This ensures the push/provision steps from deployment targets are included in the pipeline
@@ -181,6 +187,7 @@ public class AzureContainerAppEnvironmentResource :
             DefaultContainerRegistry is not null)
         {
             appModel.Resources.Remove(DefaultContainerRegistry);
+            DefaultContainerRegistry = null;
         }
 
         var logger = services.GetRequiredService<ILogger<AzureContainerAppEnvironmentResource>>();
@@ -333,6 +340,35 @@ public class AzureContainerAppEnvironmentResource :
         builder.Append($".{ContainerAppDomain}");
 
         return builder.Build();
+    }
+
+    /// <inheritdoc/>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
+
+        var endpointReference = endpointReferenceExpression.Endpoint;
+        var property = endpointReferenceExpression.Property;
+        var endpoint = endpointReference.EndpointAnnotation;
+        var scheme = PreserveHttpEndpoints ? endpoint.UriScheme : "https";
+        var port = string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? 80 : 443;
+        var tlsEnabled = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || endpoint.TlsEnabled;
+        var host = GetHostAddressExpression(endpointReference);
+
+        return property switch
+        {
+            EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
+            EndpointProperty.Host or EndpointProperty.IPV4Host => host,
+            EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),
+            EndpointProperty.TargetPort => endpoint.TargetPort is int targetPort
+                ? ReferenceExpression.Create($"{targetPort.ToString(CultureInfo.InvariantCulture)}")
+                : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
+            EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
+            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host}:{port.ToString(CultureInfo.InvariantCulture)}"),
+            EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(tlsEnabled ? bool.TrueString : bool.FalseString)}"),
+            _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
+        };
     }
 
     internal BicepOutputReference GetVolumeStorage(IResource resource, ContainerMountAnnotation volume, int volumeIndex)

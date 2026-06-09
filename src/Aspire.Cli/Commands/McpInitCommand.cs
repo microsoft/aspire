@@ -3,15 +3,12 @@
 
 using System.CommandLine;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Playwright;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
@@ -34,39 +31,31 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
     public bool PrefetchesCliPackageMetadata => false;
 
     public McpInitCommand(
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IAgentEnvironmentDetector agentEnvironmentDetector,
+        IAspireSkillsInstaller aspireSkillsInstaller,
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
-        AspireCliTelemetry telemetry)
-        : base("init", McpCommandStrings.InitCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("init", McpCommandStrings.InitCommand_Description, services)
     {
         // Create the AgentInitCommand to delegate execution to
         _agentInitCommand = new AgentInitCommand(
-            interactionService,
-            features,
-            updateNotifier,
-            executionContext,
             agentEnvironmentDetector,
+            aspireSkillsInstaller,
             playwrightCliInstaller,
             gitRepository,
             languageDiscovery,
-            telemetry);
+            services);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Display deprecation warning
         InteractionService.DisplayMarkupLine($"[yellow]⚠ {McpCommandStrings.DeprecatedCommandWarning}[/]");
         InteractionService.DisplayEmptyLine();
-        
+
         // Delegate to the new AgentInitCommand
-        return _agentInitCommand.ExecuteCommandAsync(parseResult, cancellationToken);
+        return await _agentInitCommand.ExecuteCommandAsync(parseResult, cancellationToken);
     }
 }

@@ -31,10 +31,9 @@ public sealed class KubernetesDeployTypeScriptTests(ITestOutputHelper output)
         output.WriteLine($"Namespace: {k8sNamespace}");
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -72,13 +71,13 @@ public sealed class KubernetesDeployTypeScriptTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter);
 
             // =====================================================================
-            // Phase 3: Modify apphost.ts to add Kubernetes environment
+            // Phase 3: Modify apphost.mts to add Kubernetes environment
             // =====================================================================
 
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName);
-            var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
+            var appHostFilePath = Path.Combine(projectDir, "apphost.mts");
 
-            output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
+            output.WriteLine($"Looking for apphost.mts at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
 
@@ -96,16 +95,18 @@ const chartVersion = await builder.addParameter("chartversion");
 
 // Add Kubernetes environment with Helm deployment
 const k8sEnv = await builder.addKubernetesEnvironment("env");
-await k8sEnv.withHelm(async (helm) => {
-    await helm.withNamespace(k8sNamespace);
-    await helm.withChartVersion(chartVersion);
+await k8sEnv.withHelm({
+    configure: async (helm) => {
+        await helm.withNamespace(k8sNamespace);
+        await helm.withChartVersion(chartVersion);
+    },
 });
 
 await builder.build().run();
 """);
 
             File.WriteAllText(appHostFilePath, content);
-            output.WriteLine("Modified apphost.ts with Kubernetes environment configuration");
+            output.WriteLine("Modified apphost.mts with Kubernetes environment configuration");
 
             // =====================================================================
             // Phase 4: Run aspire deploy interactively
@@ -134,15 +135,10 @@ await builder.build().run();
             // =====================================================================
 
             await auto.CleanupKubernetesDeploymentAsync(counter, clusterName);
-
-            await auto.TypeAsync("exit");
-            await auto.EnterAsync();
         }
         finally
         {
             await KubernetesDeployTestHelpers.CleanupKindClusterOutOfBandAsync(clusterName, output);
         }
-
-        await pendingRun;
     }
 }

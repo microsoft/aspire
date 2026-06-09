@@ -33,6 +33,14 @@
                           Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Neutral"/>
             </FluentButton>
+            @if (Options.CurrentValue.UI.DisableAgentHelp != true)
+            {
+                <FluentButton Class="header-button"
+                              Appearance="Appearance.Stealth" OnClick="@LaunchAIAgentsAsync"
+                              Title="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]">
+                    <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Neutral"/>
+                </FluentButton>
+            }
             @if (AIContextProvider.Enabled)
             {
                 <FluentButton Class="@("header-button" + ((AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog) ? " header-button-selected" : ""))"
@@ -79,6 +87,8 @@
             IsAIEnabled="@AIContextProvider.Enabled"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
+            LaunchAIAgentsAsync="@LaunchAIAgentsAsync"
+            IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
             LaunchAIAssistantAsync="@LaunchAssistantAsync"
             LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />

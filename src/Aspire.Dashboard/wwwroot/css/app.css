@@ -363,13 +363,15 @@ fluent-dialog fluent-toolbar {
     background-color: var(--dialog-background-color);
 }
 
-/* Changing the dialog's fill color means stealth buttons on the dialog have the wrong background,
-   so change it to match */
+/*
+    Changing the dialog's fill color means stealth buttons on the dialog have the wrong background, so change it to match
+    Set to transparent instead of dialog background color so it looks good when inside a dialog's table header row (Manage Data).
+*/
 fluent-dialog fluent-button[appearance=stealth]:not(:hover)::part(control),
 fluent-dialog fluent-button[appearance=lightweight]:not(:hover)::part(control),
 fluent-dialog fluent-anchor[appearance=stealth]:not(:hover)::part(control),
 fluent-dialog fluent-anchor[appearance=lightweight]:not(:hover)::part(control) {
-    background: var(--dialog-background-color);
+    background: transparent;
 }
 
 /* But changing the stealth button's background in dialogs means the stealth buttons used as headers for grid cells
@@ -927,9 +929,18 @@ fluent-tooltip[anchor="dialog_close"] > div {
     margin-right: var(--inline-icon-margin);
 }
 
-.aspire-menu-container > fluent-menu > fluent-menu-item::part(content) {
+.aspire-menu-container {
+    --aspire-menu-max-width: 368px;
+}
+
+.aspire-menu-container fluent-menu-item::part(content) {
     width: 100%;
+    overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.aspire-menu-container fluent-menu fluent-menu {
+    max-width: var(--aspire-menu-max-width);
 }
 
 .overflow-fluent-menu-item::part(content) {

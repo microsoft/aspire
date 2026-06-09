@@ -103,7 +103,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
 #pragma warning restore ASPIREINTERACTION001
 
         var rb = builder.AddResource(tunnelResource)
-            .WithArgs("host", tunnelId, "--nologo")
+            .WithArgs("host", tunnelResource.ResolvedTunnelId, "--nologo")
             .WithIconName("CloudBidirectional")
             .WithEnvironment("TUNNEL_SERVICE_USER_AGENT", s_aspireUserAgent)
             .WithInitialState(new()
@@ -176,19 +176,20 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
                 async Task DeleteUnmodeledPortsAsync()
                 {
-                    var existingPorts = await devTunnelClient.GetPortListAsync(tunnelResource.TunnelId, logger, ct).ConfigureAwait(false);
-                    var modeledPortNumbers = tunnelResource.Ports.Select(p => p.TargetEndpoint.Port).ToHashSet();
+                    var existingPorts = await devTunnelClient.GetPortListAsync(tunnelResource.ResolvedTunnelId, logger, ct).ConfigureAwait(false);
+                    var modeledPortNumbers = (await Task.WhenAll(tunnelResource.Ports.Select(p => p.GetTunnelPortAsync(ct).AsTask())).ConfigureAwait(false)).ToHashSet();
                     var unmodeledPorts = existingPorts.Ports.Where(p => !modeledPortNumbers.Contains(p.PortNumber)).ToList();
                     if (unmodeledPorts.Count > 0)
                     {
                         logger.LogInformation("Deleting {Count} unmodeled ports from dev tunnel '{TunnelId}': {Ports}", unmodeledPorts.Count, tunnelResource.TunnelId, string.Join(", ", unmodeledPorts.Select(p => p.PortNumber)));
-                        await Task.WhenAll(unmodeledPorts.Select(p => devTunnelClient.DeletePortAsync(tunnelResource.TunnelId, p.PortNumber, logger, ct))).ConfigureAwait(false);
+                        await Task.WhenAll(unmodeledPorts.Select(p => devTunnelClient.DeletePortAsync(tunnelResource.ResolvedTunnelId, p.PortNumber, logger, ct))).ConfigureAwait(false);
                     }
                 }
 
                 async Task StartPortAsync(DevTunnelPortResource portResource)
                 {
                     var portLogger = e.Services.GetRequiredService<ResourceLoggerService>().GetLogger(portResource);
+                    var tunnelPort = await portResource.GetTunnelPortAsync(ct).ConfigureAwait(false);
 
                     // Clear any prior port status
                     portLogger.LogInformation("Tunnel starting");
@@ -201,18 +202,18 @@ public static partial class DevTunnelsResourceBuilderExtensions
                     try
                     {
                         _ = await devTunnelClient.CreatePortAsync(
-                                portResource.DevTunnel.TunnelId,
-                                portResource.TargetEndpoint.Port,
+                                portResource.DevTunnel.ResolvedTunnelId,
+                                tunnelPort,
                                 portResource.Options,
                                 portLogger,
                                 ct)
                             .ConfigureAwait(false);
 
-                        portLogger.LogInformation("Created dev tunnel port '{Port}' on tunnel '{Tunnel}' targeting endpoint '{Endpoint}' on resource '{TargetResource}'", portResource.TargetEndpoint.Port, portResource.DevTunnel.TunnelId, portResource.TargetEndpoint.EndpointName, portResource.TargetEndpoint.Resource.Name);
+                        portLogger.LogInformation("Created dev tunnel port '{Port}' on tunnel '{Tunnel}' targeting endpoint '{Endpoint}' on resource '{TargetResource}'", tunnelPort, portResource.DevTunnel.TunnelId, portResource.TargetEndpoint.EndpointName, portResource.TargetEndpoint.Resource.Name);
                     }
                     catch (Exception ex)
                     {
-                        portLogger.LogError(ex, "Error trying to create dev tunnel port '{Port}' on tunnel '{Tunnel}': {Error}", portResource.TargetEndpoint.Port, portResource.DevTunnel.TunnelId, ex.Message);
+                        portLogger.LogError(ex, "Error trying to create dev tunnel port '{Port}' on tunnel '{Tunnel}': {Error}", tunnelPort, portResource.DevTunnel.TunnelId, ex.Message);
 #pragma warning disable CS0618 // Type or member is obsolete
                         portResource.TunnelEndpointAnnotation.AllocatedEndpointSnapshot.SetException(ex);
 #pragma warning restore CS0618 // Type or member is obsolete
@@ -234,7 +235,10 @@ public static partial class DevTunnelsResourceBuilderExtensions
         return rb;
     }
 
-    [AspireExport("addDevTunnel", Description = "Adds a Dev Tunnel resource to the distributed application model.")]
+    /// <summary>
+    /// Adds a Dev Tunnel resource to the distributed application model.
+    /// </summary>
+    [AspireExport("addDevTunnel")]
     internal static IResourceBuilder<DevTunnelResource> AddDevTunnelForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -256,7 +260,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// <param name="resourceBuilder">The resource builder for the referenced resource.</param>
     /// <param name="allowAnonymous">Whether anonymous access is allowed.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("withReferenceResourceAnonymous", MethodName = "withTunnelReferenceAll", Description = "Configures the dev tunnel to expose all endpoints on the referenced resource.")]
+    [AspireExport("withReferenceResourceAnonymous", MethodName = "withTunnelReferenceAll")]
     public static IResourceBuilder<DevTunnelResource> WithReference<TResource>(
         this IResourceBuilder<DevTunnelResource> tunnelBuilder,
         IResourceBuilder<TResource> resourceBuilder,
@@ -305,7 +309,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// <param name="tunnelBuilder">The resource builder.</param>
     /// <param name="targetEndpoint">The endpoint to expose via the dev tunnel.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("withReferenceEndpoint", MethodName = "withTunnelReference", Description = "Configures the dev tunnel to expose a target endpoint.")]
+    [AspireExport("withReferenceEndpoint", MethodName = "withTunnelReference")]
     public static IResourceBuilder<DevTunnelResource> WithReference(
         this IResourceBuilder<DevTunnelResource> tunnelBuilder,
         EndpointReference targetEndpoint)
@@ -318,7 +322,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// <param name="targetEndpoint">The endpoint to expose via the dev tunnel.</param>
     /// <param name="allowAnonymous">Whether anonymous access is allowed.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport("withReferenceEndpointAnonymous", MethodName = "withTunnelReferenceAnonymous", Description = "Configures the dev tunnel to expose a target endpoint with access control.")]
+    [AspireExport("withReferenceEndpointAnonymous", MethodName = "withTunnelReferenceAnonymous")]
     public static IResourceBuilder<DevTunnelResource> WithReference(
         this IResourceBuilder<DevTunnelResource> tunnelBuilder,
         EndpointReference targetEndpoint,
@@ -357,7 +361,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// </remarks>
     /// <param name="tunnelBuilder">The resource builder.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport(Description = "Configures the dev tunnel to allow anonymous access.")]
+    [AspireExport]
     public static IResourceBuilder<DevTunnelResource> WithAnonymousAccess(this IResourceBuilder<DevTunnelResource> tunnelBuilder)
     {
         tunnelBuilder.Resource.Options.AllowAnonymous = true;
@@ -421,7 +425,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// <param name="tunnelBuilder">The dev tunnel resource builder.</param>
     /// <param name="targetEndpointReference">The target endpoint reference.</param>
     /// <returns>An <see cref="EndpointReference"/> representing the public tunnel endpoint.</returns>
-    [AspireExport("getEndpointByEndpointReference", MethodName = "getTunnelEndpoint", Description = "Gets the public endpoint exposed by the dev tunnel.")]
+    [AspireExport("getEndpointByEndpointReference", MethodName = "getTunnelEndpoint")]
     public static EndpointReference GetEndpoint(this IResourceBuilder<DevTunnelResource> tunnelBuilder, EndpointReference targetEndpointReference)
     {
         ArgumentNullException.ThrowIfNull(tunnelBuilder);
@@ -589,7 +593,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
         var healtCheckKey = $"{portName}-check";
         tunnelBuilder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
             healtCheckKey,
-            services => new DevTunnelPortHealthCheck(tunnel, targetEndpoint.Port),
+            services => new DevTunnelPortHealthCheck(portResource),
             failureStatus: default,
             tags: default,
             timeout: default));

@@ -1,4 +1,4 @@
-﻿// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.mts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -15,10 +15,10 @@ import {
     wrapIfHandle,
     registerHandleWrapper,
     isPromiseLike
-} from './transport.js';
-import type { AspireClientRpc } from './transport.js';
+} from './transport.mjs';
+import type { AspireClientRpc } from './transport.mjs';
 
-import type { HandleReference } from './base.js';
+import type { HandleReference } from './base.mjs';
 
 import {
     ResourceBuilderBase,
@@ -26,9 +26,24 @@ import {
     refExpr,
     AspireDict,
     AspireList
-} from './base.js';
+} from './base.mjs';
 
-import type { Awaitable } from './base.js';
+export {
+    InputType,
+    InteractionInputCollection
+} from './base.mjs';
+
+export type {
+    InteractionInput,
+    InteractionInputOption
+} from './base.mjs';
+
+import type {
+    Awaitable,
+    InteractionInput,
+    InteractionInputCollection,
+    InputType
+} from './base.mjs';
 
 // ============================================================================
 // Handle Type Aliases (Internal - not exported to users)
@@ -37,22 +52,25 @@ import type { Awaitable } from './base.js';
 /** Handle to ITestVaultResource */
 type ITestVaultResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource'>;
 
-/** Handle to TestCallbackContext */
+/** Test callback context for WithCustomCallback. Also used to verify [AspireExport(ExposeProperties = true)] scanning. */
 type TestCallbackContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext'>;
 
-/** Handle to TestCollectionContext */
+/** Test context with collection properties to verify consistent code generation. Verifies both List and Dictionary properties generate proper getter patterns. */
 type TestCollectionContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext'>;
 
 /** Handle to TestDatabaseResource */
 type TestDatabaseResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource'>;
 
-/** Handle to TestEnvironmentContext */
+/** Test environment context used in callbacks. Verifies property-like object pattern (ctx.name.get(), ctx.name.set()). */
 type TestEnvironmentContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext'>;
+
+/** Handle to TestMutableCollectionContext */
+type TestMutableCollectionContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext'>;
 
 /** Handle to TestRedisResource */
 type TestRedisResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource'>;
 
-/** Handle to TestResourceContext */
+/** Test context type with exposed instance methods. Verifies [AspireExport(ExposeMethods=true)] generates async methods. */
 type TestResourceContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext'>;
 
 /** Handle to TestVaultResource */
@@ -77,18 +95,22 @@ type IDistributedApplicationBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hostin
 // Enum Types
 // ============================================================================
 
-/** Enum type for TestPersistenceMode */
+/** Test persistence mode enum. */
 export enum TestPersistenceMode {
     None = "None",
     Volume = "Volume",
     Bind = "Bind",
 }
 
-/** Enum type for TestResourceStatus */
+/** Test enum for type generation verification. */
 export enum TestResourceStatus {
+    /** The resource is pending. */
     Pending = "Pending",
+    /** The resource is running. */
     Running = "Running",
+    /** The resource is stopped. */
     Stopped = "Stopped",
+    /** The resource failed. */
     Failed = "Failed",
 }
 
@@ -96,26 +118,51 @@ export enum TestResourceStatus {
 // DTO Interfaces
 // ============================================================================
 
-/** DTO interface for TestConfigDto */
+/** Test DTO to verify [AspireDto] generates TypeScript interfaces. */
 export interface TestConfigDto {
+    /** The name of the test config. */
     name?: string;
+    /** The port used by the test config. */
     port?: number;
+    /** A value indicating whether the test config is enabled. */
     enabled?: boolean;
-    optionalField?: string;
+    /** An optional test config field. */
+    optionalField?: string | null;
 }
 
-/** DTO interface for TestDeeplyNestedDto */
+/** Test DTO with deeply nested generic types. */
 export interface TestDeeplyNestedDto {
-    nestedData?: AspireDict<string, AspireList<TestConfigDto>>;
-    metadataArray?: AspireDict<string, string>[];
+    /** Deeply nested generic: Dictionary containing List of DTOs. */
+    nestedData?: Record<string, TestConfigDto[]>;
+    /** Array of dictionaries. */
+    metadataArray?: Record<string, string>[];
 }
 
-/** DTO interface for TestNestedDto */
+/** Test DTO with complex nested types. */
 export interface TestNestedDto {
     id?: string;
     config?: TestConfigDto;
-    tags?: AspireList<string>;
-    counts?: AspireDict<string, number>;
+    tags?: string[];
+    counts?: Record<string, number>;
+}
+
+// ============================================================================
+// Exported Values
+// ============================================================================
+
+export namespace TestConfigs {
+    /** The default test configuration. */
+    export const Default = { name: "default", port: 6379, enabled: true, optionalField: "cache" } as TestConfigDto;
+
+    export namespace Profiles {
+        export const Development = { name: "development", port: 5001, enabled: false, optionalField: null } as TestConfigDto;
+
+    }
+
+    export const Secure = { name: "secure", port: 6380, enabled: true, optionalField: null } as TestConfigDto;
+
+    export const UnicodeGreeting = "你好こんにちは";
+
 }
 
 // ============================================================================
@@ -170,16 +217,20 @@ export interface WithPersistenceOptions {
 // TestCallbackContext
 // ============================================================================
 
+/** Test callback context for WithCustomCallback. Also used to verify [AspireExport(ExposeProperties = true)] scanning. */
 export interface TestCallbackContext {
     toJSON(): MarshalledHandle;
+    /** Gets the Name property */
     name: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
+    /** Gets the Value property */
     value: {
         get: () => Promise<number>;
         set: (value: number) => Promise<void>;
     };
+    /** CancellationToken is supported by ATS. */
     cancellationToken: {
         get: () => Promise<CancellationToken>;
         set: (value: AbortSignal | CancellationToken) => Promise<void>;
@@ -190,24 +241,21 @@ export interface TestCallbackContext {
 // TestCallbackContextImpl
 // ============================================================================
 
-/**
- * Type class for TestCallbackContext.
- */
+/** Test callback context for WithCustomCallback. Also used to verify [AspireExport(ExposeProperties = true)] scanning. */
 class TestCallbackContextImpl implements TestCallbackContext {
     constructor(private _handle: TestCallbackContextHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /** Gets the Name property */
     name = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName',
                 { context: this._handle, value }
@@ -215,7 +263,6 @@ class TestCallbackContextImpl implements TestCallbackContext {
         }
     };
 
-    /** Gets the Value property */
     value = {
         get: async (): Promise<number> => {
             return await this._client.invokeCapability<number>(
@@ -231,7 +278,6 @@ class TestCallbackContextImpl implements TestCallbackContext {
         }
     };
 
-    /** Gets the CancellationToken property */
     cancellationToken = {
         get: async (): Promise<CancellationToken> => {
             const result = await this._client.invokeCapability<string | null>(
@@ -254,28 +300,35 @@ class TestCallbackContextImpl implements TestCallbackContext {
 // TestCollectionContext
 // ============================================================================
 
+/** Test context with collection properties to verify consistent code generation. Verifies both List and Dictionary properties generate proper getter patterns. */
 export interface TestCollectionContext {
     toJSON(): MarshalledHandle;
-    readonly items: AspireList<string>;
-    readonly metadata: AspireDict<string, string>;
+    /** List property - should generate AspireList getter like Dictionary properties. */
+    items(): Promise<AspireList<string>>;
+    /** Dictionary property - already works with AspireDict getter. */
+    metadata(): Promise<AspireDict<string, string>>;
+}
+
+export interface TestCollectionContextPromise extends PromiseLike<TestCollectionContext> {
+    /** List property - should generate AspireList getter like Dictionary properties. */
+    items(): Promise<AspireList<string>>;
+    /** Dictionary property - already works with AspireDict getter. */
+    metadata(): Promise<AspireDict<string, string>>;
 }
 
 // ============================================================================
 // TestCollectionContextImpl
 // ============================================================================
 
-/**
- * Type class for TestCollectionContext.
- */
+/** Test context with collection properties to verify consistent code generation. Verifies both List and Dictionary properties generate proper getter patterns. */
 class TestCollectionContextImpl implements TestCollectionContext {
     constructor(private _handle: TestCollectionContextHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /** Gets the Items property */
     private _items?: AspireList<string>;
-    get items(): AspireList<string> {
+    async items(): Promise<AspireList<string>> {
         if (!this._items) {
             this._items = new AspireList<string>(
                 this._handle,
@@ -287,9 +340,8 @@ class TestCollectionContextImpl implements TestCollectionContext {
         return this._items;
     }
 
-    /** Gets the Metadata property */
     private _metadata?: AspireDict<string, string>;
-    get metadata(): AspireDict<string, string> {
+    async metadata(): Promise<AspireDict<string, string>> {
         if (!this._metadata) {
             this._metadata = new AspireDict<string, string>(
                 this._handle,
@@ -303,20 +355,49 @@ class TestCollectionContextImpl implements TestCollectionContext {
 
 }
 
+/**
+ * Thenable wrapper for TestCollectionContext that enables fluent chaining.
+ */
+class TestCollectionContextPromiseImpl implements TestCollectionContextPromise {
+    constructor(private _promise: Promise<TestCollectionContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = TestCollectionContext, TResult2 = never>(
+        onfulfilled?: ((value: TestCollectionContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    items(): Promise<AspireList<string>> {
+        return this._promise.then(obj => obj.items());
+    }
+
+    metadata(): Promise<AspireDict<string, string>> {
+        return this._promise.then(obj => obj.metadata());
+    }
+
+}
+
 // ============================================================================
 // TestEnvironmentContext
 // ============================================================================
 
+/** Test environment context used in callbacks. Verifies property-like object pattern (ctx.name.get(), ctx.name.set()). */
 export interface TestEnvironmentContext {
     toJSON(): MarshalledHandle;
+    /** Gets the Name property */
     name: {
         get: () => Promise<string>;
         set: (value: string) => Promise<void>;
     };
+    /** Gets the Description property */
     description: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
+    /** Gets the Priority property */
     priority: {
         get: () => Promise<number>;
         set: (value: number) => Promise<void>;
@@ -327,16 +408,13 @@ export interface TestEnvironmentContext {
 // TestEnvironmentContextImpl
 // ============================================================================
 
-/**
- * Type class for TestEnvironmentContext.
- */
+/** Test environment context used in callbacks. Verifies property-like object pattern (ctx.name.get(), ctx.name.set()). */
 class TestEnvironmentContextImpl implements TestEnvironmentContext {
     constructor(private _handle: TestEnvironmentContextHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /** Gets the Name property */
     name = {
         get: async (): Promise<string> => {
             return await this._client.invokeCapability<string>(
@@ -352,15 +430,14 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
         }
     };
 
-    /** Gets the Description property */
     description = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription',
                 { context: this._handle, value }
@@ -368,7 +445,6 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
         }
     };
 
-    /** Gets the Priority property */
     priority = {
         get: async (): Promise<number> => {
             return await this._client.invokeCapability<number>(
@@ -387,27 +463,87 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
 }
 
 // ============================================================================
+// TestMutableCollectionContext
+// ============================================================================
+
+export interface TestMutableCollectionContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the Tags property */
+    readonly tags: AspireList<string>;
+    /** Gets the Counts property */
+    readonly counts: AspireDict<string, number>;
+}
+
+// ============================================================================
+// TestMutableCollectionContextImpl
+// ============================================================================
+
+/** Type class for TestMutableCollectionContext. */
+class TestMutableCollectionContextImpl implements TestMutableCollectionContext {
+    constructor(private _handle: TestMutableCollectionContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    private _tags?: AspireList<string>;
+    get tags(): AspireList<string> {
+        if (!this._tags) {
+            this._tags = new AspireList<string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags',
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags'
+            );
+        }
+        return this._tags;
+    }
+
+    private _counts?: AspireDict<string, number>;
+    get counts(): AspireDict<string, number> {
+        if (!this._counts) {
+            this._counts = new AspireDict<string, number>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts',
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts'
+            );
+        }
+        return this._counts;
+    }
+
+}
+
+// ============================================================================
 // TestResourceContext
 // ============================================================================
 
+/** Test context type with exposed instance methods. Verifies [AspireExport(ExposeMethods=true)] generates async methods. */
 export interface TestResourceContext {
     toJSON(): MarshalledHandle;
+    /** Gets the Name property */
     name: {
         get: () => Promise<string>;
         set: (value: string) => Promise<void>;
     };
+    /** Gets the Value property */
     value: {
         get: () => Promise<number>;
         set: (value: number) => Promise<void>;
     };
+    /** Instance method that should be exposed as async method. */
     getValueAsync(): Promise<string>;
+    /** Instance method with parameter. */
     setValueAsync(value: string): TestResourceContextPromise;
+    /** Instance method with return type. */
     validateAsync(): Promise<boolean>;
 }
 
 export interface TestResourceContextPromise extends PromiseLike<TestResourceContext> {
+    /** Instance method that should be exposed as async method. */
     getValueAsync(): Promise<string>;
+    /** Instance method with parameter. */
     setValueAsync(value: string): TestResourceContextPromise;
+    /** Instance method with return type. */
     validateAsync(): Promise<boolean>;
 }
 
@@ -415,16 +551,13 @@ export interface TestResourceContextPromise extends PromiseLike<TestResourceCont
 // TestResourceContextImpl
 // ============================================================================
 
-/**
- * Type class for TestResourceContext.
- */
+/** Test context type with exposed instance methods. Verifies [AspireExport(ExposeMethods=true)] generates async methods. */
 class TestResourceContextImpl implements TestResourceContext {
     constructor(private _handle: TestResourceContextHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /** Gets the Name property */
     name = {
         get: async (): Promise<string> => {
             return await this._client.invokeCapability<string>(
@@ -440,7 +573,6 @@ class TestResourceContextImpl implements TestResourceContext {
         }
     };
 
-    /** Gets the Value property */
     value = {
         get: async (): Promise<number> => {
             return await this._client.invokeCapability<number>(
@@ -456,7 +588,7 @@ class TestResourceContextImpl implements TestResourceContext {
         }
     };
 
-    /** Invokes the GetValueAsync method */
+    /** Instance method that should be exposed as async method. */
     async getValueAsync(): Promise<string> {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
         return await this._client.invokeCapability<string>(
@@ -465,7 +597,6 @@ class TestResourceContextImpl implements TestResourceContext {
         );
     }
 
-    /** Invokes the SetValueAsync method */
     /** @internal */
     async _setValueAsyncInternal(value: string): Promise<TestResourceContext> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, value };
@@ -476,11 +607,12 @@ class TestResourceContextImpl implements TestResourceContext {
         return this;
     }
 
+    /** Instance method with parameter. */
     setValueAsync(value: string): TestResourceContextPromise {
         return new TestResourceContextPromiseImpl(this._setValueAsyncInternal(value), this._client);
     }
 
-    /** Invokes the ValidateAsync method */
+    /** Instance method with return type. */
     async validateAsync(): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
         return await this._client.invokeCapability<boolean>(
@@ -506,17 +638,14 @@ class TestResourceContextPromiseImpl implements TestResourceContextPromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Invokes the GetValueAsync method */
     getValueAsync(): Promise<string> {
         return this._promise.then(obj => obj.getValueAsync());
     }
 
-    /** Invokes the SetValueAsync method */
     setValueAsync(value: string): TestResourceContextPromise {
         return new TestResourceContextPromiseImpl(this._promise.then(obj => obj.setValueAsync(value)), this._client);
     }
 
-    /** Invokes the ValidateAsync method */
     validateAsync(): Promise<boolean> {
         return this._promise.then(obj => obj.validateAsync());
     }
@@ -529,12 +658,26 @@ class TestResourceContextPromiseImpl implements TestResourceContextPromise {
 
 export interface DistributedApplicationBuilder {
     toJSON(): MarshalledHandle;
+    /**
+     * Adds a test Redis resource from ATS documentation.
+     * @param name The ATS resource name.
+     * @param options Additional options.
+     * @returns The ATS test Redis resource builder.
+     */
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise;
+    /** Adds a test vault resource */
     addTestVault(name: string): TestVaultResourcePromise;
 }
 
 export interface DistributedApplicationBuilderPromise extends PromiseLike<DistributedApplicationBuilder> {
+    /**
+     * Adds a test Redis resource from ATS documentation.
+     * @param name The ATS resource name.
+     * @param options Additional options.
+     * @returns The ATS test Redis resource builder.
+     */
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise;
+    /** Adds a test vault resource */
     addTestVault(name: string): TestVaultResourcePromise;
 }
 
@@ -542,16 +685,13 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
 // DistributedApplicationBuilderImpl
 // ============================================================================
 
-/**
- * Type class for DistributedApplicationBuilder.
- */
+/** Type class for DistributedApplicationBuilder. */
 class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder {
     constructor(private _handle: IDistributedApplicationBuilderHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /** Adds a test Redis resource */
     /** @internal */
     async _addTestRedisInternal(name: string, port?: number): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
@@ -563,12 +703,17 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         return new TestRedisResourceImpl(result, this._client);
     }
 
+    /**
+     * Adds a test Redis resource from ATS documentation.
+     * @param name The ATS resource name.
+     * @param options Additional options.
+     * @returns The ATS test Redis resource builder.
+     */
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise {
         const port = options?.port;
         return new TestRedisResourcePromiseImpl(this._addTestRedisInternal(name, port), this._client);
     }
 
-    /** Adds a test vault resource */
     /** @internal */
     async _addTestVaultInternal(name: string): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
@@ -579,6 +724,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         return new TestVaultResourceImpl(result, this._client);
     }
 
+    /** Adds a test vault resource */
     addTestVault(name: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._addTestVaultInternal(name), this._client);
     }
@@ -600,12 +746,10 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds a test Redis resource */
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.addTestRedis(name, options)), this._client);
     }
 
-    /** Adds a test vault resource */
     addTestVault(name: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.addTestVault(name)), this._client);
     }
@@ -618,58 +762,138 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
 
 export interface TestDatabaseResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise;
+    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestDatabaseResourcePromise;
+    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise;
+    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestDatabaseResourcePromise;
+    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestDatabaseResourcePromise;
+    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestDatabaseResourcePromise;
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestDatabaseResourcePromise;
+    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestDatabaseResourcePromise;
+    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise;
+    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
+    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise;
+    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise;
+    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * Adds a data volume
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestDatabaseResourcePromise;
+    /** Adds a label to the resource */
     withMergeLabel(label: string): TestDatabaseResourcePromise;
+    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise;
+    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise;
+    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise;
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise;
+    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise;
+    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise;
 }
 
 export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseResource> {
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise;
+    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestDatabaseResourcePromise;
+    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise;
+    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestDatabaseResourcePromise;
+    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestDatabaseResourcePromise;
+    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestDatabaseResourcePromise;
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestDatabaseResourcePromise;
+    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestDatabaseResourcePromise;
+    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise;
+    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
+    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise;
+    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise;
+    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * Adds a data volume
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestDatabaseResourcePromise;
+    /** Adds a label to the resource */
     withMergeLabel(label: string): TestDatabaseResourcePromise;
+    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise;
+    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise;
+    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise;
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise;
+    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise;
+    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise;
 }
 
@@ -694,7 +918,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds an optional string parameter */
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
         const value = options?.value;
         const enabled = options?.enabled;
@@ -797,7 +1024,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures with optional callback */
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestDatabaseResourcePromise {
         const callback = options?.callback;
         return new TestDatabaseResourcePromiseImpl(this._withOptionalCallbackInternal(callback), this._client);
@@ -961,7 +1191,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds a data volume */
+    /**
+     * Adds a data volume
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestDatabaseResourcePromise {
         const name = options?.name;
         return new TestDatabaseResourcePromiseImpl(this._withDataVolumeInternal(name), this._client);
@@ -1039,7 +1272,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging */
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -1058,7 +1294,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging with file path */
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -1114,127 +1353,102 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
 
-    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
     }
 
-    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
     }
 
-    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
     }
 
-    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
     }
 
-    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
     }
 
-    /** Configures with optional callback */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
     }
 
-    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
     }
 
-    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
     }
 
-    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
-    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
     }
 
-    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
     }
 
-    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
     }
 
-    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
     }
 
-    /** Adds a data volume */
     withDataVolume(options?: WithDataVolumeOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDataVolume(options)), this._client);
     }
 
-    /** Adds a label to the resource */
     withMergeLabel(label: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
     }
 
-    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
     }
 
-    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
     }
 
-    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
     }
 
-    /** Configures resource logging */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
     }
 
-    /** Configures resource logging with file path */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
     }
 
-    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
     }
 
-    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
     }
@@ -1247,80 +1461,212 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
 
 export interface TestRedisResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Adds a child database to a test Redis resource
+     *
+     * This method tests the factory method codegen pattern where a method on builder type A
+     * returns builder type B (e.g., SqlServerServerResource.AddDatabase returning SqlServerDatabaseResource).
+     * @param options Additional options.
+     */
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures the Redis resource with persistence
+     * @param options Additional options.
+     */
     withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise;
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise;
+    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestRedisResourcePromise;
+    /** Gets the tags for the resource */
     getTags(): Promise<AspireList<string>>;
+    /** Gets the metadata for the resource */
     getMetadata(): Promise<AspireDict<string, string>>;
+    /** Sets the connection string using a reference expression */
     withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise;
+    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestRedisResourcePromise;
+    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestRedisResourcePromise;
+    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestRedisResourcePromise;
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestRedisResourcePromise;
+    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestRedisResourcePromise;
+    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestRedisResourcePromise;
+    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise;
+    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    /** Gets the endpoints */
     getEndpoints(): Promise<string[]>;
+    /** Sets connection string using direct interface target */
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise;
+    /** Redis-specific configuration */
     withRedisSpecific(option: string): TestRedisResourcePromise;
+    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestRedisResourcePromise;
+    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise;
+    /**
+     * Gets the status of the resource asynchronously
+     * @param options Additional options.
+     */
     getStatusAsync(options?: GetStatusAsyncOptions): Promise<string>;
+    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Waits for the resource to be ready
+     * @param options Additional options.
+     */
     waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean>;
+    /** Tests multi-param callback destructuring */
     withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Adds a data volume with persistence
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise;
+    /** Adds a label to the resource */
     withMergeLabel(label: string): TestRedisResourcePromise;
+    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise;
+    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise;
+    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise;
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise;
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise;
+    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise;
+    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise;
 }
 
 export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource> {
+    /**
+     * Adds a child database to a test Redis resource
+     *
+     * This method tests the factory method codegen pattern where a method on builder type A
+     * returns builder type B (e.g., SqlServerServerResource.AddDatabase returning SqlServerDatabaseResource).
+     * @param options Additional options.
+     */
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures the Redis resource with persistence
+     * @param options Additional options.
+     */
     withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise;
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise;
+    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestRedisResourcePromise;
+    /** Gets the tags for the resource */
     getTags(): Promise<AspireList<string>>;
+    /** Gets the metadata for the resource */
     getMetadata(): Promise<AspireDict<string, string>>;
+    /** Sets the connection string using a reference expression */
     withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise;
+    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestRedisResourcePromise;
+    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestRedisResourcePromise;
+    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestRedisResourcePromise;
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestRedisResourcePromise;
+    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestRedisResourcePromise;
+    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestRedisResourcePromise;
+    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise;
+    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    /** Gets the endpoints */
     getEndpoints(): Promise<string[]>;
+    /** Sets connection string using direct interface target */
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise;
+    /** Redis-specific configuration */
     withRedisSpecific(option: string): TestRedisResourcePromise;
+    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestRedisResourcePromise;
+    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise;
+    /**
+     * Gets the status of the resource asynchronously
+     * @param options Additional options.
+     */
     getStatusAsync(options?: GetStatusAsyncOptions): Promise<string>;
+    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Waits for the resource to be ready
+     * @param options Additional options.
+     */
     waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean>;
+    /** Tests multi-param callback destructuring */
     withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Adds a data volume with persistence
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise;
+    /** Adds a label to the resource */
     withMergeLabel(label: string): TestRedisResourcePromise;
+    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise;
+    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise;
+    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise;
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise;
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise;
+    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise;
+    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise;
 }
 
@@ -1344,7 +1690,13 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds a child database to a test Redis resource */
+    /**
+     * Adds a child database to a test Redis resource
+     *
+     * This method tests the factory method codegen pattern where a method on builder type A
+     * returns builder type B (e.g., SqlServerServerResource.AddDatabase returning SqlServerDatabaseResource).
+     * @param options Additional options.
+     */
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise {
         const databaseName = options?.databaseName;
         return new TestDatabaseResourcePromiseImpl(this._addTestChildDatabaseInternal(name, databaseName), this._client);
@@ -1361,7 +1713,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures the Redis resource with persistence */
+    /**
+     * Configures the Redis resource with persistence
+     * @param options Additional options.
+     */
     withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise {
         const mode = options?.mode;
         return new TestRedisResourcePromiseImpl(this._withPersistenceInternal(mode), this._client);
@@ -1379,7 +1734,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds an optional string parameter */
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise {
         const value = options?.value;
         const enabled = options?.enabled;
@@ -1515,7 +1873,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures with optional callback */
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestRedisResourcePromise {
         const callback = options?.callback;
         return new TestRedisResourcePromiseImpl(this._withOptionalCallbackInternal(callback), this._client);
@@ -1688,7 +2049,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourcePromiseImpl(this._withEnvironmentVariablesInternal(variables), this._client);
     }
 
-    /** Gets the status of the resource asynchronously */
+    /**
+     * Gets the status of the resource asynchronously
+     * @param options Additional options.
+     */
     async getStatusAsync(options?: GetStatusAsyncOptions): Promise<string> {
         const cancellationToken = options?.cancellationToken;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -1718,7 +2082,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourcePromiseImpl(this._withCancellableOperationInternal(operation), this._client);
     }
 
-    /** Waits for the resource to be ready */
+    /**
+     * Waits for the resource to be ready
+     * @param options Additional options.
+     */
     async waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean> {
         const cancellationToken = options?.cancellationToken;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
@@ -1763,7 +2130,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds a data volume with persistence */
+    /**
+     * Adds a data volume with persistence
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise {
         const name = options?.name;
         const isReadOnly = options?.isReadOnly;
@@ -1842,7 +2212,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging */
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -1861,7 +2234,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging with file path */
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -1917,182 +2293,146 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds a child database to a test Redis resource */
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.addTestChildDatabase(name, options)), this._client);
     }
 
-    /** Configures the Redis resource with persistence */
     withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withPersistence(options)), this._client);
     }
 
-    /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
 
-    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
     }
 
-    /** Gets the tags for the resource */
     getTags(): Promise<AspireList<string>> {
         return this._promise.then(obj => obj.getTags());
     }
 
-    /** Gets the metadata for the resource */
     getMetadata(): Promise<AspireDict<string, string>> {
         return this._promise.then(obj => obj.getMetadata());
     }
 
-    /** Sets the connection string using a reference expression */
     withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withConnectionString(connectionString)), this._client);
     }
 
-    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
     }
 
-    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
     }
 
-    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
     }
 
-    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
     }
 
-    /** Configures with optional callback */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
     }
 
-    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
     }
 
-    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
     }
 
-    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
-    /** Gets the endpoints */
     getEndpoints(): Promise<string[]> {
         return this._promise.then(obj => obj.getEndpoints());
     }
 
-    /** Sets connection string using direct interface target */
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withConnectionStringDirect(connectionString)), this._client);
     }
 
-    /** Redis-specific configuration */
     withRedisSpecific(option: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withRedisSpecific(option)), this._client);
     }
 
-    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
     }
 
-    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
     }
 
-    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
     }
 
-    /** Gets the status of the resource asynchronously */
     getStatusAsync(options?: GetStatusAsyncOptions): Promise<string> {
         return this._promise.then(obj => obj.getStatusAsync(options));
     }
 
-    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
     }
 
-    /** Waits for the resource to be ready */
     waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean> {
         return this._promise.then(obj => obj.waitForReadyAsync(timeout, options));
     }
 
-    /** Tests multi-param callback destructuring */
     withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMultiParamHandleCallback(callback)), this._client);
     }
 
-    /** Adds a data volume with persistence */
     withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDataVolume(options)), this._client);
     }
 
-    /** Adds a label to the resource */
     withMergeLabel(label: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
     }
 
-    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
     }
 
-    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
     }
 
-    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
     }
 
-    /** Configures resource logging */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
     }
 
-    /** Configures resource logging with file path */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
     }
 
-    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
     }
 
-    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
     }
@@ -2105,58 +2445,132 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
 
 export interface TestVaultResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise;
+    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestVaultResourcePromise;
+    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise;
+    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestVaultResourcePromise;
+    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestVaultResourcePromise;
+    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestVaultResourcePromise;
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestVaultResourcePromise;
+    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestVaultResourcePromise;
+    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestVaultResourcePromise;
+    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
+    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestVaultResourcePromise;
+    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise;
+    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise;
+    /** Configures vault using direct interface target */
     withVaultDirect(option: string): TestVaultResourcePromise;
+    /** Adds a label to the resource */
     withMergeLabel(label: string): TestVaultResourcePromise;
+    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise;
+    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise;
+    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise;
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise;
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise;
+    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise;
+    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise;
 }
 
 export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource> {
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise;
+    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestVaultResourcePromise;
+    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise;
+    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestVaultResourcePromise;
+    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestVaultResourcePromise;
+    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestVaultResourcePromise;
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestVaultResourcePromise;
+    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestVaultResourcePromise;
+    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestVaultResourcePromise;
+    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
+    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestVaultResourcePromise;
+    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise;
+    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise;
+    /** Configures vault using direct interface target */
     withVaultDirect(option: string): TestVaultResourcePromise;
+    /** Adds a label to the resource */
     withMergeLabel(label: string): TestVaultResourcePromise;
+    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise;
+    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise;
+    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise;
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise;
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise;
+    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise;
+    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise;
 }
 
@@ -2181,7 +2595,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Adds an optional string parameter */
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
         const value = options?.value;
         const enabled = options?.enabled;
@@ -2284,7 +2701,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures with optional callback */
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestVaultResourcePromise {
         const callback = options?.callback;
         return new TestVaultResourcePromiseImpl(this._withOptionalCallbackInternal(callback), this._client);
@@ -2524,7 +2944,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging */
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -2543,7 +2966,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging with file path */
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -2599,127 +3025,102 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
 
-    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
     }
 
-    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
     }
 
-    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
     }
 
-    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
     }
 
-    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
     }
 
-    /** Configures with optional callback */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
     }
 
-    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
     }
 
-    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
     }
 
-    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
-    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
     }
 
-    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
     }
 
-    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
     }
 
-    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
     }
 
-    /** Configures vault using direct interface target */
     withVaultDirect(option: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withVaultDirect(option)), this._client);
     }
 
-    /** Adds a label to the resource */
     withMergeLabel(label: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
     }
 
-    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
     }
 
-    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
     }
 
-    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
     }
 
-    /** Configures resource logging */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
     }
 
-    /** Configures resource logging with file path */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
     }
 
-    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
     }
 
-    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
     }
@@ -2732,52 +3133,120 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
 export interface Resource {
     toJSON(): MarshalledHandle;
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise;
+    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): ResourcePromise;
+    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): ResourcePromise;
+    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): ResourcePromise;
+    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): ResourcePromise;
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): ResourcePromise;
+    /** Sets the resource status */
     withStatus(status: TestResourceStatus): ResourcePromise;
+    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): ResourcePromise;
+    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
+    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise;
+    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ResourcePromise;
+    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise;
+    /** Adds a label to the resource */
     withMergeLabel(label: string): ResourcePromise;
+    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): ResourcePromise;
+    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): ResourcePromise;
+    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise;
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise;
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise;
+    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise;
+    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise;
 }
 
 export interface ResourcePromise extends PromiseLike<Resource> {
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise;
+    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): ResourcePromise;
+    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): ResourcePromise;
+    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): ResourcePromise;
+    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): ResourcePromise;
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): ResourcePromise;
+    /** Sets the resource status */
     withStatus(status: TestResourceStatus): ResourcePromise;
+    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): ResourcePromise;
+    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
+    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise;
+    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ResourcePromise;
+    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise;
+    /** Adds a label to the resource */
     withMergeLabel(label: string): ResourcePromise;
+    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): ResourcePromise;
+    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): ResourcePromise;
+    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise;
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise;
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise;
+    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise;
+    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise;
 }
 
@@ -2802,7 +3271,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Adds an optional string parameter */
+    /**
+     * Adds an optional string parameter
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise {
         const value = options?.value;
         const enabled = options?.enabled;
@@ -2885,7 +3357,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures with optional callback */
+    /**
+     * Configures with optional callback
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): ResourcePromise {
         const callback = options?.callback;
         return new ResourcePromiseImpl(this._withOptionalCallbackInternal(callback), this._client);
@@ -3095,7 +3570,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging */
+    /**
+     * Configures resource logging
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -3114,7 +3592,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging with file path */
+    /**
+     * Configures resource logging with file path
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -3170,112 +3651,90 @@ class ResourcePromiseImpl implements ResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
 
-    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
     }
 
-    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
     }
 
-    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
     }
 
-    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
     }
 
-    /** Configures with optional callback */
     withOptionalCallback(options?: WithOptionalCallbackOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
     }
 
-    /** Sets the resource status */
     withStatus(status: TestResourceStatus): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
     }
 
-    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
     }
 
-    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
-    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
     }
 
-    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
     }
 
-    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
     }
 
-    /** Adds a label to the resource */
     withMergeLabel(label: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
     }
 
-    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
     }
 
-    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
     }
 
-    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
     }
 
-    /** Configures resource logging */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
     }
 
-    /** Configures resource logging with file path */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
     }
 
-    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
     }
 
-    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
     }
@@ -3288,12 +3747,16 @@ class ResourcePromiseImpl implements ResourcePromise {
 
 export interface ResourceWithConnectionString {
     toJSON(): MarshalledHandle;
+    /** Sets the connection string using a reference expression */
     withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise;
+    /** Sets connection string using direct interface target */
     withConnectionStringDirect(connectionString: string): ResourceWithConnectionStringPromise;
 }
 
 export interface ResourceWithConnectionStringPromise extends PromiseLike<ResourceWithConnectionString> {
+    /** Sets the connection string using a reference expression */
     withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise;
+    /** Sets connection string using direct interface target */
     withConnectionStringDirect(connectionString: string): ResourceWithConnectionStringPromise;
 }
 
@@ -3355,12 +3818,10 @@ class ResourceWithConnectionStringPromiseImpl implements ResourceWithConnectionS
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Sets the connection string using a reference expression */
     withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromiseImpl(this._promise.then(obj => obj.withConnectionString(connectionString)), this._client);
     }
 
-    /** Sets connection string using direct interface target */
     withConnectionStringDirect(connectionString: string): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromiseImpl(this._promise.then(obj => obj.withConnectionStringDirect(connectionString)), this._client);
     }
@@ -3373,12 +3834,16 @@ class ResourceWithConnectionStringPromiseImpl implements ResourceWithConnectionS
 
 export interface ResourceWithEnvironment {
     toJSON(): MarshalledHandle;
+    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise;
+    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): ResourceWithEnvironmentPromise;
 }
 
 export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWithEnvironment> {
+    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise;
+    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): ResourceWithEnvironmentPromise;
 }
 
@@ -3445,12 +3910,10 @@ class ResourceWithEnvironmentPromiseImpl implements ResourceWithEnvironmentPromi
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
     }
 
-    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
     }
@@ -3521,16 +3984,16 @@ export async function createBuilder(options?: CreateBuilderOptions): Promise<Dis
     delete effectiveOptions.throwOnPendingRejections;
 
     const handle = await client.invokeCapability<IDistributedApplicationBuilderHandle>(
-        'Aspire.Hosting/createBuilderWithOptions',
-        { options: effectiveOptions }
+        'Aspire.Hosting/createBuilder',
+        { argsOrOptions: effectiveOptions }
     );
     return new DistributedApplicationBuilderImpl(handle, client);
 }
 
 // Re-export commonly used types
-export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.js';
-export { refExpr, ReferenceExpression } from './base.js';
-export type { HandleReference, Awaitable } from './base.js';
+export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.mjs';
+export { refExpr, ReferenceExpression } from './base.mjs';
+export type { HandleReference, Awaitable } from './base.mjs';
 
 // ============================================================================
 // Global Error Handling
@@ -3589,6 +4052,7 @@ process.on('uncaughtException', (error: Error) => {
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext', (handle, client) => new TestCallbackContextImpl(handle as TestCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext', (handle, client) => new TestCollectionContextImpl(handle as TestCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
+registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder', (handle, client) => new DistributedApplicationBuilderImpl(handle as IDistributedApplicationBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource', (handle, client) => new TestDatabaseResourceImpl(handle as TestDatabaseResourceHandle, client));

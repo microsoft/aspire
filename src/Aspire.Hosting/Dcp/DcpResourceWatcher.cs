@@ -8,10 +8,12 @@ using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Shared.ConsoleLogs;
 using k8s;
 using k8s.Autorest;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
 
@@ -27,6 +29,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     private readonly ResourceLoggerService _loggerService;
     private readonly DcpExecutorEvents _executorEvents;
     private readonly ILogger _logger;
+    private readonly IConfiguration _configuration;
+    private readonly Func<IResource, CancellationToken, Task> _publishEndpointsAllocatedEventAsync;
+    private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly CancellationToken _shutdownToken;
 
     private readonly DcpResourceState _resourceState;
@@ -51,12 +56,18 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         DcpExecutorEvents executorEvents,
         DistributedApplicationModel model,
         DcpAppResourceStore appResources,
+        IConfiguration configuration,
+        Func<IResource, CancellationToken, Task> publishEndpointsAllocatedEventAsync,
+        ProfilingTelemetry profilingTelemetry,
         CancellationToken shutdownToken)
     {
         _kubernetesService = kubernetesService;
         _loggerService = loggerService;
         _executorEvents = executorEvents;
         _logger = logger;
+        _configuration = configuration;
+        _publishEndpointsAllocatedEventAsync = publishEndpointsAllocatedEventAsync;
+        _profilingTelemetry = profilingTelemetry;
         _shutdownToken = shutdownToken;
 
         _resourceState = new(model.Resources.ToDictionary(r => r.Name), appResources.Get());
@@ -262,6 +273,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
                     var resourceType = DcpExecutor.GetResourceType(resource, appModelResource);
                     var status = GetResourceStatus(resource);
+                    AddDcpResourceObservedEvent(resource, appModelResource, resourceKind, status);
                     await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status, s => snapshotFactory(resource, s))).ConfigureAwait(false);
 
                     if (resource is Container { LogsAvailable: true } ||
@@ -316,6 +328,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
         if (resource is Executable executable)
         {
+            if (executable.Spec.Start == false && IsNotStartedExecutableState(executable.Status?.State))
+            {
+                // If the resource is set for delay start, treat not-yet-started states as NotStarted.
+                return new(KnownResourceStates.NotStarted, null, null);
+            }
+
             return new(executable.Status?.State, executable.Status?.StartupTimestamp?.ToUniversalTime(), executable.Status?.FinishTimestamp?.ToUniversalTime());
         }
         if (resource is ContainerExec containerExec)
@@ -326,9 +344,26 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         return new(null, null, null);
     }
 
+    private void AddDcpResourceObservedEvent(CustomResource resource, IResource appModelResource, string resourceKind, ResourceStatus status)
+    {
+        using var activity = _profilingTelemetry.StartDcpResourceObserved(
+            appModelResource,
+            resourceKind,
+            resource.Metadata.Name,
+            status.State,
+            status.StartupTimestamp,
+            status.FinishedTimestamp,
+            resource.Metadata.Annotations);
+    }
+
+    private static bool IsNotStartedExecutableState(string? state)
+    {
+        return string.IsNullOrEmpty(state) || state == ExecutableState.Unknown;
+    }
+
     public async IAsyncEnumerable<IReadOnlyList<LogEntry>> GetAllLogsAsync(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        IAsyncEnumerable<IReadOnlyList<(string, bool)>>? enumerable = null;
+        IAsyncEnumerable<IReadOnlyList<ResourceLogEntry>>? enumerable = null;
         if (_resourceState.ContainersMap.TryGetValue(resourceName, out var container))
         {
             enumerable = new ResourceLogSource<Container>(_logger, _kubernetesService, container, follow: false);
@@ -357,26 +392,26 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
     }
 
-    private static IEnumerable<LogEntry> CreateLogEntries(IReadOnlyList<(string, bool)> batch)
+    private static IEnumerable<LogEntry> CreateLogEntries(IReadOnlyList<ResourceLogEntry> batch)
     {
-        foreach (var (content, logEntryType) in batch)
+        foreach (var entry in batch)
         {
-            DateTime? timestamp = null;
-            var resolvedContent = content;
+            var timestamp = entry.Timestamp;
+            var resolvedContent = entry.Content;
 
-            if (TimestampParser.TryParseConsoleTimestamp(resolvedContent, out var result))
+            if (timestamp is null && TimestampParser.TryParseConsoleTimestamp(resolvedContent, out var result))
             {
                 resolvedContent = result.Value.ModifiedText;
                 timestamp = result.Value.Timestamp.UtcDateTime;
             }
 
-            yield return LogEntry.Create(timestamp, resolvedContent, content, logEntryType, resourcePrefix: null);
+            yield return LogEntry.Create(timestamp, resolvedContent, entry.RawContent ?? entry.Content, entry.IsErrorMessage, resourcePrefix: null);
         }
     }
 
     private void StartLogStream<T>(T resource) where T : CustomResource, IKubernetesStaticMetadata
     {
-        IAsyncEnumerable<IReadOnlyList<(string, bool)>>? enumerable = resource switch
+        IAsyncEnumerable<IReadOnlyList<ResourceLogEntry>>? enumerable = resource switch
         {
             Container c when c.LogsAvailable => new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: true),
             Executable e when e.LogsAvailable => new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: true),
@@ -460,6 +495,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         if (!ProcessResourceChange(_resourceState.ServicesMap, watchEventType, service))
         {
             return;
+        }
+
+        if (watchEventType is WatchEventType.Added or WatchEventType.Modified &&
+            DcpModelUtilities.TryApplyServiceAddressToEndpoint(service, _resourceState.AppResources, out var allocatedResource))
+        {
+            await _publishEndpointsAllocatedEventAsync(allocatedResource, _shutdownToken).ConfigureAwait(false);
         }
 
         foreach (var ((resourceKind, resourceName), _) in _resourceState.ResourceAssociatedServicesMap.Where(e => e.Value.Contains(service.Metadata.Name)))

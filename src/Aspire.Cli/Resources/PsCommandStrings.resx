@@ -126,6 +126,9 @@
   <data name="HeaderPath" xml:space="preserve">
     <value>Path</value>
   </data>
+  <data name="HeaderSdk" xml:space="preserve">
+    <value>SDK</value>
+  </data>
   <data name="HeaderPid" xml:space="preserve">
     <value>PID</value>
   </data>
@@ -138,7 +141,10 @@
   <data name="UnknownPath" xml:space="preserve">
     <value>Unknown</value>
   </data>
-  <data name="ResourcesOptionDescription" xml:space="preserve">
-    <value>Include resource details for each running AppHost. Only applies to JSON output.</value>
+  <data name="FollowOptionDescription" xml:space="preserve">
+    <value>Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</value>
+  </data>
+  <data name="FollowRequiresJson" xml:space="preserve">
+    <value>The --follow option only supports JSON output. Use --format json.</value>
   </data>
 </root>

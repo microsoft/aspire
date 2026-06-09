@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis;
 
 namespace Aspire.Hosting.Analyzers;
 
-public partial class AspireExportAnalyzer
+internal partial class AspireExportAnalyzer
 {
     internal static class Diagnostics
     {
@@ -105,7 +105,7 @@ public partial class AspireExportAnalyzer
         internal static readonly DiagnosticDescriptor s_exportedSyncDelegateInvokedInline = new(
             id: ExportedSyncDelegateInvokedInlineId,
             title: "Exported synchronous callback should not be invoked inline",
-            messageFormat: "Exported builder method '{0}' directly invokes synchronous delegate parameter '{1}'. Defer the callback, expose an async delegate, or set RunSyncOnBackgroundThread = true to avoid polyglot deadlocks.",
+            messageFormat: "Exported builder method '{0}' directly or transitively invokes synchronous delegate parameter '{1}'. Defer the callback, expose an async delegate, or set RunSyncOnBackgroundThread = true to avoid polyglot deadlocks.",
             category: "Design",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
@@ -131,6 +131,49 @@ public partial class AspireExportAnalyzer
             isEnabledByDefault: true,
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{CallbackContextTypeMissingExportId}");
 
+        private const string DuplicatePolyglotCapabilityIdId = "ASPIREEXPORT013";
+        internal static readonly DiagnosticDescriptor s_duplicatePolyglotCapabilityId = new(
+            id: DuplicatePolyglotCapabilityIdId,
+            title: "Duplicate polyglot capability ID",
+            messageFormat: "Polyglot capability ID '{0}' is defined by multiple exports in this assembly: {1}. Use unique AspireExport IDs for overloaded or colliding members.",
+            category: "Design",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DuplicatePolyglotCapabilityIdId}",
+            customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+        private const string DuplicateGeneratedMethodNameId = "ASPIREEXPORT014";
+        internal static readonly DiagnosticDescriptor s_duplicateGeneratedMethodName = new(
+            id: DuplicateGeneratedMethodNameId,
+            title: "Duplicate generated polyglot member name",
+            messageFormat: "Generated polyglot member name '{0}' is already used for target type '{1}' by multiple exports: {2}. Use a unique MethodName, or combine overloads into a single export with optional parameters.",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DuplicateGeneratedMethodNameId}",
+            customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+        private const string DescriptionShouldUseXmlDocsId = "ASPIREEXPORT015";
+        internal static readonly DiagnosticDescriptor s_descriptionShouldUseXmlDocs = new(
+            id: DescriptionShouldUseXmlDocsId,
+            title: "AspireExport description should use XML documentation",
+            messageFormat: "AspireExport Description is compatibility metadata. Use XML documentation with ATS tags such as <ats-summary> for generated polyglot SDK documentation.",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DescriptionShouldUseXmlDocsId}",
+            customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+        private const string DtoMutableCollectionPropertyMustBeInitSettableId = "ASPIREEXPORT016";
+        internal static readonly DiagnosticDescriptor s_dtoMutableCollectionPropertyMustBeInitSettable = new(
+            id: DtoMutableCollectionPropertyMustBeInitSettableId,
+            title: "AspireDto mutable collection property should be init-settable",
+            messageFormat: "DTO property '{0}' is a get-only mutable collection. Add an init accessor so System.Text.Json replaces the collection during DTO deserialization; otherwise collection values can be merged with initializer defaults.",
+            category: "Design",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DtoMutableCollectionPropertyMustBeInitSettableId}");
+
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_exportMethodMustBeStatic,
             s_invalidExportIdFormat,
@@ -143,7 +186,11 @@ public partial class AspireExportAnalyzer
             s_exportNameShouldBeUnique,
             s_exportedSyncDelegateInvokedInline,
             s_redundantExportId,
-            s_callbackContextTypeMissingExport
+            s_callbackContextTypeMissingExport,
+            s_duplicatePolyglotCapabilityId,
+            s_duplicateGeneratedMethodName,
+            s_descriptionShouldUseXmlDocs,
+            s_dtoMutableCollectionPropertyMustBeInitSettable
         );
     }
 }

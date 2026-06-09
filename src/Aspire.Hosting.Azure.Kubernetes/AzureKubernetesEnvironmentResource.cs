@@ -2,25 +2,74 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREAZURE001
 
-using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Pipelines;
 
-namespace Aspire.Hosting.Azure;
+namespace Aspire.Hosting.Azure.Kubernetes;
 
 /// <summary>
 /// Represents an Azure Kubernetes Service (AKS) environment resource that provisions
 /// an AKS cluster and serves as a compute environment for Kubernetes workloads.
 /// </summary>
-/// <param name="name">The name of the resource.</param>
-/// <param name="configureInfrastructure">Callback to configure the Azure infrastructure.</param>
-public class AzureKubernetesEnvironmentResource(
-    string name,
-    Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure),
-      IAzureComputeEnvironmentResource,
-      IAzureNspAssociationTarget
+public partial class AzureKubernetesEnvironmentResource :
+    AzureProvisioningResource,
+    IAzureComputeEnvironmentResource,
+    IAzureNspAssociationTarget
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AzureKubernetesEnvironmentResource"/> class.
+    /// </summary>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="configureInfrastructure">Callback to configure the Azure infrastructure.</param>
+    public AzureKubernetesEnvironmentResource(
+        string name,
+        Action<AzureResourceInfrastructure> configureInfrastructure)
+        : base(name, configureInfrastructure)
+    {
+        // Add pipeline step annotation to register per-environment AKS steps:
+        //   - prepare-aks-{name}: applies node-pool/workload-identity annotations to compute
+        //     resources targeted at this AKS env. Runs before BeforeStart so the inner
+        //     KubernetesEnvironmentResource's prepare-deployment-targets-{k8s-name} step
+        //     can observe the annotations.
+        //   - aks-get-credentials-{name}: fetches AKS credentials into an isolated
+        //     kubeconfig file after AKS is provisioned, before Helm prepare runs.
+        Annotations.Add(new PipelineStepAnnotation(_ =>
+        {
+            var k8sEnv = KubernetesEnvironment;
+
+            var prepareStep = new PipelineStep
+            {
+                Name = $"prepare-aks-{Name}",
+                Description = $"Prepares Azure Kubernetes Service environment {Name}.",
+                Action = ctx => PrepareAksEnvironmentAsync(ctx),
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments],
+                RequiredBySteps =
+                [
+                    WellKnownPipelineSteps.BeforeStart,
+                    // Ensure this runs before the inner K8s env materializes service resources,
+                    // because that step reads node-pool and workload-identity annotations
+                    // applied by PrepareAksEnvironmentAsync.
+                    $"prepare-deployment-targets-{k8sEnv.Name}"
+                ]
+            };
+
+            var getCredentialsStep = new PipelineStep
+            {
+                Name = $"aks-get-credentials-{Name}",
+                Description = $"Fetches AKS credentials for {Name}",
+                Action = ctx => GetAksCredentialsAsync(ctx),
+                // Run after ALL Azure infrastructure is provisioned (including the AKS cluster).
+                DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
+                // Must complete before the Helm prepare step on the inner K8s env.
+                RequiredBySteps = [$"prepare-{k8sEnv.Name}"]
+            };
+
+            return Task.FromResult<IEnumerable<PipelineStep>>([prepareStep, getCredentialsStep]);
+        }));
+    }
 
     /// <summary>
     /// Gets the underlying Kubernetes environment resource used for Helm-based deployment.
@@ -61,11 +110,6 @@ public class AzureKubernetesEnvironmentResource(
     /// Gets or sets the Kubernetes version for the AKS cluster.
     /// </summary>
     internal string? KubernetesVersion { get; set; }
-
-    /// <summary>
-    /// Gets or sets the SKU tier for the AKS cluster.
-    /// </summary>
-    internal AksSkuTier SkuTier { get; set; } = AksSkuTier.Free;
 
     /// <summary>
     /// Gets or sets whether OIDC issuer is enabled on the cluster.
@@ -120,4 +164,37 @@ public class AzureKubernetesEnvironmentResource(
     /// Gets or sets the default container registry auto-created for this AKS environment.
     /// </summary>
     internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
+
+    /// <summary>
+    /// Gets the load balancer resources registered against this AKS environment via
+    /// <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>. Used by
+    /// the Bicep emission to synthesize per-LB role assignments granting the
+    /// AKS-auto-created AGC controller identity permission to join each LB subnet.
+    /// </summary>
+    internal List<AzureKubernetesLoadBalancerResource> LoadBalancers { get; } = [];
+
+    /// <summary>
+    /// Gets or sets whether the AKS managed Gateway API installation is enabled on the
+    /// cluster. Toggled internally by <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>;
+    /// not exposed as a public extension because it's only useful in combination with the
+    /// AGC ALB controller add-on (<see cref="ApplicationLoadBalancerEnabled"/>) today.
+    /// </summary>
+    internal bool GatewayApiEnabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the Azure Application Gateway for Containers (AGC) ALB
+    /// controller add-on is enabled on the cluster. Toggled internally by
+    /// <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>.
+    /// </summary>
+    internal bool ApplicationLoadBalancerEnabled { get; set; }
+
+    /// <summary>
+    /// Whether the cluster needs to be emitted using a preview Bicep API version because
+    /// it depends on <c>ingressProfile.gatewayAPI</c> or <c>ingressProfile.applicationLoadBalancer</c>,
+    /// neither of which is in any stable AKS API version yet (latest stable
+    /// <c>2026-01-01</c> doesn't have them; <c>gatewayAPI</c> first appears in
+    /// <c>2025-08-02-preview</c>, <c>applicationLoadBalancer</c> in
+    /// <c>2025-09-02-preview</c>).
+    /// </summary>
+    internal bool RequiresPreviewIngressApi => GatewayApiEnabled || ApplicationLoadBalancerEnabled;
 }

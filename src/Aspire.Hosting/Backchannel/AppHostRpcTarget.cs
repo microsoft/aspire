@@ -3,8 +3,9 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Exec;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -15,14 +16,22 @@ internal class AppHostRpcTarget(
     ILogger<AppHostRpcTarget> logger,
     ResourceNotificationService resourceNotificationService,
     IServiceProvider serviceProvider,
+    ProfilingTelemetry profilingTelemetry,
     PipelineActivityReporter activityReporter,
     IHostApplicationLifetime lifetime,
-    DistributedApplicationOptions options)
+    DistributedApplicationOptions options,
+    AppHostStartupState startupState)
 {
     private readonly CancellationTokenSource _shutdownCts = new();
 
     public async IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Complete the stream immediately if shutdown has already been requested.
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
+
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
@@ -44,8 +53,9 @@ internal class AppHostRpcTarget(
                 yield return entry;
             }
 
-            // Stream live entries
-            await foreach (var entry in channel.Reader.ReadAllAsync(linkedToken).ConfigureAwait(false))
+            // Stream live entries — uses a helper that swallows OperationCanceledException on cancellation
+            // instead of propagating it, since yield return cannot appear in a try/catch block.
+            await foreach (var entry in AsyncEnumerableUtils.ReadUntilCancelledAsync(channel.Reader.ReadAllAsync(linkedToken), linkedToken).ConfigureAwait(false))
             {
                 yield return entry;
             }
@@ -58,6 +68,12 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<PublishingActivity> GetPublishingActivitiesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Complete the stream immediately if shutdown has already been requested.
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
+
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
@@ -65,15 +81,15 @@ internal class AppHostRpcTarget(
         while (!linkedToken.IsCancellationRequested)
         {
             PublishingActivity? publishingActivity = null;
-            
+
             try
             {
                 publishingActivity = await activityReporter.ActivityItemUpdated.Reader.ReadAsync(linkedToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (_shutdownCts.Token.IsCancellationRequested)
+            catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
             {
-                // Gracefully handle cancellation due to shutdown
-                logger.LogDebug("Publishing activities stream cancelled due to AppHost shutdown");
+                // Expected when the stream is cancelled due to shutdown or client disconnect.
+                logger.LogDebug("Publishing activities stream cancelled.");
                 yield break;
             }
 
@@ -89,15 +105,23 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Complete the stream immediately if shutdown has already been requested.
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
+
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
 
         var resourceEvents = resourceNotificationService.WatchAsync(linkedToken);
 
-        await foreach (var resourceEvent in resourceEvents.WithCancellation(linkedToken).ConfigureAwait(false))
+        // Use a helper that swallows OperationCanceledException on cancellation instead of propagating it,
+        // since yield return cannot appear in a try/catch block.
+        await foreach (var resourceEvent in AsyncEnumerableUtils.ReadUntilCancelledAsync(resourceEvents, linkedToken).ConfigureAwait(false))
         {
-            if (resourceEvent.Resource.Name == "aspire-dashboard")
+            if (string.Equals(resourceEvent.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
             {
                 // Skip the dashboard resource, as it is handled separately.
                 continue;
@@ -131,10 +155,10 @@ internal class AppHostRpcTarget(
     public Task RequestStopAsync(CancellationToken cancellationToken)
     {
         _ = cancellationToken;
-        
+
         // Cancel inflight streaming RPC calls before stopping the application
         _shutdownCts.Cancel();
-        
+
         lifetime.StopApplication();
         return Task.CompletedTask;
     }
@@ -150,28 +174,38 @@ internal class AppHostRpcTarget(
 
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetDashboardUrlsAsync), streaming: false);
         if (!options.DashboardEnabled)
         {
-            logger.LogError("Dashboard URL requested but dashboard is disabled.");
-            throw new InvalidOperationException("Dashboard URL requested but dashboard is disabled.");
+            logger.LogDebug("Dashboard URL requested but dashboard is disabled.");
+            activity.SetDashboardHealthy(false);
+            return new DashboardUrlsState { DashboardHealthy = false };
         }
 
-        return await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var urls = await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
+            activity.SetDashboardHealthy(urls.DashboardHealthy);
+            return urls;
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
     }
 
-    public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    public Task NotifyAppHostReadyAsync(CancellationToken cancellationToken)
     {
-        var execResourceManager = serviceProvider.GetRequiredService<ExecResourceManager>();
-        var logsStream = execResourceManager.StreamExecResourceLogs(cancellationToken);
-        await foreach (var commandOutput in logsStream.ConfigureAwait(false))
-        {
-            yield return commandOutput;
-        }
+        _ = cancellationToken;
+        startupState.MarkReady();
+        return Task.CompletedTask;
     }
 
 #pragma warning disable CA1822
     public Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetCapabilitiesAsync), streaming: false);
         // The purpose of this API is to allow the CLI to determine what API surfaces
         // the AppHost supports. In 9.2 we'll be saying that you need a 9.2 apphost,
         // but the 9.3 CLI might actually support working with 9.2 apphosts. The idea
@@ -179,11 +213,11 @@ internal class AppHostRpcTarget(
         // and store the results. The "baseline.v0" capability is the bare minimum
         // that we need as of CLI version 9.2-preview*.
         //
-        // Some capabilties will be opt in. For example in 9.3 we might refine the
+        // Some capabilities will be opt in. For example in 9.3 we might refine the
         // publishing activities API to return more information, or add log streaming
-        // features. So that would add a new capability that the apphsot can report
+        // features. So that would add a new capability that the apphost can report
         // on initial backchannel negotiation and the CLI can adapt its behavior around
-        // that. There may be scenarios where we need to break compataiblity at which
+        // that. There may be scenarios where we need to break compatibility at which
         // point we might increase the baseline version that the apphost reports.
         //
         // The ability to support a back channel at all is determined by the CLI by
@@ -209,6 +243,7 @@ internal class AppHostRpcTarget(
 
     public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(GetPipelineStepsRequest? request = null, CancellationToken cancellationToken = default)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetPipelineStepsAsync), streaming: false, request?.TraceContext);
         logger.LogDebug("Resolving pipeline steps for list-steps request.");
 
 #pragma warning disable ASPIREPIPELINES001

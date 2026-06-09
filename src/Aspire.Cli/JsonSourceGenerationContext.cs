@@ -3,14 +3,17 @@
 
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using Aspire.Cli.Acquisition;
+using Aspire.Cli.Caching;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Mcp.Tools;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Utils.EnvironmentChecker;
 
 namespace Aspire.Cli;
@@ -46,9 +49,17 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(ApiListItem[]))]
 [JsonSerializable(typeof(ApiSearchResult[]))]
 [JsonSerializable(typeof(ApiContent))]
+[JsonSerializable(typeof(IntegrationSearchResult[]))]
+[JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(CandidateAppHostDisplayInfo))]
+[JsonSerializable(typeof(List<CandidateAppHostDisplayInfo>))]
+[JsonSerializable(typeof(InstallationInfo))]
+[JsonSerializable(typeof(AppHostInfoCacheEntry))]
+[JsonSerializable(typeof(AppHostProjectInspectionOutput))]
 internal partial class JsonSourceGenerationContext : JsonSerializerContext
 {
     private static JsonSourceGenerationContext? s_relaxedEscaping;
+    private static JsonSourceGenerationContext? s_streaming;
 
     /// <summary>
     /// Gets a context configured with relaxed JSON escaping that preserves non-ASCII characters
@@ -58,6 +69,20 @@ internal partial class JsonSourceGenerationContext : JsonSerializerContext
     public static JsonSourceGenerationContext RelaxedEscaping => s_relaxedEscaping ??= new(new JsonSerializerOptions
     {
         WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    });
+
+    /// <summary>
+    /// Gets a context configured for newline-delimited JSON output.
+    /// </summary>
+    public static JsonSourceGenerationContext Streaming => s_streaming ??= new(new JsonSerializerOptions
+    {
+        WriteIndented = false,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         AllowTrailingCommas = true,
         ReadCommentHandling = JsonCommentHandling.Skip,

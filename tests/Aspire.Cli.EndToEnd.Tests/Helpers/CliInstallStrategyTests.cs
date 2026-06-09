@@ -23,6 +23,17 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void GetRecordAspireCliVersionCommand_IsBestEffort()
+    {
+        var strategy = CliInstallStrategy.FromDotnetTool(includePrerelease: true);
+
+        var command = CliE2EAutomatorHelpers.GetRecordAspireCliVersionCommand(strategy, "VER", "BASE_VER");
+
+        Assert.Contains("if mkdir -p \"$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR\" && ", command);
+        Assert.Contains("} > \"$CLI_VERSION_RECORD\"; then echo \"CLI_VERSION_RECORDED:$CLI_VERSION_RECORD\"; else echo \"CLI_VERSION_RECORD_FAILED:$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR\"; fi; fi", command);
+    }
+
+    [Fact]
     public void Detect_ReturnsLocalArchive_WhenArchiveDirIsSet()
     {
         var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
@@ -148,6 +159,241 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void ConfigureContainer_AddsUbuntuAptMirrorBuildArgWhenEnvironmentVariableIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, "http://azure.archive.ubuntu.com/ubuntu/"));
+
+        var strategy = CliInstallStrategy.LatestGa();
+        var options = new DockerContainerOptions();
+
+        strategy.ConfigureContainer(options);
+
+        Assert.Equal("http://azure.archive.ubuntu.com/ubuntu/", options.BuildArgs[CliInstallStrategy.UbuntuAptMirrorBuildArgName]);
+    }
+
+    [Fact]
+    public void ConfigureContainer_DoesNotAddUbuntuAptMirrorBuildArgWhenEnvironmentVariableIsEmpty()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, null));
+
+        var strategy = CliInstallStrategy.LatestGa();
+        var options = new DockerContainerOptions();
+
+        strategy.ConfigureContainer(options);
+
+        Assert.DoesNotContain(CliInstallStrategy.UbuntuAptMirrorBuildArgName, options.BuildArgs.Keys);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_UsesDotNetImageWhenEnvironmentVariableIsSet()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet);
+
+        Assert.Equal("aspire-cli-e2e-dotnet:prebuilt", options.Image);
+        Assert.True(string.IsNullOrEmpty(options.DockerfilePath));
+        Assert.True(string.IsNullOrEmpty(options.BuildContext));
+    }
+
+    [Fact]
+    public void ConfigureContainer_BuildArgsCanBeClearedForPrebuiltImage()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, "http://azure.archive.ubuntu.com/ubuntu/"));
+        var strategy = CliInstallStrategy.LatestGa();
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet);
+        CliE2ETestHelpers.ConfigureDockerContainerStrategy(options, strategy, prebuiltImageSelected: true);
+
+        Assert.Equal("aspire-cli-e2e-dotnet:prebuilt", options.Image);
+        Assert.Empty(options.BuildArgs);
+    }
+
+    [Fact]
+    public void ConfigureContainer_ThrowsWhenPrebuiltImageAlsoHasDockerfileConfiguration()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"));
+        var strategy = CliInstallStrategy.LatestGa();
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet);
+        options.DockerfilePath = "/unexpected/Dockerfile";
+        options.BuildContext = "/unexpected";
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CliE2ETestHelpers.ConfigureDockerContainerStrategy(options, strategy, prebuiltImageSelected: true));
+
+        Assert.Contains("prebuilt CLI E2E image", exception.Message);
+    }
+
+    [Fact]
+    public void ConfigureContainer_PreservesBuildArgsForDockerfileVariant()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, "http://azure.archive.ubuntu.com/ubuntu/"));
+        var strategy = CliInstallStrategy.LatestGa();
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot);
+        CliE2ETestHelpers.ConfigureDockerContainerStrategy(options, strategy);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-base"), options.DockerfilePath);
+        Assert.Equal("true", options.BuildArgs["SKIP_SOURCE_BUILD"]);
+        Assert.Equal("http://azure.archive.ubuntu.com/ubuntu/", options.BuildArgs[CliInstallStrategy.UbuntuAptMirrorBuildArgName]);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_UsesPolyglotImageWhenEnvironmentVariableIsSet()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, "aspire-cli-e2e-polyglot:prebuilt"),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot);
+
+        Assert.Equal("aspire-cli-e2e-polyglot:prebuilt", options.Image);
+        Assert.True(string.IsNullOrEmpty(options.DockerfilePath));
+        Assert.True(string.IsNullOrEmpty(options.BuildContext));
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_RequiresPolyglotImageWhenConfigured()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot));
+
+        Assert.Contains(CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, exception.Message);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_UsesPolyglotJavaImageWhenEnvironmentVariableIsSet()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-java:prebuilt"),
+            (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotJava);
+
+        Assert.Equal("aspire-cli-e2e-polyglot-java:prebuilt", options.Image);
+        Assert.True(string.IsNullOrEmpty(options.DockerfilePath));
+        Assert.True(string.IsNullOrEmpty(options.BuildContext));
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_RequiresPolyglotJavaImageWhenConfigured()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotJava));
+
+        Assert.Contains(CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, exception.Message);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_IgnoresPolyglotJavaImageForPolyglotVariant()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-java:prebuilt"),
+            (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-base"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_FallsBackToDockerfileOutsideCI()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, null),
+            ("GITHUB_ACTIONS", null));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_RequiresDotNetImageWhenConfigured()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet));
+
+        Assert.Contains(CliE2ETestHelpers.DotNetImageEnvironmentVariableName, exception.Message);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_FallsBackToDockerfileInCIWhenDotNetImageIsNotRequired()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, null),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_IgnoresDotNetImageForPolyglotVariant()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-base"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
+    }
+
+    [Fact]
     public void Detect_DotnetTool_WhenEnvironmentVariableIsSet()
     {
         using var environment = new EnvironmentVariableScope(
@@ -167,6 +413,7 @@ public class CliInstallStrategyTests
         Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
         Assert.Null(strategy.Version);
         Assert.Null(strategy.NupkgSourcePath);
+        Assert.False(strategy.IncludePrerelease);
     }
 
     [Fact]
@@ -189,6 +436,7 @@ public class CliInstallStrategyTests
         Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
         Assert.Equal("9.5.0", strategy.Version);
         Assert.Null(strategy.NupkgSourcePath);
+        Assert.False(strategy.IncludePrerelease);
     }
 
     [Fact]
@@ -223,12 +471,15 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
-    public void Detect_DotnetToolLocalSource_ThrowsWithoutVersion()
+    public void Detect_DotnetToolLocalSource_InfersVersion()
     {
         var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
 
         try
         {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0-preview.1.25175.1.nupkg"), "");
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.linux-x64.13.3.0-preview.1.25175.1.nupkg"), "");
+
             using var environment = new EnvironmentVariableScope(
                 ("ASPIRE_E2E_ARCHIVE", null),
                 ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", tempDir.FullName),
@@ -241,7 +492,11 @@ public class CliInstallStrategyTests
                 ("CI", null),
                 ("GITHUB_ACTIONS", null));
 
-            Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.Detect());
+            var strategy = CliInstallStrategy.Detect();
+
+            Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+            Assert.Equal("13.3.0-preview.1.25175.1", strategy.Version);
+            Assert.Equal(tempDir.FullName, strategy.NupkgSourcePath);
         }
         finally
         {
@@ -267,6 +522,117 @@ public class CliInstallStrategyTests
         var strategy = CliInstallStrategy.Detect();
 
         Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.True(strategy.IncludePrerelease);
+    }
+
+    [Fact]
+    public void Detect_DotnetTool_IncludesPrereleaseForStagingQuality()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", "staging"),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.True(strategy.IncludePrerelease);
+    }
+
+    [Fact]
+    public void Detect_DotnetTool_DoesNotIncludePrereleaseForReleaseQuality()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", "release"),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.False(strategy.IncludePrerelease);
+    }
+
+    [Fact]
+    public void Detect_DotnetTool_DoesNotIncludePrereleaseWhenVersionIsSpecified()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", "dev"),
+            ("ASPIRE_E2E_VERSION", "13.3.0-preview.1.25175.1"),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.Equal("13.3.0-preview.1.25175.1", strategy.Version);
+        Assert.False(strategy.IncludePrerelease);
+    }
+
+    [Fact]
+    public void DotnetToolSmokeTests_ThrowsWhenPublishedFeedFallbackHasNoSelector()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("BUILT_NUGETS_PATH", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_QUALITY", null));
+
+        var exception = Assert.Throws<InvalidOperationException>(DotnetToolSmokeTests.GetDotnetToolStrategy);
+
+        Assert.Contains("ASPIRE_E2E_QUALITY", exception.Message);
+    }
+
+    [Fact]
+    public void DotnetToolSmokeTests_UsesPublishedFeedWhenQualityIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("BUILT_NUGETS_PATH", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_QUALITY", "staging"));
+
+        var strategy = DotnetToolSmokeTests.GetDotnetToolStrategy();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.True(strategy.IncludePrerelease);
+        Assert.Null(strategy.Version);
+    }
+
+    [Fact]
+    public void DotnetToolSmokeTests_UsesPublishedFeedWhenVersionIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("BUILT_NUGETS_PATH", null),
+            ("ASPIRE_E2E_VERSION", "13.3.0"),
+            ("ASPIRE_E2E_QUALITY", null));
+
+        var strategy = DotnetToolSmokeTests.GetDotnetToolStrategy();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.Equal("13.3.0", strategy.Version);
+        Assert.False(strategy.IncludePrerelease);
     }
 
     [Fact]
@@ -310,6 +676,15 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void GetDotnetToolInstallCommandInDocker_WithPrereleaseVersion()
+    {
+        var strategy = CliInstallStrategy.FromDotnetTool("13.3.0-preview.1.25175.1");
+        var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
+
+        Assert.Equal("dotnet tool install --global Aspire.Cli --version 13.3.0-preview.1.25175.1 --configfile '/opt/aspire-scripts/NuGet.config'", command);
+    }
+
+    [Fact]
     public void GetDotnetToolInstallCommandInDocker_WithLocalSource()
     {
         var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
@@ -319,7 +694,7 @@ public class CliInstallStrategyTests
             var strategy = CliInstallStrategy.FromDotnetToolLocalSource(tempDir.FullName, "13.3.0");
             var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
 
-            Assert.Equal("dotnet tool install --global Aspire.Cli --version 13.3.0 --add-source /tmp/aspire-nupkg-source", command);
+            Assert.Equal("dotnet tool install --global Aspire.Cli --version 13.3.0 --add-source '/tmp/aspire-nupkg-source'", command);
         }
         finally
         {
@@ -334,6 +709,15 @@ public class CliInstallStrategyTests
         var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
 
         Assert.Equal("dotnet tool install --global Aspire.Cli", command);
+    }
+
+    [Fact]
+    public void GetDotnetToolInstallCommandInDocker_WithPrerelease()
+    {
+        var strategy = CliInstallStrategy.FromDotnetTool(includePrerelease: true);
+        var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
+
+        Assert.Equal("dotnet tool install --global Aspire.Cli --prerelease --configfile '/opt/aspire-scripts/NuGet.config'", command);
     }
 
     [Fact]
@@ -392,16 +776,16 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
-    public void FromLocalArchive_ThrowsWhenNupkgVersionIsMalformed()
+    public void FromLocalArchive_IgnoresRidSpecificCliNupkg()
     {
         var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
         try
         {
-            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0;bad.nupkg"), "");
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.linux-x64.13.3.0.nupkg"), "");
 
-            var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromLocalArchive(tempDir.FullName));
+            var strategy = CliInstallStrategy.FromLocalArchive(tempDir.FullName);
 
-            Assert.Contains("Invalid Aspire.Cli nupkg version", exception.Message);
+            Assert.Null(strategy.ExpectedVersion);
         }
         finally
         {
@@ -410,7 +794,7 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
-    public void FromLocalArchive_ThrowsWhenMultipleCliNupkgsArePresent()
+    public void FromLocalArchive_ThrowsWhenMultiplePointerCliNupkgsArePresent()
     {
         var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
         try
@@ -420,7 +804,26 @@ public class CliInstallStrategyTests
 
             var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromLocalArchive(tempDir.FullName));
 
-            Assert.Contains("Found 2 Aspire.Cli nupkg files", exception.Message);
+            Assert.Contains("Found 2 Aspire.Cli pointer nupkg files", exception.Message);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FromDotnetToolLocalSource_ThrowsWhenOnlyRidSpecificPackagesArePresent()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.linux-x64.13.3.0.nupkg"), "");
+
+            var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromDotnetToolLocalSource(tempDir.FullName));
+
+            Assert.Contains("No Aspire.Cli tool nupkg found", exception.Message);
         }
         finally
         {
@@ -574,6 +977,28 @@ public class CliInstallStrategyTests
         var strategy = CliInstallStrategy.Detect();
 
         Assert.Equal(CliInstallMode.Preinstalled, strategy.Mode);
+    }
+
+    private static EnvironmentVariableScope WithCleanCliE2ETestEnvironment(params (string Name, string? Value)[] variables)
+    {
+        (string Name, string? Value)[] defaults =
+        [
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, null),
+            ("GITHUB_ACTIONS", null),
+        ];
+
+        var cleanVariables = defaults.ToDictionary(variable => variable.Name, variable => variable.Value);
+        foreach (var (name, value) in variables)
+        {
+            cleanVariables[name] = value;
+        }
+
+        return new EnvironmentVariableScope([.. cleanVariables.Select(variable => (variable.Key, variable.Value))]);
     }
 
     private sealed class EnvironmentVariableScope : IDisposable

@@ -9,10 +9,57 @@ namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 [AspireDto]
 public class TestConfigDto
 {
+    /// <summary>
+    /// The name of the test config.
+    /// </summary>
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The port used by the test config.
+    /// </summary>
     public int Port { get; set; }
+
+    /// <summary>
+    /// A value indicating whether the test config is enabled.
+    /// </summary>
     public bool Enabled { get; set; }
+
+    /// <summary>
+    /// An optional test config field.
+    /// </summary>
     public string? OptionalField { get; set; }
+
+    /// <ats-summary>The default test configuration.</ats-summary>
+    [AspireValue("TestConfigs")]
+    public static readonly TestConfigDto Default = new()
+    {
+        Name = "default",
+        Port = 6379,
+        Enabled = true,
+        OptionalField = "cache"
+    };
+
+    [AspireValue("TestConfigs")]
+    public static TestConfigDto Secure { get; } = new()
+    {
+        Name = "secure",
+        Port = 6380,
+        Enabled = true
+    };
+
+    [AspireValue("TestConfigs")]
+    public static string UnicodeGreeting { get; } = "你好こんにちは";
+
+    public static class Profiles
+    {
+        [AspireValue("TestConfigs")]
+        public static readonly TestConfigDto Development = new()
+        {
+            Name = "development",
+            Port = 5001,
+            Enabled = false
+        };
+    }
 }
 
 /// <summary>
@@ -81,6 +128,14 @@ public class TestCollectionContext
     public Dictionary<string, string> Metadata { get; } = [];
 }
 
+[AspireExport(ExposeProperties = true)]
+public class TestMutableCollectionContext
+{
+    public List<string> Tags { get; set; } = [];
+
+    public Dictionary<string, int> Counts { get; set; } = [];
+}
+
 /// <summary>
 /// Test DTO with complex nested types.
 /// </summary>
@@ -98,9 +153,24 @@ public class TestNestedDto
 /// </summary>
 public enum TestResourceStatus
 {
+    /// <summary>
+    /// The resource is pending.
+    /// </summary>
     Pending,
+
+    /// <summary>
+    /// The resource is running.
+    /// </summary>
     Running,
+
+    /// <summary>
+    /// The resource is stopped.
+    /// </summary>
     Stopped,
+
+    /// <summary>
+    /// The resource failed.
+    /// </summary>
     Failed
 }
 

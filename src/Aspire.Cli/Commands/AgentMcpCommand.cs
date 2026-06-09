@@ -2,16 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
-using Aspire.Cli.Mcp;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Mcp;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Shared.Mcp;
@@ -52,10 +50,6 @@ internal sealed class AgentMcpCommand : BaseCommand
     internal IReadOnlyDictionary<string, CliMcpTool> KnownTools => _knownTools;
 
     public AgentMcpCommand(
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor,
         IMcpTransportFactory transportFactory,
         ILoggerFactory loggerFactory,
@@ -65,8 +59,8 @@ internal sealed class AgentMcpCommand : BaseCommand
         IDocsSearchService docsSearchService,
         IDocsIndexService docsIndexService,
         IHttpClientFactory httpClientFactory,
-        AspireCliTelemetry telemetry)
-        : base("mcp", AgentCommandStrings.McpCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("mcp", AgentCommandStrings.McpCommand_Description, services)
     {
         _auxiliaryBackchannelMonitor = auxiliaryBackchannelMonitor;
         _transportFactory = transportFactory;
@@ -77,25 +71,23 @@ internal sealed class AgentMcpCommand : BaseCommand
         _environmentChecker = environmentChecker;
         _docsSearchService = docsSearchService;
         _docsIndexService = docsIndexService;
-        _executionContext = executionContext;
+        _executionContext = services.ExecutionContext;
         _resourceToolRefreshService = new McpResourceToolRefreshService(auxiliaryBackchannelMonitor, loggerFactory.CreateLogger<McpResourceToolRefreshService>());
 
         Options.Add(s_dashboardUrlOption);
         Options.Add(s_apiKeyOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     /// <summary>
     /// Public entry point for executing the MCP server command.
     /// This allows McpStartCommand to delegate to this implementation.
     /// </summary>
-    internal Task<int> ExecuteCommandAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    internal Task<CommandResult> ExecuteCommandAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         return ExecuteAsync(parseResult, cancellationToken);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
@@ -105,7 +97,7 @@ internal sealed class AgentMcpCommand : BaseCommand
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
                 _logger.LogError("Invalid --dashboard-url: {DashboardUrl}", dashboardUrl);
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl));
             }
 
             _dashboardOnlyMode = true;
@@ -166,7 +158,7 @@ internal sealed class AgentMcpCommand : BaseCommand
         _resourceToolRefreshService.SetMcpServer(null);
         _server = null;
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 
     private async ValueTask<ListToolsResult> HandleListToolsAsync(RequestContext<ListToolsRequestParams> request, CancellationToken cancellationToken)

@@ -33,7 +33,7 @@ eng/test-configuration.json
 Aspire-Core.slnf
 
 .github/instructions/**
-.github/skills/**
+.agents/skills/**
 
 # GitHub workflow files that do not affect the CI build or test process
 .github/workflows/apply-test-attributes.yml
@@ -46,9 +46,16 @@ Aspire-Core.slnf
 .github/workflows/markdownlint*.yml
 .github/workflows/pr-review-needed.yml
 .github/workflows/refresh-manifests.yml
+.github/workflows/release-github-tasks.yml
+.github/workflows/release-notes-generate.*
 .github/workflows/reproduce-flaky-tests.yml
 .github/workflows/specialized-test-runner.yml
 .github/workflows/tests-outerloop.yml
 .github/workflows/tests-quarantine.yml
 .github/workflows/update-*.yml
 .github/workflows/auto-rerun-transient-ci-failures.*
+
+# Scripts not used on CI
+start-code.sh
+localhive.*
+dogfood.sh

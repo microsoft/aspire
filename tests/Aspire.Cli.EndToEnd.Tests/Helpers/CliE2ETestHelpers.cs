@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Cli.Tests.Utils;
 using Hex1b;
+using Hex1b.Automation;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests.Helpers;
@@ -18,6 +19,14 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 internal static class CliE2ETestHelpers
 {
     internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
+    internal const string DotNetImageEnvironmentVariableName = "ASPIRE_E2E_DOTNET_IMAGE";
+    internal const string RequireDotNetImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_DOTNET_IMAGE";
+    internal const string PolyglotImageEnvironmentVariableName = "ASPIRE_E2E_POLYGLOT_IMAGE";
+    internal const string RequirePolyglotImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_POLYGLOT_IMAGE";
+    internal const string PolyglotJavaImageEnvironmentVariableName = "ASPIRE_E2E_POLYGLOT_JAVA_IMAGE";
+    internal const string RequirePolyglotJavaImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_POLYGLOT_JAVA_IMAGE";
+    internal const string CliVersionOutputDirEnvironmentVariableName = "ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR";
+    internal const string ContainerCliVersionOutputDir = "/tmp/aspire-cli-versions";
     private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
 
     /// <summary>
@@ -86,6 +95,13 @@ internal static class CliE2ETestHelpers
     }
 
     /// <summary>
+    /// Resolves the test method name for naming a recording file. See
+    /// <see cref="Hex1bTestHelpers.ResolveTestMethodName"/> for the full rationale.
+    /// </summary>
+    private static string ResolveTestMethodName(string callerMemberName)
+        => Hex1bTestHelpers.ResolveTestMethodName(callerMemberName);
+
+    /// <summary>
     /// Creates a headless Hex1b terminal configured for E2E testing with asciinema recording.
     /// Uses default dimensions of 160x48 unless overridden.
     /// </summary>
@@ -95,7 +111,14 @@ internal static class CliE2ETestHelpers
     /// <returns>A configured <see cref="Hex1bTerminal"/> instance. Caller is responsible for disposal.</returns>
     internal static Hex1bTerminal CreateTestTerminal(int width = 160, int height = 48, [CallerMemberName] string testName = "")
     {
-        var recordingPath = GetTestResultsRecordingPath(testName);
+        // Prefer the xUnit-reported test method name so that when a [Fact]/[Theory]
+        // delegates into a private helper (e.g. *Core methods), the .cast file is
+        // still named after the public test the TRX records an outcome for. Without
+        // this, `[CallerMemberName]` captures the helper, the recording filename has
+        // no matching TRX entry, and the recording-comment workflow tags the test as
+        // "Unknown".
+        var resolvedTestName = ResolveTestMethodName(testName);
+        var recordingPath = GetTestResultsRecordingPath(resolvedTestName);
         RegisterCaptureFile("recording.cast", recordingPath);
         return Hex1bTerminal.CreateBuilder()
             .WithHeadless()
@@ -103,6 +126,22 @@ internal static class CliE2ETestHelpers
             .WithAsciinemaRecording(recordingPath)
             .WithPtyProcess("/bin/bash", ["--norc"])
             .Build();
+    }
+
+    /// <summary>
+    /// Starts the terminal run and returns a <see cref="TerminalRun"/> that captures diagnostics
+    /// and exits the terminal on disposal.
+    /// </summary>
+    /// <param name="terminal">The Hex1b terminal to run.</param>
+    /// <param name="workspace">The workspace for diagnostic capture.</param>
+    /// <param name="automator">The automator used to drive the terminal.</param>
+    /// <param name="counter">The sequence counter for prompt tracking.</param>
+    /// <param name="cancellationToken">Cancellation token passed to <see cref="Hex1bTerminal.RunAsync"/>.</param>
+    /// <returns>A <see cref="TerminalRun"/> that ensures diagnostics capture and clean exit on disposal.</returns>
+    internal static TerminalRun StartRun(Hex1bTerminal terminal, TemporaryWorkspace workspace, Hex1bTerminalAutomator automator, SequenceCounter counter, ITestOutputHelper output, CancellationToken cancellationToken)
+    {
+        var pendingRun = terminal.RunAsync(cancellationToken);
+        return new TerminalRun(pendingRun, automator, counter, workspace, output);
     }
 
     /// <summary>
@@ -150,22 +189,20 @@ internal static class CliE2ETestHelpers
         bool mountDockerSocket = false,
         TemporaryWorkspace? workspace = null,
         IEnumerable<string>? additionalVolumes = null,
+        string? network = null,
         int width = 160,
         int height = 48,
         [CallerMemberName] string testName = "")
     {
+        // See CreateTestTerminal above for why we prefer the xUnit-reported test
+        // method name over `[CallerMemberName]`.
+        testName = ResolveTestMethodName(testName);
         var recordingPath = GetTestResultsRecordingPath(testName);
         RegisterCaptureFile("recording.cast", recordingPath);
-        var dockerfileName = variant switch
-        {
-            DockerfileVariant.DotNet => "Dockerfile.e2e",
-            DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot-base",
-            DockerfileVariant.PolyglotJava => "Dockerfile.e2e-polyglot-java",
-            _ => throw new ArgumentOutOfRangeException(nameof(variant)),
-        };
-        var dockerfilePath = Path.Combine(repoRoot, "tests", "Shared", "Docker", dockerfileName);
+        var dockerfilePath = GetDockerfilePath(repoRoot, variant);
+        var prebuiltImageName = GetPrebuiltImageName(variant);
 
-        if (variant is DockerfileVariant.PolyglotJava)
+        if (variant is DockerfileVariant.PolyglotJava && prebuiltImageName is null)
         {
             EnsurePolyglotBaseImage(repoRoot, output);
         }
@@ -175,7 +212,8 @@ internal static class CliE2ETestHelpers
         output.WriteLine($"  Strategy:       {strategy}");
         output.WriteLine($"  Expected ver:   {strategy.ExpectedVersion ?? "(not available)"}");
         output.WriteLine($"  Variant:        {variant}");
-        output.WriteLine($"  Dockerfile:     {dockerfilePath}");
+        output.WriteLine($"  Dockerfile:     {(prebuiltImageName is null ? dockerfilePath : "(prebuilt image)")}");
+        output.WriteLine($"  Image:          {prebuiltImageName ?? "(build from Dockerfile)"}");
         output.WriteLine($"  Workspace:      {workspace?.WorkspaceRoot.FullName ?? "(none)"}");
         output.WriteLine($"  Docker socket:  {mountDockerSocket}");
         output.WriteLine($"  Dimensions:     {width}x{height}");
@@ -187,17 +225,29 @@ internal static class CliE2ETestHelpers
             .WithAsciinemaRecording(recordingPath)
             .WithDockerContainer(c =>
             {
-                c.DockerfilePath = dockerfilePath;
-                c.BuildContext = repoRoot;
+                ConfigureDockerContainerSource(c, repoRoot, variant);
 
                 if (mountDockerSocket)
                 {
                     c.MountDockerSocket = true;
                 }
 
+                if (network is not null)
+                {
+                    c.Network = network;
+                }
+
                 if (workspace is not null)
                 {
                     c.Volumes.Add($"{workspace.WorkspaceRoot.FullName}:/workspace/{workspace.WorkspaceRoot.Name}");
+                }
+
+                var cliVersionOutputDir = Environment.GetEnvironmentVariable(CliVersionOutputDirEnvironmentVariableName);
+                if (!string.IsNullOrEmpty(cliVersionOutputDir))
+                {
+                    Directory.CreateDirectory(cliVersionOutputDir);
+                    c.Volumes.Add($"{cliVersionOutputDir}:{ContainerCliVersionOutputDir}");
+                    c.Environment[CliVersionOutputDirEnvironmentVariableName] = ContainerCliVersionOutputDir;
                 }
 
                 if (additionalVolumes is not null)
@@ -208,11 +258,103 @@ internal static class CliE2ETestHelpers
                     }
                 }
 
-                // Delegate all mode-specific Docker config to the strategy
-                strategy.ConfigureContainer(c);
+                ConfigureDockerContainerStrategy(c, strategy, prebuiltImageSelected: prebuiltImageName is not null);
             });
 
         return builder.Build();
+    }
+
+    internal static void ConfigureDockerContainerStrategy(DockerContainerOptions options, CliInstallStrategy strategy, bool prebuiltImageSelected = false)
+    {
+        // Delegate all mode-specific Docker config to the strategy.
+        strategy.ConfigureContainer(options);
+
+        if (prebuiltImageSelected)
+        {
+            if (!string.IsNullOrEmpty(options.DockerfilePath) || !string.IsNullOrEmpty(options.BuildContext))
+            {
+                throw new InvalidOperationException("A prebuilt CLI E2E image was selected, but Dockerfile configuration was also set. Prebuilt-image runs must not fall back to Dockerfile builds.");
+            }
+
+            options.BuildArgs.Clear();
+        }
+    }
+
+    internal static void ConfigureDockerContainerSource(DockerContainerOptions options, string repoRoot, DockerfileVariant variant)
+    {
+        var prebuiltImageName = GetPrebuiltImageName(variant);
+        if (prebuiltImageName is not null)
+        {
+            options.Image = prebuiltImageName;
+            return;
+        }
+
+        if (variant is DockerfileVariant.DotNet && IsDotNetImageRequired())
+        {
+            throw new InvalidOperationException($"{DotNetImageEnvironmentVariableName} must be set when the prebuilt CLI E2E .NET image is required.");
+        }
+
+        if (variant is DockerfileVariant.Polyglot && IsPolyglotImageRequired())
+        {
+            throw new InvalidOperationException($"{PolyglotImageEnvironmentVariableName} must be set when the prebuilt CLI E2E polyglot image is required.");
+        }
+
+        if (variant is DockerfileVariant.PolyglotJava && IsPolyglotJavaImageRequired())
+        {
+            throw new InvalidOperationException($"{PolyglotJavaImageEnvironmentVariableName} must be set when the prebuilt CLI E2E Java image is required.");
+        }
+
+        options.DockerfilePath = GetDockerfilePath(repoRoot, variant);
+        options.BuildContext = repoRoot;
+    }
+
+    private static string? GetPrebuiltImageName(DockerfileVariant variant)
+    {
+        var environmentVariableName = variant switch
+        {
+            DockerfileVariant.DotNet => DotNetImageEnvironmentVariableName,
+            DockerfileVariant.Polyglot => PolyglotImageEnvironmentVariableName,
+            DockerfileVariant.PolyglotJava => PolyglotJavaImageEnvironmentVariableName,
+            _ => throw new ArgumentOutOfRangeException(nameof(variant)),
+        };
+
+        var imageName = Environment.GetEnvironmentVariable(environmentVariableName);
+        return string.IsNullOrWhiteSpace(imageName) ? null : imageName.Trim();
+    }
+
+    private static string GetDockerfilePath(string repoRoot, DockerfileVariant variant)
+    {
+        var dockerfileName = variant switch
+        {
+            DockerfileVariant.DotNet => "Dockerfile.e2e",
+            DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot-base",
+            DockerfileVariant.PolyglotJava => "Dockerfile.e2e-polyglot-java",
+            _ => throw new ArgumentOutOfRangeException(nameof(variant)),
+        };
+
+        return Path.Combine(repoRoot, "tests", "Shared", "Docker", dockerfileName);
+    }
+
+    private static bool IsDotNetImageRequired()
+    {
+        return IsImageRequired(RequireDotNetImageEnvironmentVariableName);
+    }
+
+    private static bool IsPolyglotImageRequired()
+    {
+        return IsImageRequired(RequirePolyglotImageEnvironmentVariableName);
+    }
+
+    private static bool IsPolyglotJavaImageRequired()
+    {
+        return IsImageRequired(RequirePolyglotJavaImageEnvironmentVariableName);
+    }
+
+    private static bool IsImageRequired(string environmentVariableName)
+    {
+        var value = Environment.GetEnvironmentVariable(environmentVariableName);
+        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -232,6 +374,9 @@ internal static class CliE2ETestHelpers
         int height = 48,
         [CallerMemberName] string testName = "")
     {
+        // See CreateTestTerminal above for why we prefer the xUnit-reported test
+        // method name over `[CallerMemberName]`.
+        testName = ResolveTestMethodName(testName);
         var recordingPath = GetTestResultsRecordingPath(testName);
         RegisterCaptureFile("recording.cast", recordingPath);
 
@@ -301,6 +446,7 @@ internal static class CliE2ETestHelpers
             startInfo.ArgumentList.Add("--quiet");
             startInfo.ArgumentList.Add("--build-arg");
             startInfo.ArgumentList.Add("SKIP_SOURCE_BUILD=true");
+            AddUbuntuAptMirrorBuildArg(startInfo);
             startInfo.ArgumentList.Add("-f");
             startInfo.ArgumentList.Add(dockerfilePath);
             startInfo.ArgumentList.Add("-t");
@@ -350,6 +496,7 @@ internal static class CliE2ETestHelpers
 
             startInfo.ArgumentList.Add("build");
             startInfo.ArgumentList.Add("--quiet");
+            AddUbuntuAptMirrorBuildArg(startInfo);
             startInfo.ArgumentList.Add("-f");
             startInfo.ArgumentList.Add(dockerfilePath);
             startInfo.ArgumentList.Add("-t");
@@ -434,6 +581,18 @@ internal static class CliE2ETestHelpers
     private static string GenerateDockerContainerName()
     {
         return $"hex1b-test-{Guid.NewGuid():N}".Substring(0, 32);
+    }
+
+    private static void AddUbuntuAptMirrorBuildArg(ProcessStartInfo startInfo)
+    {
+        var buildArgs = new Dictionary<string, string>();
+        CliInstallStrategy.ConfigureUbuntuAptMirrorBuildArg(buildArgs);
+
+        foreach (var (name, value) in buildArgs)
+        {
+            startInfo.ArgumentList.Add("--build-arg");
+            startInfo.ArgumentList.Add($"{name}={value}");
+        }
     }
 
     /// <summary>

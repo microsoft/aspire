@@ -1,0 +1,360 @@
+parameters:
+  - name: npmPackagesDir
+    type: string
+    default: ''
+  - name: expectedVersion
+    type: string
+    default: ''
+  - name: rid
+    type: string
+    default: 'linux-x64'
+  - name: validationSummaryArtifactName
+    type: string
+    default: 'npm-validation-summary'
+  # When true, the install test is allowed to run against just-built tarballs
+  # without contacting the npm registry. PR builds set this to true; release
+  # validation builds also set this to true. The variable exists so future
+  # registry-resolution probes can be gated on it.
+  - name: skipRegistryResolution
+    type: boolean
+    default: true
+
+steps:
+  - bash: |
+      set -euo pipefail
+      to_unix_path() {
+        local value="$1"
+        if command -v cygpath >/dev/null 2>&1 && [[ "$value" =~ ^[A-Za-z]:\\ ]]; then
+          cygpath -u "$value"
+        else
+          printf '%s\n' "$value"
+        fi
+      }
+
+      packagesDir="$(to_unix_path '${{ parameters.npmPackagesDir }}')"
+      expectedVersion='${{ parameters.expectedVersion }}'
+      rid='${{ parameters.rid }}'
+
+      if [ -z "$packagesDir" ] || [ ! -d "$packagesDir" ]; then
+        echo "##[error]npmPackagesDir parameter is required and must point to a directory containing the just-built microsoft-aspire-cli*.tgz files."
+        exit 1
+      fi
+
+      if [ -z "$expectedVersion" ]; then
+        echo "##[error]expectedVersion parameter is required."
+        exit 1
+      fi
+
+      if [ -z "$rid" ]; then
+        echo "##[error]rid parameter is required."
+        exit 1
+      fi
+
+      echo "##vso[task.setvariable variable=NpmPackagesDir]$packagesDir"
+      echo "##vso[task.setvariable variable=NpmExpectedVersion]$expectedVersion"
+      echo "##vso[task.setvariable variable=NpmTestRid]$rid"
+    displayName: 🟣Resolve npm install-test inputs
+
+  - bash: |
+      set -euo pipefail
+      packagesDir="$(NpmPackagesDir)"
+      expectedVersion="$(NpmExpectedVersion)"
+      rid="$(NpmTestRid)"
+
+      # Filename layout produced by eng/scripts/pack-cli-npm-package.ps1:
+      #   microsoft-aspire-cli-<version>.tgz                  (pointer package)
+      #   microsoft-aspire-cli-<rid>-<version>.tgz            (RID package)
+      # The pointer filename never embeds a RID, so distinguish them on that.
+      #
+      # IMPORTANT: This script must stay portable to Bash 3.2 because the
+      # AzDO Bash@3 task on the macOS image executes scripts with /bin/bash
+      # which is still 3.2.x. That means: no extended-glob shell options
+      # (those are 4+), no array-load builtins (those are 4+), no associative
+      # arrays (4+). We therefore enumerate the tarballs with `find` (always
+      # available) and read them into a regular indexed array with a
+      # portable `while read` loop that survives names containing spaces.
+      allPackages=()
+      while IFS= read -r pkg; do
+        [ -n "$pkg" ] && allPackages+=("$pkg")
+      done < <(find "$packagesDir" -type f -name "microsoft-aspire-cli*.tgz" | LC_ALL=C sort -u)
+
+      if [ ${#allPackages[@]} -eq 0 ]; then
+        echo "##[error]No microsoft-aspire-cli*.tgz files found under $packagesDir"
+        exit 1
+      fi
+
+      pointer=""
+      ridTarball=""
+      ridFilename="microsoft-aspire-cli-${rid}-${expectedVersion}.tgz"
+      pointerFilename="microsoft-aspire-cli-${expectedVersion}.tgz"
+
+      for pkg in "${allPackages[@]}"; do
+        base="$(basename "$pkg")"
+        if [ "$base" = "$pointerFilename" ]; then
+          pointer="$pkg"
+        elif [ "$base" = "$ridFilename" ]; then
+          ridTarball="$pkg"
+        fi
+      done
+
+      if [ -z "$pointer" ]; then
+        echo "##[error]Pointer package $pointerFilename was not found under $packagesDir"
+        echo "Discovered files:"
+        printf '  %s\n' "${allPackages[@]}"
+        exit 1
+      fi
+
+      if [ -z "$ridTarball" ]; then
+        echo "##[error]RID package $ridFilename was not found under $packagesDir"
+        echo "Discovered files:"
+        printf '  %s\n' "${allPackages[@]}"
+        exit 1
+      fi
+
+      echo "Pointer package: $pointer"
+      echo "RID package:     $ridTarball"
+      echo "##vso[task.setvariable variable=NpmPointerTarball]$pointer"
+      echo "##vso[task.setvariable variable=NpmRidTarball]$ridTarball"
+
+      # Initialize every check status to 'failed' up front. If any subsequent
+      # step exits via 'set -e' before flipping one of these to 'passed', the
+      # summary written by the final step still reflects the real outcome
+      # instead of a literal '$(NpmCheckXxx)' AzDO variable expansion (which
+      # the release-side gate would still reject, but the diagnostic value
+      # of 'failed' is much higher).
+      echo "##vso[task.setvariable variable=NpmCheckInstall]failed"
+      echo "##vso[task.setvariable variable=NpmCheckVersion]failed"
+      echo "##vso[task.setvariable variable=NpmCheckLauncher]failed"
+      echo "##vso[task.setvariable variable=NpmCheckUninstall]failed"
+    displayName: 🟣Locate pointer and RID tarballs
+
+  - bash: |
+      set -euo pipefail
+      pointer="$(NpmPointerTarball)"
+      ridTarball="$(NpmRidTarball)"
+      expectedVersion="$(NpmExpectedVersion)"
+      rid="$(NpmTestRid)"
+
+      # Use a scratch npm prefix so the test never mutates the agent's
+      # global node_modules and so cleanup is a single rm -rf.
+      stagingDirectory="$(Build.StagingDirectory)"
+      if command -v cygpath >/dev/null 2>&1 && [[ "$stagingDirectory" =~ ^[A-Za-z]:\\ ]]; then
+        stagingDirectory="$(cygpath -u "$stagingDirectory")"
+      fi
+
+      prefix="$stagingDirectory/npm-validate-prefix"
+      cache="$stagingDirectory/npm-validate-cache"
+      aspireCache="$stagingDirectory/npm-validate-aspire-cache"
+      rm -rf "$prefix" "$cache" "$aspireCache"
+      mkdir -p "$prefix" "$cache" "$aspireCache"
+
+      export NPM_CONFIG_PREFIX="$prefix"
+      export NPM_CONFIG_CACHE="$cache"
+      export ASPIRE_NPM_CACHE_DIR="$aspireCache"
+      # Prefer the freshly-built launcher's PATH; do not poison existing aspire binaries.
+      # npm writes POSIX shims to <prefix>/bin and Windows shims to <prefix>.
+      export PATH="$prefix/bin:$prefix:$PATH"
+
+      if command -v aspire >/dev/null 2>&1; then
+        echo "##[error]aspire is already on PATH before install ($(command -v aspire)) — test environment is not clean"
+        exit 1
+      fi
+
+      # Install the RID package first so it lands as a top-level sibling of the
+      # pointer package. Then install the pointer with --omit=optional so npm
+      # does not install the matching RID dep from the registry (the just-built
+      # version does not yet exist in the public registry during this validation
+      # step).
+      #
+      # IMPORTANT: --omit=optional only prevents the *install* of an optional
+      # dep; npm still resolves its metadata from the registry while building
+      # the dependency tree. The pointer declares ALL 7 supported RIDs as
+      # optionalDependencies pinned to the just-built version, so on a network
+      # path that doesn't get a fast 404 (some 1ES Linux/Windows pools, where
+      # the npm registry call gets blackholed by network isolation rules), each
+      # of the 7 lookups burns the full --fetch-timeout. That's how the pointer
+      # install took 9m on Linux while only 3s on macOS during dry-run build
+      # 2987581. Pair --omit=optional with --offline so npm never touches the
+      # network for this validation: optional deps are skipped without a
+      # resolution attempt and the local tarball is installed straight from
+      # disk. A short --fetch-timeout is set as belt-and-suspenders in case any
+      # code path bypasses --offline (it should not, but if it does we'd rather
+      # fail in seconds than minutes). NPM_CONFIG_CACHE points at a fresh empty
+      # directory above, so --offline cannot accidentally use a poisoned cache.
+      npmInstallArgs=(
+        --foreground-scripts=false
+        --no-audit
+        --no-fund
+        --loglevel=warn
+        --offline
+        --fetch-timeout=15000
+      )
+
+      echo "Installing RID package..."
+      npm install -g "${npmInstallArgs[@]}" "$ridTarball"
+
+      echo "Installing pointer package..."
+      npm install -g "${npmInstallArgs[@]}" --omit=optional "$pointer"
+
+      echo ""
+      echo "Verifying aspire CLI is available on PATH..."
+      if ! command -v aspire >/dev/null 2>&1; then
+        echo "##[error]aspire command not found in PATH after npm install"
+        ls -la "$prefix/bin" || true
+        exit 1
+      fi
+      echo "  Path: $(command -v aspire)"
+
+      # Capture the launcher's reported version. The CLI is set to skip its first-run
+      # update check in CI via DOTNET_CLI_TELEMETRY_OPTOUT and friends; here we just
+      # need a clean version line. Match the first line that looks like a semver-ish
+      # token so we are not thrown off by an incidental warn/info line printed before
+      # or after the version (System.CommandLine's VersionOption normally just prints
+      # the version and exits, but be defensive).
+      #
+      # The version we get from `aspire --version` is the InformationalVersion from
+      # the assembly, which the dotnet build embeds as SemVer 2.0 with build metadata
+      # appended after `+`. For example:
+      #     13.5.0-preview.1.26279.34+727fe3ca9dcecbcc6d10d8b4373ae6f5779b25b4
+      # We accept this form and strip the `+<buildmeta>` suffix before comparing to
+      # the npm package version, which intentionally drops build metadata because
+      # npm SemVer (npm/semver) doesn't honor it for equality.
+      # See https://semver.org/#spec-item-10 and https://github.com/npm/node-semver#advanced-range-syntax
+      #
+      # IMPORTANT: pipe the subprocess output through `tr -d '\r'` BEFORE capturing.
+      # On Windows runners this template's `bash:` step runs under Git Bash, which
+      # spawns `aspire.exe` as a Windows console process. System.CommandLine 2.x's
+      # VersionOption writes through Console.Out.WriteLine, which terminates lines
+      # with Environment.NewLine = "\r\n" on Windows. Bash command substitution
+      # `$(...)` strips trailing LF but NOT CR, so the captured variable ends with
+      # "\r". The semver regex below is anchored with `$`, which matches end-of-line
+      # but not the literal CR — so without the `tr -d '\r'`, the entire match
+      # silently fails on Windows and the step exits with
+      # "##[error]aspire --version reported '' but expected '<version>'".
+      # Verified locally: `printf 'X\r\n' | grep -Eo '^X$'` produces NO match.
+      versionOutput="$(aspire --version 2>&1 | tr -d '\r')"
+      versionLine="$(printf '%s\n' "$versionOutput" | grep -Eo '^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9._-]+)?(\+[A-Za-z0-9._-]+)?$' | head -n 1 || true)"
+      # ${var%+*} strips the longest matching `+*` suffix. POSIX, works in Bash 3.2.
+      actualVersion="${versionLine%+*}"
+      echo "  Raw output: $versionOutput"
+      echo "  Matched semver line: $versionLine"
+      echo "  Comparable version (no +buildmeta): $actualVersion"
+      if [ -z "$actualVersion" ] || [ "$actualVersion" != "$expectedVersion" ]; then
+        echo "##[error]aspire --version reported '$actualVersion' but expected '$expectedVersion'"
+        exit 1
+      fi
+
+      # The launcher copies the native binary into $ASPIRE_NPM_CACHE_DIR/<version>/<rid>/bin/<binaryName>.
+      binaryName="aspire"
+      if [[ "$rid" == win-* ]]; then
+        binaryName="aspire.exe"
+      fi
+
+      cachedBinary="$aspireCache/$expectedVersion/$rid/bin/$binaryName"
+      if [ ! -f "$cachedBinary" ]; then
+        echo "##[error]Expected cached binary at $cachedBinary was not created by the launcher"
+        find "$aspireCache" -maxdepth 6 -type f || true
+        exit 1
+      fi
+      if [ ! -x "$cachedBinary" ]; then
+        echo "##[error]Cached binary at $cachedBinary is not executable"
+        ls -la "$cachedBinary"
+        exit 1
+      fi
+      echo "  Launcher cache layout verified at $cachedBinary"
+
+      echo ""
+      echo "Uninstalling pointer and RID packages..."
+      # Reuse the offline/timeout-capped args so a stray audit/funding call
+      # on an isolated 1ES pool cannot hang the uninstall step the way it
+      # almost hung the install step.
+      npm uninstall -g "${npmInstallArgs[@]}" '@microsoft/aspire-cli' "@microsoft/aspire-cli-${rid}"
+
+      if command -v aspire >/dev/null 2>&1; then
+        echo "##[error]aspire command still on PATH after uninstall ($(command -v aspire))"
+        exit 1
+      fi
+      echo "  Confirmed: aspire is no longer in PATH"
+
+      # Surface every status to the summary step via task variables.
+      echo "##vso[task.setvariable variable=NpmCheckInstall]passed"
+      echo "##vso[task.setvariable variable=NpmCheckVersion]passed"
+      echo "##vso[task.setvariable variable=NpmCheckLauncher]passed"
+      echo "##vso[task.setvariable variable=NpmCheckUninstall]passed"
+    displayName: 🟣Install, verify, and uninstall @microsoft/aspire-cli
+
+  - bash: |
+      set -euo pipefail
+      stagingDirectory="$(Build.StagingDirectory)"
+      if command -v cygpath >/dev/null 2>&1 && [[ "$stagingDirectory" =~ ^[A-Za-z]:\\ ]]; then
+        stagingDirectory="$(cygpath -u "$stagingDirectory")"
+      fi
+
+      outputDir="$stagingDirectory/npm-validation-summary"
+      mkdir -p "$outputDir"
+      outputPath="$outputDir/validation-summary.json"
+      rid="$(NpmTestRid)"
+      expectedVersion="$(NpmExpectedVersion)"
+      skipRegistry='${{ parameters.skipRegistryResolution }}'
+
+      # Lowercase booleans so the JSON is valid.
+      skipRegistry="$(printf '%s' "$skipRegistry" | tr '[:upper:]' '[:lower:]')"
+
+      # Single-quote the AzDO macro expansions so an unexpanded '$(NpmCheckXxx)'
+      # token is never re-interpreted by the shell as a command substitution.
+      # Every check is initialized to 'failed' up front (see the locate step), so
+      # these are always set; validatedByPreparePipeline is true only when all
+      # four checks actually passed. This keeps the field honest instead of a
+      # hardcoded 'true', so the release-side gate that reads it is meaningful.
+      checkInstall='$(NpmCheckInstall)'
+      checkVersion='$(NpmCheckVersion)'
+      checkLauncher='$(NpmCheckLauncher)'
+      checkUninstall='$(NpmCheckUninstall)'
+
+      validatedByPreparePipeline=false
+      if [ "$checkInstall" = "passed" ] && \
+         [ "$checkVersion" = "passed" ] && \
+         [ "$checkLauncher" = "passed" ] && \
+         [ "$checkUninstall" = "passed" ]; then
+        validatedByPreparePipeline=true
+      fi
+
+      cat > "$outputPath" <<EOF
+      {
+        "schemaVersion": 1,
+        "validatedByPreparePipeline": $validatedByPreparePipeline,
+        "rid": "$rid",
+        "expectedVersion": "$expectedVersion",
+        "skipRegistryResolution": $skipRegistry,
+        "checks": {
+          "install": {
+            "status": "$checkInstall",
+            "details": "npm install -g <rid>.tgz && npm install -g --omit=optional <pointer>.tgz"
+          },
+          "version": {
+            "status": "$checkVersion",
+            "details": "aspire --version output matched the build version"
+          },
+          "launcher": {
+            "status": "$checkLauncher",
+            "details": "Launcher cached native binary at ASPIRE_NPM_CACHE_DIR/<version>/<rid>/bin/<binaryName>"
+          },
+          "uninstall": {
+            "status": "$checkUninstall",
+            "details": "npm uninstall -g @microsoft/aspire-cli @microsoft/aspire-cli-$rid"
+          }
+        }
+      }
+      EOF
+
+      echo "Wrote npm validation summary to $outputPath"
+      cat "$outputPath"
+    displayName: 🟣Write npm validation summary
+    condition: always()
+
+  - task: 1ES.PublishBuildArtifacts@1
+    displayName: 🟣Publish npm validation summary
+    condition: always()
+    inputs:
+      PathtoPublish: '$(Build.StagingDirectory)/npm-validation-summary'
+      ArtifactName: ${{ parameters.validationSummaryArtifactName }}

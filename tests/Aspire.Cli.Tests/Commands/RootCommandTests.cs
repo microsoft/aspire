@@ -40,6 +40,69 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
     }
 
+    [Fact]
+    public async Task CaptureProfileOptions_AreHiddenFromHelp()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--help");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        var help = string.Join(Environment.NewLine, outputWriter.Logs);
+        Assert.DoesNotContain("--capture-profile", help, StringComparison.Ordinal);
+        Assert.DoesNotContain("--capture-profile-output", help, StringComparison.Ordinal);
+        Assert.DoesNotContain("--capture-profile-delay", help, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CaptureProfileOptions_ParseOnSubcommands()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run --capture-profile --capture-profile-output profile.zip --capture-profile-delay 1");
+
+        Assert.Empty(result.Errors);
+        Assert.True(result.GetValue(RootCommand.CaptureProfileOption));
+        Assert.Equal("profile.zip", result.GetValue(RootCommand.CaptureProfileOutputOption)?.Name);
+        Assert.Equal(1, result.GetValue(RootCommand.CaptureProfileDelayOption));
+        Assert.DoesNotContain("--capture-profile", result.UnmatchedTokens);
+    }
+
+    [Fact]
+    public void StartDebugSessionOption_IsOnlyAddedInExtensionContext()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var normalServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var normalProvider = normalServices.BuildServiceProvider();
+
+        var normalCommand = normalProvider.GetRequiredService<RootCommand>();
+        Assert.DoesNotContain(normalCommand.Options, option => ReferenceEquals(option, RootCommand.StartDebugSessionOption));
+
+        var extensionServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+        });
+        using var extensionProvider = extensionServices.BuildServiceProvider();
+
+        var extensionCommand = extensionProvider.GetRequiredService<RootCommand>();
+        Assert.Contains(extensionCommand.Options, option => ReferenceEquals(option, RootCommand.StartDebugSessionOption));
+    }
+
     [Theory]
     [InlineData("1", true)]
     [InlineData("true", true)]
@@ -183,6 +246,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.ErrorTextWriter = errorWriter;
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -203,6 +267,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -237,6 +302,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.ErrorTextWriter = errorWriter;
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -369,8 +435,11 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task Banner_DisplayedWithExplicitBannerFlag_InNonInteractiveEnvironment()
+    public async Task Banner_NotDisplayedWithExplicitBannerFlag_InNonInteractiveEnvironment()
     {
+        // Even when --banner is explicitly passed, the banner should NOT display in a
+        // non-interactive environment because Spectre.Console's Live display requires
+        // valid console handles (e.g., stdout must not be redirected).
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = true }; // Not first run
         var bannerService = new TestBannerService();
@@ -385,7 +454,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.Banner]);
 
-        Assert.True(bannerService.WasBannerDisplayed);
+        Assert.False(bannerService.WasBannerDisplayed);
     }
 
     [Fact]
@@ -462,5 +531,17 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         {
             Assert.Contains(sub.Name, helpOutput);
         }
+    }
+
+    [Fact]
+    public void RootCommand_DoesNotExposeRemovedExecSubcommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+
+        Assert.DoesNotContain(command.Subcommands, subcommand => subcommand.Name == "exec");
     }
 }

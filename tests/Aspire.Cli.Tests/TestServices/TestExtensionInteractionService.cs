@@ -14,20 +14,37 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestExtensionInteractionService(IServiceProvider serviceProvider) : IExtensionInteractionService
 {
     public ConsoleOutput Console { get; set; }
+    public bool SupportsLinks { get; set; }
     public Action<string>? DisplayErrorCallback { get; set; }
     public Action<string>? DisplaySubtleMessageCallback { get; set; }
     public Action<string>? DisplayConsoleWriteLineMessage { get; set; }
     public Action? LaunchAppHostCallback { get; set; }
     public Action? NotifyAppHostStartupCompletedCallback { get; set; }
     public Action<DashboardUrlsState>? DisplayDashboardUrlsCallback { get; set; }
-    public Action<string, string?, bool>? StartDebugSessionCallback { get; set; }
+    public Action<string, string?, bool, DebugSessionOptions?>? StartDebugSessionCallback { get; set; }
     public Action<string, bool>? ConsoleDisplaySubtleMessageCallback { get; set; }
+    public Func<string, bool, bool>? ConfirmCallback { get; set; }
+    public Func<string, IReadOnlyList<string>, string>? SelectionCallback { get; set; }
+    public Func<IRenderable, Func<Action<IRenderable>, Task>, Task>? DisplayLiveAsyncCallback { get; set; }
+    public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
+    public bool FlushAsyncCalled { get; private set; }
 
     public IExtensionBackchannel Backchannel { get; } = serviceProvider.GetRequiredService<IExtensionBackchannel>();
+
+    public Task FlushAsync(CancellationToken cancellationToken = default)
+    {
+        FlushAsyncCalled = true;
+        return Task.CompletedTask;
+    }
 
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         return action();
+    }
+
+    public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
+    {
+        return action(_ => { });
     }
 
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
@@ -45,17 +62,28 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
     }
 
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
-        if (!choices.Any())
+        var choicesArray = choices.ToArray();
+        if (choicesArray.Length == 0)
         {
             throw new EmptyChoicesException($"No items available for selection: {promptText}");
         }
 
-        return Task.FromResult(choices.First());
+        if (SelectionCallback is not null)
+        {
+            var selected = SelectionCallback(promptText, choicesArray.Select(choiceFormatter).ToArray());
+            var matchingChoice = choicesArray.FirstOrDefault(c => string.Equals(choiceFormatter(c), selected, StringComparison.Ordinal));
+            if (matchingChoice is not null)
+            {
+                return Task.FromResult(matchingChoice);
+            }
+        }
+
+        return Task.FromResult(choicesArray.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
         if (!choices.Any())
         {
@@ -75,12 +103,12 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         return 0;
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
         DisplayErrorCallback?.Invoke(errorMessage);
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
     }
 
@@ -105,7 +133,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options = null)
     {
-        StartDebugSessionCallback?.Invoke(workingDirectory, projectFile, debug);
+        StartDebugSessionCallback?.Invoke(workingDirectory, projectFile, debug, options);
         return Task.CompletedTask;
     }
 
@@ -115,15 +143,17 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
+        DisplayedLines.AddRange(lines);
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
     }
 
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(true);
+        var defaultValue = binding?.DefaultValue ?? false;
+        return Task.FromResult(ConfirmCallback?.Invoke(promptText, defaultValue) ?? true);
     }
 
     public void DisplaySubtleMessage(string message, bool allowMarkup = false)
@@ -143,7 +173,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     {
     }
 
-    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null)
     {
     }
 
@@ -170,6 +200,11 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback)
     {
+        if (DisplayLiveAsyncCallback is not null)
+        {
+            return DisplayLiveAsyncCallback(initialRenderable, callback);
+        }
+
         return callback(_ => { });
     }
 

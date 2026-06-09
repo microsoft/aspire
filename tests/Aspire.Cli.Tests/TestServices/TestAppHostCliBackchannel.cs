@@ -10,6 +10,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 {
     public TaskCompletionSource? RequestStopAsyncCalled { get; set; }
     public Func<Task>? RequestStopAsyncCallback { get; set; }
+    public TaskCompletionSource? NotifyAppHostReadyAsyncCalled { get; set; }
 
     public TaskCompletionSource? GetDashboardUrlsAsyncCalled { get; set; }
     public Func<CancellationToken, Task<DashboardUrlsState>>? GetDashboardUrlsAsyncCallback { get; set; }
@@ -22,6 +23,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 
     public TaskCompletionSource? ConnectAsyncCalled { get; set; }
     public Func<string, CancellationToken, Task>? ConnectAsyncCallback { get; set; }
+    public TaskCompletionSource DisconnectCompletionSource { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public TaskCompletionSource? GetPublishingActivitiesAsyncCalled { get; set; }
     public Func<CancellationToken, IAsyncEnumerable<PublishingActivity>>? GetPublishingActivitiesAsyncCallback { get; set; }
@@ -43,6 +45,12 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         {
             return Task.CompletedTask;
         }
+    }
+
+    public Task NotifyAppHostReadyAsync(CancellationToken cancellationToken)
+    {
+        NotifyAppHostReadyAsyncCalled?.SetResult();
+        return Task.CompletedTask;
     }
 
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
@@ -106,6 +114,11 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         {
             await ConnectAsyncCallback.Invoke(socketPath, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    public async Task WaitForDisconnectAsync(CancellationToken cancellationToken)
+    {
+        await DisconnectCompletionSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async IAsyncEnumerable<PublishingActivity> GetPublishingActivitiesAsync([EnumeratorCancellation]CancellationToken cancellationToken)
@@ -246,12 +259,6 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken)
     {
         return Task.CompletedTask;
-    }
-
-    public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        await Task.Delay(1, cancellationToken).ConfigureAwait(false);
-        yield return new CommandOutput { Text = "test", IsErrorMessage = false, LineNumber = 0 };
     }
 
     public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken)

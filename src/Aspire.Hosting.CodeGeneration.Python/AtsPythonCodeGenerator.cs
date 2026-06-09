@@ -3,6 +3,10 @@
 
 using System.Globalization;
 using System.Reflection;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Python;
@@ -18,6 +22,13 @@ internal sealed class BuilderModel
     public required List<AtsCapabilityInfo> Capabilities { get; init; }
     public bool IsInterface { get; init; }
     public AtsTypeRef? TargetType { get; init; }
+}
+
+internal sealed class PythonExportedValueTreeNode
+{
+    public Dictionary<string, PythonExportedValueTreeNode> Children { get; } = new(StringComparer.Ordinal);
+
+    public AtsExportedValueInfo? Value { get; set; }
 }
 
 /// <summary>
@@ -187,7 +198,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     /// </summary>
     private string MapTypeRefToPython(AtsTypeRef? typeRef)
     {
-        if (typeRef == null)
+        if (typeRef is null)
         {
             return "typing.Any";
         }
@@ -198,7 +209,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             return wrapperClassName;
         }
 
-        return typeRef.Category switch
+        var mappedType = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
@@ -214,6 +225,19 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             AtsTypeCategory.Unknown => "typing.Any",  // Unknown types use 'Any' since they're not in the ATS universe
             _ => "typing.Any"  // Fallback for any unhandled categories
         };
+        return ApplyNullableType(typeRef, mappedType);
+    }
+
+    private static string ApplyNullableType(AtsTypeRef typeRef, string mappedType)
+    {
+        if (typeRef.IsNullable != true || typeRef.Category is not (AtsTypeCategory.Primitive or AtsTypeCategory.Enum))
+        {
+            return mappedType;
+        }
+
+        return typeRef.TypeId is AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken
+            ? mappedType
+            : $"{mappedType} | None";
     }
 
     /// <summary>
@@ -336,6 +360,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                         IsCallback = p.IsCallback,
                         CallbackParameters = p.CallbackParameters,
                         CallbackReturnType = p.CallbackReturnType,
+                        Documentation = p.Documentation,
                         DefaultValue = p.DefaultValue
                     });
                 }
@@ -358,6 +383,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 MethodName = shortest.MethodName,
                 OwningTypeName = shortest.OwningTypeName,
                 Description = shortest.Description ?? items.FirstOrDefault(c => c.Description is not null)?.Description,
+                Documentation = shortest.Documentation ?? items.FirstOrDefault(c => c.Documentation is not null)?.Documentation,
                 Parameters = mergedParams,
                 ReturnType = shortest.ReturnType,
                 TargetTypeId = shortest.TargetTypeId,
@@ -484,13 +510,43 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     /// </summary>
     private string MapUnionTypeToPython(AtsTypeRef typeRef)
     {
-        if (typeRef.UnionTypes == null || typeRef.UnionTypes.Count == 0)
+        if (typeRef.UnionTypes is null || typeRef.UnionTypes.Count == 0)
         {
             return "typing.Any";
         }
 
         var memberTypes = typeRef.UnionTypes
             .Select(MapTypeRefToPython)
+            .Distinct();
+
+        return string.Join(" | ", memberTypes);
+    }
+
+    private string MapDtoPropertyTypeToPython(AtsTypeRef? typeRef)
+    {
+        if (typeRef is null)
+        {
+            return "typing.Any";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Array or AtsTypeCategory.List => $"typing.Iterable[{MapDtoPropertyTypeToPython(typeRef.ElementType)}]",
+            AtsTypeCategory.Dict => $"typing.Mapping[{MapDtoPropertyTypeToPython(typeRef.KeyType)}, {MapDtoPropertyTypeToPython(typeRef.ValueType)}]",
+            AtsTypeCategory.Union => MapDtoUnionTypeToPython(typeRef),
+            _ => MapTypeRefToPython(typeRef)
+        };
+    }
+
+    private string MapDtoUnionTypeToPython(AtsTypeRef typeRef)
+    {
+        if (typeRef.UnionTypes is null || typeRef.UnionTypes.Count == 0)
+        {
+            return "typing.Any";
+        }
+
+        var memberTypes = typeRef.UnionTypes
+            .Select(MapDtoPropertyTypeToPython)
             .Distinct();
 
         return string.Join(" | ", memberTypes);
@@ -634,6 +690,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         var capabilities = context.Capabilities;
         var dtoTypes = context.DtoTypes;
         var enumTypes = context.EnumTypes;
+        var exportedValues = context.ExportedValues;
 
         // Get builder models (flattened - each builder has all its applicable capabilities)
         var allBuilders = CreateBuilderModels(capabilities);
@@ -711,6 +768,9 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         // Generate DTO classes
         GenerateDtoClasses(dtoTypes);
 
+        // Generate exported immutable values
+        GenerateExportedValues(exportedValues, dtoTypes.ToDictionary(dto => dto.TypeId, StringComparer.Ordinal));
+
         // Generate type classes (context types and wrapper types)
         foreach (var typeClass in typeClasses.Where(t => !_ignoreTypes.Contains(t.TypeId)))
         {
@@ -772,11 +832,142 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             sb.AppendLine(CultureInfo.InvariantCulture, $"class {className}(typing.TypedDict, total=False):");
             foreach (var prop in dtoType.Properties)
             {
-                var propType = MapTypeRefToPython(prop.Type);
+                var propType = MapDtoPropertyTypeToPython(prop.Type);
                 sb.AppendLine(CultureInfo.InvariantCulture, $"    {prop.Name}: {propType}");
             }
             sb.AppendLine();
         }
+    }
+
+    private void GenerateExportedValues(
+        IReadOnlyList<AtsExportedValueInfo> exportedValues,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        var sb = _moduleBuilder.ExportedValues;
+        if (exportedValues.Count == 0)
+        {
+            return;
+        }
+
+        var root = BuildExportedValueTree(exportedValues);
+        foreach (var (name, node) in root.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"{name} = types.SimpleNamespace()");
+            WritePythonExportedValueChildren(sb, name, node, dtoTypesById);
+            sb.AppendLine();
+        }
+    }
+
+    private void WritePythonExportedValueChildren(
+        StringBuilder sb,
+        string path,
+        PythonExportedValueTreeNode node,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        foreach (var (name, child) in node.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            var childPath = $"{path}.{name}";
+            if (child.Value is { } valueInfo)
+            {
+                if (!string.IsNullOrWhiteSpace(valueInfo.Description))
+                {
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"# {valueInfo.Description}");
+                }
+
+                sb.AppendLine(CultureInfo.InvariantCulture, $"{childPath} = {RenderPythonExportedValue(valueInfo.Value, valueInfo.Type, dtoTypesById, topLevel: true)}");
+            }
+            else
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"{childPath} = types.SimpleNamespace()");
+                WritePythonExportedValueChildren(sb, childPath, child, dtoTypesById);
+            }
+        }
+    }
+
+    private string RenderPythonExportedValue(
+        JsonNode? value,
+        AtsTypeRef typeRef,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById,
+        bool topLevel)
+    {
+        string expression;
+
+        if (value is null)
+        {
+            expression = "None";
+        }
+        else
+        {
+            expression = typeRef.Category switch
+            {
+                AtsTypeCategory.Dto when value is JsonObject obj && dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoInfo)
+                    => RenderPythonDtoValue(obj, dtoInfo, dtoTypesById),
+                AtsTypeCategory.Array or AtsTypeCategory.List when value is JsonArray arr
+                    => "[" + string.Join(", ", arr.Select(item => RenderPythonExportedValue(item, typeRef.ElementType!, dtoTypesById, topLevel: false))) + "]",
+                AtsTypeCategory.Dict when value is JsonObject obj
+                    => "{" + string.Join(", ", obj.Select(pair => $"{AtsJsonCodeWriter.ToRelaxedJsonString(pair.Key)}: {RenderPythonExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById, topLevel: false)}")) + "}",
+                _ => RenderPythonPrimitiveValue(value)
+            };
+        }
+
+        if (!topLevel || typeRef.Category is AtsTypeCategory.Primitive)
+        {
+            return expression;
+        }
+
+        return $"typing.cast({MapTypeRefToPython(typeRef)}, {expression})";
+    }
+
+    private string RenderPythonDtoValue(
+        JsonObject value,
+        AtsDtoTypeInfo dtoInfo,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        var members = new List<string>();
+        foreach (var property in dtoInfo.Properties)
+        {
+            if (!value.TryGetPropertyValue(property.Name, out var propertyValue))
+            {
+                continue;
+            }
+
+            members.Add($"{AtsJsonCodeWriter.ToRelaxedJsonString(property.Name)}: {RenderPythonExportedValue(propertyValue, property.Type, dtoTypesById, topLevel: false)}");
+        }
+
+        return "{ " + string.Join(", ", members) + " }";
+    }
+
+    private static string RenderPythonPrimitiveValue(JsonNode value)
+    {
+        return value switch
+        {
+            JsonValue jsonValue when jsonValue.TryGetValue<bool>(out var boolValue) => boolValue ? "True" : "False",
+            JsonValue jsonValue => jsonValue.ToRelaxedJsonString(),
+            _ => value.ToRelaxedJsonString()
+        };
+    }
+
+    private static PythonExportedValueTreeNode BuildExportedValueTree(IReadOnlyList<AtsExportedValueInfo> exportedValues)
+    {
+        var root = new PythonExportedValueTreeNode();
+        foreach (var exportedValue in exportedValues)
+        {
+            var current = root;
+            foreach (var segment in exportedValue.PathSegments)
+            {
+                if (!current.Children.TryGetValue(segment, out var child))
+                {
+                    child = new PythonExportedValueTreeNode();
+                    current.Children[segment] = child;
+                }
+
+                current = child;
+            }
+
+            current.Value = exportedValue;
+        }
+
+        return root;
     }
 
     /// <summary>
@@ -789,23 +980,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             return name;
         }
 
-        var result = new System.Text.StringBuilder();
-        result.Append(char.ToLowerInvariant(name[0]));
-
-        for (int i = 1; i < name.Length; i++)
-        {
-            var c = name[i];
-            if (char.IsUpper(c))
-            {
-                result.Append('_');
-                result.Append(char.ToLowerInvariant(c));
-            }
-            else
-            {
-                result.Append(c);
-            }
-        }
-        var resultStr = result.ToString();
+        var resultStr = JsonNamingPolicy.SnakeCaseLower.ConvertName(name);
         resultStr = resultStr.Replace("environment", "env");
         resultStr = resultStr.Replace("configuration", "config");
         resultStr = resultStr.Replace("application", "app");

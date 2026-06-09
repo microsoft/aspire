@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.TypeSystem;
 using Xunit;
@@ -35,6 +36,15 @@ public class AtsContextFilterTests
             filteredContext.EnumTypes,
             type => Assert.Equal(AtsConstants.EnumTypeId(typeof(TestMode).FullName!), type.TypeId));
 
+        Assert.Collection(
+            filteredContext.ExportedValues.OrderBy(value => string.Join(".", value.PathSegments), StringComparer.Ordinal),
+            value => Assert.Equal("Aspire.Hosting.RemoteHost.Tests.SelectedValues.Default", string.Join(".", value.PathSegments)),
+            value => Assert.Equal("Aspire.Hosting.RemoteHost.Tests.SelectedValues.Metadata", string.Join(".", value.PathSegments)));
+
+        Assert.Contains(filteredContext.Diagnostics, diagnostic => diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.TestType.Method");
+        Assert.DoesNotContain(filteredContext.Diagnostics, diagnostic => diagnostic.Location == "Aspire.Hosting.UnrelatedType.Method");
+        Assert.DoesNotContain(filteredContext.Diagnostics, diagnostic => diagnostic.Location == "Aspire.Hosting.Redis.RedisType.Method");
+
         Assert.Contains("Aspire.Hosting.RemoteHost.Tests/addTestResource", filteredContext.Methods.Keys);
         Assert.DoesNotContain("Aspire.Hosting/createBuilder", filteredContext.Methods.Keys);
     }
@@ -50,7 +60,13 @@ public class AtsContextFilterTests
 
         Assert.Contains(filteredContext.HandleTypes, type => type.AtsTypeId == "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceBuilder`1");
         Assert.Contains(filteredContext.DtoTypes, type => type.TypeId == "Aspire.TypeSystem/AtsContext");
+        Assert.Contains(filteredContext.DtoTypes, type => type.TypeId == "Aspire.TypeSystem/ExportedValueMetadata");
         Assert.Contains(filteredContext.EnumTypes, type => type.TypeId == AtsConstants.EnumTypeId(typeof(DistributedApplicationOperation).FullName!));
+        Assert.Contains(filteredContext.EnumTypes, type => type.TypeId == AtsConstants.EnumTypeId("Aspire.TypeSystem.ExportedValueMode"));
+        Assert.Collection(
+            filteredContext.ExportedValues.OrderBy(value => string.Join(".", value.PathSegments), StringComparer.Ordinal),
+            value => Assert.Equal("Aspire.Hosting.RemoteHost.Tests.SelectedValues.Default", string.Join(".", value.PathSegments)),
+            value => Assert.Equal("Aspire.Hosting.RemoteHost.Tests.SelectedValues.Metadata", string.Join(".", value.PathSegments)));
         Assert.DoesNotContain(filteredContext.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/createBuilder");
         Assert.DoesNotContain(filteredContext.HandleTypes, type => type.AtsTypeId == "Aspire.Hosting/Aspire.Hosting.DistributedApplication");
     }
@@ -91,6 +107,19 @@ public class AtsContextFilterTests
         Assert.True(filteredContext.HandleTypes.Count > 0);
     }
 
+    [Fact]
+    public void FilterByExportingAssemblies_DiagnosticsUseMostSpecificKnownAssemblyPrefix()
+    {
+        var context = CreateContext();
+
+        var filteredContext = AtsContextFilter.FilterByExportingAssemblies(
+            context,
+            ["Aspire.Hosting"]);
+
+        Assert.Contains(filteredContext.Diagnostics, diagnostic => diagnostic.Location == "Aspire.Hosting.UnrelatedType.Method");
+        Assert.DoesNotContain(filteredContext.Diagnostics, diagnostic => diagnostic.Location == "Aspire.Hosting.Redis.RedisType.Method");
+    }
+
     private static AtsContext CreateContext()
     {
         const string selectedCapabilityId = "Aspire.Hosting.RemoteHost.Tests/addTestResource";
@@ -122,6 +151,17 @@ public class AtsContextFilterTests
         {
             AtsTypeId = "Aspire.Hosting/Aspire.Hosting.DistributedApplication",
             ClrType = typeof(DistributedApplication),
+            IsInterface = false,
+            HasExposeMethods = true,
+            HasExposeProperties = false,
+            BaseTypeHierarchy = [],
+            ImplementedInterfaces = []
+        };
+
+        var siblingHandleType = new AtsTypeInfo
+        {
+            AtsTypeId = "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisResource",
+            ClrType = null,
             IsInterface = false,
             HasExposeMethods = true,
             HasExposeProperties = false,
@@ -166,12 +206,41 @@ public class AtsContextFilterTests
             Values = Enum.GetNames<TestMode>()
         };
 
+        var exportedValueOnlyEnumType = new AtsEnumTypeInfo
+        {
+            TypeId = AtsConstants.EnumTypeId("Aspire.TypeSystem.ExportedValueMode"),
+            Name = "ExportedValueMode",
+            ClrType = typeof(DistributedApplicationOperation),
+            Values = Enum.GetNames<DistributedApplicationOperation>()
+        };
+
         var referencedCoreEnumType = new AtsEnumTypeInfo
         {
             TypeId = AtsConstants.EnumTypeId(typeof(DistributedApplicationOperation).FullName!),
             Name = nameof(DistributedApplicationOperation),
             ClrType = typeof(DistributedApplicationOperation),
             Values = Enum.GetNames<DistributedApplicationOperation>()
+        };
+
+        var exportedValueOnlyDtoType = new AtsDtoTypeInfo
+        {
+            TypeId = "Aspire.TypeSystem/ExportedValueMetadata",
+            Name = "ExportedValueMetadata",
+            ClrType = typeof(AtsContext),
+            Properties =
+            [
+                new AtsDtoPropertyInfo
+                {
+                    Name = "Mode",
+                    Type = new AtsTypeRef
+                    {
+                        TypeId = exportedValueOnlyEnumType.TypeId,
+                        ClrType = exportedValueOnlyEnumType.ClrType,
+                        Category = AtsTypeCategory.Enum
+                    },
+                    IsOptional = false
+                }
+            ]
         };
 
         var selectedCapability = new AtsCapabilityInfo
@@ -247,12 +316,61 @@ public class AtsContextFilterTests
             ExpandedTargetTypes = []
         };
 
+        var selectedAssemblyName = typeof(AtsContextFilterTests).Assembly.GetName().Name!;
+        var unrelatedAssemblyName = typeof(DistributedApplication).Assembly.GetName().Name!;
+
+        var selectedPrimitiveExportedValue = new AtsExportedValueInfo
+        {
+            OwningAssemblyName = selectedAssemblyName,
+            PathSegments = ["Aspire.Hosting.RemoteHost.Tests", "SelectedValues", "Default"],
+            Type = new AtsTypeRef
+            {
+                TypeId = "System/String",
+                ClrType = typeof(string),
+                Category = AtsTypeCategory.Primitive
+            },
+            Value = JsonValue.Create("selected")
+        };
+
+        var selectedDtoExportedValue = new AtsExportedValueInfo
+        {
+            OwningAssemblyName = selectedAssemblyName,
+            PathSegments = ["Aspire.Hosting.RemoteHost.Tests", "SelectedValues", "Metadata"],
+            Type = new AtsTypeRef
+            {
+                TypeId = exportedValueOnlyDtoType.TypeId,
+                ClrType = exportedValueOnlyDtoType.ClrType,
+                Category = AtsTypeCategory.Dto
+            },
+            Value = JsonNode.Parse("""{"mode":"Run"}""")
+        };
+
+        var unrelatedPrimitiveExportedValue = new AtsExportedValueInfo
+        {
+            OwningAssemblyName = unrelatedAssemblyName,
+            PathSegments = ["Aspire.Hosting", "CoreValues", "Default"],
+            Type = new AtsTypeRef
+            {
+                TypeId = "System/String",
+                ClrType = typeof(string),
+                Category = AtsTypeCategory.Primitive
+            },
+            Value = JsonValue.Create("unrelated")
+        };
+
         var context = new AtsContext
         {
             Capabilities = [selectedCapability, unrelatedCapability],
-            HandleTypes = [selectedHandleType, referencedCoreHandleType, unrelatedCoreHandleType],
-            DtoTypes = [selectedDtoType, referencedCoreDtoType],
-            EnumTypes = [selectedEnumType, referencedCoreEnumType]
+            HandleTypes = [selectedHandleType, referencedCoreHandleType, unrelatedCoreHandleType, siblingHandleType],
+            DtoTypes = [selectedDtoType, referencedCoreDtoType, exportedValueOnlyDtoType],
+            EnumTypes = [selectedEnumType, referencedCoreEnumType, exportedValueOnlyEnumType],
+            ExportedValues = [selectedPrimitiveExportedValue, selectedDtoExportedValue, unrelatedPrimitiveExportedValue],
+            Diagnostics =
+            [
+                AtsDiagnostic.Warning("Selected warning", "Aspire.Hosting.RemoteHost.Tests.TestType.Method"),
+                AtsDiagnostic.Warning("Unrelated warning", "Aspire.Hosting.UnrelatedType.Method"),
+                AtsDiagnostic.Warning("Sibling warning", "Aspire.Hosting.Redis.RedisType.Method")
+            ]
         };
 
         var testMethod = typeof(AtsContextFilterTests).GetMethod(nameof(TestCapability), BindingFlags.Static | BindingFlags.NonPublic)!;

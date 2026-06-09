@@ -245,6 +245,10 @@ internal partial class MarkdownToSpectreConverter
         {
             case ParagraphBlock paragraph:
                 AppendInlinesToMarkup(builder, paragraph.Inline, markdown);
+                while (builder.Length > start && builder[builder.Length - 1] == '\n')
+                {
+                    builder.Length--;
+                }
                 break;
             case HtmlBlock htmlBlock:
                 AppendEscapedMarkup(builder, StripHtmlTags(GetOriginalMarkdownSpan(htmlBlock.Span, markdown)).AsSpan());
@@ -548,6 +552,7 @@ internal partial class MarkdownToSpectreConverter
         {
             var contentStart = builder.Length;
             AppendInlinesToMarkup(builder, link, markdown);
+            TrimAppendedWhitespace(builder, contentStart);
 
             var appendedLength = builder.Length - contentStart;
             if (appendedLength == 0 || appendedLength == link.Url.Length && AppendedTextEquals(builder, contentStart, link.Url))
@@ -572,6 +577,7 @@ internal partial class MarkdownToSpectreConverter
 
         var linkContentStart = builder.Length;
         AppendInlinesToMarkup(builder, link, markdown);
+        TrimAppendedWhitespace(builder, linkContentStart);
         if (builder.Length == linkContentStart)
         {
             AppendEscapedMarkup(builder, link.Url.AsSpan());

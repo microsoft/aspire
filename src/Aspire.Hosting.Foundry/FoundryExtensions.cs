@@ -11,10 +11,12 @@ using Azure.Provisioning;
 using Azure.Provisioning.CognitiveServices;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Resources;
-using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Threading.Channels;
 using static Azure.Provisioning.Expressions.BicepFunction;
 
 namespace Aspire.Hosting;
@@ -33,13 +35,15 @@ public static class FoundryExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a Microsoft Foundry resource to the distributed application model.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<FoundryResource> AddFoundry(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         builder.AddAzureProvisioning();
 
         var resource = new FoundryResource(name, ConfigureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("AgentsAdd")
             .WithDefaultRoleAssignments(CognitiveServicesBuiltInRole.GetBuiltInRoleName,
                 CognitiveServicesBuiltInRole.CognitiveServicesUser, CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser);
     }
@@ -53,7 +57,7 @@ public static class FoundryExtensions
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <param name="format">The format of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, string modelName, string modelVersion, string format)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -76,7 +80,32 @@ public static class FoundryExtensions
             deploymentBuilder.AsLocalDeployment(deployment);
         }
 
-        return deploymentBuilder;
+        return deploymentBuilder.WithIconName("BoxMultiple");
+    }
+
+    /// <summary>
+    /// Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.
+    /// </summary>
+    [AspireExport("addDeployment")]
+    internal static IResourceBuilder<FoundryDeploymentResource> AddDeploymentForPolyglot(
+        this IResourceBuilder<FoundryResource> builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(FoundryModel), typeof(string))] object model,
+        string? modelVersion = null,
+        string? format = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return model switch
+        {
+            FoundryModel foundryModel when modelVersion is null && format is null => builder.AddDeployment(name, foundryModel),
+            FoundryModel => throw new ArgumentException("Model version and format must be omitted when using a FoundryModel.", nameof(modelVersion)),
+            string modelName when modelVersion is not null && format is not null => builder.AddDeployment(name, modelName, modelVersion, format),
+            string => throw new ArgumentException("Model version and format are required when the model is provided as a string.", nameof(modelVersion)),
+            _ => throw new ArgumentException("Model must be a FoundryModel or a string model name.", nameof(model))
+        };
     }
 
     /// <summary>
@@ -97,7 +126,7 @@ public static class FoundryExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("addDeploymentFromModel", Description = "Adds a Microsoft Foundry deployment resource by using a Microsoft Foundry model descriptor.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, FoundryModel model)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -116,7 +145,8 @@ public static class FoundryExtensions
     /// <param name="builder">The Microsoft Foundry Deployment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="FoundryDeploymentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withFoundryDeploymentProperties", MethodName = "withProperties", Description = "Configures properties of a Microsoft Foundry deployment resource.", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withFoundryDeploymentProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<FoundryDeploymentResource> WithProperties(this IResourceBuilder<FoundryDeploymentResource> builder, Action<FoundryDeploymentResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -132,7 +162,7 @@ public static class FoundryExtensions
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <returns>A resource builder for the Foundry Local resource.</returns>
-    [AspireExport(Description = "Configures the Microsoft Foundry resource to run by using Foundry Local.")]
+    [AspireExport]
     public static IResourceBuilder<FoundryResource> RunAsFoundryLocal(this IResourceBuilder<FoundryResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder, nameof(builder));
@@ -146,9 +176,8 @@ public static class FoundryExtensions
         ThrowIfProjectsConfiguredForLocal(builder, resource);
         resource.Annotations.Add(new EmulatorResourceAnnotation());
 
-        builder.ApplicationBuilder.Services.AddSingleton<FoundryLocalManager>();
-
         builder.WithInitializer();
+        builder.OnResourceStopped(static (_, _, ct) => FoundryLocalService.StopAsync(ct));
 
         foreach (var deployment in resource.Deployments)
         {
@@ -162,11 +191,12 @@ public static class FoundryExtensions
         builder.ApplicationBuilder.Services.AddHealthChecks()
                 .Add(new HealthCheckRegistration(
                     healthCheckKey,
-                    sp => new FoundryLocalHealthCheck(sp.GetRequiredService<FoundryLocalManager>()),
+                    sp => new FoundryLocalHealthCheck(),
                     failureStatus: default,
                     tags: default,
                     timeout: default
                     ));
+        builder.ApplicationBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, FoundryLocalLifecycleService>());
 
         builder.WithHealthCheck(healthCheckKey);
 
@@ -223,8 +253,9 @@ public static class FoundryExtensions
     /// <param name="target">The target Microsoft Foundry resource.</param>
     /// <param name="roles">The Microsoft Foundry roles to be assigned (for example, <see cref="FoundryRole.CognitiveServicesOpenAIUser"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="FoundryRole"/> value.</exception>
-    [AspireExport("withFoundryRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Microsoft Foundry roles to a resource")]
+    [AspireExport("withFoundryRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<FoundryResource> target,
@@ -257,10 +288,9 @@ public static class FoundryExtensions
             => Task.Run(async () =>
             {
                 var rns = @event.Services.GetRequiredService<ResourceNotificationService>();
-                var manager = @event.Services.GetRequiredService<FoundryLocalManager>();
                 var logger = @event.Services.GetRequiredService<ResourceLoggerService>().GetLogger(resource);
 
-                resource.ApiKey = manager.ApiKey;
+                resource.ApiKey = FoundryLocalService.ApiKey;
 
                 await rns.PublishUpdateAsync(resource, state => state with
                 {
@@ -269,16 +299,16 @@ public static class FoundryExtensions
 
                 try
                 {
-                    await manager.StartServiceAsync(ct).ConfigureAwait(false);
+                    await FoundryLocalService.StartAsync(logger, ct).ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
                     logger.LogInformation("Foundry Local could not be started. Ensure it's installed correctly: https://learn.microsoft.com/azure/ai-foundry/foundry-local/get-started (Error: {Error}).", e.Message);
                 }
 
-                if (manager.IsServiceRunning)
+                if (FoundryLocalService.IsServiceRunning)
                 {
-                    resource.EmulatorServiceUri = manager.Endpoint;
+                    resource.EmulatorServiceUri = FoundryLocalService.Endpoint;
 
                     await rns.PublishUpdateAsync(resource, state => state with
                     {
@@ -311,7 +341,6 @@ public static class FoundryExtensions
             var rns = @event.Services.GetRequiredService<ResourceNotificationService>();
             var loggerService = @event.Services.GetRequiredService<ResourceLoggerService>();
             var logger = loggerService.GetLogger(deployment);
-            var manager = @event.Services.GetRequiredService<FoundryLocalManager>();
             var eventing = @event.Services.GetRequiredService<IDistributedApplicationEventing>();
 
             var model = deployment.ModelName;
@@ -324,67 +353,63 @@ public static class FoundryExtensions
                     Properties = [.. state.Properties, new(CustomResourceKnownProperties.Source, model)]
                 }).ConfigureAwait(false);
 
-                var result = manager.DownloadModelWithProgressAsync(model, ct: ct);
+                var progressChannel = Channel.CreateUnbounded<float>();
+                var downloadTask = DownloadModelAsync();
 
-                await foreach (var progress in result.ConfigureAwait(false))
+                await foreach (var progress in progressChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
                 {
-                    if (progress.IsCompleted && progress.ModelInfo is not null)
+                    logger.LogInformation("Downloading model {Model}: {Progress:F2}%", model, progress);
+                    await rns.PublishUpdateAsync(deployment, state => state with
                     {
-                        // Set the model id that was actually downloaded. This is the value that is used in the
-                        // connection string
+                        State = new ResourceStateSnapshot($"Downloading model {model}: {progress:F2}%", KnownResourceStateStyles.Info)
+                    }).ConfigureAwait(false);
+                }
 
-                        deployment.ModelId = progress.ModelInfo.ModelId;
-                        logger.LogInformation("Model {Model} downloaded successfully ({ModelId}).", model, deployment.ModelId);
+                try
+                {
+                    deployment.ModelId = await downloadTask.ConfigureAwait(false);
+                    logger.LogInformation("Model {Model} downloaded successfully ({ModelId}).", model, deployment.ModelId);
 
-                        // Re-publish the connection string since the model id is now known
-                        var connectionStringAvailableEvent = new ConnectionStringAvailableEvent(deployment, @event.Services);
-                        await eventing.PublishAsync(connectionStringAvailableEvent, ct).ConfigureAwait(false);
+                    // Re-publish the connection string since the model id is now known.
+                    var connectionStringAvailableEvent = new ConnectionStringAvailableEvent(deployment, @event.Services);
+                    await eventing.PublishAsync(connectionStringAvailableEvent, ct).ConfigureAwait(false);
 
-                        await rns.PublishUpdateAsync(deployment, state => state with
-                        {
-                            Properties = [.. state.Properties, new(CustomResourceKnownProperties.Source, $"{model} ({deployment.ModelId})")]
-                        }).ConfigureAwait(false);
+                    await rns.PublishUpdateAsync(deployment, state => state with
+                    {
+                        Properties = [.. state.Properties, new(CustomResourceKnownProperties.Source, $"{model} ({deployment.ModelId})")]
+                    }).ConfigureAwait(false);
 
-                        await rns.PublishUpdateAsync(deployment, state => state with
-                        {
-                            State = new ResourceStateSnapshot("Loading model", KnownResourceStateStyles.Info)
-                        }).ConfigureAwait(false);
+                    await rns.PublishUpdateAsync(deployment, state => state with
+                    {
+                        State = new ResourceStateSnapshot("Loading model", KnownResourceStateStyles.Info)
+                    }).ConfigureAwait(false);
 
-                        try
-                        {
-                            _ = await manager.LoadModelAsync(deployment.ModelId, ct: ct).ConfigureAwait(false);
+                    await FoundryLocalService.LoadModelAsync(deployment.ModelId, ct).ConfigureAwait(false);
 
-                            await rns.PublishUpdateAsync(deployment, state => state with
-                            {
-                                State = KnownResourceStates.Running
-                            }).ConfigureAwait(false);
-                        }
-                        catch (Exception e)
-                        {
-                            // LoadModelAsync throws IOE when the model is invalid.
-                            logger.LogInformation("Failed to start {Model}. Error: {Error}", model, e.Message);
+                    await rns.PublishUpdateAsync(deployment, state => state with
+                    {
+                        State = KnownResourceStates.Running
+                    }).ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    logger.LogInformation("Failed to start {Model}. Error: {Error}", model, e.Message);
 
-                            await rns.PublishUpdateAsync(deployment, state => state with
-                            {
-                                State = KnownResourceStates.FailedToStart
-                            }).ConfigureAwait(false);
-                        }
+                    await rns.PublishUpdateAsync(deployment, state => state with
+                    {
+                        State = KnownResourceStates.FailedToStart
+                    }).ConfigureAwait(false);
+                }
+
+                async Task<string> DownloadModelAsync()
+                {
+                    try
+                    {
+                        return await FoundryLocalService.DownloadModelAsync(model, progress => progressChannel.Writer.TryWrite(progress), ct).ConfigureAwait(false);
                     }
-                    else if (progress.IsCompleted && !string.IsNullOrEmpty(progress.ErrorMessage))
+                    finally
                     {
-                        logger.LogInformation("Failed to start {Model}. Error: {Error}", model, progress.ErrorMessage);
-                        await rns.PublishUpdateAsync(deployment, state => state with
-                        {
-                            State = KnownResourceStates.FailedToStart
-                        }).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        logger.LogInformation("Downloading model {Model}: {Progress:F2}%", model, progress.Percentage);
-                        await rns.PublishUpdateAsync(deployment, state => state with
-                        {
-                            State = new ResourceStateSnapshot($"Downloading model {model}: {progress.Percentage:F2}%", KnownResourceStateStyles.Info)
-                        }).ConfigureAwait(false);
+                        progressChannel.Writer.TryComplete();
                     }
                 }
             }, ct);
@@ -397,7 +422,7 @@ public static class FoundryExtensions
         builder.ApplicationBuilder.Services.AddHealthChecks()
                 .Add(new HealthCheckRegistration(
                     healthCheckKey,
-                    sp => new LocalModelHealthCheck(modelId: deployment.ModelId, sp.GetRequiredService<FoundryLocalManager>()),
+                    sp => new LocalModelHealthCheck(modelId: deployment.ModelId),
                     failureStatus: default,
                     tags: default,
                     timeout: default
@@ -422,29 +447,35 @@ public static class FoundryExtensions
                     resource.Name = name;
                     return resource;
                 },
-                (infrastructure) => new CognitiveServicesAccount(infrastructure.AspireResource.GetBicepIdentifier())
+                (infrastructure) =>
                 {
-                    Kind = "AIServices",
-                    Sku = new CognitiveServicesSku()
+                    // Cognitive Services account names are limited to 64 characters; reserve room for the unique suffix.
+                    var accountNamePrefix = infrastructure.AspireResource.Name[..Math.Min(infrastructure.AspireResource.Name.Length, 50)];
+                    var accountName = ToLower(Interpolate($"{accountNamePrefix}-{GetUniqueString(GetResourceGroup().Id)}"));
+
+                    return new CognitiveServicesAccount(infrastructure.AspireResource.GetBicepIdentifier())
                     {
-                        Name = "S0"
-                    },
-                    Properties = new CognitiveServicesAccountProperties()
-                    {
-                        // Until this bug is fixed, CustomSubDomainName must be set to the
-                        // account's name: https://msdata.visualstudio.com/Vienna/_workitems/edit/4866592
-                        CustomSubDomainName = ToLower(Take(Concat(infrastructure.AspireResource.Name, GetUniqueString(GetResourceGroup().Id)), 24)),
-                        PublicNetworkAccess = hasPrivateEndpoint
-                            ? ServiceAccountPublicNetworkAccess.Disabled
-                            : ServiceAccountPublicNetworkAccess.Enabled,
-                        DisableLocalAuth = true,
-                        AllowProjectManagement = true
-                    },
-                    Identity = new ManagedServiceIdentity()
-                    {
-                        ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned
-                    },
-                    Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                        Name = accountName,
+                        Kind = "AIServices",
+                        Sku = new CognitiveServicesSku()
+                        {
+                            Name = "S0"
+                        },
+                        Properties = new CognitiveServicesAccountProperties()
+                        {
+                            CustomSubDomainName = accountName,
+                            PublicNetworkAccess = hasPrivateEndpoint
+                                ? ServiceAccountPublicNetworkAccess.Disabled
+                                : ServiceAccountPublicNetworkAccess.Enabled,
+                            DisableLocalAuth = true,
+                            AllowProjectManagement = true
+                        },
+                        Identity = new ManagedServiceIdentity()
+                        {
+                            ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned
+                        },
+                        Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                    };
                 });
 
         infrastructure.Add(new ProvisioningOutput("aiFoundryApiEndpoint", typeof(string))

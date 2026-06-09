@@ -2,7 +2,7 @@ import { MessageConnection } from 'vscode-jsonrpc';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import { getRelativePathToWorkspace, isFolderOpenInWorkspace } from '../utils/workspace';
-import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle } from '../loc/strings';
+import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle, unableToAddFolderToWorkspace } from '../loc/strings';
 import { ICliRpcClient } from './rpcClient';
 import { ProgressNotifier } from './progressNotifier';
 import { applyTextStyle, formatText } from '../utils/strings';
@@ -14,6 +14,7 @@ import { isDirectory } from '../utils/io';
 
 export interface IInteractionService {
     showStatus: (statusText: string | null) => void;
+    clearProgressNotification: () => void;
     promptForString: (promptText: string, defaultValue: string | null, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForSecretString: (promptText: string, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForFilePath: (promptText: string, defaultValue: string | null, directory: boolean) => Promise<string | null>;
@@ -75,6 +76,14 @@ function getDashboardUrlProperty(urls: DashboardUrls, property: 'baseUrl' | 'cod
     }
 }
 
+function sanitizeDashboardUrlForLog(url: string): string {
+    try {
+        return new URL(url).origin;
+    } catch {
+        return '<redacted dashboard URL>';
+    }
+}
+
 // Support both PascalCase (old) and camelCase (new) for backwards compatibility.
 // DisplayLineState is serialized with ModelContextProtocol.McpJsonUtilities.DefaultOptions
 // which changed to camelCase in version 0.2.0+
@@ -113,6 +122,7 @@ export class InteractionService implements IInteractionService {
     }
 
     showStatus(statusText: string | null) {
+        delayStatusForE2E();
         this._progressNotifier.show(statusText);
     }
 
@@ -285,6 +295,7 @@ export class InteractionService implements IInteractionService {
         }
 
         extensionLogOutputChannel.info(`Displaying message: ${emoji} ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -297,6 +308,7 @@ export class InteractionService implements IInteractionService {
         }
 
         extensionLogOutputChannel.info(`Displaying success message: ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -312,6 +324,7 @@ export class InteractionService implements IInteractionService {
 
     displayPlainText(message: string) {
         extensionLogOutputChannel.info(`Displaying plain text: ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -321,21 +334,23 @@ export class InteractionService implements IInteractionService {
     }
 
     async displayDashboardUrls(dashboardUrls: DashboardUrls) {
-        extensionLogOutputChannel.info(`Displaying dashboard URLs: ${JSON.stringify(dashboardUrls)}`);
+        extensionLogOutputChannel.info('Displaying dashboard URLs.');
 
         const baseUrl = getDashboardUrlProperty(dashboardUrls, 'baseUrl');
         const codespacesUrl = getDashboardUrlProperty(dashboardUrls, 'codespacesUrl');
 
+        extensionLogOutputChannel.info(`${dashboard}: ${sanitizeDashboardUrlForLog(baseUrl)}`);
         this.writeDebugSessionMessage(`${dashboard}: `, true, AnsiColors.Green, false);
         this.writeDebugSessionMessage(baseUrl, true, AnsiColors.Blue);
 
         if (codespacesUrl) {
+            extensionLogOutputChannel.info(`${codespaces}: ${sanitizeDashboardUrlForLog(codespacesUrl)}`);
             this.writeDebugSessionMessage(`${codespaces}: `, true, AnsiColors.Green, false);
             this.writeDebugSessionMessage(codespacesUrl, true, AnsiColors.Blue);
         }
 
         // Refresh the Aspire panel so it picks up dashboard URLs for the running app host
-        vscode.commands.executeCommand('aspire-vscode.refreshRunningAppHosts');
+        vscode.commands.executeCommand('aspire-vscode.refreshAppHosts');
 
         //  If aspire.enableAspireDashboardAutoLaunch is 'launch', the dashboard will be launched automatically.
         //  If 'notification', a notification is shown with a link. If 'off', do nothing.
@@ -406,6 +421,8 @@ export class InteractionService implements IInteractionService {
     }
 
     async displayLines(lines: ConsoleLine[]) {
+        this.clearProgressNotification();
+
         const debugSession = this._getAspireDebugSession();
         const aspireTerminal = !debugSession ? this._getAspireTerminal?.() : undefined;
         for (const line of lines) {
@@ -422,19 +439,30 @@ export class InteractionService implements IInteractionService {
 
     displayCancellationMessage() {
         extensionLogOutputChannel.info(`Cancelled Aspire operation.`);
+        this.clearProgressNotification();
     }
 
     async openEditor(path: string) {
         extensionLogOutputChannel.info(`Opening path: ${path}`);
 
-        // check if is folder
         if (await isDirectory(path)) {
             if (isFolderOpenInWorkspace(path)) {
                 return;
             }
 
             const uri = vscode.Uri.file(path);
-            vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: false });
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders && workspaceFolders.length > 0) {
+                if (!vscode.workspace.updateWorkspaceFolders(workspaceFolders.length, 0, { uri })) {
+                    const message = unableToAddFolderToWorkspace(path);
+                    extensionLogOutputChannel.warn(message);
+                    vscode.window.showWarningMessage(message);
+                }
+
+                return;
+            }
+
+            await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: false });
         }
         else {
             const fileUri = vscode.Uri.file(path);
@@ -581,4 +609,29 @@ export function addInteractionServiceEndpoints(connection: MessageConnection, in
     connection.onRequest("notifyAppHostStartupCompleted", middleware('notifyAppHostStartupCompleted', interactionService.notifyAppHostStartupCompleted.bind(interactionService)));
     connection.onRequest("startDebugSession", middleware('startDebugSession', async (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => interactionService.startDebugSession(workingDirectory, projectFile, debug, options)));
     connection.onRequest("writeDebugSessionMessage", middleware('writeDebugSessionMessage', interactionService.writeDebugSessionMessage.bind(interactionService)));
+}
+
+function delayStatusForE2E(): void {
+    if (process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE !== 'true' ||
+        !process.env.ASPIRE_EXTENSION_E2E_STATE_FILE ||
+        !process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE) {
+        return;
+    }
+
+    const rawDelayMs = process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS;
+    if (!rawDelayMs) {
+        return;
+    }
+
+    const delayMs = Number(rawDelayMs);
+    if (!Number.isFinite(delayMs) || delayMs <= 0) {
+        return;
+    }
+
+    // This is intentionally synchronous and E2E-only. The regression test needs to
+    // block the JSON-RPC response that the CLI queued before build diagnostics, so
+    // a timer-based delay would let the request return and fail to exercise the
+    // CLI-side flush path.
+    const buffer = new SharedArrayBuffer(4);
+    Atomics.wait(new Int32Array(buffer), 0, 0, Math.min(delayMs, 10000));
 }

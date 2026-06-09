@@ -27,4 +27,10 @@ internal static class PackageChannelNames
     /// The default channel name, based on the user's NuGet configuration.
     /// </summary>
     public const string Default = "default";
+
+    /// <summary>
+    /// The local channel name, used when the CLI binary was built locally
+    /// (i.e., with <c>AspireCliChannel=local</c>).
+    /// </summary>
+    public const string Local = "local";
 }

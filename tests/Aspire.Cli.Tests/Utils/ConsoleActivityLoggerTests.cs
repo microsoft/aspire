@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -27,6 +29,37 @@ public class ConsoleActivityLoggerTests
             : TestHelpers.CreateNonInteractiveHostEnvironment();
 
         return new ConsoleActivityLogger(console, hostEnvironment, forceColor: color);
+    }
+
+    [Fact]
+    public void Info_WithAlreadyEscapedLiteralBrackets_PreservesContent()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: true, color: true);
+
+        logger.StartTask("step1", "Test Step");
+        logger.Info("step1", "[[DBG]] already escaped");
+
+        var result = output.ToString();
+
+        Assert.Contains("[DBG] already escaped", result);
+    }
+
+    [Fact]
+    public void Info_WithValidSpectreMarkup_PreservesFormattingMarkup()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: true, color: true);
+
+        logger.StartTask("step1", "Test Step");
+        logger.Info("step1", "[bold]important[/] [link=https://example.com]docs[/]");
+
+        var result = output.ToString();
+
+        Assert.Contains("important", result);
+        Assert.Contains("docs", result);
+        Assert.DoesNotContain("[bold]", result);
+        Assert.DoesNotContain("[link=https://example.com]", result);
     }
 
     [Fact]
@@ -395,5 +428,163 @@ public class ConsoleActivityLoggerTests
         Assert.DoesNotContain(lines, line => line.Contains('┬'));
         Assert.DoesNotContain('│', deepPublishLine);
         Assert.Contains(new string(' ', 24) + "Publish", deepPublishLine);
+    }
+
+    [Fact]
+    public void Info_WithDimAndBracketsInMessage_DoesNotThrow()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: true, color: true);
+
+        logger.StartTask("step1", "Test Step");
+
+        // Simulates what PipelineCommandBase does for Debug/Trace log messages from EF tool output:
+        // prefixedMessage = "[[DBG]] dotnet-ef output: Executing command 'ef-tool-start'."
+        // which is then passed with dim: true
+        var exception = Record.Exception(() =>
+            logger.Info("step1", "[[DBG]] dotnet-ef output: Executing command 'ef-tool-start'.", dim: true));
+
+        Assert.Null(exception);
+
+        var result = output.ToString();
+        Assert.Contains("[DBG]", result);
+        Assert.Contains("ef-tool-start", result);
+    }
+
+    [Fact]
+    public async Task Spinner_DoesNotPropagate_CursorMoveLeftFailureFromLegacyBackend()
+    {
+        // Regression test for the crash:
+        //   "The value must be greater than or equal to zero and less than the
+        //    console's buffer size in that dimension. (Parameter 'left')"
+        // which surfaced from `aspire publish` when the spinner's MoveLeft raced
+        // with concurrent WriteLine output and the cursor was at column 0.
+        // Spectre's LegacyConsoleCursor (used whenever ANSI is disabled) does
+        // an unguarded `Console.CursorLeft -= 1` that throws in that case.
+        // The spinner must tolerate that failure rather than faulting the task.
+        var output = new StringBuilder();
+        var inner = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
+        });
+        var console = new ThrowingCursorConsole(inner);
+        var logger = new ConsoleActivityLogger(console, TestHelpers.CreateInteractiveHostEnvironment(), forceColor: false);
+
+        logger.StartSpinner();
+
+        // Poll for the spinner to actually run rather than waiting a fixed wall-clock
+        // duration. Under thread-pool starvation the spinner task may not get scheduled
+        // for a while, so a fixed Task.Delay would be timing-dependent and flaky.
+        var sw = Stopwatch.StartNew();
+        while (console.MoveLeftCallCount == 0 && sw.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            await Task.Delay(50);
+        }
+
+        // StopSpinnerAsync awaits the spinner task, so any unhandled exception
+        // inside the loop or the finally block would be observed and rethrown here.
+        await logger.StopSpinnerAsync();
+
+        Assert.True(console.MoveLeftCallCount > 0, "Expected the spinner to attempt at least one MoveLeft.");
+        Assert.True(console.ShowHideCallCount >= 2, "Expected the spinner to attempt both Hide (at start) and Show (in finally).");
+    }
+
+    [Fact]
+    public async Task Spinner_DoesNotCrash_WhenWriteLineRunsConcurrently()
+    {
+        // Belt-and-braces test that the spinner's draw and the activity WriteLine
+        // calls do not produce an unhandled exception when interleaved on a console
+        // whose cursor uses the legacy (non-ANSI) backend semantics.
+        var output = new StringBuilder();
+        var inner = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
+        });
+        var console = new ThrowingCursorConsole(inner);
+        var logger = new ConsoleActivityLogger(console, TestHelpers.CreateInteractiveHostEnvironment(), forceColor: false);
+
+        logger.StartSpinner();
+
+        // Hammer WriteLine from multiple threads while the spinner is ticking.
+        var writers = Enumerable.Range(0, 4).Select(threadIndex => Task.Run(() =>
+        {
+            for (var i = 0; i < 50; i++)
+            {
+                logger.Progress($"step-{threadIndex}", $"working {i}");
+            }
+        })).ToArray();
+
+        await Task.WhenAll(writers);
+        await logger.StopSpinnerAsync();
+    }
+
+    // Wraps a real IAnsiConsole but substitutes an IAnsiConsoleCursor whose Move(Left, _)
+    // always throws ArgumentOutOfRangeException, mimicking Spectre's LegacyConsoleCursor
+    // when System.Console.CursorLeft would be driven negative.
+    private sealed class ThrowingCursorConsole : IAnsiConsole
+    {
+        private readonly IAnsiConsole _inner;
+        private readonly ThrowingCursor _cursor = new();
+
+        public ThrowingCursorConsole(IAnsiConsole inner)
+        {
+            _inner = inner;
+        }
+
+        public int MoveLeftCallCount => _cursor.MoveLeftCallCount;
+        public int ShowHideCallCount => _cursor.ShowHideCallCount;
+
+        public Profile Profile => _inner.Profile;
+        public IAnsiConsoleCursor Cursor => _cursor;
+        public IAnsiConsoleInput Input => _inner.Input;
+        public IExclusivityMode ExclusivityMode => _inner.ExclusivityMode;
+        public RenderPipeline Pipeline => _inner.Pipeline;
+
+        public void Clear(bool home) => _inner.Clear(home);
+        public void Write(IRenderable renderable) => _inner.Write(renderable);
+        public void WriteAnsi(Action<AnsiWriter> action) => _inner.WriteAnsi(action);
+    }
+
+    private sealed class ThrowingCursor : IAnsiConsoleCursor
+    {
+        private int _moveLeftCallCount;
+
+        public int MoveLeftCallCount => _moveLeftCallCount;
+        public int ShowHideCallCount { get; private set; }
+
+        public void Show(bool show)
+        {
+            ShowHideCallCount++;
+            // Simulate Spectre's LegacyConsoleCursor.Show, which sets
+            // System.Console.CursorVisible and can throw IOException when stdout is
+            // redirected or attached to a non-tty.
+            throw new IOException("Simulated legacy cursor visibility failure.");
+        }
+
+        public void Move(CursorDirection direction, int steps)
+        {
+            if (direction == CursorDirection.Left)
+            {
+                Interlocked.Increment(ref _moveLeftCallCount);
+                // Simulate the worst-case legacy backend behavior: every MoveLeft fails
+                // as if Console.CursorLeft were already 0. The production code must
+                // swallow this so the spinner task does not fault. We intentionally use
+                // the same "left" parameter name that System.Console.SetCursorPosition
+                // throws with, to mirror the real-world exception users see.
+#pragma warning disable CA2208 // Instantiate argument exceptions correctly
+                throw new ArgumentOutOfRangeException("left", -1, "Simulated legacy cursor failure.");
+#pragma warning restore CA2208
+            }
+        }
+
+        public void SetPosition(int column, int line)
+        {
+        }
     }
 }

@@ -18,8 +18,9 @@
     <!-- Read the PE Machine field from the binary and compare against PEExpectedMachine (hex) — Windows only -->
     <_CheckPEMachine Condition="'$(PublishNativeAot)' == 'true' and $([System.OperatingSystem]::IsWindows())">true</_CheckPEMachine>
 
-    <_NativeBinaryPath>$([MSBuild]::NormalizePath($(OutputPath), 'aspire'))</_NativeBinaryPath>
-    <_NativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_NativeBinaryPath).exe</_NativeBinaryPath>
+    <!-- Microsoft.DotNet.Build.Tasks.Archives stages PublishToDisk output under $(IntermediateOutputPath)/output for the current TFM. -->
+    <_ArchiveStagedNativeBinaryPath>$([MSBuild]::NormalizePath($(IntermediateOutputPath), '$(TargetFramework)', 'output', 'aspire'))</_ArchiveStagedNativeBinaryPath>
+    <_ArchiveStagedNativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_ArchiveStagedNativeBinaryPath).exe</_ArchiveStagedNativeBinaryPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,9 +28,9 @@
   </ItemGroup>
 
   <Target Name="PublishToDisk"
-          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;PrepareOutputPathForPublishToDisk" />
+          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;_PrepareOutputPathForPublishToDisk" />
 
-  <Target Name="PrepareOutputPathForPublishToDisk">
+  <Target Name="_PrepareOutputPathForPublishToDisk">
     <!-- TODO: avoid generating the file instead of manually deleting it here -->
     <Delete Files="$(OutputPath)\aspire.xml" Condition="Exists('$(OutputPath)\aspire.xml')" />
 
@@ -40,7 +41,31 @@
     <RemoveDir Directories="$(OutputPath)\%(DirectoriesToRemove.Identity)" />
   </Target>
 
+  <!--
+    No install-route sidecar is staged into the per-RID CLI archive. The
+    shared archives are sidecar-free by contract; each route writes its own
+    .aspire-install.json at install time. The dotnet-tool nupkg is the
+    exception (route-exclusive, payload-embedded by
+    src/Aspire.Cli/Aspire.Cli.csproj _PreparePreBuiltCliBinaryForPackTool).
+    See docs/specs/install-routes.md for the full authorship table.
+
+    _AssertNoSidecarInArchiveStaging below is the build-time guard that
+    fails the build if a regression starts staging the sidecar back in.
+  -->
+  <Target Name="_AssertNoSidecarInArchiveStaging"
+          AfterTargets="_PublishProject"
+          Condition="'$(CliRuntime)' != ''">
+    <PropertyGroup>
+      <_ArchiveSidecarPath>$([MSBuild]::NormalizePath($(OutputPath), '.aspire-install.json'))</_ArchiveSidecarPath>
+    </PropertyGroup>
+    <Error Condition="Exists('$(_ArchiveSidecarPath)')"
+           Text="Per-RID CLI archives must not contain '.aspire-install.json' — shared across install routes. See docs/specs/install-routes.md. Found smuggled sidecar at $(_ArchiveSidecarPath)." />
+  </Target>
+
   <Target Name="_PublishProject">
+
+    <Error Condition="'$(CliRuntime)' == ''" Text="CliRuntime must be set before packing the CLI tool." />
+
     <!--
       Bundle payload flow:
         1. Bundle.proj runs CreateLayout which produces a tar.gz archive (managed runtime, DCP, etc.)
@@ -60,6 +85,9 @@
       <!-- Pass through version properties so the CLI gets the correct version -->
       <AdditionalProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
       <AdditionalProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+      <!-- Forward AspireCliChannel explicitly rather than relying on global-property
+           inheritance through the inner <MSBuild> invocation below. -->
+      <AdditionalProperties Condition="'$(AspireCliChannel)' != ''" Include="AspireCliChannel=$(AspireCliChannel)" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(PublishNativeAot)' == 'true'">
@@ -94,13 +122,13 @@
         Properties="@(AdditionalProperties)"
         RemoveProperties="OutputPath;TargetFramework" />
 
-    <Error Condition="!Exists('$(_NativeBinaryPath)')" Text="Could not find expected `aspire` binary at $(_NativeBinaryPath)" />
+    <Error Condition="!Exists('$(_ArchiveStagedNativeBinaryPath)')" Text="Could not find expected `aspire` binary at $(_ArchiveStagedNativeBinaryPath)" />
   </Target>
 
   <Target Name="_ValidateNativeBinaryFileSignatureOnUnix" Condition="'$(_CheckFileSignature)' == 'true'">
     <Error Condition="$(FileSignatureRegex) == ''" Text="Property %24(FileSignatureRegex) is unset." />
 
-    <Exec Command="file -b $(_NativeBinaryPath)" ConsoleToMSBuild="true">
+    <Exec Command="file -b $(_ArchiveStagedNativeBinaryPath)" ConsoleToMSBuild="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="_FileCommandOutput" />
     </Exec>
 
@@ -119,13 +147,296 @@
   <Target Name="_ValidateNativeBinaryPEMachineOnWindows" Condition="'$(_CheckPEMachine)' == 'true'">
     <Error Condition="'$(PEExpectedMachine)' == ''" Text="Property %24(PEExpectedMachine) is unset for $(CliRuntime)." />
 
-    <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;$b=[System.IO.File]::ReadAllBytes('$(_NativeBinaryPath)'); $p=[BitConverter]::ToInt32($b,0x3C); [Console]::Write(([BitConverter]::ToUInt16($b,$p+4)).ToString('X4'))&quot;"
+    <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;$b=[System.IO.File]::ReadAllBytes('$(_ArchiveStagedNativeBinaryPath)'); $p=[BitConverter]::ToInt32($b,0x3C); [Console]::Write(([BitConverter]::ToUInt16($b,$p+4)).ToString('X4'))&quot;"
           ConsoleToMSBuild="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="_PEMachineHex" />
     </Exec>
 
     <Error Condition="'$(_PEMachineHex)' != '$(PEExpectedMachine)'"
            Text="PE Machine type mismatch for $(CliRuntime). Expected: $(PEExpectedMachine), Got: $(_PEMachineHex)" />
+  </Target>
+
+  <!--
+    Tool packing targets.
+
+    These targets pack Aspire.Cli.Tool packages from the CLI native archives produced by
+    this RID-specific clipack project. They are invoked after native archive signing by
+    eng/AfterSigning.targets so the tool packages contain the final signed/native payload.
+  -->
+
+  <Target Name="PackDotnetTool"
+          DependsOnTargets="_InitializeDotnetToolPackProperties;_ExtractNativeBinaryFromArchive;_PackRidSpecificDotnetTool;_PackPointerDotnetTool;PackNpmPackage" />
+
+  <Target Name="_InitializeDotnetToolPackProperties">
+    <Error Condition="'$(CliRuntime)' == ''"
+           Text="CliRuntime must be set before packing the CLI tool." />
+
+    <PropertyGroup>
+      <!-- The native archive is the canonical payload. On signed platforms, MicroBuild signs nested files
+           and writes the signed streams back into this archive without updating Arcade's staging directory.
+           Linux archives are not signed here, but extracting still keeps the tool package aligned with the published archive. -->
+      <_CliArchiveFileName>$(ArchiveName)-$(Version)</_CliArchiveFileName>
+      <_CliArchivePath>$([MSBuild]::NormalizePath($(PackageOutputPath), '$(_CliArchiveFileName).$(ArchiveFormat)'))</_CliArchivePath>
+      <_NativeBinaryArchiveExtractionDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'extracted-tool-binary'))</_NativeBinaryArchiveExtractionDir>
+      <_ExtractedNativeBinaryPath>$([MSBuild]::NormalizePath($(_NativeBinaryArchiveExtractionDir), 'aspire'))</_ExtractedNativeBinaryPath>
+      <_ExtractedNativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_ExtractedNativeBinaryPath).exe</_ExtractedNativeBinaryPath>
+      <_CliToolPublishBaseDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'tool-publish'))</_CliToolPublishBaseDir>
+      <_CliToolPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), '$(CliRuntime)'))</_CliToolPublishDir>
+      <_CliToolPointerPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), 'pointer'))</_CliToolPointerPublishDir>
+      <_CliNpmPackageStagingDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'npm-packages', '$(CliRuntime)'))</_CliNpmPackageStagingDir>
+      <_CliNpmPackageStagingDirArg>$(_CliNpmPackageStagingDir.TrimEnd('\').TrimEnd('/'))</_CliNpmPackageStagingDirArg>
+      <_PackageOutputPathArg>$(PackageOutputPath.TrimEnd('\').TrimEnd('/'))</_PackageOutputPathArg>
+      <NpmCliPackageName Condition="'$(NpmCliPackageName)' == ''">@microsoft/aspire-cli</NpmCliPackageName>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_SharedPackToolProperties Include="CreateRidSpecificToolPackages=true" />
+      <_SharedPackToolProperties Include="PreBuiltCliBinaryPath=$(_ExtractedNativeBinaryPath)" />
+      <_SharedPackToolProperties Include="PublishAot=true" />
+      <_SharedPackToolProperties Include="BundlePayloadPath=" />
+      <_SharedPackToolProperties Include="Configuration=$(Configuration)" />
+      <_SharedPackToolProperties Include="ContinuousIntegrationBuild=$(ContinuousIntegrationBuild)" />
+      <_SharedPackToolProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_SharedPackToolProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_ExtractNativeBinaryFromArchive"
+          DependsOnTargets="_InitializeDotnetToolPackProperties">
+    <Error Condition="'$(_CliArchivePath)' == '' or !Exists('$(_CliArchivePath)')"
+           Text="CLI archive path does not exist: '$(_CliArchivePath)'. Run the native archive build for $(CliRuntime) before PackDotnetTool." />
+
+    <RemoveDir Directories="$(_NativeBinaryArchiveExtractionDir)" />
+    <MakeDir Directories="$(_NativeBinaryArchiveExtractionDir)" />
+
+    <!-- ArchiveFormat is derived from CliRuntime above: Windows RIDs are zip archives,
+         and all supported Linux/macOS RIDs are tar.gz archives. -->
+    <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;Expand-Archive -LiteralPath '$(_CliArchivePath)' -DestinationPath '$(_NativeBinaryArchiveExtractionDir)' -Force&quot;"
+          Condition="'$(ArchiveFormat)' == 'zip'" />
+    <Exec Command="tar -xzf '$(_CliArchivePath)' -C '$(_NativeBinaryArchiveExtractionDir)'"
+          Condition="'$(ArchiveFormat)' == 'tar.gz'" />
+
+    <Error Condition="!Exists('$(_ExtractedNativeBinaryPath)')"
+           Text="Could not find expected `aspire` binary at '$(_ExtractedNativeBinaryPath)' after extracting '$(_CliArchivePath)'." />
+  </Target>
+
+  <Target Name="_PackRidSpecificDotnetTool">
+    <ItemGroup>
+      <_PackToolProperties Include="@(_SharedPackToolProperties)" />
+      <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />
+      <_PackToolProperties Include="PublishDir=$(_CliToolPublishDir)" />
+    </ItemGroup>
+
+    <Message Importance="High"
+             Text="Packing RID-specific CLI tool for $(CliRuntime) from '$(_ExtractedNativeBinaryPath)' extracted from '$(_CliArchivePath)'." />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Restore"
+             Properties="@(_PackToolProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Pack"
+             Properties="@(_PackToolProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+  </Target>
+
+  <Target Name="_PackPointerDotnetTool">
+    <ItemGroup>
+      <_PackPointerProperties Include="@(_SharedPackToolProperties)" />
+      <_PackPointerProperties Include="PublishDir=$(_CliToolPointerPublishDir)" />
+      <_PackPointerProperties Include="NoBuild=true" />
+    </ItemGroup>
+
+    <Message Importance="High"
+             Text="Packing CLI tool pointer package from '$(_ExtractedNativeBinaryPath)' extracted from '$(_CliArchivePath)'." />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Restore"
+             Properties="@(_PackPointerProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Pack"
+             Properties="@(_PackPointerProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+  </Target>
+
+  <!--
+    Native AOT symbol staging.
+
+    After PackDotnetTool runs (on the per-RID build agent), stage the
+    native AOT debug-info payload so the publishing pipeline can ship
+    it to MSDL/SymWeb. Two routing paths, split into two targets keyed
+    on the RID family so neither carries inner conditions for the
+    other family:
+
+      * Windows (.pdb)  copied loose into native-symbols-staging/<rid>/.
+                        Arcade's FilesToPublishToSymbolServer glob in
+                        eng/Publishing.props picks it up on the publish
+                        agent and ships it via the loose-PDB path
+                        (PrepLoosePdbsForPublish).
+
+      * Linux/macOS     Aspire.Cli.NativeSymbols.proj produces a
+        (.dbg/.dwarf)   real Aspire.Cli.<rid>.<version>.symbols.nupkg
+                        containing tools/<tfm>/<rid>/aspire.<dbg|dwarf>
+                        and we promote it into native-symbols-staging/<rid>/.
+                        Arcade matches it via the _ExistingSymbolPackage
+                        item (Microsoft.DotNet.Arcade.Sdk's Publish.proj
+                        EndsWith('.symbols.nupkg') filter) and routes it
+                        to SymbolUploadHelper for MSDL ingestion.
+
+    AfterTargets=PackDotnetTool runs both targets after the per-RID tool
+    nupkg has been packed, so $(CliRuntime) / $(Version) are fully resolved.
+
+    Both targets gate on Exists($(_NativeOutputDir)aspire[.exe]) — the
+    publish binary itself — so they silently no-op in flows that invoke
+    PackDotnetTool without first running PublishToDisk (notably
+    eng/AfterSigning.targets' _PackCliDotnetToolAfterPack on
+    build-packages.yml runners, where the archive is consumed via
+    _ExtractNativeBinaryFromArchive but the ILC native output isn't
+    regenerated locally). When the publish binary IS present, the Errors
+    inside each target catch the real "ILC ran but the symbol file isn't
+    where we expect" failure mode.
+
+    See docs/ci/cli-native-symbols.md for the operating doctrine.
+  -->
+
+  <!-- Shared paths used by both _PackNativeAotSymbolsWindows and
+       _PackNativeAotSymbolsUnix. Always read from the Release output
+       dir: _PublishProject above pins Configuration=Release on the AOT
+       publish regardless of the outer build's $(Configuration) (Debug
+       AOT trips https://github.com/protocolbuffers/protobuf/issues/21824).
+       Mirroring that pin here keeps a local `build.sh -c Debug -pack`
+       from failing the Exists() guards in the targets below with a
+       misleading "ILC output layout may have moved" message when the
+       artifacts are actually under Release/. -->
+  <PropertyGroup Condition="'$(CliRuntime)' != ''">
+    <_NativeOutputDir>$([MSBuild]::NormalizeDirectory($(ArtifactsBinDir), 'Aspire.Cli', 'Release', '$(TargetFramework)', '$(CliRuntime)', 'native'))</_NativeOutputDir>
+    <_NativeSymbolsStagingDir>$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'native-symbols-staging', '$(CliRuntime)'))</_NativeSymbolsStagingDir>
+  </PropertyGroup>
+
+  <Target Name="_PackNativeAotSymbolsWindows"
+          AfterTargets="PackDotnetTool"
+          Condition="'$(CliRuntime)' != '' and $(CliRuntime.StartsWith('win-')) and Exists('$(_NativeOutputDir)aspire.exe')">
+    <PropertyGroup>
+      <_AspireNativePdbPath>$([MSBuild]::NormalizePath($(_NativeOutputDir), 'aspire.pdb'))</_AspireNativePdbPath>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(_NativeSymbolsStagingDir)" />
+
+    <Error Condition="!Exists('$(_AspireNativePdbPath)')"
+           Text="Expected native AOT pdb not found at '$(_AspireNativePdbPath)' for $(CliRuntime). ILC output layout may have moved; check Microsoft.NETCore.Native.targets (NativeOutputPath / NativeSymbolExt) and docs/ci/cli-native-symbols.md." />
+
+    <Copy SourceFiles="$(_AspireNativePdbPath)"
+          DestinationFiles="$([MSBuild]::NormalizePath($(_NativeSymbolsStagingDir), 'aspire.pdb'))" />
+
+    <Message Importance="High"
+             Text="Staged native AOT pdb for $(CliRuntime) -&gt; $(_NativeSymbolsStagingDir)aspire.pdb" />
+  </Target>
+
+  <Target Name="_PackNativeAotSymbolsUnix"
+          AfterTargets="PackDotnetTool"
+          Condition="'$(CliRuntime)' != '' and !$(CliRuntime.StartsWith('win-')) and Exists('$(_NativeOutputDir)aspire')">
+    <PropertyGroup>
+      <_NativeSymbolsScratchDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'native-symbols-pack'))</_NativeSymbolsScratchDir>
+
+      <!--
+        Linux:  ILC's default StripSymbols=true splits debug info into
+                the .dbg sidecar via objcopy (only-keep-debug +
+                add-gnu-debuglink). File is already named aspire.dbg.
+
+        macOS:  ILC produces a .dSYM bundle whose payload is a Mach-O
+                file with DWARF sections at Contents/Resources/DWARF/<name>.
+                We ship just that flat Mach-O as aspire.dwarf, mirroring
+                dotnet/runtime's flat-output dsymutil mode
+                (eng/native/functions.cmake). The inner file is named
+                `aspire` (no extension); NuGet's extension allowlist
+                routes by extension, so we stage a renamed copy as
+                aspire.dwarf before passing the path to the pack helper.
+                symstore's MachOFileKeyGenerator reads LC_UUID from the
+                file content to compute the SSQP key
+                _.dwarf/mach-uuid-sym-<uuid>/_.dwarf — independent of
+                filename. The .dSYM bundle directory itself isn't
+                shipped; see dotnet/runtime#88286 for the long-term
+                .dSYM bundle distribution work.
+      -->
+      <_SymbolsSuffix Condition="$(CliRuntime.StartsWith('linux-'))">.dbg</_SymbolsSuffix>
+      <_SymbolsSuffix Condition="$(CliRuntime.StartsWith('osx-'))">.dwarf</_SymbolsSuffix>
+
+      <_RawSymbolPath Condition="$(CliRuntime.StartsWith('linux-'))">$([MSBuild]::NormalizePath($(_NativeOutputDir), 'aspire.dbg'))</_RawSymbolPath>
+      <_RawSymbolPath Condition="$(CliRuntime.StartsWith('osx-'))">$([MSBuild]::NormalizePath($(_NativeOutputDir), 'aspire.dSYM', 'Contents', 'Resources', 'DWARF', 'aspire'))</_RawSymbolPath>
+
+      <_StagedSymbolPath>$([MSBuild]::NormalizePath($(_NativeSymbolsScratchDir), 'aspire$(_SymbolsSuffix)'))</_StagedSymbolPath>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(_NativeSymbolsStagingDir)" />
+
+    <Error Condition="!Exists('$(_RawSymbolPath)')"
+           Text="Expected native AOT debug-info payload not found at '$(_RawSymbolPath)' for $(CliRuntime). ILC output layout may have moved; check Microsoft.NETCore.Native.targets and docs/ci/cli-native-symbols.md." />
+
+    <MakeDir Directories="$(_NativeSymbolsScratchDir)" />
+    <Copy SourceFiles="$(_RawSymbolPath)"
+          DestinationFiles="$(_StagedSymbolPath)" />
+
+    <ItemGroup>
+      <_NativeSymbolsPackProperties Include="Configuration=$(Configuration)" />
+      <_NativeSymbolsPackProperties Include="ContinuousIntegrationBuild=$(ContinuousIntegrationBuild)" />
+      <_NativeSymbolsPackProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_NativeSymbolsPackProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+      <_NativeSymbolsPackProperties Include="RuntimeIdentifier=$(CliRuntime)" />
+      <_NativeSymbolsPackProperties Include="SymbolFilePath=$(_StagedSymbolPath)" />
+      <_NativeSymbolsPackProperties Include="SymbolsSuffix=$(_SymbolsSuffix)" />
+      <_NativeSymbolsPackProperties Include="PackageOutputPath=$(_NativeSymbolsScratchDir)" />
+      <!-- Isolate the helper's obj/ from the outer per-RID clipack
+           project's obj/, which sits at the same path
+           (eng/clipack/obj/Release/<tfm>/) because both projects live
+           in eng/clipack/ and share TargetFramework. -->
+      <_NativeSymbolsPackProperties Include="BaseIntermediateOutputPath=$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'native-symbols-helper-obj'))" />
+    </ItemGroup>
+
+    <MSBuild Projects="$(RepoRoot)eng\clipack\Aspire.Cli.NativeSymbols.proj"
+             Targets="Restore"
+             Properties="@(_NativeSymbolsPackProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <MSBuild Projects="$(RepoRoot)eng\clipack\Aspire.Cli.NativeSymbols.proj"
+             Targets="Pack"
+             Properties="@(_NativeSymbolsPackProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <!-- Promote only the .symbols.nupkg into the staging dir. The empty
+         companion Aspire.Cli.<rid>.<version>.nupkg from NuGet's
+         IncludeSymbols pack is intentionally discarded — it would
+         collide with the per-RID tool nupkg of the same id+version
+         produced by _PackRidSpecificDotnetTool. -->
+    <ItemGroup>
+      <_PackedSymbolsNupkg Include="$(_NativeSymbolsScratchDir)Aspire.Cli.$(CliRuntime).*.symbols.nupkg" />
+    </ItemGroup>
+
+    <Error Condition="@(_PackedSymbolsNupkg-&gt;Count()) != 1"
+           Text="Expected exactly one Aspire.Cli.$(CliRuntime).*.symbols.nupkg in '$(_NativeSymbolsScratchDir)' but found @(_PackedSymbolsNupkg-&gt;Count()). Files: @(_PackedSymbolsNupkg, ', ')" />
+
+    <Copy SourceFiles="@(_PackedSymbolsNupkg)"
+          DestinationFolder="$(_NativeSymbolsStagingDir)" />
+
+    <Message Importance="High"
+             Text="Staged native AOT symbols package for $(CliRuntime) -&gt; $(_NativeSymbolsStagingDir)%(_PackedSymbolsNupkg.Filename)%(_PackedSymbolsNupkg.Extension)" />
+  </Target>
+
+  <Target Name="PackNpmPackage"
+          DependsOnTargets="_InitializeDotnetToolPackProperties;_ExtractNativeBinaryFromArchive">
+    <Message Importance="High"
+             Text="Packing CLI npm packages for $(CliRuntime) from '$(_ExtractedNativeBinaryPath)' extracted from '$(_CliArchivePath)'." />
+
+    <PropertyGroup>
+      <!-- Build the script path with MSBuild path helpers so it uses the correct separator
+           on every platform. The native CLI archives are built on Windows, Linux, and macOS,
+           and pwsh on non-Windows does not silently normalize mixed-separator paths. -->
+      <_PackCliNpmPackageScript>$([MSBuild]::NormalizePath($(RepoRoot), 'eng', 'scripts', 'pack-cli-npm-package.ps1'))</_PackCliNpmPackageScript>
+    </PropertyGroup>
+
+    <Exec Command="pwsh -NoProfile -NonInteractive -File &quot;$(_PackCliNpmPackageScript)&quot; -Rid &quot;$(CliRuntime)&quot; -Version &quot;$(Version)&quot; -NativeBinaryPath &quot;$(_ExtractedNativeBinaryPath)&quot; -OutputPath &quot;$(_PackageOutputPathArg)&quot; -StagingRoot &quot;$(_CliNpmPackageStagingDirArg)&quot; -PackageName &quot;$(NpmCliPackageName)&quot;" />
   </Target>
 
 </Project>

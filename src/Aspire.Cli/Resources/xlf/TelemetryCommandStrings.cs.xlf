@@ -167,6 +167,11 @@
         <target state="needs-review-translation">Filtrovat podle názvu prostředku.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Search and filter telemetry fields such as log messages, attribute values, names, source, and IDs. Supports full-text search and field filters. See https://aka.ms/aspire/cli-search for more details</source>
+        <target state="new">Search and filter telemetry fields such as log messages, attribute values, names, source, and IDs. Supports full-text search and field filters. See https://aka.ms/aspire/cli-search for more details</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>view telemetry for</source>
         <target state="translated">zobrazit telemetrii pro</target>

@@ -42,6 +42,23 @@ public class AtsRustCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_IncludesExportedValues()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Profiles.Development");
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireRs = files["aspire.rs"];
+
+        Assert.Contains("pub mod test_configs", aspireRs);
+        Assert.Contains("pub fn default() -> TestConfigDto", aspireRs);
+        Assert.Contains("pub mod profiles", aspireRs);
+        Assert.Contains("pub fn development() -> TestConfigDto", aspireRs);
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithTestTypes_IncludesCapabilities()
     {
         // Arrange

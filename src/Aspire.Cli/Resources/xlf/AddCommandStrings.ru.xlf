@@ -17,15 +17,80 @@
         <target state="translated">Произошла ошибка при добавлении пакета: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ErrorOccurredWhileSearchingIntegrations">
+        <source>An error occurred while searching integrations: {0}</source>
+        <target state="new">An error occurred while searching integrations: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FormatOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="new">Output format (Table or Json)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FoundIntegrationPackages">
+        <source>Found {0} integration package(s).</source>
+        <target state="new">Found {0} integration package(s).</target>
+        <note>{0} is the number of integration packages found.</note>
+      </trans-unit>
+      <trans-unit id="FoundIntegrationPackagesMatchingSearchTerm">
+        <source>Found {0} integration package(s) matching '{1}'.</source>
+        <target state="new">Found {0} integration package(s) matching '{1}'.</target>
+        <note>{0} is the number of integration packages found, {1} is the search term provided by the user.</note>
+      </trans-unit>
+      <trans-unit id="HeaderName">
+        <source>Name</source>
+        <target state="new">Name</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderPackage">
+        <source>Package</source>
+        <target state="new">Package</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderVersion">
+        <source>Version</source>
+        <target state="new">Version</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IntegrationArgumentDescription">
         <source>The name of the integration to add (e.g. redis, postgres)</source>
         <target state="needs-review-translation">Имя интеграции для добавления (например, redis, postgres).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IntegrationCommandDescription">
+        <source>Manage Aspire hosting integrations</source>
+        <target state="new">Manage Aspire hosting integrations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IntegrationListDescription">
+        <source>List available Aspire hosting integrations</source>
+        <target state="new">List available Aspire hosting integrations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IntegrationSearchAppHostOptionDescription">
+        <source>The Aspire AppHost project file, or a directory to search, for channel-aware integration discovery</source>
+        <target state="new">The Aspire AppHost project file, or a directory to search, for channel-aware integration discovery</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IntegrationSearchDescription">
+        <source>Search available Aspire hosting integrations</source>
+        <target state="new">Search available Aspire hosting integrations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IntegrationSearchQueryArgumentDescription">
+        <source>The integration search query.</source>
+        <target state="new">The integration search query.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">Ни одного пакета интеграции не найдено. Проверьте подключение к Интернету и конфигурацию источника NuGet.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="NoIntegrationPackagesMatchedSearchTerm">
+        <source>No integration packages matched '{0}'.</source>
+        <target state="new">No integration packages matched '{0}'.</target>
+        <note>{0} is the search term provided by the user.</note>
       </trans-unit>
       <trans-unit id="NoPackagesFound">
         <source>No packages found.</source>
@@ -37,18 +102,23 @@
         <target state="translated">Не найдено пакетов, соответствующих вашему запросу "{0}". Показаны все доступные пакеты.</target>
         <note>{0} is the search term provided by the user.</note>
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresExactPackageMatch">
+        <source>No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</source>
+        <target state="new">No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</target>
+        <note>{0} is the integration name provided by the user.</note>
+      </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
         <source>The package {0}::{1} was added successfully.</source>
         <target state="translated">Пакет {0}::{1} загружен успешно.</target>
         <note>{0} is the package name, {1} is the version.</note>
       </trans-unit>
       <trans-unit id="PackageInstallationFailed">
-        <source>The package installation failed with exit code {0}. See logs at {1}</source>
-        <target state="translated">Не удалось установить пакет. Код завершения: {0}. См. журналы по адресу {1}</target>
-        <note>{0} is a number, {1} is the log file path</note>
+        <source>The package installation failed with exit code {0}.</source>
+        <target state="new">The package installation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file to add the integration to</source>
+        <source>The Aspire AppHost project file, or a directory to search, to add the integration to</source>
         <target state="needs-review-translation">Путь к файлу проекта, в который необходимо добавить интеграцию.</target>
         <note />
       </trans-unit>

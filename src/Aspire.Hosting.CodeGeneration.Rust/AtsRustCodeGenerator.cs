@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Rust;
@@ -95,6 +96,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         WriteHeader();
         GenerateEnumTypes(enumTypes);
         GenerateDtoTypes(dtoTypes);
+        GenerateExportedValues(context.ExportedValues);
         GenerateHandleTypes(handleTypes, capabilitiesByTarget);
         GenerateHandleWrapperRegistrations(handleTypes, listTypeIds);
         GenerateConnectionHelpers();
@@ -247,6 +249,89 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             WriteLine("}");
             WriteLine();
         }
+    }
+
+    private void GenerateExportedValues(IReadOnlyList<AtsExportedValueInfo> exportedValues)
+    {
+        if (exportedValues.Count == 0)
+        {
+            return;
+        }
+
+        WriteLine("// ============================================================================");
+        WriteLine("// Exported Values");
+        WriteLine("// ============================================================================");
+        WriteLine();
+
+        var root = BuildExportedValueTree(exportedValues);
+        foreach (var (name, node) in root.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            WriteRustExportedValueNode(name, node, 0);
+            WriteLine();
+        }
+    }
+
+    private void WriteRustExportedValueNode(string name, RustExportedValueTreeNode node, int depth)
+    {
+        var indent = new string(' ', depth * 4);
+
+        WriteLine($"{indent}pub mod {ToSnakeCase(name)} {{");
+        WriteLine($"{indent}    use super::*;");
+        WriteLine();
+
+        foreach (var (childName, childNode) in node.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            if (childNode.Value is { } valueInfo)
+            {
+                WriteRustExportedValueFunction(childName, valueInfo, depth + 1);
+            }
+            else
+            {
+                WriteRustExportedValueNode(childName, childNode, depth + 1);
+            }
+        }
+
+        WriteLine($"{indent}}}");
+    }
+
+    private void WriteRustExportedValueFunction(string name, AtsExportedValueInfo valueInfo, int depth)
+    {
+        var indent = new string(' ', depth * 4);
+        var returnType = MapTypeRefToRustForExportedValue(valueInfo.Type);
+
+        if (!string.IsNullOrWhiteSpace(valueInfo.Description))
+        {
+            WriteLine($"{indent}/// {valueInfo.Description}");
+        }
+
+        WriteLine($"{indent}pub fn {ToSnakeCase(name)}() -> {returnType} {{");
+        WriteLine($"{indent}    serde_json::from_value::<{returnType}>(serde_json::json!({valueInfo.Value?.ToRelaxedJsonString() ?? "null"}))");
+        WriteLine($"{indent}        .expect(\"generated exported value should deserialize\")");
+        WriteLine($"{indent}}}");
+    }
+
+    private static RustExportedValueTreeNode BuildExportedValueTree(IReadOnlyList<AtsExportedValueInfo> exportedValues)
+    {
+        var root = new RustExportedValueTreeNode();
+
+        foreach (var exportedValue in exportedValues)
+        {
+            var current = root;
+            foreach (var segment in exportedValue.PathSegments)
+            {
+                if (!current.Children.TryGetValue(segment, out var child))
+                {
+                    child = new RustExportedValueTreeNode();
+                    current.Children[segment] = child;
+                }
+
+                current = child;
+            }
+
+            current.Value = exportedValue;
+        }
+
+        return root;
     }
 
     private static bool CanDeriveDefault(
@@ -652,13 +737,28 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         WriteLine("        resolved_options.insert(\"Args\".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));");
         WriteLine("    }");
         WriteLine("    if !resolved_options.contains_key(\"ProjectDirectory\") {");
-        WriteLine("        if let Ok(pwd) = std::env::current_dir() {");
+        // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
+        // directory (not the cwd) when matching --apphost <directory> requests.
+        WriteLine("        if let Some(project_directory) = std::env::var(\"ASPIRE_PROJECT_DIRECTORY\").ok().filter(|s| !s.is_empty()) {");
+        WriteLine("            resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(project_directory));");
+        WriteLine("        } else if let Ok(pwd) = std::env::current_dir() {");
         WriteLine("            resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(pwd.to_string_lossy().to_string()));");
         WriteLine("        }");
         WriteLine("    }");
+        // ASPIRE_APPHOST_FILEPATH is set by the CLI so the host reports the original AppHost file
+        // path (e.g. apphost.rs) back through GetAppHostInformationAsync. Without this the host
+        // falls back to the aspire-managed entry assembly name and the CLI cannot match
+        // --apphost <directory> against the running AppHost.
+        WriteLine("    if !resolved_options.contains_key(\"AppHostFilePath\") {");
+        WriteLine("        if let Ok(app_host_file_path) = std::env::var(\"ASPIRE_APPHOST_FILEPATH\") {");
+        WriteLine("            if !app_host_file_path.is_empty() {");
+        WriteLine("                resolved_options.insert(\"AppHostFilePath\".to_string(), Value::String(app_host_file_path));");
+        WriteLine("            }");
+        WriteLine("        }");
+        WriteLine("    }");
         WriteLine("    let mut args: HashMap<String, Value> = HashMap::new();");
-        WriteLine("    args.insert(\"options\".to_string(), serde_json::to_value(resolved_options).unwrap_or(Value::Null));");
-        WriteLine("    let result = client.invoke_capability(\"Aspire.Hosting/createBuilderWithOptions\", args)?;");
+        WriteLine("    args.insert(\"argsOrOptions\".to_string(), serde_json::to_value(resolved_options).unwrap_or(Value::Null));");
+        WriteLine("    let result = client.invoke_capability(\"Aspire.Hosting/createBuilder\", args)?;");
         WriteLine("    let handle: Handle = serde_json::from_value(result)?;");
         WriteLine($"    Ok({builderStructName}::new(handle, client))");
         WriteLine("}");
@@ -855,6 +955,30 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         };
 
         return isOptional ? $"Option<{baseType}>" : baseType;
+    }
+
+    private string MapTypeRefToRustForExportedValue(AtsTypeRef? typeRef)
+    {
+        if (typeRef is null)
+        {
+            return "Value";
+        }
+
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
+        {
+            return "ReferenceExpression";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
+            AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
+            AtsTypeCategory.Dto => MapDtoType(typeRef.TypeId),
+            AtsTypeCategory.Array or AtsTypeCategory.List => $"Vec<{MapTypeRefToRustForExportedValue(typeRef.ElementType)}>",
+            AtsTypeCategory.Dict => $"HashMap<{MapTypeRefToRustForExportedValue(typeRef.KeyType)}, {MapTypeRefToRustForExportedValue(typeRef.ValueType)}>",
+            AtsTypeCategory.Union or AtsTypeCategory.Unknown => "Value",
+            _ => "Value"
+        };
     }
 
     private string MapHandleType(string typeId) =>
@@ -1062,4 +1186,11 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
     }
 
     private sealed record RustHandleType(string TypeId, string StructName, bool IsResourceBuilder);
+
+    private sealed class RustExportedValueTreeNode
+    {
+        public Dictionary<string, RustExportedValueTreeNode> Children { get; } = new(StringComparer.Ordinal);
+
+        public AtsExportedValueInfo? Value { get; set; }
+    }
 }

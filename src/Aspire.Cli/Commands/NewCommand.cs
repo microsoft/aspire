@@ -5,13 +5,11 @@ using System.CommandLine;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
@@ -24,12 +22,12 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly INewCommandPrompter _prompter;
     private readonly ITemplateProvider _templateProvider;
     private readonly ITemplate[] _templates;
-    private readonly IFeatures _features;
     private readonly IPackagingService _packagingService;
-    private readonly IConfigurationService _configurationService;
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
 
@@ -75,24 +73,17 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
     public NewCommand(
         INewCommandPrompter prompter,
-        IInteractionService interactionService,
         ITemplateProvider templateProvider,
-        AspireCliTelemetry telemetry,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IPackagingService packagingService,
-        IConfigurationService configurationService,
         AgentInitCommand agentInitCommand,
         ICliHostEnvironment hostEnvironment,
-        IConfiguration configuration)
-        : base("new", NewCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        IConfiguration configuration,
+        CommonCommandServices services)
+        : base("new", NewCommandStrings.Description, services)
     {
         _prompter = prompter;
         _templateProvider = templateProvider;
-        _features = features;
         _packagingService = packagingService;
-        _configurationService = configurationService;
         _agentInitCommand = agentInitCommand;
         _hostEnvironment = hostEnvironment;
 
@@ -103,7 +94,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_suppressAgentInitOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration);
+        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
+            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
         _channelOption = new Option<string?>("--channel")
         {
             Description = isStagingEnabled
@@ -115,7 +107,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         _languageOption = new Option<string?>("--language")
         {
-            Description = NewCommandStrings.LanguageOptionDescription
+            Description = NewCommandStrings.LanguageOptionDescription,
+            Recursive = true
         };
         Options.Add(_languageOption);
 
@@ -127,7 +120,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         foreach (var template in _templates)
         {
-            var templateCommand = new TemplateCommand(template, ExecuteAsync, features, updateNotifier, executionContext, InteractionService, Telemetry);
+            var templateCommand = new TemplateCommand(template, ExecuteAsync, services);
             Subcommands.Add(templateCommand);
         }
     }
@@ -152,6 +145,9 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             KnownLanguageId.CSharp => KnownLanguageId.CSharpDisplayName,
             KnownLanguageId.TypeScript => "TypeScript (Node.js)",
             KnownLanguageId.Python => KnownLanguageId.PythonDisplayName,
+            KnownLanguageId.Go => KnownLanguageId.GoDisplayName,
+            KnownLanguageId.Java => KnownLanguageId.JavaDisplayName,
+            KnownLanguageId.Rust => KnownLanguageId.RustDisplayName,
             _ => languageId
         };
     }
@@ -171,6 +167,49 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             cancellationToken: cancellationToken);
 
         return selected.LanguageId;
+    }
+
+    private static NuGetPackage? TryGetCurrentCliTemplateVersionPackage(PackageChannel selectedChannel, NuGetPackage[] packages, bool hasPrHives)
+    {
+        if (VersionHelper.TryGetCurrentCliVersionMatch(
+            packages,
+            p => p.Version,
+            out var cliVersionPackage,
+            channelName: selectedChannel.Name,
+            hasPrHives: hasPrHives))
+        {
+            return cliVersionPackage;
+        }
+
+        if (packages.Length > 0 &&
+            selectedChannel.Type is PackageChannelType.Explicit &&
+            !string.Equals(selectedChannel.Name, PackageChannelNames.Stable, StringComparisons.ChannelName) &&
+            !VersionHelper.IsLocalBuildChannel(selectedChannel.Name))
+        {
+            // Prerelease channels (daily, staging) filter the shipped stable package out of channel
+            // search even when the channel's feed mappings can still restore it (they fall back to
+            // nuget.org). For those channels, pinning to the running CLI's SDK version keeps the
+            // bundled server and the restored Aspire packages in lock-step. Without this, `aspire new
+            // --channel daily` on a shipped 13.4 CLI floats templates to a 13.5 daily preview, which
+            // then breaks the bundled 13.4 AppHost server with `Aspire.TypeSystem, Version=13.5.0.0`
+            // assembly load errors followed by `No language support found for: typescript/nodejs`.
+            //
+            // The stable channel is excluded here on purpose: it does not apply that filter, so a
+            // "no exact match" outcome means the CLI version is genuinely not published on the stable
+            // feed (the CLI is daily-shape, staging-shape, or PR-shape `13.4.0-pr.X.gY`). Forcing
+            // it through would either contradict the user's explicit `--channel stable` request or
+            // write an unpublishable version into `apphost.cs` that NuGet restore cannot satisfy.
+            // Fall through to the OrderByDescending picker so the user gets the highest shipped
+            // stable package they actually asked for.
+            return new NuGetPackage
+            {
+                Id = TemplateNuGetConfigService.TemplatesPackageName,
+                Version = VersionHelper.GetDefaultSdkVersion(),
+                Source = selectedChannel.SourceDetails
+            };
+        }
+
+        return null;
     }
 
     private async Task<(bool Success, string? LanguageId)> ResolveSelectedLanguageAsync(ITemplate template, ParseResult parseResult, CancellationToken cancellationToken)
@@ -197,18 +236,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 return (false, null);
             }
 
-            await _configurationService.SetConfigurationAsync("language", normalizedExplicitLanguageId, isGlobal: false, cancellationToken);
             return (true, normalizedExplicitLanguageId);
-        }
-
-        var configuredLanguageId = await _configurationService.GetConfigurationAsync("language", cancellationToken);
-        if (!string.IsNullOrWhiteSpace(configuredLanguageId))
-        {
-            var normalizedConfiguredLanguageId = NormalizeLanguageId(configuredLanguageId);
-            if (template.SelectableAppHostLanguages.Any(l => l.Equals(normalizedConfiguredLanguageId, StringComparison.OrdinalIgnoreCase)))
-            {
-                return (true, normalizedConfiguredLanguageId);
-            }
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -217,24 +245,23 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         }
 
         var selectedLanguageId = await PromptForAppHostLanguageAsync(template.SelectableAppHostLanguages, cancellationToken);
-        await _configurationService.SetConfigurationAsync("language", selectedLanguageId, isGlobal: false, cancellationToken);
         return (true, selectedLanguageId);
     }
 
-    private ITemplate[] GetTemplatesForPrompt(ITemplate[] availableTemplates, ParseResult parseResult)
+    private ITemplate[] GetTemplatesForTemplateArgument(ITemplate[] availableTemplates, ParseResult parseResult)
     {
         var explicitLanguageId = ParseExplicitLanguageId(parseResult);
-        var templatesForPrompt = availableTemplates.ToList();
+        var templates = availableTemplates.ToList();
 
         if (!string.IsNullOrWhiteSpace(explicitLanguageId))
         {
-            templatesForPrompt = templatesForPrompt
+            templates = templates
                 .Where(t => t.SupportsLanguage(explicitLanguageId))
                 .ToList();
         }
 
         // Sort templates alphabetically by description, keeping empty templates at the end
-        templatesForPrompt.Sort((a, b) =>
+        templates.Sort((a, b) =>
         {
             var aIsEmpty = a.IsEmpty;
             var bIsEmpty = b.IsEmpty;
@@ -247,7 +274,14 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return string.Compare(a.Description, b.Description, StringComparison.OrdinalIgnoreCase);
         });
 
-        return templatesForPrompt.ToArray();
+        return templates.ToArray();
+    }
+
+    private ITemplate[] GetTemplatesForPrompt(ITemplate[] availableTemplates, ParseResult parseResult)
+    {
+        return GetTemplatesForTemplateArgument(availableTemplates, parseResult)
+            .Where(static t => t.ShowInPrompt)
+            .ToArray();
     }
 
     private async Task<ITemplate?> GetProjectTemplateAsync(ITemplate[] availableTemplates, ParseResult parseResult, CancellationToken cancellationToken)
@@ -267,8 +301,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return null;
         }
 
-        var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
-        if (templatesForPrompt.Length == 0)
+        var templatesForTemplateArgument = GetTemplatesForTemplateArgument(availableTemplates, parseResult);
+        if (templatesForTemplateArgument.Length == 0)
         {
             InteractionService.DisplayError("No templates are available for the current environment.");
             return null;
@@ -277,19 +311,20 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
             InteractionService.DisplayError(NewCommandStrings.NonInteractiveTemplateRequired);
-            var templateNames = string.Join(", ", templatesForPrompt.Select(t => t.Name));
+            var templateNames = string.Join(", ", templatesForTemplateArgument.Select(t => t.Name));
             InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, templateNames));
             throw new NonInteractiveException("template");
         }
 
+        var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
+        if (templatesForPrompt.Length == 0)
+        {
+            InteractionService.DisplayError("No templates are available for the current environment.");
+            return null;
+        }
+
         var result = await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken);
 
-        // The prompt is cleared after selection.
-        // Write out the selected template again for context before proceeding.
-        if (result != null)
-        {
-            InteractionService.DisplayPlainText($"{NewCommandStrings.SelectAProjectTemplate} {result.Description}");
-        }
         return result;
     }
 
@@ -312,61 +347,107 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             NewCommandStrings.ResolvingTemplateVersion,
             async () =>
             {
-                var channels = await _packagingService.GetChannelsAsync(cancellationToken);
-
                 var configuredChannelName = parseResult.GetValue(_channelOption);
-                if (string.IsNullOrWhiteSpace(configuredChannelName))
+                var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
+
+                // When no --channel was passed, prefer the channel whose name matches the running
+                // CLI's identity (CliExecutionContext.IdentityChannel — stable, staging, daily,
+                // local, or pr-<N>) over the Implicit (nuget.org) channel. This keeps the
+                // resolved template package and the channel pinned into aspire.config.json
+                // mutually satisfiable: a daily CLI scaffolds a daily-channel project whose
+                // prerelease SDK version is reachable through the daily channel's Package Source
+                // Mapping (Aspire.* → dnceng), a stable CLI scaffolds a stable project whose
+                // stable SDK version is reachable through nuget.org, and so on. The opposite
+                // outcome — resolving against Implicit while pinning channel to the identity —
+                // makes restore reject the prerelease/stable mismatch with "Unable to find a
+                // stable package Aspire.Hosting with version (>= …)".
+                //
+                // Falls back to the Implicit channel when the identity doesn't match any
+                // registered channel (e.g. typoed override, future identity name) so the
+                // command stays useful while surfacing a deterministic version.
+                PackageChannel? identityChannelMatch = null;
+                if (string.IsNullOrWhiteSpace(configuredChannelName) &&
+                    !string.IsNullOrWhiteSpace(ExecutionContext.IdentityChannel))
                 {
-                    configuredChannelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
+                    identityChannelMatch = channels.FirstOrDefault(c =>
+                        string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparisons.ChannelName));
                 }
 
                 var selectedChannel = string.IsNullOrWhiteSpace(configuredChannelName)
-                    ? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit) ?? channels.FirstOrDefault()
-                    : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase));
+                    ? identityChannelMatch
+                        ?? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
+                        ?? channels.FirstOrDefault()
+                    : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparisons.ChannelName));
 
                 if (selectedChannel is null)
                 {
-                    var errorMessage = string.IsNullOrWhiteSpace(configuredChannelName)
-                        ? "No package channels are available."
-                        : $"No channel found matching '{configuredChannelName}'. Valid options are: {string.Join(", ", channels.Select(c => c.Name))}";
+                    string errorMessage;
+                    if (string.IsNullOrWhiteSpace(configuredChannelName))
+                    {
+                        errorMessage = NewCommandStrings.NoPackageChannelsAvailable;
+                    }
+                    else if (string.Equals(configuredChannelName, PackageChannelNames.Staging, StringComparisons.ChannelName)
+                        && _packagingService.GetStagingChannelUnavailableReason() is { } stagingReason)
+                    {
+                        // Surface the actionable packaging-service reason (e.g. "daily CLI cannot
+                        // synthesize a staging channel; set overrideStagingFeed") instead of the
+                        // generic channel list, mirroring UpdateCommand's behavior.
+                        // See https://github.com/microsoft/aspire/issues/16652.
+                        errorMessage = stagingReason;
+                    }
+                    else
+                    {
+                        errorMessage = string.Format(
+                            CultureInfo.CurrentCulture,
+                            NewCommandStrings.NoChannelFoundMatching,
+                            configuredChannelName,
+                            string.Join(", ", channels.Select(c => c.Name)));
+                    }
 
                     return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                 }
 
-                var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
-                    .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
-                    .ToArray();
-                var hasPrHives = ExecutionContext.GetPrHiveCount() > 0;
-
-                NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
-                    packages,
-                    p => p.Version,
-                    out var cliVersionPackage,
-                    channelName: selectedChannel.Name,
-                    hasPrHives: hasPrHives)
-                    ? cliVersionPackage
-                    : null;
-
-                package ??= packages
-                    .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
-                    .FirstOrDefault();
-
-                if (package is null)
+                try
                 {
-                    return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
+                    var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
+                        .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
+                        .ToArray();
+                    var hasPrHives = ExecutionContext.GetHiveCount() > 0;
+
+                    var package = TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives);
+
+                    package ??= packages
+                        .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
+                        .FirstOrDefault();
+
+                    if (package is null)
+                    {
+                        return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
+                    }
+
+                    // Only persist explicit channel names (e.g. local, daily) — implicit channels
+                    // (stable/nuget.org) should not be written so aspire add uses its default behavior.
+                    var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
+
+                    return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
                 }
-
-                // Only persist explicit channel names (e.g. local, daily) — implicit channels
-                // (stable/nuget.org) should not be written so aspire add uses its default behavior.
-                var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
-
-                return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
+                catch (NuGetPackageCacheException ex)
+                {
+                    return new ResolveTemplateVersionResult { ErrorMessage = ex.Message };
+                }
             });
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
+
+        var source = parseResult.GetValue(s_sourceOption);
+        if (!string.IsNullOrWhiteSpace(source) && PackageSourceOverrideMappings.HasCredentialMaterial(source))
+        {
+            InteractionService.DisplayError(NewCommandStrings.SourceWithCredentialsCannotBePersisted);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
+        }
 
         // Resolve which templates are actually available at runtime (performs
         // async checks like SDK availability). This may be a subset of the
@@ -376,16 +457,25 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         var template = await GetProjectTemplateAsync(availableTemplates, parseResult, cancellationToken);
         if (template is null)
         {
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         var (languageResolutionSuccess, selectedLanguageId) = await ResolveSelectedLanguageAsync(template, parseResult, cancellationToken);
         if (!languageResolutionSuccess)
         {
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         var version = parseResult.GetValue(s_versionOption);
+        // Precedence for the channel written into TemplateInputs.Channel:
+        //   1. Explicit --channel argument (user override always wins).
+        //   2. Channel returned by ResolveCliTemplateVersionAsync (CLI-runtime templates).
+        //   3. The running CLI's IdentityChannel, when it matches a registered Explicit
+        //      channel — needed for TemplateRuntime.DotNet starters (aspire-starter,
+        //      aspire-starter-csharp-typescript) which otherwise resolve
+        //      Aspire.ProjectTemplates from the Implicit (nuget.org) channel regardless
+        //      of CLI identity, and also for CLI-runtime templates invoked with --version
+        //      which short-circuits the resolver below.
         string? resolvedChannelName = null;
         if (ShouldResolveCliTemplateVersion(template) &&
             string.IsNullOrWhiteSpace(version))
@@ -393,36 +483,53 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             var resolveResult = await ResolveCliTemplateVersionAsync(parseResult, cancellationToken);
             if (!resolveResult.Success)
             {
-                InteractionService.DisplayError(resolveResult.ErrorMessage);
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, resolveResult.ErrorMessage);
             }
 
             version = resolveResult.Version;
             resolvedChannelName = resolveResult.ChannelName;
         }
 
+        // Apply the channel precedence as a single coalesce. The identity fallback lives
+        // here, not inside ResolveCliTemplateVersionAsync, because that resolver only runs
+        // on the CLI-runtime / no-explicit-version branch above. The two paths that need
+        // the identity hint are precisely the ones the resolver does NOT visit:
+        //   * TemplateRuntime.DotNet templates (aspire-starter family) — the bug this fix
+        //     addresses; without forwarding, DotNetTemplateFactory searches only the
+        //     Implicit (nuget.org) channel regardless of CLI identity.
+        //   * CLI-runtime templates invoked with --version, which short-circuits the
+        //     resolver and would otherwise leave inputs.Channel null.
+        // Keeping the fallback out of the resolver also keeps the resolver's role narrow:
+        // it performs version negotiation across channels and reports the channel that won;
+        // the identity hint is a different policy ("label the project with the CLI's own
+        // channel") that should not influence version selection.
+        resolvedChannelName = parseResult.GetValue(_channelOption)
+            ?? resolvedChannelName
+            ?? await ResolveIdentityChannelNameAsync(cancellationToken);
+
         var inputs = new TemplateInputs
         {
             Name = parseResult.GetValue(s_nameOption),
             Output = parseResult.GetValue(s_outputOption),
-            Source = parseResult.GetValue(s_sourceOption),
+            Source = source,
             Version = version,
-            Channel = parseResult.GetValue(_channelOption) ?? resolvedChannelName,
+            Channel = resolvedChannelName,
             Language = selectedLanguageId
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
-        var exitCode = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, cancellationToken);
+        // The template already produced the AppHost, so don't pre-select the one-time aspireify
+        // wiring skill — users can still opt into it from the prompt.
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, cancellationToken, AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
             extensionInteractionService.OpenEditor(templateResult.OutputPath);
         }
 
-        return exitCode;
+        return CommandResult.FromExitCode(agentInitResult.ExitCode);
     }
 
     private static bool ShouldResolveCliTemplateVersion(ITemplate template)
@@ -430,13 +537,40 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return template.Runtime is TemplateRuntime.Cli;
     }
 
+    /// <summary>
+    /// Resolves <see cref="CliExecutionContext.IdentityChannel"/> to a registered channel name
+    /// from the packaging service. Returns the channel name when an Explicit channel matches the
+    /// identity (e.g. <c>daily</c>, <c>staging</c>, <c>stable</c>, <c>pr-&lt;N&gt;</c>); returns
+    /// <see langword="null"/> when there is no identity, when no Explicit channel matches, or
+    /// when only the Implicit (nuget.org) channel is registered. A <see langword="null"/> result
+    /// intentionally lets the downstream template path consult the Implicit channel and avoids
+    /// writing a per-project channel pin into the new project's NuGet configuration.
+    /// </summary>
+    private async Task<string?> ResolveIdentityChannelNameAsync(CancellationToken cancellationToken)
+    {
+        var identity = ExecutionContext.IdentityChannel;
+        if (string.IsNullOrWhiteSpace(identity))
+        {
+            return null;
+        }
+
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken, identity);
+        var match = channels.FirstOrDefault(c =>
+            string.Equals(c.Name, identity, StringComparisons.ChannelName));
+
+        // Only persist Explicit channel names — Implicit channels (the nuget.org fallback)
+        // are deliberately left unpinned so `aspire add` and later restores use ambient
+        // NuGet configuration. Mirrors the same rule applied at the end of
+        // ResolveCliTemplateVersionAsync.
+        return match is { Type: PackageChannelType.Explicit } ? match.Name : null;
+    }
 }
 
 internal interface INewCommandPrompter
 {
     Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
     Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken);
-    Task<string> PromptForOutputPath(string v, ParseResult parseResult, CancellationToken cancellationToken);
+    Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null);
 }
 
 internal interface ITemplateVersionPrompter
@@ -549,14 +683,23 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
         return await topSelection.Action(cancellationToken);
     }
 
-    public virtual async Task<string> PromptForOutputPath(string path, ParseResult parseResult, CancellationToken cancellationToken)
+    public virtual async Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
     {
-        return await interactionService.PromptForFilePathAsync(
+        var resolvedValidator = validator;
+        if (validator is not null && outputPathResolver is not null)
+        {
+            resolvedValidator = candidatePath => validator(outputPathResolver(candidatePath));
+        }
+
+        var outputPath = await interactionService.PromptForFilePathAsync(
             NewCommandStrings.EnterTheOutputPath,
+            validator: resolvedValidator,
             binding: PromptBinding.Create(parseResult, NewCommand.s_outputOption, path),
             directory: true,
             cancellationToken: cancellationToken
             );
+
+        return outputPathResolver?.Invoke(outputPath) ?? outputPath;
     }
 
     public virtual async Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)

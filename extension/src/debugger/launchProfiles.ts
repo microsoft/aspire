@@ -25,6 +25,9 @@ export interface LaunchProfile {
     environmentVariables?: { [key: string]: string };
     // checkForDevCert in debug configuration
     useSSL?: boolean;
+    // The URL to launch in the browser. May be absolute (e.g. "https://my.localhost");
+    // when relative, it is resolved against the first applicationUrl entry.
+    launchUrl?: string;
 }
 
 /**
@@ -254,16 +257,57 @@ interface ServerReadyAction {
     uriFormat: string;
 }
 
-export function determineServerReadyAction(launchBrowser?: boolean, applicationUrl?: string): ServerReadyAction | undefined {
+export function determineServerReadyAction(launchBrowser?: boolean, applicationUrl?: string, launchUrl?: string): ServerReadyAction | undefined {
     if (!launchBrowser || !applicationUrl) {
         return undefined;
     }
 
     let uriFormat = applicationUrl.includes(';') ? applicationUrl.split(';')[0] : applicationUrl;
 
+    if (launchUrl) {
+        uriFormat = resolveLaunchUrl(launchUrl, uriFormat);
+    }
+
     return {
         action: "openExternally",
         pattern: "\\bNow listening on:\\s+https?://\\S+",
         uriFormat: uriFormat
     };
+}
+
+function resolveLaunchUrl(launchUrl: string, applicationUrl: string): string {
+    const absoluteLaunchUrl = tryCreateUrl(launchUrl);
+    if (absoluteLaunchUrl) {
+        return getHttpUrlOrFallback(absoluteLaunchUrl, applicationUrl, launchUrl);
+    }
+
+    const resolvedLaunchUrl = tryCreateUrl(launchUrl, applicationUrl);
+    if (resolvedLaunchUrl) {
+        return getHttpUrlOrFallback(resolvedLaunchUrl, applicationUrl, launchUrl);
+    }
+
+    extensionLogOutputChannel.warn(`Failed to resolve launchUrl '${launchUrl}' against applicationUrl '${applicationUrl}'. Falling back to applicationUrl.`);
+    return applicationUrl;
+}
+
+function tryCreateUrl(url: string, base?: string): URL | undefined {
+    try {
+        return base ? new URL(url, base) : new URL(url);
+    } catch {
+        return undefined;
+    }
+}
+
+function getHttpUrlOrFallback(url: URL, fallback: string, launchUrl: string): string {
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+        if (url.hostname === '*') {
+            extensionLogOutputChannel.warn(`Ignoring launchUrl '${launchUrl}' because it resolves to wildcard host '*'. Falling back to applicationUrl.`);
+            return fallback;
+        }
+
+        return url.href;
+    }
+
+    extensionLogOutputChannel.warn(`Ignoring launchUrl '${launchUrl}' because it resolves to unsupported scheme '${url.protocol}'. Falling back to applicationUrl.`);
+    return fallback;
 }

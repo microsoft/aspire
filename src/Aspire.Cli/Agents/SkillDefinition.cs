@@ -14,24 +14,13 @@ namespace Aspire.Cli.Agents;
 internal sealed class SkillDefinition
 {
     /// <summary>
-    /// The Aspire skill for CLI commands and workflows.
-    /// </summary>
-    public static readonly SkillDefinition Aspire = new(
-        CommonAgentApplicators.AspireSkillName,
-        AgentCommandStrings.SkillDescription_Aspire,
-        skillContent: null,
-        embeddedResourceRoot: CommonAgentApplicators.AspireSkillResourceRoot,
-        installExcludedRelativePaths: [Path.Combine("evals")],
-        isDefault: true);
-
-    /// <summary>
     /// The Playwright CLI skill for browser automation.
     /// </summary>
     public static readonly SkillDefinition PlaywrightCli = new(
         "playwright-cli",
         AgentCommandStrings.SkillDescription_PlaywrightCli,
         skillContent: null,
-        embeddedResourceRoot: null, // Playwright is installed via PlaywrightCliInstaller, not a static file
+        sourceKind: SkillSourceKind.ExternalInstaller, // Playwright is installed via PlaywrightCliInstaller, not a static file
         installExcludedRelativePaths: [],
         isDefault: false);
 
@@ -43,17 +32,42 @@ internal sealed class SkillDefinition
         CommonAgentApplicators.DotnetInspectSkillName,
         AgentCommandStrings.SkillDescription_DotnetInspect,
         CommonAgentApplicators.DotnetInspectSkillFileContent,
-        embeddedResourceRoot: null,
+        sourceKind: SkillSourceKind.Static,
         installExcludedRelativePaths: [],
         isDefault: false,
         applicableLanguages: [KnownLanguageId.CSharp]);
 
-    private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
+    /// <summary>
+    /// Creates a skill definition sourced from the Aspire skills bundle. All bundle-sourced
+    /// skills are pre-selected by default in the install prompt; callers like <c>aspire new</c>
+    /// and standalone <c>aspire agent init</c> can still narrow that set with a predicate
+    /// (see <c>AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults</c>).
+    /// </summary>
+    internal static SkillDefinition CreateAspireSkillsBundle(
+        string name,
+        string description,
+        IReadOnlyList<string>? installExcludedRelativePaths = null,
+        IReadOnlyList<string>? applicableLanguages = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
+        return new(
+            name,
+            description,
+            skillContent: null,
+            sourceKind: SkillSourceKind.AspireSkillsBundle,
+            installExcludedRelativePaths: installExcludedRelativePaths ?? [],
+            isDefault: true,
+            applicableLanguages);
+    }
+
+    private SkillDefinition(string name, string description, string? skillContent, SkillSourceKind sourceKind, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
     {
         Name = name;
         Description = description;
         SkillContent = skillContent;
-        EmbeddedResourceRoot = embeddedResourceRoot;
+        SourceKind = sourceKind;
         InstallExcludedRelativePaths = installExcludedRelativePaths;
         IsDefault = isDefault;
         ApplicableLanguages = applicableLanguages ?? [];
@@ -70,15 +84,19 @@ internal sealed class SkillDefinition
     public string Description { get; }
 
     /// <summary>
-    /// Gets the content for the top-level SKILL.md file when the skill is defined as a single-file bundle,
-    /// or <c>null</c> when installable files come from <see cref="EmbeddedResourceRoot"/> or another installer.
+    /// Gets the content for the top-level SKILL.md file when the skill is defined as a single-file bundle.
     /// </summary>
     public string? SkillContent { get; }
 
     /// <summary>
-    /// Gets the embedded resource root for bundled skill files, or <c>null</c> if the skill is not installed from an embedded file tree.
+    /// Gets where the installable files for this skill come from.
     /// </summary>
-    public string? EmbeddedResourceRoot { get; }
+    public SkillSourceKind SourceKind { get; }
+
+    /// <summary>
+    /// Gets whether this skill has files that <c>aspire agent init</c> installs directly.
+    /// </summary>
+    public bool HasInstallableFiles => SkillContent is not null || SourceKind is SkillSourceKind.AspireSkillsBundle;
 
     /// <summary>
     /// Gets relative paths that should be excluded when the skill is installed into a workspace.
@@ -134,6 +152,11 @@ internal sealed class SkillDefinition
         return ApplicableLanguages.Any(l => string.Equals(l, detectedLanguage.Value.Value, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Returns whether this skill has the specified name.
+    /// </summary>
+    public bool HasName(string name, StringComparison comparison = StringComparison.Ordinal) => string.Equals(Name, name, comparison);
+
     private static bool PathMatchesOrIsUnder(string relativePath, string excludedPath)
     {
         if (string.Equals(relativePath, excludedPath, StringComparison.Ordinal))
@@ -150,10 +173,31 @@ internal sealed class SkillDefinition
     }
 
     /// <summary>
-    /// Gets all available skill definitions.
+    /// Gets CLI-defined skills that are not sourced from the Aspire skills bundle.
     /// </summary>
-    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, PlaywrightCli, DotnetInspect];
+    public static IReadOnlyList<SkillDefinition> CliDefined { get; } = [PlaywrightCli, DotnetInspect];
 
     /// <inheritdoc />
     public override string ToString() => Name;
+}
+
+/// <summary>
+/// Identifies where skill files are sourced from.
+/// </summary>
+internal enum SkillSourceKind
+{
+    /// <summary>
+    /// The skill is represented by static content compiled into the CLI.
+    /// </summary>
+    Static,
+
+    /// <summary>
+    /// The skill is installed from the external Aspire skills bundle.
+    /// </summary>
+    AspireSkillsBundle,
+
+    /// <summary>
+    /// The skill is managed by a dedicated external installer.
+    /// </summary>
+    ExternalInstaller
 }

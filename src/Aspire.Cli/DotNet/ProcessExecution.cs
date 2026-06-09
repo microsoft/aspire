@@ -45,6 +45,9 @@ internal sealed class ProcessExecution : IProcessExecution
     public int ExitCode => _process.ExitCode;
 
     /// <inheritdoc />
+    public int ProcessId => _process.Id;
+
+    /// <inheritdoc />
     public bool Start()
     {
         var started = _process.Start();
@@ -83,7 +86,20 @@ internal sealed class ProcessExecution : IProcessExecution
     {
         _logger.LogDebug("{FileName}({ProcessId}) waiting for exit", FileName, _process.Id);
 
-        await _process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await _process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (!_process.HasExited)
+            {
+                _logger.LogDebug("{FileName}({ProcessId}) wait was canceled, killing it", FileName, _process.Id);
+                TryKillProcessTree();
+            }
+
+            throw;
+        }
 
         if (!_process.HasExited)
         {
@@ -200,5 +216,17 @@ internal sealed class ProcessExecution : IProcessExecution
     private void RecordForwarderActivity()
     {
         Interlocked.Exchange(ref _lastForwarderActivityTimestamp, Stopwatch.GetTimestamp());
+    }
+
+    private void TryKillProcessTree()
+    {
+        try
+        {
+            _process.Kill(entireProcessTree: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "{FileName}({ProcessId}) failed to kill process tree after wait cancellation", FileName, _process.Id);
+        }
     }
 }

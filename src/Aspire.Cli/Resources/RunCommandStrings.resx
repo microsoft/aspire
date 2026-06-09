@@ -124,7 +124,7 @@
     <value>Stop any running instance of the AppHost without prompting</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file</value>
+    <value>The path to the Aspire AppHost project file or a directory to search</value>
   </data>
   <data name="DetachArgumentDescription" xml:space="preserve">
     <value>Run the AppHost in the background and exit after it starts</value>
@@ -182,13 +182,16 @@
     <value>Connecting to AppHost...</value>
   </data>
   <data name="DashboardFailedToStart" xml:space="preserve">
-    <value>Aspire Dashboard failed to start.</value>
+    <value>Aspire Dashboard failed to start or is disabled.</value>
   </data>
   <data name="AppHost" xml:space="preserve">
     <value>AppHost</value>
   </data>
   <data name="StartingDebugSessionInExtension" xml:space="preserve">
-    <value>Detected aspire run inside the Aspire extension, starting a debug session in VS Code...</value>
+    <value>Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</value>
+  </data>
+  <data name="StartingRunSessionInExtension" xml:space="preserve">
+    <value>Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</value>
   </data>
   <data name="AgentConfigurationPrompt" xml:space="preserve">
     <value>Aspire has detected {0} agentic coding environment(s) to configure. Would you like to configure now?</value>
@@ -227,10 +230,21 @@
     <value>AppHost failed to build.</value>
   </data>
   <data name="TimeoutWaitingForAppHost" xml:space="preserve">
-    <value>Timeout waiting for AppHost to start.</value>
+    <value>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</value>
+    <comment>Do not localize the {1} placeholder. It is an environment variable name.</comment>
+  </data>
+  <data name="InvalidAppHostStartupTimeoutEnvironmentVariable" xml:space="preserve">
+    <value>The {0} environment variable must be a positive number of seconds.</value>
+    <comment>Do not localize the {0} placeholder. It is an environment variable name.</comment>
   </data>
   <data name="CheckLogsForDetails" xml:space="preserve">
     <value>Check logs for details: {0}</value>
+  </data>
+  <data name="RecentAppHostStartupOutput" xml:space="preserve">
+    <value>Recent AppHost startup output</value>
+  </data>
+  <data name="AppHostConnectionLostWaitingForExit" xml:space="preserve">
+    <value>The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</value>
   </data>
   <data name="ProcessId" xml:space="preserve">
     <value>PID</value>

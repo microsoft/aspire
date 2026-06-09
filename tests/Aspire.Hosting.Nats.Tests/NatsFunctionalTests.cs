@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.TestUtilities;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Hosting;
@@ -358,4 +360,15 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
 
         await app.StopAsync();
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Nats_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddNats("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
 }

@@ -13,10 +13,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Update integrations in the Aspire project (Preview)</value>
+    <value>Update integrations in the Aspire project</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file</value>
+    <value>The path to the Aspire AppHost project file or a directory to search</value>
   </data>
   <data name="SelectChannelPrompt" xml:space="preserve">
     <value>Select a channel:</value>
@@ -117,11 +117,22 @@
   <data name="FallbackParsingWarning" xml:space="preserve">
     <value>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</value>
   </data>
+  <data name="UpdateChannelStepDescriptionFormat" xml:space="preserve">
+    <value>Update aspire.config.json channel from '{0}' to '{1}'</value>
+    <comment>{0} = current channel name (or '(none)' if absent). {1} = new channel name.</comment>
+  </data>
+  <data name="ChannelNonePlaceholder" xml:space="preserve">
+    <value>(none)</value>
+    <comment>Displayed in place of the current channel value when aspire.config.json has no channel pinned.</comment>
+  </data>
   <data name="NoAppHostFoundUpdateCliPrompt" xml:space="preserve">
     <value>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</value>
   </data>
   <data name="UpdateCliAfterProjectUpdatePrompt" xml:space="preserve">
     <value>An update is available for the Aspire CLI. Would you like to update it now?</value>
+  </data>
+  <data name="UpdateCliBeforeGuestProjectUpdatePrompt" xml:space="preserve">
+    <value>The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</value>
   </data>
   <data name="ChannelOptionDescription" xml:space="preserve">
     <value>Channel to update to (stable, daily)</value>
@@ -138,6 +149,12 @@
   <data name="DotNetToolSelfUpdateMessage" xml:space="preserve">
     <value>To update the Aspire CLI when installed as a .NET tool, run:</value>
   </data>
+  <data name="NpmSelfUpdateMessage" xml:space="preserve">
+    <value>To update the Aspire CLI when installed from npm, run:</value>
+  </data>
+  <data name="ProjectUpdateSkippedAfterCliUpdateMessage" xml:space="preserve">
+    <value>Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</value>
+  </data>
   <data name="MigratedToNewSdkFormat" xml:space="preserve">
     <value>Migrated to new project format: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</value>
   </data>
@@ -152,6 +169,12 @@
   </data>
   <data name="ApplyingUpdates" xml:space="preserve">
     <value>Applying updates...</value>
+  </data>
+  <data name="RestoringPackagesAfterUpdate" xml:space="preserve">
+    <value>Restoring packages...</value>
+  </data>
+  <data name="FailedToRestoreAfterUpdateFormat" xml:space="preserve">
+    <value>Failed to restore packages for project {0} after update.</value>
   </data>
   <data name="ExtractingNewCli" xml:space="preserve">
     <value>Extracting new CLI...</value>
@@ -173,5 +196,8 @@
   </data>
   <data name="NuGetConfigDirOptionDescription" xml:space="preserve">
     <value>Directory to create or update the NuGet.config file in</value>
+  </data>
+  <data name="NoChannelFoundMatching" xml:space="preserve">
+    <value>No channel found matching '{0}'. Valid options are: {1}.</value>
   </data>
 </root>

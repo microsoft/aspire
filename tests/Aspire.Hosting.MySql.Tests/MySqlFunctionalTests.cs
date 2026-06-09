@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Data;
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
@@ -572,14 +574,14 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
 
             var passwordParameter = builder.AddParameter("pwd", "p@ssw0rd1", secret: true);
             var mysql = builder
-                .AddMySql("resource", password: passwordParameter).WithLifetime(ContainerLifetime.Persistent)
-                .WithPhpMyAdmin(c => c.WithLifetime(ContainerLifetime.Persistent))
+                .AddMySql("resource", password: passwordParameter).WithPersistentLifetime()
+                .WithPhpMyAdmin(c => c.WithPersistentLifetime())
                 .AddDatabase("db");
 
             if (useMultipleInstances)
             {
                 var passwordParameter2 = builder.AddParameter("pwd2", "p@ssw0rd2", secret: true);
-                builder.AddMySql("resource2", password: passwordParameter2).WithLifetime(ContainerLifetime.Persistent);
+                builder.AddMySql("resource2", password: passwordParameter2).WithPersistentLifetime();
             }
 
             var app = builder.Build();
@@ -855,4 +857,15 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(ConnectionState.Open, conn.State);
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task MySql_WithPersistentLifetime_ReusesContainerWithDefaults()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddMySql("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
 }

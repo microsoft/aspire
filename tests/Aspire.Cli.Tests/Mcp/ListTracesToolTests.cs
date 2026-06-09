@@ -163,24 +163,21 @@ public class ListTracesToolTests
         var tracesArray = JsonNode.Parse(jsonText)?.AsArray();
 
         Assert.NotNull(tracesArray);
-        // Should have 2 traces (grouped by trace_id)
+        // Should have 2 traces (grouped by traceId)
         Assert.Equal(2, tracesArray.Count);
 
-        // Verify first trace (trace_id is shortened to 7 characters)
+        // Verify first trace
         var firstTrace = tracesArray[0]?.AsObject();
         Assert.NotNull(firstTrace);
-        Assert.Equal("abc123d", firstTrace["trace_id"]?.GetValue<string>());
+        Assert.Equal("abc123def456789012345678901234567890", firstTrace["traceId"]?.GetValue<string>());
 
         // Verify spans in first trace have correct source and destination
         var spans = firstTrace["spans"]?.AsArray();
         Assert.NotNull(spans);
         Assert.Equal(2, spans.Count);
 
-        // Verify dashboard_link is included for each trace with correct URLs (trace_id is shortened to 7 chars in the URL)
-        var firstDashboardLink = firstTrace["dashboard_link"]?.AsObject();
-        Assert.NotNull(firstDashboardLink);
-        Assert.Equal("http://localhost:18888/traces/detail/abc123d", firstDashboardLink["url"]?.GetValue<string>());
-        Assert.Equal("abc123d", firstDashboardLink["text"]?.GetValue<string>());
+        // Verify dashboardUrl is included for each trace with correct URLs
+        Assert.Equal("http://localhost:18888/traces/detail/abc123def456789012345678901234567890", firstTrace["dashboardUrl"]?.GetValue<string>());
 
         // First span (server) should have source from resource name, no destination
         var serverSpan = spans.FirstOrDefault(s => s?["kind"]?.GetValue<string>() == "Server")?.AsObject();
@@ -197,12 +194,9 @@ public class ListTracesToolTests
         // Verify second trace
         var secondTrace = tracesArray[1]?.AsObject();
         Assert.NotNull(secondTrace);
-        Assert.Equal("xyz789a", secondTrace["trace_id"]?.GetValue<string>());
+        Assert.Equal("xyz789abc123456789012345678901234567890", secondTrace["traceId"]?.GetValue<string>());
 
-        var secondDashboardLink = secondTrace["dashboard_link"]?.AsObject();
-        Assert.NotNull(secondDashboardLink);
-        Assert.Equal("http://localhost:18888/traces/detail/xyz789a", secondDashboardLink["url"]?.GetValue<string>());
-        Assert.Equal("xyz789a", secondDashboardLink["text"]?.GetValue<string>());
+        Assert.Equal("http://localhost:18888/traces/detail/xyz789abc123456789012345678901234567890", secondTrace["dashboardUrl"]?.GetValue<string>());
 
         // Verify spans in second trace have correct source and destination
         var secondTraceSpans = secondTrace["spans"]?.AsArray();
@@ -465,5 +459,71 @@ public class ListTracesToolTests
         };
         monitor.AddConnection("hash1", "socket.hash1", connection);
         return monitor;
+    }
+
+    [Fact]
+    public async Task ListTracesTool_WithSearch_PassesSearchToUrl()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api-service", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true }
+        };
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+
+        var apiResponseObj = new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceSpans = [] },
+            TotalCount = 0,
+            ReturnedCount = 0
+        };
+        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        string? capturedUrl = null;
+        using var mockHandler = new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (request.RequestUri?.AbsolutePath.Contains("/resources") == true)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(resourcesResponse, System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+
+            capturedUrl = url;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(apiResponse, System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+        var mockHttpClientFactory = new MockHttpClientFactory(mockHandler);
+
+        var monitor = CreateMonitorWithDashboard();
+        var tool = CreateTool(monitor, mockHttpClientFactory);
+
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["search"] = JsonDocument.Parse("\"GET /api\"").RootElement
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(capturedUrl);
+        Assert.Contains("search=", capturedUrl);
+    }
+
+    [Fact]
+    public void ListTracesTool_InputSchema_HasSearchProperty()
+    {
+        var tool = CreateTool();
+
+        var schema = tool.GetInputSchema();
+
+        Assert.Equal(JsonValueKind.Object, schema.ValueKind);
+        Assert.True(schema.TryGetProperty("properties", out var properties));
+        Assert.True(properties.TryGetProperty("search", out var search));
+        Assert.True(search.TryGetProperty("type", out var type));
+        Assert.Equal("string", type.GetString());
     }
 }

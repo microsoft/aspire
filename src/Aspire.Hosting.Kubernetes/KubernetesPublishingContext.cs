@@ -34,6 +34,7 @@ internal sealed class KubernetesPublishingContext(
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
         .WithTypeConverter(new ByteArrayStringYamlConverter())
         .WithTypeConverter(new IntOrStringYamlConverter())
+        .WithTypeConverter(new KubernetesManifestResourceYamlConverter())
         .WithEventEmitter(nextEmitter => new ForceQuotedStringsEventEmitter(nextEmitter, HelmExtensions.ShouldDoubleQuoteString))
         .WithEventEmitter(e => new FloatEmitter(e))
         .WithEmissionPhaseObjectGraphVisitor(args => new YamlIEnumerableSkipEmptyObjectGraphVisitor(args.InnerVisitor))
@@ -85,16 +86,14 @@ internal sealed class KubernetesPublishingContext(
                 {
                     var dockerfileContext = new DockerfileFactoryContext
                     {
-                        Services = executionContext.ServiceProvider,
+                        Services = executionContext.Services,
                         Resource = serviceResource.TargetResource,
                         CancellationToken = cancellationToken
                     };
-                    await dockerfileBuildAnnotation.MaterializeDockerfileAsync(dockerfileContext, cancellationToken).ConfigureAwait(false);
 
                     // Copy to a resource-specific path in the output folder for publishing
                     var resourceDockerfilePath = Path.Combine(OutputPath, $"{serviceResource.TargetResource.Name}.Dockerfile");
-                    Directory.CreateDirectory(OutputPath);
-                    File.Copy(dockerfileBuildAnnotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
+                    await dockerfileBuildAnnotation.EmitDockerfileArtifactsAsync(dockerfileContext, resourceDockerfilePath).ConfigureAwait(false);
                 }
 
                 if (serviceResource.TargetResource.TryGetAnnotationsOfType<KubernetesServiceCustomizationAnnotation>(out var annotations))
@@ -116,8 +115,62 @@ internal sealed class KubernetesPublishingContext(
             }
         }
 
+        // Write Ingress resources as standalone templates.
+        foreach (var ingressResource in resources.OfType<KubernetesIngressResource>())
+        {
+            if (ingressResource.Parent == environment && ingressResource.GeneratedIngress is { } generatedIngress)
+            {
+                await WriteKubernetesTemplatesForResource(ingressResource, [generatedIngress]).ConfigureAwait(false);
+            }
+        }
+
+        // Write Gateway API resources (Gateway + HTTPRoutes) as standalone templates.
+        foreach (var gatewayResource in resources.OfType<KubernetesGatewayResource>())
+        {
+            if (gatewayResource.Parent == environment && gatewayResource.GeneratedGateway is { } generatedGateway)
+            {
+                var gatewayObjects = new List<BaseKubernetesResource> { generatedGateway };
+                gatewayObjects.AddRange(gatewayResource.GeneratedHttpRoutes);
+                await WriteKubernetesTemplatesForResource(gatewayResource, gatewayObjects).ConfigureAwait(false);
+            }
+        }
+
         await WriteKubernetesHelmChartAsync(environment).ConfigureAwait(false);
+
+        // Drain any captured Helm values from ingress/gateway resources that don't go through
+        // AppendResourceContextToHelmValuesAsync (compute resources do). Without this, values.yaml
+        // would be missing placeholders for parameters referenced by WithIngressClass(parameter),
+        // WithHostname(parameter), WithTls(parameter), WithGatewayClass(parameter), etc., and
+        // `helm template` would render `<no value>` for those Helm references.
+        EnsureCapturedHelmValuePlaceholders(environment);
+
         await WriteKubernetesHelmValuesAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Adds empty placeholders to <see cref="_helmValues"/> for any captured Helm value
+    /// whose (section, resourceKey, valueKey) is not already present. Compute resources
+    /// populate their placeholders during <see cref="AppendResourceContextToHelmValuesAsync"/>;
+    /// ingress and gateway resources rely on this pass.
+    /// </summary>
+    private void EnsureCapturedHelmValuePlaceholders(KubernetesEnvironmentResource environment)
+    {
+        foreach (var captured in environment.CapturedHelmValues)
+        {
+            if (!_helmValues.TryGetValue(captured.Section, out var section))
+            {
+                continue;
+            }
+
+            if (!section.TryGetValue(captured.ResourceKey, out var resourceObj) ||
+                resourceObj is not Dictionary<string, object> resourceSection)
+            {
+                resourceSection = new Dictionary<string, object>();
+                section[captured.ResourceKey] = resourceSection;
+            }
+
+            resourceSection.TryAdd(captured.ValueKey, string.Empty);
+        }
     }
 
     private async Task AppendResourceContextToHelmValuesAsync(IResource resource, KubernetesResource resourceContext)
@@ -279,6 +332,8 @@ internal sealed class KubernetesPublishingContext(
 
     private async Task WriteKubernetesHelmChartAsync(KubernetesEnvironmentResource environment)
     {
+        await ResolveHelmChartMetadataAsync(environment).ConfigureAwait(false);
+
         var helmChart = new HelmChart
         {
             Name = environment.HelmChartName,
@@ -295,6 +350,45 @@ internal sealed class KubernetesPublishingContext(
         var outputFile = Path.Combine(OutputPath, "Chart.yaml");
         Directory.CreateDirectory(OutputPath);
         await File.WriteAllTextAsync(outputFile, chartYaml, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves Helm chart name/version/description annotations (set via
+    /// <see cref="HelmChartOptions"/>) and assigns the resolved values onto the
+    /// environment's internal <c>HelmChart*</c> properties so that Chart.yaml is
+    /// generated with the user-configured values on the first write.
+    /// </summary>
+    private async Task ResolveHelmChartMetadataAsync(KubernetesEnvironmentResource environment)
+    {
+        if (environment.TryGetLastAnnotation<HelmChartNameAnnotation>(out var nameAnnotation))
+        {
+            var name = await nameAnnotation.Name.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                HelmChartOptions.ValidateChartName(name, nameof(HelmChartOptions.WithChartName));
+                environment.HelmChartName = name;
+            }
+        }
+
+        if (environment.TryGetLastAnnotation<HelmChartVersionAnnotation>(out var versionAnnotation))
+        {
+            var version = await versionAnnotation.Version.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(version))
+            {
+                HelmChartOptions.ValidateChartVersion(version, nameof(HelmChartOptions.WithChartVersion));
+                environment.HelmChartVersion = version;
+            }
+        }
+
+        if (environment.TryGetLastAnnotation<HelmChartDescriptionAnnotation>(out var descriptionAnnotation))
+        {
+            var description = await descriptionAnnotation.Description.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                HelmChartOptions.ValidateChartDescription(description, nameof(HelmChartOptions.WithChartDescription));
+                environment.HelmChartDescription = description;
+            }
+        }
     }
 
     private static void ApplyNodePoolSelector(KubernetesResource serviceResource, KubernetesNodePoolResource nodePool)
