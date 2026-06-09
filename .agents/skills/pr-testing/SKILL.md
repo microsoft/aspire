@@ -1,6 +1,6 @@
 ---
 name: pr-testing
-description: Downloads and tests Aspire CLI from a PR build, preferably in the repo-local container runner under eng/scripts, verifies version, and runs test scenarios based on PR changes. Use this when asked to test a pull request.
+description: Downloads and tests Aspire CLI from a PR build, preferably in the repo-local container runner under eng/scripts, verifies version, and runs test scenarios based on PR changes. Also covers testing PRs that change CI infrastructure — GitHub Actions (workflows, actions, gh-aw agentic workflows, CI scripts under .github/ and eng/) and Azure DevOps pipelines (eng/pipelines, eng/common). Use this when asked to test a pull request.
 ---
 
 You are a specialized PR testing agent for the microsoft/aspire repository. Your primary function is to download the Aspire CLI from a PR's "Dogfood this PR" comment, verify it matches the PR's latest commit, analyze the PR changes, and run appropriate test scenarios.
@@ -242,6 +242,9 @@ Categorize the changes:
 - **Client/Component changes**: Files in `src/Components/`
 - **Template changes**: Files in `src/Aspire.ProjectTemplates/`
 - **Test changes**: Files in `tests/`
+- **CI infrastructure changes**: GitHub Actions — files in `.github/workflows/`, `.github/actions/`, `.github/aw/`, `.github/agents/`, or CI scripts under `eng/scripts/`, `eng/testing/github-ci-trigger-patterns.txt`, `eng/test-retry-patterns.json`; **and** Azure DevOps — `eng/pipelines/`, `eng/common/`, and the signing/packaging/publishing plumbing those pipelines call. More broadly, anything that changes *how CI selects, builds, or runs* (e.g. `tools/**` invoked by CI, MSBuild test plumbing in `eng/**/*.props`/`*.targets`, or CI config/data JSON), even when no `.github/` or `eng/pipelines/` file is touched. (Skill/doc-only edits under `.agents/skills/**` or `docs/**` are **not** tested by this skill — there is nothing to run for them.)
+
+> **If the PR touches CI infrastructure, follow the `ci-infra-testing.md` reference in this skill directory for that part.** Those changes are *not* validated by the CLI dogfood / template scenarios below. The reference has two tracks: **GitHub Actions** (most workflows don't run on the PR; unit tests don't catch trigger / permission / fork / portability / lock-drift gotchas) and **Azure DevOps** (no AzDO pipeline runs on a GitHub PR — a non-trivial change must be run on the `dnceng/internal` mirror via the `azdo-internal` skill). For an **infra-only** PR, skip the CLI install and template scenarios in Steps 3–9 entirely and use `ci-infra-testing.md` instead. For a mixed PR, do both.
 
 ### 6. Generate Test Scenarios
 
@@ -276,6 +279,9 @@ Based on the PR changes, generate appropriate test scenarios. Always use new pro
 - Create a project that uses the modified component
 - Add the corresponding hosting resource
 - Test the client can connect to the resource
+
+**For CI infrastructure changes (`.github/**`, `eng/pipelines/**`, `eng/common/**`, CI scripts under `eng/`):**
+- Follow `ci-infra-testing.md` in this skill directory. It splits into a **GitHub Actions** track and an **Azure DevOps** track. In brief — GitHub: enumerate every workflow the diff affects (changed `.yml`, every workflow that consumes a changed script/action/reusable-workflow/data file, *and* every consumer of an artifact a changed job produces), trace the producer→consumer graph (`needs:`, `outputs`, `upload`/`download-artifact`, `workflow_run`), determine which actually run on this PR, run the matching `Infrastructure.Tests` classes, recompile any gh-aw `.lock.yml` and confirm no diff, manually dispatch the affected workflows that don't run on the PR (prefer a `dry_run` input or your fork), validate each run's *results* (job logs, binlog, downloaded artifacts) rather than just that it went green, and confirm no *fewer* tests/jobs run than baseline when enumeration/matrix/job structure changes. AzDO: no pipeline runs on the PR — for a non-trivial change, run def-1602 on the `dnceng/internal` mirror via the `azdo-internal` skill, check stage `dependsOn` + published/consumed artifacts (including the cross-pipeline release consumer), and validate the change took effect from the timeline + downloaded artifacts. Scan the failure-mode tables for the gotchas the unit tests can't catch.
 
 #### Unhappy-Path Coverage
 
@@ -454,6 +460,7 @@ Use the following structure:
 - [x] CLI changes detected
 - [ ] Hosting integration changes
 - [x] Dashboard changes
+- [ ] CI infrastructure changes (GitHub Actions / Azure DevOps)
 ...
 
 ## Test Scenarios Executed
@@ -483,6 +490,21 @@ Use the following structure:
 
 ### Scenario 2: [Scenario Name]
 ...
+
+## CI Infrastructure Validation
+[Include this section only when the PR changes `.github/**`, `eng/pipelines/**`, `eng/common/**`, or CI scripts under `eng/`. See `ci-infra-testing.md` for the full playbook.]
+
+**GitHub Actions:**
+- **What runs on this PR:** [Which path-triggered workflows fired and passed (link runs); which affected workflows could only be validated manually]
+- **Automated tests:** [Which `Infrastructure.Tests` classes ran + result; or "no automated coverage exists for `<file>`"]
+- **Manual triggers:** [`gh workflow run` invocations, run links, dry-run output, whether run on a fork]
+- **Results validation:** [Per behavioral change, the observable confirmed in a real run — job-log line, artifact path/layout, binlog target, or skipped job — not just that the run completed; and, for enumeration/matrix/job changes, that no *fewer* tests/jobs ran than baseline]
+- **Dependency graph:** [For a changed producing job/artifact, the consumers traced (same-run `needs:` and cross-workflow/cross-pipeline downloads) and how each was confirmed — or "n/a"]
+- **gh-aw:** [`gh aw compile --validate` result + post-recompile lock-file diff (ideally empty)]
+- **Failure-modes scan:** [Gotcha rows checked and outcome — including gotchas confirmed *not* to be a problem]
+
+**Azure DevOps (only when pipelines changed):**
+- **Run vs. baseline:** [Baseline def-1602 `buildId` + result, your validation `buildId`(s) + result, artifact set compared, steps confirmed to run (timeline/log markers), expected contributor-branch skips — or "n/a — validated offline via `Infrastructure.Tests`"]
 
 ## Summary
 | Scenario | Status | Notes |
@@ -705,3 +727,4 @@ Dashboard correctly displays the new Redis resource type.
 - **Non-interactive project creation** - Follow the flags listed in the "Important template note" section (Step 3)
 - **Explicit AppHost path** - Prefer `--apphost <path>` for scripted `wait`, `describe`, `resource`, and `stop` commands
 - **PR hive for templates** - Prefer `--source <pr-hive>` and `--version <installed-version>` when creating projects from the PR build
+- **CI infra PRs** - When the PR changes `.github/**`, `eng/pipelines/**`, `eng/common/**`, or CI scripts under `eng/`, follow `ci-infra-testing.md` (GitHub Actions track + Azure DevOps track): enumerate every affected workflow/pipeline, validate the workflows/actions/scripts/pipelines and hunt for trigger/permission/fork/portability/lock-drift gotchas, and for AzDO run def-1602 on the `dnceng/internal` mirror via the `azdo-internal` skill — don't dogfood the CLI for infra-only PRs, and don't test skill/doc-only edits at all
