@@ -6,6 +6,19 @@ function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
 }
 
+function isAspireCommandType(value: unknown): value is AspireCommandType {
+    return value === 'run' || value === 'deploy' || value === 'publish' || value === 'do';
+}
+
+function getTerminationCommand(configuration: vscode.DebugConfiguration): AspireCommandType | undefined {
+    // Run is the default Aspire command when omitted from launch configuration.
+    if (configuration.command === undefined || configuration.command === null) {
+        return 'run';
+    }
+
+    return isAspireCommandType(configuration.command) ? configuration.command : undefined;
+}
+
 export interface AppHostLaunchRequestedEvent {
     appHostPath: string;
     command: AspireCommandType;
@@ -54,7 +67,7 @@ export class AppHostLaunchService implements vscode.Disposable {
                 }
                 this._onDidTerminateAppHostDebugSession.fire({
                     appHostPath,
-                    command: session.configuration.command,
+                    command: getTerminationCommand(session.configuration),
                 });
             }
         });

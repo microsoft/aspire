@@ -186,4 +186,45 @@ suite('AppHostLaunchService', () => {
             command: 'publish',
         });
     });
+
+    test('terminated Aspire sessions default missing command to run', () => {
+        let terminationEvent: { appHostPath: string; command?: string } | undefined;
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvent = event;
+        });
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback({
+            configuration: {
+                type: 'aspire',
+                program: '/repo/AppHost.csproj',
+            },
+        } as unknown as vscode.DebugSession);
+
+        assert.deepStrictEqual(terminationEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: 'run',
+        });
+    });
+
+    test('terminated Aspire sessions drop invalid command values', () => {
+        let terminationEvent: { appHostPath: string; command?: string } | undefined;
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvent = event;
+        });
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback({
+            configuration: {
+                type: 'aspire',
+                program: '/repo/AppHost.csproj',
+                command: 'invalid',
+            },
+        } as unknown as vscode.DebugSession);
+
+        assert.deepStrictEqual(terminationEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: undefined,
+        });
+    });
 });
