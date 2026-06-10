@@ -12,6 +12,7 @@ using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
+using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests;
 using Azure;
@@ -389,6 +390,48 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.DoesNotContain(storageEvent.Snapshot.Properties, p => p.Name == "azure.subscription.id");
         Assert.DoesNotContain(storageEvent.Snapshot.Properties, p => p.Name == CustomResourceKnownProperties.Source);
         Assert.Contains(storageEvent.Snapshot.Properties, p => p.Name == "custom.property");
+    }
+
+    [Fact]
+    public async Task ResetProvisioningStateCommand_ReentersProvisioningAndPromptsWhenAzureConfigMissing()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        var testInteractionService = new TestInteractionService();
+
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        builder.AddAzureProvisioning();
+        builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environmentResource = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
+        var resetCommand = Assert.Single(environmentResource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ResetProvisioningStateCommandName);
+
+        var commandTask = resetCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = environmentResource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        });
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.Equal(AzureProvisioningStrings.NotificationTitle, interaction.Title);
+        Assert.Equal(AzureProvisioningStrings.NotificationMessage, interaction.Message);
+        var options = Assert.IsType<NotificationInteractionOptions>(interaction.Options);
+        Assert.Equal(MessageIntent.Warning, options.Intent);
+        Assert.Equal(AzureProvisioningStrings.NotificationPrimaryButtonText, options.PrimaryButtonText);
+
+        interaction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+        var result = await commandTask.WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.False(result.Success);
+        Assert.True(result.Canceled);
     }
 
     [Fact]

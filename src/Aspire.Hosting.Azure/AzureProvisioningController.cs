@@ -490,7 +490,7 @@ internal sealed class AzureProvisioningController(
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        await RunOperationAsync(model, new ResetStateIntent(), cancellationToken).ConfigureAwait(false);
+        await RunOperationAsync(model, new ResetStateIntent(ReprovisionAfterReset: false), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task ForgetResourceStateAsync(DistributedApplicationModel model, string resourceName, CancellationToken cancellationToken = default)
@@ -658,7 +658,7 @@ internal sealed class AzureProvisioningController(
         var model = context.Services.GetRequiredService<DistributedApplicationModel>();
 
         return ExecuteCommandAsync(
-            () => ResetStateAsync(model, context.CancellationToken),
+            () => RunOperationAsync<bool>(model, new ResetStateIntent(ReprovisionAfterReset: true), context.CancellationToken),
             AzureProvisioningStrings.ResetProvisioningStateCommandSuccess,
             () => CreateEnvironmentCommandResultDataAsync(ResetProvisioningStateCommandName, model, context.CancellationToken));
     }
@@ -1304,7 +1304,7 @@ internal sealed class AzureProvisioningController(
     {
         return intent switch
         {
-            ResetStateIntent => await ExecuteResetStateAsync(model, cancellationToken).ConfigureAwait(false),
+            ResetStateIntent resetState => await ExecuteResetStateAsync(model, resetState, cancellationToken).ConfigureAwait(false),
             ForgetResourceStateIntent forgetResourceState => await ExecuteForgetResourceStateAsync(model, forgetResourceState, cancellationToken).ConfigureAwait(false),
             ChangeAzureContextIntent changeAzureContext => await ExecuteChangeAzureContextAsync(model, changeAzureContext, cancellationToken).ConfigureAwait(false),
             EnsureProvisionedIntent => await ExecuteEnsureProvisionedAsync(model, cancellationToken).ConfigureAwait(false),
@@ -1319,7 +1319,7 @@ internal sealed class AzureProvisioningController(
         };
     }
 
-    private async Task<object?> ExecuteResetStateAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
+    private async Task<bool> ExecuteResetStateAsync(DistributedApplicationModel model, ResetStateIntent intent, CancellationToken cancellationToken)
     {
         // Resetting the environment removes the top-level provisioning context first, then clears
         // each deployment section. This makes future prompts fall back to configuration/defaults and
@@ -1332,7 +1332,12 @@ internal sealed class AzureProvisioningController(
         await PublishAzureEnvironmentStateAsync(model, KnownResourceStates.NotStarted, cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Azure provisioning state reset for {Count} Azure resources.", azureResources.Count);
-        return null;
+        if (!intent.ReprovisionAfterReset || !serviceProvider.GetRequiredService<IInteractionService>().IsAvailable)
+        {
+            return true;
+        }
+
+        return await EnsureProvisionedCoreAsync(model, azureResources, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<object?> ExecuteForgetResourceStateAsync(DistributedApplicationModel model, ForgetResourceStateIntent intent, CancellationToken cancellationToken)
@@ -3154,7 +3159,7 @@ internal sealed class AzureProvisioningController(
     // makes each queued operation self-describing for command-state calculation and execution.
     private abstract record AzureIntent(AzureOperationState Operation);
 
-    private sealed record ResetStateIntent() : AzureIntent(AzureOperationState.All("Reset provisioning state"));
+    private sealed record ResetStateIntent(bool ReprovisionAfterReset) : AzureIntent(AzureOperationState.All("Reset provisioning state"));
 
     private sealed record ChangeAzureContextIntent(AzureProvisioningOptionsUpdate? Options) : AzureIntent(AzureOperationState.All("Change Azure context"));
 
