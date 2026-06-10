@@ -24,6 +24,9 @@ public partial class SignalsActionsDisplay
     [Parameter, EditorRequired]
     public required Func<ResourceKey?, Task> HandleClearSignal { get; set; }
 
+    [Parameter]
+    public Func<Task>? HandleDownloadLogs { get; set; }
+
     [Parameter, EditorRequired]
     public required SelectViewModel<ResourceTypeDetails> SelectedResource { get; set; }
 }
