@@ -14,6 +14,9 @@ var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41Mini);
 
 var a2aAgent = builder.AddUvicornApp("a2a-jsonrpc-agent", "../weather-agent-python", "weather_agent_python.main:app")
     .WithUv()
+    .WithReference(project)
+    .WithReference(chat)
+    .WaitFor(chat)
     .AsAgent(AgentProtocol.A2A);
 
 builder.AddProject<Projects.ResponsesAgent>("responses-agent")
@@ -23,6 +26,14 @@ builder.AddProject<Projects.ResponsesAgent>("responses-agent")
     .WaitFor(chat)
     .AsAgent(AgentProtocol.Responses)
     .WithMcpServer();
+
+builder.AddNodeApp("vercel-ai-responses-agent", "../vercel-ai-responses-agent", "app.ts")
+    .WithRunScript("start")
+    .WithNpm(installCommand: "ci")
+    .WithHttpEndpoint(env: "PORT")
+    .WithReference(chat)
+    .WaitFor(chat)
+    .AsAgent(AgentProtocol.Responses);
 
 builder.AddProject<Projects.McpAgent>("mcp-agent")
     .WithHttpEndpoint(env: "PORT")

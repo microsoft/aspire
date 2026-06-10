@@ -18,6 +18,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Agents" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Foundry" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.JavaScript" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Python" />
     <ProjectReference Include="..\McpAgent\McpAgent.csproj" />
     <ProjectReference Include="..\ResponsesAgent\ResponsesAgent.csproj" />

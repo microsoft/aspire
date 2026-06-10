@@ -1,6 +1,5 @@
-"""A2A JSON-RPC agent served with FastAPI and the official A2A SDK."""
+"""A2A JSON-RPC agent served with FastAPI, LangChain, and the official A2A SDK."""
 
-import asyncio
 import logging
 import os
 
@@ -22,7 +21,12 @@ from a2a.types import (
     TaskState,
     TaskStatus,
 )
+from azure.identity import DefaultAzureCredential
 from fastapi import FastAPI
+from langchain.agents import create_agent
+from langchain_azure_ai.chat_models import AzureAIOpenAIApiChatModel
+from langchain_core.messages import BaseMessage
+from langchain_core.tools import tool
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 
@@ -30,11 +34,99 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _read_foundry_connections() -> tuple[str, str]:
+    project_values = _parse_connection_string(os.environ.get("ConnectionStrings__agentsproject", ""))
+    chat_values = _parse_connection_string(os.environ.get("ConnectionStrings__chat", ""))
+
+    endpoint = project_values.get("Endpoint")
+    deployment = chat_values.get("Deployment")
+    if not endpoint or not deployment:
+        raise RuntimeError("ConnectionStrings__agentsproject must contain Endpoint and ConnectionStrings__chat must contain Deployment.")
+
+    return _normalize_foundry_model_endpoint(endpoint), deployment
+
+
+def _parse_connection_string(connection_string: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for part in connection_string.split(";"):
+        key, separator, value = part.partition("=")
+        if separator:
+            values[key.strip()] = value.strip()
+
+    return values
+
+
+def _normalize_foundry_model_endpoint(endpoint: str) -> str:
+    endpoint = endpoint.rstrip("/")
+    project_separator = "/api/projects/"
+    if project_separator in endpoint:
+        endpoint = endpoint.split(project_separator, maxsplit=1)[0]
+
+    return endpoint if endpoint.endswith("/openai/v1") else f"{endpoint}/openai/v1"
+
+
+@tool
+def get_playground_weather(location: str) -> str:
+    """Get a deterministic playground weather report for a location."""
+    return f"The playground forecast for {location} is sunny with a chance of distributed traces."
+
+
+class LangChainAgent:
+    """LangChain agent used by the Aspire A2A playground."""
+
+    def __init__(self) -> None:
+        endpoint, deployment = _read_foundry_connections()
+        model = AzureAIOpenAIApiChatModel(
+            endpoint=endpoint,
+            credential=DefaultAzureCredential(),
+            model=deployment,
+            temperature=0,
+        )
+        self._agent = create_agent(
+            model=model,
+            tools=[get_playground_weather],
+            system_prompt="You are a concise assistant exposed through the Agent2Agent JSON-RPC protocol.",
+        )
+
+    async def answer(self, question: str) -> str:
+        """Answer a user question using the LangChain agent."""
+        result = await self._agent.ainvoke(
+            {"messages": [{"role": "user", "content": question or "Hello"}]}
+        )
+        messages = result.get("messages", [])
+        if not messages:
+            return "The LangChain agent did not return a response."
+
+        return _message_content_to_text(messages[-1])
+
+
+def _message_content_to_text(message: BaseMessage) -> str:
+    content = message.content
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text") or block.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+
+        if parts:
+            return "\n".join(parts)
+
+    return str(content)
+
+
 class AspireAgentExecutor(AgentExecutor):
     """Small A2A SDK executor used by the Aspire playground."""
 
     def __init__(self) -> None:
         self._running_tasks: set[str] = set()
+        self._agent: LangChainAgent | None = None
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         """Cancel the running task if it is still active."""
@@ -50,7 +142,7 @@ class AspireAgentExecutor(AgentExecutor):
         await updater.cancel()
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
-        """Execute a task with simple deterministic agent behavior."""
+        """Execute a task by passing the user message to the LangChain agent."""
         user_message = context.message
         task_id = context.task_id
         context_id = context.context_id
@@ -76,9 +168,8 @@ class AspireAgentExecutor(AgentExecutor):
         )
 
         query = context.get_user_input()
-        response_text = self._answer(query)
-        await asyncio.sleep(0)
-
+        agent = self._get_agent()
+        response_text = await agent.answer(query)
         if task_id not in self._running_tasks:
             return
 
@@ -90,16 +181,11 @@ class AspireAgentExecutor(AgentExecutor):
         await updater.complete()
         self._running_tasks.discard(task_id)
 
-    @staticmethod
-    def _answer(query: str) -> str:
-        if not query:
-            return "Hello from the Aspire A2A playground agent."
+    def _get_agent(self) -> LangChainAgent:
+        if self._agent is None:
+            self._agent = LangChainAgent()
 
-        normalized = query.lower()
-        if "weather" in normalized:
-            return "The playground forecast is sunny with a chance of distributed traces."
-
-        return f"Hello from the Aspire A2A playground agent. You said: {query}"
+        return self._agent
 
 
 def _get_agent_card(agent_url: str) -> AgentCard:
@@ -122,7 +208,7 @@ def _get_agent_card(agent_url: str) -> AgentCard:
             AgentSkill(
                 id="chat",
                 name="Chat",
-                description="Answers prompts with deterministic playground responses.",
+                description="Answers prompts through a LangChain-backed playground agent.",
                 examples=["Hello, what can you do?"],
                 tags=["chat"],
             )
