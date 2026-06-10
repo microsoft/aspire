@@ -2040,7 +2040,9 @@ function renderHtml() {
         el("createdTo").value = String(range.to);
         el("createdFromLabel").textContent = disabled ? "" : dayToDate(range.from);
         el("createdToLabel").textContent = disabled ? "" : dayToDate(range.to);
-        el("dateRangeLabel").textContent = disabled ? "No issues loaded." : dayToDate(range.from) + " -> " + dayToDate(range.to);
+        el("dateRangeLabel").textContent = disabled
+          ? (state.issues.length === 0 ? "No issues loaded." : "No issues match filters.")
+          : dayToDate(range.from) + " -> " + dayToDate(range.to);
         if (disabled) {
           el("timelineSelection").style.left = "0%";
           el("timelineSelection").style.right = "100%";
@@ -2183,7 +2185,7 @@ function renderHtml() {
         const select = el("categorySelect");
         const counts = new Map(issueCategoryDefinitions.map((category) => [category.id, 0]));
 
-        for (const issue of state.issues) {
+        for (const issue of state.issues.filter((issue) => issueMatchesActiveFilters(issue, { includeCategories: false }))) {
           for (const category of categoriesForIssue(issue)) {
             counts.set(category.id, (counts.get(category.id) || 0) + 1);
           }
@@ -2192,7 +2194,6 @@ function renderHtml() {
         const knownCategoryIds = new Set(issueCategoryDefinitions.map((category) => category.id));
         state.selectedCategories = new Set([...state.selectedCategories].filter((categoryId) => knownCategoryIds.has(categoryId)));
         state.categoryCounts = counts;
-        persistCategories();
 
         select.innerHTML = "";
         const placeholder = document.createElement("option");
@@ -2239,7 +2240,7 @@ function renderHtml() {
         const select = el("areaLabelSelect");
         const counts = new Map();
 
-        for (const issue of state.issues) {
+        for (const issue of state.issues.filter((issue) => issueMatchesActiveFilters(issue, { includeAreaLabels: false }))) {
           for (const label of issue.labels) {
             counts.set(label, (counts.get(label) || 0) + 1);
           }
@@ -2248,7 +2249,6 @@ function renderHtml() {
         const labels = [...counts.keys()].sort((a, b) => a.localeCompare(b));
         state.areaLabels = labels;
         state.areaLabelCounts = counts;
-        persistAreaLabels();
 
         select.innerHTML = "";
         const placeholder = document.createElement("option");
@@ -2316,6 +2316,8 @@ function renderHtml() {
 
       function issueMatchesActiveFilters(issue, options = {}) {
         const includeDate = options.includeDate !== false;
+        const includeCategories = options.includeCategories !== false;
+        const includeAreaLabels = options.includeAreaLabels !== false;
         const query = el("search").value.trim().toLowerCase();
         const group = el("group").value;
         const showDismissed = el("showDismissed").checked;
@@ -2332,11 +2334,11 @@ function renderHtml() {
           }
         }
 
-        if (state.selectedCategories.size > 0 && !categoriesForIssue(issue).some((category) => state.selectedCategories.has(category.id))) {
+        if (includeCategories && state.selectedCategories.size > 0 && !categoriesForIssue(issue).some((category) => state.selectedCategories.has(category.id))) {
           return false;
         }
 
-        if (state.selectedAreaLabels.size > 0 && !issue.labels.some((label) => state.selectedAreaLabels.has(label))) {
+        if (includeAreaLabels && state.selectedAreaLabels.size > 0 && !issue.labels.some((label) => state.selectedAreaLabels.has(label))) {
           return false;
         }
 
@@ -2378,6 +2380,8 @@ function renderHtml() {
 
       function render() {
         configureTimeline(timelineFilteredIssues());
+        populateCategoryFilter();
+        populateAreaFilter();
 
         const content = el("content");
         const issues = filteredIssues();
