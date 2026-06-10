@@ -70,8 +70,8 @@ public static class AzureProvisionerExtensions
         }
 
         // The controller is registered unconditionally because AzureProvisioner is resolved by the run-mode
-        // pipeline step. In publish mode, the controller's interactive features (change-context, change-location)
-        // are never invoked, but it must be resolvable.
+        // Azure environment initialization. In publish mode, the controller's interactive features
+        // (change-context, change-location) are never invoked, but it must be resolvable.
         builder.Services.TryAddSingleton<IAzureProvisioningOptionsManager, NoOpAzureProvisioningOptionsManager>();
         builder.Services.TryAddSingleton<AzureProvisioningController>();
 

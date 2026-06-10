@@ -7,6 +7,7 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure;
 
@@ -40,6 +41,7 @@ public static class AzureEnvironmentResourceExtensions
         if (builder.ExecutionContext.IsRunMode)
         {
             var resourceBuilder = builder.AddResource(resource)
+                .OnInitializeResource(ProvisionAzureResourcesAsync)
                 .WithInitialState(new CustomResourceSnapshot
                 {
                     ResourceType = nameof(AzureEnvironmentResource),
@@ -85,6 +87,30 @@ public static class AzureEnvironmentResourceExtensions
                 Properties = [],
                 IsHidden = true // hidden from the dashboard
             });
+    }
+
+    private static async Task ProvisionAzureResourcesAsync(AzureEnvironmentResource resource, InitializeResourceEvent @event, CancellationToken cancellationToken)
+    {
+        var model = @event.Services.GetRequiredService<DistributedApplicationModel>();
+        var provisioner = @event.Services.GetRequiredService<AzureProvisioner>();
+
+        try
+        {
+            await provisioner.ProvisionResourcesAsync(model, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The application is shutting down; leave the current resource state untouched.
+        }
+        catch (Exception ex)
+        {
+            @event.Logger.LogError(ex, "Azure provisioning failed.");
+
+            await @event.Notifications.PublishUpdateAsync(resource, state => state with
+            {
+                State = new("Failed to Provision", KnownResourceStateStyles.Error)
+            }).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

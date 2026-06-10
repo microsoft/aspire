@@ -431,7 +431,7 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
-    public async Task RunModePipelineStep_ProvisionsAzureResourcesAfterPrepareStep()
+    public async Task RunModeInitializeResource_ProvisionsAzureResourcesAfterPrepareStep()
     {
         var builder = CreateBuilder(isRunMode: true);
         var deploymentStateManager = new TestDeploymentStateManager();
@@ -463,10 +463,10 @@ public class AzureEnvironmentResourceExtensionsTests
         var environmentResource = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
         var (steps, pipelineContext) = await CreateAzureEnvironmentPipelineStepsAsync(environmentResource, model, app.Services);
         var prepareResourcesStep = Assert.Single(steps, step => step.Name == AzureEnvironmentResource.PrepareResourcesStepName);
-        var runModeProvisionStep = Assert.Single(steps, step => step.Name == AzureEnvironmentResource.RunModeProvisionStepName);
+        var beforeStartSteps = steps.Where(step => step.RequiredBySteps.Contains(WellKnownPipelineSteps.BeforeStart)).ToArray();
 
-        Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, runModeProvisionStep.DependsOnSteps);
-        Assert.Contains(WellKnownPipelineSteps.BeforeStart, runModeProvisionStep.RequiredBySteps);
+        Assert.Collection(beforeStartSteps, step => Assert.Equal(AzureEnvironmentResource.PrepareResourcesStepName, step.Name));
+        Assert.DoesNotContain(WellKnownPipelineSteps.BeforeStart, steps.Single(step => step.Name == AzureEnvironmentResource.ProvisionInfrastructureStepName).RequiredBySteps);
 
         await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
         var stepContext = new PipelineStepContext
@@ -476,7 +476,16 @@ public class AzureEnvironmentResourceExtensionsTests
         };
 
         await prepareResourcesStep.Action(stepContext);
-        await runModeProvisionStep.Action(stepContext);
+
+        Assert.Empty(storage.Resource.Outputs);
+
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        await eventing.PublishAsync(new InitializeResourceEvent(
+            environmentResource,
+            eventing,
+            app.Services.GetRequiredService<ResourceLoggerService>(),
+            notifications,
+            app.Services));
 
         Assert.True(notifications.TryGetCurrentState(storage.Resource.Name, out var storageEvent));
         Assert.Equal(KnownResourceStates.Running, storageEvent.Snapshot.State?.Text);
