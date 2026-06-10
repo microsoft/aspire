@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -182,13 +183,7 @@ public class AzureAppServiceEnvironmentResource :
             return;
         }
 
-        // Remove the default container registry from the model if an explicit registry is configured
-        if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
-            DefaultContainerRegistry is not null)
-        {
-            appModel.Resources.Remove(DefaultContainerRegistry);
-            DefaultContainerRegistry = null;
-        }
+        RemoveGeneratedContainerRegistryIfReplaced(appModel);
 
         var logger = services.GetRequiredService<ILogger<AzureAppServiceEnvironmentResource>>();
         var provisioningOptions = services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
@@ -198,6 +193,18 @@ public class AzureAppServiceEnvironmentResource :
             executionContext,
             this,
             services);
+
+        // Deployment prerequisites such as the AcrPull role assignment are owned by the environment,
+        // not by each generated website. The role-assignment module does not produce a value that the
+        // environment or website Bicep naturally references, so there is no implicit data-flow dependency
+        // for Bicep to infer. References carries the explicit ordering edge: the environment module and
+        // each generated deployment target must wait for the environment-owned prerequisite modules before
+        // image push/deploy steps can rely on the permission being present.
+        var environmentDeploymentPrerequisites = GetEnvironmentDeploymentPrerequisites();
+        foreach (var prerequisite in environmentDeploymentPrerequisites)
+        {
+            References.Add(prerequisite);
+        }
 
         // Annotate the environment with its context
         Annotations.Add(new AzureAppServiceEnvironmentContextAnnotation(appServiceEnvironmentContext));
@@ -217,6 +224,7 @@ public class AzureAppServiceEnvironmentResource :
                 continue;
             }
 
+            AddDeploymentPrerequisites(resource, environmentDeploymentPrerequisites);
             var website = await appServiceEnvironmentContext.CreateAppServiceAsync(resource, provisioningOptions.Value, cancellationToken).ConfigureAwait(false);
 
             resource.Annotations.Add(new DeploymentTargetAnnotation(website)
@@ -228,6 +236,41 @@ public class AzureAppServiceEnvironmentResource :
 
         // Log once about all HTTP endpoints upgraded to HTTPS
         appServiceEnvironmentContext.LogHttpsUpgradeIfNeeded();
+    }
+
+    private IReadOnlySet<AzureBicepResource> GetEnvironmentDeploymentPrerequisites()
+    {
+        if (!this.TryGetAnnotationsOfType<DeploymentPrerequisitesAnnotation>(out var prerequisiteAnnotations))
+        {
+            return new HashSet<AzureBicepResource>();
+        }
+
+        // The preparer writes environment-owned prerequisites after it materializes generated
+        // role-assignment modules. Collapse all annotations here so future environment-owned
+        // infrastructure can participate in the same deployment ordering contract.
+        return prerequisiteAnnotations.SelectMany(a => a.Resources).ToHashSet();
+    }
+
+    private static void AddDeploymentPrerequisites(IResource resource, IReadOnlySet<AzureBicepResource> prerequisites)
+    {
+        if (prerequisites.Count == 0)
+        {
+            return;
+        }
+
+        var newPrerequisites = prerequisites.ToHashSet();
+        if (resource.TryGetAnnotationsOfType<DeploymentPrerequisitesAnnotation>(out var existingAnnotations))
+        {
+            // A resource can already have prerequisites from direct Azure references. Only add the
+            // environment-level resources it does not already wait on to avoid duplicate References
+            // when deployment targets are generated.
+            newPrerequisites.ExceptWith(existingAnnotations.SelectMany(a => a.Resources));
+        }
+
+        if (newPrerequisites.Count > 0)
+        {
+            resource.Annotations.Add(new DeploymentPrerequisitesAnnotation(newPrerequisites));
+        }
     }
 
     private async Task PrintDashboardUrlAsync(PipelineStepContext context)
@@ -430,10 +473,8 @@ public class AzureAppServiceEnvironmentResource :
         BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id);
 
     /// <summary>
-    /// Gets the default container registry for this environment.
+    /// Gets the configured container registry for this environment.
     /// </summary>
-    internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
-
     ReferenceExpression IContainerRegistry.Name => GetContainerRegistry()?.Name ?? ReferenceExpression.Create($"{ContainerRegistryName}");
 
     ReferenceExpression IContainerRegistry.Endpoint => GetContainerRegistry()?.Endpoint ?? ReferenceExpression.Create($"{ContainerRegistryUrl}");
@@ -448,8 +489,24 @@ public class AzureAppServiceEnvironmentResource :
             return annotation.Registry;
         }
 
-        // Fall back to default container registry
-        return DefaultContainerRegistry;
+        return null;
+    }
+
+    private void RemoveGeneratedContainerRegistryIfReplaced(DistributedApplicationModel appModel)
+    {
+        if (!this.TryGetLastAnnotation<GeneratedContainerRegistryAnnotation>(out var generatedRegistryAnnotation))
+        {
+            return;
+        }
+
+        if (this.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var currentRegistryAnnotation) &&
+            ReferenceEquals(currentRegistryAnnotation.Registry, generatedRegistryAnnotation.Registry))
+        {
+            return;
+        }
+
+        appModel.Resources.Remove(generatedRegistryAnnotation.Registry);
+        Annotations.Remove(generatedRegistryAnnotation);
     }
 
     /// <summary>

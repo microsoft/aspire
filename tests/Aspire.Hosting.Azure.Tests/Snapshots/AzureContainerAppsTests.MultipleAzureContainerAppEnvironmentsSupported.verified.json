@@ -4,10 +4,15 @@
       "type": "azure.bicep.v0",
       "path": "env1-acr.module.bicep"
     },
+    "env1-acr-pull-identity": {
+      "type": "azure.bicep.v0",
+      "path": "env1-acr-pull-identity.module.bicep"
+    },
     "env1": {
       "type": "azure.bicep.v0",
       "path": "env1.module.bicep",
       "params": {
+        "env1_acr_pull_identity_outputs_id": "{env1-acr-pull-identity.outputs.id}",
         "env1_acr_outputs_name": "{env1-acr.outputs.name}",
         "userPrincipalId": ""
       }
@@ -16,10 +21,15 @@
       "type": "azure.bicep.v0",
       "path": "env2-acr.module.bicep"
     },
+    "env2-acr-pull-identity": {
+      "type": "azure.bicep.v0",
+      "path": "env2-acr-pull-identity.module.bicep"
+    },
     "env2": {
       "type": "azure.bicep.v0",
       "path": "env2.module.bicep",
       "params": {
+        "env2_acr_pull_identity_outputs_id": "{env2-acr-pull-identity.outputs.id}",
         "env2_acr_outputs_name": "{env2-acr.outputs.name}",
         "userPrincipalId": ""
       }
@@ -46,6 +56,22 @@
           "env2_outputs_azure_container_apps_environment_default_domain": "{env2.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
           "env2_outputs_azure_container_apps_environment_id": "{env2.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}"
         }
+      }
+    },
+    "env1-roles-env1-acr": {
+      "type": "azure.bicep.v0",
+      "path": "env1-roles-env1-acr.module.bicep",
+      "params": {
+        "env1_acr_outputs_name": "{env1-acr.outputs.name}",
+        "principalId": "{env1-acr-pull-identity.outputs.principalId}"
+      }
+    },
+    "env2-roles-env2-acr": {
+      "type": "azure.bicep.v0",
+      "path": "env2-roles-env2-acr.module.bicep",
+      "params": {
+        "env2_acr_outputs_name": "{env2-acr.outputs.name}",
+        "principalId": "{env2-acr-pull-identity.outputs.principalId}"
       }
     }
   }

@@ -1,7 +1,8 @@
-﻿{
+{
   "type": "azure.bicep.v0",
   "path": "app-host.module.bicep",
   "params": {
+    "app_host_acr_pull_identity_outputs_id": "{app-host-acr-pull-identity.outputs.id}",
     "app_host_acr_outputs_name": "{app-host-acr.outputs.name}",
     "log_env_shared_name": "{log-env-shared-name.value}",
     "log_env_shared_rg": "{log-env-shared-rg.value}",

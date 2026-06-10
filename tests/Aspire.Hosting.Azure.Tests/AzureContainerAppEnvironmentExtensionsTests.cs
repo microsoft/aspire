@@ -193,7 +193,14 @@ public class AzureContainerAppEnvironmentExtensionsTests
             .AsExisting(environmentName, sharedResourceGroup)
             .WithAzureContainerRegistry(acr);
 
-        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(env.Resource);
+        var model = new DistributedApplicationModel([env.Resource]);
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(model, env.Resource);
+
+        var roleAssignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
+            r => r.Name == "env-roles-acr");
+        Assert.Same(acr.Resource, roleAssignment.TargetAzureResource);
+        Assert.Same(env.Resource, roleAssignment.OwnerResource);
+        Assert.Same(sharedResourceGroup.Resource, roleAssignment.Scope?.ResourceGroup);
 
         await Verify(bicep, extension: "bicep")
             .AppendContentAsFile(manifest.ToString(), "json");

@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 
@@ -160,10 +161,11 @@ public partial class AzureKubernetesEnvironmentResource :
     /// </summary>
     internal bool IsPrivateCluster { get; set; }
 
-    /// <summary>
-    /// Gets or sets the default container registry auto-created for this AKS environment.
-    /// </summary>
-    internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
+    IAzureContainerRegistryResource? IAzureComputeEnvironmentResource.ContainerRegistry =>
+        this.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation) &&
+        annotation.Registry is IAzureContainerRegistryResource registry
+            ? registry
+            : null;
 
     /// <summary>
     /// Gets the load balancer resources registered against this AKS environment via

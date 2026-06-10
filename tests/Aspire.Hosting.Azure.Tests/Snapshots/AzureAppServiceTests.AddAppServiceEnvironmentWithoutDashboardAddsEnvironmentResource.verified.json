@@ -1,7 +1,9 @@
-﻿{
+{
   "type": "azure.bicep.v0",
   "path": "env.module.bicep",
   "params": {
+    "env_acr_pull_identity_outputs_id": "{env-acr-pull-identity.outputs.id}",
+    "env_acr_pull_identity_outputs_clientid": "{env-acr-pull-identity.outputs.clientId}",
     "env_acr_outputs_name": "{env-acr.outputs.name}",
     "userPrincipalId": ""
   }

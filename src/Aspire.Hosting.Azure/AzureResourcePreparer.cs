@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREAZURE003
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning;
@@ -28,14 +29,15 @@ internal sealed class AzureResourcePreparer(
             return;
         }
 
-        if (!EnvironmentSupportsIdentitiesAndAssignments())
+        var supportsTargetedRoleAssignments = EnvironmentSupportsIdentitiesAndAssignments(model);
+        if (!supportsTargetedRoleAssignments)
         {
             // If the app infrastructure does not support targeted identities and role assignments, then we need to ensure that
             // there are no identity or role assignment annotations in the app model because they won't be honored otherwise.
             EnsureNoIdentityOrRoleAssignmentAnnotations(model);
         }
 
-        await BuildRoleAssignmentAnnotations(model, azureResources, cancellationToken).ConfigureAwait(false);
+        await BuildRoleAssignmentAnnotations(model, azureResources, supportsTargetedRoleAssignments, cancellationToken).ConfigureAwait(false);
 
         // set the ProvisioningBuildOptions on the resource, if necessary
         foreach (var r in azureResources)
@@ -77,11 +79,14 @@ internal sealed class AzureResourcePreparer(
         return azureResources;
     }
 
-    private bool EnvironmentSupportsIdentitiesAndAssignments()
+    private bool EnvironmentSupportsIdentitiesAndAssignments(DistributedApplicationModel model)
     {
         // run mode always supports targeted role assignments
-        // publish mode only supports targeted role assignments if the environment supports it
-        return executionContext.IsRunMode || options.Value.SupportsTargetedRoleAssignments;
+        // publish mode supports targeted role assignments when the active publisher opted in, or when
+        // a compute environment resource is already in the model. The option is the normal extension
+        // registration signal; the resource check preserves direct model construction paths where the
+        // environment-specific pipeline still knows how to attach identities and deployment prerequisites.
+        return executionContext.IsRunMode || options.Value.SupportsTargetedRoleAssignments || model.Resources.OfType<IAzureComputeEnvironmentResource>().Any();
     }
 
     private static void EnsureNoIdentityOrRoleAssignmentAnnotations(DistributedApplicationModel appModel)
@@ -93,6 +98,11 @@ internal sealed class AzureResourcePreparer(
                 throw new InvalidOperationException("The application model does not support role assignments. Ensure you are using an environment that supports role assignments, for example AddAzureContainerAppEnvironment.");
             }
 
+            if (resource.HasAnnotationOfType<ContainerRegistryRoleAssignmentAnnotation>())
+            {
+                throw new InvalidOperationException("The application model does not support container registry role assignments. Ensure you are using an environment that supports role assignments, for example AddAzureContainerAppEnvironment.");
+            }
+
             if (resource.HasAnnotationOfType<AppIdentityAnnotation>())
             {
                 throw new InvalidOperationException("The application model does not support using explicit managed identities. Ensure you are using an environment that supports managed identities, for example AddAzureContainerAppEnvironment.");
@@ -100,161 +110,45 @@ internal sealed class AzureResourcePreparer(
         }
     }
 
-    private async Task BuildRoleAssignmentAnnotations(DistributedApplicationModel appModel, List<(IResource Resource, IAzureResource AzureResource)> azureResources, CancellationToken cancellationToken)
+    private async Task BuildRoleAssignmentAnnotations(
+        DistributedApplicationModel appModel,
+        List<(IResource Resource, IAzureResource AzureResource)> azureResources,
+        bool supportsTargetedRoleAssignments,
+        CancellationToken cancellationToken)
     {
         var globalRoleAssignments = new Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>>();
 
-        if (!EnvironmentSupportsIdentitiesAndAssignments())
+        // The same annotations drive two different outputs. In Run mode, there is no published
+        // workload identity to attach, so role assignments target the deployment principal globally.
+        // In Publish mode, each owner gets (or supplies) a user-assigned identity plus targeted role
+        // modules, and those modules become deployment prerequisites for the owner.
+        var provisioningResourcesByResource = azureResources
+            .Where(r => r.AzureResource is AzureProvisioningResource)
+            .ToDictionary(r => r.Resource, r => (AzureProvisioningResource)r.AzureResource);
+        var provisioningResources = provisioningResourcesByResource.Values.ToArray();
+        if (!supportsTargetedRoleAssignments)
         {
-            // when the app infrastructure doesn't support targeted role assignments, just copy all the default role assignments to applied role assignments
-            foreach (var resource in azureResources.Select(r => r.AzureResource).OfType<AzureProvisioningResource>())
-            {
-                if (resource.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaultRoleAssignments))
-                {
-                    AppendGlobalRoleAssignments(globalRoleAssignments, resource, defaultRoleAssignments.Roles);
-                }
-            }
+            AddDefaultRoleAssignments(provisioningResources, globalRoleAssignments);
         }
         else
         {
-            // when the app infrastructure supports targeted role assignments, walk the resource graph and
-            // - if in RunMode
-            //   - if a compute resource has RoleAssignmentAnnotations, add them to globalRoleAssignments on the referenced Azure resource
-            //   - if the resource doesn't, copy the DefaultRoleAssignments to globalRoleAssignments
-            //
-            // - if in PublishMode
-            //   - if a compute resource has RoleAssignmentAnnotations, use them
-            //   - if the resource doesn't, copy the DefaultRoleAssignments to RoleAssignmentAnnotations to apply the defaults
-            var resourceSnapshot = appModel.GetComputeResources()
-                .Concat(appModel.Resources
-                    .OfType<AzureUserAssignedIdentityResource>()
-                    .Where(r => !r.IsExcludedFromPublish()))
-                .ToArray(); // avoid modifying the collection while iterating
-            foreach (var resource in resourceSnapshot)
+            foreach (var resource in GetRoleAssignmentProcessingResources(appModel))
             {
                 var prerequisiteResources = new HashSet<AzureBicepResource>();
                 var directDependencies = await resource.GetResourceDependenciesAsync(executionContext, ResourceDependencyDiscoveryMode.DirectOnly, cancellationToken).ConfigureAwait(false);
-                var azureReferences = new HashSet<IAzureResource>(directDependencies.OfType<IAzureResource>());
 
-                var azureReferencesWithRoleAssignments =
-                    (resource.TryGetAnnotationsOfType<RoleAssignmentAnnotation>(out var annotations)
-                        ? annotations
-                        : [])
-                        .ToLookup(a => a.Target);
-                foreach (var azureReference in azureReferences.OfType<AzureProvisioningResource>())
-                {
-                    if (azureReference.IsContainer() || azureReference.IsEmulator())
-                    {
-                        // Skip emulators
-                        continue;
-                    }
+                ProcessDirectAzureReferences(resource, directDependencies, provisioningResourcesByResource, globalRoleAssignments, prerequisiteResources);
+                ProcessReferenceRoleAssignments(resource, directDependencies, globalRoleAssignments);
 
-                    var roleAssignments = azureReferencesWithRoleAssignments[azureReference];
-                    if (roleAssignments.Any())
-                    {
-                        if (executionContext.IsRunMode)
-                        {
-                            // in RunMode, we need to add the role assignments to the resource
-                            AppendGlobalRoleAssignments(globalRoleAssignments, azureReference, roleAssignments.SelectMany(a => a.Roles));
-                        }
-                        // in PublishMode, this is a no-op since GetAllRoleAssignments will handle the role assignments
-                    }
-                    else if (azureReference.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaults))
-                    {
-                        if (executionContext.IsRunMode)
-                        {
-                            // in RunMode, we copy the default role assignments to the Azure reference,
-                            // even if the roles are empty, since empty roles are used by some resources - like databases
-                            AppendGlobalRoleAssignments(globalRoleAssignments, azureReference, defaults.Roles);
-                        }
-                        else
-                        {
-                            // in PublishMode, we copy the default role assignments to the compute resource
-                            resource.Annotations.Add(new RoleAssignmentAnnotation(azureReference, defaults.Roles));
-                        }
-                    }
-
-                    // Find private endpoints that target Azure resources referenced by this compute resource.
-                    // These must be provisioned before the compute resource is deployed.
-                    if (azureReference.TryGetAnnotationsOfType<PrivateEndpointTargetAnnotation>(out var peAnnotations))
-                    {
-                        foreach (var peAnnotation in peAnnotations)
-                        {
-                            prerequisiteResources.Add(peAnnotation.PrivateEndpointResource);
-                        }
-                    }
-                }
-
-                // A direct dependency that is not itself an Azure resource can still "front" one
-                // (e.g. a Foundry hosted agent's node app fronts its owning Foundry account). Such a
-                // resource carries ReferenceRoleAssignmentAnnotation(s) declaring that any resource
-                // referencing it should be granted roles on a transitive Azure target the normal
-                // IAzureResource-only reference walk above cannot reach. Fold those implied targets
-                // into the same role-assignment path so the consumer gets an identity + role bicep
-                // exactly as it would for a direct Azure reference.
-                foreach (var dependency in directDependencies)
-                {
-                    if (!dependency.TryGetAnnotationsOfType<ReferenceRoleAssignmentAnnotation>(out var impliedRoleAssignments))
-                    {
-                        continue;
-                    }
-
-                    foreach (var impliedRoleAssignment in impliedRoleAssignments)
-                    {
-                        var target = impliedRoleAssignment.Target;
-                        if (target.IsContainer() || target.IsEmulator())
-                        {
-                            continue;
-                        }
-
-                        if (executionContext.IsRunMode)
-                        {
-                            AppendGlobalRoleAssignments(globalRoleAssignments, target, impliedRoleAssignment.Roles);
-                        }
-                        else
-                        {
-                            // In PublishMode, materialize as an explicit RoleAssignmentAnnotation so
-                            // GetAllRoleAssignments (which groups by target and unions roles) picks it
-                            // up alongside any roles the consumer already declares for the same target.
-                            resource.Annotations.Add(new RoleAssignmentAnnotation(target, impliedRoleAssignment.Roles));
-                        }
-                    }
-                }
-
-                // in PublishMode with SupportsTargetedRoleAssignments, we need to create the identity and role assignment resources
-                // if the resource references any Azure resources, or has role assignments to Azure resources
                 if (executionContext.IsPublishMode)
                 {
-                    var roleAssignments = GetAllRoleAssignments(resource);
-                    if (roleAssignments.Count > 0)
-                    {
-                        var (identityResource, roleAssignmentResources) = CreateIdentityAndRoleAssignmentResources(resource, roleAssignments);
-
-                        if (resource != identityResource)
-                        {
-                            // Only add the AppIdentityAnnotation if the resource doesn't already have one
-                            if (!resource.TryGetLastAnnotation<AppIdentityAnnotation>(out var existingAppIdentityAnnotation) ||
-                                existingAppIdentityAnnotation.IdentityResource != identityResource)
-                            {
-                                resource.Annotations.Add(new AppIdentityAnnotation(identityResource));
-                            }
-
-                            // add the identity resource to the resource collection so it can be provisioned
-                            // but only if it's not already there
-                            if (!appModel.Resources.Contains(identityResource))
-                            {
-                                appModel.Resources.Add(identityResource);
-                            }
-                        }
-
-                        foreach (var roleAssignmentResource in roleAssignmentResources)
-                        {
-                            prerequisiteResources.Add(AddOrGetRoleAssignmentResource(appModel, roleAssignmentResource));
-                        }
-                    }
+                    // The two processing steps above may add RoleAssignmentAnnotation instances for
+                    // defaults and implied references. Materialize publish resources only after that
+                    // mutation so GetAllRoleAssignments sees the complete set for this owner.
+                    CreatePublishRoleAssignmentResources(appModel, resource, provisioningResourcesByResource, prerequisiteResources);
                 }
 
-                // Add prerequisite infrastructure resources on the compute resource.
+                // Add prerequisite infrastructure resources on the owner resource.
                 // Deployment infrastructure subscribers will transfer these to deployment target References
                 // so AzureBicepResource dependency wiring can apply provision ordering.
                 AddDeploymentPrerequisitesAnnotation(resource, prerequisiteResources);
@@ -262,15 +156,9 @@ internal sealed class AzureResourcePreparer(
 
             if (executionContext.IsRunMode)
             {
-                // in RunMode, any Azure resources that are not referenced by a compute resource should have their default role assignments applied
-                foreach (var azureResource in azureResources.Select(r => r.AzureResource).OfType<AzureProvisioningResource>())
-                {
-                    if (!globalRoleAssignments.TryGetValue(azureResource, out _) &&
-                        azureResource.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaultRoleAssignments))
-                    {
-                        AppendGlobalRoleAssignments(globalRoleAssignments, azureResource, defaultRoleAssignments.Roles);
-                    }
-                }
+                // Any Azure resource that was not claimed by a direct reference still gets its defaults
+                // in Run mode, preserving the deployment-principal behavior used for F5 provisioning.
+                AddDefaultRoleAssignments(provisioningResources.Where(resource => !globalRoleAssignments.ContainsKey(resource)), globalRoleAssignments);
             }
         }
 
@@ -280,33 +168,272 @@ internal sealed class AzureResourcePreparer(
         }
     }
 
-    private static Dictionary<AzureProvisioningResource, IEnumerable<RoleDefinition>> GetAllRoleAssignments(IResource resource)
+    private static IResource[] GetRoleAssignmentProcessingResources(DistributedApplicationModel appModel)
     {
-        var result = new Dictionary<AzureProvisioningResource, IEnumerable<RoleDefinition>>();
-        if (resource.TryGetAnnotationsOfType<RoleAssignmentAnnotation>(out var roleAssignments))
+        // Snapshot the owners before processing because publish materialization can add generated
+        // identities and role-assignment resources to the model. Aggregate resources are included
+        // because they can declare role needs for internal Azure resources even though they are not
+        // compute resources themselves.
+        return appModel.GetComputeResources()
+            .Concat(appModel.Resources
+                .OfType<AzureUserAssignedIdentityResource>()
+                .Where(r => !r.IsExcludedFromPublish()))
+            .Concat(appModel.Resources
+                .Where(r => !r.IsExcludedFromPublish() &&
+                    (r.HasAnnotationOfType<RoleAssignmentAnnotation>() ||
+                     r.HasAnnotationOfType<ContainerRegistryRoleAssignmentAnnotation>())))
+            .Distinct()
+            .ToArray();
+    }
+
+    private void ProcessDirectAzureReferences(
+        IResource resource,
+        IReadOnlySet<IResource> directDependencies,
+        IReadOnlyDictionary<IResource, AzureProvisioningResource> provisioningResourcesByResource,
+        Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> globalRoleAssignments,
+        HashSet<AzureBicepResource> prerequisiteResources)
+    {
+        var roleAssignmentsByTarget = GetResolvedRoleAssignments(resource, provisioningResourcesByResource).ToLookup(a => a.Target);
+
+        foreach (var dependency in directDependencies)
         {
-            foreach (var g in roleAssignments.GroupBy(r => r.Target))
+            if (!TryResolveRoleAssignmentTarget(dependency, provisioningResourcesByResource, out var azureReference))
             {
-                // Deduplicate roles per target. A target can accumulate multiple RoleAssignmentAnnotations
-                // (e.g. an implied ReferenceRoleAssignmentAnnotation from two hosted agents on the same
-                // Foundry account, plus a direct reference). Emitting the same RoleDefinition twice would
-                // produce two RoleAssignment bicep resources with the same identifier ("{prefix}_{roleName}")
-                // and fail bicep compilation. This mirrors the RunMode path, which unions into a HashSet.
-                result[g.Key] = g.SelectMany(r => r.Roles).Distinct();
+                continue;
+            }
+
+            if (ShouldSkipRoleAssignmentTarget(azureReference))
+            {
+                continue;
+            }
+
+            AddPrivateEndpointPrerequisites(azureReference, prerequisiteResources);
+
+            var explicitRoleAssignments = roleAssignmentsByTarget[azureReference];
+            if (explicitRoleAssignments.Any())
+            {
+                if (executionContext.IsRunMode)
+                {
+                    // Run mode assigns roles only for direct Azure references. Aggregate annotations
+                    // whose targets are not direct dependencies are publish-only, which avoids granting
+                    // unexpected deployment-principal permissions during local provisioning.
+                    AppendRoleAssignments(globalRoleAssignments, azureReference, explicitRoleAssignments.SelectMany(a => a.Roles));
+                }
+
+                continue;
+            }
+
+            if (!azureReference.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaults))
+            {
+                continue;
+            }
+
+            if (executionContext.IsRunMode)
+            {
+                // Empty defaults are meaningful for resources like databases: the key marks the target
+                // as claimed so the Run-mode fallback does not add broader parent defaults later.
+                AppendRoleAssignments(globalRoleAssignments, azureReference, defaults.Roles);
+            }
+            else
+            {
+                resource.Annotations.Add(new RoleAssignmentAnnotation(azureReference, defaults.Roles));
             }
         }
+    }
+
+    private void ProcessReferenceRoleAssignments(
+        IResource resource,
+        IReadOnlySet<IResource> directDependencies,
+        Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> globalRoleAssignments)
+    {
+        // A direct dependency that is not itself an Azure resource can still "front" one
+        // (e.g. a Foundry hosted agent's node app fronts its owning Foundry account). Such a
+        // resource carries ReferenceRoleAssignmentAnnotation(s) declaring that any resource
+        // referencing it should be granted roles on a transitive Azure target the normal
+        // IAzureResource-only reference walk above cannot reach.
+        foreach (var dependency in directDependencies)
+        {
+            if (!dependency.TryGetAnnotationsOfType<ReferenceRoleAssignmentAnnotation>(out var impliedRoleAssignments))
+            {
+                continue;
+            }
+
+            foreach (var impliedRoleAssignment in impliedRoleAssignments)
+            {
+                var target = impliedRoleAssignment.Target;
+                if (ShouldSkipRoleAssignmentTarget(target))
+                {
+                    continue;
+                }
+
+                if (executionContext.IsRunMode)
+                {
+                    AppendRoleAssignments(globalRoleAssignments, target, impliedRoleAssignment.Roles);
+                }
+                else
+                {
+                    // Publish materialization reads RoleAssignmentAnnotation, so convert implied
+                    // reference grants into the same shape as direct WithRoleAssignments calls.
+                    resource.Annotations.Add(new RoleAssignmentAnnotation(target, impliedRoleAssignment.Roles));
+                }
+            }
+        }
+    }
+
+    private void CreatePublishRoleAssignmentResources(
+        DistributedApplicationModel appModel,
+        IResource resource,
+        IReadOnlyDictionary<IResource, AzureProvisioningResource> provisioningResourcesByResource,
+        HashSet<AzureBicepResource> prerequisiteResources)
+    {
+        var roleAssignments = GetAllRoleAssignments(resource, provisioningResourcesByResource);
+        if (roleAssignments.Count == 0)
+        {
+            return;
+        }
+
+        var (identityResource, roleAssignmentResources) = CreateIdentityAndRoleAssignmentResources(resource, roleAssignments);
+
+        if (resource != identityResource)
+        {
+            // Publishers discover workload identities from AppIdentityAnnotation, not by scanning the
+            // role-assignment modules. Keep the identity in the model so generated deployment targets
+            // can attach it and expose any required client/id parameters.
+            EnsureIdentityResource(appModel, resource, identityResource);
+        }
+
+        foreach (var roleAssignmentResource in roleAssignmentResources)
+        {
+            prerequisiteResources.Add(AddOrGetRoleAssignmentResource(appModel, roleAssignmentResource));
+        }
+    }
+
+    private void EnsureIdentityResource(DistributedApplicationModel appModel, IResource ownerResource, AzureUserAssignedIdentityResource identityResource)
+    {
+        if (!ownerResource.TryGetLastAnnotation<AppIdentityAnnotation>(out var existingAppIdentityAnnotation) ||
+            existingAppIdentityAnnotation.IdentityResource != identityResource)
+        {
+            ownerResource.Annotations.Add(new AppIdentityAnnotation(identityResource));
+        }
+
+        if (!appModel.Resources.Contains(identityResource))
+        {
+            identityResource.ProvisioningBuildOptions ??= options.Value.ProvisioningBuildOptions;
+            appModel.Resources.Add(identityResource);
+        }
+    }
+
+    private static void AddDefaultRoleAssignments(
+        IEnumerable<AzureProvisioningResource> resources,
+        Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> roleAssignments)
+    {
+        foreach (var resource in resources)
+        {
+            if (resource.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaultRoleAssignments))
+            {
+                AppendRoleAssignments(roleAssignments, resource, defaultRoleAssignments.Roles);
+            }
+        }
+    }
+
+    private static void AddPrivateEndpointPrerequisites(AzureProvisioningResource azureReference, HashSet<AzureBicepResource> prerequisiteResources)
+    {
+        if (!azureReference.TryGetAnnotationsOfType<PrivateEndpointTargetAnnotation>(out var peAnnotations))
+        {
+            return;
+        }
+
+        foreach (var peAnnotation in peAnnotations)
+        {
+            prerequisiteResources.Add(peAnnotation.PrivateEndpointResource);
+        }
+    }
+
+    private static bool ShouldSkipRoleAssignmentTarget(AzureProvisioningResource target) => target.IsContainer() || target.IsEmulator();
+
+    private static Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> GetAllRoleAssignments(
+        IResource resource,
+        IReadOnlyDictionary<IResource, AzureProvisioningResource> provisioningResourcesByResource)
+    {
+        var result = new Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>>();
+
+        foreach (var (target, roles) in GetResolvedRoleAssignments(resource, provisioningResourcesByResource))
+        {
+            // Use the same HashSet accumulator as Run mode so duplicate annotations for the same
+            // target cannot produce duplicate Bicep role assignment names. Creating the key before
+            // unioning is intentional: an empty role set must remain observable after a caller uses
+            // it to suppress defaults.
+            AppendRoleAssignments(result, target, roles);
+        }
+
         return result;
+    }
+
+    private static IEnumerable<(AzureProvisioningResource Target, IReadOnlySet<RoleDefinition> Roles)> GetResolvedRoleAssignments(
+        IResource resource,
+        IReadOnlyDictionary<IResource, AzureProvisioningResource> provisioningResourcesByResource)
+    {
+        if (resource.TryGetAnnotationsOfType<RoleAssignmentAnnotation>(out var roleAssignments))
+        {
+            foreach (var roleAssignment in roleAssignments)
+            {
+                yield return (roleAssignment.Target, roleAssignment.Roles);
+            }
+        }
+
+        if (!resource.TryGetAnnotationsOfType<ContainerRegistryRoleAssignmentAnnotation>(out var containerRegistryRoleAssignments))
+        {
+            yield break;
+        }
+
+        if (resource is not IAzureComputeEnvironmentResource computeEnvironment)
+        {
+            throw new InvalidOperationException($"The resource '{resource.Name}' declares container registry role assignments but is not an Azure compute environment.");
+        }
+
+        // The current container registry is last-writer-wins on ContainerRegistryReferenceAnnotation.
+        // Resolve it during preparation so a later WithAzureContainerRegistry call updates both image
+        // deployment and the generated AcrPull role assignment without a second side channel.
+        var containerRegistry = computeEnvironment.ContainerRegistry;
+        if (containerRegistry is null)
+        {
+            throw new InvalidOperationException($"The Azure compute environment '{resource.Name}' does not have an associated Azure Container Registry.");
+        }
+
+        if (!TryResolveRoleAssignmentTarget(containerRegistry, provisioningResourcesByResource, out var containerRegistryTarget))
+        {
+            throw new InvalidOperationException($"The container registry associated with Azure compute environment '{resource.Name}' is not an Azure provisioning resource.");
+        }
+
+        foreach (var containerRegistryRoleAssignment in containerRegistryRoleAssignments)
+        {
+            yield return (containerRegistryTarget, containerRegistryRoleAssignment.Roles);
+        }
+    }
+
+    private static bool TryResolveRoleAssignmentTarget(
+        IResource targetResource,
+        IReadOnlyDictionary<IResource, AzureProvisioningResource> provisioningResourcesByResource,
+        [NotNullWhen(true)] out AzureProvisioningResource? target)
+    {
+        if (targetResource is AzureProvisioningResource provisioningResource)
+        {
+            target = provisioningResource;
+            return true;
+        }
+
+        return provisioningResourcesByResource.TryGetValue(targetResource, out target);
     }
 
     private (AzureUserAssignedIdentityResource IdentityResource, List<AzureRoleAssignmentResource> RoleAssignmentResources) CreateIdentityAndRoleAssignmentResources(
         IResource resource,
-        Dictionary<AzureProvisioningResource, IEnumerable<RoleDefinition>> roleAssignments)
+        Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> roleAssignments)
     {
         AzureUserAssignedIdentityResource identityResource;
 
-        // If we're currently targeting an AzureUserAssignedIdentityResource, we can use it as the identity resource
-        // for the role assignments. If we are targeting a compute resource that has an AppIdentityAnnotation, we can
-        // use the identity resource from that annotation. Otherwise, create a new identity resource to use for role assignments.
+        // If the owner is an AzureUserAssignedIdentityResource, it is its own role-assignment identity.
+        // Otherwise prefer an explicit AppIdentityAnnotation and create a hidden identity only when the
+        // owner has not declared which identity should receive the roles.
         if (resource is AzureUserAssignedIdentityResource existingIdentityResource)
         {
             identityResource = existingIdentityResource;
@@ -330,12 +457,15 @@ internal sealed class AzureResourcePreparer(
 
     private List<AzureRoleAssignmentResource> CreateRoleAssignmentsResources(
         IResource resource,
-        Dictionary<AzureProvisioningResource, IEnumerable<RoleDefinition>> roleAssignments,
+        Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> roleAssignments,
         AzureUserAssignedIdentityResource appIdentityResource)
     {
         var roleAssignmentResources = new List<AzureRoleAssignmentResource>();
         foreach (var (targetResource, roles) in roleAssignments)
         {
+            // Keep targeted role assignments in their own Bicep module instead of inlining them
+            // under the owner module. Existing Azure resources can live in a different resource
+            // group, and Bicep extension resources must be emitted at the scope they target.
             var roleAssignmentResource = new AzureRoleAssignmentResource(
                 $"{resource.Name}-roles-{targetResource.Name}",
                 targetResource,
@@ -365,7 +495,9 @@ internal sealed class AzureResourcePreparer(
         IEnumerable<RoleDefinition> roles,
         AzureUserAssignedIdentityResource appIdentityResource)
     {
-
+        // Role assignment builders only evaluate the principal values they need. Keep them lazy so
+        // resources that do not emit a particular field do not unnecessarily create matching Bicep
+        // parameters on the role-assignment module.
         var context = new AddRoleAssignmentsContext(
             infra,
             executionContext,
@@ -401,12 +533,12 @@ internal sealed class AzureResourcePreparer(
         public DistributedApplicationExecutionContext ExecutionContext => executionContext;
     }
 
-    private static void AppendGlobalRoleAssignments(Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> globalRoleAssignments, AzureProvisioningResource azureResource, IEnumerable<RoleDefinition> newRoles)
+    private static void AppendRoleAssignments(Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> roleAssignments, AzureProvisioningResource azureResource, IEnumerable<RoleDefinition> newRoles)
     {
-        if (!globalRoleAssignments.TryGetValue(azureResource, out var existingRoles))
+        if (!roleAssignments.TryGetValue(azureResource, out var existingRoles))
         {
             existingRoles = new HashSet<RoleDefinition>();
-            globalRoleAssignments[azureResource] = existingRoles;
+            roleAssignments[azureResource] = existingRoles;
         }
 
         existingRoles.UnionWith(newRoles);

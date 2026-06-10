@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
@@ -481,7 +482,14 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
             .WithAzureContainerRegistry(acr)
             .WithDashboard(false);
 
-        var (manifest, bicep) = await GetManifestWithBicep(env.Resource);
+        var model = new DistributedApplicationModel([env.Resource]);
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(model, env.Resource);
+
+        var roleAssignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
+            r => r.Name == "env-roles-acr");
+        Assert.Same(acr.Resource, roleAssignment.TargetAzureResource);
+        Assert.Same(env.Resource, roleAssignment.OwnerResource);
+        Assert.Same(sharedResourceGroup.Resource, roleAssignment.Scope?.ResourceGroup);
 
         await Verify(bicep, extension: "bicep")
             .AppendContentAsFile(manifest.ToString(), "json");
@@ -1283,7 +1291,7 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     private static Task<(JsonNode ManifestNode, string BicepText)> GetManifestWithBicep(IResource resource) =>
-        AzureManifestUtils.GetManifestWithBicep(resource, skipPreparer: true);
+        AzureManifestUtils.GetManifestWithBicep(resource);
 
     private static async Task<List<PipelineStep>> CreateStepsAsync(DistributedApplication app, AzureAppServiceEnvironmentResource resource)
     {

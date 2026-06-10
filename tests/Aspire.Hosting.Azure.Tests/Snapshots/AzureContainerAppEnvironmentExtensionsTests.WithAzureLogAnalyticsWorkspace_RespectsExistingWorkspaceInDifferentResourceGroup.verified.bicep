@@ -1,9 +1,11 @@
-﻿@description('The location for the resource(s) to be deployed.')
+@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param userPrincipalId string = ''
 
 param tags object = { }
+
+param app_host_acr_pull_identity_outputs_id string
 
 param app_host_acr_outputs_name string
 
@@ -11,24 +13,8 @@ param log_env_shared_name string
 
 param log_env_shared_rg string
 
-resource app_host_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
-  name: take('app_host_mi-${uniqueString(resourceGroup().id)}', 128)
-  location: location
-  tags: tags
-}
-
 resource app_host_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
   name: app_host_acr_outputs_name
-}
-
-resource app_host_acr_app_host_mi_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(app_host_acr.id, app_host_mi.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d'))
-  properties: {
-    principalId: app_host_mi.properties.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-    principalType: 'ServicePrincipal'
-  }
-  scope: app_host_acr
 }
 
 resource log_env_shared 'Microsoft.OperationalInsights/workspaces@2025-02-01' existing = {
@@ -73,7 +59,7 @@ output AZURE_CONTAINER_REGISTRY_NAME string = app_host_acr.name
 
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = app_host_acr.properties.loginServer
 
-output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = app_host_mi.id
+output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = app_host_acr_pull_identity_outputs_id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = app_host.name
 

@@ -5,26 +5,12 @@ param userPrincipalId string = ''
 
 param tags object = { }
 
-param customregistry_outputs_name string
+param env_acr_pull_identity_outputs_id string
 
-resource env_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
-  name: take('env_mi-${uniqueString(resourceGroup().id)}', 128)
-  location: location
-  tags: tags
-}
+param customregistry_outputs_name string
 
 resource customregistry 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
   name: customregistry_outputs_name
-}
-
-resource customregistry_env_mi_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(customregistry.id, env_mi.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d'))
-  properties: {
-    principalId: env_mi.properties.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-    principalType: 'ServicePrincipal'
-  }
-  scope: customregistry
 }
 
 resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
@@ -75,7 +61,7 @@ output AZURE_CONTAINER_REGISTRY_NAME string = customregistry.name
 
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = customregistry.properties.loginServer
 
-output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = env_mi.id
+output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = env_acr_pull_identity_outputs_id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = env.name
 

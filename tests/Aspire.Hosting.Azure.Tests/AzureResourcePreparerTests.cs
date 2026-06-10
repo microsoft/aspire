@@ -210,6 +210,172 @@ public class AzureResourcePreparerTests
     }
 
     [Fact]
+    public async Task RoleAssignmentAnnotation_PublishMode_CreatesRoleResourcesForAggregateOwner()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var identity = builder.AddAzureUserAssignedIdentity("aggregate-identity");
+        var storage = builder.AddAzureStorage("storage");
+        var keyVault = builder.AddAzureKeyVault("keyvault");
+
+        var aggregate = new TestProvisioningResource("aggregate");
+        aggregate.Annotations.Add(new AppIdentityAnnotation(identity.Resource));
+        aggregate.Annotations.Add(new RoleAssignmentAnnotation(
+            storage.Resource,
+            CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
+        aggregate.Annotations.Add(new RoleAssignmentAnnotation(
+            keyVault.Resource,
+            CreateKeyVaultRoleDefinitions(KeyVaultBuiltInRole.KeyVaultSecretsUser)));
+        builder.AddResource(aggregate);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var storageRoles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "aggregate-roles-storage");
+        Assert.Same(storage.Resource, storageRoles.TargetAzureResource);
+        Assert.Same(aggregate, storageRoles.OwnerResource);
+        Assert.Same(identity.Resource, storageRoles.IdentityResource);
+
+        var keyVaultRoles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "aggregate-roles-keyvault");
+        Assert.Same(keyVault.Resource, keyVaultRoles.TargetAzureResource);
+        Assert.Same(aggregate, keyVaultRoles.OwnerResource);
+        Assert.Same(identity.Resource, keyVaultRoles.IdentityResource);
+
+        var prerequisites = Assert.Single(aggregate.Annotations.OfType<DeploymentPrerequisitesAnnotation>()).Resources;
+        Assert.Contains(storageRoles, prerequisites);
+        Assert.Contains(keyVaultRoles, prerequisites);
+    }
+
+    [Fact]
+    public async Task RoleAssignmentAnnotation_PublishMode_CreatesRoleResourcesWithoutComputeEnvironmentWhenTargetedAssignmentsSupported()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
+
+        var identity = builder.AddAzureUserAssignedIdentity("aggregate-identity");
+        var storage = builder.AddAzureStorage("storage");
+
+        var aggregate = new TestProvisioningResource("aggregate");
+        aggregate.Annotations.Add(new AppIdentityAnnotation(identity.Resource));
+        aggregate.Annotations.Add(new RoleAssignmentAnnotation(
+            storage.Resource,
+            CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
+        builder.AddResource(aggregate);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.DoesNotContain(model.Resources, resource => resource is IAzureComputeEnvironmentResource);
+
+        var roleAssignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "aggregate-roles-storage");
+        Assert.Same(storage.Resource, roleAssignment.TargetAzureResource);
+        Assert.Same(aggregate, roleAssignment.OwnerResource);
+        Assert.Same(identity.Resource, roleAssignment.IdentityResource);
+    }
+
+    [Fact]
+    public async Task RoleAssignmentAnnotation_PublishMode_ThrowsForAggregateOwnerWhenTargetedAssignmentsUnsupported()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var storage = builder.AddAzureStorage("storage");
+
+        var aggregate = new TestProvisioningResource("aggregate");
+        aggregate.Annotations.Add(new RoleAssignmentAnnotation(
+            storage.Resource,
+            CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
+        builder.AddResource(aggregate);
+
+        using var app = builder.Build();
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Contains("role assignments", ex.Message);
+    }
+
+    [Fact]
+    public async Task RoleAssignmentAnnotation_PublishMode_DeduplicatesRolesForAggregateOwner()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
+
+        var identity = builder.AddAzureUserAssignedIdentity("aggregate-identity");
+        var storage = builder.AddAzureStorage("storage");
+
+        var aggregate = new TestProvisioningResource("aggregate");
+        aggregate.Annotations.Add(new AppIdentityAnnotation(identity.Resource));
+        aggregate.Annotations.Add(new RoleAssignmentAnnotation(
+            storage.Resource,
+            CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
+        aggregate.Annotations.Add(new RoleAssignmentAnnotation(
+            storage.Resource,
+            CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
+        builder.AddResource(aggregate);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var roleAssignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "aggregate-roles-storage");
+        Assert.Same(storage.Resource, roleAssignment.TargetAzureResource);
+        Assert.Same(aggregate, roleAssignment.OwnerResource);
+
+        var manifest = await GetManifestWithBicep(roleAssignment, skipPreparer: true);
+        var roleAssignmentCount = System.Text.RegularExpressions.Regex.Matches(manifest.BicepText, "Microsoft.Authorization/roleAssignments@").Count;
+        Assert.Equal(1, roleAssignmentCount);
+    }
+
+    [Fact]
+    public async Task RoleAssignmentAnnotation_PublishMode_CreatesIdentityForAggregateOwnerWithoutAppIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
+
+        var storage = builder.AddAzureStorage("storage");
+
+        var aggregate = new TestProvisioningResource("aggregate");
+        aggregate.Annotations.Add(new RoleAssignmentAnnotation(
+            storage.Resource,
+            CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
+        builder.AddResource(aggregate);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var generatedIdentity = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), r => r.Name == "aggregate-identity");
+        var identityAnnotation = Assert.Single(aggregate.Annotations.OfType<AppIdentityAnnotation>());
+        Assert.Same(generatedIdentity, identityAnnotation.IdentityResource);
+
+        var roleAssignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "aggregate-roles-storage");
+        Assert.Same(generatedIdentity, roleAssignment.IdentityResource);
+        Assert.Same(aggregate, roleAssignment.OwnerResource);
+    }
+
+    [Fact]
+    public async Task RoleAssignmentAnnotation_RunMode_DoesNotCreateGlobalRoleAssignmentForAggregateOwnedTargetWithoutDirectReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var storage = builder.AddAzureStorage("storage")
+            .ClearDefaultRoleAssignments();
+
+        var aggregate = new TestProvisioningResource("aggregate");
+        aggregate.Annotations.Add(new RoleAssignmentAnnotation(
+            storage.Resource,
+            CreateStorageRoleDefinitions(StorageBuiltInRole.StorageBlobDataReader)));
+
+        builder.AddResource(aggregate);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.DoesNotContain(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.TargetAzureResource == storage.Resource);
+    }
+
+    [Fact]
     public async Task PublishDeploymentTargetIncludesComputedPrerequisitesInReferences()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -356,8 +522,12 @@ public class AzureResourcePreparerTests
             model.Resources
                 .OfType<ProjectResource>()
                 .OrderBy(resource => resource.Name, StringComparer.Ordinal),
-            resource => Assert.Single(resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>()),
-            resource => Assert.Single(resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>()));
+            resource => Assert.Single(
+                resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>().SelectMany(annotation => annotation.Resources),
+                prerequisite => prerequisite.Name == "service-a-roles-signalr"),
+            resource => Assert.Single(
+                resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>().SelectMany(annotation => annotation.Resources),
+                prerequisite => prerequisite.Name == "service-b-roles-signalr"));
     }
 
     [Fact]
@@ -490,13 +660,15 @@ public class AzureResourcePreparerTests
         Assert.Collection(model.Resources.Select(r => r.Name),
             n => Assert.StartsWith("azure", n),
             n => Assert.Equal("env-acr", n),
+            n => Assert.Equal("env-acr-pull-identity", n),
             n => Assert.Equal("env", n),
             n => Assert.Equal("storage", n),
             n => Assert.Equal("blobs", n),
             n => Assert.Equal("api", n),
             n => Assert.Equal("api2", n),
             n => Assert.Equal("api-identity", n),
-            n => Assert.Equal("api-roles-storage", n));
+            n => Assert.Equal("api-roles-storage", n),
+            n => Assert.Equal("env-roles-env-acr", n));
     }
 
     [Fact]
@@ -525,13 +697,15 @@ public class AzureResourcePreparerTests
         Assert.Collection(model.Resources.Select(r => r.Name),
             n => Assert.StartsWith("azure", n),
             n => Assert.Equal("env-acr", n),
+            n => Assert.Equal("env-acr-pull-identity", n),
             n => Assert.Equal("env", n),
             n => Assert.Equal("storage", n),
             n => Assert.Equal("blobs", n),
             n => Assert.Equal("api", n),
             n => Assert.Equal("frontend", n),
             n => Assert.Equal("api-identity", n),
-            n => Assert.Equal("api-roles-storage", n));
+            n => Assert.Equal("api-roles-storage", n),
+            n => Assert.Equal("env-roles-env-acr", n));
 
         // The ViteApp should NOT get a managed identity since it is a BuildOnlyContainer resource,
         // even though it references the storage account. Only the API should get a managed identity.
@@ -752,5 +926,15 @@ public class AzureResourcePreparerTests
             CancellationToken.None);
 
         return pipeline.ExecuteAsync(context);
+    }
+
+    private static HashSet<RoleDefinition> CreateStorageRoleDefinitions(params StorageBuiltInRole[] roles)
+    {
+        return [.. roles.Select(role => new RoleDefinition(role.ToString(), StorageBuiltInRole.GetBuiltInRoleName(role)))];
+    }
+
+    private static HashSet<RoleDefinition> CreateKeyVaultRoleDefinitions(params KeyVaultBuiltInRole[] roles)
+    {
+        return [.. roles.Select(role => new RoleDefinition(role.ToString(), KeyVaultBuiltInRole.GetBuiltInRoleName(role)))];
     }
 }

@@ -19,13 +19,32 @@ module acr 'acr/acr.bicep' = {
   }
 }
 
+module env_acr_pull_identity 'env-acr-pull-identity/env-acr-pull-identity.bicep' = {
+  name: 'env-acr-pull-identity'
+  scope: rg
+  params: {
+    location: location
+  }
+}
+
 module env 'env/env.bicep' = {
   name: 'env'
   scope: rg
   params: {
     location: location
+    env_acr_pull_identity_outputs_id: env_acr_pull_identity.outputs.id
     acr_outputs_name: acr.outputs.name
     userPrincipalId: principalId
+  }
+}
+
+module env_roles_acr 'env-roles-acr/env-roles-acr.bicep' = {
+  name: 'env-roles-acr'
+  scope: rg
+  params: {
+    location: location
+    acr_outputs_name: acr.outputs.name
+    principalId: env_acr_pull_identity.outputs.principalId
   }
 }
 

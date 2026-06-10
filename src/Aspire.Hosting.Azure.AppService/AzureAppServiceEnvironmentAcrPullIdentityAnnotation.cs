@@ -11,11 +11,19 @@ namespace Aspire.Hosting.Azure;
 /// configured container registry, instead of having Aspire create a new identity and a new <c>AcrPull</c>
 /// role assignment.
 /// </summary>
-/// <param name="identity">The user-assigned identity resource to use for the <c>AcrPull</c> role.</param>
-internal sealed class AzureAppServiceEnvironmentAcrPullIdentityAnnotation(AzureUserAssignedIdentityResource identity) : IResourceAnnotation
+/// <param name="identity">The user-assigned identity resource to use for container registry pulls.</param>
+/// <param name="assignAcrPullRole">Indicates whether Aspire should assign the <c>AcrPull</c> role to the identity.</param>
+internal sealed class AzureAppServiceEnvironmentAcrPullIdentityAnnotation(
+    AzureUserAssignedIdentityResource identity,
+    bool assignAcrPullRole) : IResourceAnnotation
 {
     /// <summary>
-    /// Gets the user-assigned identity resource that holds the <c>AcrPull</c> role.
+    /// Gets the user-assigned identity resource used for container registry pulls.
     /// </summary>
     public AzureUserAssignedIdentityResource Identity { get; } = identity;
+
+    /// <summary>
+    /// Gets a value indicating whether Aspire should assign the <c>AcrPull</c> role to the identity.
+    /// </summary>
+    public bool AssignAcrPullRole { get; } = assignAcrPullRole;
 }

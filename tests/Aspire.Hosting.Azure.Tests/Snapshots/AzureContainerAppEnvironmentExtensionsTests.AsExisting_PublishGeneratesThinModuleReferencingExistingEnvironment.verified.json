@@ -1,9 +1,10 @@
-﻿{
+{
   "type": "azure.bicep.v0",
   "path": "env.module.bicep",
   "params": {
     "environmentName": "{environmentName.value}",
     "sharedRg": "{sharedRg.value}",
+    "env_acr_pull_identity_outputs_id": "{env-acr-pull-identity.outputs.id}",
     "env_acr_outputs_name": "{env-acr.outputs.name}",
     "userPrincipalId": ""
   }

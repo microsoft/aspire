@@ -1,30 +1,18 @@
-﻿@description('The location for the resource(s) to be deployed.')
+@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param userPrincipalId string = ''
 
 param tags object = { }
 
-param env_acr_outputs_name string
+param env_acr_pull_identity_outputs_id string
 
-resource env_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
-  name: take('env_mi-${uniqueString(resourceGroup().id)}', 128)
-  location: location
-  tags: tags
-}
+param env_acr_pull_identity_outputs_clientid string
+
+param env_acr_outputs_name string
 
 resource env_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
   name: env_acr_outputs_name
-}
-
-resource env_acr_env_mi_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(env_acr.id, env_mi.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d'))
-  properties: {
-    principalId: env_mi.properties.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-    principalType: 'ServicePrincipal'
-  }
-  scope: env_acr
 }
 
 resource env_asplan 'Microsoft.Web/serverfarms@2025-03-01' = {
@@ -64,7 +52,7 @@ resource dashboard 'Microsoft.Web/sites@2025-03-01' = {
       numberOfWorkers: 1
       linuxFxVersion: 'ASPIREDASHBOARD|1.0'
       acrUseManagedIdentityCreds: true
-      acrUserManagedIdentityID: env_mi.properties.clientId
+      acrUserManagedIdentityID: env_acr_pull_identity_outputs_clientid
       appSettings: [
         {
           name: 'DASHBOARD__FRONTEND__AUTHMODE'
@@ -104,7 +92,7 @@ resource dashboard 'Microsoft.Web/sites@2025-03-01' = {
         }
         {
           name: 'ALLOWED_MANAGED_IDENTITIES'
-          value: env_mi.properties.clientId
+          value: env_acr_pull_identity_outputs_clientid
         }
         {
           name: 'ASPIRE_ENVIRONMENT_NAME'
@@ -135,9 +123,9 @@ output AZURE_CONTAINER_REGISTRY_NAME string = env_acr.name
 
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = env_acr.properties.loginServer
 
-output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = env_mi.id
+output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = env_acr_pull_identity_outputs_id
 
-output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_CLIENT_ID string = env_mi.properties.clientId
+output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_CLIENT_ID string = env_acr_pull_identity_outputs_clientid
 
 output AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_ID string = env_contributor_mi.id
 

@@ -2,6 +2,7 @@
   "type": "azure.bicep.v0",
   "path": "env.module.bicep",
   "params": {
+    "env_acr_pull_identity_outputs_id": "{env-acr-pull-identity.outputs.id}",
     "customregistry_outputs_name": "{customregistry.outputs.name}",
     "userPrincipalId": ""
   }

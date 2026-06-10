@@ -90,8 +90,8 @@ public static class AzureKubernetesEnvironmentExtensions
         // env's prepare-deployment-targets step can discover it as the container
         // registry for compute resources.
         var defaultRegistry = builder.AddAzureContainerRegistry($"{name}-acr");
-        resource.DefaultContainerRegistry = defaultRegistry.Resource;
         resource.Annotations.Add(new ContainerRegistryReferenceAnnotation(defaultRegistry.Resource));
+        resource.Annotations.Add(new GeneratedContainerRegistryAnnotation(defaultRegistry.Resource));
         k8sEnvBuilder.WithAnnotation(new ContainerRegistryReferenceAnnotation(defaultRegistry.Resource));
 
         // Wire ACR name as a parameter on the AKS resource so the Bicep module
@@ -325,12 +325,7 @@ public static class AzureKubernetesEnvironmentExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(registry);
 
-        // Remove the default registry from the model if one was auto-created
-        if (builder.Resource.DefaultContainerRegistry is not null)
-        {
-            builder.ApplicationBuilder.Resources.Remove(builder.Resource.DefaultContainerRegistry);
-            builder.Resource.DefaultContainerRegistry = null;
-        }
+        RemoveGeneratedContainerRegistryIfReplaced(builder.ApplicationBuilder.Resources, builder.Resource);
 
         // Set the explicit registry via annotation on both the AKS environment
         // and the inner K8s environment so deployment target preparation finds it.
@@ -672,7 +667,7 @@ public static class AzureKubernetesEnvironmentExtensions
         }
 
         // ACR pull role assignment for kubelet identity
-        if (aksResource.DefaultContainerRegistry is not null || aksResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out _))
+        if (((IAzureComputeEnvironmentResource)aksResource).ContainerRegistry is not null)
         {
             var acrNameParam = new ProvisioningParameter("acrName", typeof(string));
             infrastructure.Add(acrNameParam);
@@ -866,6 +861,17 @@ public static class AzureKubernetesEnvironmentExtensions
             };
             infrastructure.Add(fedCred);
         }
+    }
+
+    private static void RemoveGeneratedContainerRegistryIfReplaced(IResourceCollection resources, AzureKubernetesEnvironmentResource environment)
+    {
+        if (!environment.TryGetLastAnnotation<GeneratedContainerRegistryAnnotation>(out var generatedRegistryAnnotation))
+        {
+            return;
+        }
+
+        resources.Remove(generatedRegistryAnnotation.Registry);
+        environment.Annotations.Remove(generatedRegistryAnnotation);
     }
 
     private static void AddKubernetesPipelineAnnotations(AzureKubernetesEnvironmentResource resource)
