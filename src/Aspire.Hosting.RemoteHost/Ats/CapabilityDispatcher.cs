@@ -847,6 +847,13 @@ internal sealed class CapabilityDispatcher
             {
                 continue;
             }
+            catch (ArgumentException) when (IsRejectedEnumString(argNode, unionMemberType))
+            {
+                // Enum.Parse rejects unknown string values with ArgumentException. In a union,
+                // that only means this enum member did not match, so later members such as
+                // string still need a chance to accept the same JSON value.
+                continue;
+            }
         }
 
         throw CapabilityException.TypeMismatch(
@@ -918,6 +925,14 @@ internal sealed class CapabilityDispatcher
     private static string DescribeUnionTypes(IReadOnlyList<Type> unionMemberTypes)
     {
         return string.Join(" | ", unionMemberTypes.Select(static type => type.Name));
+    }
+
+    private static bool IsRejectedEnumString(JsonNode? node, Type unionMemberType)
+    {
+        var underlyingType = Nullable.GetUnderlyingType(unionMemberType) ?? unionMemberType;
+        return underlyingType.IsEnum &&
+            node is JsonValue value &&
+            value.TryGetValue<string>(out _);
     }
 
     private static string DescribeJsonNode(JsonNode? node)
