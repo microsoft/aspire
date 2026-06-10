@@ -30,6 +30,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
@@ -1059,6 +1060,50 @@ public class DcpExecutorTests
         Assert.Equal(allocatedPort, svc.Status?.EffectivePort);
         Assert.Equal(allocatedPort, svc.Spec.Port);
         Assert.Equal(allocatedPort.ToString(CultureInfo.InvariantCulture), userSecretsManager.Secrets["Aspire:ProxylessEndpointPorts:database:http"]);
+    }
+
+    [Fact]
+    public async Task PersistentProxylessWithoutPortLogsWarningButStillAllocatesWhenPersistenceFails()
+    {
+        var (allocatedPort, _) = GetAvailableConsecutivePortPair();
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddExecutable("CoolProgram", "cool", Environment.CurrentDirectory, "--alpha", "--bravo")
+            .WithPersistentLifetime()
+            .WithEndpoint(name: "http", env: "HTTP_PORT", isProxied: false);
+
+        var configDict = new Dictionary<string, string?>
+        {
+            ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+        var userSecretsManager = new MockUserSecretsManager(canSetSecret: false);
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            ProxylessEndpointPortRangeStart = allocatedPort,
+            ProxylessEndpointPortRangeEnd = allocatedPort
+        };
+
+        var testSink = new TestSink();
+        var logger = new TestLogger<DcpExecutor>(new TestLoggerFactory(testSink, enabled: true));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration, dcpOptions: dcpOptions, userSecretsManager: userSecretsManager, logger: logger);
+        await appExecutor.RunApplicationAsync();
+
+        // Persistence failed, but allocation must still proceed and assign the port to the endpoint.
+        var svc = kubernetesService.CreatedResources.OfType<Service>().Single(s => s.Name() == "CoolProgram");
+        Assert.Equal(allocatedPort, svc.Status?.EffectivePort);
+        Assert.Empty(userSecretsManager.Secrets);
+
+        // A warning must surface so the user knows the port won't be stable across runs.
+        Assert.Contains(testSink.Writes, w => w.LogLevel == LogLevel.Warning
+            && w.Message?.Contains("Failed to persist public port") == true
+            && w.Message?.Contains("CoolProgram") == true
+            && w.Message?.Contains("http") == true);
     }
 
     [Fact]
@@ -5268,7 +5313,8 @@ public class DcpExecutorTests
         ResourceLoggerService? resourceLoggerService = null,
         DcpExecutorEvents? events = null,
         Hosting.Eventing.IDistributedApplicationEventing? distributedApplicationEventing = null,
-        ILogger<ContainerCreator>? containerCreatorLogger = null)
+        ILogger<ContainerCreator>? containerCreatorLogger = null,
+        ILogger<DcpExecutor>? logger = null)
     {
         if (configuration == null)
         {
@@ -5338,7 +5384,7 @@ public class DcpExecutorTests
             appResources);
 
         return new DcpExecutor(
-            NullLogger<DcpExecutor>.Instance,
+            logger ?? NullLogger<DcpExecutor>.Instance,
             NullLogger<DistributedApplication>.Instance,
             distributedAppModel,
             ks,

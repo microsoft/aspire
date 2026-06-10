@@ -257,15 +257,13 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
             DisposeSockets(sockets);
             return true;
         }
-        catch (SocketException ex) when (ex.SocketErrorCode is SocketError.AddressAlreadyInUse or SocketError.AccessDenied)
-        {
-            DisposeSockets(sockets);
-            return false;
-        }
         catch
         {
+            // This is a best-effort availability probe: any failure to bind (port in use, access
+            // denied, or anything else) means we can't reserve this port, so treat it as unavailable
+            // rather than letting an unexpected exception abort the whole allocation.
             DisposeSockets(sockets);
-            throw;
+            return false;
         }
     }
 
