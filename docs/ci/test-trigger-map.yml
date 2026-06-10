@@ -152,14 +152,9 @@ run_all_globs:
   - tests/Directory.Build.props
   - tests/Directory.Build.targets
   - tests/Directory.Packages.props
-  - eng/Versions.props
+  - eng/*.props      # any root-level eng build prop (Versions, Testing, Build, Publishing, Signing, ...) -> err toward ALL
+  - eng/*.targets    # any root-level eng build target (Testing, AfterSigning, ReplaceText, ...) -> err toward ALL
   - eng/Version.Details.xml
-  - eng/Testing.props
-  - eng/Testing.targets
-  - eng/Build.props
-  - eng/Tools.props
-  - eng/Packaging.targets
-  - eng/targets/**
   - eng/common/**
   - src/Shared/**
   - tests/Shared/**
@@ -691,6 +686,9 @@ shared_compiled_source:
     targets: [test:Aspire.RabbitMQ.Client.v6.Tests]
   - paths: [src/Components/Aspire.RabbitMQ.Client/RabbitMQEventSourceLogForwarder.cs]
     targets: [test:Aspire.RabbitMQ.Client.v6.Tests]
+  - paths: [src/Components/Common/ConfigurationSchemaAttributes.cs]
+    targets: [test:ConfigurationSchemaGenerator.Tests]
+    note: link-compiled into ConfigurationSchemaGenerator.Tests, which is not an ALL_COMPONENT_TESTS member
 
 # 9. Known gaps ----------------------------------------------------------------
 gaps:

@@ -49,10 +49,13 @@ Arcade MSBuild SDKs from `global.json` restored):
 
 ```bash
 dotnet-affected \
-  --solution-path Aspire.slnx \
+  --filter-file-path Aspire.slnx \
   --from "$base_sha" --to "$head_sha" \
   --format json --output-dir "$out" --output-name affected
 ```
+
+(`--filter-file-path` is the current flag for scoping discovery to a solution;
+the older `--solution-path` alias is marked obsolete in `dotnet-affected` 6.2.0.)
 
 Output is `[{ "Name": "...", "FilePath": "..." }]`, where `Name` is exactly the
 matrix `projectName`. The tool reads `.Name` and intersects it with the
@@ -79,7 +82,7 @@ not *affected*.
    loading the template placeholder projects under
    `src/Aspire.ProjectTemplates/templates/.../XmlEncodedProjectName.*.csproj`,
    whose `ProjectReference`s only resolve when a template is instantiated.
-   `--solution-path Aspire.slnx` excludes them.
+   `--filter-file-path Aspire.slnx` excludes them.
 2. **The SDK must be resolvable by MSBuildLocator.** Ensure `DOTNET_ROOT` (or the
    `global.json` `paths` local SDK) points at the SDK the rest of CI uses.
 
@@ -233,7 +236,7 @@ God-edge pruning is explicitly out of scope.
 dotnet tool install -g dotnet-affected
 export DOTNET_ROOT=<sdk-root>      # so MSBuildLocator resolves the SDK
 
-dotnet-affected --solution-path Aspire.slnx \
+dotnet-affected --filter-file-path Aspire.slnx \
   --assume-changes Aspire.Hosting.Yarp \
   --format json --output-dir /tmp/affected --output-name a
 # count *.Tests entries in /tmp/affected/a.json
@@ -249,8 +252,8 @@ dotnet-affected --solution-path Aspire.slnx \
 - **Union semantics** — link-compile consumers appear in the *changed* set, not
   *affected*; take the union.
 - **Solution scoping** — filesystem discovery crashes on the
-  `XmlEncodedProjectName.*` template placeholder projects; `--solution-path
-  Aspire.slnx` is required.
+  `XmlEncodedProjectName.*` template placeholder projects; `--filter-file-path
+  Aspire.slnx` is required (the older `--solution-path` alias is obsolete).
 - **Layer 2 is genuinely needed** — `dotnet-affected` models only MSBuild
   projects; it does not see non-.NET jobs or runtime-only file reads (verified:
   `Aspire.Cli.Tests` reads `eng/clipack/npm/aspire.js`, `Aspire.Templates.Tests`

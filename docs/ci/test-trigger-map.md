@@ -91,7 +91,7 @@ the YAML):
 global.json, NuGet.config, .config/dotnet-tools.json
 Directory.Build.*, Directory.Packages.props, Aspire.slnx
 src/Directory.Build.*, tests/Directory.Build.*
-eng/Versions.props, eng/Version.Details.xml, eng/Testing.props, eng/Testing.targets, eng/Tools.props, eng/common/**
+eng/Versions.props, eng/Version.Details.xml, eng/*.props, eng/*.targets, eng/common/**
 src/Shared/**, tests/Shared/**
 .github/actions/enumerate-tests/**, eng/scripts/split-test-matrix-by-deps.ps1
 .github/workflows/tests.yml, run-tests.yml, build-packages.yml, build-cli-native-archives.yml, build-cli-e2e-image.yml
