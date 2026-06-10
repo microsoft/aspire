@@ -255,18 +255,14 @@ export default class AspireDcpServer {
 
                     return { dcpId, token: bearerToken, testRunSessionLease };
                 }
+                else {
+                    const result = validateBearerToken(auth);
+                    if (result.kind !== 'ok') {
+                        return result.kind;
+                    }
 
-                const testRunSessionLease = testRunSessionManager?.tryAuthorizeDcpRequest(dcpId, bearerToken);
-                if (testRunSessionLease) {
-                    return { dcpId, token: bearerToken, testRunSessionLease };
+                    return { dcpId, token: bearerToken };
                 }
-
-                const result = validateBearerToken(auth);
-                if (result.kind !== 'ok') {
-                    return result.kind;
-                }
-
-                return { dcpId, token: bearerToken };
             }
 
             function respondWithTelemetryAuthError(res: Response, statusCode: number, code: string, message: string): void {
@@ -830,11 +826,14 @@ export default class AspireDcpServer {
     }
 
     public dispose(): void {
+        const stopRunSessionPromises: Promise<void>[] = [];
         for (const runId of [...this.runsBySession.keys()]) {
-            void this.stopRunSession(runId);
+            stopRunSessionPromises.push(this.stopRunSession(runId));
         }
 
-        this.testRunSessionLeaseIdByRunId.clear();
+        void Promise.all(stopRunSessionPromises).finally(() => {
+            this.testRunSessionLeaseIdByRunId.clear();
+        });
         this.pendingNotificationQueueByDcpId.clear();
         for (const disposable of this.debugAdapterTrackerDisposablesByAdapter.values()) {
             disposable.dispose();
@@ -908,13 +907,17 @@ async function startAndGetDebugSession(debugConfig: vscode.DebugConfiguration, d
             resolve(result);
         }
 
-        timeout = setTimeout(() => {
+        function completeWithoutSessionButKeepLateCleanup(): void {
             completed = true;
             resolve(undefined);
             lateCleanupTimeout = setTimeout(() => {
                 disposable.dispose();
             }, 60_000);
-        }, 10000);
+        }
+
+        timeout = setTimeout(() => {
+            completeWithoutSessionButKeepLateCleanup();
+        }, 10_000);
 
         vscode.debug.startDebugging(undefined, debugConfig).then(started => {
             if (!started) {

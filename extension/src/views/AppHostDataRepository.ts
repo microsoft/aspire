@@ -1140,9 +1140,9 @@ export class AppHostDataRepository {
                 }
                 if (describeProcess) {
                     this._oneShotProcesses.delete(describeProcess);
-                }
-                if (describeProcess && describeProcess.exitCode === null && !describeProcess.killed) {
-                    this._terminateProcess(describeProcess, command);
+                    if (describeProcess.exitCode === null && !describeProcess.killed) {
+                        this._terminateProcess(describeProcess, command);
+                    }
                 }
                 callback();
             };
