@@ -457,6 +457,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 "context"
                 "fmt"
                 "os"
+                "strings"
                 "time"
             )
 
@@ -464,6 +465,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             var _ = context.Background
             var _ = fmt.Errorf
             var _ = os.Getenv
+            var _ = strings.EqualFold
             var _ = time.Second
             """);
         WriteLine();
@@ -540,7 +542,12 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var propertyName = ToPascalCase(property.Name);
-                var propertyType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
+                // Callback-typed DTO properties carry the same metadata as method parameters, so
+                // render the strongly-typed func signature (e.g. func(ctx InputsDialogValidationContext))
+                // instead of the weak func(...any) any fallback.
+                var propertyType = property.IsCallback
+                    ? RenderCallbackType(DtoPropertyToParameterInfo(property))
+                    : MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
                 var jsonTag = $"`json:\"{property.Name},omitempty\"`";
                 WriteLine($"\t{propertyName} {propertyType} {jsonTag}");
             }
@@ -553,6 +560,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var propertyName = ToPascalCase(property.Name);
+                if (property.IsCallback)
+                {
+                    EmitDtoCallbackToMap(property, propertyName);
+                    continue;
+                }
                 var propertyType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
                 if (IsNilableGoType(propertyType))
                 {
@@ -814,6 +826,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 EmitCapabilityMethod(typeId, interfaceName, implName, capability, listDictGetters);
             }
+
+            if (string.Equals(typeId, InteractionInputCollectionTypeId, StringComparison.Ordinal))
+            {
+                EmitInteractionInputCollectionAccessors(implName);
+            }
         }
     }
 
@@ -890,6 +907,16 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine($"\tBuild() ({appInterface}, error)");
         }
 
+        // By-name accessors are hand-authored convenience helpers layered over the generated
+        // ToArray capability so polyglot callers get the same ergonomics as the .NET indexer.
+        if (string.Equals(typeId, InteractionInputCollectionTypeId, StringComparison.Ordinal))
+        {
+            WriteLine("\tGet(name string) (*InteractionInput, error)");
+            WriteLine("\tRequired(name string) (*InteractionInput, error)");
+            WriteLine("\tValue(name string) (string, error)");
+            WriteLine("\tRequiredValue(name string) (string, error)");
+        }
+
         // Lifecycle escape hatches.
         WriteLine("\tErr() error");
 
@@ -919,6 +946,53 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"// new{interfaceName}FromHandle wraps an existing handle as {interfaceName}.");
         WriteLine($"func new{interfaceName}FromHandle(h *handle, c *client) {interfaceName} {{");
         WriteLine($"\treturn &{implName}{{resourceBuilderBase: newResourceBuilderBase(h, c)}}");
+        WriteLine("}");
+        WriteLine();
+    }
+
+    // Type ID of InteractionInputCollection. The by-name accessors below are hand-authored on top of the
+    // generated ToArray capability so Go matches the .NET indexer and the TypeScript get/value helpers.
+    private const string InteractionInputCollectionTypeId = "Aspire.Hosting/Aspire.Hosting.InteractionInputCollection";
+
+    private void EmitInteractionInputCollectionAccessors(string implName)
+    {
+        // These delegate to ToArray (a single RPC) and then match locally. Names are compared
+        // case-insensitively via strings.EqualFold to mirror StringComparers.InteractionInputName in .NET.
+        WriteLine("// Get returns the input with the specified name, or nil if no input matches.");
+        WriteLine($"func (s *{implName}) Get(name string) (*InteractionInput, error) {{");
+        WriteLine("\tif s.err != nil { return nil, s.err }");
+        WriteLine("\tinputs, err := s.ToArray()");
+        WriteLine("\tif err != nil { return nil, err }");
+        WriteLine("\tfor _, input := range inputs {");
+        WriteLine("\t\tif strings.EqualFold(input.Name, name) { return input, nil }");
+        WriteLine("\t}");
+        WriteLine("\treturn nil, nil");
+        WriteLine("}");
+        WriteLine();
+
+        WriteLine("// Required returns the input with the specified name, or an error if no input matches.");
+        WriteLine($"func (s *{implName}) Required(name string) (*InteractionInput, error) {{");
+        WriteLine("\tinput, err := s.Get(name)");
+        WriteLine("\tif err != nil { return nil, err }");
+        WriteLine("\tif input == nil { return nil, fmt.Errorf(\"no input with name '%s' was found\", name) }");
+        WriteLine("\treturn input, nil");
+        WriteLine("}");
+        WriteLine();
+
+        WriteLine("// Value returns the value of the input with the specified name, or an empty string if no input matches or it has no value.");
+        WriteLine($"func (s *{implName}) Value(name string) (string, error) {{");
+        WriteLine("\tinput, err := s.Get(name)");
+        WriteLine("\tif err != nil { return \"\", err }");
+        WriteLine("\tif input == nil { return \"\", nil }");
+        WriteLine("\treturn input.Value, nil");
+        WriteLine("}");
+        WriteLine();
+
+        WriteLine("// RequiredValue returns the value of the input with the specified name, or an error if no input matches.");
+        WriteLine($"func (s *{implName}) RequiredValue(name string) (string, error) {{");
+        WriteLine("\tinput, err := s.Required(name)");
+        WriteLine("\tif err != nil { return \"\", err }");
+        WriteLine("\treturn input.Value, nil");
         WriteLine("}");
         WriteLine();
     }
@@ -1371,6 +1445,47 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     /// </summary>
     private void EmitCallbackRegistration(string indent, AtsParameterInfo p, string callbackExpr)
     {
+        WriteLine($"{indent}if {callbackExpr} != nil {{");
+        WriteLine($"{indent}\tcb := {callbackExpr}");
+        WriteLine($"{indent}\tshim := func(args ...any) any {{");
+        EmitGoCallbackShimBody($"{indent}\t\t", p);
+        WriteLine($"{indent}\t}}");
+        WriteLine($"{indent}\treqArgs[\"{p.Name}\"] = s.client.registerCallback(shim)");
+        WriteLine($"{indent}}}");
+    }
+
+    // Emits a strongly-typed DTO callback property into the DTO's ToMap output. Method parameters
+    // pre-register their callback (putting a string id into reqArgs), but DTO properties instead
+    // embed the shim func directly in the map; the client's marshalTransportValue walks the
+    // serialized args, finds the func(...any) any value, and registers it. This keeps the public
+    // DTO field strongly typed (e.g. func(ctx InputsDialogValidationContext)) while reusing the
+    // exact arg-decoding/return/writeback behavior of method-parameter callbacks.
+    private void EmitDtoCallbackToMap(AtsDtoPropertyInfo property, string propertyName)
+    {
+        var p = DtoPropertyToParameterInfo(property);
+        WriteLine($"\tif d.{propertyName} != nil {{");
+        WriteLine($"\t\tcb := d.{propertyName}");
+        WriteLine($"\t\tm[\"{property.Name}\"] = func(args ...any) any {{");
+        EmitGoCallbackShimBody("\t\t\t", p);
+        WriteLine($"\t\t}}");
+        WriteLine($"\t}}");
+    }
+
+    private static AtsParameterInfo DtoPropertyToParameterInfo(AtsDtoPropertyInfo property)
+        => new()
+        {
+            Name = property.Name,
+            Type = property.Type,
+            IsOptional = property.IsOptional,
+            IsCallback = property.IsCallback,
+            CallbackParameters = property.CallbackParameters,
+            CallbackReturnType = property.CallbackReturnType,
+        };
+
+    // Writes the body of a `func(args ...any) any` callback shim, assuming the user's typed
+    // callback is in scope as `cb`. Shared by method-parameter and DTO-property callbacks.
+    private void EmitGoCallbackShimBody(string indent, AtsParameterInfo p)
+    {
         var hasReturn = p.CallbackReturnType is not null
             && p.CallbackReturnType.TypeId != AtsConstants.Void;
         var callExpr = new StringBuilder();
@@ -1390,17 +1505,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         }
         callExpr.Append(')');
 
-        WriteLine($"{indent}if {callbackExpr} != nil {{");
-        WriteLine($"{indent}\tcb := {callbackExpr}");
-        WriteLine($"{indent}\tshim := func(args ...any) any {{");
         if (hasReturn)
         {
-            WriteLine($"{indent}\t\treturn {callExpr}");
+            WriteLine($"{indent}return {callExpr}");
         }
         else if (p.CallbackParameters is null)
         {
             // Legacy untyped callback returning any — preserve return value.
-            WriteLine($"{indent}\t\treturn {callExpr}");
+            WriteLine($"{indent}return {callExpr}");
         }
         else if (p.CallbackParameters is { Count: > 0 } callbackParameters && callbackParameters.Any(cp => cp.Type.Category == AtsTypeCategory.Dto))
         {
@@ -1410,28 +1522,25 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 var argName = $"arg{i}";
                 argNames.Add(argName);
                 var goType = MapTypeRefToGo(callbackParameters[i].Type, false);
-                WriteLine($"{indent}\t\t{argName} := callbackArg[{goType}](args, {i})");
+                WriteLine($"{indent}{argName} := callbackArg[{goType}](args, {i})");
             }
 
-            WriteLine($"{indent}\t\tcb({string.Join(", ", argNames)})");
-            WriteLine($"{indent}\t\treturn map[string]any{{");
+            WriteLine($"{indent}cb({string.Join(", ", argNames)})");
+            WriteLine($"{indent}return map[string]any{{");
             for (var i = 0; i < callbackParameters.Count; i++)
             {
                 if (callbackParameters[i].Type.Category == AtsTypeCategory.Dto)
                 {
-                    WriteLine($"{indent}\t\t\t\"p{i}\": serializeValue({argNames[i]}),");
+                    WriteLine($"{indent}\t\"p{i}\": serializeValue({argNames[i]}),");
                 }
             }
-            WriteLine($"{indent}\t\t}}");
+            WriteLine($"{indent}}}");
         }
         else
         {
-            WriteLine($"{indent}\t\t{callExpr}");
-            WriteLine($"{indent}\t\treturn nil");
+            WriteLine($"{indent}{callExpr}");
+            WriteLine($"{indent}return nil");
         }
-        WriteLine($"{indent}\t}}");
-        WriteLine($"{indent}\treqArgs[\"{p.Name}\"] = s.client.registerCallback(shim)");
-        WriteLine($"{indent}}}");
     }
 
     // ── List / Dict accessor methods ─────────────────────────────────────────

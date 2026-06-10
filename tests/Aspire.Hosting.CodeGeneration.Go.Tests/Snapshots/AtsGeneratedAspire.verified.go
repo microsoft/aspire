@@ -10,6 +10,7 @@ import (
     "context"
     "fmt"
     "os"
+    "strings"
     "time"
 )
 
@@ -17,6 +18,7 @@ import (
 var _ = context.Background
 var _ = fmt.Errorf
 var _ = os.Getenv
+var _ = strings.EqualFold
 var _ = time.Second
 
 // ============================================================================

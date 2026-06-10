@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"apphost/modules/aspire"
@@ -571,14 +572,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	_ = container.WithHealthCheck("custom_check")
 	_ = container.WithHttpHealthCheck()
 	_ = container.WithHttpHealthCheck()
-	updateCommandState := func(args ...any) any {
-		if len(args) == 0 {
-			return aspire.ResourceCommandStateDisabled
-		}
-		ctx, ok := args[0].(aspire.UpdateCommandStateContext)
-		if !ok {
-			return aspire.ResourceCommandStateDisabled
-		}
+	updateCommandState := func(ctx aspire.UpdateCommandStateContext) aspire.ResourceCommandState {
 		updateStateServices := ctx.Services()
 		updateStateLoggerFactory := updateStateServices.GetLoggerFactory()
 		updateStateLogger := updateStateLoggerFactory.CreateLogger("ValidationAppHost.UpdateCommandState")
@@ -599,30 +593,22 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			UpdateState: updateCommandState,
 		},
 	})
-	validateCommandArguments := func(args ...any) any {
-		if len(args) == 0 {
-			return nil
-		}
-		ctx, ok := args[0].(aspire.InputsDialogValidationContext)
-		if !ok {
-			return nil
-		}
+	validateCommandArguments := func(ctx aspire.InputsDialogValidationContext) {
 		validationServices := ctx.Services()
 		validationLoggerFactory := validationServices.GetLoggerFactory()
 		validationLogger := validationLoggerFactory.CreateLogger("ValidationAppHost.ValidateCommandArguments")
 		_ = validationLogger.LogInformation("Validate command arguments services")
-		return nil
 	}
 	_ = container.WithCommand("echo", "Echo", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
 		echoServices := ctx.Services()
 		echoLoggerFactory := echoServices.GetLoggerFactory()
 		echoLogger := echoLoggerFactory.CreateLogger("ValidationAppHost.EchoCommand")
 		_ = echoLogger.LogInformation("Echo command services")
-		commandArguments, err := ctx.Arguments().ToArray()
+		message, err := ctx.Arguments().Value("message")
 		if err != nil {
 			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
 		}
-		return &aspire.ExecuteCommandResult{Success: commandArguments[0].Value == "hello"}
+		return &aspire.ExecuteCommandResult{Success: message == "hello"}
 	}, &aspire.WithCommandOptions{
 		CommandOptions: &aspire.CommandOptions{
 			Arguments: []*aspire.InteractionInput{
@@ -679,6 +665,189 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		buildLoggerFactory := buildServices.GetLoggerFactory()
 		buildLogger := buildLoggerFactory.CreateLogger("ValidationAppHost.ContainerBuildOptions")
 		_ = buildLogger.LogInformation("ContainerBuildOptions services")
+	})
+
+	// Test bench for the polyglot IInteractionService API: prompts for a region, then dynamically
+	// loads the available zones for that region into a second choice input. Reached via the command's
+	// service provider (Services().GetInteractionService()), which only prompts when the
+	// interaction service is available (the interactive dashboard path).
+	_ = container.WithCommand("pick-zone", "Pick Zone", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		interactionService := ctx.Services().GetInteractionService()
+
+		available, err := interactionService.IsAvailable()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		if !available {
+			return &aspire.ExecuteCommandResult{Success: true, Message: aspire.StringPtr("Interaction service is not available.")}
+		}
+
+		regionInput := interactionService.CreateChoiceInput("region", &aspire.CreateChoiceInputOptions{
+			Choices: []*aspire.InteractionChoiceOption{{Value: "us", Label: "United States"}, {Value: "eu", Label: "Europe"}},
+		})
+
+		zoneInput := interactionService.CreateChoiceInput("zone").WithDynamicLoading(func(loadContext aspire.InteractionInputLoadContext) {
+			region, _ := loadContext.Inputs().Value("region")
+			zones := []*aspire.InteractionChoiceOption{{Value: "us-east", Label: "US East"}, {Value: "us-west", Label: "US West"}}
+			if region == "eu" {
+				zones = []*aspire.InteractionChoiceOption{{Value: "eu-west", Label: "EU West"}, {Value: "eu-north", Label: "EU North"}}
+			}
+			_ = loadContext.Input().SetChoiceOptions(zones)
+		})
+
+		result := interactionService.PromptInputs("Pick a zone", "Choose a region, then pick a zone from the dynamically loaded options.", []aspire.InteractionInputBuilder{regionInput, zoneInput})
+
+		canceled, err := result.Canceled()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		return &aspire.ExecuteCommandResult{Success: !canceled, Canceled: aspire.BoolPtr(canceled)}
+	})
+
+	// Exhaustive coverage of the remaining IInteractionService surface so every newly added member is
+	// exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
+	// the dynamic-loading context accessors/setters, and the option/result DTO fields.
+	_ = container.WithCommand("interaction-showcase", "Interaction Showcase", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		interactionService := ctx.Services().GetInteractionService()
+
+		available, err := interactionService.IsAvailable()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		if !available {
+			return &aspire.ExecuteCommandResult{Success: true, Message: aspire.StringPtr("Interaction service is not available.")}
+		}
+
+		confirmIntent := aspire.MessageIntentConfirmation
+		confirmation, err := interactionService.PromptConfirmation("Confirm", "Proceed?", &aspire.PromptConfirmationOptions{
+			Options: &aspire.InteractionMessageBoxOptions{
+				PrimaryButtonText:     aspire.StringPtr("Yes"),
+				SecondaryButtonText:   aspire.StringPtr("No"),
+				ShowSecondaryButton:   aspire.BoolPtr(true),
+				ShowDismiss:           aspire.BoolPtr(true),
+				EnableMessageMarkdown: aspire.BoolPtr(true),
+				Intent:                &confirmIntent,
+			},
+		})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		infoIntent := aspire.MessageIntentInformation
+		messageBox, err := interactionService.PromptMessageBox("Notice", "Read this.", &aspire.PromptMessageBoxOptions{
+			Options: &aspire.InteractionMessageBoxOptions{PrimaryButtonText: aspire.StringPtr("OK"), Intent: &infoIntent},
+		})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		warnIntent := aspire.MessageIntentWarning
+		notification, err := interactionService.PromptNotification("Heads up", "Something happened.", &aspire.PromptNotificationOptions{
+			Options: &aspire.InteractionNotificationOptions{
+				Intent:      &warnIntent,
+				LinkText:    aspire.StringPtr("Learn more"),
+				LinkUrl:     aspire.StringPtr("https://aspire.dev"),
+				ShowDismiss: aspire.BoolPtr(true),
+			},
+		})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		textInput := interactionService.CreateTextInput("name", &aspire.CreateTextInputOptions{
+			Options: &aspire.CreateInteractionInputOptions{
+				Label:                     aspire.StringPtr("Name"),
+				Description:               aspire.StringPtr("Your **name**"),
+				EnableDescriptionMarkdown: aspire.BoolPtr(true),
+				Required:                  aspire.BoolPtr(true),
+				Placeholder:               aspire.StringPtr("Jane Doe"),
+				Value:                     aspire.StringPtr("Jane"),
+				MaxLength:                 aspire.Float64Ptr(64),
+				Disabled:                  aspire.BoolPtr(false),
+			},
+		})
+		secretInput := interactionService.CreateSecretInput("password", &aspire.CreateSecretInputOptions{
+			Options: &aspire.CreateInteractionInputOptions{Required: aspire.BoolPtr(true)},
+		})
+		booleanInput := interactionService.CreateBooleanInput("enabled", &aspire.CreateBooleanInputOptions{
+			Options: &aspire.CreateInteractionInputOptions{Value: aspire.StringPtr("true")},
+		})
+		numberInput := interactionService.CreateNumberInput("count", &aspire.CreateNumberInputOptions{
+			Options: &aspire.CreateInteractionInputOptions{Value: aspire.StringPtr("1")},
+		})
+		choiceInput := interactionService.CreateChoiceInput("color", &aspire.CreateChoiceInputOptions{
+			Choices: []*aspire.InteractionChoiceOption{{Value: "r", Label: "Red"}, {Value: "g", Label: "Green"}},
+			Options: &aspire.CreateInteractionInputOptions{AllowCustomChoice: aspire.BoolPtr(true)},
+		})
+		presetInput := interactionService.CreateTextInput("greeting").WithValue("hello")
+		sizeInput := interactionService.CreateChoiceInput("size").WithChoiceOptions([]*aspire.InteractionChoiceOption{{Value: "s", Label: "Small"}, {Value: "l", Label: "Large"}})
+		dependentInput := interactionService.CreateChoiceInput("shade").WithDynamicLoading(func(loadContext aspire.InteractionInputLoadContext) {
+			input := loadContext.Input()
+			inputName, _ := input.GetName()
+			color, _ := loadContext.Inputs().Value("color")
+			shades := []*aspire.InteractionChoiceOption{{Value: "lime", Label: "Lime"}, {Value: "forest", Label: "Forest"}}
+			if color == "r" {
+				shades = []*aspire.InteractionChoiceOption{{Value: "crimson", Label: "Crimson"}, {Value: "scarlet", Label: "Scarlet"}}
+			}
+			_ = input.SetChoiceOptions(shades)
+			_ = input.SetValue(inputName)
+		}, &aspire.WithDynamicLoadingOptions{
+			Options: &aspire.DynamicLoadingOptions{AlwaysLoadOnStart: aspire.BoolPtr(true), DependsOnInputs: []string{"color"}},
+		})
+
+		single, err := interactionService.PromptInput("Single input", "Enter a value.", interactionService.CreateTextInput("solo"), &aspire.PromptInputOptions{
+			Options: &aspire.InteractionInputsDialogOptions{
+				PrimaryButtonText: aspire.StringPtr("Save"),
+				ValidationCallback: func(validationContext aspire.InputsDialogValidationContext) {
+					solo, _ := validationContext.Inputs().Value("solo")
+					if solo == "" {
+						_ = validationContext.AddValidationError("solo", "A value is required.")
+					}
+				},
+			},
+		})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		multi := interactionService.PromptInputs("Multiple inputs", "Fill out the form.",
+			[]aspire.InteractionInputBuilder{textInput, secretInput, booleanInput, numberInput, choiceInput, presetInput, sizeInput, dependentInput},
+			&aspire.PromptInputsOptions{
+				Options: &aspire.InteractionInputsDialogOptions{
+					PrimaryButtonText:     aspire.StringPtr("Submit"),
+					EnableMessageMarkdown: aspire.BoolPtr(true),
+					ValidationCallback: func(validationContext aspire.InputsDialogValidationContext) {
+						name, _ := validationContext.Inputs().Value("name")
+						if name == "bad" {
+							_ = validationContext.AddValidationError("name", "Name cannot be 'bad'.")
+						}
+					},
+				},
+			})
+
+		selectedColor, _ := multi.Inputs().Value("color")
+		soloValue := ""
+		if single.Input != nil {
+			soloValue = single.Input.Value
+		}
+
+		multiCanceled, err := multi.Canceled()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		success := !confirmation.Canceled &&
+			confirmation.Value != nil && *confirmation.Value &&
+			!messageBox.Canceled &&
+			!notification.Canceled &&
+			!single.Canceled &&
+			!multiCanceled
+
+		return &aspire.ExecuteCommandResult{
+			Success:  success,
+			Canceled: aspire.BoolPtr(multiCanceled),
+			Message:  aspire.StringPtr(fmt.Sprintf("color=%s solo=%s", selectedColor, soloValue)),
+		}
 	})
 
 	app, err := builder.Build()

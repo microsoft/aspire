@@ -10,6 +10,7 @@ import (
     "context"
     "fmt"
     "os"
+    "strings"
     "time"
 )
 
@@ -17,6 +18,7 @@ import (
 var _ = context.Background
 var _ = fmt.Errorf
 var _ = os.Getenv
+var _ = strings.EqualFold
 var _ = time.Second
 
 // ============================================================================
@@ -195,6 +197,18 @@ const (
 	HealthStatusHealthy HealthStatus = "Healthy"
 )
 
+// MessageIntent represents MessageIntent.
+type MessageIntent string
+
+const (
+	MessageIntentNone MessageIntent = "None"
+	MessageIntentSuccess MessageIntent = "Success"
+	MessageIntentWarning MessageIntent = "Warning"
+	MessageIntentError MessageIntent = "Error"
+	MessageIntentInformation MessageIntent = "Information"
+	MessageIntentConfirmation MessageIntent = "Confirmation"
+)
+
 // ResourceCommandVisibility represents ResourceCommandVisibility.
 type ResourceCommandVisibility string
 
@@ -272,7 +286,6 @@ type InteractionInput struct {
 	InputType InputType `json:"InputType,omitempty"`
 	Required *bool `json:"Required,omitempty"`
 	Options []any `json:"Options,omitempty"`
-	DynamicLoading any `json:"DynamicLoading,omitempty"`
 	Value string `json:"Value,omitempty"`
 	Placeholder *string `json:"Placeholder,omitempty"`
 	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
@@ -290,7 +303,6 @@ func (d *InteractionInput) ToMap() map[string]any {
 	m["InputType"] = serializeValue(d.InputType)
 	if d.Required != nil { m["Required"] = serializeValue(d.Required) }
 	if d.Options != nil { m["Options"] = serializeValue(d.Options) }
-	if d.DynamicLoading != nil { m["DynamicLoading"] = serializeValue(d.DynamicLoading) }
 	m["Value"] = serializeValue(d.Value)
 	if d.Placeholder != nil { m["Placeholder"] = serializeValue(d.Placeholder) }
 	if d.AllowCustomChoice != nil { m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
@@ -427,6 +439,166 @@ func (d *HealthCheckResult) ToMap() map[string]any {
 	return m
 }
 
+// InteractionChoiceOption represents InteractionChoiceOption.
+type InteractionChoiceOption struct {
+	Value string `json:"Value,omitempty"`
+	Label string `json:"Label,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *InteractionChoiceOption) ToMap() map[string]any {
+	m := map[string]any{}
+	m["Value"] = serializeValue(d.Value)
+	m["Label"] = serializeValue(d.Label)
+	return m
+}
+
+// CreateInteractionInputOptions represents CreateInteractionInputOptions.
+type CreateInteractionInputOptions struct {
+	Label *string `json:"Label,omitempty"`
+	Description *string `json:"Description,omitempty"`
+	EnableDescriptionMarkdown *bool `json:"EnableDescriptionMarkdown,omitempty"`
+	Required *bool `json:"Required,omitempty"`
+	Placeholder *string `json:"Placeholder,omitempty"`
+	Value *string `json:"Value,omitempty"`
+	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
+	Disabled *bool `json:"Disabled,omitempty"`
+	MaxLength *float64 `json:"MaxLength,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *CreateInteractionInputOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.Label != nil { m["Label"] = serializeValue(d.Label) }
+	if d.Description != nil { m["Description"] = serializeValue(d.Description) }
+	if d.EnableDescriptionMarkdown != nil { m["EnableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown) }
+	if d.Required != nil { m["Required"] = serializeValue(d.Required) }
+	if d.Placeholder != nil { m["Placeholder"] = serializeValue(d.Placeholder) }
+	if d.Value != nil { m["Value"] = serializeValue(d.Value) }
+	if d.AllowCustomChoice != nil { m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
+	if d.Disabled != nil { m["Disabled"] = serializeValue(d.Disabled) }
+	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
+	return m
+}
+
+// DynamicLoadingOptions represents DynamicLoadingOptions.
+type DynamicLoadingOptions struct {
+	AlwaysLoadOnStart *bool `json:"AlwaysLoadOnStart,omitempty"`
+	DependsOnInputs []string `json:"DependsOnInputs,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *DynamicLoadingOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.AlwaysLoadOnStart != nil { m["AlwaysLoadOnStart"] = serializeValue(d.AlwaysLoadOnStart) }
+	if d.DependsOnInputs != nil { m["DependsOnInputs"] = serializeValue(d.DependsOnInputs) }
+	return m
+}
+
+// InteractionMessageBoxOptions represents InteractionMessageBoxOptions.
+type InteractionMessageBoxOptions struct {
+	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
+	SecondaryButtonText *string `json:"SecondaryButtonText,omitempty"`
+	ShowSecondaryButton *bool `json:"ShowSecondaryButton,omitempty"`
+	ShowDismiss *bool `json:"ShowDismiss,omitempty"`
+	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
+	Intent *MessageIntent `json:"Intent,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *InteractionMessageBoxOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
+	if d.SecondaryButtonText != nil { m["SecondaryButtonText"] = serializeValue(d.SecondaryButtonText) }
+	if d.ShowSecondaryButton != nil { m["ShowSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
+	if d.ShowDismiss != nil { m["ShowDismiss"] = serializeValue(d.ShowDismiss) }
+	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
+	if d.Intent != nil { m["Intent"] = serializeValue(d.Intent) }
+	return m
+}
+
+// InteractionNotificationOptions represents InteractionNotificationOptions.
+type InteractionNotificationOptions struct {
+	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
+	SecondaryButtonText *string `json:"SecondaryButtonText,omitempty"`
+	ShowSecondaryButton *bool `json:"ShowSecondaryButton,omitempty"`
+	ShowDismiss *bool `json:"ShowDismiss,omitempty"`
+	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
+	Intent *MessageIntent `json:"Intent,omitempty"`
+	LinkText *string `json:"LinkText,omitempty"`
+	LinkUrl *string `json:"LinkUrl,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *InteractionNotificationOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
+	if d.SecondaryButtonText != nil { m["SecondaryButtonText"] = serializeValue(d.SecondaryButtonText) }
+	if d.ShowSecondaryButton != nil { m["ShowSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
+	if d.ShowDismiss != nil { m["ShowDismiss"] = serializeValue(d.ShowDismiss) }
+	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
+	if d.Intent != nil { m["Intent"] = serializeValue(d.Intent) }
+	if d.LinkText != nil { m["LinkText"] = serializeValue(d.LinkText) }
+	if d.LinkUrl != nil { m["LinkUrl"] = serializeValue(d.LinkUrl) }
+	return m
+}
+
+// InteractionInputsDialogOptions represents InteractionInputsDialogOptions.
+type InteractionInputsDialogOptions struct {
+	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
+	SecondaryButtonText *string `json:"SecondaryButtonText,omitempty"`
+	ShowSecondaryButton *bool `json:"ShowSecondaryButton,omitempty"`
+	ShowDismiss *bool `json:"ShowDismiss,omitempty"`
+	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
+	ValidationCallback func(arg InputsDialogValidationContext) `json:"ValidationCallback,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *InteractionInputsDialogOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
+	if d.SecondaryButtonText != nil { m["SecondaryButtonText"] = serializeValue(d.SecondaryButtonText) }
+	if d.ShowSecondaryButton != nil { m["ShowSecondaryButton"] = serializeValue(d.ShowSecondaryButton) }
+	if d.ShowDismiss != nil { m["ShowDismiss"] = serializeValue(d.ShowDismiss) }
+	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
+	if d.ValidationCallback != nil {
+		cb := d.ValidationCallback
+		m["ValidationCallback"] = func(args ...any) any {
+			cb(callbackArg[InputsDialogValidationContext](args, 0))
+			return nil
+		}
+	}
+	return m
+}
+
+// BoolInteractionResult represents BoolInteractionResult.
+type BoolInteractionResult struct {
+	Canceled bool `json:"Canceled,omitempty"`
+	Value *bool `json:"Value,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *BoolInteractionResult) ToMap() map[string]any {
+	m := map[string]any{}
+	m["Canceled"] = serializeValue(d.Canceled)
+	if d.Value != nil { m["Value"] = serializeValue(d.Value) }
+	return m
+}
+
+// InputInteractionResult represents InputInteractionResult.
+type InputInteractionResult struct {
+	Canceled bool `json:"Canceled,omitempty"`
+	Input *InteractionInput `json:"Input,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *InputInteractionResult) ToMap() map[string]any {
+	m := map[string]any{}
+	m["Canceled"] = serializeValue(d.Canceled)
+	if d.Input != nil { m["Input"] = serializeValue(d.Input) }
+	return m
+}
+
 // ResourceEventDto represents ResourceEventDto.
 type ResourceEventDto struct {
 	ResourceName string `json:"ResourceName,omitempty"`
@@ -520,13 +692,13 @@ type CommandOptions struct {
 	Description string `json:"Description,omitempty"`
 	Parameter any `json:"Parameter,omitempty"`
 	Arguments []*InteractionInput `json:"Arguments,omitempty"`
-	ValidateArguments func(...any) any `json:"ValidateArguments,omitempty"`
+	ValidateArguments func(arg InputsDialogValidationContext) `json:"ValidateArguments,omitempty"`
 	Visibility ResourceCommandVisibility `json:"Visibility,omitempty"`
 	ConfirmationMessage string `json:"ConfirmationMessage,omitempty"`
 	IconName string `json:"IconName,omitempty"`
 	IconVariant *IconVariant `json:"IconVariant,omitempty"`
 	IsHighlighted bool `json:"IsHighlighted,omitempty"`
-	UpdateState func(...any) any `json:"UpdateState,omitempty"`
+	UpdateState func(arg UpdateCommandStateContext) ResourceCommandState `json:"UpdateState,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -535,13 +707,24 @@ func (d *CommandOptions) ToMap() map[string]any {
 	m["Description"] = serializeValue(d.Description)
 	if d.Parameter != nil { m["Parameter"] = serializeValue(d.Parameter) }
 	if d.Arguments != nil { m["Arguments"] = serializeValue(d.Arguments) }
-	if d.ValidateArguments != nil { m["ValidateArguments"] = serializeValue(d.ValidateArguments) }
+	if d.ValidateArguments != nil {
+		cb := d.ValidateArguments
+		m["ValidateArguments"] = func(args ...any) any {
+			cb(callbackArg[InputsDialogValidationContext](args, 0))
+			return nil
+		}
+	}
 	m["Visibility"] = serializeValue(d.Visibility)
 	m["ConfirmationMessage"] = serializeValue(d.ConfirmationMessage)
 	m["IconName"] = serializeValue(d.IconName)
 	if d.IconVariant != nil { m["IconVariant"] = serializeValue(d.IconVariant) }
 	m["IsHighlighted"] = serializeValue(d.IsHighlighted)
-	if d.UpdateState != nil { m["UpdateState"] = serializeValue(d.UpdateState) }
+	if d.UpdateState != nil {
+		cb := d.UpdateState
+		m["UpdateState"] = func(args ...any) any {
+			return cb(callbackArg[UpdateCommandStateContext](args, 0))
+		}
+	}
 	return m
 }
 
@@ -556,7 +739,7 @@ type HttpCommandExportOptions struct {
 	CommandName string `json:"CommandName,omitempty"`
 	EndpointName string `json:"EndpointName,omitempty"`
 	MethodName string `json:"MethodName,omitempty"`
-	PrepareRequest func(...any) any `json:"PrepareRequest,omitempty"`
+	PrepareRequest func(arg HttpCommandPrepareRequestContext) *HttpCommandRequestExportData `json:"PrepareRequest,omitempty"`
 	ResultMode HttpCommandResultMode `json:"ResultMode,omitempty"`
 }
 
@@ -572,7 +755,12 @@ func (d *HttpCommandExportOptions) ToMap() map[string]any {
 	m["CommandName"] = serializeValue(d.CommandName)
 	m["EndpointName"] = serializeValue(d.EndpointName)
 	m["MethodName"] = serializeValue(d.MethodName)
-	if d.PrepareRequest != nil { m["PrepareRequest"] = serializeValue(d.PrepareRequest) }
+	if d.PrepareRequest != nil {
+		cb := d.PrepareRequest
+		m["PrepareRequest"] = func(args ...any) any {
+			return cb(callbackArg[HttpCommandPrepareRequestContext](args, 0))
+		}
+	}
 	m["ResultMode"] = serializeValue(d.ResultMode)
 	return m
 }
@@ -648,7 +836,7 @@ type ProcessCommandExportOptions struct {
 	InheritEnvironmentVariables *bool `json:"InheritEnvironmentVariables,omitempty"`
 	StandardInputContent string `json:"StandardInputContent,omitempty"`
 	KillEntireProcessTree *bool `json:"KillEntireProcessTree,omitempty"`
-	CreateProcessSpec func(...any) any `json:"CreateProcessSpec,omitempty"`
+	CreateProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData `json:"CreateProcessSpec,omitempty"`
 	CommandOptions *CommandOptions `json:"CommandOptions,omitempty"`
 	MaxOutputLineCount *float64 `json:"MaxOutputLineCount,omitempty"`
 	DisplayImmediately *bool `json:"DisplayImmediately,omitempty"`
@@ -665,7 +853,12 @@ func (d *ProcessCommandExportOptions) ToMap() map[string]any {
 	if d.InheritEnvironmentVariables != nil { m["InheritEnvironmentVariables"] = serializeValue(d.InheritEnvironmentVariables) }
 	m["StandardInputContent"] = serializeValue(d.StandardInputContent)
 	if d.KillEntireProcessTree != nil { m["KillEntireProcessTree"] = serializeValue(d.KillEntireProcessTree) }
-	if d.CreateProcessSpec != nil { m["CreateProcessSpec"] = serializeValue(d.CreateProcessSpec) }
+	if d.CreateProcessSpec != nil {
+		cb := d.CreateProcessSpec
+		m["CreateProcessSpec"] = func(args ...any) any {
+			return cb(callbackArg[ExecuteCommandContext](args, 0))
+		}
+	}
 	if d.CommandOptions != nil { m["CommandOptions"] = serializeValue(d.CommandOptions) }
 	if d.MaxOutputLineCount != nil { m["MaxOutputLineCount"] = serializeValue(d.MaxOutputLineCount) }
 	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
@@ -17354,10 +17547,135 @@ func (s *inputsDialogValidationContext) Services() ServiceProvider {
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// InputsInteractionResult is the public interface for handle type InputsInteractionResult.
+type InputsInteractionResult interface {
+	handleReference
+	Canceled() (bool, error)
+	Inputs() InteractionInputCollection
+	Err() error
+}
+
+// inputsInteractionResult is the unexported impl of InputsInteractionResult.
+type inputsInteractionResult struct {
+	*resourceBuilderBase
+}
+
+// newInputsInteractionResultFromHandle wraps an existing handle as InputsInteractionResult.
+func newInputsInteractionResultFromHandle(h *handle, c *client) InputsInteractionResult {
+	return &inputsInteractionResult{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Canceled gets a value indicating whether the interaction was canceled by the user.
+func (s *inputsInteractionResult) Canceled() (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/InputsInteractionResult.canceled", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
+}
+
+// Inputs gets the inputs returned from the interaction. Empty when `Canceled` is `true`.
+func (s *inputsInteractionResult) Inputs() InteractionInputCollection {
+	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/InputsInteractionResult.inputs", reqArgs)
+	if err != nil {
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Ats/InputsInteractionResult.inputs returned unexpected type %T", result)
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// InteractionInputBuilder is the public interface for handle type InteractionInputBuilder.
+type InteractionInputBuilder interface {
+	handleReference
+	WithChoiceOptions(choices []*InteractionChoiceOption) InteractionInputBuilder
+	WithDynamicLoading(callback func(arg InteractionInputLoadContext), options ...*WithDynamicLoadingOptions) InteractionInputBuilder
+	WithValue(value string) InteractionInputBuilder
+	Err() error
+}
+
+// interactionInputBuilder is the unexported impl of InteractionInputBuilder.
+type interactionInputBuilder struct {
+	*resourceBuilderBase
+}
+
+// newInteractionInputBuilderFromHandle wraps an existing handle as InteractionInputBuilder.
+func newInteractionInputBuilderFromHandle(h *handle, c *client) InteractionInputBuilder {
+	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// WithChoiceOptions sets the choice options for the input.
+func (s *interactionInputBuilder) WithChoiceOptions(choices []*InteractionChoiceOption) InteractionInputBuilder {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if choices != nil { reqArgs["choices"] = serializeValue(choices) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/withChoiceOptions", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithDynamicLoading attaches a callback that dynamically loads or updates the input after the prompt starts.
+func (s *interactionInputBuilder) WithDynamicLoading(callback func(arg InteractionInputLoadContext), options ...*WithDynamicLoadingOptions) InteractionInputBuilder {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[InteractionInputLoadContext](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	if len(options) > 0 {
+		merged := &WithDynamicLoadingOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/withDynamicLoading", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithValue sets the value of the input.
+func (s *interactionInputBuilder) WithValue(value string) InteractionInputBuilder {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/withValue", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // InteractionInputCollection is the public interface for handle type InteractionInputCollection.
 type InteractionInputCollection interface {
 	handleReference
 	ToArray() ([]*InteractionInput, error)
+	Get(name string) (*InteractionInput, error)
+	Required(name string) (*InteractionInput, error)
+	Value(name string) (string, error)
+	RequiredValue(name string) (string, error)
 	Err() error
 }
 
@@ -17384,6 +17702,488 @@ func (s *interactionInputCollection) ToArray() ([]*InteractionInput, error) {
 		return zero, err
 	}
 	return decodeAs[[]*InteractionInput](result)
+}
+
+// Get returns the input with the specified name, or nil if no input matches.
+func (s *interactionInputCollection) Get(name string) (*InteractionInput, error) {
+	if s.err != nil { return nil, s.err }
+	inputs, err := s.ToArray()
+	if err != nil { return nil, err }
+	for _, input := range inputs {
+		if strings.EqualFold(input.Name, name) { return input, nil }
+	}
+	return nil, nil
+}
+
+// Required returns the input with the specified name, or an error if no input matches.
+func (s *interactionInputCollection) Required(name string) (*InteractionInput, error) {
+	input, err := s.Get(name)
+	if err != nil { return nil, err }
+	if input == nil { return nil, fmt.Errorf("no input with name '%s' was found", name) }
+	return input, nil
+}
+
+// Value returns the value of the input with the specified name, or an empty string if no input matches or it has no value.
+func (s *interactionInputCollection) Value(name string) (string, error) {
+	input, err := s.Get(name)
+	if err != nil { return "", err }
+	if input == nil { return "", nil }
+	return input.Value, nil
+}
+
+// RequiredValue returns the value of the input with the specified name, or an error if no input matches.
+func (s *interactionInputCollection) RequiredValue(name string) (string, error) {
+	input, err := s.Required(name)
+	if err != nil { return "", err }
+	return input.Value, nil
+}
+
+// InteractionInputLoadContext is the public interface for handle type InteractionInputLoadContext.
+type InteractionInputLoadContext interface {
+	handleReference
+	Input() InteractionLoadingInput
+	Inputs() InteractionInputCollection
+	Err() error
+}
+
+// interactionInputLoadContext is the unexported impl of InteractionInputLoadContext.
+type interactionInputLoadContext struct {
+	*resourceBuilderBase
+}
+
+// newInteractionInputLoadContextFromHandle wraps an existing handle as InteractionInputLoadContext.
+func newInteractionInputLoadContextFromHandle(h *handle, c *client) InteractionInputLoadContext {
+	return &interactionInputLoadContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Input gets a handle to the input that is loading. Mutate the input through this handle.
+func (s *interactionInputLoadContext) Input() InteractionLoadingInput {
+	if s.err != nil { return &interactionLoadingInput{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/input", reqArgs)
+	if err != nil {
+		return &interactionLoadingInput{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Ats/input returned unexpected type %T", result)
+		return &interactionLoadingInput{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionLoadingInput{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Inputs gets all inputs in the prompt, including the one currently loading.
+func (s *interactionInputLoadContext) Inputs() InteractionInputCollection {
+	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/InteractionInputLoadContext.inputs", reqArgs)
+	if err != nil {
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Ats/InteractionInputLoadContext.inputs returned unexpected type %T", result)
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// InteractionLoadingInput is the public interface for handle type InteractionLoadingInput.
+type InteractionLoadingInput interface {
+	handleReference
+	GetName() (string, error)
+	SetChoiceOptions(choices []*InteractionChoiceOption) error
+	SetValue(value string) error
+	Err() error
+}
+
+// interactionLoadingInput is the unexported impl of InteractionLoadingInput.
+type interactionLoadingInput struct {
+	*resourceBuilderBase
+}
+
+// newInteractionLoadingInputFromHandle wraps an existing handle as InteractionLoadingInput.
+func newInteractionLoadingInputFromHandle(h *handle, c *client) InteractionLoadingInput {
+	return &interactionLoadingInput{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// GetName gets the name of the input.
+func (s *interactionLoadingInput) GetName() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/getName", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// SetChoiceOptions sets the choice options for the input.
+func (s *interactionLoadingInput) SetChoiceOptions(choices []*InteractionChoiceOption) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if choices != nil { reqArgs["choices"] = serializeValue(choices) }
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/setChoiceOptions", reqArgs)
+	return err
+}
+
+// SetValue sets the value of the input.
+func (s *interactionLoadingInput) SetValue(value string) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/setValue", reqArgs)
+	return err
+}
+
+// InteractionService is the public interface for handle type InteractionService.
+type InteractionService interface {
+	handleReference
+	CreateBooleanInput(name string, options ...*CreateBooleanInputOptions) InteractionInputBuilder
+	CreateChoiceInput(name string, options ...*CreateChoiceInputOptions) InteractionInputBuilder
+	CreateNumberInput(name string, options ...*CreateNumberInputOptions) InteractionInputBuilder
+	CreateSecretInput(name string, options ...*CreateSecretInputOptions) InteractionInputBuilder
+	CreateTextInput(name string, options ...*CreateTextInputOptions) InteractionInputBuilder
+	IsAvailable() (bool, error)
+	PromptConfirmation(title string, message string, options ...*PromptConfirmationOptions) (*BoolInteractionResult, error)
+	PromptInput(title string, message string, input InteractionInputBuilder, options ...*PromptInputOptions) (*InputInteractionResult, error)
+	PromptInputs(title string, message string, inputs []InteractionInputBuilder, options ...*PromptInputsOptions) InputsInteractionResult
+	PromptMessageBox(title string, message string, options ...*PromptMessageBoxOptions) (*BoolInteractionResult, error)
+	PromptNotification(title string, message string, options ...*PromptNotificationOptions) (*BoolInteractionResult, error)
+	Err() error
+}
+
+// interactionService is the unexported impl of InteractionService.
+type interactionService struct {
+	*resourceBuilderBase
+}
+
+// newInteractionServiceFromHandle wraps an existing handle as InteractionService.
+func newInteractionServiceFromHandle(h *handle, c *client) InteractionService {
+	return &interactionService{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CreateBooleanInput creates a boolean (checkbox) input.
+func (s *interactionService) CreateBooleanInput(name string, options ...*CreateBooleanInputOptions) InteractionInputBuilder {
+	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	if len(options) > 0 {
+		merged := &CreateBooleanInputOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createBooleanInput", reqArgs)
+	if err != nil {
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/createBooleanInput returned unexpected type %T", result)
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// CreateChoiceInput creates a choice input that selects from a list of options.
+func (s *interactionService) CreateChoiceInput(name string, options ...*CreateChoiceInputOptions) InteractionInputBuilder {
+	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	if len(options) > 0 {
+		merged := &CreateChoiceInputOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createChoiceInput", reqArgs)
+	if err != nil {
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/createChoiceInput returned unexpected type %T", result)
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// CreateNumberInput creates a numeric input.
+func (s *interactionService) CreateNumberInput(name string, options ...*CreateNumberInputOptions) InteractionInputBuilder {
+	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	if len(options) > 0 {
+		merged := &CreateNumberInputOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createNumberInput", reqArgs)
+	if err != nil {
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/createNumberInput returned unexpected type %T", result)
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// CreateSecretInput creates a secret (masked) text input.
+func (s *interactionService) CreateSecretInput(name string, options ...*CreateSecretInputOptions) InteractionInputBuilder {
+	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	if len(options) > 0 {
+		merged := &CreateSecretInputOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createSecretInput", reqArgs)
+	if err != nil {
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/createSecretInput returned unexpected type %T", result)
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// CreateTextInput creates a single-line text input.
+func (s *interactionService) CreateTextInput(name string, options ...*CreateTextInputOptions) InteractionInputBuilder {
+	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	if len(options) > 0 {
+		merged := &CreateTextInputOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createTextInput", reqArgs)
+	if err != nil {
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/createTextInput returned unexpected type %T", result)
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// IsAvailable gets a value indicating whether the interaction service is available to prompt the user.
+func (s *interactionService) IsAvailable() (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/isAvailable", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
+}
+
+// PromptConfirmation prompts the user for confirmation with an OK/Cancel dialog.
+func (s *interactionService) PromptConfirmation(title string, message string, options ...*PromptConfirmationOptions) (*BoolInteractionResult, error) {
+	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["title"] = serializeValue(title)
+	reqArgs["message"] = serializeValue(message)
+	if len(options) > 0 {
+		merged := &PromptConfirmationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/promptConfirmation", reqArgs)
+	if err != nil {
+		var zero *BoolInteractionResult
+		return zero, err
+	}
+	return decodeAs[*BoolInteractionResult](result)
+}
+
+// PromptInput prompts the user for a single input.
+func (s *interactionService) PromptInput(title string, message string, input InteractionInputBuilder, options ...*PromptInputOptions) (*InputInteractionResult, error) {
+	if s.err != nil { var zero *InputInteractionResult; return zero, s.err }
+	if input != nil { if err := input.Err(); err != nil { var zero *InputInteractionResult; return zero, err } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["title"] = serializeValue(title)
+	reqArgs["message"] = serializeValue(message)
+	reqArgs["input"] = serializeValue(input)
+	if len(options) > 0 {
+		merged := &PromptInputOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/promptInput", reqArgs)
+	if err != nil {
+		var zero *InputInteractionResult
+		return zero, err
+	}
+	return decodeAs[*InputInteractionResult](result)
+}
+
+// PromptInputs prompts the user for multiple inputs.
+func (s *interactionService) PromptInputs(title string, message string, inputs []InteractionInputBuilder, options ...*PromptInputsOptions) InputsInteractionResult {
+	if s.err != nil { return &inputsInteractionResult{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["title"] = serializeValue(title)
+	reqArgs["message"] = serializeValue(message)
+	if inputs != nil { reqArgs["inputs"] = serializeValue(inputs) }
+	if len(options) > 0 {
+		merged := &PromptInputsOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/promptInputs", reqArgs)
+	if err != nil {
+		return &inputsInteractionResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/promptInputs returned unexpected type %T", result)
+		return &inputsInteractionResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &inputsInteractionResult{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// PromptMessageBox prompts the user with a message box dialog.
+func (s *interactionService) PromptMessageBox(title string, message string, options ...*PromptMessageBoxOptions) (*BoolInteractionResult, error) {
+	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["title"] = serializeValue(title)
+	reqArgs["message"] = serializeValue(message)
+	if len(options) > 0 {
+		merged := &PromptMessageBoxOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/promptMessageBox", reqArgs)
+	if err != nil {
+		var zero *BoolInteractionResult
+		return zero, err
+	}
+	return decodeAs[*BoolInteractionResult](result)
+}
+
+// PromptNotification prompts the user with a notification.
+func (s *interactionService) PromptNotification(title string, message string, options ...*PromptNotificationOptions) (*BoolInteractionResult, error) {
+	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["title"] = serializeValue(title)
+	reqArgs["message"] = serializeValue(message)
+	if len(options) > 0 {
+		merged := &PromptNotificationOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/promptNotification", reqArgs)
+	if err != nil {
+		var zero *BoolInteractionResult
+		return zero, err
+	}
+	return decodeAs[*BoolInteractionResult](result)
 }
 
 // LogFacade is the public interface for handle type LogFacade.
@@ -22277,6 +23077,7 @@ type ServiceProvider interface {
 	GetAspireStore() AspireStore
 	GetDistributedApplicationModel() DistributedApplicationModel
 	GetEventing() DistributedApplicationEventing
+	GetInteractionService() InteractionService
 	GetLoggerFactory() LoggerFactory
 	GetResourceCommandService() ResourceCommandService
 	GetResourceLoggerService() ResourceLoggerService
@@ -22350,6 +23151,25 @@ func (s *serviceProvider) GetEventing() DistributedApplicationEventing {
 		return &distributedApplicationEventing{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &distributedApplicationEventing{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// GetInteractionService gets the interaction service from the service provider.
+func (s *serviceProvider) GetInteractionService() InteractionService {
+	if s.err != nil { return &interactionService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"serviceProvider": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getInteractionService", reqArgs)
+	if err != nil {
+		return &interactionService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/getInteractionService returned unexpected type %T", result)
+		return &interactionService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionService{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // GetLoggerFactory gets the logger factory from the service provider.
@@ -28148,6 +28968,145 @@ func (o *BuildOptions) ToMap() map[string]any {
 	return m
 }
 
+// PromptConfirmationOptions carries optional parameters for PromptConfirmation.
+type PromptConfirmationOptions struct {
+	Options *InteractionMessageBoxOptions `json:"options,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *PromptConfirmationOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// PromptMessageBoxOptions carries optional parameters for PromptMessageBox.
+type PromptMessageBoxOptions struct {
+	Options *InteractionMessageBoxOptions `json:"options,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *PromptMessageBoxOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// PromptNotificationOptions carries optional parameters for PromptNotification.
+type PromptNotificationOptions struct {
+	Options *InteractionNotificationOptions `json:"options,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *PromptNotificationOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// PromptInputOptions carries optional parameters for PromptInput.
+type PromptInputOptions struct {
+	Options *InteractionInputsDialogOptions `json:"options,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *PromptInputOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// PromptInputsOptions carries optional parameters for PromptInputs.
+type PromptInputsOptions struct {
+	Options *InteractionInputsDialogOptions `json:"options,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *PromptInputsOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// CreateTextInputOptions carries optional parameters for CreateTextInput.
+type CreateTextInputOptions struct {
+	Options *CreateInteractionInputOptions `json:"options,omitempty"`
+}
+
+func (o *CreateTextInputOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// CreateSecretInputOptions carries optional parameters for CreateSecretInput.
+type CreateSecretInputOptions struct {
+	Options *CreateInteractionInputOptions `json:"options,omitempty"`
+}
+
+func (o *CreateSecretInputOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// CreateBooleanInputOptions carries optional parameters for CreateBooleanInput.
+type CreateBooleanInputOptions struct {
+	Options *CreateInteractionInputOptions `json:"options,omitempty"`
+}
+
+func (o *CreateBooleanInputOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// CreateNumberInputOptions carries optional parameters for CreateNumberInput.
+type CreateNumberInputOptions struct {
+	Options *CreateInteractionInputOptions `json:"options,omitempty"`
+}
+
+func (o *CreateNumberInputOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// CreateChoiceInputOptions carries optional parameters for CreateChoiceInput.
+type CreateChoiceInputOptions struct {
+	Choices []*InteractionChoiceOption `json:"choices,omitempty"`
+	Options *CreateInteractionInputOptions `json:"options,omitempty"`
+}
+
+func (o *CreateChoiceInputOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Choices != nil { m["choices"] = serializeValue(o.Choices) }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// WithDynamicLoadingOptions carries optional parameters for WithDynamicLoading.
+type WithDynamicLoadingOptions struct {
+	Options *DynamicLoadingOptions `json:"options,omitempty"`
+}
+
+func (o *WithDynamicLoadingOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
 // WaitForResourceStateOptions carries optional parameters for WaitForResourceState.
 type WaitForResourceStateOptions struct {
 	TargetState *string `json:"targetState,omitempty"`
@@ -28730,8 +29689,23 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", func(h *handle, c *client) any {
 		return newInputsDialogValidationContextFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult", func(h *handle, c *client) any {
+		return newInputsInteractionResultFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder", func(h *handle, c *client) any {
+		return newInteractionInputBuilderFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", func(h *handle, c *client) any {
 		return newInteractionInputCollectionFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext", func(h *handle, c *client) any {
+		return newInteractionInputLoadContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput", func(h *handle, c *client) any {
+		return newInteractionLoadingInputFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IInteractionService", func(h *handle, c *client) any {
+		return newInteractionServiceFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", func(h *handle, c *client) any {
 		return newLogFacadeFromHandle(h, c)

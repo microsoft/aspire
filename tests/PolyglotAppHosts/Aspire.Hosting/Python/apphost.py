@@ -465,12 +465,12 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         return "Enabled" if snapshot.get("HealthStatus") == "Healthy" else "Disabled"
 
     def echo_command(ctx):
-        command_arguments = list(ctx.arguments.to_array())
+        message = ctx.arguments.value("message")
         echo_services = ctx.services
         echo_logger_factory = echo_services.get_logger_factory()
         echo_logger = echo_logger_factory.create_logger("ValidationAppHost.EchoCommand")
         echo_logger.log_information("Echo command services")
-        return {"success": command_arguments[0]["Value"] == "hello"}
+        return {"success": message == "hello"}
 
     def validate_command_arguments(ctx):
         validation_services = ctx.services
@@ -535,6 +535,157 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         build_logger.log_information("ContainerBuildOptions services")
 
     container.with_container_build_options(container_build_options)
+
+    # Test bench for the polyglot IInteractionService API: prompts for a region, then dynamically
+    # loads the available zones for that region into a second choice input. Reached via the command's
+    # service provider (services.get_interaction_service()), which only prompts when the
+    # interaction service is available (the interactive dashboard path).
+    def pick_zone_command(ctx):
+        interaction_service = ctx.services.get_interaction_service()
+        if not interaction_service.is_available():
+            return {"success": True, "message": "Interaction service is not available."}
+
+        region_input = interaction_service.create_choice_input(
+            "region",
+            choices=[{"Value": "us", "Label": "United States"}, {"Value": "eu", "Label": "Europe"}]
+        )
+
+        def load_zones(load_context):
+            region = load_context.inputs().value("region")
+            zones = ([{"Value": "eu-west", "Label": "EU West"}, {"Value": "eu-north", "Label": "EU North"}]
+                     if region == "eu"
+                     else [{"Value": "us-east", "Label": "US East"}, {"Value": "us-west", "Label": "US West"}])
+            load_context.input().set_choice_options(zones)
+
+        zone_input = interaction_service.create_choice_input("zone").with_dynamic_loading(load_zones)
+
+        result = interaction_service.prompt_inputs(
+            "Pick a zone",
+            "Choose a region, then pick a zone from the dynamically loaded options.",
+            [region_input, zone_input]
+        )
+        canceled = result.canceled()
+        return {"success": not canceled, "canceled": canceled}
+
+    container.with_command("pick-zone", "Pick Zone", pick_zone_command)
+    # Exhaustive coverage of the remaining IInteractionService surface so every newly added member is
+    # exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
+    # the dynamic-loading context accessors/setters, and the option/result DTO fields.
+    def interaction_showcase_command(ctx):
+        interaction_service = ctx.services.get_interaction_service()
+        if not interaction_service.is_available():
+            return {"success": True, "message": "Interaction service is not available."}
+
+        confirmation = interaction_service.prompt_confirmation(
+            "Confirm",
+            "Proceed?",
+            options={
+                "PrimaryButtonText": "Yes",
+                "SecondaryButtonText": "No",
+                "ShowSecondaryButton": True,
+                "ShowDismiss": True,
+                "EnableMessageMarkdown": True,
+                "Intent": "Confirmation",
+            }
+        )
+
+        message_box = interaction_service.prompt_message_box(
+            "Notice",
+            "Read this.",
+            options={"PrimaryButtonText": "OK", "Intent": "Information"}
+        )
+
+        notification = interaction_service.prompt_notification(
+            "Heads up",
+            "Something happened.",
+            options={
+                "Intent": "Warning",
+                "LinkText": "Learn more",
+                "LinkUrl": "https://aspire.dev",
+                "ShowDismiss": True,
+            }
+        )
+
+        text_input = interaction_service.create_text_input(
+            "name",
+            options={
+                "Label": "Name",
+                "Description": "Your **name**",
+                "EnableDescriptionMarkdown": True,
+                "Required": True,
+                "Placeholder": "Jane Doe",
+                "Value": "Jane",
+                "MaxLength": 64,
+                "Disabled": False,
+            }
+        )
+        secret_input = interaction_service.create_secret_input("password", options={"Required": True})
+        boolean_input = interaction_service.create_boolean_input("enabled", options={"Value": "true"})
+        number_input = interaction_service.create_number_input("count", options={"Value": "1"})
+        choice_input = interaction_service.create_choice_input(
+            "color",
+            choices=[{"Value": "r", "Label": "Red"}, {"Value": "g", "Label": "Green"}],
+            options={"AllowCustomChoice": True}
+        )
+        preset_input = interaction_service.create_text_input("greeting").with_value("hello")
+        size_input = interaction_service.create_choice_input("size").with_choice_options([{"Value": "s", "Label": "Small"}, {"Value": "l", "Label": "Large"}])
+
+        def load_shade(load_context):
+            input = load_context.input()
+            input_name = input.get_name()
+            color = load_context.inputs().value("color")
+            input.set_choice_options(
+                [{"Value": "crimson", "Label": "Crimson"}, {"Value": "scarlet", "Label": "Scarlet"}]
+                if color == "r"
+                else [{"Value": "lime", "Label": "Lime"}, {"Value": "forest", "Label": "Forest"}]
+            )
+            input.set_value(input_name)
+
+        dependent_input = interaction_service.create_choice_input("shade").with_dynamic_loading(
+            load_shade,
+            options={"AlwaysLoadOnStart": True, "DependsOnInputs": ["color"]}
+        )
+
+        def validate_solo(validation_context):
+            if not validation_context.inputs().value("solo"):
+                validation_context.add_validation_error("solo", "A value is required.")
+
+        single = interaction_service.prompt_input(
+            "Single input",
+            "Enter a value.",
+            interaction_service.create_text_input("solo"),
+            options={"PrimaryButtonText": "Save", "ValidationCallback": validate_solo},
+        )
+
+        def validate_form(validation_context):
+            if validation_context.inputs().value("name") == "bad":
+                validation_context.add_validation_error("name", "Name cannot be 'bad'.")
+
+        multi = interaction_service.prompt_inputs(
+            "Multiple inputs",
+            "Fill out the form.",
+            [text_input, secret_input, boolean_input, number_input, choice_input, preset_input, size_input, dependent_input],
+            options={"PrimaryButtonText": "Submit", "EnableMessageMarkdown": True, "ValidationCallback": validate_form},
+        )
+
+        selected_color = multi.inputs().value("color")
+        solo_value = (single.get("Input") or {}).get("Value")
+
+        multi_canceled = multi.canceled()
+        success = (not confirmation.get("Canceled", False)
+                   and confirmation.get("Value", False)
+                   and not message_box.get("Canceled", False)
+                   and not notification.get("Canceled", False)
+                   and not single.get("Canceled", False)
+                   and not multi_canceled)
+
+        return {
+            "success": bool(success),
+            "canceled": multi_canceled,
+            "message": f"color={selected_color or ''} solo={solo_value or ''}",
+        }
+
+    container.with_command("interaction-showcase", "Interaction Showcase", interaction_showcase_command)
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})

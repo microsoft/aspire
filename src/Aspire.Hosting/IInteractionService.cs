@@ -327,6 +327,11 @@ public sealed class InteractionInput
     /// Dynamic loading is used to load data and update inputs after a prompt has started.
     /// It can also be used to reload data and update inputs after a dependant input has changed.
     /// </summary>
+    // Excluded from the ATS surface: InputLoadOptions holds a non-serializable LoadCallback delegate, and the
+    // dynamic-loading payload is always stripped from interaction results at runtime (see InteractionExports.ToResultInput).
+    // Polyglot app hosts configure dynamic loading through InteractionInputBuilder.WithDynamicLoading, never by reading
+    // this property back, so advertising it on the result DTO would describe a value that is always null on the wire.
+    [AspireExportIgnore(Reason = "InputLoadOptions carries a non-serializable callback and is never populated on interaction results.")]
     public InputLoadOptions? DynamicLoading
     {
         get => _dynamicLoading;

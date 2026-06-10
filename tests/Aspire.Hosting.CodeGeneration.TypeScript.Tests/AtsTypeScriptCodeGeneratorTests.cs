@@ -111,7 +111,7 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.mts"]);
         Assert.Contains("('$handle' in json || '$expr' in json)", files["base.mts"]);
         Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.mts"]);
-        Assert.Contains("arguments(): Promise<InteractionInputCollection>", aspireTs);
+        Assert.Contains("arguments(): InteractionInputCollectionPromise", aspireTs);
         Assert.DoesNotContain("setArguments", aspireTs);
     }
 

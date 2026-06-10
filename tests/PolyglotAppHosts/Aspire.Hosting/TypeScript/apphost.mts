@@ -12,12 +12,13 @@ import {
     HealthStatus,
     IconVariant,
     InputType,
+    MessageIntent,
     OtlpProtocol,
     ProbeType,
     ResourceCommandState,
     refExpr,
 } from './.aspire/modules/aspire.mjs';
-import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext, HealthCheckResult } from './.aspire/modules/aspire.mjs';
+import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext, HealthCheckResult, InteractionChoiceOption } from './.aspire/modules/aspire.mjs';
 import { fileURLToPath } from 'node:url';
 
 const builder = await createBuilder();
@@ -768,13 +769,13 @@ await container.withCommand("noop", "Noop", async () => {
 });
 await container.withCommand("echo", "Echo", async (ctx) => {
     const commandInputs = await ctx.arguments();
-    const commandArguments = await commandInputs.toArray();
+    const message = await commandInputs.value("message");
     const echoServices = await ctx.services();
     const echoLoggerFactory = await echoServices.getLoggerFactory();
     const echoLogger = await echoLoggerFactory.createLogger("ValidationAppHost.EchoCommand");
     await echoLogger.logInformation("Echo command services");
 
-    return { success: commandArguments[0]?.value === "hello" };
+    return { success: message === "hello" };
 }, {
     commandOptions: {
         arguments: [
@@ -799,6 +800,155 @@ await container.withCommand("restart", "Restart", async (ctx) => {
         arguments: { message: "hello" },
         cancellationToken
     });
+});
+// Test bench for the polyglot IInteractionService API: prompts for a region, then dynamically
+// loads the available zones for that region into a second choice input. Reached via the command's
+// service provider (services().getInteractionService()), which only prompts when the
+// interaction service is available (the interactive dashboard path).
+await container.withCommand("pick-zone", "Pick Zone", async (ctx) => {
+    const interactionService = await ctx.services().getInteractionService();
+
+    if (!(await interactionService.isAvailable())) {
+        return { success: true, message: "Interaction service is not available." };
+    }
+
+    const regionInput = await interactionService.createChoiceInput("region", {
+        choices: [{ value: "us", label: "United States" }, { value: "eu", label: "Europe" }]
+    });
+
+    const zoneInput = await interactionService
+        .createChoiceInput("zone")
+        .withDynamicLoading(async (loadContext) => {
+            const region = await loadContext.inputs().value("region");
+
+            const zones: InteractionChoiceOption[] = region === "eu"
+                ? [{ value: "eu-west", label: "EU West" }, { value: "eu-north", label: "EU North" }]
+                : [{ value: "us-east", label: "US East" }, { value: "us-west", label: "US West" }];
+
+            await loadContext.input().setChoiceOptions(zones);
+        });
+
+    const result = await interactionService.promptInputs(
+        "Pick a zone",
+        "Choose a region, then pick a zone from the dynamically loaded options.",
+        [regionInput, zoneInput]);
+
+    const canceled = await result.canceled();
+    return { success: !canceled, canceled };
+});
+// Exhaustive coverage of the remaining IInteractionService surface so every newly added member is
+// exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
+// the dynamic-loading context accessors/setters, and the option/result DTO fields.
+await container.withCommand("interaction-showcase", "Interaction Showcase", async (ctx) => {
+    const interactionService = await ctx.services().getInteractionService();
+
+    if (!(await interactionService.isAvailable())) {
+        return { success: true, message: "Interaction service is not available." };
+    }
+
+    const confirmation = await interactionService.promptConfirmation("Confirm", "Proceed?", {
+        primaryButtonText: "Yes",
+        secondaryButtonText: "No",
+        showSecondaryButton: true,
+        showDismiss: true,
+        enableMessageMarkdown: true,
+        intent: MessageIntent.Confirmation
+    });
+
+    const messageBox = await interactionService.promptMessageBox("Notice", "Read this.", {
+        primaryButtonText: "OK",
+        intent: MessageIntent.Information
+    });
+
+    const notification = await interactionService.promptNotification("Heads up", "Something happened.", {
+        intent: MessageIntent.Warning,
+        linkText: "Learn more",
+        linkUrl: "https://aspire.dev",
+        showDismiss: true
+    });
+
+    const textInput = await interactionService.createTextInput("name", {
+        label: "Name",
+        description: "Your **name**",
+        enableDescriptionMarkdown: true,
+        required: true,
+        placeholder: "Jane Doe",
+        value: "Jane",
+        maxLength: 64,
+        disabled: false
+    });
+    const secretInput = await interactionService.createSecretInput("password", { required: true });
+    const booleanInput = await interactionService.createBooleanInput("enabled", { value: "true" });
+    const numberInput = await interactionService.createNumberInput("count", { value: "1" });
+    const choiceInput = await interactionService.createChoiceInput("color", {
+        choices: [{ value: "r", label: "Red" }, { value: "g", label: "Green" }],
+        options: { allowCustomChoice: true }
+    });
+    const presetInput = await interactionService.createTextInput("greeting").withValue("hello");
+    const sizeInput = await interactionService
+        .createChoiceInput("size")
+        .withChoiceOptions([{ value: "s", label: "Small" }, { value: "l", label: "Large" }]);
+    const dependentInput = await interactionService
+        .createChoiceInput("shade")
+        .withDynamicLoading(async (loadContext) => {
+            const input = loadContext.input();
+            const inputName = await input.getName();
+            const color = await loadContext.inputs().value("color");
+
+            await input.setChoiceOptions(color === "r"
+                ? [{ value: "crimson", label: "Crimson" }, { value: "scarlet", label: "Scarlet" }]
+                : [{ value: "lime", label: "Lime" }, { value: "forest", label: "Forest" }]);
+            await input.setValue(inputName);
+        }, {
+            alwaysLoadOnStart: true,
+            dependsOnInputs: ["color"]
+        });
+
+    const single = await interactionService.promptInput(
+        "Single input",
+        "Enter a value.",
+        interactionService.createTextInput("solo"),
+        {
+            primaryButtonText: "Save",
+            validationCallback: async (validationContext) => {
+                const solo = await validationContext.inputs().value("solo");
+                if (!solo) {
+                    await validationContext.addValidationError("solo", "A value is required.");
+                }
+            }
+        });
+
+    const multi = await interactionService.promptInputs(
+        "Multiple inputs",
+        "Fill out the form.",
+        [textInput, secretInput, booleanInput, numberInput, choiceInput, presetInput, sizeInput, dependentInput],
+        {
+            primaryButtonText: "Submit",
+            enableMessageMarkdown: true,
+            validationCallback: async (validationContext) => {
+                const name = await validationContext.inputs().value("name");
+                if (name === "bad") {
+                    await validationContext.addValidationError("name", "Name cannot be 'bad'.");
+                }
+            }
+        });
+
+    const selectedColor = await multi.inputs().value("color");
+    const soloValue = single.input?.value;
+
+    const multiCanceled = await multi.canceled();
+    const success = !confirmation.canceled
+        && confirmation.value === true
+        && !messageBox.canceled
+        && !notification.canceled
+        && !single.canceled
+        && !multiCanceled;
+
+    return {
+        success,
+        canceled: multiCanceled,
+        message: `color=${selectedColor ?? ""} solo=${soloValue ?? ""}`
+    };
 });
 
 // withHttpsCertificateConfiguration
