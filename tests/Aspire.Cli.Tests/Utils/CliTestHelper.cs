@@ -162,7 +162,7 @@ internal static class CliTestHelper
         services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         services.AddTransient<LayoutProcessRunner>();
         services.AddTransient<DetachedAppHostShutdownService>();
-        // Mirror Program.cs:414 so consumers (e.g. GuestAppHostProject) that depend on the
+        // Mirror Program.cs so consumers (e.g. GuestAppHostProject) that depend on the
         // interface receive the same DetachedAppHostShutdownService instance the abstraction
         // wraps. Without this, DI returns null and Run-path tests construct the project with
         // a missing dependency, masking wiring regressions.
