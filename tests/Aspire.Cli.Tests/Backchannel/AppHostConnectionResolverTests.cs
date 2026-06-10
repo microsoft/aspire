@@ -35,6 +35,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             interactionService,
             projectLocator,
             executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
             NullLogger.Instance);
 
         var result = await resolver.ResolveConnectionAsync(
@@ -64,6 +65,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             new TestInteractionService(),
             new TestProjectLocator(),
             executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
             NullLogger.Instance);
 
         var result = await resolver.ResolveConnectionAsync(
@@ -109,6 +111,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             interactionService,
             projectLocator,
             executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
             NullLogger.Instance);
 
         var result = await resolver.ResolveConnectionAsync(
@@ -141,6 +144,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             interactionService,
             projectLocator,
             executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
             NullLogger.Instance);
 
         var result = await resolver.ResolveConnectionAsync(
@@ -154,6 +158,65 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         Assert.True(result.IsProjectResolutionError);
         Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
         Assert.Equal(InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_NonInteractiveWithOnlyOutOfScopeAppHosts_ReturnsNotFoundError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket-other", new TestAppHostAuxiliaryBackchannel { IsInScope = false });
+
+        var resolver = new AppHostConnectionResolver(
+            monitor,
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateNonInteractiveHostEnvironment(),
+            NullLogger.Instance);
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile: null,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsProjectResolutionError);
+        Assert.Equal(SharedCommandStrings.AppHostNotRunning, result.ErrorMessage);
+        Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_NonInteractiveWithMultipleInScopeAppHosts_ReturnsActionableError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket-one", new TestAppHostAuxiliaryBackchannel { IsInScope = true });
+        monitor.AddConnection("hash2", "socket-two", new TestAppHostAuxiliaryBackchannel { IsInScope = true });
+
+        var resolver = new AppHostConnectionResolver(
+            monitor,
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateNonInteractiveHostEnvironment(),
+            NullLogger.Instance);
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile: null,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsProjectResolutionError);
+        Assert.Equal(SharedCommandStrings.MultipleAppHostsNonInteractive, result.ErrorMessage);
+        Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
     }
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
