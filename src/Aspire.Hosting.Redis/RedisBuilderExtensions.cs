@@ -556,6 +556,14 @@ public static class RedisBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="nativeModule">The well-known, pre-installed Redis module to load.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// This method loads a well-known Redis module that is pre-installed in the Redis container image from version 8 onward.
+    /// <code lang="csharp">
+    /// var cache = builder.AddRedis("cache")
+    ///                    .WithModule(RedisNativeModule.Json)
+    ///                    .WithModule(RedisNativeModule.Search);
+    /// </code>
+    /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the canonical withModule export with a RedisNativeModule|string union.")]
     public static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, RedisNativeModule nativeModule)
     {
