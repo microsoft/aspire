@@ -12,8 +12,6 @@ using Microsoft.Extensions.Http.Resilience;
 
 namespace Aspire.Hosting.Tests;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
-
 [Trait("Partition", "6")]
 public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 {
@@ -583,7 +581,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
                 PrepareRequest = requestContext =>
                 {
                     Assert.NotNull(requestContext);
-                    Assert.NotNull(requestContext.ServiceProvider);
+                    Assert.NotNull(requestContext.Services);
                     Assert.Equal(service.Resource.Name, requestContext.ResourceName);
                     Assert.NotNull(requestContext.Endpoint);
                     Assert.NotNull(requestContext.HttpClient);
@@ -627,7 +625,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
                 GetCommandResult = resultContext =>
                 {
                     Assert.NotNull(resultContext);
-                    Assert.NotNull(resultContext.ServiceProvider);
+                    Assert.NotNull(resultContext.Services);
                     Assert.Equal(service.Resource.Name, resultContext.ResourceName);
                     Assert.NotNull(resultContext.Endpoint);
                     Assert.NotNull(resultContext.HttpClient);
@@ -1014,4 +1012,3 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001

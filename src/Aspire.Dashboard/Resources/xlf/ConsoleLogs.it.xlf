@@ -107,6 +107,81 @@
         <target state="translated">Stato del log del servizio</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalHeader">
+        <source>Terminal</source>
+        <target state="new">Terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPageTitle">
+        <source>{0} terminal</source>
+        <target state="new">{0} terminal</target>
+        <note>{0} is an application name</note>
+      </trans-unit>
+      <trans-unit id="TerminalToolbarConnectingLabel">
+        <source>Connecting…</source>
+        <target state="new">Connecting…</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarConnectingTitle">
+        <source>Connecting to the terminal session…</source>
+        <target state="new">Connecting to the terminal session…</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarCurrentGrid">
+        <source>Current terminal grid</source>
+        <target state="new">Current terminal grid</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarDecreaseFontSize">
+        <source>Decrease font size</source>
+        <target state="new">Decrease font size</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarFontSize">
+        <source>Terminal font size</source>
+        <target state="new">Terminal font size</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarGridSize">
+        <source>Terminal grid size</source>
+        <target state="new">Terminal grid size</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarGridSizeAuto">
+        <source>Auto</source>
+        <target state="new">Auto</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarIncreaseFontSize">
+        <source>Increase font size</source>
+        <target state="new">Increase font size</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarNoPrimaryTitle">
+        <source>No client currently owns primary input. Click to take it.</source>
+        <target state="new">No client currently owns primary input. Click to take it.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarPrimaryLabel">
+        <source>Primary</source>
+        <target state="new">Primary</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarPrimaryTitle">
+        <source>This tab owns primary input on the terminal session.</source>
+        <target state="new">This tab owns primary input on the terminal session.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarTakeControlLabel">
+        <source>Take control</source>
+        <target state="new">Take control</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarViewerTitle">
+        <source>Another client owns primary input. Click to take control.</source>
+        <target state="new">Another client owns primary input. Click to take control.</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

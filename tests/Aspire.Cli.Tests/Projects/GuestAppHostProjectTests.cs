@@ -10,6 +10,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -668,6 +669,30 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
+    public async Task FindAndStopRunningInstanceAsync_CleansUpDeadPidSocketAndReturnsNoRunningInstance()
+    {
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (appPath, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(appPath))
+        };
+
+        var project = CreateGuestAppHostProject(appHostServerProjectFactory: factory);
+        var socketPath = CreateMatchingSocketFile(_workspace.WorkspaceRoot.FullName, int.MaxValue - 1);
+
+        var result = await project.FindAndStopRunningInstanceAsync(
+            new FileInfo(appHostPath),
+            _workspace.WorkspaceRoot,
+            CancellationToken.None);
+
+        Assert.Equal(RunningInstanceResult.NoRunningInstance, result);
+        Assert.False(File.Exists(socketPath));
+    }
+
+    [Fact]
     public async Task UpdatePackagesAsync_ExplicitStableChannel_WhenRegenerationFails_DoesNotMutateConfig()
     {
         var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
@@ -902,6 +927,20 @@ public class GuestAppHostProjectTests : IDisposable
 
     private GuestAppHostProject CreateGuestAppHostProject()
         => CreateGuestAppHostProject(interactionService: null, identityChannel: "local");
+
+    private string CreateMatchingSocketFile(string appHostPath, int pid)
+    {
+        var backchannelsDir = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
+        Directory.CreateDirectory(backchannelsDir);
+
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, _workspace.WorkspaceRoot.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var socketPath = Path.Combine(
+            backchannelsDir,
+            $"{appHostId}a1b2C3d4.{pid.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        File.WriteAllText(socketPath, "");
+        return socketPath;
+    }
 
     private GuestAppHostProject CreateGuestAppHostProject(
         TestInteractionService? interactionService = null,

@@ -52,6 +52,7 @@
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
+    <PackageReference Include="Hex1b" />
     <PackageReference Include="Humanizer.Core" />
     <PackageReference Include="Microsoft.Extensions.AI" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
@@ -338,5 +339,10 @@
   <ItemGroup>
     <Content Remove="wwwroot\js\README.md" />
     <None Include="wwwroot\js\README.md" />
+    <Content Remove="wwwroot\fonts\cascadia-mono-nf\README.md" />
+    <None Include="wwwroot\fonts\cascadia-mono-nf\README.md" />
   </ItemGroup>
+
+  <Import Project="BlazorAssets.targets" />
+
 </Project>

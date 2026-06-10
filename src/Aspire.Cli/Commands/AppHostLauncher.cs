@@ -229,9 +229,11 @@ internal sealed class AppHostLauncher(
 
     private async Task StopExistingInstancesAsync(FileInfo effectiveAppHostFile, CancellationToken cancellationToken)
     {
-        var existingSockets = AppHostHelper.FindMatchingSockets(
+        var existingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
             effectiveAppHostFile.FullName,
-            executionContext.HomeDirectory.FullName);
+            executionContext.HomeDirectory.FullName,
+            Environment.ProcessId,
+            logger);
 
         if (existingSockets.Length > 0)
         {

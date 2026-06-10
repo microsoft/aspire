@@ -478,24 +478,37 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     return CliExitCodes.FailedToDotnetRunAppHost;
                 }
 
-                // Step 5: Connect to server for RPC calls
-                rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
-
-                // Step 6: Generate SDK code via RPC if needed
-                // This must happen before dependency installation because the generated
-                // code directory (.aspire/modules) may not exist yet (e.g., freshly cloned project)
-                // and dependency files (pylock.toml, requirements.txt) reference it.
-                if (buildResult.NeedsCodeGen)
+                try
                 {
-                    await GenerateCodeViaRpcAsync(
-                        directory.FullName,
-                        appHostFile,
-                        rpcClient,
-                        integrations,
-                        cancellationToken);
-                }
+                    // Step 5: Connect to server for RPC calls. The connection helper retries until
+                    // the RPC socket is available and fails early if the server process exits.
+                    rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
-                await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
+                    // Step 6: Generate SDK code via RPC if needed
+                    // This must happen before dependency installation because the generated
+                    // code directory (.aspire/modules) may not exist yet (e.g., freshly cloned project)
+                    // and dependency files (pylock.toml, requirements.txt) reference it.
+                    if (buildResult.NeedsCodeGen)
+                    {
+                        await GenerateCodeViaRpcAsync(
+                            directory.FullName,
+                            appHostFile,
+                            rpcClient,
+                            integrations,
+                            cancellationToken);
+                    }
+
+                    await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
+                }
+                catch (Exception) when (serverSession.HasServerExited == true && !cancellationToken.IsCancellationRequested)
+                {
+                    // If the helper server exits while we are connecting or making setup RPC calls,
+                    // its captured output is the only place the real startup failure may be recorded.
+                    // serverSession is in an `await using` scope, so returning here disposes it.
+                    _interactionService.DisplayLines(serverSession.Output!.GetLines());
+                    _interactionService.DisplayError("App host exited unexpectedly.");
+                    return CliExitCodes.FailedToDotnetRunAppHost;
+                }
             }
             var socketPath = serverSession.SocketPath!;
             var appHostServerOutputCollector = serverSession.Output!;
@@ -1060,7 +1073,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                         return CliExitCodes.FailedToDotnetRunAppHost;
                     }
 
-                    // Step 3: Connect to server for RPC calls
+                    // Step 3: Connect to server for RPC calls. The connection helper retries until
+                    // the RPC socket is available and fails early if the server process exits.
                     rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
                     // Step 4: Generate code via RPC if needed
@@ -1078,6 +1092,18 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     }
 
                     await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
+                }
+                catch (Exception) when (serverSession.HasServerExited == true && !cancellationToken.IsCancellationRequested)
+                {
+                    // The publish pipeline waits on the AppHost backchannel independently from this
+                    // setup path. If the helper server exits before the guest AppHost can launch,
+                    // fault that waiter immediately instead of letting it burn the full connection timeout.
+                    // serverSession is in an `await using` scope, so returning here disposes it.
+                    context.BackchannelCompletionSource?.TrySetException(
+                        new InvalidOperationException("The app host server exited unexpectedly."));
+                    _interactionService.DisplayLines(serverSession.Output!.GetLines());
+                    _interactionService.DisplayError("App host exited unexpectedly.");
+                    return CliExitCodes.FailedToDotnetRunAppHost;
                 }
                 catch (Exception ex)
                 {
@@ -1125,8 +1151,18 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
                 // Step 6: Execute the guest apphost for publishing
                 // Pass the publish arguments (e.g., --operation publish --step deploy)
+                Task StartBackchannelConnectionAfterGuestAppHostLaunchesAsync()
+                {
+                    if (context.BackchannelCompletionSource is not null)
+                    {
+                        _ = StartBackchannelConnectionAsync(appHostServerProcess, backchannelSocketPath, context.BackchannelCompletionSource, enableHotReload: false, startProjectContext, cancellationToken);
+                    }
+
+                    return Task.CompletedTask;
+                }
+
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostForPublishAsync(
-                    appHostFile, directory, environmentVariables, context.Arguments, context.NoBuild, rpcClient, cancellationToken);
+                    appHostFile, directory, environmentVariables, context.Arguments, context.NoBuild, rpcClient, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, cancellationToken);
             }
 
             if (guestExitCode != 0)
@@ -1486,7 +1522,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var genericAppHostPath = appHostServerProject.GetInstanceIdentifier();
 
         // Find matching sockets for this AppHost
-        var matchingSockets = AppHostHelper.FindMatchingSockets(genericAppHostPath, homeDirectory.FullName);
+        var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+            genericAppHostPath,
+            homeDirectory.FullName,
+            Environment.ProcessId,
+            _logger);
 
         // Check if any socket files exist
         if (matchingSockets.Length == 0)
@@ -1904,6 +1944,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         string[]? publishArgs,
         bool noBuild,
         IAppHostRpcClient rpcClient,
+        Func<Task>? afterAppHostLaunchedAsync,
         CancellationToken cancellationToken)
     {
         await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
@@ -1914,7 +1955,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
-        return await _guestRuntime.PublishAsync(appHostFile, directory, environmentVariables, publishArgs, _guestRuntime.CreateDefaultLauncher(), cancellationToken, noBuild: noBuild);
+        return await _guestRuntime.PublishAsync(appHostFile, directory, environmentVariables, publishArgs, _guestRuntime.CreateDefaultLauncher(), noBuild: noBuild, afterAppHostLaunchedAsync: afterAppHostLaunchedAsync, cancellationToken: cancellationToken);
     }
 
     /// <summary>

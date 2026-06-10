@@ -336,8 +336,45 @@ internal sealed class AppHostServerSession : IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        if (_rpcClient is not null)
+        {
+            return _rpcClient;
+        }
+
         var socketPath = _socketPath ?? throw NotStarted();
-        return _rpcClient ??= await AppHostRpcClient.ConnectAsync(socketPath, _authenticationToken, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
+        // _completion is published alongside _socketPath in StartAsync, so a non-null socket
+        // path guarantees the server-exit signal is available here.
+        var serverExitTask = (_completion ?? throw NotStarted()).Task;
+
+        // ConnectAsync already retries until the RPC socket is available. Race it against the
+        // server-exit signal instead of sleeping first, so fast startups connect immediately and
+        // failed server launches surface as soon as the process exits. We race _completion rather
+        // than Process.WaitForExitAsync because on the isolated Windows path the Process is
+        // GetProcessById-derived and its lifetime getters are unreliable — the completion is
+        // tripped from the IsolatedProcess wrapper that holds the original CreateProcess handle.
+        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var connectTask = AppHostRpcClient.ConnectAsync(socketPath, _authenticationToken, _profilingTelemetry, connectCts.Token);
+        var completedTask = await Task.WhenAny(connectTask, serverExitTask).ConfigureAwait(false);
+
+        if (completedTask == connectTask)
+        {
+            // Stop the process-exit watcher once the RPC connection wins the race.
+            connectCts.Cancel();
+            ObserveFaultedTask(serverExitTask);
+            _rpcClient = await connectTask.ConfigureAwait(false);
+            return _rpcClient;
+        }
+
+        await serverExitTask.ConfigureAwait(false);
+        // Stop the retrying connection attempt once the server has exited, then observe any
+        // cancellation/failure it reports so the losing task cannot raise an unobserved exception.
+        connectCts.Cancel();
+        ObserveFaultedTask(connectTask);
+        var exitCode = TryGetServerExitCode();
+        throw new InvalidOperationException(
+            exitCode is { } code
+                ? $"AppHost server process exited before the RPC connection could be established. Exit code: {code}."
+                : "AppHost server process exited before the RPC connection could be established.");
     }
 
     public async ValueTask DisposeAsync()
@@ -525,6 +562,15 @@ internal sealed class AppHostServerSession : IAsyncDisposable
             _shutdownService.Token,
             _logger,
             ProcessDescription).ConfigureAwait(false);
+    }
+
+    private static void ObserveFaultedTask(Task task)
+    {
+        _ = task.ContinueWith(
+            completedTask => _ = completedTask.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private static InvalidOperationException NotStarted() =>

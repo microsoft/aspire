@@ -15,6 +15,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -127,6 +128,33 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             CancellationToken.None);
 
         Assert.False(string.IsNullOrEmpty(session.AuthenticationToken));
+    }
+
+    [Fact]
+    public async Task GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout()
+    {
+        // RecordingAppHostServerProject spawns `dotnet --version`, which exits almost immediately
+        // with exit code 0 against a socket path ("test.sock") that never hosts an RPC server.
+        // The connection race in GetRpcClientAsync should observe the server-exit signal and fail
+        // fast rather than burning the full connection-retry timeout.
+        var project = new RecordingAppHostServerProject();
+
+        await using var session = new AppHostServerSession(
+            project,
+            environmentVariables: null,
+            debug: false,
+            NullLogger<AppHostServerSession>.Instance,
+            CancellationToken.None);
+        _ = session.StartAsync();
+
+        var stopwatch = Stopwatch.StartNew();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => session.GetRpcClientAsync(TestContext.Current.CancellationToken)).DefaultTimeout();
+        stopwatch.Stop();
+
+        Assert.Equal("AppHost server process exited before the RPC connection could be established. Exit code: 0.", exception.Message);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
+            $"Expected RPC connection to fail promptly after the server process exited, but it took {stopwatch.Elapsed}.");
     }
 
     [Fact]
