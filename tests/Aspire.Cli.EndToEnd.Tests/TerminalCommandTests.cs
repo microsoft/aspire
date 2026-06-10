@@ -77,8 +77,11 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
         var detached = false;
         for (var i = 0; i < 3 && !detached; i++)
         {
-            await auto.Ctrl().KeyAsync(Hex1bKey.B);
-            await auto.KeyAsync(Hex1bKey.D);
+            await auto.SequenceAsync(
+                builder => builder
+                    .Ctrl().Key(Hex1bKey.B)
+                    .Key(Hex1bKey.D),
+                description: "detach chord Ctrl+B then D");
 
             try
             {
