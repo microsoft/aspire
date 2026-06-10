@@ -58,20 +58,7 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
 
     internal ProxylessEndpointPortAllocator(int rangeStart, int rangeEnd, int randomWalkOffset, int randomWalkStep, Func<int, ProtocolType, bool> tryProbe)
     {
-        if (rangeStart is < 1 or > 65535)
-        {
-            throw new ArgumentOutOfRangeException(nameof(rangeStart), rangeStart, "Port range start must be between 1 and 65535.");
-        }
-
-        if (rangeEnd is < 1 or > 65535)
-        {
-            throw new ArgumentOutOfRangeException(nameof(rangeEnd), rangeEnd, "Port range end must be between 1 and 65535.");
-        }
-
-        if (rangeStart > rangeEnd)
-        {
-            throw new ArgumentException("Port range start must be less than or equal to the range end.", nameof(rangeStart));
-        }
+        PortRange.ValidateRange(rangeStart, rangeEnd, nameof(rangeStart), nameof(rangeEnd));
 
         _rangeStart = rangeStart;
         _rangeEnd = rangeEnd;
@@ -319,20 +306,7 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
 
     private static int GetRangeSize(int rangeStart, int rangeEnd)
     {
-        if (rangeStart is < 1 or > 65535)
-        {
-            throw new ArgumentOutOfRangeException(nameof(rangeStart), rangeStart, "Port range start must be between 1 and 65535.");
-        }
-
-        if (rangeEnd is < 1 or > 65535)
-        {
-            throw new ArgumentOutOfRangeException(nameof(rangeEnd), rangeEnd, "Port range end must be between 1 and 65535.");
-        }
-
-        if (rangeStart > rangeEnd)
-        {
-            throw new ArgumentException("Port range start must be less than or equal to the range end.", nameof(rangeStart));
-        }
+        PortRange.ValidateRange(rangeStart, rangeEnd, nameof(rangeStart), nameof(rangeEnd));
 
         return rangeEnd - rangeStart + 1;
     }

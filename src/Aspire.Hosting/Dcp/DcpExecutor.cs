@@ -850,7 +850,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         }
 
         if (int.TryParse(configuredPort, NumberStyles.None, CultureInfo.InvariantCulture, out var port) &&
-            port is >= 1 and <= 65535)
+            PortRange.IsValidPort(port))
         {
             return port;
         }

@@ -158,14 +158,14 @@ internal class ValidateDcpOptions : IValidateOptions<DcpOptions>
             builder.AddError("The path to the Aspire Dashboard binaries is missing.", "DashboardPath");
         }
 
-        if (options.ProxylessEndpointPortRangeStart is < 1 or > 65535)
+        if (!PortRange.IsValidPort(options.ProxylessEndpointPortRangeStart))
         {
-            builder.AddError("The proxyless endpoint port range start must be between 1 and 65535.", nameof(options.ProxylessEndpointPortRangeStart));
+            builder.AddError($"The proxyless endpoint port range start must be between {PortRange.MinPort} and {PortRange.MaxPort}.", nameof(options.ProxylessEndpointPortRangeStart));
         }
 
-        if (options.ProxylessEndpointPortRangeEnd is < 1 or > 65535)
+        if (!PortRange.IsValidPort(options.ProxylessEndpointPortRangeEnd))
         {
-            builder.AddError("The proxyless endpoint port range end must be between 1 and 65535.", nameof(options.ProxylessEndpointPortRangeEnd));
+            builder.AddError($"The proxyless endpoint port range end must be between {PortRange.MinPort} and {PortRange.MaxPort}.", nameof(options.ProxylessEndpointPortRangeEnd));
         }
 
         if (options.ProxylessEndpointPortRangeStart > options.ProxylessEndpointPortRangeEnd)
