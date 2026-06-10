@@ -20,10 +20,20 @@ paths exist for different audiences:
 
 - `aspire.rb.template` — canonical formula template (`class Aspire`, rendered to
   `aspire.rb`). Placeholders (`SDK_VERSION`, `SHA_*`, `SRC_VERSION`, `SRC_SHA`)
-  are substituted per release.
-- `build-cli.sh` — single-shot bundled build the formula's `install` block
-  invokes. With `--no-embed` it produces an unbundled NativeAOT `aspire` plus the
-  sibling bundle layout (`managed/`, `dcp/`) the formula lays out under `libexec/`.
+  are substituted per release. The `def install` block is a thin delegation: it
+  stages the per-RID SDK resource (the one step that must stay Ruby) and calls
+  `install-formula.sh`. Keeping the imperative logic out of the formula means the
+  submitted homebrew-core formula only bumps url/sha256/version and resource SHAs.
+- `install-formula.sh` — entry point the formula's `install` block invokes. Builds
+  the CLI (via `build-cli.sh --no-embed`) and lays out the keg in the canonical
+  sidecar-route shape under `libexec/` (`versions/<v>/{managed,dcp}`, the `bundle`
+  symlink, the `.aspire-install.json` sidecar, and the `bin/aspire` symlink). This
+  is where layout changes land — they travel in the source tarball and are
+  validated by `homebrew-formula.yml`, so new releases keep working without a
+  hand-edited formula.
+- `build-cli.sh` — single-shot bundled build `install-formula.sh` invokes. With
+  `--no-embed` it produces an unbundled NativeAOT `aspire` plus the sibling bundle
+  layout (`managed/`, `dcp/`) that `install-formula.sh` reorganizes under `libexec/`.
 - Rendering + validation are driven by `.github/workflows/homebrew-formula.yml`
   (it resolves SDK/source SHAs and renders the template inline); there is no
   standalone `generate-formula.sh` yet. The release-pipeline bump automation

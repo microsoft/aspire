@@ -58,66 +58,24 @@ class Aspire < Formula
     os   = OS.mac? ? "osx" : "linux"
     rid  = "#{os}-#{arch}"
 
-    # Stage the per-RID SDK into the buildpath so dotnet runs from a known location.
+    # Stage the per-RID SDK into the buildpath so the build runs from a known
+    # toolset. `resource(...).stage` is the only step that must stay in Ruby
+    # (it's Homebrew DSL); everything else is delegated below.
     resource("dotnet-sdk-#{rid}").stage do
       (buildpath/"dotnet-sdk").install Dir["./*"]
     end
 
-    ENV["DOTNET_ROOT"] = buildpath/"dotnet-sdk"
-    ENV.prepend_path "PATH", buildpath/"dotnet-sdk"
-    ENV["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1"
-    ENV["DOTNET_NOLOGO"] = "1"
-
-    # Unbundled build: produces an unbundled NativeAOT `aspire` binary plus
-    # the unwrapped bundle layout (managed/, dcp/) in buildpath/"out".
-    # We then lay these out under libexec/ in the canonical sidecar-route
-    # shape (versions/<v>/{managed,dcp} + bundle symlink) so the runtime
-    # LayoutDiscovery's "new layout" arm resolves through libexec/bundle/.
-    # Skipping the self-extracting transport saves ~100 MB of Cellar disk
-    # per install and avoids running an install-time extraction step.
-    # `--channel stable` bakes the release channel into the binary's
-    # assembly metadata so install-route gating identifies brew-installed
-    # binaries correctly (defaulting to "local" would break
-    # `aspire doctor`).
-    system "eng/homebrew-core/build-cli.sh",
+    # Build + lay out the keg. All imperative install logic lives in the repo
+    # script so that layout changes ride along with the source tarball and are
+    # validated by .github/workflows/homebrew-formula.yml. The homebrew-core
+    # formula only ever bumps url/sha256/version and the resource SHAs — never
+    # this block — so new releases keep working without a formula edit.
+    system "eng/homebrew-core/install-formula.sh",
            "--rid", rid,
-           "--output", buildpath/"out",
-           "--channel", "stable",
-           "--version", version.to_s,
-           "--no-embed"
-
-    # Layout: <prefix>/libexec/{aspire, ...runtime files..., bundle -> versions/<v>/}
-    #         <prefix>/libexec/versions/<v>/{managed, dcp}
-    version_dir = libexec/"versions"/version.to_s
-    version_dir.install (buildpath/"out/managed")
-    version_dir.install (buildpath/"out/dcp")
-
-    # Copy the CLI binary and its sibling NativeAOT runtime files
-    # (libsodium.dylib, satellite locale folders) into libexec/. The
-    # bundle layout we just laid out under versions/<v>/ is excluded —
-    # we move it into version_dir above and don't want a duplicate copy
-    # at libexec/managed or libexec/dcp.
-    Dir[buildpath/"out/*"].each do |entry|
-      basename = File.basename(entry)
-      next if ["managed", "dcp"].include?(basename)
-
-      libexec.install entry
-    end
-
-    # The canonical sidecar-route layout anchor. LayoutDiscovery's
-    # TryInferLayout finds {libexec}/bundle/{managed,dcp}/ via this
-    # symlink. The symlink itself is what's stable across reads, even
-    # though brew reinstalls of a new version replace the entire Cellar
-    # prefix anyway — the shape match with cask/winget is the point.
-    ln_s "versions/#{version}", libexec/"bundle"
-
-    # Install-route sidecar. Two consumers in the brew route:
-    #   * BrewInstallDetection (self-update gate; prints `brew upgrade aspire`)
-    #   * BundleService.ComputeDefaultExtractDir (route-aware extract dir;
-    #     unused under --no-embed because no extraction ever runs)
-    (libexec/".aspire-install.json").write(%Q({"source":"brew"}\n))
-
-    bin.install_symlink libexec/"aspire"
+           "--dotnet-root", buildpath/"dotnet-sdk",
+           "--libexec", libexec,
+           "--bin", bin,
+           "--version", version.to_s
   end
 
   test do

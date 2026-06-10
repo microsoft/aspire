@@ -12,8 +12,9 @@ name: Homebrew formula
 #                    source <tap>/aspire`. This is the same code path
 #                    homebrew-core's CI runs on the submission PR — it
 #                    exercises the formula's `def install` block, resource
-#                    staging, `eng/homebrew-core/build-cli.sh`, the brew
-#                    sidecar write, and `aspire setup` pre-extraction.
+#                    staging, and `eng/homebrew-core/install-formula.sh`
+#                    (which builds via build-cli.sh and lays out the keg in
+#                    the sidecar-route shape, including the brew sidecar write).
 #   * post-install — `aspire --version` works; `aspire doctor` reports the
 #                    brew install route; **nothing extracts into ~/.aspire**
 #                    (the formula owns the bundle layout via libexec/);
