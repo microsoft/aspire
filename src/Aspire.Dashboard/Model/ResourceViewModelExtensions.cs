@@ -119,7 +119,7 @@ internal static class ResourceViewModelExtensions
     /// </summary>
     public static bool TryGetTerminalReplicaInfo(this ResourceViewModel resource, out int replicaIndex, out int replicaCount)
     {
-         replicaIndex = 0;
+        replicaIndex = 0;
         replicaCount = 0;
 
         if (!resource.TryGetCustomDataString(KnownProperties.Terminal.ReplicaIndex, out var indexString) ||
