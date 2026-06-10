@@ -1054,13 +1054,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             {
                 serverCompletion = serverSession.StartAsync();
 
-                // Start connecting to the backchannel (fire-and-forget) so the caller is unblocked
-                // as soon as the server is reachable; the post-start work below races alongside it.
-                if (context.BackchannelCompletionSource is not null)
-                {
-                    _ = StartBackchannelConnectionAsync(serverSession, backchannelSocketPath, context.BackchannelCompletionSource, enableHotReload: false, startProjectContext, cancellationToken);
-                }
-
                 try
                 {
                     // Give the server a moment to start
@@ -1107,9 +1100,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 }
                 catch (Exception ex)
                 {
-                    // The backchannel connection task was started before code generation
-                    // (see StartBackchannelConnectionAsync above); fault it eagerly so the
-                    // caller doesn't wait out the connection timeout when generateCode fails.
+                    // The backchannel connection is deferred until the guest AppHost launches
+                    // (see StartBackchannelConnectionAfterGuestAppHostLaunchesAsync below), so on a
+                    // setup failure here it was never started. Fault the completion source so the
+                    // publish pipeline waiter doesn't burn the full connection timeout.
                     // The `await using` declaration above disposes the session on the rethrow.
                     context.BackchannelCompletionSource?.TrySetException(ex);
                     throw;
@@ -1155,7 +1149,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 {
                     if (context.BackchannelCompletionSource is not null)
                     {
-                        _ = StartBackchannelConnectionAsync(appHostServerProcess, backchannelSocketPath, context.BackchannelCompletionSource, enableHotReload: false, startProjectContext, cancellationToken);
+                        _ = StartBackchannelConnectionAsync(serverSession, backchannelSocketPath, context.BackchannelCompletionSource, enableHotReload: false, startProjectContext, cancellationToken);
                     }
 
                     return Task.CompletedTask;
