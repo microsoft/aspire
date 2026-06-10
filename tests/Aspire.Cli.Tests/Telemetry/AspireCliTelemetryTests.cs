@@ -266,16 +266,19 @@ public class AspireCliTelemetryTests
 
     [Theory]
     [MemberData(nameof(CodingAgentTelemetryTestCases))]
-    public void CodingAgentDetector_DetectsKnownCodingAgents((string, string?) environmentVariable, string? expectedCodingAgent)
+    public void CodingAgentDetector_DetectsKnownCodingAgents((string, string?)[] environmentVariables, string? expectedCodingAgent)
     {
-        var environmentVariables = new Dictionary<string, string?>();
-        if (environmentVariable.Item1.Length > 0)
+        var configurationValues = new Dictionary<string, string?>();
+        foreach (var environmentVariable in environmentVariables)
         {
-            environmentVariables.Add(environmentVariable.Item1, environmentVariable.Item2);
+            if (environmentVariable.Item1.Length > 0)
+            {
+                configurationValues.Add(environmentVariable.Item1, environmentVariable.Item2);
+            }
         }
 
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(environmentVariables)
+            .AddInMemoryCollection(configurationValues)
             .Build();
 
         var detector = new CodingAgentDetector(configuration);
@@ -335,57 +338,66 @@ public class AspireCliTelemetryTests
         Assert.Equal(tagsAfterFirstInit, tags.Count); // Should have the same number of tags after second init
     }
 
-    public static TheoryData<(string, string?), string?> CodingAgentTelemetryTestCases =>
-    [
-        new(("CLAUDECODE", "1"), "claude"),
-        new(("CLAUDE_CODE", "1"), "claude"),
-        new(("CLAUDE_CODE_ENTRYPOINT", "some_value"), "claude"),
-        new(("CLAUDE_CODE_IS_COWORK", "1"), "cowork"),
-        new(("CURSOR_EDITOR", "1"), "cursor"),
-        new(("CURSOR_AI", "1"), "cursor"),
-        new(("CURSOR_TRACE_ID", "abc"), "cursor"),
-        new(("CURSOR_AGENT", "1"), "cursor"),
-        new(("GEMINI_CLI", "true"), "gemini"),
-        new(("GEMINI_CLI", "0"), "gemini"),
-        new(("GITHUB_COPILOT_CLI_MODE", "true"), "copilot-cli"),
-        new(("GH_COPILOT_WORKING_DIRECTORY", "/repo"), "copilot-cli"),
-        new(("COPILOT_CLI", "1"), "copilot-cli"),
-        new(("COPILOT_AGENT", "1"), null),
-        new(("COPILOT_MODEL", "gpt"), "copilot-cli"),
-        new(("COPILOT_ALLOW_ALL", "1"), "copilot-cli"),
-        new(("COPILOT_GITHUB_TOKEN", "token"), "copilot-cli"),
-        new(("CODEX_CLI", "1"), "codex"),
-        new(("CODEX_SANDBOX", "1"), "codex"),
-        new(("CODEX_CI", "1"), "codex"),
-        new(("CODEX_THREAD_ID", "thread1"), "codex"),
-        new(("OR_APP_NAME", "Aider"), "aider"),
-        new(("OR_APP_NAME", "aider"), "aider"),
-        new(("OR_APP_NAME", "plandex"), "plandex"),
-        new(("OR_APP_NAME", "Plandex"), "plandex"),
-        new(("AMP_HOME", "/path/to/amp"), "amp"),
-        new(("QWEN_CODE", "1"), "qwen"),
-        new(("DROID_CLI", "true"), "droid"),
-        new(("OPENCODE_AI", "1"), "opencode"),
-        new(("ZED_ENVIRONMENT", "1"), "zed"),
-        new(("ZED_TERM", "1"), "zed"),
-        new(("KIMI_CLI", "true"), "kimi"),
-        new(("OR_APP_NAME", "OpenHands"), "openhands"),
-        new(("OR_APP_NAME", "openhands"), "openhands"),
-        new(("GOOSE_TERMINAL", "1"), "goose"),
-        new(("GOOSE_PROVIDER", "openai"), "goose"),
-        new(("CLINE_TASK_ID", "task123"), "cline"),
-        new(("ROO_CODE_TASK_ID", "task456"), "roo"),
-        new(("WINDSURF_SESSION", "session789"), "windsurf"),
-        new(("REPL_ID", "repl1"), "replit"),
-        new(("AUGMENT_AGENT", "1"), "augment"),
-        new(("ANTIGRAVITY_AGENT", "1"), "antigravity"),
-        new(("AGENT_CLI", "true"), "generic_agent"),
-        new(("GEMINI_CLI", "false"), "gemini"),
-        new(("GITHUB_COPILOT_CLI_MODE", "false"), "copilot-cli"),
-        new(("AGENT_CLI", "false"), "generic_agent"),
-        new(("DROID_CLI", "false"), "droid"),
-        new(("KIMI_CLI", "false"), "kimi"),
-        new(("OR_APP_NAME", "SomeOtherApp"), null),
-        new(("",""), null),
-    ];
+    public static TheoryData<(string, string?)[], string?> CodingAgentTelemetryTestCases => new()
+    {
+        { [("CLAUDECODE", "1")], "claude" },
+        { [("CLAUDE_CODE", "1")], "claude" },
+        { [("CLAUDE_CODE_ENTRYPOINT", "some_value")], "claude" },
+        { [("CLAUDE_CODE_IS_COWORK", "1")], "cowork" },
+        { [("CURSOR_EDITOR", "1")], "cursor" },
+        { [("CURSOR_AI", "1")], "cursor" },
+        { [("CURSOR_TRACE_ID", "abc")], "cursor" },
+        { [("CURSOR_AGENT", "1")], "cursor" },
+        { [("GEMINI_CLI", "true")], "gemini" },
+        { [("GEMINI_CLI", "0")], "gemini" },
+        { [("GITHUB_COPILOT_CLI_MODE", "true")], "copilot-cli" },
+        { [("GH_COPILOT_WORKING_DIRECTORY", "/repo")], "copilot-cli" },
+        { [("COPILOT_CLI", "1")], "copilot-cli" },
+        { [("COPILOT_MODEL", "gpt")], "copilot-cli" },
+        { [("COPILOT_ALLOW_ALL", "1")], "copilot-cli" },
+        { [("COPILOT_GITHUB_TOKEN", "token")], "copilot-cli" },
+        { [("AI_AGENT", "github_copilot_vscode_agent")], "copilot-vscode" },
+        { [("COPILOT_AGENT", "1")], "copilot-vscode" },
+        { [("CODEX_CLI", "1")], "codex" },
+        { [("CODEX_SANDBOX", "1")], "codex" },
+        { [("CODEX_CI", "1")], "codex" },
+        { [("CODEX_THREAD_ID", "thread1")], "codex" },
+        { [("OR_APP_NAME", "Aider")], "aider" },
+        { [("OR_APP_NAME", "aider")], "aider" },
+        { [("OR_APP_NAME", "plandex")], "plandex" },
+        { [("OR_APP_NAME", "Plandex")], "plandex" },
+        { [("AMP_HOME", "/path/to/amp")], "amp" },
+        { [("QWEN_CODE", "1")], "qwen" },
+        { [("DROID_CLI", "true")], "droid" },
+        { [("OPENCODE_AI", "1")], "opencode" },
+        { [("ZED_ENVIRONMENT", "1")], "zed" },
+        { [("ZED_TERM", "1")], "zed" },
+        { [("KIMI_CLI", "true")], "kimi" },
+        { [("OR_APP_NAME", "OpenHands")], "openhands" },
+        { [("OR_APP_NAME", "openhands")], "openhands" },
+        { [("GOOSE_TERMINAL", "1")], "goose" },
+        { [("GOOSE_PROVIDER", "openai")], "goose" },
+        { [("CLINE_TASK_ID", "task123")], "cline" },
+        { [("ROO_CODE_TASK_ID", "task456")], "roo" },
+        { [("WINDSURF_SESSION", "session789")], "windsurf" },
+        { [("REPL_ID", "repl1")], "replit" },
+        { [("AUGMENT_AGENT", "1")], "augment" },
+        { [("ANTIGRAVITY_AGENT", "1")], "antigravity" },
+        { [("AGENT_CLI", "true")], "generic_agent" },
+        { [("CLAUDECODE", "1"), ("CURSOR_EDITOR", "1") ], "claude, cursor" },
+        { [("GEMINI_CLI", "true"), ("GITHUB_COPILOT_CLI_MODE", "true") ], "gemini, copilot-cli" },
+        { [("CLAUDECODE", "1"), ("GEMINI_CLI", "true"), ("AGENT_CLI", "true") ], "claude, gemini, generic_agent" },
+        { [("CLAUDECODE", "1"), ("CURSOR_EDITOR", "1"), ("GEMINI_CLI", "true"), ("GITHUB_COPILOT_CLI_MODE", "true"), ("AGENT_CLI", "true") ], "claude, cursor, gemini, copilot-cli, generic_agent" },
+        { [("OR_APP_NAME", "Aider"), ("CLINE_TASK_ID", "task123") ], "aider, cline" },
+        { [("CODEX_CLI", "1"), ("WINDSURF_SESSION", "session789") ], "codex, windsurf" },
+        { [("GOOSE_TERMINAL", "1"), ("ROO_CODE_TASK_ID", "task456") ], "goose, roo" },
+        { [("GEMINI_CLI", "false")], "gemini" },
+        { [("GITHUB_COPILOT_CLI_MODE", "false")], "copilot-cli" },
+        { [("AGENT_CLI", "false")], "generic_agent" },
+        { [("DROID_CLI", "false")], "droid" },
+        { [("KIMI_CLI", "false")], "kimi" },
+        { [("CLAUDE_CODE_IS_COWORK", "1"), ("CLAUDE_CODE", "1")], "cowork, claude" },
+        { [("OR_APP_NAME", "SomeOtherApp")], null },
+        { [("", "")], null }
+    };
 }
