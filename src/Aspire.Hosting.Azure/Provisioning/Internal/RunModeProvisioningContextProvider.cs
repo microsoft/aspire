@@ -96,6 +96,11 @@ internal sealed class RunModeProvisioningContextProvider(
                 return true;
             }
 
+            if (!forcePrompt)
+            {
+                return false;
+            }
+
             var result = await RetrieveAzureProvisioningOptionsAsync(forcePrompt, cancellationToken).ConfigureAwait(false);
             if (result)
             {
@@ -252,81 +257,51 @@ internal sealed class RunModeProvisioningContextProvider(
     {
         while (forcePrompt || _options.Location == null || _options.SubscriptionId == null)
         {
-            var shouldPrompt = true;
-            if (!forcePrompt)
-            {
-                var messageBarResult = await _interactionService.PromptNotificationAsync(
-                     AzureProvisioningStrings.NotificationTitle,
-                     AzureProvisioningStrings.NotificationMessage,
-                     new NotificationInteractionOptions
-                     {
-                         Intent = MessageIntent.Warning,
-                         PrimaryButtonText = AzureProvisioningStrings.NotificationPrimaryButtonText
-                     },
-                     cancellationToken)
-                     .ConfigureAwait(false);
-
-                if (messageBarResult.Canceled)
+            var inputs = CreateProvisioningInputs(forcePrompt, cancellationToken);
+            var result = await _interactionService.PromptInputsAsync(
+                AzureProvisioningStrings.InputsTitle,
+                AzureProvisioningStrings.InputsMessage,
+                inputs,
+                new InputsDialogInteractionOptions
                 {
-                    return false;
-                }
-
-                shouldPrompt = messageBarResult.Data;
-            }
-
-            if (shouldPrompt)
-            {
-                var inputs = CreateProvisioningInputs(forcePrompt, cancellationToken);
-                var result = await _interactionService.PromptInputsAsync(
-                    AzureProvisioningStrings.InputsTitle,
-                    AzureProvisioningStrings.InputsMessage,
-                    inputs,
-                    new InputsDialogInteractionOptions
+                    EnableMessageMarkdown = true,
+                    PrimaryButtonText = AzureProvisioningStrings.InputsPrimaryButtonText,
+                    SecondaryButtonText = AzureProvisioningStrings.InputsSecondaryButtonText,
+                    ValidationCallback = (validationContext) =>
                     {
-                        EnableMessageMarkdown = true,
-                        ValidationCallback = (validationContext) =>
+                        // Only validate tenant if it's included in the inputs
+                        if (validationContext.Inputs.TryGetByName(TenantName, out var tenantInput))
                         {
-                            // Only validate tenant if it's included in the inputs
-                            if (validationContext.Inputs.TryGetByName(TenantName, out var tenantInput))
+                            if (!string.IsNullOrWhiteSpace(tenantInput.Value) && !Guid.TryParse(tenantInput.Value, out _))
                             {
-                                if (!string.IsNullOrWhiteSpace(tenantInput.Value) && !Guid.TryParse(tenantInput.Value, out _))
-                                {
-                                    validationContext.AddValidationError(tenantInput, AzureProvisioningStrings.ValidationTenantIdInvalid);
-                                }
+                                validationContext.AddValidationError(tenantInput, AzureProvisioningStrings.ValidationTenantIdInvalid);
                             }
-
-                            var subscriptionInput = validationContext.Inputs[SubscriptionIdName];
-                            if (!string.IsNullOrWhiteSpace(subscriptionInput.Value) && !Guid.TryParse(subscriptionInput.Value, out _))
-                            {
-                                validationContext.AddValidationError(subscriptionInput, AzureProvisioningStrings.ValidationSubscriptionIdInvalid);
-                            }
-
-                            var resourceGroupInput = validationContext.Inputs[ResourceGroupName];
-                            if (!IsValidResourceGroupName(resourceGroupInput.Value))
-                            {
-                                validationContext.AddValidationError(resourceGroupInput, AzureProvisioningStrings.ValidationResourceGroupNameInvalid);
-                            }
-
-                            return Task.CompletedTask;
                         }
-                    },
-                    cancellationToken).ConfigureAwait(false);
 
-                if (result.Canceled)
-                {
-                    return false;
-                }
+                        var subscriptionInput = validationContext.Inputs[SubscriptionIdName];
+                        if (!string.IsNullOrWhiteSpace(subscriptionInput.Value) && !Guid.TryParse(subscriptionInput.Value, out _))
+                        {
+                            validationContext.AddValidationError(subscriptionInput, AzureProvisioningStrings.ValidationSubscriptionIdInvalid);
+                        }
 
-                ApplyProvisioningInputs(result.Data);
-                return true;
-            }
+                        var resourceGroupInput = validationContext.Inputs[ResourceGroupName];
+                        if (!IsValidResourceGroupName(resourceGroupInput.Value))
+                        {
+                            validationContext.AddValidationError(resourceGroupInput, AzureProvisioningStrings.ValidationResourceGroupNameInvalid);
+                        }
 
-            if (!forcePrompt)
+                        return Task.CompletedTask;
+                    }
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            if (result.Canceled)
             {
                 return false;
             }
 
-            forcePrompt = false;
+            ApplyProvisioningInputs(result.Data);
+            return true;
         }
 
         return true;

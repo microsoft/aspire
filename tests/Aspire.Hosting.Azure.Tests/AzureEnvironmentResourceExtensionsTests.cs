@@ -419,6 +419,11 @@ public class AzureEnvironmentResourceExtensionsTests
             Arguments = new InteractionInputCollection([])
         });
 
+        var result = await commandTask.WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.False(result.Success);
+        Assert.True(result.Canceled);
+
         var interaction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().WaitAsync(s_testSynchronizationTimeout);
 
         Assert.Equal(AzureProvisioningStrings.NotificationTitle, interaction.Title);
@@ -426,12 +431,53 @@ public class AzureEnvironmentResourceExtensionsTests
         var options = Assert.IsType<NotificationInteractionOptions>(interaction.Options);
         Assert.Equal(MessageIntent.Warning, options.Intent);
         Assert.Equal(AzureProvisioningStrings.NotificationPrimaryButtonText, options.PrimaryButtonText);
+    }
 
-        interaction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
-        var result = await commandTask.WaitAsync(s_testSynchronizationTimeout);
+    [Fact]
+    public async Task MissingAzureContextNotification_ReappearsWhenConfigureDialogIsCanceled()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        var testInteractionService = new TestInteractionService();
 
-        Assert.False(result.Success);
-        Assert.True(result.Canceled);
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        builder.AddAzureProvisioning();
+        builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+
+        await controller.EnsureProvisionedAsync(model);
+
+        var notification = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.Equal(AzureProvisioningStrings.NotificationTitle, notification.Title);
+        Assert.Equal(AzureProvisioningStrings.NotificationMessage, notification.Message);
+
+        var notificationOptions = Assert.IsType<NotificationInteractionOptions>(notification.Options);
+        Assert.Equal(MessageIntent.Warning, notificationOptions.Intent);
+        Assert.Equal(AzureProvisioningStrings.NotificationPrimaryButtonText, notificationOptions.PrimaryButtonText);
+
+        notification.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputs = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.Equal(AzureProvisioningStrings.InputsTitle, inputs.Title);
+        Assert.Equal(AzureProvisioningStrings.InputsMessage, inputs.Message);
+        var inputOptions = Assert.IsType<InputsDialogInteractionOptions>(inputs.Options);
+        Assert.True(inputOptions.EnableMessageMarkdown);
+        Assert.Equal(AzureProvisioningStrings.InputsPrimaryButtonText, inputOptions.PrimaryButtonText);
+        Assert.Equal(AzureProvisioningStrings.InputsSecondaryButtonText, inputOptions.SecondaryButtonText);
+
+        inputs.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInputCollection>());
+
+        var repeatedNotification = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.Equal(AzureProvisioningStrings.NotificationTitle, repeatedNotification.Title);
+        Assert.Equal(AzureProvisioningStrings.NotificationMessage, repeatedNotification.Message);
     }
 
     [Fact]

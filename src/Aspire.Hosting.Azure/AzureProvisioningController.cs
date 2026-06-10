@@ -120,6 +120,7 @@ internal sealed class AzureProvisioningController(
     private AzureControllerState _state = AzureControllerState.Empty;
     private int _operationLoopStarted;
     private int _driftMonitorStarted;
+    private int _azureContextNotificationStarted;
     private bool _driftCheckQueued;
 
     // Drift checks are intentionally periodic and non-overlapping. The monitor queues at most one check at a time so
@@ -948,8 +949,17 @@ internal sealed class AzureProvisioningController(
                 : new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
             cancellationToken).ConfigureAwait(false);
 
+        if (hasFailures && HasMissingAzureContextFailure(azureResources))
+        {
+            EnsureAzureContextNotificationStarted(model);
+        }
+
         return !hasFailures;
     }
+
+    private static bool HasMissingAzureContextFailure(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources)
+        => azureResources.Any(static resource =>
+            resource.AzureResource.ProvisioningTaskCompletionSource?.Task.Exception?.InnerExceptions.Any(IsMissingAzureContextFailure) == true);
 
     private async Task<bool> EnsureProvisionedOrThrowAsync(
         DistributedApplicationModel model,
@@ -1257,6 +1267,7 @@ internal sealed class AzureProvisioningController(
     private async Task ProcessQueuedOperationAsync(QueuedOperation queuedOperation)
     {
         var updatesCommandState = queuedOperation.Intent is not DetectDriftIntent;
+        var shouldPromptForMissingAzureContext = false;
         if (updatesCommandState)
         {
             // Publish command-state changes before running the operation so dashboard buttons
@@ -1280,6 +1291,11 @@ internal sealed class AzureProvisioningController(
         }
         catch (Exception ex)
         {
+            if (IsMissingAzureContextFailure(ex))
+            {
+                shouldPromptForMissingAzureContext = true;
+            }
+
             queuedOperation.Completion.TrySetException(ex);
         }
         finally
@@ -1297,8 +1313,101 @@ internal sealed class AzureProvisioningController(
                 // should not make dashboard commands flicker disabled while it checks ARM state.
                 CompleteDriftCheck();
             }
+
+            if (shouldPromptForMissingAzureContext)
+            {
+                EnsureAzureContextNotificationStarted(queuedOperation.Model);
+            }
         }
     }
+
+    private void EnsureAzureContextNotificationStarted(DistributedApplicationModel model)
+    {
+        if (Interlocked.CompareExchange(ref _azureContextNotificationStarted, 1, 0) != 0)
+        {
+            return;
+        }
+
+        var stoppingToken = serviceProvider.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await PromptForMissingAzureContextAsync(model, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Azure context notification failed.");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _azureContextNotificationStarted, 0);
+            }
+        }, stoppingToken);
+    }
+
+    private async Task PromptForMissingAzureContextAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
+    {
+        var azureResources = GetProvisionableAzureResources(model);
+        if (azureResources.Count == 0)
+        {
+            return;
+        }
+
+        // This loop is the "missing Azure context" state expressed as an interaction. It intentionally
+        // lives outside the Azure operation queue: waiting for a user to click the notification or fill
+        // the dialog can take an arbitrary amount of time, and holding the queue would disable commands
+        // that should remain usable while the dashboard is asking for context.
+        while (true)
+        {
+            var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
+            if (!interactionService.IsAvailable ||
+                await provisioningOptionsManager.EnsureProvisioningOptionsAsync(forcePrompt: false, cancellationToken).ConfigureAwait(false))
+            {
+                // Another path may have supplied the context while this notification task was waiting
+                // to run. Re-check before posting so we don't show stale UI.
+                return;
+            }
+
+            var notificationResult = await interactionService.PromptNotificationAsync(
+                AzureProvisioningStrings.NotificationTitle,
+                AzureProvisioningStrings.NotificationMessage,
+                new NotificationInteractionOptions
+                {
+                    Intent = MessageIntent.Warning,
+                    PrimaryButtonText = AzureProvisioningStrings.NotificationPrimaryButtonText
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            if (notificationResult.Canceled || !notificationResult.Data)
+            {
+                // Dismissing the notification does not change the underlying state. If Azure resources
+                // still need context, loop so the notification is posted again.
+                continue;
+            }
+
+            var updated = await provisioningOptionsManager.EnsureProvisioningOptionsAsync(forcePrompt: true, cancellationToken).ConfigureAwait(false);
+            if (!updated)
+            {
+                // Canceling the configure dialog leaves the context missing too, so keep the
+                // notification alive instead of treating the prompt as a one-shot operation.
+                continue;
+            }
+
+            // Only the apply/reprovision work is queued. At this point the user interaction has
+            // completed and the serialized operation can safely reset state and provision resources.
+            await provisioningOptionsManager.PersistProvisioningOptionsAsync(cancellationToken).ConfigureAwait(false);
+            await RunOperationAsync<bool>(model, new ApplyAzureContextIntent(), cancellationToken).ConfigureAwait(false);
+            return;
+        }
+    }
+
+    private static bool IsMissingAzureContextFailure(Exception ex)
+        => ex is MissingConfigurationException ||
+            ex is AggregateException aggregateException && aggregateException.InnerExceptions.Any(IsMissingAzureContextFailure);
 
     private async Task<object?> ExecuteIntentAsync(DistributedApplicationModel model, AzureIntent intent, CancellationToken cancellationToken)
     {
@@ -1307,6 +1416,7 @@ internal sealed class AzureProvisioningController(
             ResetStateIntent resetState => await ExecuteResetStateAsync(model, resetState, cancellationToken).ConfigureAwait(false),
             ForgetResourceStateIntent forgetResourceState => await ExecuteForgetResourceStateAsync(model, forgetResourceState, cancellationToken).ConfigureAwait(false),
             ChangeAzureContextIntent changeAzureContext => await ExecuteChangeAzureContextAsync(model, changeAzureContext, cancellationToken).ConfigureAwait(false),
+            ApplyAzureContextIntent => await ExecuteApplyAzureContextAsync(model, cancellationToken).ConfigureAwait(false),
             EnsureProvisionedIntent => await ExecuteEnsureProvisionedAsync(model, cancellationToken).ConfigureAwait(false),
             ReprovisionAllIntent => await ExecuteReprovisionAllAsync(model, cancellationToken).ConfigureAwait(false),
             DeleteAzureResourcesIntent => await ExecuteDeleteAzureResourcesAsync(model, cancellationToken).ConfigureAwait(false),
@@ -1373,6 +1483,15 @@ internal sealed class AzureProvisioningController(
         // Changing subscription/resource group/location invalidates cached deployment state. Preserve
         // explicit user location overrides, but drop inferred overrides that only mirrored the previous
         // environment location; otherwise resources can accidentally stay pinned to the old context.
+        await ResetResourcesAsync(model, GetProvisionableAzureResources(model), preserveOverrides: true, cancellationToken, preserveInferredLocationOverrides: false).ConfigureAwait(false);
+        await PublishAzureEnvironmentStateAsync(model, KnownResourceStates.NotStarted, cancellationToken).ConfigureAwait(false);
+        return await EnsureProvisionedOrThrowAsync(model, GetProvisionableAzureResources(model), cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ExecuteApplyAzureContextAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
+    {
+        // The notification prompt runs outside the operation queue so dashboard commands stay responsive
+        // while the dialog is open. This queued operation only applies the saved context and reprovisions.
         await ResetResourcesAsync(model, GetProvisionableAzureResources(model), preserveOverrides: true, cancellationToken, preserveInferredLocationOverrides: false).ConfigureAwait(false);
         await PublishAzureEnvironmentStateAsync(model, KnownResourceStates.NotStarted, cancellationToken).ConfigureAwait(false);
         return await EnsureProvisionedOrThrowAsync(model, GetProvisionableAzureResources(model), cancellationToken).ConfigureAwait(false);
@@ -3173,6 +3292,8 @@ internal sealed class AzureProvisioningController(
     private sealed record ResetStateIntent(bool ReprovisionAfterReset) : AzureIntent(AzureOperationState.All("Reset provisioning state"));
 
     private sealed record ChangeAzureContextIntent(AzureProvisioningOptionsUpdate? Options) : AzureIntent(AzureOperationState.All("Change Azure context"));
+
+    private sealed record ApplyAzureContextIntent() : AzureIntent(AzureOperationState.All("Configure Azure context"));
 
     private sealed record EnsureProvisionedIntent() : AzureIntent(AzureOperationState.All("Provision Azure resources"));
 

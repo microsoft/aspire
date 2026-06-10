@@ -124,16 +124,22 @@
     <value>The model contains Azure resources that require an Azure Subscription.</value>
   </data>
   <data name="NotificationPrimaryButtonText" xml:space="preserve">
-    <value>Enter values</value>
+    <value>Configure</value>
   </data>
   <data name="InputsTitle" xml:space="preserve">
-    <value>Azure provisioning</value>
+    <value>Configure Azure context</value>
   </data>
   <data name="InputsMessage" xml:space="preserve">
-    <value>The model contains Azure resources that require an Azure Subscription.
+    <value>Select the Azure tenant, subscription, resource group, and location Aspire should use for provisioning.
 
 To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</value>
     <comment>Contains markdown</comment>
+  </data>
+  <data name="InputsPrimaryButtonText" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="InputsSecondaryButtonText" xml:space="preserve">
+    <value>Cancel</value>
   </data>
   <data name="LocationLabel" xml:space="preserve">
     <value>Location</value>

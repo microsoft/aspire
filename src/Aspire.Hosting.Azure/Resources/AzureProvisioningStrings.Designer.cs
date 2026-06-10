@@ -108,7 +108,7 @@ namespace Aspire.Hosting.Azure.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Enter values.
+        ///   Looks up a localized string similar to Configure.
         /// </summary>
         internal static string NotificationPrimaryButtonText {
             get {
@@ -122,6 +122,24 @@ namespace Aspire.Hosting.Azure.Resources {
         internal static string NotificationTitle {
             get {
                 return ResourceManager.GetString("NotificationTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Save.
+        /// </summary>
+        internal static string InputsPrimaryButtonText {
+            get {
+                return ResourceManager.GetString("InputsPrimaryButtonText", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cancel.
+        /// </summary>
+        internal static string InputsSecondaryButtonText {
+            get {
+                return ResourceManager.GetString("InputsSecondaryButtonText", resourceCulture);
             }
         }
         

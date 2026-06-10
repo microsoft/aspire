@@ -143,17 +143,27 @@
         <note />
       </trans-unit>
       <trans-unit id="InputsMessage">
-        <source>The model contains Azure resources that require an Azure Subscription.
+        <source>Select the Azure tenant, subscription, resource group, and location Aspire should use for provisioning.
 
 To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</source>
-        <target state="translated">O modelo contém recursos do Azure que exigem uma Assinatura do Azure.
+        <target state="needs-review-translation">O modelo contém recursos do Azure que exigem uma Assinatura do Azure.
 
 Para saber mais, veja a [documentação de provisionamento do Azure](https://aka.ms/aspire/azure/provisioning).</target>
         <note>Contains markdown</note>
       </trans-unit>
+      <trans-unit id="InputsPrimaryButtonText">
+        <source>Save</source>
+        <target state="new">Save</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InputsSecondaryButtonText">
+        <source>Cancel</source>
+        <target state="new">Cancel</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InputsTitle">
-        <source>Azure provisioning</source>
-        <target state="translated">Provisionamento do Azure</target>
+        <source>Configure Azure context</source>
+        <target state="needs-review-translation">Provisionamento do Azure</target>
         <note />
       </trans-unit>
       <trans-unit id="LocationDialogTitle">
@@ -182,8 +192,8 @@ Para saber mais, veja a [documentação de provisionamento do Azure](https://aka
         <note />
       </trans-unit>
       <trans-unit id="NotificationPrimaryButtonText">
-        <source>Enter values</source>
-        <target state="translated">Inserir valores</target>
+        <source>Configure</source>
+        <target state="needs-review-translation">Inserir valores</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationTitle">

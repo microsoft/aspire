@@ -143,17 +143,27 @@
         <note />
       </trans-unit>
       <trans-unit id="InputsMessage">
-        <source>The model contains Azure resources that require an Azure Subscription.
+        <source>Select the Azure tenant, subscription, resource group, and location Aspire should use for provisioning.
 
 To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</source>
-        <target state="translated">モデルには、Azure サブスクリプションを必要とする Azure リソースが含まれています。
+        <target state="needs-review-translation">モデルには、Azure サブスクリプションを必要とする Azure リソースが含まれています。
 
 詳細については、[Azure のプロビジョニング に関するドキュメント](https://aka.ms/aspire/azure/provisioning) を参照してください。</target>
         <note>Contains markdown</note>
       </trans-unit>
+      <trans-unit id="InputsPrimaryButtonText">
+        <source>Save</source>
+        <target state="new">Save</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InputsSecondaryButtonText">
+        <source>Cancel</source>
+        <target state="new">Cancel</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InputsTitle">
-        <source>Azure provisioning</source>
-        <target state="translated">Azure のプロビジョニング</target>
+        <source>Configure Azure context</source>
+        <target state="needs-review-translation">Azure のプロビジョニング</target>
         <note />
       </trans-unit>
       <trans-unit id="LocationDialogTitle">
@@ -182,8 +192,8 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
         <note />
       </trans-unit>
       <trans-unit id="NotificationPrimaryButtonText">
-        <source>Enter values</source>
-        <target state="translated">値の入力</target>
+        <source>Configure</source>
+        <target state="needs-review-translation">値の入力</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationTitle">

@@ -143,17 +143,27 @@
         <note />
       </trans-unit>
       <trans-unit id="InputsMessage">
-        <source>The model contains Azure resources that require an Azure Subscription.
+        <source>Select the Azure tenant, subscription, resource group, and location Aspire should use for provisioning.
 
 To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</source>
-        <target state="translated">该模型包含需要 Azure 订阅的 Azure 资源。
+        <target state="needs-review-translation">该模型包含需要 Azure 订阅的 Azure 资源。
 
 要了解详细信息，请参阅 [Azure 预配文档](https://aka.ms/aspire/azure/provisioning)。</target>
         <note>Contains markdown</note>
       </trans-unit>
+      <trans-unit id="InputsPrimaryButtonText">
+        <source>Save</source>
+        <target state="new">Save</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InputsSecondaryButtonText">
+        <source>Cancel</source>
+        <target state="new">Cancel</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InputsTitle">
-        <source>Azure provisioning</source>
-        <target state="translated">Azure 预配</target>
+        <source>Configure Azure context</source>
+        <target state="needs-review-translation">Azure 预配</target>
         <note />
       </trans-unit>
       <trans-unit id="LocationDialogTitle">
@@ -182,8 +192,8 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
         <note />
       </trans-unit>
       <trans-unit id="NotificationPrimaryButtonText">
-        <source>Enter values</source>
-        <target state="translated">输入值</target>
+        <source>Configure</source>
+        <target state="needs-review-translation">输入值</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationTitle">

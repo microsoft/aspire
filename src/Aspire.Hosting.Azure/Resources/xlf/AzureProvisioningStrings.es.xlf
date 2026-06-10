@@ -143,17 +143,27 @@
         <note />
       </trans-unit>
       <trans-unit id="InputsMessage">
-        <source>The model contains Azure resources that require an Azure Subscription.
+        <source>Select the Azure tenant, subscription, resource group, and location Aspire should use for provisioning.
 
 To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</source>
-        <target state="translated">El modelo contiene recursos de Azure que requieren una suscripción de Azure.
+        <target state="needs-review-translation">El modelo contiene recursos de Azure que requieren una suscripción de Azure.
 
 Para más información, consulte la [documentación de aprovisionamiento de Azure](https://aka.ms/aspire/azure/provisioning).</target>
         <note>Contains markdown</note>
       </trans-unit>
+      <trans-unit id="InputsPrimaryButtonText">
+        <source>Save</source>
+        <target state="new">Save</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InputsSecondaryButtonText">
+        <source>Cancel</source>
+        <target state="new">Cancel</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InputsTitle">
-        <source>Azure provisioning</source>
-        <target state="translated">Aprovisionamiento de Azure</target>
+        <source>Configure Azure context</source>
+        <target state="needs-review-translation">Aprovisionamiento de Azure</target>
         <note />
       </trans-unit>
       <trans-unit id="LocationDialogTitle">
@@ -182,8 +192,8 @@ Para más información, consulte la [documentación de aprovisionamiento de Azur
         <note />
       </trans-unit>
       <trans-unit id="NotificationPrimaryButtonText">
-        <source>Enter values</source>
-        <target state="translated">Especifique los valores</target>
+        <source>Configure</source>
+        <target state="needs-review-translation">Especifique los valores</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationTitle">
