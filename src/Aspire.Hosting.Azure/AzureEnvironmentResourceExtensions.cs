@@ -7,7 +7,6 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure;
 
@@ -94,23 +93,7 @@ public static class AzureEnvironmentResourceExtensions
         var model = @event.Services.GetRequiredService<DistributedApplicationModel>();
         var provisioner = @event.Services.GetRequiredService<AzureProvisioner>();
 
-        try
-        {
-            await provisioner.ProvisionResourcesAsync(model, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // The application is shutting down; leave the current resource state untouched.
-        }
-        catch (Exception ex)
-        {
-            @event.Logger.LogError(ex, "Azure provisioning failed.");
-
-            await @event.Notifications.PublishUpdateAsync(resource, state => state with
-            {
-                State = new("Failed to Provision", KnownResourceStateStyles.Error)
-            }).ConfigureAwait(false);
-        }
+        await provisioner.ProvisionResourcesAsync(model, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
