@@ -126,8 +126,8 @@ or by setting the "OPENAI_EXPERIMENTAL_ENABLE_OPEN_TELEMETRY" environment variab
 ## Additional documentation
 
 * https://github.com/openai/openai-dotnet
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="..\Common\AITelemetryHelpers.cs" Link="AITelemetryHelpers.cs" />
     <Compile Include="..\Common\ConfigurationSchemaAttributes.cs" Link="ConfigurationSchemaAttributes.cs" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="KnownOtelConfigNames.cs" />
   </ItemGroup>
 
   <ItemGroup>

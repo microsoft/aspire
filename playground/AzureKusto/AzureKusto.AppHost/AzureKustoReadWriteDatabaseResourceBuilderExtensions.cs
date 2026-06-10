@@ -22,6 +22,7 @@ internal static class AzureKustoReadWriteDatabaseResourceBuilderExtensions
         })
         .Build();
 
+    [AspireExportIgnore(Reason = "Kusto playground helper that registers .NET callbacks for emulator control commands; not intended for ATS export.")]
     public static IResourceBuilder<AzureKustoReadWriteDatabaseResource> WithControlCommand(this IResourceBuilder<AzureKustoReadWriteDatabaseResource> dbBuilder, string command)
     {
         dbBuilder.OnResourceReady(async (dbResource, evt, ct) =>

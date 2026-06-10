@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 internal static class IDistributedApplicationBuilderExtensions
 {
+    [AspireExportIgnore(Reason = "Publisher playground test resource; not part of the supported ATS surface.")]
     public static IResourceBuilder<IComputeEnvironmentResource>? AddPublishTestResource(this IDistributedApplicationBuilder builder, string name)
     {
         var resource = new PublishTestResource(name);

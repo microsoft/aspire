@@ -1,6 +1,6 @@
 # Aspire.NATS.Net library
 
-Registers [INatsConnection](https://nats-io.github.io/nats.net.v2/api/NATS.Client.Core.INatsConnection.html) in the DI container for connecting NATS server. Enables corresponding health check and logging.
+Registers [INatsClient](https://nats-io.github.io/nats.net/api/NATS.Client.Core.INatsClient.html) and [INatsConnection](https://nats-io.github.io/nats.net/api/NATS.Client.Core.INatsConnection.html) in the DI container for connecting to a NATS server. Enables corresponding health check, logging and telemetry.
 
 ## Getting started
 
@@ -18,21 +18,28 @@ dotnet add package Aspire.NATS.Net
 
 ## Usage example
 
-In the _AppHost.cs_ file of your project, call the `AddNatsClient` extension method to register a `INatsConnection` for use via the dependency injection container. The method takes a connection name parameter.
+In the _Program.cs_ file of your project, call the `AddNatsClient` extension method to register an `INatsClient` (and `INatsConnection`) for use via the dependency injection container. The method takes a connection name parameter.
 
 ```csharp
 builder.AddNatsClient("nats");
 ```
 
-You can then retrieve a `INatsConnection` instance using dependency injection. For example, to retrieve a connection from a Web API controller:
+You can then retrieve an `INatsClient` instance using dependency injection. For example, to retrieve the client from a Web API controller:
 
 ```csharp
-private readonly INatsConnection _connection;
+private readonly INatsClient _client;
 
-public ProductsController(INatsConnection connection)
+public ProductsController(INatsClient client)
 {
-    _connection = connection;
+    _client = client;
 }
+```
+
+By default, the registered client uses `NatsClientDefaultSerializerRegistry` which serializes typed payloads as JSON (with raw and UTF-8 primitive support). To use a custom serializer, such as a source-generated `NatsJsonContextSerializerRegistry` for AOT, pass a `configureOptions` delegate:
+
+```csharp
+builder.AddNatsClient("nats", configureOptions: opts =>
+    opts with { SerializerRegistry = new NatsJsonContextSerializerRegistry(MyJsonContext.Default) });
 ```
 
 ## Configuration
@@ -108,9 +115,9 @@ builder.AddNatsClient("nats");
 
 ## Additional documentation
 
-* https://nats-io.github.io/nats.net.v2/documentation/intro.html
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://nats-io.github.io/nats.net/documentation/intro.html
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

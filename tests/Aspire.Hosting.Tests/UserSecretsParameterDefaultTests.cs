@@ -14,6 +14,7 @@ using Microsoft.Extensions.Configuration.UserSecrets;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class UserSecretsParameterDefaultTests
 {
     private static readonly ConstructorInfo s_userSecretsIdAttrCtor = typeof(UserSecretsIdAttribute).GetConstructor([typeof(string)])!;
@@ -172,6 +173,28 @@ public class UserSecretsParameterDefaultTests
         Assert.True(userSecrets.ContainsKey("Parameters:sql-password"), "SQL Server password was not found");
         Assert.True(userSecrets.ContainsKey("Parameters:rabbit-password"), "RabbitMQ password was not found");
         Assert.Equal("SqlPassword123!", userSecrets["Parameters:sql-password"]);
+        Assert.Equal("RabbitPassword456!", userSecrets["Parameters:rabbit-password"]);
+
+        DeleteUserSecretsFile(userSecretsId);
+    }
+
+    [Fact]
+    public void TryDeleteUserSecret_RemovesOnlyRequestedSecret()
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        ClearUsersSecrets(userSecretsId);
+
+        var testAssembly = AssemblyBuilder.DefineDynamicAssembly(
+            new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
+        var factory = CreateFactory();
+        var manager = factory.GetOrCreate(testAssembly);
+
+        Assert.True(manager.TrySetSecret("Parameters:sql-password", "SqlPassword123!"));
+        Assert.True(manager.TrySetSecret("Parameters:rabbit-password", "RabbitPassword456!"));
+        Assert.True(manager.TryDeleteSecret("Parameters:sql-password"));
+
+        var userSecrets = GetUserSecrets(userSecretsId);
+        Assert.False(userSecrets.ContainsKey("Parameters:sql-password"));
         Assert.Equal("RabbitPassword456!", userSecrets["Parameters:rabbit-password"]);
 
         DeleteUserSecretsFile(userSecretsId);

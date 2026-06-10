@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "CustomResources.AppHost/CustomResources.AppHost.csproj"
+  }
+}

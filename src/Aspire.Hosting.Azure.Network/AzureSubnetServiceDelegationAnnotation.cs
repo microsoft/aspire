@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="name">The name of the service delegation.</param>
 /// <param name="serviceName">The service name for the delegation (e.g., "Microsoft.App/environments").</param>
-internal sealed class AzureSubnetServiceDelegationAnnotation(string name, string serviceName) : IResourceAnnotation
+public sealed class AzureSubnetServiceDelegationAnnotation(string name, string serviceName) : IResourceAnnotation
 {
     /// <summary>
     /// Gets or sets the name associated with the service delegation.

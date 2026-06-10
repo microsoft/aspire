@@ -20,6 +20,7 @@ public sealed class ClockHandResource(string name) : Resource(name);
 public static class TalkingClockExtensions
 {
     // The main Aspire extension method to add a TalkingClockResource.
+    [AspireExportIgnore(Reason = "Playground-only custom resource sample; not part of the supported ATS surface.")]
     public static IResourceBuilder<TalkingClockResource> AddTalkingClock(
         this IDistributedApplicationBuilder builder, // Extends the Aspire application builder.
         string name)                                 // The name for this resource instance.

@@ -7,7 +7,7 @@ namespace Aspire.Hosting.Azure;
 
 internal static class JsonExtensions
 {
-    public static JsonNode Prop(this JsonNode obj, string key)
+    internal static JsonNode Prop(this JsonNode obj, string key)
     {
         var jsonObj = obj.AsObject();
 

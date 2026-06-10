@@ -19,6 +19,7 @@ public static class AzureNetworkSecurityGroupExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the Network Security Group resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureNetworkSecurityGroupResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// This example adds a Network Security Group with a security rule:
     /// <code>
@@ -34,6 +35,7 @@ public static class AzureNetworkSecurityGroupExtensions
     ///     });
     /// </code>
     /// </example>
+    [AspireExport]
     public static IResourceBuilder<AzureNetworkSecurityGroupResource> AddNetworkSecurityGroup(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -59,6 +61,7 @@ public static class AzureNetworkSecurityGroupExtensions
     /// <param name="builder">The Network Security Group resource builder.</param>
     /// <param name="rule">The security rule configuration.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureNetworkSecurityGroupResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// This example adds multiple security rules to a Network Security Group:
     /// <code>
@@ -83,6 +86,7 @@ public static class AzureNetworkSecurityGroupExtensions
     ///     });
     /// </code>
     /// </example>
+    [AspireExport]
     public static IResourceBuilder<AzureNetworkSecurityGroupResource> WithSecurityRule(
         this IResourceBuilder<AzureNetworkSecurityGroupResource> builder,
         AzureSecurityRule rule)
@@ -131,12 +135,36 @@ public static class AzureNetworkSecurityGroupExtensions
                 Direction = rule.Direction,
                 Access = rule.Access,
                 Protocol = rule.Protocol,
-                SourceAddressPrefix = rule.SourceAddressPrefix,
                 SourcePortRange = rule.SourcePortRange,
-                DestinationAddressPrefix = rule.DestinationAddressPrefix,
                 DestinationPortRange = rule.DestinationPortRange,
                 Parent = nsg,
             };
+
+            if (rule.Description is { } description)
+            {
+                securityRule.Description = description;
+            }
+
+            // When a reference expression is provided (e.g. a PIP IP resolved at deploy time),
+            // use it as a provisioning parameter; otherwise use the static address prefix.
+            if (rule.SourceAddressPrefixReference is { } sourceAddressReference)
+            {
+                securityRule.SourceAddressPrefix = sourceAddressReference.AsProvisioningParameter(infra);
+            }
+            else
+            {
+                securityRule.SourceAddressPrefix = rule.SourceAddressPrefix;
+            }
+
+            if (rule.DestinationAddressPrefixReference is { } destinationAddressReference)
+            {
+                securityRule.DestinationAddressPrefix = destinationAddressReference.AsProvisioningParameter(infra);
+            }
+            else
+            {
+                securityRule.DestinationAddressPrefix = rule.DestinationAddressPrefix;
+            }
+
             infra.Add(securityRule);
         }
 

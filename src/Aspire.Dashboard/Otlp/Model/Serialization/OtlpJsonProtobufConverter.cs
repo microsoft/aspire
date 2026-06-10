@@ -566,7 +566,7 @@ internal static class OtlpJsonToProtobufConverter
         {
             foreach (var bc in json.BucketCounts)
             {
-                dataPoint.BucketCounts.Add(ulong.Parse(bc, System.Globalization.CultureInfo.InvariantCulture));
+                dataPoint.BucketCounts.Add(bc);
             }
         }
         if (json.ExplicitBounds is not null)
@@ -662,7 +662,7 @@ internal static class OtlpJsonToProtobufConverter
         {
             foreach (var bc in json.BucketCounts)
             {
-                buckets.BucketCounts.Add(ulong.Parse(bc, System.Globalization.CultureInfo.InvariantCulture));
+                buckets.BucketCounts.Add(bc);
             }
         }
         return buckets;

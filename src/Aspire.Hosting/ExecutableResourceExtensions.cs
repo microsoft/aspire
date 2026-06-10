@@ -15,6 +15,7 @@ public static class ExecutableResourceExtensions
     /// </summary>
     /// <param name="model">The distributed application model to retrieve executable resources from.</param>
     /// <returns>An enumerable collection of executable resources.</returns>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<ExecutableResource> GetExecutableResources(this DistributedApplicationModel model)
     {
         ArgumentNullException.ThrowIfNull(model);

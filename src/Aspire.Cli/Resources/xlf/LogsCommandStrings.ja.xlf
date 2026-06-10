@@ -3,18 +3,28 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost.</source>
-        <target state="translated">実行中の AppHost のリソースからのログを表示します。</target>
+        <source>Display logs from resources in a running AppHost</source>
+        <target state="needs-review-translation">実行中の Aspire apphost のリソースからログを表示します。</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
-        <source>Stream logs in real-time as they are written.</source>
-        <target state="translated">ログが書き込まれると同時にリアルタイムでストリームします。</target>
+        <source>Stream logs in real-time as they are written</source>
+        <target state="needs-review-translation">ログが書き込まれると同時にリアルタイムでストリームします。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">出力形式 (テーブルまたは JSON)。</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">ログを JSON 形式 (NDJSON) で出力します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoLogsFound">
+        <source>No logs found.</source>
+        <target state="new">No logs found.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -24,7 +34,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="translated">ログ取得の対象とするリソースの名前。指定しない場合は、すべてのリソースのログが表示されます。</target>
+        <target state="needs-review-translation">ログ取得の対象とするリソースの名前。指定しない場合は、すべてのリソースのログが表示されます。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -37,9 +47,14 @@
         <target state="translated">--follow を使わない場合はリソース名の指定が必須です。--follow を使う場合、すべてのリソースのログがストリーミングされます。</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</source>
+        <target state="new">Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stream logs from</source>
-        <target state="new">stream logs from</target>
+        <target state="translated">次からログをストリーミングする</target>
         <note />
       </trans-unit>
       <trans-unit id="TailMustBePositive">
@@ -48,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TailOptionDescription">
-        <source>Number of lines to show from the end of logs (default: all).</source>
-        <target state="translated">表示するログの行数を、ログの末尾から数えた行数で指定します (既定値: すべて)。</target>
+        <source>Number of lines to show from the end of logs (default: all)</source>
+        <target state="needs-review-translation">表示するログの行数を、ログの末尾から数えた行数で指定します (既定値: すべて)。</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -58,13 +73,13 @@
         <note />
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
-        <source>Show timestamps for each log line.</source>
-        <target state="translated">各ログ行のタイムスタンプを表示します。</target>
+        <source>Show timestamps for each log line</source>
+        <target state="new">Show timestamps for each log line</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">
         <source>Getting logs...</source>
-        <target state="new">Getting logs...</target>
+        <target state="translated">ログを取得しています...</target>
         <note />
       </trans-unit>
     </body>

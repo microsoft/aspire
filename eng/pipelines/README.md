@@ -1,6 +1,6 @@
 # Azure DevOps Pipelines
 
-This directory contains Azure DevOps pipeline definitions for the dotnet/aspire repository.
+This directory contains Azure DevOps pipeline definitions for the microsoft/aspire repository.
 
 ## Pipeline Files
 

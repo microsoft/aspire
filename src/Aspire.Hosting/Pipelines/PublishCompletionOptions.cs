@@ -23,8 +23,8 @@ public sealed class PublishCompletionOptions
     public CompletionState? CompletionState { get; set; }
 
     /// <summary>
-    /// Gets or sets optional pipeline summary information as key-value pairs to display after completion.
-    /// The list preserves insertion order.
+    /// Gets or sets optional pipeline summary information to display after completion.
+    /// The list preserves insertion order. Each item carries its own Markdown formatting flag.
     /// </summary>
-    public IReadOnlyList<KeyValuePair<string, string>>? PipelineSummary { get; set; }
+    public IReadOnlyList<PipelineSummaryItem>? PipelineSummary { get; set; }
 }

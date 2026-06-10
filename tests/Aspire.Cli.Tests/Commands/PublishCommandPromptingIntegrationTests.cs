@@ -11,6 +11,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.InternalTesting;
@@ -25,7 +26,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt that will be sent from AppHost
         promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true);
@@ -41,7 +42,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -71,7 +72,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt that will be sent from AppHost
         promptBackchannel.AddPrompt("secret-prompt-1", "Database Password", InputTypes.SecretText, "Enter secure password:", isRequired: true);
@@ -87,7 +88,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -117,7 +118,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the choice prompt with options
         var options = new List<KeyValuePair<string, string>>
@@ -139,7 +140,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -170,7 +171,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the boolean prompt
         promptBackchannel.AddPrompt("bool-prompt-1", "Enable Verbose Logging", InputTypes.Boolean, "Enable verbose logging?", isRequired: false);
@@ -186,7 +187,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -216,7 +217,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the number prompt
         promptBackchannel.AddPrompt("number-prompt-1", "Instance Count", InputTypes.Number, "Enter number of instances:", isRequired: true);
@@ -232,7 +233,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -262,7 +263,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up multiple prompts that will be sent in sequence
         promptBackchannel.AddPrompt("text-prompt-1", "Application Name", InputTypes.Text, "Enter app name:", isRequired: true);
@@ -290,7 +291,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -337,7 +338,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up a single prompt with multiple inputs
         promptBackchannel.AddMultiInputPrompt("multi-input-prompt-1", "Configuration Setup", "Please provide the following details:",
@@ -369,7 +370,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -421,7 +422,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt with a default value
         promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true, defaultValue: "development");
@@ -437,7 +438,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -473,7 +474,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt with a default value
         promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true, defaultValue: "de", validationErrors: ["Environment name must be at least 3 characters long."]);
@@ -489,7 +490,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -528,7 +529,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt with markdown in the activity status text
         promptBackchannel.AddPrompt("markdown-prompt-1", "Config Value", InputTypes.Text, "**Enter** the `config` value for [Azure Portal](https://portal.azure.com):", isRequired: true);
@@ -544,7 +545,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -599,7 +600,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up the prompt that will be sent from AppHost
         promptBackchannel.AddPrompt("debug-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true);
@@ -615,7 +616,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act - use the --debug flag
@@ -643,7 +644,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up a single-input prompt where StatusText and Label are different
         promptBackchannel.AddPrompt("status-label-prompt", "Target Region", InputTypes.Text, "Configure deployment target", isRequired: true);
@@ -659,7 +660,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -686,7 +687,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Arrange
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
-        var consoleService = new TestConsoleInteractionServiceWithPromptTracking();
+        var consoleService = new TestInteractionService();
 
         // Set up a single-input prompt where StatusText and Label are the same
         promptBackchannel.AddPrompt("duplicate-prompt", "Environment Name", InputTypes.Text, "Environment Name", isRequired: true);
@@ -702,7 +703,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -809,6 +810,7 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
 
     // Default implementations for other interface methods
     public Task RequestStopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task NotifyAppHostReadyAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken) =>
         Task.FromResult(new DashboardUrlsState
         {
@@ -827,15 +829,13 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
         await Task.CompletedTask; // Suppress CS1998
         yield break;
     }
-    public Task ConnectAsync(string socketPath, CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task ConnectAsync(string socketPath, bool autoReconnect, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task WaitForDisconnectAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken) => Task.FromResult(new[] { "baseline.v2" });
 
-    public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        await Task.CompletedTask; // Suppress CS1998
-        yield break;
-    }
+    public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken) =>
+        Task.FromResult(new GetPipelineStepsResponse { Steps = [] });
 }
 
 // Data structures for tracking prompts
@@ -851,6 +851,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     private bool _shouldCancel;
 
     public ConsoleOutput Console { get; set; }
+    public bool SupportsLinks { get; set; }
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<object> SelectionPromptCalls { get; } = []; // Using object to handle generic types
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
@@ -869,9 +870,9 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
         }
     }
 
-    public Task<string> PromptForStringAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, CancellationToken cancellationToken = default)
+    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
     {
-        StringPromptCalls.Add(new StringPromptCall(promptText, defaultValue, isSecret));
+        StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret));
 
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
@@ -883,10 +884,13 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
             return Task.FromResult(response.response);
         }
 
-        return Task.FromResult(defaultValue ?? string.Empty);
+        return Task.FromResult(binding?.DefaultValue ?? string.Empty);
     }
 
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken = default) where T : notnull
+    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+        => PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
+
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
@@ -906,7 +910,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
         return Task.FromResult(choices.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken = default) where T : notnull
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
@@ -914,12 +918,19 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
         }
 
         _ = _responses.TryDequeue(out _);
+
+        if (preSelected is not null)
+        {
+            return Task.FromResult<IReadOnlyList<T>>(preSelected.ToList());
+        }
+
         // For simplicity, return all choices in the test
         return Task.FromResult<IReadOnlyList<T>>(choices.ToList());
     }
 
-    public Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default)
+    public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
     {
+        var defaultValue = binding?.DefaultValue ?? false;
         BooleanPromptCalls.Add(new BooleanPromptCall(promptText, defaultValue));
 
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
@@ -936,35 +947,32 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     }
 
     // Default implementations for other interface methods
-    public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action) => action();
-    public void ShowStatus(string statusText, Action action) => action();
+    public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
+    public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => action(_ => { });
+    public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
-    public void DisplayError(string errorMessage) => DisplayedErrors.Add(errorMessage);
-    public void DisplayMessage(string emojiName, string message) { }
-    public void DisplaySuccess(string message) { }
-    public void DisplaySubtleMessage(string message, bool escapeMarkup = true) { }
-    public void DisplayLines(IEnumerable<(string Stream, string Line)> lines) { }
-    public void DisplayCancellationMessage() { }
+    public void DisplayError(string errorMessage, bool allowMarkup = false) => DisplayedErrors.Add(errorMessage);
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) { }
+    public void DisplaySuccess(string message, bool allowMarkup = false) { }
+    public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
+    public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) { }
     public void DisplayEmptyLine() { }
     public void DisplayPlainText(string text) { }
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }
-    public void DisplayMarkdown(string markdown) { }
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null) { }
     public void DisplayMarkupLine(string markup) { }
 
     public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null) { }
+
+    public void DisplayRenderable(IRenderable renderable) { }
+    public Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback) => callback(_ => { });
 
     public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false)
     {
         var messageType = isErrorMessage ? "error" : "info";
         System.Console.WriteLine($"#{lineNumber} [{messageType}] {message}");
     }
-}
-
-internal enum ResponseType
-{
-    String,
-    Selection,
-    Boolean
 }
 
 // Input type constants that match the Aspire CLI implementation
@@ -976,7 +984,3 @@ internal static class InputTypes
     public const string Boolean = "boolean";
     public const string Number = "number";
 }
-
-internal sealed record StringPromptCall(string PromptText, string? DefaultValue, bool IsSecret);
-internal sealed record SelectionPromptCall<T>(string PromptText, IEnumerable<T> Choices, Func<T, string> ChoiceFormatter);
-internal sealed record BooleanPromptCall(string PromptText, bool DefaultValue);

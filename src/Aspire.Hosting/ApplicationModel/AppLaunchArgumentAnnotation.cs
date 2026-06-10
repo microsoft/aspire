@@ -8,8 +8,8 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents a container or project application launch argument.
 /// </summary>
-[DebuggerDisplay("Type = {GetType().Name,nq}, Argument = {Argument}, IsSensitive = {IsSensitive}")]
-internal sealed class AppLaunchArgumentAnnotation(string argument, bool isSensitive)
+[DebuggerDisplay("Type = {GetType().Name,nq}, Argument = {Argument}, IsSensitive = {IsSensitive}, EffectiveArgumentIndex = {EffectiveArgumentIndex}")]
+internal sealed class AppLaunchArgumentAnnotation(string argument, bool isSensitive, int? effectiveArgumentIndex = null)
 {
     /// <summary>
     /// The evaluated launch argument.
@@ -20,4 +20,9 @@ internal sealed class AppLaunchArgumentAnnotation(string argument, bool isSensit
     /// Whether the argument contains a secret.
     /// </summary>
     public bool IsSensitive { get; } = isSensitive;
+
+    /// <summary>
+    /// The index of the corresponding effective launch argument, if one exists.
+    /// </summary>
+    public int? EffectiveArgumentIndex { get; } = effectiveArgumentIndex;
 }

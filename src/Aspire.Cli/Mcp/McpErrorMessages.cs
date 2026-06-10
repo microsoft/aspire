@@ -13,7 +13,7 @@ internal static class McpErrorMessages
     /// </summary>
     public const string NoAppHostRunning =
         "No Aspire AppHost is currently running. " +
-        "To use Aspire MCP tools, you must first start an Aspire application by running 'aspire run --detach' in your AppHost project directory. " +
+        "To use Aspire MCP tools, you must first start an Aspire application by running 'aspire start' in your AppHost project directory. " +
         "Once the application is running, the MCP tools will be able to connect to the dashboard and execute commands.";
 
     /// <summary>

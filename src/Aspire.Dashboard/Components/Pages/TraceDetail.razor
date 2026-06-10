@@ -5,6 +5,8 @@
 @using System.Diagnostics
 @inject IStringLocalizer<AIAssistant> AIAssistantLoc
 @inject IStringLocalizer<AIPrompts> AIPromptsLoc
+@inject IStringLocalizer<StructuredFiltering> FilterLoc
+@inject IStringLocalizer<Dialogs> DialogsLoc
 
 <PageTitle>
     <ApplicationName
@@ -46,6 +48,7 @@
                             }
                             <FluentSearch @bind-Value="_filter"
                                           @bind-Value:after="HandleAfterFilterBindAsync"
+                                          Name="spans-search"
                                           Immediate="true"
                                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                                           Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
@@ -60,6 +63,25 @@
 
                             <DesktopToolbarDivider />
 
+                            @if (_filters.Count == 0)
+                            {
+                                <span slot="end">@FilterLoc[nameof(StructuredFiltering.NoFilters)]</span>
+                            }
+                            else
+                            {
+                                <div slot="end">
+                                    <FluentCounterBadge HorizontalPosition="70" Count="@(_filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                                        <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
+                                    </FluentCounterBadge>
+                                </div>
+                            }
+
+                            <DesktopToolbarDivider />
+
+                            <FluentButton slot="end" Appearance="Appearance.Stealth" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" /></FluentButton>
+
+                            <DesktopToolbarDivider />
+
                             <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
                                               Icon="@(new Icons.Regular.Size20.Options())"
                                               Items="@_traceActionsMenuItems"
@@ -71,6 +93,7 @@
                 {
                     <FluentSearch @bind-Value="_filter"
                                   @bind-Value:after="HandleAfterFilterBindAsync"
+                                  Name="spans-search"
                                   Immediate="true"
                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
                                   Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
@@ -78,6 +101,17 @@
                     <SpanTypeSelect @bind-SpanType="@_selectedSpanType"
                                     SpanTypes="@_spanTypes"
                                     HandleSelectedSpanTypeChangedAsync="@HandleSelectedSpanTypeChangedAsync" />
+                    @if (_filters.Count > 0)
+                    {
+                        <div slot="end">
+                            <FluentCounterBadge HorizontalPosition="70" Count="@(_filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                                <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
+                            </FluentCounterBadge>
+                        </div>
+                    }
+                    <FluentButton slot="end" Appearance="Appearance.Stealth" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
+                        <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" /> @FilterLoc[nameof(StructuredFiltering.AddFilter)]
+                    </FluentButton>
                     <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
                                       Icon="@(new Icons.Regular.Size20.Options())"
                                       Items="@_traceActionsMenuItems"

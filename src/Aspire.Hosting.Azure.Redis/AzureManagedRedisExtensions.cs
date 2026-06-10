@@ -24,6 +24,7 @@ public static class AzureManagedRedisExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureManagedRedisResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// By default, the Azure Managed Redis resource is configured to use Microsoft Entra ID (Azure Active Directory) for authentication.
     /// This requires changes to the application code to use an azure credential to authenticate with the resource. See
@@ -43,6 +44,8 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<AzureManagedRedisResource> AddAzureManagedRedis(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -63,6 +66,7 @@ public static class AzureManagedRedisExtensions
     /// <param name="builder">The Azure Managed Redis resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureRedisCacheResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// The following example creates an Azure Managed Redis resource that runs locally in a
@@ -80,6 +84,8 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureManagedRedisResource> RunAsContainer(
         this IResourceBuilder<AzureManagedRedisResource> builder,
         Action<IResourceBuilder<RedisResource>>? configureContainer = null)
@@ -124,6 +130,7 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
     public static IResourceBuilder<AzureManagedRedisResource> WithAccessKeyAuthentication(this IResourceBuilder<AzureManagedRedisResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -135,7 +142,7 @@ public static class AzureManagedRedisExtensions
         // need to do this later in case builder becomes an emulator after this method is called.
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((data, token) =>
+            builder.ApplicationBuilder.OnBeforeStart((data, token) =>
             {
                 if (builder.Resource.IsContainer())
                 {
@@ -149,11 +156,27 @@ public static class AzureManagedRedisExtensions
     }
 
     /// <summary>
+    /// Configures Azure Managed Redis to use access key authentication
+    /// </summary>
+    [AspireExport("withAccessKeyAuthentication")]
+    internal static IResourceBuilder<AzureManagedRedisResource> WithAccessKeyAuthenticationForPolyglot(
+        this IResourceBuilder<AzureManagedRedisResource> builder,
+        IResourceBuilder<IAzureKeyVaultResource>? keyVaultBuilder = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return keyVaultBuilder is null
+            ? builder.WithAccessKeyAuthentication()
+            : builder.WithAccessKeyAuthentication(keyVaultBuilder);
+    }
+
+    /// <summary>
     /// Configures the resource to use access key authentication for Azure Managed Redis.
     /// </summary>
     /// <param name="builder">The Azure Managed Redis resource builder.</param>
     /// <param name="keyVaultBuilder">The Azure Key Vault resource builder where the connection string used to connect to this AzureManagedRedisResource will be stored.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureManagedRedisResource}"/> builder.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
     public static IResourceBuilder<AzureManagedRedisResource> WithAccessKeyAuthentication(this IResourceBuilder<AzureManagedRedisResource> builder, IResourceBuilder<IAzureKeyVaultResource> keyVaultBuilder)
     {
         ArgumentNullException.ThrowIfNull(builder);

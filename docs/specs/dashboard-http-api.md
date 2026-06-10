@@ -8,8 +8,8 @@ The Dashboard exposes telemetry data via a REST HTTP API that provides data in *
 
 **Related:**
 
-- Issue: <https://github.com/dotnet/aspire/issues/14138>
-- PR: <https://github.com/dotnet/aspire/pull/14168>
+- Issue: <https://github.com/microsoft/aspire/issues/14138>
+- PR: <https://github.com/microsoft/aspire/pull/14168>
 - MCP implementation: `src/Aspire.Dashboard/Mcp/AspireTelemetryMcpTools.cs`
 
 ## Design Philosophy

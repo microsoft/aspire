@@ -6,7 +6,6 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Roles;
@@ -75,12 +74,12 @@ public class AzureBicepResourceTests
     [MemberData(nameof(AzureExtensions))]
     public void AzureExtensionsAutomaticallyAddAzureProvisioning(Func<IDistributedApplicationBuilder, IResourceBuilder<IResource>> addAzureResource)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         addAzureResource(builder);
 
         var app = builder.Build();
-        var eventingServices = app.Services.GetServices<IDistributedApplicationEventingSubscriber>();
-        Assert.Single(eventingServices.OfType<AzureProvisioner>());
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
     }
 
     [Theory]
@@ -250,7 +249,7 @@ public class AzureBicepResourceTests
     [Fact]
     public void GetBicepTemplateFile_WithTemplateFile_ReturnsOriginalPathWhenDirectoryProvided()
     {
-        // This test verifies the fix for https://github.com/dotnet/aspire/issues/13967
+        // This test verifies the fix for https://github.com/microsoft/aspire/issues/13967
         // When a templateFile is specified, GetBicepTemplateFile should return the original path
         // and not combine it with the directory parameter.
 

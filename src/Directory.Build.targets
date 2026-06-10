@@ -3,6 +3,7 @@
     <DisablePackageBaselineValidation Condition="'$(DisablePackageBaselineValidation)' == '' And '$(SuppressFinalPackageVersion)' == 'true'">true</DisablePackageBaselineValidation>
     <!-- If the project is packable, we generate its API surface in a separate file to be used by the API review process. -->
     <GenAPITargetPath Condition="'$(IsPackable)' == 'true'">$(MSBuildProjectDirectory)/api/$(AssemblyName).cs</GenAPITargetPath>
+    <SkipAspireIntegrationAnalyzersReference Condition="'$(SkipAspireIntegrationAnalyzersReference)' == '' And '$(IsRoslynComponent)' == 'true'">true</SkipAspireIntegrationAnalyzersReference>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,7 +16,28 @@
 
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))" />
 
-  <!-- Used by Aspire.Workload.Testing.targets -->
+  <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('Aspire.Hosting'))
+                        and
+                        '$(SkipAspireIntegrationAnalyzersReference)' != 'true'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)\Aspire.Hosting.Integration.Analyzers\Aspire.Hosting.Integration.Analyzers.csproj"
+                    PrivateAssets="all"
+                    ReferenceOutputAssembly="false"
+                    OutputItemType="Analyzer" />
+  </ItemGroup>
+
+  <!-- Used by Aspire.Templates.Testing.targets and by Aspire.RepoTesting.targets to
+       dynamically compute per-package versions for Helix testing.
+       Returns items with PackageId as Include and the per-project computed PackageVersion
+       as WithPackageVersion metadata. The version is computed by the Arcade SDK and respects
+       SuppressFinalPackageVersion, StabilizePackageVersion, etc.
+
+       Reads $(PackageVersion) declaratively (i.e. as a property whose value Arcade has
+       already set via property groups during evaluation, not via a prior target). That is
+       correct as of the current Arcade SDK. If a future Arcade bump moves PackageVersion
+       computation into a target body, callers of this target may observe the pre-target
+       value; the Helix package-versions generation in
+       tests/Shared/RepoTesting/Aspire.RepoTesting.targets would then need an explicit
+       dependency on whatever target sets PackageVersion. -->
   <Target Name="GetPackageName" Returns="@(PackageName)">
     <ItemGroup>
       <PackageName Include="$(PackageId)" Condition="'$(IsPackable)' == 'true'" WithPackageVersion="$(PackageVersion)" />

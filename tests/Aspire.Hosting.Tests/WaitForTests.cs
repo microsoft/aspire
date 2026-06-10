@@ -12,6 +12,7 @@ using System.Text.RegularExpressions;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "3")]
 public class WaitForTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]

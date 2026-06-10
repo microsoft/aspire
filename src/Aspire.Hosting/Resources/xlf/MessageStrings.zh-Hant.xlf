@@ -37,6 +37,11 @@
         <target state="translated">遺漏命令</target>
         <note />
       </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">資源 '{0}' 具有持久生命週期，但 AppHost 專案尚未設定使用者祕密。產生的參數值 (例如密碼) 可能會在每次重啟時變更，導致持久容器被重新建立。請執行 'aspire secret set' 以初始化使用者祕密。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RequiredCommandNotFound">
         <source>Required command '{0}' was not found on PATH or at the specified location.</source>
         <target state="translated">在 PATH 或指定的位置找不到必要的命令 '{0}'。</target>
@@ -55,11 +60,6 @@
       <trans-unit id="RequiredCommandValidationFailedWithLink">
         <source>Command '{0}' validation failed: {1}. For installation instructions, see: {2}</source>
         <target state="translated">命令 '{0}' 驗證失敗: {1}。如需安裝指示，請參閱: {2}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="PersistentContainerWithoutUserSecrets">
-        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' in the AppHost directory to configure secrets.</source>
-        <target state="new">Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' in the AppHost directory to configure secrets.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceMayFailToStart">

@@ -1,34 +1,34 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react';
 
 interface ApiResponse {
-  message: string
-  database?: string
-  serverTime?: string
-  error?: string
+  message: string;
+  database?: string;
+  serverTime?: string;
+  error?: string;
 }
 
 function App() {
-  const [data, setData] = useState<ApiResponse | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<ApiResponse | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/')
       .then(res => {
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
-        return res.json()
+        return res.json();
       })
       .then((data: ApiResponse) => {
-        setData(data)
-        setLoading(false)
+        setData(data);
+        setLoading(false);
       })
       .catch(err => {
-        console.error('API Error:', err)
-        setData({ message: 'Error connecting to API', error: err.message })
-        setLoading(false)
-      })
-  }, [])
+        console.error('API Error:', err);
+        setData({ message: 'Error connecting to API', error: err.message });
+        setLoading(false);
+      });
+  }, []);
 
   return (
     <div style={{
@@ -61,7 +61,7 @@ function App() {
         </div>
       ) : null}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

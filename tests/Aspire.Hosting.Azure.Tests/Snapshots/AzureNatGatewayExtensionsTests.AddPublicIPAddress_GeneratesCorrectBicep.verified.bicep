@@ -18,3 +18,5 @@ resource mypip 'Microsoft.Network/publicIPAddresses@2025-05-01' = {
 output id string = mypip.id
 
 output name string = mypip.name
+
+output ipAddress string = mypip.properties.ipAddress

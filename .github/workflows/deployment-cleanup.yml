@@ -39,7 +39,7 @@ jobs:
   cleanup:
     name: Cleanup Azure Resources
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     environment: deployment-testing
 
     steps:

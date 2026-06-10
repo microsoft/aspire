@@ -11,7 +11,7 @@ param my_ace_outputs_volumes_druid_1 string
 
 param my_ace_outputs_bindmounts_druid_0 string
 
-resource druid 'Microsoft.App/containerApps@2025-01-01' = {
+resource druid 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'druid'
   location: location
   properties: {

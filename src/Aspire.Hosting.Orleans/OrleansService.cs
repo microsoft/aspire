@@ -8,6 +8,7 @@ namespace Aspire.Hosting.Orleans;
 /// <summary>
 /// Describes an Orleans service.
 /// </summary>
+[AspireExport]
 public sealed class OrleansService
 {
     /// <summary>Initializes a new <see cref="OrleansService"/> instance.</summary>

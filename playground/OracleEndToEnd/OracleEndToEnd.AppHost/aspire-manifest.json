@@ -1,10 +1,9 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "oracle": {
       "type": "container.v0",
       "connectionString": "user id=system;password={oracle-password.value};data source={oracle.bindings.tcp.host}:{oracle.bindings.tcp.port}",
-      "image": "container-registry.oracle.com/database/free:23.26.0.0",
+      "image": "container-registry.oracle.com/database/free:23.26.1.0",
       "env": {
         "ORACLE_PWD": "{oracle-password.value}"
       },

@@ -151,7 +151,7 @@
     <value>Command '{0}' validation failed: {1}. For installation instructions, see: {2}</value>
   </data>
   <data name="PersistentContainerWithoutUserSecrets" xml:space="preserve">
-    <value>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' in the AppHost directory to configure secrets.</value>
+    <value>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</value>
   </data>
   <data name="ResourceMayFailToStart" xml:space="preserve">
     <value>Resource '{0}' may fail to start: {1}</value>

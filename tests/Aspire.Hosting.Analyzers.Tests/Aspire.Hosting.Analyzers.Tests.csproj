@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Analyzers\Aspire.Hosting.Analyzers.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Integration.Analyzers\Aspire.Hosting.Integration.Analyzers.csproj" IsAspireProjectResource="false" />
   </ItemGroup>
 
   <ItemGroup>

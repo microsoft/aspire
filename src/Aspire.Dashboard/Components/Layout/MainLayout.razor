@@ -24,7 +24,7 @@
             <div class="flex-filler"></div>
             <FluentAnchor Class="header-button"
                           Appearance="Appearance.Stealth"
-                          Href="https://aka.ms/dotnet/aspire/repo" Target="_blank" Rel="noreferrer noopener"
+                          Href="https://aka.ms/aspire/repo" Target="_blank" Rel="noreferrer noopener"
                           Title="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
                 <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Neutral"/>
             </FluentAnchor>
@@ -33,12 +33,12 @@
                           Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Neutral"/>
             </FluentButton>
-            @if (Options.CurrentValue.Mcp.GetEndpointAddress() != null && !Options.CurrentValue.Mcp.Disabled.GetValueOrDefault())
+            @if (Options.CurrentValue.UI.DisableAgentHelp != true)
             {
                 <FluentButton Class="header-button"
-                              Appearance="Appearance.Stealth" OnClick="@LaunchMcpAsync"
-                              Title="MCP Server" aria-label="MCP Server">
-                    <FluentIcon Value="@(new AspireIcons.Size24.McpIcon())" Color="Color.Neutral" />
+                              Appearance="Appearance.Stealth" OnClick="@LaunchAIAgentsAsync"
+                              Title="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]">
+                    <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Neutral"/>
                 </FluentButton>
             }
             @if (AIContextProvider.Enabled)
@@ -49,6 +49,7 @@
                     <FluentIcon Value="@(new AspireIcons.Size24.GitHubCopilot())" Color="Color.Neutral" />
                 </FluentButton>
             }
+            <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
             <FluentButton Class="header-button"
                           Appearance="Appearance.Stealth" OnClick="@LaunchSettingsAsync"
                           Title="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
@@ -86,7 +87,10 @@
             IsAIEnabled="@AIContextProvider.Enabled"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
+            LaunchAIAgentsAsync="@LaunchAIAgentsAsync"
+            IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
             LaunchAIAssistantAsync="@LaunchAssistantAsync"
+            LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
     }
 

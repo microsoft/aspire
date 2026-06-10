@@ -54,6 +54,7 @@
     -->
     <WriteLinesToFile File="%(TestToRun.ResultsStdOutPath)"
                       Overwrite="false"
+                      Encoding="UTF-8"
                       Lines=";=== COMMAND LINE ===;$(_TestRunnerCommand);=== END COMMAND LINE ===;%20;"
                       Condition="'$(TestCaptureOutput)' != 'false'" />
 

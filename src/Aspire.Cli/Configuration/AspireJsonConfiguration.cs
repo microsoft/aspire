@@ -30,6 +30,7 @@ internal sealed class AspireJsonConfiguration
     /// </summary>
     [JsonPropertyName("appHostPath")]
     [LocalAspireJsonConfigurationProperty]
+    [HiddenFromConfigurationSchema]
     [Description("The path to the AppHost entry point file (e.g., \"Program.cs\", \"app.ts\"). Relative to the directory containing .aspire/settings.json.")]
     public string? AppHostPath { get; set; }
 
@@ -172,24 +173,27 @@ internal sealed class AspireJsonConfiguration
     }
 
     /// <summary>
-    /// Gets all package references including the base Aspire.Hosting package.
-    /// Empty package versions in settings are resolved to the effective SDK version.
+    /// Gets all integration references (both NuGet packages and project references)
+    /// including the base Aspire.Hosting package.
+    /// A value ending in ".csproj" is treated as a project reference; otherwise as a NuGet version.
+    /// Empty package versions are resolved to the effective SDK version.
     /// </summary>
     /// <param name="defaultSdkVersion">Default SDK version to use when not configured.</param>
-    /// <returns>Enumerable of (PackageName, Version) tuples.</returns>
-    public IEnumerable<(string Name, string Version)> GetAllPackages(string defaultSdkVersion)
+    /// <param name="settingsDirectory">The directory containing .aspire/settings.json, used to resolve relative project paths.</param>
+    /// <returns>Enumerable of IntegrationReference objects.</returns>
+    public IEnumerable<IntegrationReference> GetIntegrationReferences(string defaultSdkVersion, string settingsDirectory)
     {
         var sdkVersion = GetEffectiveSdkVersion(defaultSdkVersion);
 
-        // Base package always included (Aspire.Hosting.AppHost is an SDK, not a runtime DLL)
-        yield return ("Aspire.Hosting", sdkVersion);
+        // Base package always included
+        yield return IntegrationReference.FromPackage("Aspire.Hosting", sdkVersion);
 
         if (Packages is null)
         {
             yield break;
         }
 
-        foreach (var (packageName, version) in Packages)
+        foreach (var (packageName, value) in Packages)
         {
             // Skip base packages and SDK-only packages
             if (string.Equals(packageName, "Aspire.Hosting", StringComparison.OrdinalIgnoreCase) ||
@@ -198,21 +202,27 @@ internal sealed class AspireJsonConfiguration
                 continue;
             }
 
-            yield return (packageName, string.IsNullOrWhiteSpace(version) ? sdkVersion : version);
+            var trimmedValue = value?.Trim();
+
+            if (string.IsNullOrEmpty(trimmedValue))
+            {
+                // NuGet package reference with no explicit version — fall back to the SDK version
+                yield return IntegrationReference.FromPackage(packageName, sdkVersion);
+                continue;
+            }
+
+            if (trimmedValue.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                // Project reference — resolve relative path to absolute
+                var absolutePath = Path.GetFullPath(Path.Combine(settingsDirectory, trimmedValue));
+                yield return IntegrationReference.FromProject(packageName, absolutePath);
+            }
+            else
+            {
+                // NuGet package reference with explicit version
+                yield return IntegrationReference.FromPackage(packageName, trimmedValue);
+            }
         }
     }
 
-    /// <summary>
-    /// Gets all package references including the base Aspire.Hosting packages.
-    /// Uses the SdkVersion for base packages.
-    /// Note: Aspire.Hosting.AppHost is an SDK package (not a runtime DLL) and is excluded.
-    /// </summary>
-    /// <returns>Enumerable of (PackageName, Version) tuples.</returns>
-    public IEnumerable<(string Name, string Version)> GetAllPackages()
-    {
-        var sdkVersion = !string.IsNullOrWhiteSpace(SdkVersion)
-            ? SdkVersion
-            : throw new InvalidOperationException("SdkVersion must be set to a non-empty value before calling GetAllPackages. Use LoadOrCreate to ensure it's set.");
-        return GetAllPackages(sdkVersion);
-    }
 }

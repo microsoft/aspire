@@ -3,10 +3,9 @@
 
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Mcp;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Otlp.Model.Serialization;
 using Aspire.Dashboard.Utils;
+using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Localization;
@@ -27,9 +26,9 @@ public static class DashboardEndpointsBuilder
         IEndpointConventionBuilder builder;
         if (dashboardOptions.Frontend.AuthMode == FrontendAuthMode.BrowserToken)
         {
-            builder = endpoints.MapPost("/api/validatetoken", async (string token, HttpContext httpContext, IOptionsMonitor<DashboardOptions> dashboardOptions) =>
+            builder = endpoints.MapPost("/api/validatetoken", async ([FromBody] ValidateTokenRequest request, HttpContext httpContext, IOptionsMonitor<DashboardOptions> dashboardOptions) =>
             {
-                return await ValidateTokenMiddleware.TryAuthenticateAsync(token, httpContext, dashboardOptions).ConfigureAwait(false);
+                return await ValidateTokenMiddleware.TryAuthenticateAsync(request.Token, httpContext, dashboardOptions).ConfigureAwait(false);
             });
 
 #if DEBUG
@@ -90,27 +89,16 @@ public static class DashboardEndpointsBuilder
 
             return Results.LocalRedirect(redirectUrl);
         }).SkipStatusCodePages();
-    }
 
-    public static void MapDashboardMcp(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)
-    {
-        IEndpointConventionBuilder builder;
-        if (!dashboardOptions.Mcp.Disabled.GetValueOrDefault())
-        {
-            builder = endpoints.MapMcp("/mcp").RequireAuthorization(McpApiKeyAuthenticationHandler.PolicyName);
-        }
-        else
-        {
-            builder = endpoints.MapPostNotFound("/mcp");
-        }
-        builder.SkipStatusCodePages();
     }
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)
     {
-        // Check if API is disabled (defaults to enabled if not specified)
-        if (dashboardOptions.Api.Enabled == false)
+        // Check if API is disabled
+        if (dashboardOptions.Api.Disabled.GetValueOrDefault())
         {
+            endpoints.MapGetNotFound("/api/telemetry/{*path}").SkipStatusCodePages();
+            endpoints.MapPostNotFound("/api/telemetry/{*path}").SkipStatusCodePages();
             return;
         }
 
@@ -118,11 +106,38 @@ public static class DashboardEndpointsBuilder
             .RequireAuthorization(ApiAuthenticationHandler.PolicyName)
             .SkipStatusCodePages();
 
+        // POST /api/telemetry/validateToken - Exchange a browser token for the telemetry API key.
+        // Returns the API key if the token is valid and the API uses key-based auth, or null if unsecured.
+        // Returns 401 if the token is invalid, 404 if the telemetry API is not enabled.
+        group.MapPost("/validateToken", ([FromBody] TelemetryValidateTokenRequest request, IOptionsMonitor<DashboardOptions> optionsMonitor) =>
+        {
+            var currentOptions = optionsMonitor.CurrentValue;
+
+            // Validate the browser token
+            if (currentOptions.Frontend.AuthMode != FrontendAuthMode.BrowserToken)
+            {
+                return Results.Unauthorized();
+            }
+
+            var expectedBrowserTokenBytes = currentOptions.Frontend.GetBrowserTokenBytes();
+            if (expectedBrowserTokenBytes is null || !CompareHelpers.CompareKey(expectedBrowserTokenBytes, request.Token))
+            {
+                return Results.Unauthorized();
+            }
+
+            // Token is valid — return the API key (null if unsecured)
+            var apiKey = currentOptions.Api.AuthMode == ApiAuthMode.ApiKey
+                ? currentOptions.Api.PrimaryApiKey
+                : null;
+
+            return Results.Json(new TelemetryValidateTokenResponse(apiKey), OtlpJsonSerializerContext.Default.TelemetryValidateTokenResponse);
+        }).AllowAnonymous();
+
         // GET /api/telemetry/resources - List resources that have telemetry data
         group.MapGet("/resources", (TelemetryApiService service) =>
         {
             var resources = service.GetResources();
-            return Results.Json(resources, OtlpJsonSerializerContext.Default.ResourceInfoArray);
+            return Results.Json(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
         });
 
         // GET /api/telemetry/spans - List spans in OTLP JSON format (with optional streaming via ?follow=true)
@@ -135,15 +150,16 @@ public static class DashboardEndpointsBuilder
             [FromQuery] bool? hasError,
             [FromQuery] int? limit,
             [FromQuery] bool? follow,
+            [FromQuery] string? search,
             CancellationToken cancellationToken) =>
         {
             if (follow == true)
             {
-                await StreamNdjsonAsync(httpContext, service.FollowSpansAsync(resource, traceId, hasError, cancellationToken), cancellationToken).ConfigureAwait(false);
+                await StreamNdjsonAsync(httpContext, service.FollowSpansAsync(resource, traceId, hasError, search, cancellationToken), cancellationToken).ConfigureAwait(false);
                 return Results.Empty;
             }
 
-            var response = service.GetSpans(resource, traceId, hasError, limit);
+            var response = service.GetSpans(resource, traceId, hasError, limit, search);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -153,7 +169,7 @@ public static class DashboardEndpointsBuilder
                     Status = StatusCodes.Status404NotFound
                 });
             }
-            return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponseOtlpTelemetryDataJson);
+            return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         });
 
         // GET /api/telemetry/logs - List logs in OTLP JSON format (with optional streaming via ?follow=true)
@@ -166,15 +182,16 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string? severity,
             [FromQuery] int? limit,
             [FromQuery] bool? follow,
+            [FromQuery] string? search,
             CancellationToken cancellationToken) =>
         {
             if (follow == true)
             {
-                await StreamNdjsonAsync(httpContext, service.FollowLogsAsync(resource, traceId, severity, cancellationToken), cancellationToken).ConfigureAwait(false);
+                await StreamNdjsonAsync(httpContext, service.FollowLogsAsync(resource, traceId, severity, search, cancellationToken), cancellationToken).ConfigureAwait(false);
                 return Results.Empty;
             }
 
-            var response = service.GetLogs(resource, traceId, severity, limit);
+            var response = service.GetLogs(resource, traceId, severity, limit, search);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -184,7 +201,7 @@ public static class DashboardEndpointsBuilder
                     Status = StatusCodes.Status404NotFound
                 });
             }
-            return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponseOtlpTelemetryDataJson);
+            return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         });
 
         // GET /api/telemetry/traces - List traces in OTLP JSON format (snapshot only, no streaming)
@@ -193,9 +210,10 @@ public static class DashboardEndpointsBuilder
             TelemetryApiService service,
             [FromQuery] string[]? resource,
             [FromQuery] bool? hasError,
-            [FromQuery] int? limit) =>
+            [FromQuery] int? limit,
+            [FromQuery] string? search) =>
         {
-            var response = service.GetTraces(resource, hasError, limit);
+            var response = service.GetTraces(resource, hasError, limit, search);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -205,7 +223,7 @@ public static class DashboardEndpointsBuilder
                     Status = StatusCodes.Status404NotFound
                 });
             }
-            return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponseOtlpTelemetryDataJson);
+            return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         });
 
         // GET /api/telemetry/traces/{traceId} - Get a specific trace with all spans in OTLP format
@@ -223,7 +241,7 @@ public static class DashboardEndpointsBuilder
                     Status = StatusCodes.Status404NotFound
                 });
             }
-            return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponseOtlpTelemetryDataJson);
+            return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         });
     }
 
@@ -252,3 +270,6 @@ public static class DashboardEndpointsBuilder
         }
     }
 }
+
+/// <param name="Token">The browser token to validate.</param>
+internal sealed record ValidateTokenRequest(string Token);

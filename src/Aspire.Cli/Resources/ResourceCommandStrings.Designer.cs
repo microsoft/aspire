@@ -51,30 +51,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string StartDescription {
-            get {
-                return ResourceManager.GetString("StartDescription", resourceCulture);
-            }
-        }
-
-        internal static string StartResourceArgumentDescription {
-            get {
-                return ResourceManager.GetString("StartResourceArgumentDescription", resourceCulture);
-            }
-        }
-
-        internal static string RestartDescription {
-            get {
-                return ResourceManager.GetString("RestartDescription", resourceCulture);
-            }
-        }
-
-        internal static string RestartResourceArgumentDescription {
-            get {
-                return ResourceManager.GetString("RestartResourceArgumentDescription", resourceCulture);
-            }
-        }
-
         internal static string CommandDescription {
             get {
                 return ResourceManager.GetString("CommandDescription", resourceCulture);
@@ -93,10 +69,59 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string OptionNotValidWithResource {
+        internal static string ArgumentRequired {
             get {
-                return ResourceManager.GetString("OptionNotValidWithResource", resourceCulture);
+                return ResourceManager.GetString("ArgumentRequired", resourceCulture);
             }
         }
+
+        internal static string AvailableResourceCommands {
+            get {
+                return ResourceManager.GetString("AvailableResourceCommands", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpAllowedValues {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpAllowedValues", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpCommandOptions {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpCommandOptions", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpDefaultValue {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpDefaultValue", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpDelimiterHint {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpDelimiterHint", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpRequired {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpRequired", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpUsageSyntax {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpUsageSyntax", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpValuePlaceholder {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpValuePlaceholder", resourceCulture);
+            }
+        }
+
     }
 }

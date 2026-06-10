@@ -72,7 +72,7 @@ c5e604f4b Add dashboard resource to AddDockerComposeEnvironment (#9597)
 
 # Enhanced Feature Documentation:
 ### ⚡ Faster aspire exec validation
-The `aspire exec` command now provides immediate validation feedback, failing fast when required arguments are missing instead of spending time searching for projects first. Error messages have also been improved to be more actionable ([#10606](https://github.com/dotnet/aspire/pull/10606)).
+The `aspire exec` command now provides immediate validation feedback, failing fast when required arguments are missing instead of spending time searching for projects first. Error messages have also been improved to be more actionable ([#10606](https://github.com/microsoft/aspire/pull/10606)).
 
 **Before:** CLI searches for projects, then shows confusing "Failed to parse command" error
 **After:** Immediate "Target resource is not specified" error with clear guidance
@@ -95,7 +95,7 @@ This improvement reduces development friction by providing faster, clearer feedb
 
 # Final documentation includes GitHub reference:
 ### ✨ Enhanced telemetry navigation
-The dashboard now provides better navigation between telemetry data and resources ([#10648](https://github.com/dotnet/aspire/pull/10648)).
+The dashboard now provides better navigation between telemetry data and resources ([#10648](https://github.com/microsoft/aspire/pull/10648)).
 ```
 
 #### GitHub Issue Pattern Recognition

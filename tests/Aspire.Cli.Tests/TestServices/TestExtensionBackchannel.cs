@@ -56,6 +56,9 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     public TaskCompletionSource? PromptForSecretStringAsyncCalled { get; set; }
     public Func<string, Func<string, ValidationResult>?, bool, Task<string>>? PromptForSecretStringAsyncCallback { get; set; }
 
+    public TaskCompletionSource? PromptForFilePathAsyncCalled { get; set; }
+    public Func<string, string?, bool, Task<string?>>? PromptForFilePathAsyncCallback { get; set; }
+
     public TaskCompletionSource? OpenEditorAsyncCalled { get; set; }
     public Func<string, Task>? OpenEditorAsyncCallback { get; set; }
 
@@ -74,7 +77,7 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     public TaskCompletionSource? NotifyAppHostStartupCompletedAsyncCalled { get; set; }
 
     public TaskCompletionSource? StartDebugSessionAsyncCalled { get; set; }
-    public Func<string, string?, bool, Task>? StartDebugSessionAsyncCallback { get; set; }
+    public Func<string, string?, bool, DebugSessionOptions?, Task>? StartDebugSessionAsyncCallback { get; set; }
 
     public TaskCompletionSource? DisplayPlainTextAsyncCalled { get; set; }
     public Func<string, Task>? DisplayPlainTextAsyncCallback { get; set; }
@@ -147,6 +150,14 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     {
         ShowStatusAsyncCalled?.SetResult();
         return ShowStatusAsyncCallback?.Invoke(status) ?? Task.CompletedTask;
+    }
+
+    public Task<string?> PromptForFilePathAsync(string promptText, string? defaultValue, bool directory, CancellationToken cancellationToken)
+    {
+        PromptForFilePathAsyncCalled?.SetResult();
+        return PromptForFilePathAsyncCallback != null
+            ? PromptForFilePathAsyncCallback.Invoke(promptText, defaultValue, directory)
+            : Task.FromResult(defaultValue);
     }
 
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken) where T : notnull
@@ -249,11 +260,11 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     }
 
     public Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug,
-        CancellationToken cancellationToken)
+        DebugSessionOptions? options, CancellationToken cancellationToken)
     {
         StartDebugSessionAsyncCalled?.SetResult();
         return StartDebugSessionAsyncCallback != null
-            ? StartDebugSessionAsyncCallback.Invoke(workingDirectory, projectFile, debug)
+            ? StartDebugSessionAsyncCallback.Invoke(workingDirectory, projectFile, debug, options)
             : Task.CompletedTask;
     }
 

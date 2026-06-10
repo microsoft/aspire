@@ -16,10 +16,10 @@ Roslyn based utility to add or remove `[QuarantinedTest]` or `[ActiveIssue]` att
 dotnet run --project tools/QuarantineTools -- --help
 
 # Quarantine a test with QuarantinedTest (default mode)
-dotnet run --project tools/QuarantineTools -- -q -i https://github.com/dotnet/aspire/issues/1234 Full.Namespace.Type.Method
+dotnet run --project tools/QuarantineTools -- -q -i https://github.com/microsoft/aspire/issues/1234 Full.Namespace.Type.Method
 
 # Disable a test with ActiveIssue attribute
-dotnet run --project tools/QuarantineTools -- -q -m activeissue -i https://github.com/dotnet/aspire/issues/1234 Full.Namespace.Type.Method
+dotnet run --project tools/QuarantineTools -- -q -m activeissue -i https://github.com/microsoft/aspire/issues/1234 Full.Namespace.Type.Method
 
 # Unquarantine a test with QuarantinedTest (removes attribute)
 dotnet run --project tools/QuarantineTools -- -u Full.Namespace.Type.Method

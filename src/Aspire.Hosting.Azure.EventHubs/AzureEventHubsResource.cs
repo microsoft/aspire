@@ -14,8 +14,9 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure Event Hubs resource.</param>
+[AspireExport]
 public class AzureEventHubsResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     private static readonly string[] s_eventHubClientNames =
     [
@@ -213,9 +214,7 @@ public class AzureEventHubsResource(string name, Action<AzureResourceInfrastruct
         }
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["namespace"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.servicebus.windows.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.servicebus.windows.net"];
 }

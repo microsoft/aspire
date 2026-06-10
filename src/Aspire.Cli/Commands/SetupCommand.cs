@@ -3,10 +3,7 @@
 
 using System.CommandLine;
 using Aspire.Cli.Bundles;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
@@ -15,6 +12,8 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class SetupCommand : BaseCommand
 {
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly IBundleService _bundleService;
 
     private static readonly Option<string?> s_installPathOption = new("--install-path")
@@ -24,17 +23,13 @@ internal sealed class SetupCommand : BaseCommand
 
     private static readonly Option<bool> s_forceOption = new("--force")
     {
-        Description = "Force extraction even if the layout already exists."
+        Description = "Force extraction even if the layout already exists"
     };
 
     public SetupCommand(
         IBundleService bundleService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
-        AspireCliTelemetry telemetry)
-        : base("setup", "Extract the embedded bundle to set up the Aspire CLI runtime.", features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("setup", "Extract the embedded bundle to set up the Aspire CLI runtime", services)
     {
         // Hidden: the setup command is an implementation detail used by install scripts.
         Hidden = true;
@@ -44,7 +39,7 @@ internal sealed class SetupCommand : BaseCommand
         Options.Add(s_forceOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var installPath = parseResult.GetValue(s_installPathOption);
         var force = parseResult.GetValue(s_forceOption);
@@ -52,51 +47,65 @@ internal sealed class SetupCommand : BaseCommand
         var processPath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(processPath))
         {
-            InteractionService.DisplayError("Could not determine the CLI executable path.");
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, "Could not determine the CLI executable path.");
         }
 
-        // Determine extraction directory
+        // `aspire setup` uses a route-independent default (parent of the binary's dir).
+        // Do not switch to `_bundleService.GetDefaultExtractDir` — that path is route-aware
+        // and reserved for auto-extract, where managed-route layouts must stay package-owned.
         if (string.IsNullOrEmpty(installPath))
         {
-            installPath = BundleService.GetDefaultExtractDir(processPath);
+            installPath = GetDefaultInstallPath(processPath);
         }
 
         if (string.IsNullOrEmpty(installPath))
         {
-            InteractionService.DisplayError("Could not determine the installation path.");
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, "Could not determine the installation path.");
         }
 
         // Extract with spinner
         BundleExtractResult result = BundleExtractResult.NoPayload;
         var exitCode = await InteractionService.ShowStatusAsync(
-            ":package:  Extracting Aspire bundle...",
+            "Extracting Aspire bundle...",
             async () =>
             {
                 result = await _bundleService.ExtractAsync(installPath, force, cancellationToken);
-                return ExitCodeConstants.Success;
-            });
+                return CommandResult.Success();
+            }, emoji: KnownEmojis.Package);
 
         switch (result)
         {
             case BundleExtractResult.NoPayload:
-                InteractionService.DisplayMessage("information", "This CLI binary does not contain an embedded bundle. No extraction needed.");
+                InteractionService.DisplayMessage(KnownEmojis.Information, "This CLI binary does not contain an embedded bundle. No extraction needed.");
                 break;
 
             case BundleExtractResult.AlreadyUpToDate:
-                InteractionService.DisplayMessage("white_check_mark", "Bundle is already extracted and up to date. Use --force to re-extract.");
+                InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Bundle is already extracted and up to date. Use --force to re-extract.");
                 break;
 
             case BundleExtractResult.Extracted:
-                InteractionService.DisplayMessage("white_check_mark", $"Bundle extracted to {installPath}");
+                InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Bundle extracted to {installPath}");
                 break;
 
             case BundleExtractResult.ExtractionFailed:
-                InteractionService.DisplayError($"Bundle was extracted to {installPath} but layout validation failed.");
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, $"Bundle was extracted to {installPath} but layout validation failed.");
         }
 
         return exitCode;
+    }
+
+    /// <summary>
+    /// Returns the parent of <paramref name="processPath"/>'s directory, or <c>null</c> if
+    /// none. Route-independent counterpart to the route-aware <see cref="IBundleService.GetDefaultExtractDir"/>.
+    /// </summary>
+    internal static string? GetDefaultInstallPath(string? processPath)
+    {
+        if (string.IsNullOrEmpty(processPath))
+        {
+            return null;
+        }
+
+        var binaryDir = Path.GetDirectoryName(processPath);
+        return string.IsNullOrEmpty(binaryDir) ? null : Path.GetDirectoryName(binaryDir);
     }
 }

@@ -12,6 +12,7 @@ using Humanizer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
+using InteractionInput = Aspire.DashboardService.Proto.V1.InteractionInput;
 
 namespace Aspire.Dashboard.Model;
 
@@ -209,14 +210,14 @@ public sealed class ResourceViewModelNameComparer : IComparer<ResourceViewModel>
         // Use display name by itself first.
         // This is to avoid the problem of using the full name where one resource is called "database" and another is called "database-admin".
         // The full names could end up "database-xyz" and "database-admin-xyz", which would put resources out of order.
-        var displayNameResult = StringComparers.ResourceName.Compare(x.DisplayName, y.DisplayName);
+        var displayNameResult = string.Compare(x.DisplayName, y.DisplayName, StringComparisons.ResourceName);
         if (displayNameResult != 0)
         {
             return displayNameResult;
         }
 
         // Display names are the same so compare with full names.
-        return StringComparers.ResourceName.Compare(x.Name, y.Name);
+        return string.Compare(x.Name, y.Name, StringComparisons.ResourceName);
     }
 }
 
@@ -225,10 +226,13 @@ public sealed class CommandViewModel
 {
     // Known resource command constants.
     // Keep in sync with KnownResourceCommands in Aspire.Hosting.
-    public const string StartCommand = "resource-start";
-    public const string StopCommand = "resource-stop";
-    public const string RestartCommand = "resource-restart";
-    private static readonly string[] s_knownResourceCommands = [StartCommand, StopCommand, RestartCommand];
+    public const string StartCommand = "start";
+    public const string StopCommand = "stop";
+    public const string RestartCommand = "restart";
+    public const string RebuildCommand = "rebuild";
+    public const string SetParameterCommand = "set-parameter";
+    public const string DeleteParameterCommand = "delete-parameter";
+    private static readonly string[] s_knownResourceCommands = [StartCommand, StopCommand, RestartCommand, RebuildCommand, SetParameterCommand, DeleteParameterCommand];
 
     public string Name { get; }
     public CommandViewModelState State { get; }
@@ -236,12 +240,12 @@ public sealed class CommandViewModel
     private string DisplayDescription { get; }
 
     public string ConfirmationMessage { get; }
-    public Value? Parameter { get; }
+    public ImmutableArray<InteractionInput> ArgumentInputs { get; }
     public bool IsHighlighted { get; }
     public string IconName { get; }
     public IconVariant IconVariant { get; }
 
-    public CommandViewModel(string name, CommandViewModelState state, string displayName, string displayDescription, string confirmationMessage, Value? parameter, bool isHighlighted, string iconName, IconVariant iconVariant)
+    public CommandViewModel(string name, CommandViewModelState state, string displayName, string displayDescription, string confirmationMessage, ImmutableArray<InteractionInput> argumentInputs, bool isHighlighted, string iconName, IconVariant iconVariant)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
@@ -251,7 +255,7 @@ public sealed class CommandViewModel
         DisplayName = displayName;
         DisplayDescription = displayDescription;
         ConfirmationMessage = confirmationMessage;
-        Parameter = parameter;
+        ArgumentInputs = argumentInputs;
         IsHighlighted = isHighlighted;
         IconName = iconName;
         IconVariant = iconVariant;
@@ -259,7 +263,7 @@ public sealed class CommandViewModel
 
     public static bool IsKnownCommand(string command)
     {
-        return s_knownResourceCommands.Contains(command);
+        return s_knownResourceCommands.Contains(command, StringComparers.CommandName);
     }
 
     public string GetDisplayName()
@@ -295,7 +299,7 @@ public sealed class EnvironmentVariableViewModel : IPropertyGridItem
     {
         // Name should always have a value, but somehow an empty/whitespace name can reach this point.
         // Better to allow the dashboard to run with an env var with no name than break when loading resources.
-        // https://github.com/dotnet/aspire/issues/5309
+        // https://github.com/microsoft/aspire/issues/5309
         Name = name;
         Value = value;
         FromSpec = fromSpec;

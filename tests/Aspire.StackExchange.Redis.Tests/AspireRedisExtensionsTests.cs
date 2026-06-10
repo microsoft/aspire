@@ -200,7 +200,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
 
     /// <summary>
     /// Verifies that both distributed and output caching components can be added to the same builder and their HealthChecks don't conflict.
-    /// See https://github.com/dotnet/aspire/issues/705
+    /// See https://github.com/microsoft/aspire/issues/705
     /// </summary>
     [Theory]
     [InlineData(true)]

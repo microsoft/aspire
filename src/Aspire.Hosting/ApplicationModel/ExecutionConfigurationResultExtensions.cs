@@ -18,6 +18,7 @@ public static class ExecutionConfigurationResultExtensions
     /// <param name="configuration">The resource execution configuration.</param>
     /// <param name="additionalData">The additional data if found.</param>
     /// <returns>True if the additional data was found; otherwise, false.</returns>
+    [AspireExportIgnore(Reason = "Generic out-parameter helper — use getCertificateTrustData or getHttpsCertificateData instead.")]
     public static bool TryGetAdditionalData<T>(this IExecutionConfigurationResult configuration, [NotNullWhen(true)] out T? additionalData) where T : IExecutionConfigurationData
     {
         foreach (var item in configuration.AdditionalConfigurationData)

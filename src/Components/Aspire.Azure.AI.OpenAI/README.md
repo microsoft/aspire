@@ -67,7 +67,7 @@ And then the connection string will be retrieved from the `ConnectionStrings` co
 
 #### Account Endpoint
 
-The recommended approach is to use an Endpoint, which works with the `AzureOpenAISettings.Credential` property to establish a connection. If no credential is configured, the [DefaultAzureCredential](https://learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential) is used.
+The recommended approach is to use an Endpoint, which works with the `AzureOpenAISettings.Credential` property to establish a connection. If no credential is configured, a [default TokenCredential is created based on the current environment](https://aka.ms/aspire/default-azure-credential).
 
 ```json
 {
@@ -165,8 +165,8 @@ or by setting the "OPENAI_EXPERIMENTAL_ENABLE_OPEN_TELEMETRY" environment variab
 ## Additional documentation
 
 * https://learn.microsoft.com/dotnet/api/overview/azure/ai.openai-readme
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

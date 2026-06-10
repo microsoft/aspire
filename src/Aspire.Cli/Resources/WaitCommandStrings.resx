@@ -118,10 +118,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Wait for a resource to reach a target status.</value>
+    <value>Wait for a resource to reach a target status</value>
   </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
-    <value>The name of the resource to wait for.</value>
+    <value>The name of the resource to wait for</value>
   </data>
   <data name="StatusOptionDescription" xml:space="preserve">
     <value>The target status to wait for (healthy, up, down). Defaults to healthy.</value>
@@ -142,7 +142,7 @@
     <value>Resource '{0}' was not found.</value>
   </data>
   <data name="ResourceEnteredFailedState" xml:space="preserve">
-    <value>Resource '{0}' entered a failed state: {1}.</value>
+    <value>Resource '{0}' entered a failed state: {1}</value>
   </data>
   <data name="InvalidStatusValue" xml:space="preserve">
     <value>Invalid status value '{0}'. Valid values are: healthy, up, down.</value>

@@ -1,0 +1,47 @@
+parameters:
+  - name: rid
+    type: string
+  - name: validationSummaryArtifactName
+    type: string
+  - name: preSteps
+    type: stepList
+    default: []
+  # Name of the native_archives_* artifact to pull microsoft-aspire-cli*.tgz
+  # from. Required (no default) because AzDO disallows template expressions
+  # in parameter defaults. Callers with a literal rid (e.g. `win-x64`) can
+  # use a compile-time `native_archives_${{ replace(rid, '-', '_') }}`
+  # expression; callers whose rid is a runtime variable (e.g. the macOS
+  # job which resolves osx-arm64/osx-x64 in a preStep) must compute the
+  # underscored form at runtime and pass it as a variable reference here.
+  - name: nativeArchiveArtifactName
+    type: string
+
+steps:
+  - checkout: self
+    fetchDepth: 1
+  - ${{ each step in parameters.preSteps }}:
+    - ${{ step }}
+  # Download the per-RID npm tarball directly from the native job's published
+  # artifacts. Previously this pulled from `BlobArtifacts` (assemble stage),
+  # which forced prepare_installers to wait for assemble to finish. The same
+  # microsoft-aspire-cli-<rid>.tgz file is already present in
+  # native_archives_<rid>, so reading from there lets this stage start as
+  # soon as the producing native job completes — see the prepare_installers
+  # stage's `dependsOn: build_sign_native` for the wall-clock motivation.
+  - task: DownloadPipelineArtifact@2
+    displayName: 🟣Download npm packages from native job
+    inputs:
+      artifact: ${{ parameters.nativeArchiveArtifactName }}
+      itemPattern: '**/microsoft-aspire-cli*.tgz'
+      targetPath: '$(Pipeline.Workspace)/npm-packages'
+  - task: NodeTool@0
+    displayName: 🟣Install Node.js
+    inputs:
+      versionSpec: '22.x'
+  - template: /eng/pipelines/templates/prepare-npm-cli-packages.yml@self
+    parameters:
+      npmPackagesDir: $(Pipeline.Workspace)/npm-packages
+      expectedVersion: $(aspireVersion)
+      rid: ${{ parameters.rid }}
+      validationSummaryArtifactName: ${{ parameters.validationSummaryArtifactName }}
+      skipRegistryResolution: true

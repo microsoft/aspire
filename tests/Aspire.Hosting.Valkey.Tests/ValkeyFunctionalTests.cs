@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
@@ -18,7 +20,7 @@ public class ValkeyFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task VerifyValkeyResource()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -60,7 +62,7 @@ public class ValkeyFunctionalTests(ITestOutputHelper testOutputHelper)
     [InlineData(true)]
     [InlineData(false)]
     [RequiresFeature(TestFeature.Docker)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         string? volumeName = null;
@@ -82,7 +84,7 @@ public class ValkeyFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+                bindMountPath = Path.Combine(Directory.CreateTempSubdirectory().FullName, "data");
 
                 valkey1.WithDataBindMount(bindMountPath);
             }
@@ -188,7 +190,7 @@ public class ValkeyFunctionalTests(ITestOutputHelper testOutputHelper)
             {
                 try
                 {
-                    Directory.Delete(bindMountPath, recursive: true);
+                    Directory.Delete(Path.GetDirectoryName(bindMountPath)!, recursive: true);
                 }
                 catch
                 {
@@ -200,7 +202,7 @@ public class ValkeyFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task VerifyWaitForOnValkeyBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -236,4 +238,15 @@ public class ValkeyFunctionalTests(ITestOutputHelper testOutputHelper)
 
         await app.StopAsync();
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Valkey_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddValkey("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
 }

@@ -1,4 +1,5 @@
-﻿@description('The location for the resource(s) to be deployed.')
+﻿// Resource: myvnet
+@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param shared_nsg_outputs_id string
@@ -50,3 +51,35 @@ output subnet2_Id string = subnet2.id
 output id string = myvnet.id
 
 output name string = myvnet.name
+
+// Resource: shared-nsg
+@description('The location for the resource(s) to be deployed.')
+param location string = resourceGroup().location
+
+resource shared_nsg 'Microsoft.Network/networkSecurityGroups@2025-05-01' = {
+  name: take('shared_nsg-${uniqueString(resourceGroup().id)}', 80)
+  location: location
+  tags: {
+    'aspire-resource-name': 'shared-nsg'
+  }
+}
+
+resource shared_nsg_allow_https 'Microsoft.Network/networkSecurityGroups/securityRules@2025-05-01' = {
+  name: 'allow-https'
+  properties: {
+    access: 'Allow'
+    destinationAddressPrefix: '*'
+    destinationPortRange: '443'
+    direction: 'Inbound'
+    priority: 100
+    protocol: 'Tcp'
+    sourceAddressPrefix: '*'
+    sourcePortRange: '*'
+  }
+  parent: shared_nsg
+}
+
+output id string = shared_nsg.id
+
+output name string = shared_nsg.name
+

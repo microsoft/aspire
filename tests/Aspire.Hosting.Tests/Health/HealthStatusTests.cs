@@ -6,6 +6,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Aspire.Hosting.Tests.Health;
 
+[Trait("Partition", "3")]
 public class HealthStatusTests
 {
     private const string StartingState = "Starting";

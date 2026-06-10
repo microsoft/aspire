@@ -63,6 +63,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string HeaderSdk {
+            get {
+                return ResourceManager.GetString("HeaderSdk", resourceCulture);
+            }
+        }
+
         public static string HeaderPid {
             get {
                 return ResourceManager.GetString("HeaderPid", resourceCulture);
@@ -84,6 +90,18 @@ namespace Aspire.Cli.Resources {
         public static string UnknownPath {
             get {
                 return ResourceManager.GetString("UnknownPath", resourceCulture);
+            }
+        }
+
+        public static string FollowOptionDescription {
+            get {
+                return ResourceManager.GetString("FollowOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string FollowRequiresJson {
+            get {
+                return ResourceManager.GetString("FollowRequiresJson", resourceCulture);
             }
         }
     }

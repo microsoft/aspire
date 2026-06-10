@@ -46,14 +46,27 @@ async function fileExists(filePath: string): Promise<boolean> {
 /**
  * Tries to execute the CLI at the given path to verify it works.
  */
-async function tryExecuteCli(cliPath: string): Promise<boolean> {
+export async function tryExecuteCli(cliPath: string): Promise<boolean> {
     try {
-        await execFileAsync(cliPath, ['--version'], { timeout: 5000 });
+        if (shouldUseCmdForCliPath(cliPath)) {
+            // .cmd/.bat files are interpreted by cmd.exe. Passing the wrapper path as a
+            // separate argument lets Node quote paths with spaces instead of relying on
+            // fragile hand-built cmd.exe command strings.
+            await execFileAsync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', 'call', cliPath, '--version'], { timeout: 5000 });
+        }
+        else {
+            await execFileAsync(cliPath, ['--version'], { timeout: 5000 });
+        }
+
         return true;
     }
     catch {
         return false;
     }
+}
+
+function shouldUseCmdForCliPath(cliPath: string): boolean {
+    return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(cliPath);
 }
 
 /**
@@ -133,9 +146,10 @@ const defaultDependencies: CliPathDependencies = {
 
 /**
  * Resolves the Aspire CLI path, checking multiple locations in order:
- * 1. User-configured path in VS Code settings
- * 2. System PATH
- * 3. Default installation directories (~/.aspire/bin, ~/.dotnet/tools)
+ * 1. E2E runner-provided CLI path
+ * 2. User-configured path in VS Code settings
+ * 3. System PATH
+ * 4. Default installation directories (~/.aspire/bin, ~/.dotnet/tools)
  *
  * If the CLI is found at a default installation path but not on PATH,
  * the VS Code setting is updated to use that path.
@@ -146,12 +160,21 @@ const defaultDependencies: CliPathDependencies = {
 export async function resolveCliPath(deps: CliPathDependencies = defaultDependencies): Promise<CliPathResolutionResult> {
     const configuredPath = deps.getConfiguredPath();
     const defaultPaths = deps.getDefaultPaths();
+    const e2eCliPath = process.env.ASPIRE_EXTENSION_E2E_CLI_PATH?.trim();
 
-    // 1. Check if user has configured a custom path (not one of the defaults)
+    if (e2eCliPath) {
+        const isValid = await deps.tryExecute(e2eCliPath);
+        if (isValid) {
+            return { cliPath: e2eCliPath, available: true, source: 'configured' };
+        }
+
+        extensionLogOutputChannel.warn(`E2E CLI path is invalid: ${e2eCliPath}`);
+    }
+
+    // Check if user has configured a custom path (not one of the defaults)
     if (configuredPath && !defaultPaths.includes(configuredPath)) {
         const isValid = await deps.tryExecute(configuredPath);
         if (isValid) {
-            extensionLogOutputChannel.info(`Using user-configured Aspire CLI path: ${configuredPath}`);
             return { cliPath: configuredPath, available: true, source: 'configured' };
         }
 
@@ -162,8 +185,6 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
     // 2. Check if CLI is on PATH
     const onPath = await deps.isOnPath();
     if (onPath) {
-        extensionLogOutputChannel.info('Aspire CLI found on system PATH');
-
         // If we previously auto-set the path to a default install location, clear it
         // since PATH is now working
         if (defaultPaths.includes(configuredPath)) {
@@ -177,8 +198,6 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
     // 3. Check default installation paths (~/.aspire/bin first, then ~/.dotnet/tools)
     const foundPath = await deps.findAtDefaultPath();
     if (foundPath) {
-        extensionLogOutputChannel.info(`Aspire CLI found at default install location: ${foundPath}`);
-
         // Update the setting so future invocations use this path
         if (configuredPath !== foundPath) {
             extensionLogOutputChannel.info('Updating aspireCliExecutablePath setting to use default install location');
@@ -189,6 +208,5 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
     }
 
     // 4. CLI not found anywhere
-    extensionLogOutputChannel.warn('Aspire CLI not found on PATH or at default install locations');
     return { cliPath: 'aspire', available: false, source: 'not-found' };
 }

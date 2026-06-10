@@ -12,7 +12,7 @@ ms.date: 09/17/2025
 - .NET 9.0 Standard Term Support (STS)
 - .NET 10.0 RC (release candidate) 1
 
-If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/dotnet/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://aka.ms/aspire-discord) to chat with the team and other community members.
+If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/microsoft/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://aka.ms/aspire-discord) to chat with the team and other community members.
 
 It's important to note that Aspire releases out-of-band from .NET releases. While major versions of Aspire align with major .NET versions, minor versions are released more frequently. For more information on .NET and Aspire version support, see:
 
@@ -83,7 +83,7 @@ It's important to note that Aspire releases out-of-band from .NET releases. Whil
 ## Upgrade to Aspire 9.5
 
 > [!NOTE] Try out the new update command!
-> Aspire 9.5 brings a new preview CLI command - [aspire update](#new-aspire-update-command-preview) - that can update your AppHost and its packages for you. Get the latest CLI if you want to try and give us feedback about it on [GitHub](https://github.com/dotnet/aspire/issues)!
+> Aspire 9.5 brings a new preview CLI command - [aspire update](#new-aspire-update-command-preview) - that can update your AppHost and its packages for you. Get the latest CLI if you want to try and give us feedback about it on [GitHub](https://github.com/microsoft/aspire/issues)!
 
 Moving between minor releases of Aspire is simple:
 
@@ -103,7 +103,7 @@ Moving between minor releases of Aspire is simple:
     <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
     ```
 
-    For more information, see [Aspire SDK](xref:dotnet/aspire/sdk).
+    For more information, see [Aspire SDK](xref:microsoft/aspire/sdk).
 
 1. Check for any NuGet package updates, either using the NuGet Package Manager in Visual Studio or the **Update NuGet Package** command from C# Dev Kit in VS Code.
 
@@ -343,7 +343,7 @@ Several improvements to resource management and debugging capabilities:
 - **Sub-menu organization**: Resource action menus now use sub-menus to prevent overflow on complex applications (#10869)
 - **Launch profile details**: Project resources now show their associated launch profile for easier debugging (#10906)
 - **Improved navigation**: Better resource selection and navigation handling (#10848)
-- **Launch profile localization**: Launch profile localization and model surfaced in dashboard resource details ([#10906](https://github.com/dotnet/aspire/pull/10906))
+- **Launch profile localization**: Launch profile localization and model surfaced in dashboard resource details ([#10906](https://github.com/microsoft/aspire/pull/10906))
 
 **Debugging enhancements:**
 - **Direct launch profile access**: Quick access to the launch configuration used for each project
@@ -1059,7 +1059,7 @@ var worker = builder.AddProject<Projects.Worker>("worker")
     .WithReference(database);
 ```
 
-New `ResourceStoppedEvent` provides lifecycle insight when resources shut down or fail ([#11103](https://github.com/dotnet/aspire/pull/11103)):
+New `ResourceStoppedEvent` provides lifecycle insight when resources shut down or fail ([#11103](https://github.com/microsoft/aspire/pull/11103)):
 
 ```csharp
 builder.AddProject<Projects.Api>("api")
@@ -1463,18 +1463,18 @@ These overloads provide convenient APIs for the most common job types while main
 
 9.5 delivers the first iteration of the Azure provisioning & deployment pipeline that unifies interactive prompting, Bicep compilation, and mode-specific behavior (run vs publish) across Azure resources:
 
-- New provisioning contexts separate run-mode and publish-mode flows ([#11094](https://github.com/dotnet/aspire/pull/11094)).
+- New provisioning contexts separate run-mode and publish-mode flows ([#11094](https://github.com/microsoft/aspire/pull/11094)).
 - Graph-based dependency planning (`ResourceDeploymentGraph`) ensures correct ordering of resource provisioning.
-- Improved error handling and idempotency for `AddAsExistingResource` across all Azure resources ([#10562](https://github.com/dotnet/aspire/issues/10562)).
-- Support for deploying compute images and resources (custom images referenced in your environment) ([#11030](https://github.com/dotnet/aspire/pull/11030)).
-- Deploy individual Bicep modules instead of a monolithic `main.bicep` for clearer failure isolation and faster iteration ([#11098](https://github.com/dotnet/aspire/pull/11098)).
+- Improved error handling and idempotency for `AddAsExistingResource` across all Azure resources ([#10562](https://github.com/microsoft/aspire/issues/10562)).
+- Support for deploying compute images and resources (custom images referenced in your environment) ([#11030](https://github.com/microsoft/aspire/pull/11030)).
+- Deploy individual Bicep modules instead of a monolithic `main.bicep` for clearer failure isolation and faster iteration ([#11098](https://github.com/microsoft/aspire/pull/11098)).
 - Localized interaction + notification strings across all provisioning prompts (multiple OneLocBuild PRs).
 
 Provisioning automatically prompts for required values only once per run, caches results, and reuses them in publish-mode without re-prompting. This reduces friction when iterating locally while maintaining reproducibility for production publish.
 
 ### Azure deployer interactive command handling
 
-The AppHost now wires Azure provisioning prompts into the standard interaction system (initial work in [#10038](https://github.com/dotnet/aspire/pull/10038), extended in [#10792](https://github.com/dotnet/aspire/pull/10792) and [#10845](https://github.com/dotnet/aspire/pull/10845)). This enables:
+The AppHost now wires Azure provisioning prompts into the standard interaction system (initial work in [#10038](https://github.com/microsoft/aspire/pull/10038), extended in [#10792](https://github.com/microsoft/aspire/pull/10792) and [#10845](https://github.com/microsoft/aspire/pull/10845)). This enables:
 
 - Consistent UX for parameter entry (names, descriptions, validation)
 - Localized prompt text
@@ -1482,15 +1482,15 @@ The AppHost now wires Azure provisioning prompts into the standard interaction s
 
 ### Azure resource idempotency & existing resources
 
-Calling `AddAsExistingResource` is now idempotent across Azure hosting resource builders; repeated calls no longer cause duplicate annotations or inconsistent behavior ([#10562](https://github.com/dotnet/aspire/issues/10562)). This improves reliability when composing reusable extension methods.
+Calling `AddAsExistingResource` is now idempotent across Azure hosting resource builders; repeated calls no longer cause duplicate annotations or inconsistent behavior ([#10562](https://github.com/microsoft/aspire/issues/10562)). This improves reliability when composing reusable extension methods.
 
 ### Compute image deployment
 
-You can now reference and deploy custom compute images as part of Azure environment provisioning ([#11030](https://github.com/dotnet/aspire/pull/11030)). This lays groundwork for richer VM/container hybrid topologies.
+You can now reference and deploy custom compute images as part of Azure environment provisioning ([#11030](https://github.com/microsoft/aspire/pull/11030)). This lays groundwork for richer VM/container hybrid topologies.
 
 ### Module-scoped Bicep deployment
 
-Instead of generating a single aggregated template, 9.5 deploys individual Bicep modules ([#11098](https://github.com/dotnet/aspire/pull/11098)). Failures surface with more precise context and partial successes require less rework.
+Instead of generating a single aggregated template, 9.5 deploys individual Bicep modules ([#11098](https://github.com/microsoft/aspire/pull/11098)). Failures surface with more precise context and partial successes require less rework.
 
 ### Publishing progress & activity reporting
 
@@ -1498,11 +1498,11 @@ Instead of generating a single aggregated template, 9.5 deploys individual Bicep
 
 ### Parameter & interaction API updates
 
-- `ParameterResource.Value` is now obsolete: switch to `await parameter.GetValueAsync()` or inject parameter resources directly ([#10363](https://github.com/dotnet/aspire/pull/10363)). This change improves async value acquisition and avoids accidental blocking.
-- Interaction inputs enforce server-side validation and required `Name` property (breaking, [#10835](https://github.com/dotnet/aspire/pull/10835)).
-- New notification terminology (renamed from MessageBar, [#10449](https://github.com/dotnet/aspire/pull/10449)).
+- `ParameterResource.Value` is now obsolete: switch to `await parameter.GetValueAsync()` or inject parameter resources directly ([#10363](https://github.com/microsoft/aspire/pull/10363)). This change improves async value acquisition and avoids accidental blocking.
+- Interaction inputs enforce server-side validation and required `Name` property (breaking, [#10835](https://github.com/microsoft/aspire/pull/10835)).
+- New notification terminology (renamed from MessageBar, [#10449](https://github.com/microsoft/aspire/pull/10449)).
 - `ExecuteCommandResult` now includes a `Canceled` property to track whether command execution was canceled by the user or system.
-- Server-side validation of interaction inputs ([#10527](https://github.com/dotnet/aspire/pull/10527)).
+- Server-side validation of interaction inputs ([#10527](https://github.com/microsoft/aspire/pull/10527)).
 
 Migration example:
 
@@ -1647,7 +1647,7 @@ The `InteractionInputCollection` provides indexed access by name and improved ty
 
 ### Docker Compose Aspire Dashboard forwarding headers
 
-`AddDockerComposeEnvironment(...).WithDashboard()` gained `WithForwardedHeaders()` to enable forwarded `Host` and `Proto` handling for dashboard scenarios behind reverse proxies or compose networks ([#11080](https://github.com/dotnet/aspire/pull/11080)). This mirrors the standalone dashboard forwarded header support and fixes auth redirect edge cases.
+`AddDockerComposeEnvironment(...).WithDashboard()` gained `WithForwardedHeaders()` to enable forwarded `Host` and `Proto` handling for dashboard scenarios behind reverse proxies or compose networks ([#11080](https://github.com/microsoft/aspire/pull/11080)). This mirrors the standalone dashboard forwarded header support and fixes auth redirect edge cases.
 
 ```csharp
 builder.AddDockerComposeEnvironment("env")
@@ -1657,7 +1657,7 @@ builder.AddDockerComposeEnvironment("env")
 
 ### Container build customization
 
-`ContainerBuildOptions` support (commit [#10074](https://github.com/dotnet/aspire/pull/10074)) enables customizing the underlying `dotnet publish` invocation when Aspire builds project-sourced container images (for example to change configuration, trimming, or pass additional MSBuild properties). Use the new options hook on the project container image configuration to set MSBuild properties instead of maintaining a custom Dockerfile. (Exact API surface is intentionally summarized here to avoid drift; see API docs for `ContainerBuildOptions` in the hosting namespace for usage.)
+`ContainerBuildOptions` support (commit [#10074](https://github.com/microsoft/aspire/pull/10074)) enables customizing the underlying `dotnet publish` invocation when Aspire builds project-sourced container images (for example to change configuration, trimming, or pass additional MSBuild properties). Use the new options hook on the project container image configuration to set MSBuild properties instead of maintaining a custom Dockerfile. (Exact API surface is intentionally summarized here to avoid drift; see API docs for `ContainerBuildOptions` in the hosting namespace for usage.)
 
 ### Deployment image tag callbacks
 

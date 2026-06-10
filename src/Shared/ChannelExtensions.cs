@@ -64,4 +64,40 @@ internal static class ChannelExtensions
             }
         }
     }
+
+    /// <summary>
+    /// Reads up to <paramref name="maxBatchSize"/> values from an async sequence before yielding each batch.
+    /// </summary>
+    /// <typeparam name="T">The type of items in the source and returned batch.</typeparam>
+    /// <param name="source">The async sequence to read values from.</param>
+    /// <param name="maxBatchSize">The maximum number of values to include in each batch.</param>
+    /// <param name="cancellationToken">A token that signals a loss of interest in the operation.</param>
+    /// <returns>An async sequence of batches.</returns>
+    public static async IAsyncEnumerable<T[]> GetBatchesAsync<T>(
+        this IAsyncEnumerable<T> source,
+        int maxBatchSize,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
+
+        List<T>? batch = null;
+
+        await foreach (var item in source.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            batch ??= new List<T>(maxBatchSize);
+            batch.Add(item);
+
+            if (batch.Count == maxBatchSize)
+            {
+                yield return batch.ToArray();
+                batch.Clear();
+            }
+        }
+
+        if (batch is { Count: > 0 })
+        {
+            yield return batch.ToArray();
+        }
+    }
 }

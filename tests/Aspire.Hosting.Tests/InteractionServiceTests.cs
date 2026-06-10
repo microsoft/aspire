@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Tests;
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+[Trait("Partition", "2")]
 public class InteractionServiceTests
 {
     [Fact]
@@ -268,6 +269,83 @@ public class InteractionServiceTests
 
         // Assert - Both conditions should result in false
         Assert.False(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public void IsAvailable_NonInteractiveScope_ReturnsFalse()
+    {
+        var interactionService = CreateInteractionService();
+
+        Assert.True(interactionService.IsAvailable);
+
+        using (InteractionService.StartNonInteractiveScope())
+        {
+            Assert.False(interactionService.IsAvailable);
+        }
+
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public async Task IsAvailable_NonInteractiveScope_FlowsAcrossAsyncCalls()
+    {
+        var interactionService = CreateInteractionService();
+
+        Assert.True(interactionService.IsAvailable);
+
+        using (InteractionService.StartNonInteractiveScope())
+        {
+            Assert.False(interactionService.IsAvailable);
+
+            await Task.Yield();
+
+            // AsyncLocal should flow across await points
+            Assert.False(interactionService.IsAvailable);
+        }
+
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public void IsAvailable_NestedNonInteractiveScopes_RestoresPreviousValue()
+    {
+        var interactionService = CreateInteractionService();
+
+        Assert.True(interactionService.IsAvailable);
+
+        using (InteractionService.StartNonInteractiveScope())
+        {
+            Assert.False(interactionService.IsAvailable);
+
+            using (InteractionService.StartNonInteractiveScope())
+            {
+                Assert.False(interactionService.IsAvailable);
+            }
+
+            // Inner scope disposed, but outer scope still active
+            Assert.False(interactionService.IsAvailable);
+        }
+
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public void IsAvailable_NullScopeDispose_DoesNotAffectOuterScope()
+    {
+        var interactionService = CreateInteractionService();
+
+        Assert.True(interactionService.IsAvailable);
+
+        using (InteractionService.StartNonInteractiveScope())
+        {
+            Assert.False(interactionService.IsAvailable);
+
+            using var _ = default(InteractionService.NonInteractiveScope);
+
+            Assert.False(interactionService.IsAvailable);
+        }
+
+        Assert.True(interactionService.IsAvailable);
     }
 
     [Fact]

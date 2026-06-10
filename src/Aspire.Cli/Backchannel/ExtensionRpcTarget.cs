@@ -45,7 +45,7 @@ internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcT
 
     public Task StopCliAsync()
     {
-        Environment.Exit(ExitCodeConstants.Success);
+        Environment.Exit(CliExitCodes.Success);
         return Task.CompletedTask;
     }
 
@@ -56,6 +56,6 @@ internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcT
 
     public Task<string[]> GetCliCapabilitiesAsync()
     {
-        return Task.FromResult(new[] { KnownCapabilities.BuildDotnetUsingCli });
+        return Task.FromResult(KnownCapabilities.GetAdvertisedCapabilities());
     }
 }

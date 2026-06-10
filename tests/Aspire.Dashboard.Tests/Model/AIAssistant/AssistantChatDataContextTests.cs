@@ -47,7 +47,7 @@ public class AssistantChatDataContextTests
         var dataContext = CreateAssistantChatDataContext(telemetryRepository: repository);
 
         // Act
-        var result = await dataContext.GetStructuredLogsAsync(resourceName: null, CancellationToken.None);
+        var result = await dataContext.GetStructuredLogsAsync(resourceName: null!, CancellationToken.None);
 
         // Assert
         for (var i = 6; i < 20; i++)
@@ -81,7 +81,7 @@ public class AssistantChatDataContextTests
         var dataContext = CreateAssistantChatDataContext(telemetryRepository: repository);
 
         // Act
-        var result = await dataContext.GetTracesAsync(resourceName: null, CancellationToken.None);
+        var result = await dataContext.GetTracesAsync(resourceName: null!, CancellationToken.None);
 
         // Assert
         for (var i = 7; i < 20; i++)

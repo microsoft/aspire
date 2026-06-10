@@ -9,6 +9,7 @@ namespace Aspire.Hosting;
 /// A resource that represents a Kafka broker.
 /// </summary>
 /// <param name="name">The name of the resource.</param>
+[AspireExport(ExposeProperties = true)]
 public class KafkaServerResource(string name) : ContainerResource(name), IResourceWithConnectionString, IResourceWithEnvironment
 {
     // This endpoint is used for host processes Kafka broker communication.

@@ -250,7 +250,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 
         static async Task RunTest(string tempDir)
         {
-            // This test verifies the fix for https://github.com/dotnet/aspire/issues/13967
+            // This test verifies the fix for https://github.com/microsoft/aspire/issues/13967
             // When using AzureBicepResource with a relative templateFile and AzurePublishingContext,
             // the bicep file should be correctly copied to the output directory.
 

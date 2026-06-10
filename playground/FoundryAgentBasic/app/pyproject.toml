@@ -1,0 +1,19 @@
+[project]
+name = "FastAPI-starter"
+version = "0.1.0"
+description = "FastAPI starter"
+requires-python = ">=3.13"
+dependencies = [
+    "azure-ai-agents>=1.2.0b5",
+    "azure-ai-agentserver-core>=1.0.0b7",
+    "azure-ai-projects>=2.0.0b2",
+    "azure-identity>=1.25.1",
+    "azure-monitor-opentelemetry-exporter",
+    "dotenv>=0.9.9",
+    "openai>=2.9.0",
+    "openai-agents>=0.6.2",
+    "opentelemetry-distro>=0.59b0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.38.0",
+    "opentelemetry-instrumentation-openai-agents-v2>=0.1.0",
+    "rich>=14.2.0",
+]

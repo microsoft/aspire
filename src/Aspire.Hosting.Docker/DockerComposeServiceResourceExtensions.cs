@@ -8,7 +8,7 @@ using Aspire.Hosting.Docker;
 
 internal static class DockerComposeServiceResourceExtensions
 {
-    internal static object ProcessValue(this DockerComposeServiceResource resource, object value)
+    internal static async Task<object> ProcessValueAsync(this DockerComposeServiceResource resource, object value)
     {
         while (true)
         {
@@ -58,9 +58,22 @@ internal static class DockerComposeServiceResourceExtensions
 
             if (value is ReferenceExpression expr)
             {
+                // Handle conditional expressions by resolving the condition to its
+                // actual value. Docker Compose YAML cannot represent conditionals, so
+                // the branch must be selected at generation time.
+                if (expr.IsConditional)
+                {
+                    var conditionStr = await expr.Condition!.GetValueAsync(default).ConfigureAwait(false);
+
+                    var branch = string.Equals(conditionStr, expr.MatchValue, StringComparison.OrdinalIgnoreCase)
+                        ? expr.WhenTrue!
+                        : expr.WhenFalse!;
+                    return await resource.ProcessValueAsync(branch).ConfigureAwait(false);
+                }
+
                 if (expr is { Format: "{0}", ValueProviders.Count: 1 })
                 {
-                    return resource.ProcessValue(expr.ValueProviders[0]).ToString() ?? string.Empty;
+                    return (await resource.ProcessValueAsync(expr.ValueProviders[0]).ConfigureAwait(false)).ToString() ?? string.Empty;
                 }
 
                 var args = new object[expr.ValueProviders.Count];
@@ -68,7 +81,7 @@ internal static class DockerComposeServiceResourceExtensions
 
                 foreach (var vp in expr.ValueProviders)
                 {
-                    var val = resource.ProcessValue(vp);
+                    var val = await resource.ProcessValueAsync(vp).ConfigureAwait(false);
                     args[index++] = val ?? throw new InvalidOperationException("Value is null");
                 }
 

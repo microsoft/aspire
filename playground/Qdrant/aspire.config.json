@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "Qdrant.AppHost/Qdrant.AppHost.csproj"
+  }
+}

@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="AppCommands">
         <source>App commands:</source>
-        <target state="new">App commands:</target>
+        <target state="translated">Uygulama komutları:</target>
         <note />
       </trans-unit>
       <trans-unit id="Deployment">
         <source>Deployment:</source>
-        <target state="new">Deployment:</target>
+        <target state="translated">Dağıtım:</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpHint">
         <source>Use "aspire &lt;command&gt; --help" for more information about a command.</source>
-        <target state="new">Use "aspire &lt;command&gt; --help" for more information about a command.</target>
+        <target state="translated">Bir komut hakkında daha fazla bilgi edinmek için "aspire &lt;komut&gt; --help" kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="Monitoring">
         <source>Monitoring:</source>
-        <target state="new">Monitoring:</target>
+        <target state="translated">İzleme:</target>
         <note />
       </trans-unit>
       <trans-unit id="Options">
@@ -29,17 +29,17 @@
       </trans-unit>
       <trans-unit id="OtherCommands">
         <source>Other commands:</source>
-        <target state="new">Other commands:</target>
+        <target state="translated">Diğer komutlar:</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceManagement">
         <source>Resource management:</source>
-        <target state="new">Resource management:</target>
+        <target state="translated">Kaynak yönetimi:</target>
         <note />
       </trans-unit>
       <trans-unit id="ToolsAndConfiguration">
         <source>Tools &amp; configuration:</source>
-        <target state="new">Tools &amp; configuration:</target>
+        <target state="translated">Araçlar ve yapılandırma:</target>
         <note />
       </trans-unit>
       <trans-unit id="Usage">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="UsageSyntax">
         <source>aspire &lt;command&gt; [options]</source>
-        <target state="new">aspire &lt;command&gt; [options]</target>
+        <target state="translated">aspire &lt;komut&gt; [seçenekler]</target>
         <note />
       </trans-unit>
     </body>

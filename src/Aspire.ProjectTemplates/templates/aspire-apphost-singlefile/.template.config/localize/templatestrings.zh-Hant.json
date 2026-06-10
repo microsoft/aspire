@@ -1,15 +1,13 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire 單一檔案主控處理程序",
   "description": "適用於單一檔案案例的精簡版 Aspire AppHost (.NET 10+)。",
   "symbols/Framework/choices/net10.0/description": "目標 net10.0",
   "symbols/appHostHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中 HTTP 端點的連接埠號碼。",
   "symbols/appHostOtlpHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中 OTLP HTTP 端點的連接埠號碼。",
-  "symbols/appHostMcpHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中 MCP HTTP 端點的連接埠號碼。",
   "symbols/appHostResourceHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中資源服務 HTTP 端點的連接埠號碼。",
   "symbols/appHostHttpsPort/description": "要用於 AppHost 專案 launchSettings.json 中 HTTPS 端點的連接埠號碼。只有在未使用參數 no-https 時，才適用此選項。",
   "symbols/appHostOtlpHttpsPort/description": "要用於 AppHost 專案 launchSettings.json 中 OTLP HTTPS 端點的連接埠號碼。",
-  "symbols/appHostMcpHttpsPort/description": "要用於 AppHost 專案 launchSettings.json 中 MCP HTTPS 端點的連接埠號碼。",
   "symbols/appHostResourceHttpsPort/description": "要用於 AppHost 專案 launchSettings.json 中資源服務 HTTPS 端點的連接埠號碼。",
   "symbols/NoHttps/description": "是否要關閉 HTTPS。",
   "symbols/LocalhostTld/displayName": "在應用程式 URL 中使用 .dev.localhost TLD",

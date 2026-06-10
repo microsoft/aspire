@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -32,7 +34,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <summary>
     /// Environment variable for OpenTelemetry Protocol exporter endpoint.
     /// </summary>
-    internal const string OtlpExporterEndpointConfigKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
+    internal const string OtlpExporterEndpointConfigKey = KnownOtelConfigNames.ExporterOtlpEndpoint;
 
     /// <summary>
     /// Environment variable to specify the console exporter level for debugging.
@@ -99,6 +101,14 @@ internal sealed class AspireCliTelemetry : IHostedService
     }
 
     /// <summary>
+    /// Starts a new activity for reported telemetry with an explicit parent context.
+    /// </summary>
+    public Activity? StartReportedActivity(string name, ActivityKind kind, ActivityContext parentContext)
+    {
+        return StartActivityCore(_reportedActivitySource, name, kind, parentContext);
+    }
+
+    /// <summary>
     /// Starts a new activity for diagnostic telemetry used for internal diagnostics only.
     /// Uses the caller member name if no name is provided.
     /// </summary>
@@ -110,14 +120,29 @@ internal sealed class AspireCliTelemetry : IHostedService
         return StartActivityCore(_diagnosticsActivitySource, name, kind);
     }
 
+    /// <summary>
+    /// Starts a new activity for diagnostic telemetry with an explicit parent context.
+    /// </summary>
+    public Activity? StartDiagnosticActivity(string name, ActivityKind kind, ActivityContext parentContext)
+    {
+        return StartActivityCore(_diagnosticsActivitySource, name, kind, parentContext);
+    }
+
     private Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind)
+    {
+        return StartActivityCore(source, name, kind, parentContext: null);
+    }
+
+    private Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind, ActivityContext? parentContext)
     {
         CheckInitialization();
 
         // Activities must have a name.
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var activity = source.StartActivity(name, kind);
+        var activity = parentContext is { } context
+            ? source.StartActivity(name, kind, context)
+            : source.StartActivity(name, kind);
 
         if (activity is not null)
         {
@@ -197,10 +222,14 @@ internal sealed class AspireCliTelemetry : IHostedService
             _tagsList.Add(new(TelemetryConstants.Tags.DeviceId, deviceIdTask.Result));
 
             // This is consistent with dashboard version data.
-            _tagsList.Add(new(TelemetryConstants.Tags.CliVersion, typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty));
-            _tagsList.Add(new(TelemetryConstants.Tags.CliBuildId, typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? string.Empty));
+            _tagsList.Add(new(TelemetryConstants.Tags.CliVersion, GetCliVersion()));
+            _tagsList.Add(new(TelemetryConstants.Tags.CliBuildId, GetCliBuildId()));
 
             _tagsList.Add(new(TelemetryConstants.Tags.DeploymentEnvironmentName, _ciEnvironmentDetector.IsCIEnvironment() ? "ci" : "local"));
+
+            _tagsList.Add(new(TelemetryConstants.Tags.OsName, GetOsName()));
+            _tagsList.Add(new(TelemetryConstants.Tags.OsType, GetOsType()));
+            _tagsList.Add(new(TelemetryConstants.Tags.OsVersion, Environment.OSVersion.Version.ToString()));
         }
         catch (Exception ex)
         {
@@ -239,5 +268,69 @@ internal sealed class AspireCliTelemetry : IHostedService
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Gets the human-readable operating system name for the <c>os.name</c> semantic convention.
+    /// </summary>
+    internal static string GetOsName()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return "Windows";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return "Linux";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return "macOS";
+        }
+
+        return RuntimeInformation.OSDescription;
+    }
+
+    /// <summary>
+    /// Gets the OpenTelemetry semantic convention value for the <c>os.type</c> attribute.
+    /// </summary>
+    internal static string GetOsType()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return "windows";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return "linux";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return "darwin";
+        }
+
+        return "unknown";
+    }
+
+    /// <summary>
+    /// Gets the CLI version from the assembly's informational version attribute.
+    /// </summary>
+    /// <returns>The CLI version string, or an empty string if not available.</returns>
+    internal static string GetCliVersion()
+    {
+        return AssemblyVersionHelper.GetInformationalVersion(typeof(Program).Assembly);
+    }
+
+    /// <summary>
+    /// Gets the CLI build ID from the assembly's file version attribute.
+    /// </summary>
+    /// <returns>The CLI build ID string, or an empty string if not available.</returns>
+    internal static string GetCliBuildId()
+    {
+        return AssemblyVersionHelper.GetFileVersion(typeof(Program).Assembly);
     }
 }

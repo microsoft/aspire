@@ -186,20 +186,20 @@
   <data name="ParameterValueNotSet" xml:space="preserve">
     <value>Value not set</value>
   </data>
+  <data name="ParameterSetValueAction" xml:space="preserve">
+    <value>Click to set parameter value</value>
+  </data>
   <data name="StateColumnHeader" xml:space="preserve">
     <value>State</value>
   </data>
-  <data name="SpanDetailsResource" xml:space="preserve">
-    <value>Resource &lt;strong&gt;{0}&lt;/strong&gt;</value>
-    <comment>{0} is the application name. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  <data name="SpanDetailsResourceLabel" xml:space="preserve">
+    <value>Resource</value>
   </data>
-  <data name="SpanDetailsDuration" xml:space="preserve">
-    <value>Duration &lt;strong&gt;{0}&lt;/strong&gt;</value>
-    <comment>{0} is a duration. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  <data name="SpanDetailsDurationLabel" xml:space="preserve">
+    <value>Duration</value>
   </data>
-  <data name="SpanDetailsStartTime" xml:space="preserve">
-    <value>Start time &lt;strong&gt;{0}&lt;/strong&gt;</value>
-    <comment>{0} is a duration. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  <data name="SpanDetailsStartTimeLabel" xml:space="preserve">
+    <value>Start time</value>
   </data>
   <data name="ViewLogsLink" xml:space="preserve">
     <value>View logs</value>
@@ -283,13 +283,11 @@
   <data name="Loading" xml:space="preserve">
     <value>Loading...</value>
   </data>
-  <data name="StructuredLogsDetailsResource" xml:space="preserve">
-    <value>Resource &lt;strong&gt;{0}&lt;/strong&gt;</value>
-    <comment>{0} is the application name. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  <data name="StructuredLogsDetailsResourceLabel" xml:space="preserve">
+    <value>Resource</value>
   </data>
-  <data name="StructuredLogsDetailsTimestamp" xml:space="preserve">
-    <value>Timestamp &lt;strong&gt;{0}&lt;/strong&gt;</value>
-    <comment>{0} is a date. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  <data name="StructuredLogsDetailsTimestampLabel" xml:space="preserve">
+    <value>Timestamp</value>
   </data>
   <data name="ResourceDetailsUrlsHeader" xml:space="preserve">
     <value>URLs</value>
@@ -305,6 +303,9 @@
   </data>
   <data name="ResourceDetailsResourceHeader" xml:space="preserve">
     <value>Resource</value>
+  </data>
+  <data name="ResourceDetailsStateDescriptionHeader" xml:space="preserve">
+    <value>State details</value>
   </data>
   <data name="SpanDetailsEventsHeader" xml:space="preserve">
     <value>Events</value>
@@ -428,13 +429,13 @@
     <value>Mount type</value>
   </data>
   <data name="ClearAllResources" xml:space="preserve">
-    <value>Remove all</value>
+    <value>Remove all telemetry</value>
   </data>
   <data name="ClearSelectedResource" xml:space="preserve">
-    <value>Remove for {0}</value>
+    <value>Remove telemetry for {0}</value>
   </data>
   <data name="ClearPendingSelectedResource" xml:space="preserve">
-    <value>Remove for resource</value>
+    <value>Remove telemetry for resource</value>
   </data>
   <data name="ChartContainerOverflowDescription" xml:space="preserve">
     <value>Some dimensions for the metric have been dropped by the OpenTelemetry SDK.</value>

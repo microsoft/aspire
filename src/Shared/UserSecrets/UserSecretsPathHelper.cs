@@ -1,43 +1,31 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Security.Cryptography;
+using System.Text;
+
 namespace Aspire.Shared.UserSecrets;
 
 // Copied from https://github.com/dotnet/runtime/blob/213833ea99b79a4b494b2935e1ccb10b93cd4cbc/src/libraries/Microsoft.Extensions.Configuration.UserSecrets/src/PathHelper.cs
 
 /// <summary>
-/// Provides helper methods for working with user secrets in a location outside of source control.
+/// Helpers for resolving user secrets file paths.
 /// </summary>
 internal static class UserSecretsPathHelper
 {
     internal const string SecretsFileName = "secrets.json";
 
     /// <summary>
-    /// <para>
     /// Returns the path to the JSON file that stores user secrets.
-    /// </para>
-    /// <para>
-    /// This uses the current user profile to locate the secrets file on disk in a location outside of source control.
-    /// </para>
     /// </summary>
-    /// <param name="userSecretsId">The user secret ID.</param>
-    /// <returns>The full path to the secret file.</returns>
     public static string GetSecretsPathFromSecretsId(string userSecretsId)
     {
         return InternalGetSecretsPathFromSecretsId(userSecretsId, throwIfNoRoot: true);
     }
 
     /// <summary>
-    /// <para>
-    /// Returns the path to the JSON file that stores user secrets or throws exception if not found.
-    /// </para>
-    /// <para>
-    /// This uses the current user profile to locate the secrets file on disk in a location outside of source control.
-    /// </para>
+    /// Returns the path to the user secrets file, optionally throwing if no root is found.
     /// </summary>
-    /// <param name="userSecretsId">The user secret ID.</param>
-    /// <param name="throwIfNoRoot">specifies if an exception should be thrown when no root for user secrets is found</param>
-    /// <returns>The full path to the secret file.</returns>
     internal static string InternalGetSecretsPathFromSecretsId(string userSecretsId, bool throwIfNoRoot)
     {
         const string userSecretsFallbackDir = "DOTNET_USER_SECRETS_FALLBACK_DIR";
@@ -63,5 +51,17 @@ internal static class UserSecretsPathHelper
         return !string.IsNullOrEmpty(appData)
             ? Path.Combine(root, "Microsoft", "UserSecrets", userSecretsId, SecretsFileName)
             : Path.Combine(root, ".microsoft", "usersecrets", userSecretsId, SecretsFileName);
+    }
+
+    /// <summary>
+    /// Computes a deterministic synthetic UserSecretsId from a file path.
+    /// Used for polyglot AppHosts that don't have a csproj with UserSecretsId.
+    /// </summary>
+    public static string ComputeSyntheticUserSecretsId(string appHostPath)
+    {
+        var hashBytes = SHA256.HashData(
+            Encoding.UTF8.GetBytes(appHostPath.ToLowerInvariant()));
+        var hash = Convert.ToHexString(hashBytes).ToLowerInvariant();
+        return $"aspire-{hash[..32]}";
     }
 }

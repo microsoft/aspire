@@ -1,6 +1,6 @@
 name: 🐞 Bug Report
 description: Create a report about something that is not working
-labels: ["bug"]
+type: Bug
 body:
   - type: markdown
     attributes:
@@ -10,11 +10,11 @@ body:
         Please keep in mind that the GitHub issue tracker is not intended as a general support forum, but for reporting **non-security** bugs and feature requests.
 
         If you believe you have an issue that affects the SECURITY of the platform, please do NOT create an issue and instead email your issue details to secure@microsoft.com. Your report may be eligible for our [bug bounty](https://www.microsoft.com/msrc/bounty-dot-net-core) but ONLY if it is reported through email.
-        For other types of questions, consider using [Discussions](https://github.com/dotnet/aspire/discussions).
+        For other types of questions, consider using [Discussions](https://github.com/microsoft/aspire/discussions).
   - type: checkboxes
     attributes:
       label: Is there an existing issue for this?
-      description: Please search to see if an issue already exists for the bug you encountered ([aspire/issues](https://github.com/dotnet/aspire/issues)). More information on our issue management policies is available [here](https://aka.ms/aspnet/issue-policies).
+      description: Please search to see if an issue already exists for the bug you encountered ([aspire/issues](https://github.com/microsoft/aspire/issues)). More information on our issue management policies is available [here](https://aka.ms/aspnet/issue-policies).
       options:
         - label: I have searched the existing issues
           required: true
@@ -34,7 +34,7 @@ body:
     attributes:
       label: Steps To Reproduce
       description: |
-        We ❤ code! Point us to a [minimalistic project which reproduces this issue (repro)](https://github.com/dotnet/aspnetcore/blob/main/docs/repro.md) hosted in a public GitHub repo.
+        We ❤ code! Point us to a minimalistic project which reproduces this issue (repro) hosted in a public GitHub repo.
 
         We will close this issue if:
         - The repro project you share with us is complex. We can't investigate custom projects, so don't point us to such, please.
@@ -52,18 +52,17 @@ body:
       required: false
   - type: textarea
     attributes:
-      label: .NET Version info
+      label: Aspire doctor output
       description: |
-        Run `dotnet --info`
+        Run `aspire doctor` and paste output here
     validations:
       required: false
   - type: textarea
     attributes:
       label: Anything else?
       description: |
-        - ASP.NET Core version:
-        - Aspire version (e.g. package versions): 
-        - The IDE (VS / VS Code / Rider / Other) you're running on, and its version (and any extension versions):
+        - .NET, JS, etc versions: 
+        - The development environment or tooling (VS Code / CLI / VS or Rider / Other) you're running on, and its version (and any extension versions):
 
         Links? References? Anything that will give us more context about the issue you are encountering!
 

@@ -1,16 +1,22 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.ApplicationModel;
 
+using IArgCallbackAnnotation = ICallbackResourceAnnotation<CommandLineArgsCallbackContext, IList<object>>;
+
 /// <summary>
 /// Represents an annotation that provides a callback to be executed with a list of command-line arguments when an executable resource is started.
 /// </summary>
-public class CommandLineArgsCallbackAnnotation : IResourceAnnotation
+public class CommandLineArgsCallbackAnnotation : IResourceAnnotation, IArgCallbackAnnotation
 {
+    private Task<IList<object>>? _callbackTask;
+    private readonly object _lock = new();
+
     /// <summary>
     /// Initializes a new instance of the <see cref="CommandLineArgsCallbackAnnotation"/> class with the specified callback action.
     /// </summary>
@@ -41,6 +47,35 @@ public class CommandLineArgsCallbackAnnotation : IResourceAnnotation
     /// Gets the callback action to be executed when the executable arguments are parsed.
     /// </summary>
     public Func<CommandLineArgsCallbackContext, Task> Callback { get; }
+
+    internal IArgCallbackAnnotation AsCallbackAnnotation() => this;
+
+    Task<IList<object>> IArgCallbackAnnotation.EvaluateOnceAsync(CommandLineArgsCallbackContext context)
+    {
+        lock(_lock)
+        {
+            if (_callbackTask is null)
+            {
+                _callbackTask = ExecuteCallbackAsync(context);
+            }
+            return _callbackTask;
+        }
+    }
+
+    void IArgCallbackAnnotation.ForgetCachedResult()
+    {
+        lock(_lock)
+        {
+            _callbackTask = null;
+        }
+    }
+
+    private async Task<IList<object>> ExecuteCallbackAsync(CommandLineArgsCallbackContext context)
+    {
+        await Callback(context).ConfigureAwait(false);
+        var result = context.Args.ToImmutableList();
+        return result;
+    }
 }
 
 /// <summary>
@@ -48,7 +83,7 @@ public class CommandLineArgsCallbackAnnotation : IResourceAnnotation
 /// </summary>
 /// <param name="args"> The list of command-line arguments.</param>
 /// <param name="cancellationToken"> The cancellation token associated with this execution.</param>
-[AspireExport(ExposeProperties = true)]
+[AspireExport]
 public sealed class CommandLineArgsCallbackContext(IList<object> args, CancellationToken cancellationToken = default)
 {
     private readonly IResource? _resource;
@@ -83,11 +118,30 @@ public sealed class CommandLineArgsCallbackContext(IList<object> args, Cancellat
     public ILogger Logger { get; init; } = NullLogger.Instance;
 
     /// <summary>
+    /// Gets the editor used to manipulate command-line arguments in polyglot callbacks.
+    /// </summary>
+    [AspireExport("CommandLineArgsCallbackContext.args", MethodName = "args")]
+    internal CommandLineArgsEditor ArgsEditor => new(Args);
+
+    /// <summary>
+    /// Gets the logger facade used by polyglot callbacks.
+    /// </summary>
+    [AspireExport]
+    internal LogFacade Log => new(Logger);
+
+    /// <summary>
     /// The resource associated with this callback context.
     /// </summary>
     /// <remarks>
     /// This will be set to the resource in all cases where Aspire invokes the callback.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">Thrown when the EnvironmentCallbackContext was created without a specified resource.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the CommandLineArgsCallbackContext was created without a specified resource.</exception>
+    [AspireExport]
     public IResource Resource => _resource ?? throw new InvalidOperationException($"{nameof(Resource)} is not set. This callback context is not associated with a resource.");
+
+    /// <summary>
+    /// Gets the execution context associated with this callback.
+    /// </summary>
+    [AspireExport(MethodName = "executionContext")]
+    internal DistributedApplicationExecutionContext ExportedExecutionContext => ExecutionContext;
 }

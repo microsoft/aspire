@@ -18,6 +18,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\IConfigurationExtensions.cs" Link="Shared\IConfigurationExtensions.cs" />
     <Compile Include="..\Shared\KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
+    <Compile Include="..\Shared\KnownOtelConfigNames.cs" Link="Shared\KnownOtelConfigNames.cs" />
     <Compile Include="..\Shared\OtlpEndpointResolver.cs" Link="Shared\OtlpEndpointResolver.cs" />
     <Compile Include="..\Shared\PathNormalizer.cs" Link="Shared\PathNormalizer.cs" />
     <Compile Include="..\Shared\StringComparers.cs" Link="Shared\StringComparers.cs" />

@@ -69,7 +69,8 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
     public CliHostEnvironment(IConfiguration configuration, bool nonInteractive)
     {
         // If --non-interactive is explicitly set, disable interactive input and output.
-        // This takes precedence over all other settings including ASPIRE_PLAYGROUND.
+        // ANSI support is still determined from the host configuration so explicit
+        // output settings such as NO_COLOR or ASPIRE_ANSI_PASS_THRU continue to apply.
         if (nonInteractive)
         {
             SupportsInteractiveInput = false;
@@ -96,18 +97,9 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
         if (!TryDetectAnsiSupportConfiguration(configuration, out var supportsAnsi))
         {
             // If there is no explicit configuration to enable or disable ANSI support, attempt to detect it.
-            // This is required because some terminals don't support ANSI output, e.g. https://github.com/dotnet/aspire/issues/13737
-
-            // TODO: Creating a fake console here is a hack to run ANSI detection logic.
-            // Update this to use AnsiCapabilities once it's available in Spectre.Console 0.60+ instead of creating a full AnsiConsole instance.
-            var ansiConsole = AnsiConsole.Create(new AnsiConsoleSettings
-            {
-                Out = new AnsiConsoleOutput(TextWriter.Null),
-                Ansi = AnsiSupport.Detect,
-                ColorSystem = ColorSystemSupport.Detect
-            });
-
-            supportsAnsi = ansiConsole.Profile.Capabilities.Ansi;
+            // This is required because some terminals don't support ANSI output, e.g. https://github.com/microsoft/aspire/issues/13737
+            var capabilities = AnsiCapabilities.Create(TextWriter.Null);
+            supportsAnsi = capabilities.Ansi;
         }
 
         return supportsAnsi;
@@ -148,6 +140,30 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
         if (IsCI(configuration))
         {
             return false;
+        }
+
+        // Verify the console handles are valid. Returning false here is safe —
+        // all consumers gracefully degrade to plain text output (no spinners,
+        // no banner, no progress bars) so the command still works.
+        return HasValidConsoleHandles();
+    }
+
+    private static bool HasValidConsoleHandles()
+    {
+        // On Windows, processes spawned without a console (e.g., via PowerShell's
+        // Invoke-Expression) have invalid output handles. Probing CursorVisible
+        // is a reliable way to detect this — it fails fast if there's no console,
+        // and it exercises the same handle that interactive UI components need.
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                _ = Console.CursorVisible;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
         }
 
         return true;

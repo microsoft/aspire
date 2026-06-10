@@ -12,14 +12,14 @@ These tests simulate real user interactions with the Aspire CLI by automating te
 
 - **`CliEndToEndTestBase`**: Base class providing Hex1b terminal setup, work directory management, and helper methods
 - **`HeadlessPresentationAdapter`**: A headless rendering adapter for running tests without a display
-- **`CliEndToEndTestRunsheetBuilder`**: MSBuild targets that extract test classes and generate per-class runsheets
+- **`TestEnumerationRunsheetBuilder`**: Unified MSBuild targets that extract test classes and generate per-class runsheets (via `SplitTestsOnCI=true`)
 
 ### CI Pipeline
 
 The CI infrastructure uses a matrix strategy to fan out test execution:
 
-1. **Discovery Phase**: The `CliEndToEndTestRunsheetBuilder` builds the test project and runs `--list-tests` to discover all test classes
-2. **Runsheet Generation**: A JSON runsheet entry is created for each unique test class
+1. **Discovery Phase**: The `TestEnumerationRunsheetBuilder` builds the test project and invokes the `GenerateTestPartitionsForCI` target to discover all test classes
+2. **Matrix Generation**: A matrix entry is created for each unique test class, expanded for the target platform
 3. **Parallel Execution**: GitHub Actions creates a separate job for each test class, running them in parallel on different agents
 
 ```plaintext
@@ -131,4 +131,4 @@ When adding a new test class:
 2. Follow the test class structure above
 3. The CI will automatically discover and run your tests as a separate job
 
-No changes to the CI configuration are required - the runsheet builder automatically discovers all test classes.
+No changes to the CI configuration are required — the `TestEnumerationRunsheetBuilder` automatically discovers all test classes in projects with `SplitTestsOnCI=true`.

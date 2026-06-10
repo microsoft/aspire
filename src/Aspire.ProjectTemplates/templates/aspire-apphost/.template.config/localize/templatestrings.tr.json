@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire AppHost",
   "description": "Aspire AppHost (düzenleyici) projesi oluşturmak için bir proje şablonu.",
@@ -8,17 +8,16 @@
   "symbols/Framework/choices/net10.0/description": "Hedef net10.0",
   "symbols/appHostHttpPort/description": "AppHost projesinin HTTP uç noktası launchSettings.json bağlantı noktası numarası.",
   "symbols/appHostOtlpHttpPort/description": "AppHost projesinin OTLP HTTP uç noktası launchSettings.json bağlantı noktası numarası.",
-  "symbols/appHostMcpHttpPort/description": "AppHost projesinin launchSettings.json dosyasında MCP HTTP uç noktası için kullanılacak bağlantı noktası numarası.",
   "symbols/appHostResourceHttpPort/description": "AppHost projesinin kaynak hizmeti HTTP uç noktası launchSettings.json bağlantı noktası numarası.",
   "symbols/appHostHttpsPort/description": "AppHost projesinin HTTPS uç noktası launchSettings.json bağlantı noktası numarası. Bu seçenek yalnızca no-https parametresi kullanılmadığında uygulanabilir.",
   "symbols/appHostOtlpHttpsPort/description": "AppHost projesinin OTLP HTTPS uç noktası launchSettings.json bağlantı noktası numarası.",
-  "symbols/appHostMcpHttpsPort/description": "AppHost projesinin launchSettings.json dosyasında MCP HTTPS uç noktası için kullanılacak bağlantı noktası numarası.",
   "symbols/appHostResourceHttpsPort/description": "AppHost projesinin kaynak hizmeti HTTPS uç noktası launchSettings.json bağlantı noktası numarası.",
   "symbols/skipRestore/description": "Belirtilirse, oluşturma sırasında projenin otomatik geri yüklenmesini atlar.",
   "symbols/NoHttps/description": "HTTPS'nin kapatılıp kapatılmayacağı.",
   "symbols/LocalhostTld/displayName": "Uygulama URL'sinde .dev.localhost TLD'sini kullanın.",
   "symbols/LocalhostTld/description": "Yerel geliştirme için uygulama URL'sinde proje adının .dev.localhost TLD ile birleştirilip birleştirilmeyeceği, örneğin https://myapp.dev.localhost:12345. .NET 10 ve sonraki sürümlerde desteklenir.",
   "postActions/set-startup-project/description": "Çözümdeki başlangıç projesini ayarlar",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Bu projenin gerektirdiği NuGet paketlerini geri yükleyin.",
   "postActions/restore/manualInstructions/default/text": "'dotnet restore' çalıştır"
 }

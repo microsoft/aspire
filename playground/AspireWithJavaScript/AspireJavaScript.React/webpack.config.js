@@ -3,6 +3,7 @@ const HTMLWebpackPlugin = require("html-webpack-plugin");
 module.exports = (env) => {
   return {
     entry: "./src/index.js",
+    devtool: "source-map",
     devServer: {
       port: env.PORT || 4001,
       allowedHosts: "all",

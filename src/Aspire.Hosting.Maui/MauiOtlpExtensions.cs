@@ -49,6 +49,7 @@ public static class MauiOtlpExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport]
     public static IResourceBuilder<T> WithOtlpDevTunnel<T>(
         this IResourceBuilder<T> builder)
         where T : IMauiPlatformResource, IResourceWithEnvironment
@@ -101,11 +102,10 @@ public static class MauiOtlpExtensions
             .ExcludeFromManifest();
 
         // Hide the stub from the dashboard UI
-        stubBuilder.WithInitialState(new CustomResourceSnapshot
+        stubBuilder.WithHidden().WithInitialState(new CustomResourceSnapshot
         {
             ResourceType = "OtlpStub",
-            Properties = [],
-            IsHidden = true
+            Properties = []
         });
 
         // Create dev tunnel with anonymous access for OTLP
@@ -115,7 +115,7 @@ public static class MauiOtlpExtensions
 
         // Manually allocate the stub endpoint so dev tunnel can start
         // Dev tunnels wait for ResourceEndpointsAllocatedEvent before starting
-        appBuilder.Eventing.Subscribe<BeforeStartEvent>((evt, ct) =>
+        appBuilder.OnBeforeStart((evt, ct) =>
         {
             var endpoint = stubResource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault();
             if (endpoint is not null && endpoint.AllocatedEndpoint is null)
@@ -145,6 +145,6 @@ public static class MauiOtlpExtensions
         platformBuilder.WithReferenceRelationship(tunnelConfig.DevTunnel);
 
         // Set OTEL_EXPORTER_OTLP_ENDPOINT directly to the tunnel endpoint URL
-        platformBuilder.WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", tunnelEndpoint);
+        platformBuilder.WithEnvironment(KnownOtelConfigNames.ExporterOtlpEndpoint, tunnelEndpoint);
     }
 }

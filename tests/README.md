@@ -27,8 +27,8 @@ Individual test projects can be opted-out by setting appropriate MSBuild propert
 
 ## Controlling local command line test runs
 
-- Set `TestMethod`, `TestClass` or `TestNamespace` to run specific tests.
-- Set `TestCaptureOutput=false` to see the output on the command line.
+- Use `--filter-method`, `--filter-class`, or `--filter-namespace` (after `--`) to run specific tests.
+- Set `TestCaptureOutput=false` as an environment variable to see the output on the command line.
 - Use `-tl:false` to disable msbuild's terminal logger so live output can be seen.
 
-Example: `dotnet test tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj -bl -p:TestClass=Aspire.Templates.Tests.NewUpAndBuildStandaloneTemplateTests -p:TestCaptureOutput=false -tl:false`
+Example: `dotnet test --project tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj --no-launch-profile -tl:false -- --filter-class "*.NewUpAndBuildStandaloneTemplateTests"`

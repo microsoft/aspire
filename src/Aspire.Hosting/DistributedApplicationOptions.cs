@@ -86,7 +86,7 @@ public sealed class DistributedApplicationOptions
     }
 
     /// <summary>
-    /// The application name to display in the dashboard. For file-based app hosts, this defaults to the directory name.
+    /// The application name to display in the dashboard. For source-file app hosts, this defaults to the AppHost directory name.
     /// For other apps, it falls back to the environment's application name.
     /// </summary>
     public string? DashboardApplicationName
@@ -139,23 +139,22 @@ public sealed class DistributedApplicationOptions
 
     private string? ResolveDashboardApplicationName()
     {
-        // For file-based app hosts (single-file programs), use the directory name as the dashboard application name
-        // to provide a more meaningful identifier than the generated assembly name.
-        // File-based programs set the "EntryPointFilePath" data in AppContext.
-        // For example, if the apphost file is at "foo/apphost.cs", the dashboard name becomes "foo".
-        var entryPointFilePath = AppContext.GetData("EntryPointFilePath") as string;
-        if (!string.IsNullOrEmpty(entryPointFilePath))
+        var appHostFilePath = AppHostFilePath;
+        if (string.IsNullOrEmpty(appHostFilePath) || string.Equals(Path.GetExtension(appHostFilePath), ".csproj", StringComparison.OrdinalIgnoreCase))
         {
-            // Use the directory name from ProjectDirectory if available
-            var projectDirectory = ProjectDirectory;
-            if (!string.IsNullOrEmpty(projectDirectory))
-            {
-                return Path.GetFileName(projectDirectory);
-            }
+            return null;
         }
 
-        // For non-file-based apps, return null to fall back to IHostEnvironment.ApplicationName
-        return null;
+        var projectDirectory = ProjectDirectory;
+        if (!string.IsNullOrEmpty(projectDirectory))
+        {
+            return Path.GetFileName(Path.TrimEndingDirectorySeparator(projectDirectory));
+        }
+
+        var appHostDirectory = Path.GetDirectoryName(appHostFilePath);
+        return string.IsNullOrEmpty(appHostDirectory)
+            ? null
+            : Path.GetFileName(Path.TrimEndingDirectorySeparator(appHostDirectory));
     }
 
     private string? ResolveAppHostFilePath()

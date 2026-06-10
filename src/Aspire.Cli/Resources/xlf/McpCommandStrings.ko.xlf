@@ -2,14 +2,34 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ko" original="../McpCommandStrings.resx">
     <body>
+      <trans-unit id="CallCommand_Description">
+        <source>Call an MCP tool on a running resource</source>
+        <target state="new">Call an MCP tool on a running resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CallCommand_InputOptionDescription">
+        <source>JSON input to pass to the tool</source>
+        <target state="new">JSON input to pass to the tool</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CallCommand_ResourceArgumentDescription">
+        <source>The name of the resource that exposes the MCP tool</source>
+        <target state="new">The name of the resource that exposes the MCP tool</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CallCommand_ToolArgumentDescription">
+        <source>The name of the MCP tool to call</source>
+        <target state="new">The name of the MCP tool to call</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeprecatedCommandWarning">
         <source>Warning: 'aspire mcp' commands are deprecated and will be removed in a future release. Please use 'aspire agent' instead.</source>
         <target state="translated">경고: 'aspire mcp' 명령은 더 이상 사용되지 않으며 향후 릴리스에서 제거될 예정입니다. 대신 'aspire agent'를 사용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage MCP (Model Context Protocol) server. (deprecated, use 'agent')</source>
-        <target state="translated">MCP(모델 컨텍스트 프로토콜) 서버를 관리합니다. (더 이상 사용되지 않음, 'agent' 사용)</target>
+        <source>Interact with MCP (Model Context Protocol) tools exposed by Aspire resources</source>
+        <target state="needs-review-translation">MCP(모델 컨텍스트 프로토콜) 서버를 관리합니다. (더 이상 사용되지 않음, 'agent' 사용)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AdditionalOptionsSelectPrompt">
@@ -28,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurePlaywrightPrompt">
-        <source>Pre-configure Playwright MCP server?</source>
-        <target state="translated">Playwright MCP 서버를 미리 구성할까요?</target>
+        <source>Install Playwright CLI for browser automation?</source>
+        <target state="translated">브라우저 자동화를 위해 Playwright CLI를 설치하시겠나요?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_CreateAgentInstructionsPrompt">
@@ -38,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
-        <source>Initialize MCP server configuration for detected agent environments. (deprecated, use 'agent init')</source>
-        <target state="translated">검색된 에이전트 환경에 대한 MCP 서버 구성을 초기화합니다. (더 이상 사용되지 않음, 'agent init' 사용)</target>
+        <source>Initialize MCP server configuration for detected agent environments (deprecated, use 'agent init')</source>
+        <target state="needs-review-translation">검색된 에이전트 환경에 대한 MCP 서버 구성을 초기화합니다. (더 이상 사용되지 않음, 'agent init' 사용)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_DetectingAgentEnvironments">
@@ -68,8 +88,18 @@
         <note />
       </trans-unit>
       <trans-unit id="StartCommand_Description">
-        <source>Start the MCP (Model Context Protocol) server. (deprecated, use 'agent mcp')</source>
-        <target state="translated">MCP(모델 컨텍스트 프로토콜) 서버를 시작합니다. (더 이상 사용되지 않음, 'agent mcp' 사용)</target>
+        <source>Start the MCP (Model Context Protocol) server (deprecated, use 'agent mcp')</source>
+        <target state="needs-review-translation">MCP(모델 컨텍스트 프로토콜) 서버를 시작합니다. (더 이상 사용되지 않음, 'agent mcp' 사용)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ToolsCommand_Description">
+        <source>List MCP tools exposed by running resources</source>
+        <target state="new">List MCP tools exposed by running resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ToolsCommand_FormatOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="new">Output format (Table or Json)</target>
         <note />
       </trans-unit>
     </body>

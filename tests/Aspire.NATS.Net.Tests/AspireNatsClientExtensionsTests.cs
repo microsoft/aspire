@@ -158,11 +158,11 @@ public class AspireNatsClientExtensionsTests : IClassFixture<NatsContainerFixtur
 
         if (useKeyed)
         {
-            builder.AddKeyedNatsClient(key);
+            builder.AddKeyedNatsClient(key, ConfigureNoRetryOptions);
         }
         else
         {
-            builder.AddNatsClient(DefaultConnectionName);
+            builder.AddNatsClient(DefaultConnectionName, ConfigureNoRetryOptions);
         }
 
         using var host = builder.Build();
@@ -175,6 +175,45 @@ public class AspireNatsClientExtensionsTests : IClassFixture<NatsContainerFixtur
 
         Assert.Contains(healthCheckReport.Entries, x => x.Key == healthCheckName);
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AddNatsClient_HealthCheckReportsConnectionFailureDescription(bool useKeyed)
+    {
+        var key = DefaultConnectionName;
+        var builder = CreateBuilder($"nats://127.0.0.1:{ComponentTestUrls.GetUnusedTcpPort()}");
+
+        if (useKeyed)
+        {
+            builder.AddKeyedNatsClient(key, ConfigureNoRetryOptions);
+        }
+        else
+        {
+            builder.AddNatsClient(DefaultConnectionName, ConfigureNoRetryOptions);
+        }
+
+        using var host = builder.Build();
+        var healthCheckService = host.Services.GetRequiredService<HealthCheckService>();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var healthCheckReport = await healthCheckService.CheckHealthAsync(cts.Token);
+        var healthCheckName = useKeyed ? $"NATS_{key}" : "NATS";
+        Assert.True(healthCheckReport.Entries.TryGetValue(healthCheckName, out var entry));
+
+        Assert.Equal(HealthStatus.Unhealthy, entry.Status);
+        Assert.Equal("Failed to connect to NATS server.", entry.Description);
+        Assert.NotNull(entry.Exception);
+    }
+
+    private static NatsOpts ConfigureNoRetryOptions(NatsOpts options)
+        => options with
+        {
+            RetryOnInitialConnect = false,
+            MaxReconnectRetry = 0,
+            ReconnectWaitMin = TimeSpan.FromMilliseconds(1),
+            ReconnectWaitMax = TimeSpan.FromMilliseconds(1)
+        };
 
     [Theory]
     [InlineData(true)]
@@ -231,6 +270,36 @@ public class AspireNatsClientExtensionsTests : IClassFixture<NatsContainerFixtur
             Assert.Equal("test publish", activity.OperationName);
             Assert.Contains(activity.Tags, kvp => kvp.Key == "messaging.system" && kvp.Value == "nats");
         }, _connectionString).Dispose();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RegistersINatsClient(bool useKeyed)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:nats", _connectionString)
+        ]);
+
+        if (useKeyed)
+        {
+            builder.AddKeyedNatsClient("nats");
+        }
+        else
+        {
+            builder.AddNatsClient("nats");
+        }
+
+        using var host = builder.Build();
+        var client = useKeyed ?
+            host.Services.GetRequiredKeyedService<INatsClient>("nats") :
+            host.Services.GetRequiredService<INatsClient>();
+        var connection = useKeyed ?
+            host.Services.GetRequiredKeyedService<INatsConnection>("nats") :
+            host.Services.GetRequiredService<INatsConnection>();
+
+        Assert.Same(connection, client);
     }
 
     [Fact]

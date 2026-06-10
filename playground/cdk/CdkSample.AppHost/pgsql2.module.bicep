@@ -49,4 +49,6 @@ output connectionString string = 'Host=${pgsql2.properties.fullyQualifiedDomainN
 
 output name string = pgsql2.name
 
+output id string = pgsql2.id
+
 output hostName string = pgsql2.properties.fullyQualifiedDomainName

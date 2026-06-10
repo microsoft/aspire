@@ -30,7 +30,7 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
     [MemberData(nameof(BuildConfigurationsForTestData))]
     [RequiresFeature(TestFeature.SSLCertificate), RequiresFeature(TestFeature.Playwright)]
     [Trait("category", "basic-build")]
-    [OuterLoop("playwright test")]
+    [OuterloopTest("playwright test")]
     public async Task BuildAndRunAspireTemplate(string config)
     {
         string id = GetNewProjectId(prefix: $"aspire_{config}");
@@ -165,7 +165,7 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
     [MemberData(nameof(BuildConfigurationsForTestData))]
     [RequiresFeature(TestFeature.SSLCertificate), RequiresFeature(TestFeature.Playwright)]
     [Trait("category", "basic-build")]
-    [OuterLoop("playwright test")]
+    [OuterloopTest("playwright test")]
     public async Task StarterTemplateNewAndRunWithoutExplicitBuild(string config)
     {
         var id = GetNewProjectId(prefix: $"aspire_starter_run_{config}");
@@ -181,8 +181,8 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
 
     [Fact]
     [RequiresFeature(TestFeature.Playwright)]
-    [OuterLoop("playwright test")]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/9155", typeof(PlatformDetection), nameof(PlatformDetection.IsMacOS))]
+    [OuterloopTest("playwright test")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/9155", typeof(PlatformDetection), nameof(PlatformDetection.IsMacOS))]
     public async Task ProjectWithNoHTTPSRequiresExplicitOverrideWithEnvironmentVariable()
     {
         string id = GetNewProjectId(prefix: "aspire");

@@ -61,13 +61,13 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Manage MCP (Model Context Protocol) server. (deprecated, use 'agent')</value>
+    <value>Interact with MCP (Model Context Protocol) tools exposed by Aspire resources</value>
   </data>
   <data name="StartCommand_Description" xml:space="preserve">
-    <value>Start the MCP (Model Context Protocol) server. (deprecated, use 'agent mcp')</value>
+    <value>Start the MCP (Model Context Protocol) server (deprecated, use 'agent mcp')</value>
   </data>
   <data name="InitCommand_Description" xml:space="preserve">
-    <value>Initialize MCP server configuration for detected agent environments. (deprecated, use 'agent init')</value>
+    <value>Initialize MCP server configuration for detected agent environments (deprecated, use 'agent init')</value>
   </data>
   <data name="DeprecatedCommandWarning" xml:space="preserve">
     <value>Warning: 'aspire mcp' commands are deprecated and will be removed in a future release. Please use 'aspire agent' instead.</value>
@@ -100,6 +100,24 @@
     <value>Create agent environment specific instruction files?</value>
   </data>
   <data name="InitCommand_ConfigurePlaywrightPrompt" xml:space="preserve">
-    <value>Pre-configure Playwright MCP server?</value>
+    <value>Install Playwright CLI for browser automation?</value>
+  </data>
+  <data name="CallCommand_Description" xml:space="preserve">
+    <value>Call an MCP tool on a running resource</value>
+  </data>
+  <data name="CallCommand_ResourceArgumentDescription" xml:space="preserve">
+    <value>The name of the resource that exposes the MCP tool</value>
+  </data>
+  <data name="CallCommand_ToolArgumentDescription" xml:space="preserve">
+    <value>The name of the MCP tool to call</value>
+  </data>
+  <data name="CallCommand_InputOptionDescription" xml:space="preserve">
+    <value>JSON input to pass to the tool</value>
+  </data>
+  <data name="ToolsCommand_Description" xml:space="preserve">
+    <value>List MCP tools exposed by running resources</value>
+  </data>
+  <data name="ToolsCommand_FormatOptionDescription" xml:space="preserve">
+    <value>Output format (Table or Json)</value>
   </data>
 </root>

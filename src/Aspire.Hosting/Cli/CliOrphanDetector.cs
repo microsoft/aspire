@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -12,37 +11,14 @@ internal sealed class CliOrphanDetector(IConfiguration configuration, IHostAppli
 {
     internal Func<int, bool> IsProcessRunning { get; set; } = (int pid) =>
     {
-        try
-        {
-            return !Process.GetProcessById(pid).HasExited;
-        }
-        catch (ArgumentException)
-        {
-            // If Process.GetProcessById throws it means the process in not running.
-            return false;
-        }
+        using var process = ProcessSignaler.TryGetRunningProcess(pid, null, logger);
+        return process is not null;
     };
 
     internal Func<int, long, bool> IsProcessRunningWithStartTime { get; set; } = (int pid, long expectedStartTimeUnix) =>
     {
-        try
-        {
-            var process = Process.GetProcessById(pid);
-            if (process.HasExited)
-            {
-                return false;
-            }
-
-            // Check if the process start time matches the expected start time exactly.
-            var actualStartTimeUnix = ((DateTimeOffset)process.StartTime).ToUnixTimeSeconds();
-            return actualStartTimeUnix == expectedStartTimeUnix;
-        }
-        catch
-        {
-            // If we can't get the process and/or can't get the start time, 
-            // then we interpret both exceptions as the process not being there.
-            return false;
-        }
+        using var process = ProcessSignaler.TryGetRunningProcess(pid, DateTimeOffset.FromUnixTimeSeconds(expectedStartTimeUnix), logger);
+        return process is not null;
     };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

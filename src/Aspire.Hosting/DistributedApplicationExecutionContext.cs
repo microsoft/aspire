@@ -59,7 +59,14 @@ public class DistributedApplicationExecutionContext
     /// The <see cref="IServiceProvider"/> for the AppHost.
     /// </summary>
     /// <exception cref="InvalidOperationException" accessor="get">Thrown when the <see cref="IServiceProvider"/> is not available.</exception>
-    public IServiceProvider ServiceProvider
+    [Obsolete("Use Services instead.")]
+    public IServiceProvider ServiceProvider => Services;
+
+    /// <summary>
+    /// The <see cref="IServiceProvider"/> for the AppHost.
+    /// </summary>
+    /// <exception cref="InvalidOperationException" accessor="get">Thrown when the <see cref="IServiceProvider"/> is not available.</exception>
+    public IServiceProvider Services
     {
         get
         {
@@ -68,7 +75,7 @@ public class DistributedApplicationExecutionContext
                 throw new InvalidOperationException("IServiceProvider is not available because execution context was not constructed with DistributedApplicationExecutionContextOptions.");
             }
 
-            if (options.ServiceProvider is not { } serviceProvider)
+            if (options.Services is not { } serviceProvider)
             {
                 throw new InvalidOperationException("IServiceProvider is not available because the container has not yet been built.");
             }

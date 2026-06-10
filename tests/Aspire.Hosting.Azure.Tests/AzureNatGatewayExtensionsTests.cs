@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -90,5 +92,15 @@ public class AzureNatGatewayExtensionsTests
         var manifest = await AzureManifestUtils.GetManifestWithBicep(builder.Resources.OfType<AzurePublicIPAddressResource>().Single());
 
         await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public void AddPublicIPAddress_HasIpAddressOutputReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var pip = builder.AddPublicIPAddress("mypip");
+
+        Assert.Equal("ipAddress", pip.Resource.IpAddress.Name);
     }
 }

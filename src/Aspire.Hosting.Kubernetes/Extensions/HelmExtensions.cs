@@ -91,13 +91,51 @@ internal static partial class HelmExtensions
 
     public static (bool, ScalarStyle?) ShouldDoubleQuoteString(string value)
     {
-        var shouldApply = ScalarExpressionPattern().IsMatch(value) is false
-                          || EndWithNonStringTypePattern().IsMatch(value) is false;
-        return (shouldApply, shouldApply is false ? ScalarStyle.ForcePlain : null);
+        // Flow control expressions (if/else) must be rendered as plain YAML so Helm
+        // can process them as template expressions without YAML escaping. This check
+        // runs first because if/else blocks contain multiple {{ }} pairs and won't
+        // match ScalarExpressionPattern.
+        if (HelmFlowControlPattern().IsMatch(value))
+        {
+            return (false, ScalarStyle.ForcePlain);
+        }
+
+        if (!ScalarExpressionPattern().IsMatch(value))
+        {
+            return (true, null);
+        }
+
+        // Scalar Helm expressions that contain type conversions (| int, | float64, etc.)
+        // must be rendered as plain (unquoted) YAML so that Helm can process them as
+        // template expressions without YAML escaping interference.
+        if (EndWithNonStringTypePattern().IsMatch(value))
+        {
+            return (false, ScalarStyle.ForcePlain);
+        }
+
+        return (true, null);
     }
 
+    /// <summary>
+    /// Preserves numeric Helm conversions while ensuring the rendered value is written as a string.
+    /// </summary>
+    public static string EnsureStringOutput(this string value)
+    {
+        return EndWithNonStringTypePattern().Replace(value, match =>
+        {
+            var endDelimiterIndex = match.Value.LastIndexOf(EndDelimiter, StringComparison.Ordinal);
+
+            return endDelimiterIndex >= 0
+                ? $"{match.Value[..endDelimiterIndex].TrimEnd()} {PipelineDelimiter} toString {EndDelimiter}"
+                : match.Value;
+        });
+    }
+
+    [GeneratedRegex(@"^\{\{\s*if\b")]
+    internal static partial Regex HelmFlowControlPattern();
+
     [GeneratedRegex(@"\{\{[^}]*\|\s*(int|int64|float64)\s*\}\}")]
-    private static partial Regex EndWithNonStringTypePattern();
+    internal static partial Regex EndWithNonStringTypePattern();
 
     [GeneratedRegex(@"((?<=^\{\{\s*)(?:[^{}]+?)(?=(?:\}\}$)))")]
     internal static partial Regex ScalarExpressionPattern();

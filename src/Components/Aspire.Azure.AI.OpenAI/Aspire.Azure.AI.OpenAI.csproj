@@ -17,6 +17,8 @@
     <Compile Include="..\Common\AzureComponent.cs" Link="AzureComponent.cs" />
     <Compile Include="..\Common\ConfigurationSchemaAttributes.cs" Link="ConfigurationSchemaAttributes.cs" />
     <Compile Include="..\Common\HealthChecksExtensions.cs" Link="HealthChecksExtensions.cs" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="KnownOtelConfigNames.cs" />
+    <Compile Include="..\..\Shared\AzureCredentialHelper.cs" Link="AzureCredentialHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>

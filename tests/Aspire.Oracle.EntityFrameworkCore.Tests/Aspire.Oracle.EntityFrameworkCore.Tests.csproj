@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
+    <SkipTests Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(RunOuterloopTests)' != 'true'">true</SkipTests>
   </PropertyGroup>
 
   <ItemGroup>

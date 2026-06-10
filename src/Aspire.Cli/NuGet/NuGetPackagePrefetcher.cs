@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
-using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Hosting;
@@ -11,22 +10,12 @@ using SystemCommand = System.CommandLine.Command;
 
 namespace Aspire.Cli.NuGet;
 
-internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> logger, CliExecutionContext executionContext, IFeatures features, IPackagingService packagingService, ICliUpdateNotifier cliUpdateNotifier, IDotNetSdkInstaller sdkInstaller) : BackgroundService
+internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> logger, CliExecutionContext executionContext, IFeatures features, IPackagingService packagingService, ICliUpdateNotifier cliUpdateNotifier) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Wait for command to be selected
         var command = await WaitForCommandSelectionAsync(stoppingToken);
-
-        // Check if SDK is installed before attempting to prefetch packages
-        // This prevents dirtying the cache when SDK is not available
-        var (sdkAvailable, _, _, _) = await sdkInstaller.CheckAsync(stoppingToken);
-
-        if (!sdkAvailable)
-        {
-            logger.LogDebug("SDK is not installed. Skipping package prefetching to avoid cache pollution.");
-            return;
-        }
 
         var shouldPrefetchTemplates = ShouldPrefetchTemplatePackages(command);
         var shouldPrefetchCli = ShouldPrefetchCliPackages(command);
@@ -35,25 +24,29 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
         if (shouldPrefetchTemplates)
         {
             _ = Task.Run(async () =>
-             {
-                 try
-                 {
-                     var channels = await packagingService.GetChannelsAsync(stoppingToken);
+            {
+                try
+                {
+                    var channels = await packagingService.GetChannelsAsync(stoppingToken);
 
-                     foreach (var channel in channels)
-                     {
-                         // Discard the results here, we just want them in the cache.
-                         _ = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, stoppingToken);
-                     }
-                 }
-                 catch (System.Exception ex)
-                 {
-                     logger.LogDebug(ex, "Non-fatal error while prefetching template packages. This is not critical to the operation of the CLI.");
-                     // This prefetching is best effort. If it fails we log (above) and then the
-                     // background service will exit gracefully. Code paths that depend on this
-                     // data will handle the absence of pre-fetched packages gracefully.
-                 }
-             }, stoppingToken);
+                    foreach (var channel in channels)
+                    {
+                        // Discard the results here, we just want them in the cache.
+                        _ = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, stoppingToken);
+                    }
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    logger.LogTrace("Template package prefetching was cancelled because the CLI is shutting down.");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogDebug(ex, "Non-fatal error while prefetching template packages. This is not critical to the operation of the CLI.");
+                    // This prefetching is best effort. If it fails we log (above) and then the
+                    // background service will exit gracefully. Code paths that depend on this
+                    // data will handle the absence of pre-fetched packages gracefully.
+                }
+            }, stoppingToken);
         }
 
         // Prefetch CLI packages if needed
@@ -70,7 +63,11 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
                             cancellationToken: stoppingToken
                             );
                     }
-                    catch (System.Exception ex)
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        logger.LogTrace("CLI package prefetching was cancelled because the CLI is shutting down.");
+                    }
+                    catch (Exception ex)
                     {
                         logger.LogDebug(ex, "Non-fatal error while prefetching CLI packages. This is not critical to the operation of the CLI.");
                     }
@@ -107,7 +104,7 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
         }
 
         // Default behavior: prefetch templates for all commands except run, publish, deploy
-        // Because of this: https://github.com/dotnet/aspire/issues/6956
+        // Because of this: https://github.com/microsoft/aspire/issues/6956
         return command is null || !IsRuntimeOnlyCommand(command);
     }
 

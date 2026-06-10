@@ -8,12 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
-    <Compile Include="$(SharedDir)OverloadResolutionPriorityAttribute.cs" Link="Utils\OverloadResolutionPriorityAttribute.cs" />
-    <Compile Include="$(RepoRoot)src\Aspire.Hosting\Dcp\Model\ExecutableLaunchConfiguration.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>
 

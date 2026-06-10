@@ -1,0 +1,8 @@
+parameters:
+  myapp:
+    enable_tls: "True"
+secrets: {}
+config:
+  myapp:
+    TLS_SUFFIX: ""
+    tls_suffix: ",ssl=true"

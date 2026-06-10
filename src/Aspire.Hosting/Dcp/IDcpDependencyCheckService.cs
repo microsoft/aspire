@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Serialization;
+using Aspire.Shared;
 
 namespace Aspire.Hosting.Dcp;
 
@@ -42,7 +43,7 @@ internal sealed class DcpContainersInfo
     internal string ContainerHostName =>
         HostName ?? Runtime switch
         {
-            "podman" => "host.containers.internal",
+            KnownContainerRuntimes.Podman => "host.containers.internal",
             _ => "host.docker.internal",
         };
 }

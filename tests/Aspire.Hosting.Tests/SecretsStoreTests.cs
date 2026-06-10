@@ -12,6 +12,7 @@ using Microsoft.Extensions.Configuration.UserSecrets;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "3")]
 public class SecretsStoreTests
 {
     private static readonly ConstructorInfo s_userSecretsIdAttrCtor = typeof(UserSecretsIdAttribute).GetConstructor([typeof(string)])!;

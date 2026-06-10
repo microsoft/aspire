@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ResourceDependencyTests
 {
     [Fact]
@@ -54,6 +56,46 @@ public class ResourceDependencyTests
         var dependencies = await frontend.Resource.GetResourceDependenciesAsync(executionContext);
 
         Assert.Contains(api.Resource, dependencies);
+    }
+
+    [Fact]
+    public async Task HostUrlDependencyOnlyIncludesMatchingHostEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var host = builder.AddResource(new TestHostResource("host"))
+            .WithEndpoint("http", endpoint =>
+            {
+                endpoint.Port = 17092;
+                endpoint.TargetPort = 1234;
+            });
+
+        var nonHostEndpoint = new EndpointAnnotation(
+            System.Net.Sockets.ProtocolType.Tcp,
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            uriScheme: "http",
+            name: "internal",
+            port: 17092,
+            targetPort: 17092);
+
+        var nonHost = builder.AddResource(new TestHostResource("nonHost"))
+            .WithAnnotation(nonHostEndpoint);
+
+        var container = builder.AddContainer("container", "alpine")
+            .WithEnvironment("URL", new HostUrl("http://localhost:17092/path"));
+
+        var serviceProvider = new TestServiceProvider()
+            .AddService(new DistributedApplicationModel(builder.Resources));
+        var executionContext = new DistributedApplicationExecutionContext(
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+            {
+                Services = serviceProvider
+            });
+
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);
+
+        Assert.Contains(host.Resource, dependencies);
+        Assert.DoesNotContain(nonHost.Resource, dependencies);
     }
 
     [Fact]
@@ -758,7 +800,10 @@ public class ResourceDependencyTests
 
         var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
         var dependencies = await ResourceExtensions.GetDependenciesAsync(
-            [a.Resource, d.Resource], executionContext, ResourceDependencyDiscoveryMode.DirectOnly);
+            [a.Resource, d.Resource], executionContext, new ResourceDependencyDiscoveryOptions
+            {
+                DiscoveryMode = ResourceDependencyDiscoveryMode.DirectOnly
+            });
 
         // DirectOnly should only include B and E (direct deps), not C and F
         Assert.Contains(b.Resource, dependencies);
@@ -876,4 +921,118 @@ public class ResourceDependencyTests
     }
 
     #endregion
+
+    [Fact]
+    public async Task ConditionalReferenceExpressionIncludesBothBranchDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var enableTls = builder.AddParameter("enable-tls");
+        var tlsSuffix = builder.AddParameter("tls-suffix");
+
+        var conditional = ReferenceExpression.CreateConditional(
+            enableTls.Resource,
+            bool.TrueString,
+            ReferenceExpression.Create($"{tlsSuffix}"),
+            ReferenceExpression.Create($",ssl=false"));
+
+        var container = builder.AddContainer("container", "alpine")
+            .WithEnvironment("TLS_SUFFIX", conditional);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);
+
+        Assert.Contains(enableTls.Resource, dependencies);
+        Assert.Contains(tlsSuffix.Resource, dependencies);
+    }
+
+    [Fact]
+    public async Task ConditionalReferenceExpressionWithEndpointReferencesIncludesAll()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var flag = builder.AddParameter("use-primary");
+        var primary = builder.AddContainer("primary", "alpine")
+            .WithHttpEndpoint(5000, 5000, "http");
+        var secondary = builder.AddContainer("secondary", "alpine")
+            .WithHttpEndpoint(5001, 5001, "http");
+
+        var conditional = ReferenceExpression.CreateConditional(
+            flag.Resource,
+            bool.TrueString,
+            ReferenceExpression.Create($"{primary.GetEndpoint("http")}"),
+            ReferenceExpression.Create($"{secondary.GetEndpoint("http")}"));
+
+        var container = builder.AddContainer("frontend", "alpine")
+            .WithEnvironment("BACKEND_URL", conditional);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);
+
+        Assert.Contains(flag.Resource, dependencies);
+        Assert.Contains(primary.Resource, dependencies);
+        Assert.Contains(secondary.Resource, dependencies);
+    }
+
+    [Fact]
+    public async Task NestedConditionalReferenceExpressionIncludesAllTransitiveDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var outerFlag = builder.AddParameter("outer-flag");
+        var innerFlag = builder.AddParameter("inner-flag");
+        var paramA = builder.AddParameter("param-a");
+        var paramB = builder.AddParameter("param-b");
+        var paramC = builder.AddParameter("param-c");
+
+        var innerConditional = ReferenceExpression.CreateConditional(
+            innerFlag.Resource,
+            bool.TrueString,
+            ReferenceExpression.Create($"{paramA}"),
+            ReferenceExpression.Create($"{paramB}"));
+
+        var outerConditional = ReferenceExpression.CreateConditional(
+            outerFlag.Resource,
+            bool.TrueString,
+            innerConditional,
+            ReferenceExpression.Create($"{paramC}"));
+
+        var container = builder.AddContainer("container", "alpine")
+            .WithEnvironment("VALUE", outerConditional);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);
+
+        Assert.Contains(outerFlag.Resource, dependencies);
+        Assert.Contains(innerFlag.Resource, dependencies);
+        Assert.Contains(paramA.Resource, dependencies);
+        Assert.Contains(paramB.Resource, dependencies);
+        Assert.Contains(paramC.Resource, dependencies);
+    }
+
+    [Fact]
+    public async Task DuplicateConditionalExpressionDependenciesAreDeduplicatedAndIncluded()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var flag = builder.AddParameter("flag");
+        var param = builder.AddParameter("value");
+
+        var conditional = ReferenceExpression.CreateConditional(
+            flag.Resource,
+            bool.TrueString,
+            ReferenceExpression.Create($"{param}"),
+            ReferenceExpression.Create($"default"));
+
+        var container = builder.AddContainer("container", "alpine")
+            .WithEnvironment("VAR1", conditional)
+            .WithEnvironment("VAR2", conditional);
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);
+
+        // Both env vars reference the same resources — dependencies should be deduplicated
+        Assert.Contains(flag.Resource, dependencies);
+        Assert.Contains(param.Resource, dependencies);
+    }
 }

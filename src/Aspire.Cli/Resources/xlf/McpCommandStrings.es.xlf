@@ -2,14 +2,34 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="es" original="../McpCommandStrings.resx">
     <body>
+      <trans-unit id="CallCommand_Description">
+        <source>Call an MCP tool on a running resource</source>
+        <target state="new">Call an MCP tool on a running resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CallCommand_InputOptionDescription">
+        <source>JSON input to pass to the tool</source>
+        <target state="new">JSON input to pass to the tool</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CallCommand_ResourceArgumentDescription">
+        <source>The name of the resource that exposes the MCP tool</source>
+        <target state="new">The name of the resource that exposes the MCP tool</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CallCommand_ToolArgumentDescription">
+        <source>The name of the MCP tool to call</source>
+        <target state="new">The name of the MCP tool to call</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeprecatedCommandWarning">
         <source>Warning: 'aspire mcp' commands are deprecated and will be removed in a future release. Please use 'aspire agent' instead.</source>
         <target state="translated">Advertencia: los comandos "mcp" están en desuso y se quitarán en una versión futura. En su lugar, use "agente aspire" en su lugar.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage MCP (Model Context Protocol) server. (deprecated, use 'agent')</source>
-        <target state="translated">Administrar el servidor MCP (protocolo de contexto de modelo). (en desuso, use ''agent'')</target>
+        <source>Interact with MCP (Model Context Protocol) tools exposed by Aspire resources</source>
+        <target state="needs-review-translation">Administrar el servidor MCP (protocolo de contexto de modelo). (en desuso, use ''agent'')</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AdditionalOptionsSelectPrompt">
@@ -28,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurePlaywrightPrompt">
-        <source>Pre-configure Playwright MCP server?</source>
-        <target state="translated">¿Configurar previamente el servidor Playwright MCP?</target>
+        <source>Install Playwright CLI for browser automation?</source>
+        <target state="translated">¿Instalar la CLI de Playwright para la automatización del explorador?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_CreateAgentInstructionsPrompt">
@@ -38,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
-        <source>Initialize MCP server configuration for detected agent environments. (deprecated, use 'agent init')</source>
-        <target state="translated">Inicialice la configuración del servidor MCP para los entornos de agentes detectados. (en desuso, use ''agent init'')</target>
+        <source>Initialize MCP server configuration for detected agent environments (deprecated, use 'agent init')</source>
+        <target state="needs-review-translation">Inicialice la configuración del servidor MCP para los entornos de agentes detectados. (en desuso, use ''agent init'')</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_DetectingAgentEnvironments">
@@ -68,8 +88,18 @@
         <note />
       </trans-unit>
       <trans-unit id="StartCommand_Description">
-        <source>Start the MCP (Model Context Protocol) server. (deprecated, use 'agent mcp')</source>
-        <target state="translated">Inicie el servidor MCP (protocolo de contexto de modelo). (en desuso, use "agent mcp")</target>
+        <source>Start the MCP (Model Context Protocol) server (deprecated, use 'agent mcp')</source>
+        <target state="needs-review-translation">Inicie el servidor MCP (protocolo de contexto de modelo). (en desuso, use "agent mcp")</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ToolsCommand_Description">
+        <source>List MCP tools exposed by running resources</source>
+        <target state="new">List MCP tools exposed by running resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ToolsCommand_FormatOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="new">Output format (Table or Json)</target>
         <note />
       </trans-unit>
     </body>

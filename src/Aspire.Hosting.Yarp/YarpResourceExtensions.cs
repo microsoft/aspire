@@ -26,6 +26,8 @@ public static class YarpResourceExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<YarpResource> AddYarp(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -55,41 +57,20 @@ public static class YarpResourceExtensions
 
         if (builder.ExecutionContext.IsRunMode)
         {
-            builder.Eventing.Subscribe<BeforeStartEvent>((@event, cancellationToken) =>
+            yarpBuilder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
-                var developerCertificateService = @event.Services.GetRequiredService<IDeveloperCertificateService>();
-
-                bool addHttps = false;
-                if (!resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var annotation))
-                {
-                    if (developerCertificateService.UseForHttps)
+                // If a TLS certificate is configured, ensure the YARP resource has an HTTPS endpoint and
+                // configure the environment variables to use it.
+                yarpBuilder
+                    .WithEndpoint("https", ep =>
                     {
-                        // If no specific certificate is configured
-                        addHttps = true;
-                    }
-                }
-                else if (annotation.UseDeveloperCertificate.GetValueOrDefault(developerCertificateService.UseForHttps) || annotation.Certificate is not null)
-                {
-                    addHttps = true;
-                }
-
-                if (addHttps)
-                {
-                    // If a TLS certificate is configured, ensure the YARP resource has an HTTPS endpoint and
-                    // configure the environment variables to use it.
-                    yarpBuilder
-                        .WithEndpoint("https", ep =>
-                        {
-                            // Create or update the HTTPS endpoint
-                            ep.TargetPort ??= HttpsPort;
-                            ep.UriScheme = "https";
-                            ep.Port ??= resource.HostHttpsPort;
-                        }, createIfNotExists: true)
-                        .WithEnvironment("ASPNETCORE_HTTPS_PORT", resource.GetEndpoint("https").Property(EndpointProperty.Port))
-                        .WithEnvironment("ASPNETCORE_URLS", $"{resource.GetEndpoint("https").Property(EndpointProperty.Scheme)}://*:{resource.GetEndpoint("https").Property(EndpointProperty.TargetPort)};{resource.GetEndpoint("http").Property(EndpointProperty.Scheme)}://*:{resource.GetEndpoint("http").Property(EndpointProperty.TargetPort)}");
-                }
-
-                return Task.CompletedTask;
+                        // Create or update the HTTPS endpoint
+                        ep.TargetPort ??= HttpsPort;
+                        ep.UriScheme = "https";
+                        ep.Port ??= resource.HostHttpsPort;
+                    }, createIfNotExists: true)
+                    .WithEnvironment("ASPNETCORE_HTTPS_PORT", resource.GetEndpoint("https").Property(EndpointProperty.Port))
+                    .WithEnvironment("ASPNETCORE_URLS", $"{resource.GetEndpoint("https").Property(EndpointProperty.Scheme)}://*:{resource.GetEndpoint("https").Property(EndpointProperty.TargetPort)};{resource.GetEndpoint("http").Property(EndpointProperty.Scheme)}://*:{resource.GetEndpoint("http").Property(EndpointProperty.TargetPort)}");
             });
         }
 
@@ -97,7 +78,7 @@ public static class YarpResourceExtensions
         {
             yarpBuilder.WithEnvironment(ctx =>
             {
-                var developerCertificateService = ctx.ExecutionContext.ServiceProvider.GetRequiredService<IDeveloperCertificateService>();
+                var developerCertificateService = ctx.ExecutionContext.Services.GetRequiredService<IDeveloperCertificateService>();
                 if (!developerCertificateService.SupportsContainerTrust)
                 {
                     // On systems without the ASP.NET DevCert updates introduced in .NET 10, YARP will not trust the cert used
@@ -123,6 +104,7 @@ public static class YarpResourceExtensions
     /// </summary>
     /// <param name="builder">The YARP resource to configure.</param>
     /// <param name="configurationBuilder">The delegate to configure YARP.</param>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<YarpResource> WithConfiguration(this IResourceBuilder<YarpResource> builder, Action<IYarpConfigurationBuilder> configurationBuilder)
     {
         var configBuilder = new YarpConfigurationBuilder(builder);
@@ -135,6 +117,7 @@ public static class YarpResourceExtensions
     /// </summary>
     /// <param name="builder">The resource builder for YARP.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
+    [AspireExport]
     public static IResourceBuilder<YarpResource> WithHostPort(this IResourceBuilder<YarpResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -152,6 +135,7 @@ public static class YarpResourceExtensions
     /// <param name="builder">The resource builder for YARP.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The updated resource builder.</returns>
+    [AspireExport]
     public static IResourceBuilder<YarpResource> WithHostHttpsPort(this IResourceBuilder<YarpResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -166,11 +150,12 @@ public static class YarpResourceExtensions
     /// </summary>
     /// <param name="builder">The resource builder for YARP.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExportIgnore(Reason = "A single internal export with an optional sourcePath parameter provides the polyglot API without changing the public C# overloads.")]
     public static IResourceBuilder<YarpResource> WithStaticFiles(this IResourceBuilder<YarpResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithEnvironment("YARP_ENABLE_STATIC_FILES", "true");
+        return ConfigureStaticFiles(builder, sourcePath: null);
     }
 
     /// <summary>
@@ -181,12 +166,34 @@ public static class YarpResourceExtensions
     /// <param name="builder">The resource builder for YARP.</param>
     /// <param name="sourcePath">The source path containing static files to serve.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExportIgnore(Reason = "A single internal export with an optional sourcePath parameter provides the polyglot API without changing the public C# overloads.")]
     public static IResourceBuilder<YarpResource> WithStaticFiles(this IResourceBuilder<YarpResource> builder, string sourcePath)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(sourcePath);
 
-        builder.WithStaticFiles();
+        return ConfigureStaticFiles(builder, sourcePath);
+    }
+
+    /// <summary>
+    /// Enables static file serving in the YARP resource.
+    /// </summary>
+    [AspireExport("withStaticFiles")]
+    internal static IResourceBuilder<YarpResource> WithStaticFilesPolyglot(this IResourceBuilder<YarpResource> builder, string? sourcePath = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return ConfigureStaticFiles(builder, sourcePath);
+    }
+
+    private static IResourceBuilder<YarpResource> ConfigureStaticFiles(IResourceBuilder<YarpResource> builder, string? sourcePath)
+    {
+        builder = builder.WithEnvironment("YARP_ENABLE_STATIC_FILES", "true");
+
+        if (sourcePath is null)
+        {
+            return builder;
+        }
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
@@ -215,6 +222,7 @@ public static class YarpResourceExtensions
     /// <param name="builder">The resource builder for YARP.</param>
     /// <param name="resourceWithFiles">The resource with container files.</param>
     /// <returns>The updated resource builder.</returns>
+    [AspireExport]
     public static IResourceBuilder<YarpResource> PublishWithStaticFiles(this IResourceBuilder<YarpResource> builder, IResourceBuilder<IResourceWithContainerFiles> resourceWithFiles)
     {
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)

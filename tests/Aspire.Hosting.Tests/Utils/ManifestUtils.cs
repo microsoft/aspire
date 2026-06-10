@@ -28,7 +28,7 @@ public sealed class ManifestUtils
         var options = new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish);
         var executionContext = new DistributedApplicationExecutionContext(options);
         serviceCollection.AddSingleton(executionContext);
-        options.ServiceProvider = serviceCollection.BuildServiceProvider();
+        options.Services = serviceCollection.BuildServiceProvider();
         
         writer.WriteStartObject();
         var context = new ManifestPublishingContext(executionContext, Path.Combine(manifestDirectory, "manifest.json"), writer);
@@ -42,13 +42,34 @@ public sealed class ManifestUtils
         return resourceNode;
     }
 
+    public static async Task<JsonNode> GetManifestForModel(DistributedApplicationModel model, string? manifestDirectory = null)
+    {
+        manifestDirectory ??= Environment.CurrentDirectory;
+
+        using var ms = new MemoryStream();
+        var writer = new Utf8JsonWriter(ms, new() { Indented = true });
+        var options = new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish)
+        {
+            Services = new ServiceCollection().BuildServiceProvider()
+        };
+        var executionContext = new DistributedApplicationExecutionContext(options);
+        var context = new ManifestPublishingContext(executionContext, Path.Combine(manifestDirectory, "manifest.json"), writer);
+
+        await context.WriteModel(model, CancellationToken.None);
+
+        ms.Position = 0;
+        var obj = JsonNode.Parse(ms);
+        Assert.NotNull(obj);
+        return obj;
+    }
+
     public static async Task<JsonNode[]> GetManifests(IResource[] resources)
     {
         using var ms = new MemoryStream();
         var writer = new Utf8JsonWriter(ms);
         var options = new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish)
         {
-            ServiceProvider = new ServiceCollection().BuildServiceProvider()
+            Services = new ServiceCollection().BuildServiceProvider()
         };
         var executionContext = new DistributedApplicationExecutionContext(options);
         var context = new ManifestPublishingContext(executionContext, Path.Combine(Environment.CurrentDirectory, "manifest.json"), writer);

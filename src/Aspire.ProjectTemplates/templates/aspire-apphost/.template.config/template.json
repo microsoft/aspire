@@ -1,6 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/template",
   "author": "Microsoft",
+  "generatorVersions": "1.0.0.0",
   "classifications": [
     "Common",
     "Aspire",
@@ -99,28 +100,6 @@
       },
       "replaces": "19000"
     },
-    "appHostMcpHttpPort": {
-      "type": "parameter",
-      "datatype": "integer",
-      "description": "Port number to use for the MCP HTTP endpoint in launchSettings.json of the AppHost project."
-    },
-    "appHostMcpHttpPortGenerated": {
-      "type": "generated",
-      "generator": "port",
-      "parameters": {
-        "low": 18000,
-        "high": 18300
-      }
-    },
-    "appHostMcpHttpPortReplacer": {
-      "type": "generated",
-      "generator": "coalesce",
-      "parameters": {
-        "sourceVariableName": "appHostMcpHttpPort",
-        "fallbackVariableName": "appHostMcpHttpPortGenerated"
-      },
-      "replaces": "18000"
-    },
     "appHostResourceHttpPort": {
       "type": "parameter",
       "datatype": "integer",
@@ -186,28 +165,6 @@
         "fallbackVariableName": "appHostOtlpHttpsPortGenerated"
       },
       "replaces": "21000"
-    },
-    "appHostMcpHttpsPort": {
-      "type": "parameter",
-      "datatype": "integer",
-      "description": "Port number to use for the MCP HTTPS endpoint in launchSettings.json of the AppHost project."
-    },
-    "appHostMcpHttpsPortGenerated": {
-      "type": "generated",
-      "generator": "port",
-      "parameters": {
-        "low": 23000,
-        "high": 23300
-      }
-    },
-    "appHostMcpHttpsPortReplacer": {
-      "type": "generated",
-      "generator": "coalesce",
-      "parameters": {
-        "sourceVariableName": "appHostMcpHttpsPort",
-        "fallbackVariableName": "appHostMcpHttpsPortGenerated"
-      },
-      "replaces": "23000"
     },
     "appHostResourceHttpsPort": {
       "type": "parameter",
@@ -303,7 +260,7 @@
     {
       "id": "set-startup-project",
       "description": "Sets the startup project in the solution",
-      "manualInstructions": [],
+      "manualInstructions": [{ "text": "" }],
       "actionId": "5BECCC32-4D5A-4476-A0F9-BD2E81AF0689",
       "condition": "(hostIdentifier == \"vs\")",
       "args": {

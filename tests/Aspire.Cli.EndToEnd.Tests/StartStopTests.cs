@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -15,379 +17,190 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class StartStopTests(ITestOutputHelper output)
 {
     [Fact]
+    [CaptureWorkspaceOnFailure]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16191")]
     public async Task CreateStartAndStopAspireProject()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectSuffix = Guid.NewGuid().ToString("N")[..6];
+        var projectName = $"StarterApp_{projectSuffix}";
+
         var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        // Pattern searchers for aspire new prompts
-        var waitingForTemplateSelectionPrompt = new CellPatternSearcher()
-            .FindPattern("> Starter App");
-
-        var waitingForProjectNamePrompt = new CellPatternSearcher()
-            .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
-
-        var waitingForOutputPathPrompt = new CellPatternSearcher()
-            .Find($"Enter the output path: (./AspireStarterApp): ");
-
-        var waitingForUrlsPrompt = new CellPatternSearcher()
-            .Find($"Use *.dev.localhost URLs");
-
-        var waitingForRedisPrompt = new CellPatternSearcher()
-            .Find($"Use Redis Cache");
-
-        var waitingForTestPrompt = new CellPatternSearcher()
-            .Find($"Do you want to create a test project?");
-
-        var waitForProjectCreatedSuccessfullyMessage = new CellPatternSearcher()
-            .Find("Project created successfully.");
-
-        // Pattern searchers for start/stop commands
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForAppHostStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        // Prepare Docker environment (prompt counting, umask, env vars)
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
 
-        if (isCI)
-        {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
-        }
+        // Install the Aspire CLI
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create a new project using aspire new
-        sequenceBuilder.Type("aspire new")
-            .Enter()
-            .WaitUntil(s => waitingForTemplateSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .Enter() // select first template (Starter App)
-            .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Type("AspireStarterApp")
-            .Enter()
-            .WaitUntil(s => waitingForOutputPathPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForTestPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.AspireNewAsync(projectName, counter);
 
         // Navigate to the AppHost directory
-        sequenceBuilder.Type("cd AspireStarterApp/AspireStarterApp.AppHost")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync($"cd {projectName}/{projectName}.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        // Start the AppHost in the background using aspire run --detach
-        sequenceBuilder.Type("aspire run --detach")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        // Start the AppHost in the background using aspire start
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
-        sequenceBuilder.Type("aspire stop")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
+        await auto.ClearScreenAsync(counter);
 
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
-
-        await pendingRun;
+        // Docker network cleanup can lag behind aspire stop on contended CI runners.
+        await auto.ExecuteCommandUntilOutputAsync(counter, $"docker network ls --format json | grep -i -- '{projectName}' | wc -l", "0", timeout: TimeSpan.FromMinutes(5));
     }
 
     [Fact]
     public async Task StopWithNoRunningAppHostExitsSuccessfully()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+
         var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        // Pattern searcher for the informational message (not an error)
-        var waitForNoRunningAppHosts = new CellPatternSearcher()
-            .Find("No running AppHost found");
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        // Prepare Docker environment (prompt counting, umask, env vars)
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        if (isCI)
-        {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
-        }
+        // Install the Aspire CLI
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Run aspire stop with no running AppHost - should exit with code 0
-        sequenceBuilder.Type("aspire stop")
-            .Enter()
-            .WaitUntil(s => waitForNoRunningAppHosts.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .WaitForSuccessPrompt(counter);
-
-        // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
-
-        await pendingRun;
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
     public async Task AddPackageWhileAppHostRunningDetached()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+
         var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        // Pattern searchers for aspire new prompts
-        var waitingForTemplateSelectionPrompt = new CellPatternSearcher()
-            .Find("> Starter App");
-
-        var waitingForProjectNamePrompt = new CellPatternSearcher()
-            .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
-
-        var waitingForOutputPathPrompt = new CellPatternSearcher()
-            .Find("Enter the output path:");
-
-        var waitingForUrlsPrompt = new CellPatternSearcher()
-            .Find("Use *.dev.localhost URLs");
-
-        var waitingForRedisPrompt = new CellPatternSearcher()
-            .Find("Use Redis Cache");
-
-        var waitingForTestPrompt = new CellPatternSearcher()
-            .Find("Do you want to create a test project?");
-
-        // Pattern searchers for detach/add/stop
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForPackageAddedSuccessfully = new CellPatternSearcher()
-            .Find("was added successfully.");
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        // Prepare Docker environment (prompt counting, umask, env vars)
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        if (isCI)
-        {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
-        }
+        // Install the Aspire CLI
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create a new project using aspire new
-        sequenceBuilder.Type("aspire new")
-            .Enter()
-            .WaitUntil(s => waitingForTemplateSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .Enter() // select first template (Starter App)
-            .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Type("AspireAddTestApp")
-            .Enter()
-            .WaitUntil(s => waitingForOutputPathPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForTestPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.AspireNewAsync("AspireAddTestApp", counter);
 
         // Navigate to the AppHost directory
-        sequenceBuilder.Type("cd AspireAddTestApp/AspireAddTestApp.AppHost")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd AspireAddTestApp/AspireAddTestApp.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in detached mode (locks the project file)
-        sequenceBuilder.Type("aspire run --detach")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Add a package while the AppHost is running - this should auto-stop the
         // running instance before modifying the project, then succeed.
         // --non-interactive skips the version selection prompt.
-        sequenceBuilder.Type("aspire add mongodb --non-interactive")
-            .Enter()
-            .WaitUntil(s => waitForPackageAddedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire add mongodb --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("was added successfully.", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: stop if still running (the add command may have stopped it)
-        // aspire stop may return a non-zero exit code if no instances are found
-        // (already stopped by aspire add), so wait for known output patterns.
-        var waitForStopResult = new CellPatternSearcher()
-            .Find("No running AppHost found");
-        var waitForStoppedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
-        sequenceBuilder.Type("aspire stop")
-            .Enter()
-            .WaitUntil(s => waitForStopResult.Search(s).Count > 0 || waitForStoppedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .IncrementSequence(counter);
-
-        // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
-
-        await pendingRun;
+        // aspire stop should return successfully whether the app host is still running
+        // or was already stopped by the preceding add command.
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
     }
 
     [Fact]
     public async Task AddPackageInteractiveWhileAppHostRunningDetached()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+
         var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        // Pattern searchers for aspire new prompts
-        var waitingForTemplateSelectionPrompt = new CellPatternSearcher()
-            .Find("> Starter App");
-
-        var waitingForProjectNamePrompt = new CellPatternSearcher()
-            .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
-
-        var waitingForOutputPathPrompt = new CellPatternSearcher()
-            .Find("Enter the output path:");
-
-        var waitingForUrlsPrompt = new CellPatternSearcher()
-            .Find("Use *.dev.localhost URLs");
-
-        var waitingForRedisPrompt = new CellPatternSearcher()
-            .Find("Use Redis Cache");
-
-        var waitingForTestPrompt = new CellPatternSearcher()
-            .Find("Do you want to create a test project?");
-
-        // Pattern searchers for detach/add/stop
-        var waitForAppHostStartedSuccessfully = new CellPatternSearcher()
-            .Find("AppHost started successfully.");
-
-        var waitForIntegrationSelectionPrompt = new CellPatternSearcher()
-            .Find("Select an integration to add:");
-
-        var waitForVersionSelectionPrompt = new CellPatternSearcher()
-            .Find("Select a version of");
-
-        var waitForPackageAddedSuccessfully = new CellPatternSearcher()
-            .Find("was added successfully.");
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        // Prepare Docker environment (prompt counting, umask, env vars)
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        if (isCI)
-        {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
-        }
+        // Install the Aspire CLI
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create a new project using aspire new
-        sequenceBuilder.Type("aspire new")
-            .Enter()
-            .WaitUntil(s => waitingForTemplateSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .Enter() // select first template (Starter App)
-            .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Type("AspireAddInteractiveApp")
-            .Enter()
-            .WaitUntil(s => waitingForOutputPathPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitUntil(s => waitingForTestPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.AspireNewAsync("AspireAddInteractiveApp", counter);
 
         // Navigate to the AppHost directory
-        sequenceBuilder.Type("cd AspireAddInteractiveApp/AspireAddInteractiveApp.AppHost")
-            .Enter()
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("cd AspireAddInteractiveApp/AspireAddInteractiveApp.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in detached mode (locks the project file)
-        sequenceBuilder.Type("aspire run --detach")
-            .Enter()
-            .WaitUntil(s => waitForAppHostStartedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(3))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Run aspire add interactively (no integration argument) while AppHost is running.
         // This exercises the interactive package selection flow and verifies the
         // running instance is auto-stopped before modifying the project.
-        sequenceBuilder.Type("aspire add")
-            .Enter()
-            .WaitUntil(s => waitForIntegrationSelectionPrompt.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .Type("mongodb") // type to filter the list
-            .Enter() // select the filtered result
-            .WaitUntil(s => waitForVersionSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            .Enter() // Accept the default version
-            .WaitUntil(s => waitForPackageAddedSuccessfully.Search(s).Count > 0, TimeSpan.FromMinutes(2))
-            .WaitForSuccessPrompt(counter);
+        await auto.TypeAsync("aspire add");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(AddCommandStrings.SelectAnIntegrationToAdd, timeout: TimeSpan.FromMinutes(1));
+        await auto.TypeAsync("mongodb"); // type to filter the list
+        await auto.EnterAsync(); // select the filtered result
+        var waitingForVersionSelection = false;
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            waitingForVersionSelection = snapshot.ContainsText("Select a version of");
+            return waitingForVersionSelection || snapshot.ContainsText("was added successfully.");
+        }, timeout: TimeSpan.FromSeconds(30), description: "version prompt or add success");
+
+        if (waitingForVersionSelection)
+        {
+            await auto.EnterAsync(); // Accept the default version
+        }
+
+        await auto.WaitUntilTextAsync("was added successfully.", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: stop if still running
-        // aspire stop may return a non-zero exit code if no instances are found
-        // (already stopped by aspire add), so wait for known output patterns.
-        var waitForStopResult2 = new CellPatternSearcher()
-            .Find("No running AppHost found");
-        var waitForStoppedSuccessfully2 = new CellPatternSearcher()
-            .Find("AppHost stopped successfully.");
-
-        sequenceBuilder.Type("aspire stop")
-            .Enter()
-            .WaitUntil(s => waitForStopResult2.Search(s).Count > 0 || waitForStoppedSuccessfully2.Search(s).Count > 0, TimeSpan.FromMinutes(1))
-            .IncrementSequence(counter);
-
-        // Exit the shell
-        sequenceBuilder.Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
-
-        await pendingRun;
+        // aspire stop should return successfully whether the app host is still running
+        // or was already stopped by the preceding add command.
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
     }
 }

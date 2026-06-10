@@ -14,11 +14,6 @@ internal enum SdkCheckResult
     AlreadyInstalled,
 
     /// <summary>
-    /// The SDK check was triggered with force install enabled (for testing purposes).
-    /// </summary>
-    ForceInstalled,
-
-    /// <summary>
     /// The SDK is missing or does not meet the minimum required version.
     /// </summary>
     NotInstalled

@@ -16,7 +16,7 @@ ms.date: 04/15/2025
 
 As always, we focused on highly requested features and pain points from the community. Our theme for 9.1 was "polish, polish, polish"—so you see quality of life fixes throughout the whole platform. Some highlights from this release are resource relationships in the dashboard, support for working in GitHub Codespaces, and publishing resources as a Dockerfile.
 
-If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/dotnet/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://discord.com/invite/h87kDAHQgJ) to chat with team members.
+If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/microsoft/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://discord.com/invite/h87kDAHQgJ) to chat with team members.
 
 Whether you're new to Aspire or have been with us since the preview, it's important to note that Aspire releases out-of-band from .NET releases. While major versions of Aspire align with .NET major versions, minor versions are released more frequently. For more details on .NET and Aspire version support, see:
 
@@ -39,7 +39,7 @@ Moving between minor releases of Aspire is simple:
     </Project>
     ```
 
-    For more information, see [Aspire SDK](xref:dotnet/aspire/sdk).
+    For more information, see [Aspire SDK](xref:microsoft/aspire/sdk).
 
 1. Check for any NuGet package updates, either using the NuGet Package Manager in Visual Studio or the **Update NuGet Package** command in VS Code.
 1. Update to the latest [Aspire templates](../fundamentals/aspire-sdk-templates.md) by running the following .NET command line:
@@ -89,7 +89,7 @@ Now you use this feature to reset the dashboard to a blank slate, test your app,
 We 💜 love the developer community and thrive on its feedback, collaboration, and contributions. This feature is a community contribution from [@Daluur](https://github.com/Daluur). Join us in celebrating their contribution by using the feature!
 
 > [!TIP]
-> If you're interested in contributing to Aspire, look for issues labeled with [good first issue](https://github.com/dotnet/aspire/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22) and follow the [contributor guide](https://github.com/dotnet/aspire/blob/main/docs/contributing.md).
+> If you're interested in contributing to Aspire, look for issues labeled with [good first issue](https://github.com/microsoft/aspire/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22) and follow the [contributor guide](https://github.com/microsoft/aspire/blob/main/docs/contributing.md).
 
 ### 🔢 New filtering
 
@@ -149,11 +149,11 @@ While this API was available in previous versions, it couldn't be used with <xre
 
 ### 🧹 Cleaning up Docker networks
 
-In 9.1, we addressed a persistent issue where Docker networks created by Aspire would remain active even after the application was stopped. This bug, tracked in [Aspire GitHub issue #6504](https://github.com/dotnet/aspire/issues/6504), is resolved. Now, Docker networks are properly cleaned up, ensuring a more efficient and tidy development environment.
+In 9.1, we addressed a persistent issue where Docker networks created by Aspire would remain active even after the application was stopped. This bug, tracked in [Aspire GitHub issue #6504](https://github.com/microsoft/aspire/issues/6504), is resolved. Now, Docker networks are properly cleaned up, ensuring a more efficient and tidy development environment.
 
 ### ✅ Socket address issues fixed
 
-Several users reported issues ([#6693](https://github.com/dotnet/aspire/issues/6693), [#6704](https://github.com/dotnet/aspire/issues/6704), [#7095](https://github.com/dotnet/aspire/issues/7095)) with restarting the Aspire app host, including reconciliation errors and "address already in use" messages.
+Several users reported issues ([#6693](https://github.com/microsoft/aspire/issues/6693), [#6704](https://github.com/microsoft/aspire/issues/6704), [#7095](https://github.com/microsoft/aspire/issues/7095)) with restarting the Aspire app host, including reconciliation errors and "address already in use" messages.
 
 This release introduces a more robust approach to managing socket addresses, ensuring only one instance of each address is used at a time. Additionally, improvements were made to ensure proper project restarts and resource releases, preventing hanging issues. These changes enhance the stability and reliability of the app host, especially during development and testing.
 
@@ -294,7 +294,7 @@ For more information, see [Aspire diagnostics overview](../diagnostics/overview.
   - [📦 Aspire.RabbitMQ.Client.v7](https://www.nuget.org/packages/Aspire.RabbitMQ.Client.v7) NuGet package. For more information, see the [Aspire RabbitMQ client integration](../messaging/rabbitmq-integration.md#client-integration) documentation.
   - [📦 Aspire.MongoDB.Driver.v3](https://www.nuget.org/packages/Aspire.MongoDB.Driver.v3) NuGet package. For more information, see the [Aspire MongoDB client integration](../database/mongodb-integration.md#client-integration) documentation.
 - Dapr migrated to the [CommunityToolkit](https://github.com/CommunityToolkit/Aspire/tree/main/src/CommunityToolkit.Aspire.Hosting.Dapr) to facilitate faster innovation.
-- Numerous other integrations received updates, fixes, and new features. For detailed information, refer to our [GitHub release notes](https://github.com/dotnet/aspire/releases).
+- Numerous other integrations received updates, fixes, and new features. For detailed information, refer to our [GitHub release notes](https://github.com/microsoft/aspire/releases).
 
 The [📦 Aspire.Hosting.AWS](https://www.nuget.org/packages/Aspire.Hosting.AWS) NuGet package and source code migrated under [Amazon Web Services (AWS)) ownership](https://github.com/aws/integrations-on-dotnet-aspire-for-aws). This migration happened as part of Aspire 9.0, we're just restating that change here.
 
@@ -304,7 +304,7 @@ Aspire 9.1 simplifies writing cross-functional integration tests with a robust a
 
 Now, you're able to disable port randomization or enable the [dashboard](../fundamentals/dashboard/overview.md). For more information, see [Aspire testing overview](../testing/overview.md). Additionally, you can now [Pass arguments to your app host](../testing/manage-app-host.md#pass-arguments-to-your-app-host).
 
-Some of these enhancements were introduced as a result of stability issues that were reported, such as [Aspire GitHub issue #6678](https://github.com/dotnet/aspire/issues/6678)—where some resources failed to start do to "address in use" errors.
+Some of these enhancements were introduced as a result of stability issues that were reported, such as [Aspire GitHub issue #6678](https://github.com/microsoft/aspire/issues/6678)—where some resources failed to start do to "address in use" errors.
 
 ## 🚀 Deployment
 
@@ -324,6 +324,6 @@ Typically APIs are decorated with the <xref:System.ObsoleteAttribute> giving you
 
 ## 🎯 Upgrade today
 
-Follow the directions outlined in the [Upgrade to Aspire 9.1](#️-upgrade-to-net-aspire-91) section to make the switch to 9.1 and take advantage of all these new features today! As always, we're listening for your feedback on [GitHub](https://github.com/dotnet/aspire/issues)-and looking out for what you want to see in 9.2 ☺️.
+Follow the directions outlined in the [Upgrade to Aspire 9.1](#️-upgrade-to-net-aspire-91) section to make the switch to 9.1 and take advantage of all these new features today! As always, we're listening for your feedback on [GitHub](https://github.com/microsoft/aspire/issues)-and looking out for what you want to see in 9.2 ☺️.
 
-For a complete list of issues addressed in this release, see [Aspire GitHub repository—9.1 milestone](https://github.com/dotnet/aspire/issues?q=is%3Aissue%20state%3Aclosed%20milestone%3A9.1%20).
+For a complete list of issues addressed in this release, see [Aspire GitHub repository—9.1 milestone](https://github.com/microsoft/aspire/issues?q=is%3Aissue%20state%3Aclosed%20milestone%3A9.1%20).

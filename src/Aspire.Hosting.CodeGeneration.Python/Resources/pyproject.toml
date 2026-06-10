@@ -1,0 +1,14 @@
+[project]
+name = "aspire_app"
+dynamic = ["version"]
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = {attr = "aspire_app.__version__"}
+
+[tool.setuptools]
+py-modules = ["aspire_app"]

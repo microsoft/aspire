@@ -7,6 +7,8 @@ param container_apps_nsg_outputs_id string
 
 param private_endpoints_nsg_outputs_id string
 
+param sql_nsg_outputs_id string
+
 resource vnet 'Microsoft.Network/virtualNetworks@2025-05-01' = {
   name: take('vnet-${uniqueString(resourceGroup().id)}', 64)
   properties: {
@@ -58,9 +60,33 @@ resource private_endpoints 'Microsoft.Network/virtualNetworks/subnets@2025-05-01
   ]
 }
 
+resource sql_aci_subnet 'Microsoft.Network/virtualNetworks/subnets@2025-05-01' = {
+  name: 'sql-aci-subnet'
+  properties: {
+    addressPrefix: '10.0.255.248/29'
+    delegations: [
+      {
+        properties: {
+          serviceName: 'Microsoft.ContainerInstance/containerGroups'
+        }
+        name: 'Microsoft.ContainerInstance/containerGroups'
+      }
+    ]
+    networkSecurityGroup: {
+      id: sql_nsg_outputs_id
+    }
+  }
+  parent: vnet
+  dependsOn: [
+    private_endpoints
+  ]
+}
+
 output container_apps_Id string = container_apps.id
 
 output private_endpoints_Id string = private_endpoints.id
+
+output sql_aci_subnet_Id string = sql_aci_subnet.id
 
 output id string = vnet.id
 

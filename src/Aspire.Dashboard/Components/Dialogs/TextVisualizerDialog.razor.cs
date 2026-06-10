@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -18,10 +19,12 @@ public partial class TextVisualizerDialog : ComponentBase
     private List<SelectViewModel<string>> _options = null!;
     private string? _selectedFormat;
     private bool _isLoading = true;
+    private MarkdownProcessor? _markdownProcessor;
     internal TextVisualizerViewModel TextVisualizerViewModel { get; set; } = default!;
 
     public HashSet<string?> EnabledOptions { get; } = [];
     internal bool? ShowSecretsWarning { get; private set; }
+    internal bool IsMarkdownFormat => TextVisualizerViewModel.FormatKind == DashboardUIHelpers.MarkdownFormat;
 
     /// <summary>
     /// Returns true if the dialog has a fixed format that cannot be changed by the user.
@@ -59,6 +62,7 @@ public partial class TextVisualizerDialog : ComponentBase
 
         _options = [
             new SelectViewModel<string> { Id = DashboardUIHelpers.PlaintextFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogPlaintextFormat)] },
+            new SelectViewModel<string> { Id = DashboardUIHelpers.MarkdownFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogMarkdownFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.JsonFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogJsonFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.XmlFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogXmlFormat)] }
         ];
@@ -79,6 +83,12 @@ public partial class TextVisualizerDialog : ComponentBase
             else if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.XmlFormat)
             {
                 EnabledOptions.Add(DashboardUIHelpers.XmlFormat);
+            }
+            else
+            {
+                // Markdown can't be reliably detected from content, so enable it when the format is
+                // unknown to let users switch to markdown rendering if they want.
+                EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
             }
         }
     }
@@ -104,7 +114,12 @@ public partial class TextVisualizerDialog : ComponentBase
         TextVisualizerViewModel.UpdateFormat(newFormat ?? DashboardUIHelpers.PlaintextFormat);
     }
 
-    public static async Task OpenDialogAsync(OpenTextVisualizerDialogOptions options)
+    internal MarkdownProcessor GetMarkdownProcessor()
+    {
+        return _markdownProcessor ??= new MarkdownProcessor(ControlsStringsLoc, safeUrlSchemes: MarkdownHelpers.SafeUrlSchemes, extensions: []);
+    }
+
+    public static async Task<IDialogReference> OpenDialogAsync(OpenTextVisualizerDialogOptions options)
     {
         var width = options.DialogService.IsDesktop ? "75vw" : "100vw";
         var parameters = new DialogParameters
@@ -116,7 +131,7 @@ public partial class TextVisualizerDialog : ComponentBase
             PreventScroll = true,
         };
 
-        await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(
+        return await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(
             new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat), parameters);
     }
 

@@ -19,6 +19,7 @@ namespace Aspire.Hosting.Pipelines;
 /// <para>
 /// Pipeline steps can add any relevant information such as resource group names,
 /// subscription IDs, URLs, namespaces, cluster names, or any other details.
+/// Values can be plain text or Markdown-formatted by using <see cref="MarkdownString"/>.
 /// </para>
 /// <para>
 /// The summary is available via the <see cref="Aspire.Hosting.Pipelines.PipelineContext.Summary"/>
@@ -32,49 +33,53 @@ namespace Aspire.Hosting.Pipelines;
 /// {
 ///     // Do work...
 ///
-///     // Add summary items
+///     // Add plain text summary items
 ///     context.PipelineContext.Summary.Add("☁️ Target", "Azure");
 ///     context.PipelineContext.Summary.Add("📦 Resource Group", "rg-myapp");
 ///     context.PipelineContext.Summary.Add("🔑 Subscription", "12345678-1234-1234-1234-123456789012");
 ///     context.PipelineContext.Summary.Add("🌐 Location", "eastus");
 /// }
 ///
-/// // Kubernetes example
-/// context.PipelineContext.Summary.Add("☸️ Target", "Kubernetes");
-/// context.PipelineContext.Summary.Add("📦 Namespace", "production");
-/// context.PipelineContext.Summary.Add("🖥️ Cluster", "my-cluster");
+///     // Kubernetes example
+///     context.PipelineContext.Summary.Add("☸️ Target", "Kubernetes");
+///     context.PipelineContext.Summary.Add("📦 Namespace", "production");
+///     context.PipelineContext.Summary.Add("🖥️ Cluster", "my-cluster");
 ///
-/// // Docker example
-/// context.PipelineContext.Summary.Add("🐳 Target", "Docker");
-/// context.PipelineContext.Summary.Add("🌐 Endpoint", "localhost:8080");
+///     // Docker example
+///     context.PipelineContext.Summary.Add("🐳 Target", "Docker");
+///     context.PipelineContext.Summary.Add("🌐 Endpoint", "localhost:8080");
+///
+///     // Add a Markdown-formatted value (e.g., a clickable link)
+///     context.PipelineContext.Summary.Add("📦 Resource Group", new MarkdownString($"[{rgName}]({portalUrl})"));
 /// </code>
 /// </example>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+[AspireExport(ExposeMethods = true)]
 public sealed class PipelineSummary
 {
     private readonly object _lock = new();
-    private readonly List<KeyValuePair<string, string>> _items = [];
+    private readonly List<PipelineSummaryItem> _items = [];
 
     /// <summary>
     /// Gets the items in the pipeline summary as a read-only collection.
     /// Items are displayed in the order they were added.
     /// </summary>
-    public ReadOnlyCollection<KeyValuePair<string, string>> Items
+    public ReadOnlyCollection<PipelineSummaryItem> Items
     {
         get
         {
             lock (_lock)
             {
-                return new ReadOnlyCollection<KeyValuePair<string, string>>(_items.ToList());
+                return new ReadOnlyCollection<PipelineSummaryItem>(_items.ToList());
             }
         }
     }
 
     /// <summary>
-    /// Adds a key-value pair to the pipeline summary.
+    /// Adds a key-value pair to the pipeline summary with a plain-text value.
     /// </summary>
-    /// <param name="key">The key or label for the item (e.g., "Resource Group", "Namespace", "URL").</param>
-    /// <param name="value">The value for the item.</param>
+    /// <param name="key">The key or label for the item (e.g., "Namespace", "URL").</param>
+    /// <param name="value">The plain-text value for the item.</param>
     public void Add(string key, string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
@@ -82,7 +87,24 @@ public sealed class PipelineSummary
 
         lock (_lock)
         {
-            _items.Add(new KeyValuePair<string, string>(key, value));
+            _items.Add(new PipelineSummaryItem(key, value, enableMarkdown: false));
+        }
+    }
+
+    /// <summary>
+    /// Adds a key-value pair to the pipeline summary with a Markdown-formatted value.
+    /// </summary>
+    /// <param name="key">The key or label for the item (e.g., "Namespace", "URL").</param>
+    /// <param name="value">The Markdown-formatted value for the item.</param>
+    [AspireExportIgnore(Reason = "MarkdownString is not exported to ATS. Use addMarkdown instead.")]
+    public void Add(string key, MarkdownString value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(value);
+
+        lock (_lock)
+        {
+            _items.Add(new PipelineSummaryItem(key, value.Value, enableMarkdown: true));
         }
     }
 

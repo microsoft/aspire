@@ -15,6 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// A resource that represents a Kusto cluster.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class AzureKustoClusterResource : AzureProvisioningResource, IResourceWithConnectionString, IResourceWithEndpoints
 {
     /// <summary>

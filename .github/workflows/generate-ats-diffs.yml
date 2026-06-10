@@ -12,9 +12,9 @@ permissions:
 jobs:
   generate-and-pr:
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Restore
         run: ./restore.sh
@@ -23,22 +23,15 @@ jobs:
         run: ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
 
       - name: Discover and dump ATS capabilities
+        env:
+          ASPIRE_REPO_ROOT: ${{ github.workspace }}
         run: |
           ASPIRE_CLI="./dotnet.sh run --no-build --project src/Aspire.Cli/Aspire.Cli.csproj --configuration Release -- --nologo"
           FAILURES=0
 
-          # Ensure sdk command is available in this workflow.
-          echo "::group::Enable polyglot support feature"
-          if ! $ASPIRE_CLI config set features.polyglotSupportEnabled true --global; then
-            echo "::error::Failed to enable features.polyglotSupportEnabled"
-            echo "::endgroup::"
-            exit 1
-          fi
-          echo "::endgroup::"
-
           # Dump core Aspire.Hosting capabilities (no integration argument)
           echo "::group::Aspire.Hosting (core)"
-          if ! $ASPIRE_CLI sdk dump --ci -o src/Aspire.Hosting/api/Aspire.Hosting.ats.txt; then
+          if ! $ASPIRE_CLI sdk dump --format ci -o src/Aspire.Hosting/api/Aspire.Hosting.ats.txt; then
             echo "::error::Failed to dump core Aspire.Hosting capabilities"
             exit 1
           fi
@@ -47,9 +40,10 @@ jobs:
           # Discover Aspire.Hosting.* integration projects with [AspireExport] attributes
           # Find project directories by resolving matched files to their nearest .csproj
           # Exclude infrastructure projects that define/analyze the attribute rather than use it
-          PROJECTS=$(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' \
+          PROJECTS=$(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' \
                       | grep -v '/obj/' | grep -v '/bin/' \
                       | grep -v 'Aspire.Hosting.Analyzers' \
+                      | grep -v 'Aspire.Hosting.Integration.Analyzers' \
                       | grep -v 'Aspire.Hosting.CodeGeneration' \
                       | grep -v 'Aspire.Hosting.RemoteHost' \
                       | while read -r file; do
@@ -70,7 +64,7 @@ jobs:
             if [ -f "$csproj" ]; then
               echo "::group::$proj_name"
               mkdir -p "$proj/api"
-              if ! $ASPIRE_CLI sdk dump --ci "$csproj" -o "$proj/api/$proj_name.ats.txt"; then
+              if ! $ASPIRE_CLI sdk dump --format ci "$csproj" -o "$proj/api/$proj_name.ats.txt"; then
                 echo "::error::Failed to dump ATS capabilities for $proj_name"
                 FAILURES=$((FAILURES + 1))
               fi
@@ -83,10 +77,17 @@ jobs:
             exit 1
           fi
 
-      - name: Create or update pull request
-        uses: dotnet/actions-create-pull-request@e8d799aa1f8b17f324f9513832811b0a62f1e0b1
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Create or update pull request
+        uses: ./.github/actions/create-pull-request
+        with:
+          token: ${{ steps.app-token.outputs.token }}
           branch: update-ats-diffs
           base: main
           labels: |

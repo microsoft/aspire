@@ -17,6 +17,7 @@ namespace Aspire.Hosting.Pipelines;
 internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, ReportingStep> _steps = new();
+    private readonly ConcurrentDictionary<string, string> _stepIdsByTitle = new(StringComparer.Ordinal);
     private readonly InteractionService _interactionService;
     private readonly ILogger<PipelineActivityReporter> _logger;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
@@ -38,28 +39,46 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         _ => CompletionStates.InProgress
     };
 
+    private static PublishingActivityData CreateStepActivityData(ReportingStep step, string statusText, CompletionState completionState, bool enableMarkdown)
+    {
+        return new PublishingActivityData
+        {
+            Id = step.Id,
+            StatusText = statusText,
+            CompletionState = ToBackchannelCompletionState(completionState),
+            StepId = null,
+            ParentStepId = step.ParentStepId,
+            HierarchyLevel = step.HierarchyLevel,
+            EnableMarkdown = enableMarkdown
+        };
+    }
+
     public async Task<IReportingStep> CreateStepAsync(string title, CancellationToken cancellationToken = default)
     {
-        var step = new ReportingStep(this, Guid.NewGuid().ToString(), title);
+        return await CreateStepAsync(title, parentStepId: null, hierarchyLevel: 0, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReportingStep> CreateStepAsync(string title, string? parentStepId, int hierarchyLevel, CancellationToken cancellationToken = default)
+    {
+        var resolvedParentStepId = parentStepId is not null && _stepIdsByTitle.TryGetValue(parentStepId, out var resolvedStepId)
+            ? resolvedStepId
+            : parentStepId;
+
+        var step = new ReportingStep(this, Guid.NewGuid().ToString(), title, resolvedParentStepId, hierarchyLevel);
         _steps.TryAdd(step.Id, step);
+        _stepIdsByTitle[title] = step.Id;
 
         var state = new PublishingActivity
         {
             Type = PublishingActivityTypes.Step,
-            Data = new PublishingActivityData
-            {
-                Id = step.Id,
-                StatusText = step.Title,
-                CompletionState = ToBackchannelCompletionState(CompletionState.InProgress),
-                StepId = null
-            }
+            Data = CreateStepActivityData(step, step.Title, CompletionState.InProgress, enableMarkdown: false)
         };
 
         await ActivityItemUpdated.Writer.WriteAsync(state, cancellationToken).ConfigureAwait(false);
         return step;
     }
 
-    public async Task<ReportingTask> CreateTaskAsync(ReportingStep step, string statusText, CancellationToken cancellationToken)
+    public async Task<ReportingTask> CreateTaskAsync(ReportingStep step, string statusText, bool enableMarkdown, CancellationToken cancellationToken)
     {
         if (!_steps.TryGetValue(step.Id, out var parentStep))
         {
@@ -87,7 +106,8 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                 Id = task.Id,
                 StatusText = statusText,
                 CompletionState = ToBackchannelCompletionState(CompletionState.InProgress),
-                StepId = step.Id
+                StepId = step.Id,
+                EnableMarkdown = enableMarkdown
             }
         };
 
@@ -95,7 +115,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         return task;
     }
 
-    public async Task CompleteStepAsync(ReportingStep step, string completionText, CompletionState completionState, CancellationToken cancellationToken)
+    public async Task CompleteStepAsync(ReportingStep step, string completionText, CompletionState completionState, bool enableMarkdown, CancellationToken cancellationToken)
     {
         lock (step)
         {
@@ -112,19 +132,13 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         var state = new PublishingActivity
         {
             Type = PublishingActivityTypes.Step,
-            Data = new PublishingActivityData
-            {
-                Id = step.Id,
-                StatusText = completionText,
-                CompletionState = ToBackchannelCompletionState(completionState),
-                StepId = null
-            }
+            Data = CreateStepActivityData(step, completionText, completionState, enableMarkdown)
         };
 
         await ActivityItemUpdated.Writer.WriteAsync(state, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task UpdateTaskAsync(ReportingTask task, string statusText, CancellationToken cancellationToken)
+    public async Task UpdateTaskAsync(ReportingTask task, string statusText, bool enableMarkdown, CancellationToken cancellationToken)
     {
         if (!_steps.TryGetValue(task.StepId, out var parentStep))
         {
@@ -149,7 +163,8 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                 Id = task.Id,
                 StatusText = statusText,
                 CompletionState = ToBackchannelCompletionState(CompletionState.InProgress),
-                StepId = task.StepId
+                StepId = task.StepId,
+                EnableMarkdown = enableMarkdown
             }
         };
 
@@ -189,7 +204,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         ActivityItemUpdated.Writer.TryWrite(state);
     }
 
-    public async Task CompleteTaskAsync(ReportingTask task, CompletionState completionState, string? completionMessage, CancellationToken cancellationToken)
+    public async Task CompleteTaskAsync(ReportingTask task, CompletionState completionState, string? completionMessage, bool enableMarkdown, CancellationToken cancellationToken)
     {
         if (!_steps.TryGetValue(task.StepId, out var parentStep))
         {
@@ -222,7 +237,8 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                 StatusText = task.StatusText,
                 CompletionState = ToBackchannelCompletionState(completionState),
                 StepId = task.StepId,
-                CompletionMessage = completionMessage
+                CompletionMessage = completionMessage,
+                EnableMarkdown = enableMarkdown
             }
         };
 
@@ -248,7 +264,12 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                     _ => "Pipeline completed"
                 },
                 CompletionState = ToBackchannelCompletionState(finalState),
-                PipelineSummary = options?.PipelineSummary
+                PipelineSummary = options?.PipelineSummary?.Select(item => new BackchannelPipelineSummaryItem
+                {
+                    Key = item.Key,
+                    Value = item.Value,
+                    EnableMarkdown = item.EnableMarkdown
+                }).ToList()
             }
         };
 

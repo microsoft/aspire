@@ -31,7 +31,7 @@ namespace Aspire.Dashboard.ServiceClient;
 /// lives until the stream is closed.
 /// </para>
 /// <para>
-/// If the <c>DOTNET_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable is not specified, then there's
+/// If the <c>ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable is not specified, then there's
 /// no known endpoint to connect to, and this dashboard client will be disabled. Calls to
 /// <see cref="IDashboardClient.SubscribeResourcesAsync"/> and <see cref="IDashboardClient.SubscribeConsoleLogs"/>
 /// will throw if <see cref="IDashboardClient.IsEnabled"/> is <see langword="false"/>. Callers should
@@ -170,7 +170,8 @@ internal sealed class DashboardClient : IDashboardClient
                     HttpHandler = httpHandler,
                     ServiceConfig = new() { MethodConfigs = { methodConfig } },
                     LoggerFactory = _loggerFactory,
-                    ThrowOperationCanceledOnCancellation = true
+                    ThrowOperationCanceledOnCancellation = true,
+                    MaxReceiveMessageSize = 16 * 1024 * 1024 // 16 MB
                 });
 
             X509CertificateCollection GetFileCertificate()
@@ -421,6 +422,15 @@ internal sealed class DashboardClient : IDashboardClient
                 else
                 {
                     throw new FormatException($"Unexpected {nameof(WatchResourcesUpdate)} kind: {response.KindCase}");
+                }
+
+                // Resolve resource colors for all resources so that color assignment is
+                // deterministic of order returned from the service, not order that the color for a resource is first used.
+                if (changes is not null)
+                {
+                    var resolvedNames = _resourceByName.Values
+                        .Select(r => ResourceViewModel.GetResourceName(r, _resourceByName));
+                    ColorGenerator.Instance.ResolveAll(resolvedNames);
                 }
             }
 
@@ -741,17 +751,27 @@ internal sealed class DashboardClient : IDashboardClient
         return resourceLogLines;
     }
 
-    public async Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, CancellationToken cancellationToken)
+    public async Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         EnsureInitialized();
 
         var request = new ResourceCommandRequest()
         {
             CommandName = command.Name,
-            Parameter = command.Parameter,
             ResourceName = resourceName,
-            ResourceType = resourceType
+            ResourceType = resourceType,
+            NonInteractive = options.NonInteractive
         };
+
+        if (options.Arguments is { } arguments)
+        {
+            foreach (var (key, value) in arguments)
+            {
+                request.Arguments.Add(key, value);
+            }
+        }
 
         try
         {
@@ -770,7 +790,8 @@ internal sealed class DashboardClient : IDashboardClient
             return new ResourceCommandResponseViewModel()
             {
                 Kind = ResourceCommandResponseKind.Failed,
-                ErrorMessage = errorMessage
+                ErrorMessage = errorMessage,
+                Message = errorMessage
             };
         }
     }

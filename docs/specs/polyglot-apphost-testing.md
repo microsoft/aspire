@@ -71,7 +71,7 @@ Use the Aspire CLI as a language-agnostic orchestration layer:
 
 The Aspire CLI already has the building blocks we need:
 
-1. **`aspire run --detach`** - Starts the AppHost in the background and returns immediately
+1. **`aspire start`** - Starts the AppHost in the background and returns immediately
 2. **Auxiliary Backchannel** - JSON-RPC connection between CLI and running AppHost
 3. **`WatchResourceSnapshotsAsync`** - Streams resource state changes via the backchannel
 4. **`aspire stop`** - Gracefully stops a running AppHost
@@ -94,18 +94,18 @@ Language wrapper libraries build convenience methods on top of these primitives.
 
 ## CLI Primitives
 
-### `aspire run --detach`
+### `aspire start`
 
 Starts the AppHost in the background.
 
 ```bash
-aspire run --detach --project ./MyApp.AppHost/MyApp.AppHost.csproj
+aspire start --apphost ./MyApp.AppHost/MyApp.AppHost.csproj
 ```
 
 By default, outputs human-readable text. Use `--format json` for structured output:
 
 ```bash
-aspire run --detach --format json --project ./MyApp.AppHost/MyApp.AppHost.csproj
+aspire start --format json --project ./MyApp.AppHost/MyApp.AppHost.csproj
 ```
 
 **Output (JSON):**
@@ -217,7 +217,7 @@ Retrieves resource console logs from the `ResourceLoggerService`. These are the 
 
 > **Note:** These are console logs (stdout/stderr), not OpenTelemetry structured logs. For OTel logs, traces, and metrics, use the Dashboard's telemetry views or configure an external collector.
 
-See [GitHub Issue #8069](https://github.com/dotnet/aspire/issues/8069) for the original feature request.
+See [GitHub Issue #8069](https://github.com/microsoft/aspire/issues/8069) for the original feature request.
 
 ```bash
 aspire logs [resource] [--project <path>] [--follow] [--format json]
@@ -299,7 +299,7 @@ The stream continues until:
 - The command is interrupted (Ctrl+C)
 - The resource enters a terminal state (Exited, Finished, FailedToStart)
 
-> **Note:** Logs from the shutdown process may not be captured if the AppHost stops before the log stream flushes. For complete diagnostic logs in failure scenarios, consider using the AppHost's log file (shown in `aspire run --detach` output).
+> **Note:** Logs from the shutdown process may not be captured if the AppHost stops before the log stream flushes. For complete diagnostic logs in failure scenarios, consider using the AppHost's log file (shown in `aspire start` output).
 
 #### Logs for a Specific Resource
 
@@ -333,7 +333,7 @@ The logs command is designed to work well in CI/CD pipelines:
 set -e
 
 # Start the AppHost
-aspire run --detach --format json > apphost.json
+aspire start --format json > apphost.json
 
 # Run tests
 npm test || TEST_FAILED=1
@@ -519,7 +519,7 @@ interface LogEntry {
 
 The TypeScript wrapper:
 
-1. Spawns `aspire run --detach --format json` and parses the JSON output
+1. Spawns `aspire start --format json` and parses the JSON output
 2. Spawns `aspire describe --follow` in the background to maintain resource state
 3. Provides async methods that wait for state changes
 4. Can collect logs via `aspire logs` piped to files before cleanup
@@ -534,7 +534,7 @@ class AspireApp {
     const app = new AspireApp();
     
     // Start the AppHost
-    const result = await exec(`aspire run --detach --format json --project ${options.project}`);
+    const result = await exec(`aspire start --format json --project ${options.project}`);
     const info = JSON.parse(result.stdout);
     app.appHostPid = info.appHostPid;
     
@@ -741,7 +741,7 @@ async def test_list_products(api_url):
 ### Phase 1: Core Implementation
 - [ ] Implement `aspire describe` command
 - [ ] Implement `aspire describe --follow` command
-- [ ] Ensure `aspire run --detach` returns structured JSON
+- [ ] Ensure `aspire start` returns structured JSON
 - [ ] Update `aspire stop` to work reliably with detached instances
 
 ### Phase 2: TypeScript Wrapper

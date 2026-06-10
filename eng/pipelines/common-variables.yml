@@ -10,6 +10,25 @@ variables:
   - name: _InternalBuildArgs
     value: ''
 
+  # npm global installs and the Corepack Yarn cache seeder don't use the repo
+  # .npmrc, so pass this registry explicitly.
+  - name: NPM_REGISTRY
+    value: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+  - name: NPM_VALIDATION_SUMMARY_WIN_X64_ARTIFACT
+    value: npm-validation-summary-win-x64
+  - name: NPM_VALIDATION_SUMMARY_LINUX_X64_ARTIFACT
+    value: npm-validation-summary-linux-x64
+  - name: NPM_VALIDATION_SUMMARY_OSX_ARTIFACT
+    value: npm-validation-summary-osx
+  - name: NPM_PUBLISH_REQUIRED_OWNERS
+    value: joperezr,ankj
+  - name: NPM_PUBLISH_REQUIRED_APPROVERS
+    value: adamratzman
+  # Disable the interactive "Do you want to download yarn@x.y.z?" prompt so
+  # pipeline steps don't hang waiting for stdin.
+  - name: COREPACK_ENABLE_DOWNLOAD_PROMPT
+    value: '0'
+
   - ${{ if notin(variables['Build.Reason'], 'PullRequest') }}:
     - name: _RunAsPublic
       value: False
@@ -19,9 +38,22 @@ variables:
       value: real
     # Publish-Build-Assets provides: MaestroAccessToken, BotAccount-dotnet-maestro-bot-PAT
     # DotNet-HelixApi-Access provides: HelixApiAccessToken
-    - group: Publish-Build-Assets
-    - group: DotNet-HelixApi-Access
-    - group: SDL_Settings
+    # SDL_Settings provides Guardian/SDL tooling credentials
+    #
+    # These variable groups have branch-restricted ACLs in AzDO (main,
+    # release/*, internal/release/* only). Consuming any of them at pipeline
+    # scope causes 1ES to inject a per-stage Branch control check that blocks
+    # every stage on contributor branches before any work can start.
+    #
+    # Only the BAR publish job (assemble stage's Asset_Registry_Publish) and
+    # helix telemetry actually need these tokens, and neither runs as a real
+    # publish on a contributor branch. Skip the group load when we're not on
+    # a branch the ACLs accept so manual / non-PR builds on ankj/* etc. can
+    # still validate the rest of the pipeline (including signing).
+    - ${{ if or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')) }}:
+      - group: Publish-Build-Assets
+      - group: DotNet-HelixApi-Access
+      - group: SDL_Settings
     - name: _InternalBuildArgs
       value: /p:DotNetSignType=$(_SignType)
         /p:TeamName=$(_TeamName)
@@ -33,3 +65,9 @@ variables:
     - ${{ else }}:
       - name: PostBuildSign
         value: true
+
+  # Single source of truth for "this build is on a branch where Aspire signs,
+  # publishes archives to ci.dot.net, and submits to upstream installer
+  # repositories." Consumed by publish-winget.yml to guard upstream submission.
+  - name: _IsProductionBranch
+    value: ${{ or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')) }}

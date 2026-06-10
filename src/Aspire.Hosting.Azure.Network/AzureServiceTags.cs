@@ -32,80 +32,95 @@ public static class AzureServiceTags
     /// <summary>
     /// Represents the Internet address space, including all publicly routable IP addresses.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string Internet = nameof(Internet);
 
     /// <summary>
     /// Represents the address space for the virtual network, including all connected address spaces,
     /// all connected on-premises address spaces, and peered virtual networks.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string VirtualNetwork = nameof(VirtualNetwork);
 
     /// <summary>
     /// Represents the Azure infrastructure load balancer. This tag is commonly used to allow
     /// health probe traffic from Azure.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string AzureLoadBalancer = nameof(AzureLoadBalancer);
 
     /// <summary>
     /// Represents Azure Traffic Manager probe IP addresses.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string AzureTrafficManager = nameof(AzureTrafficManager);
 
     /// <summary>
     /// Represents the Azure Storage service. This tag does not include specific Storage accounts;
     /// it covers all Azure Storage IP addresses.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string Storage = nameof(Storage);
 
     /// <summary>
     /// Represents Azure SQL Database, Azure Database for MySQL, Azure Database for PostgreSQL,
     /// Azure Database for MariaDB, and Azure Synapse Analytics.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string Sql = nameof(Sql);
 
     /// <summary>
     /// Represents Azure Cosmos DB service addresses.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string AzureCosmosDB = nameof(AzureCosmosDB);
 
     /// <summary>
     /// Represents Azure Key Vault service addresses.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string AzureKeyVault = nameof(AzureKeyVault);
 
     /// <summary>
     /// Represents Azure Event Hubs service addresses.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string EventHub = nameof(EventHub);
 
     /// <summary>
     /// Represents Azure Service Bus service addresses.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string ServiceBus = nameof(ServiceBus);
 
     /// <summary>
     /// Represents Azure Container Registry service addresses.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string AzureContainerRegistry = nameof(AzureContainerRegistry);
 
     /// <summary>
     /// Represents Azure App Service and Azure Functions service addresses.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string AppService = nameof(AppService);
 
     /// <summary>
     /// Represents Microsoft Entra ID (formerly Azure Active Directory) service addresses.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string AzureActiveDirectory = nameof(AzureActiveDirectory);
 
     /// <summary>
     /// Represents Azure Monitor service addresses, including Log Analytics, Application Insights,
     /// and Azure Monitor metrics.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string AzureMonitor = nameof(AzureMonitor);
 
     /// <summary>
     /// Represents the Gateway Manager service, used for VPN Gateway and Application Gateway management traffic.
     /// </summary>
+    [AspireValue("AzureServiceTags")]
     public const string GatewayManager = nameof(GatewayManager);
 }

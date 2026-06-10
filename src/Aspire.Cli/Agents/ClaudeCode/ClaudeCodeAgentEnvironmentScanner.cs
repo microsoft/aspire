@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
@@ -16,10 +17,10 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
     private const string ClaudeCodeFolderName = ".claude";
     private const string McpConfigFileName = ".mcp.json";
     private const string AspireServerName = "aspire";
-    private static readonly string s_skillFilePath = Path.Combine(".claude", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-    private const string SkillFileDescription = "Create Aspire skill file (.claude/skills/aspire/SKILL.md)";
+    private static readonly string s_skillBaseDirectory = Path.Combine(".claude", "skills");
 
     private readonly IClaudeCodeCliRunner _claudeCodeCliRunner;
+    private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly CliExecutionContext _executionContext;
     private readonly ILogger<ClaudeCodeAgentEnvironmentScanner> _logger;
 
@@ -27,14 +28,17 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
     /// Initializes a new instance of <see cref="ClaudeCodeAgentEnvironmentScanner"/>.
     /// </summary>
     /// <param name="claudeCodeCliRunner">The Claude Code CLI runner for checking if Claude Code is installed.</param>
+    /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
     /// <param name="executionContext">The CLI execution context for accessing environment variables and settings.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
-    public ClaudeCodeAgentEnvironmentScanner(IClaudeCodeCliRunner claudeCodeCliRunner, CliExecutionContext executionContext, ILogger<ClaudeCodeAgentEnvironmentScanner> logger)
+    public ClaudeCodeAgentEnvironmentScanner(IClaudeCodeCliRunner claudeCodeCliRunner, PlaywrightCliInstaller playwrightCliInstaller, CliExecutionContext executionContext, ILogger<ClaudeCodeAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(claudeCodeCliRunner);
+        ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(logger);
         _claudeCodeCliRunner = claudeCodeCliRunner;
+        _playwrightCliInstaller = playwrightCliInstaller;
         _executionContext = executionContext;
         _logger = logger;
     }
@@ -68,25 +72,8 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
                 _logger.LogDebug("Aspire MCP server is already configured");
             }
 
-            // Register Playwright configuration callback if not already configured
-            if (!HasPlaywrightServerConfigured(workspaceRoot))
-            {
-                _logger.LogDebug("Registering Playwright MCP configuration callback for Claude Code");
-                CommonAgentApplicators.AddPlaywrightConfigurationCallback(
-                    context,
-                    ct => ApplyPlaywrightMcpConfigurationAsync(workspaceRoot, ct));
-            }
-            else
-            {
-                _logger.LogDebug("Playwright MCP server is already configured");
-            }
-
-            // Try to add skill file applicator for Claude Code
-            CommonAgentApplicators.TryAddSkillFileApplicator(
-                context,
-                context.RepositoryRoot,
-                s_skillFilePath,
-                SkillFileDescription);
+            // Register Playwright CLI installation applicator
+            CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
         }
         else
         {
@@ -97,7 +84,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
             if (claudeCodeVersion is not null)
             {
                 _logger.LogDebug("Found Claude Code CLI version: {Version}", claudeCodeVersion);
-                
+
                 // Claude Code is installed - offer to create config at workspace root
                 if (!HasAspireServerConfigured(context.RepositoryRoot))
                 {
@@ -109,25 +96,8 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
                     _logger.LogDebug("Aspire MCP server is already configured");
                 }
 
-                // Register Playwright configuration callback if not already configured
-                if (!HasPlaywrightServerConfigured(context.RepositoryRoot))
-                {
-                    _logger.LogDebug("Registering Playwright MCP configuration callback for Claude Code");
-                    CommonAgentApplicators.AddPlaywrightConfigurationCallback(
-                        context,
-                        ct => ApplyPlaywrightMcpConfigurationAsync(context.RepositoryRoot, ct));
-                }
-                else
-                {
-                    _logger.LogDebug("Playwright MCP server is already configured");
-                }
-
-                // Try to add skill file applicator for Claude Code
-                CommonAgentApplicators.TryAddSkillFileApplicator(
-                    context,
-                    context.RepositoryRoot,
-                    s_skillFilePath,
-                    SkillFileDescription);
+                // Register Playwright CLI installation applicator
+                CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
             }
             else
             {
@@ -179,16 +149,34 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
     private static bool HasAspireServerConfigured(DirectoryInfo repoRoot)
     {
         var configFilePath = Path.Combine(repoRoot.FullName, McpConfigFileName);
-        return McpConfigFileHelper.HasServerConfigured(configFilePath, "mcpServers", AspireServerName);
-    }
 
-    /// <summary>
-    /// Checks if the Playwright MCP server is already configured in the .mcp.json file.
-    /// </summary>
-    private static bool HasPlaywrightServerConfigured(DirectoryInfo repoRoot)
-    {
-        var configFilePath = Path.Combine(repoRoot.FullName, McpConfigFileName);
-        return McpConfigFileHelper.HasServerConfigured(configFilePath, "mcpServers", "playwright");
+        if (!File.Exists(configFilePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var content = File.ReadAllText(configFilePath);
+            var config = JsonNode.Parse(content)?.AsObject();
+
+            if (config is null)
+            {
+                return false;
+            }
+
+            if (config.TryGetPropertyValue("mcpServers", out var serversNode) && serversNode is JsonObject servers)
+            {
+                return servers.ContainsKey(AspireServerName);
+            }
+
+            return false;
+        }
+        catch (JsonException)
+        {
+            // If the JSON is malformed, assume aspire is not configured
+            return false;
+        }
     }
 
     /// <summary>
@@ -231,33 +219,4 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
         await File.WriteAllTextAsync(configFilePath, jsonContent, cancellationToken);
     }
 
-    /// <summary>
-    /// Creates or updates the .mcp.json file at the repo root with Playwright MCP configuration.
-    /// </summary>
-    private static async Task ApplyPlaywrightMcpConfigurationAsync(
-        DirectoryInfo repoRoot,
-        CancellationToken cancellationToken)
-    {
-        var configFilePath = Path.Combine(repoRoot.FullName, McpConfigFileName);
-        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, cancellationToken);
-
-        // Ensure "mcpServers" object exists
-        if (!config.ContainsKey("mcpServers") || config["mcpServers"] is not JsonObject)
-        {
-            config["mcpServers"] = new JsonObject();
-        }
-
-        var servers = config["mcpServers"]!.AsObject();
-
-        // Add Playwright MCP server configuration
-        servers["playwright"] = new JsonObject
-        {
-            ["command"] = "npx",
-            ["args"] = new JsonArray("-y", "@playwright/mcp@latest")
-        };
-
-        // Write the updated config using AOT-compatible serialization
-        var jsonContent = JsonSerializer.Serialize(config, JsonSourceGenerationContext.Default.JsonObject);
-        await File.WriteAllTextAsync(configFilePath, jsonContent, cancellationToken);
-    }
 }

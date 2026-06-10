@@ -49,4 +49,25 @@ internal sealed class OtlpResourceJson
 
         return "unknown";
     }
+
+    /// <summary>
+    /// Gets the service.instance.id attribute value from the resource.
+    /// </summary>
+    public string? GetServiceInstanceId()
+    {
+        if (Attributes is null)
+        {
+            return null;
+        }
+
+        foreach (var attr in Attributes)
+        {
+            if (attr.Key == "service.instance.id" && attr.Value?.StringValue is not null)
+            {
+                return attr.Value.StringValue;
+            }
+        }
+
+        return null;
+    }
 }

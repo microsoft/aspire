@@ -27,7 +27,7 @@ public class OtelMetricsTests
     [RequiresFeature(TestFeature.Docker)]
     [InlineData(true)]
     [InlineData(false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task EnsureMetricsAreProducedAsync(bool useKeyed)
     {
         List<Metric> metrics = new();

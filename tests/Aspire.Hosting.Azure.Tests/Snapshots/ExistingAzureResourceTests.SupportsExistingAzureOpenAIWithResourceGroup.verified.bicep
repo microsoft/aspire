@@ -3,11 +3,11 @@ param location string = resourceGroup().location
 
 param existingResourceName string
 
-resource openAI 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
+resource openAI 'Microsoft.CognitiveServices/accounts@2025-09-01' existing = {
   name: existingResourceName
 }
 
-resource mymodel 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+resource mymodel 'Microsoft.CognitiveServices/accounts/deployments@2025-09-01' = {
   name: 'mymodel'
   properties: {
     model: {
@@ -28,3 +28,5 @@ output connectionString string = 'Endpoint=${openAI.properties.endpoint}'
 output endpoint string = openAI.properties.endpoint
 
 output name string = openAI.name
+
+output id string = openAI.id

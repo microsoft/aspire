@@ -14,6 +14,7 @@
     <Compile Include="..\..\Shared\Cosmos\CosmosConstants.cs" Link="Shared\CosmosConstants.cs" />
     <Compile Include="..\..\Shared\Cosmos\CosmosUtils.cs" Link="Shared\CosmosUtils.cs" />
     <Compile Include="..\..\Shared\StableConnectionStringBuilder.cs" Link="Shared\StableConnectionStringBuilder.cs" />
+    <Compile Include="..\..\Shared\AzureCredentialHelper.cs" Link="AzureCredentialHelper.cs" />
     <Compile Include="..\Common\EntityFrameworkUtils.cs" Link="EntityFrameworkUtils.cs" />
   </ItemGroup>
   

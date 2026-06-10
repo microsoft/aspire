@@ -2,34 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Serialization;
-using Aspire.Otlp.Serialization;
 
 namespace Aspire.Dashboard.Otlp.Model.Serialization;
-
-/// <summary>
-/// Represents the combined telemetry data in OTLP JSON format.
-/// This type can contain logs, traces, and/or metrics data.
-/// </summary>
-internal sealed class OtlpTelemetryDataJson
-{
-    /// <summary>
-    /// An array of ResourceSpans.
-    /// </summary>
-    [JsonPropertyName("resourceSpans")]
-    public OtlpResourceSpansJson[]? ResourceSpans { get; set; }
-
-    /// <summary>
-    /// An array of ResourceLogs.
-    /// </summary>
-    [JsonPropertyName("resourceLogs")]
-    public OtlpResourceLogsJson[]? ResourceLogs { get; set; }
-
-    /// <summary>
-    /// An array of ResourceMetrics.
-    /// </summary>
-    [JsonPropertyName("resourceMetrics")]
-    public OtlpResourceMetricsJson[]? ResourceMetrics { get; set; }
-}
 
 /// <summary>
 /// Represents the export trace service response.

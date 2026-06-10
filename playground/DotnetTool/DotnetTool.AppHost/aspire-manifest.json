@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "simpleUsage": {
       "type": "executable.v0",
@@ -182,7 +181,7 @@
         "exec",
         "dotnet-ef",
         "--source",
-        "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\does-not-exist\\0696e702-e9d7-4b59-8a85-cc0d069cf740",
+        "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\does-not-exist\\2623c613-5a82-4b5a-9f8a-09e9eb9a98c1",
         "--ignore-failed-sources",
         "--yes",
         "--"
@@ -200,7 +199,7 @@
         "exec",
         "dotnet-ef",
         "--source",
-        "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\does-not-exist\\0696e702-e9d7-4b59-8a85-cc0d069cf740",
+        "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\does-not-exist\\2623c613-5a82-4b5a-9f8a-09e9eb9a98c1",
         "--ignore-failed-sources",
         "--version",
         "10.0.*",
@@ -220,7 +219,7 @@
         "exec",
         "dotnet-ef",
         "--source",
-        "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\does-not-exist\\0696e702-e9d7-4b59-8a85-cc0d069cf740",
+        "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\does-not-exist\\2623c613-5a82-4b5a-9f8a-09e9eb9a98c1",
         "--ignore-failed-sources",
         "--prerelease",
         "--yes",
@@ -252,6 +251,21 @@
         "--",
         "--version",
         "{secret.value}"
+      ],
+      "env": {
+        "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"
+      }
+    },
+    "incompatibleSdk": {
+      "type": "executable.v0",
+      "workingDirectory": "IncompatibleSdk",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "exec",
+        "dotnet-ef",
+        "--yes",
+        "--"
       ],
       "env": {
         "NUGET_PACKAGES": "D:\\a\\aspire\\aspire\\artifacts\\obj\\DotnetTool.AppHost\\.aspire\\nuget"

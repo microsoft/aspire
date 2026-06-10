@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../WaitCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Wait for a resource to reach a target status.</source>
-        <target state="translated">Aguarde até que um recurso alcance um status de destino.</target>
+        <source>Wait for a resource to reach a target status</source>
+        <target state="new">Wait for a resource to reach a target status</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidStatusValue">
@@ -13,13 +13,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
-        <source>The name of the resource to wait for.</source>
-        <target state="translated">O nome do recurso a ser aguardado.</target>
+        <source>The name of the resource to wait for</source>
+        <target state="new">The name of the resource to wait for</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceEnteredFailedState">
-        <source>Resource '{0}' entered a failed state: {1}.</source>
-        <target state="translated">O recurso "{0}" entrou em um estado de falha: {1}.</target>
+        <source>Resource '{0}' entered a failed state: {1}</source>
+        <target state="needs-review-translation">O recurso "{0}" entrou em um estado de falha: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -34,7 +34,7 @@
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>connect to</source>
-        <target state="new">connect to</target>
+        <target state="translated">conectar a</target>
         <note />
       </trans-unit>
       <trans-unit id="StatusOptionDescription">

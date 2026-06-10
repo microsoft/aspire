@@ -45,13 +45,13 @@ public class AllocatedEndpoint
     /// <param name="port">The port number of the endpoint.</param>
     /// <param name="targetPortExpression">A string representing how to retrieve the target port of the <see cref="AllocatedEndpoint"/> instance.</param>
     /// <param name="bindingMode">The binding mode of the endpoint.</param>
-    /// <param name="networkID">The network identifier for the network associated with the endpoint.</param>
+    /// <param name="networkId">The network identifier for the network associated with the endpoint.</param>
     public AllocatedEndpoint(
         EndpointAnnotation endpoint,
         string address, int port,
         EndpointBindingMode bindingMode,
         string? targetPortExpression = null,
-        NetworkIdentifier? networkID = null
+        NetworkIdentifier? networkId = null
     )
     {
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -63,7 +63,7 @@ public class AllocatedEndpoint
         BindingMode = bindingMode;
         Port = port;
         TargetPortExpression = targetPortExpression;
-        NetworkID = networkID ?? endpoint.DefaultNetworkID;
+        NetworkID = networkId ?? endpoint.DefaultNetworkID;
     }
 
     /// <summary>

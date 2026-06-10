@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Azure.CognitiveServices;
 using Azure.Provisioning;
 using Azure.Provisioning.CognitiveServices;
 using static Azure.Provisioning.Expressions.BicepFunction;
@@ -20,6 +23,7 @@ public static class AzureOpenAIExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// By default references to the Azure OpenAI resource will be assigned the following roles:
     /// 
@@ -27,6 +31,8 @@ public static class AzureOpenAIExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureOpenAIResource}, CognitiveServicesBuiltInRole[])"/>.
     /// </remarks>
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<AzureOpenAIResource> AddAzureOpenAI(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -36,6 +42,11 @@ public static class AzureOpenAIExtensions
 
         var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
         {
+            var azureResource = (AzureOpenAIResource)infrastructure.AspireResource;
+
+            // Check if this Azure OpenAI has a private endpoint (via annotation)
+            var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
             var cogServicesAccount = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
                 (identifier, name) =>
                 {
@@ -53,7 +64,9 @@ public static class AzureOpenAIExtensions
                     Properties = new CognitiveServicesAccountProperties()
                     {
                         CustomSubDomainName = ToLower(Take(Concat(infrastructure.AspireResource.Name, GetUniqueString(GetResourceGroup().Id)), 24)),
-                        PublicNetworkAccess = ServiceAccountPublicNetworkAccess.Enabled,
+                        PublicNetworkAccess = hasPrivateEndpoint
+                            ? ServiceAccountPublicNetworkAccess.Disabled
+                            : ServiceAccountPublicNetworkAccess.Enabled,
                         // Disable local auth for AOAI since managed identity is used
                         DisableLocalAuth = true
                     },
@@ -72,6 +85,8 @@ public static class AzureOpenAIExtensions
 
             // We need to output name to externalize role assignments.
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = cogServicesAccount.Name.ToBicepExpression() });
+
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = cogServicesAccount.Id.ToBicepExpression() });
 
             var resource = (AzureOpenAIResource)infrastructure.AspireResource;
 
@@ -148,6 +163,8 @@ public static class AzureOpenAIExtensions
     /// <param name="builder">The Azure OpenAI resource builder.</param>
     /// <param name="deployment">The deployment to add.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddDeployment(IResourceBuilder{AzureOpenAIResource}, string, string, string)"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Obsolete API that accepts AzureOpenAIDeployment which is not ATS-compatible.")]
     [Obsolete("AddDeployment taking an AzureOpenAIDeployment is deprecated. Please the AddDeployment overload that returns an AzureOpenAIDeploymentResource instead.")]
     public static IResourceBuilder<AzureOpenAIResource> AddDeployment(this IResourceBuilder<AzureOpenAIResource> builder, AzureOpenAIDeployment deployment)
     {
@@ -162,11 +179,14 @@ public static class AzureOpenAIExtensions
     /// <summary>
     /// Adds and returns an Azure OpenAI Deployment resource to the <see cref="AzureOpenAIResource"/> resource.
     /// </summary>
+    /// <ats-summary>Adds an Azure OpenAI deployment resource</ats-summary>
     /// <param name="builder">The Azure OpenAI resource builder.</param>
     /// <param name="name">The name of the Azure OpenAI Deployment resource.</param>
     /// <param name="modelName">The name of the model to deploy.</param>
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureOpenAIDeploymentResource> AddDeployment(this IResourceBuilder<AzureOpenAIResource> builder, [ResourceName] string name, string modelName, string modelVersion)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -186,6 +206,8 @@ public static class AzureOpenAIExtensions
     /// <param name="builder">The Azure OpenAI Deployment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureOpenAIDeploymentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureOpenAIDeploymentResource> WithProperties(this IResourceBuilder<AzureOpenAIDeploymentResource> builder, Action<AzureOpenAIDeploymentResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -205,6 +227,7 @@ public static class AzureOpenAIExtensions
     /// <param name="roles">The built-in Cognitive Services roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use the enum-based overload instead.
     /// <example>
     /// Assigns the CognitiveServicesOpenAIUser role to the 'Projects.Api' project.
     /// <code lang="csharp">
@@ -218,6 +241,7 @@ public static class AzureOpenAIExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "CognitiveServicesBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the enum-based overload instead.")]
     public static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureOpenAIResource> target,
@@ -225,5 +249,42 @@ public static class AzureOpenAIExtensions
         where T : IResource
     {
         return builder.WithRoleAssignments(target, CognitiveServicesBuiltInRole.GetBuiltInRoleName, roles);
+    }
+
+    /// <summary>
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure OpenAI resource. This replaces the default role assignments for the resource.
+    /// </summary>
+    /// <param name="builder">The resource to which the specified roles will be assigned.</param>
+    /// <param name="target">The target Azure OpenAI resource.</param>
+    /// <param name="roles">The Azure OpenAI roles to be assigned (for example, <see cref="AzureOpenAIRole.CognitiveServicesOpenAIUser"/>).</param>
+    /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureOpenAIRole"/> value.</exception>
+    [AspireExport("withCognitiveServicesRoleAssignments")]
+    internal static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureOpenAIResource> target,
+        params AzureOpenAIRole[] roles)
+        where T : IResource
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(target, Array.Empty<CognitiveServicesBuiltInRole>());
+        }
+
+        var builtInRoles = new CognitiveServicesBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i] switch
+            {
+                AzureOpenAIRole.CognitiveServicesOpenAIContributor => CognitiveServicesBuiltInRole.CognitiveServicesOpenAIContributor,
+                AzureOpenAIRole.CognitiveServicesOpenAIUser => CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser,
+                AzureOpenAIRole.CognitiveServicesUser => CognitiveServicesBuiltInRole.CognitiveServicesUser,
+                _ => throw new ArgumentException($"'{roles[i]}' is not a valid {nameof(AzureOpenAIRole)} value.", nameof(roles))
+            };
+        }
+
+        return builder.WithRoleAssignments(target, builtInRoles);
     }
 }

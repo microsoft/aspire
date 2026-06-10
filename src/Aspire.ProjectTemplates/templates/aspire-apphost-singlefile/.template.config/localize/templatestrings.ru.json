@@ -1,15 +1,13 @@
-﻿{
+{
   "author": "Майкрософт",
   "name": "Хост однофайловых приложений Aspire",
   "description": "Минимальный Aspire AppHost для сценариев с одним файлом (.NET 10+).",
   "symbols/Framework/choices/net10.0/description": "Целевая платформа .NET 10.0",
   "symbols/appHostHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP в файле launchSettings.json проекта AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP OTLP в файле launchSettings.json проекта AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Номер порта для использования в конечной точке MCP HTTP в launchSettings.json проекта AppHost.",
   "symbols/appHostResourceHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP службы ресурсов в файле launchSettings.json проекта AppHost.",
   "symbols/appHostHttpsPort/description": "Номер порта, который будет использоваться для конечной точки HTTPS в файле launchSettings.json проекта AppHost. Этот параметр применим только в том случае, если NO-HTTP не используется.",
   "symbols/appHostOtlpHttpsPort/description": "Номер порта, который будет использоваться для конечной точки OTLP HTTPS в файле launchSettings.json проекта AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Номер порта для использования в конечной точке MCP HTTPS в launchSettings.json проекта AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Номер порта, который будет использоваться для конечной точки HTTPS службы ресурсов в файле launchSettings.json проекта AppHost.",
   "symbols/NoHttps/description": "Следует ли отключить HTTPS.",
   "symbols/LocalhostTld/displayName": "Используйте домен верхнего уровня .dev.localhost в URL-адресе приложения",

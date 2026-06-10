@@ -177,7 +177,7 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public void CanConfigureCommandTimeout(bool useSettings)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -213,7 +213,7 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public void CommandTimeoutFromSettingsWinsOverOthers(bool useSettings)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -252,7 +252,7 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public void ThrowsWhenDbContextIsRegisteredBeforeAspireComponent(bool useServiceType)
     {
         var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings { EnvironmentName = Environments.Development });
@@ -276,7 +276,7 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public void DoesntThrowWhenDbContextIsRegisteredBeforeAspireComponentProduction(bool useServiceType)
     {
         var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings { EnvironmentName = Environments.Production });

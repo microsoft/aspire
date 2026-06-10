@@ -282,7 +282,7 @@ public sealed record ResourcePropertySnapshot(string Name, object? Value)
 /// Could be used as a tooltip. May be localized.
 /// </param>
 /// <param name="Parameter">
-/// Optional parameter that configures the command in some way.
+/// Obsolete optional parameter that configures the command in some way.
 /// Clients must return any value provided by the server when invoking the command.
 /// </param>
 /// <param name="ConfirmationMessage">
@@ -293,7 +293,20 @@ public sealed record ResourcePropertySnapshot(string Name, object? Value)
 /// <param name="IconVariant">The icon variant.</param>
 /// <param name="IsHighlighted">A flag indicating whether the command is highlighted in the UI.</param>
 [DebuggerDisplay(null, Name = "{Name}")]
-public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState State, string DisplayName, string? DisplayDescription, object? Parameter, string? ConfirmationMessage, string? IconName, IconVariant? IconVariant, bool IsHighlighted);
+public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState State, string DisplayName, string? DisplayDescription, [property: Obsolete("Use Arguments to describe invocation arguments.")] object? Parameter, string? ConfirmationMessage, string? IconName, IconVariant? IconVariant, bool IsHighlighted)
+{
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
+    /// <summary>
+    /// Gets the invocation arguments accepted by the command.
+    /// </summary>
+    public IReadOnlyList<InteractionInput> Arguments { get; init; } = [];
+#pragma warning restore ASPIREINTERACTION001
+
+    /// <summary>
+    /// Gets where the command is visible to users and clients.
+    /// </summary>
+    public ResourceCommandVisibility Visibility { get; init; } = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api;
+}
 
 /// <summary>
 /// A report produced by a health check about a resource.
@@ -328,6 +341,28 @@ public enum ResourceCommandState
     /// Command is hidden.
     /// </summary>
     Hidden
+}
+
+/// <summary>
+/// Describes where a resource command is visible.
+/// </summary>
+[Flags]
+public enum ResourceCommandVisibility
+{
+    /// <summary>
+    /// The command is not visible to any clients.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// The command is displayed in UI clients.
+    /// </summary>
+    UI = 1 << 0,
+
+    /// <summary>
+    /// The command is exposed through resource command API discovery.
+    /// </summary>
+    Api = 1 << 1
 }
 
 /// <summary>
@@ -413,6 +448,16 @@ public static class KnownResourceStates
     public static readonly string NotStarted = nameof(NotStarted);
 
     /// <summary>
+    /// The building state. Useful for showing the resource is being rebuilt.
+    /// </summary>
+    public static readonly string Building = nameof(Building);
+
+    /// <summary>
+    /// The value missing state. Useful for showing a parameter resource is waiting for a value.
+    /// </summary>
+    public static readonly string ValueMissing = nameof(ValueMissing);
+
+    /// <summary>
     /// The not active state. Useful for resources without a lifetime.
     /// </summary>
     public static readonly string Active = nameof(Active);
@@ -421,6 +466,11 @@ public static class KnownResourceStates
     /// List of terminal states.
     /// </summary>
     public static readonly IReadOnlyList<string> TerminalStates = [Finished, FailedToStart, Exited];
+
+    /// <summary>
+    /// List of states in which a resource can be rebuilt.
+    /// </summary>
+    public static readonly IReadOnlyList<string> BuildableStates = [Running, Waiting, Finished, FailedToStart, Exited];
 }
 
 internal static class ResourceSnapshotBuilder

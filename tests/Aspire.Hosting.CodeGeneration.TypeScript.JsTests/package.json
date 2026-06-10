@@ -1,0 +1,21 @@
+{
+  "name": "aspire-codegen-typescript-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "eslint": "^10.0.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.57.1",
+    "vitest": "^4.1.0",
+    "vscode-jsonrpc": "^8.2.0"
+  },
+  "overrides": {
+    "postcss": "8.5.10"
+  }
+}

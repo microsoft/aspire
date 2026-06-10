@@ -38,10 +38,69 @@ export interface PythonLaunchConfiguration extends ExecutableLaunchConfiguration
 
     module?: string;
     interpreter_path?: string;
+    working_directory?: string;
 }
 
 export function isPythonLaunchConfiguration(obj: any): obj is PythonLaunchConfiguration {
     return obj && obj.type === 'python';
+}
+
+export interface GoLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "go";
+    program?: string;
+    working_directory?: string;
+    build_flags?: string;
+}
+
+export function isGoLaunchConfiguration(obj: any): obj is GoLaunchConfiguration {
+    return obj && obj.type === 'go';
+}
+
+export interface JavaScriptRuntimeLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "node" | "bun";
+    script_path?: string;
+    runtime_executable?: string;
+    working_directory?: string;
+    // Optional on purpose: an older AppHost (version skew vs the extension) won't emit this field at
+    // all, leaving it undefined. Undefined is the legitimate legacy signal that tells the extension to
+    // fall back to positional/runtime inference. Do not make it required.
+    launch_method?: "direct" | "package-manager";
+}
+
+export function isJavaScriptRuntimeLaunchConfiguration(obj: any): obj is JavaScriptRuntimeLaunchConfiguration {
+    return obj && (obj.type === 'node' || obj.type === 'bun');
+}
+
+export type NodeLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { type: "node" };
+
+export function isNodeLaunchConfiguration(obj: any): obj is NodeLaunchConfiguration {
+    return obj && obj.type === 'node';
+}
+
+export type BunLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { type: "bun" };
+
+export function isBunLaunchConfiguration(obj: any): obj is BunLaunchConfiguration {
+    return obj && obj.type === 'bun';
+}
+
+export interface BrowserLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "browser";
+    url?: string;
+    web_root?: string;
+    browser?: string;
+}
+
+export function isBrowserLaunchConfiguration(obj: any): obj is BrowserLaunchConfiguration {
+    return obj && obj.type === 'browser';
+}
+
+export interface AzureFunctionsLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "azure-functions";
+    project_path: string;
+}
+
+export function isAzureFunctionsLaunchConfiguration(obj: any): obj is AzureFunctionsLaunchConfiguration {
+    return obj && obj.type === 'azure-functions';
 }
 
 export interface EnvVar {
@@ -121,11 +180,18 @@ export interface AspireResourceExtendedDebugConfiguration extends vscode.DebugCo
     runId: string;
     debugSessionId: string | null;
     projectFile?: string;
+    isApphost?: boolean;
 }
+
+export type AspireCommandType = 'run' | 'deploy' | 'publish' | 'do';
 
 export interface AspireExtendedDebugConfiguration extends vscode.DebugConfiguration {
     program: string;
     debuggers?: AspireDebuggersConfiguration;
+    command?: AspireCommandType;
+    args?: string[];
+    step?: string;
+    env?: { [key: string]: string };
 }
 
 interface AspireDebuggersConfiguration {

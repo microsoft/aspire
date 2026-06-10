@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../DocsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Browse and search Aspire documentation from aspire.dev.</source>
-        <target state="translated">aspire.dev에서 Aspire 설명서를 찾아보고 검색하세요.</target>
+        <source>Browse and search Aspire documentation and API reference from aspire.dev</source>
+        <target state="needs-review-translation">aspire.dev에서 Aspire 설명서를 찾아보고 검색하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="DocumentNotFound">
@@ -13,8 +13,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">출력 형식(테이블 또는 JSON)입니다.</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">출력 형식(테이블 또는 JSON)입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundDocumentationPages">
@@ -28,18 +28,43 @@
         <note />
       </trans-unit>
       <trans-unit id="GetDescription">
-        <source>Get the full content of a documentation page by its slug.</source>
-        <target state="translated">슬러그로 설명서 페이지의 전체 내용을 가져옵니다.</target>
+        <source>Get the full content of a documentation page by its slug</source>
+        <target state="needs-review-translation">슬러그로 설명서 페이지의 전체 내용을 가져옵니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderScore">
+        <source>Score</source>
+        <target state="translated">점수</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSection">
+        <source>Section</source>
+        <target state="translated">섹션</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSlug">
+        <source>Slug</source>
+        <target state="translated">슬러그</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSummary">
+        <source>Summary</source>
+        <target state="translated">요약</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTitle">
+        <source>Title</source>
+        <target state="translated">제목</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of search results to return (default: 5, max: 10).</source>
-        <target state="translated">반환할 최대 검색 결과 수입니다(기본값: 5, 최대: 10).</target>
+        <source>Maximum number of search results to return (default: 5, max: 10)</source>
+        <target state="needs-review-translation">반환할 최대 검색 결과 수입니다(기본값: 5, 최대: 10).</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
-        <source>List all available Aspire documentation pages.</source>
-        <target state="translated">사용 가능한 모든 Aspire 설명서 페이지를 나열합니다.</target>
+        <source>List all available Aspire documentation pages</source>
+        <target state="needs-review-translation">사용 가능한 모든 Aspire 설명서 페이지를 나열합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingDocumentation">
@@ -58,23 +83,23 @@
         <note />
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
-        <source>The search query.</source>
-        <target state="translated">검색 쿼리입니다.</target>
+        <source>The search query</source>
+        <target state="needs-review-translation">검색 쿼리입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
-        <source>Search Aspire documentation by keywords.</source>
-        <target state="translated">키워드로 Aspire 설명서를 검색하세요.</target>
+        <source>Search Aspire documentation by keywords</source>
+        <target state="needs-review-translation">키워드로 Aspire 설명서를 검색하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="SectionOptionDescription">
-        <source>Return only the specified section of the page.</source>
-        <target state="translated">페이지의 지정된 섹션만 반환합니다.</target>
+        <source>Return only the specified section of the page</source>
+        <target state="needs-review-translation">페이지의 지정된 섹션만 반환합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SlugArgumentDescription">
-        <source>The slug of the documentation page (e.g., 'redis-integration').</source>
-        <target state="translated">설명서 페이지의 슬러그(예: 'redis-integration')입니다.</target>
+        <source>The slug of the documentation page (e.g., 'redis-integration')</source>
+        <target state="needs-review-translation">설명서 페이지의 슬러그(예: 'redis-integration')입니다.</target>
         <note />
       </trans-unit>
     </body>

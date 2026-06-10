@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Net.Http.Json;
 using System.Net;
 using Aspire.TestUtilities;
@@ -283,9 +285,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
     [RequiresFeature(TestFeature.Docker)]
     public async Task WithDataBindMountShouldPersistStateBetweenUsages()
     {
-        var bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-        Directory.CreateDirectory(bindMountPath);
+        var bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
         // Use a bind mount to do a snapshot save
 
@@ -645,4 +645,27 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
         public int? Port { get; set; }
         public string? Name { get; set; }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Redis_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddRedis("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Redis_WithPersistentLifetimeAndRandomizedPorts_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddRedis("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true,
+            randomizePorts: true);
+    }
+
 }

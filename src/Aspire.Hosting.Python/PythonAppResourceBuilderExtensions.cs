@@ -34,6 +34,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="appDirectory">The path to the directory containing the python application.</param>
     /// <param name="scriptPath">The path to the script relative to the app directory to run.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method executes a Python script directly using <c>python script.py</c>.
@@ -50,6 +51,7 @@ public static class PythonAppResourceBuilderExtensions
     /// Python applications automatically have debugging support enabled.
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// Add a FastAPI Python application to the application model:
     /// <code lang="csharp">
@@ -62,6 +64,7 @@ public static class PythonAppResourceBuilderExtensions
     /// </code>
     /// </example>
     [OverloadResolutionPriority(1)]
+    [AspireExport]
     public static IResourceBuilder<PythonAppResource> AddPythonApp(
         this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string scriptPath)
         => AddPythonAppCore(builder, name, appDirectory, EntrypointType.Script, scriptPath, DefaultVirtualEnvFolder)
@@ -75,6 +78,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="appDirectory">The path to the directory containing the python application.</param>
     /// <param name="moduleName">The name of the Python module to run (e.g., "flask", "uvicorn").</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method runs a Python module using <c>python -m &lt;module&gt;</c>.
@@ -86,6 +90,7 @@ public static class PythonAppResourceBuilderExtensions
     /// Python modules automatically have debugging support enabled.
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// Add a Flask module to the application model:
     /// <code lang="csharp">
@@ -97,6 +102,7 @@ public static class PythonAppResourceBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport]
     public static IResourceBuilder<PythonAppResource> AddPythonModule(
         this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string moduleName)
         => AddPythonAppCore(builder, name, appDirectory, EntrypointType.Module, moduleName, DefaultVirtualEnvFolder)
@@ -110,6 +116,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="appDirectory">The path to the directory containing the python application.</param>
     /// <param name="executableName">The name of the executable in the virtual environment (e.g., "pytest", "uvicorn", "flask").</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method runs an executable from the virtual environment's bin directory.
@@ -123,6 +130,7 @@ public static class PythonAppResourceBuilderExtensions
     /// tool that can be debugged.
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// Add a pytest executable to the application model:
     /// <code lang="csharp">
@@ -135,6 +143,7 @@ public static class PythonAppResourceBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport]
     public static IResourceBuilder<PythonAppResource> AddPythonExecutable(
         this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string executableName)
         => AddPythonAppCore(builder, name, appDirectory, EntrypointType.Executable, executableName, DefaultVirtualEnvFolder);
@@ -257,6 +266,7 @@ public static class PythonAppResourceBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
+    [AspireExport]
     public static IResourceBuilder<UvicornAppResource> AddUvicornApp(
         this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string app)
     {
@@ -312,34 +322,11 @@ public static class PythonAppResourceBuilderExtensions
 
         if (builder.ExecutionContext.IsRunMode)
         {
-            builder.Eventing.Subscribe<BeforeStartEvent>((@event, cancellationToken) =>
+            // If a TLS certificate is configured, override the endpoint to use HTTPS instead of HTTP.
+            // Uvicorn only supports binding to a single port.
+            resourceBuilder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
-                var developerCertificateService = @event.Services.GetRequiredService<IDeveloperCertificateService>();
-
-                bool addHttps = false;
-                if (!resourceBuilder.Resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var annotation))
-                {
-                    if (developerCertificateService.UseForHttps)
-                    {
-                        // If no certificate is configured, and the developer certificate service supports container trust,
-                        // configure the resource to use the developer certificate for its key pair.
-                        addHttps = true;
-                    }
-                }
-                else if (annotation.UseDeveloperCertificate.GetValueOrDefault(developerCertificateService.UseForHttps) || annotation.Certificate is not null)
-                {
-                    addHttps = true;
-                }
-
-                if (addHttps)
-                {
-                    // If a TLS certificate is configured, override the endpoint to use HTTPS instead of HTTP
-                    // Uvicorn only supports binding to a single port
-                    resourceBuilder
-                        .WithEndpoint("http", ep => ep.UriScheme = "https");
-                }
-
-                return Task.CompletedTask;
+                resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
             });
         }
 
@@ -419,7 +406,7 @@ public static class PythonAppResourceBuilderExtensions
             {
                 if (ctx.Scope == CertificateTrustScope.Append)
                 {
-                    var resourceLogger = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                    var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                     var logger = resourceLogger.GetLogger(ctx.Resource);
                     logger.LogInformation("Certificate trust scope is set to 'Append', but Python resources do not support appending to the default certificate authorities; only OTLP certificate trust will be applied.");
                 }
@@ -510,7 +497,7 @@ public static class PythonAppResourceBuilderExtensions
             // and the dependencies will be established based on which resources actually exist
             // Only do this in run mode since the installer and venv creator only run in run mode
             var resourceToSetup = resourceBuilder.Resource;
-            builder.Eventing.Subscribe<BeforeStartEvent>((evt, ct) =>
+            builder.OnBeforeStart((evt, ct) =>
             {
                 // Wire up wait dependencies for this resource based on which child resources exist
                 SetupDependencies(builder, resourceToSetup);
@@ -841,6 +828,7 @@ public static class PythonAppResourceBuilderExtensions
     /// Set to <c>false</c> to disable automatic venv creation (the venv must already exist).
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for method chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method updates the Python executable path to use the specified virtual environment.
@@ -871,6 +859,7 @@ public static class PythonAppResourceBuilderExtensions
     ///     .WithVirtualEnvironment("myenv", createIfNotExists: false);
     /// </code>
     /// </example>
+    [AspireExport]
     public static IResourceBuilder<T> WithVirtualEnvironment<T>(
         this IResourceBuilder<T> builder, string virtualEnvironmentPath, bool createIfNotExists = true) where T : PythonAppResource
     {
@@ -919,6 +908,7 @@ public static class PythonAppResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">The resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for method chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method adds the <see cref="PythonExecutableDebuggableAnnotation"/> to the resource, which enables
@@ -930,6 +920,7 @@ public static class PythonAppResourceBuilderExtensions
     /// the program or module to debug, and appropriate launch settings.
     /// </para>
     /// </remarks>
+    [AspireExport]
     public static IResourceBuilder<T> WithDebugging<T>(
         this IResourceBuilder<T> builder) where T : PythonAppResource
     {
@@ -947,23 +938,31 @@ public static class PythonAppResourceBuilderExtensions
         var entrypointType = entrypointAnnotation.Type;
         var entrypoint = entrypointAnnotation.Entrypoint;
 
-        string programPath;
-        string module;
-
-        if (entrypointType == EntrypointType.Script)
-        {
-            programPath = Path.GetFullPath(entrypoint, builder.Resource.WorkingDirectory);
-            module = string.Empty;
-        }
-        else
-        {
-            programPath = builder.Resource.WorkingDirectory;
-            module = entrypoint;
-        }
-
         builder.WithDebugSupport(
             mode =>
             {
+                // Compute paths inside the lambda so a later WithWorkingDirectory(...) override is respected.
+                var workingDirectory = builder.Resource.WorkingDirectory;
+
+                string programPath;
+                string module;
+
+                if (entrypointType == EntrypointType.Script)
+                {
+                    programPath = Path.GetFullPath(entrypoint, workingDirectory);
+                    module = string.Empty;
+                }
+                else
+                {
+                    // For Module and Executable entrypoints the new `working_directory` field on the launch
+                    // configuration carries the cwd to the Python debugger. Older versions of the VS Code
+                    // extension only look at `program_path`/`project_path` to derive the cwd and don't
+                    // understand `working_directory`, so to preserve backward compatibility we still
+                    // populate `ProgramPath` with the working directory like the previous behavior.
+                    programPath = workingDirectory;
+                    module = entrypoint;
+                }
+
                 string interpreterPath;
                 if (!builder.Resource.TryGetLastAnnotation<PythonEnvironmentAnnotation>(out var annotation) || annotation.VirtualEnvironment is null)
                 {
@@ -973,7 +972,7 @@ public static class PythonAppResourceBuilderExtensions
                 {
                     var venvPath = Path.IsPathRooted(annotation.VirtualEnvironment.VirtualEnvironmentPath)
                         ? annotation.VirtualEnvironment.VirtualEnvironmentPath
-                        : Path.GetFullPath(annotation.VirtualEnvironment.VirtualEnvironmentPath, builder.Resource.WorkingDirectory);
+                        : Path.GetFullPath(annotation.VirtualEnvironment.VirtualEnvironmentPath, workingDirectory);
 
                     if (OperatingSystem.IsWindows())
                     {
@@ -990,7 +989,8 @@ public static class PythonAppResourceBuilderExtensions
                     ProgramPath = programPath,
                     Module = module,
                     Mode = mode,
-                    InterpreterPath = interpreterPath
+                    InterpreterPath = interpreterPath,
+                    WorkingDirectory = workingDirectory
                 };
             },
             "python",
@@ -1035,6 +1035,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="entrypointType">The type of entrypoint (Script, Module, or Executable).</param>
     /// <param name="entrypoint">The entrypoint value (script path, module name, or executable name).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for method chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method allows you to change the entrypoint configuration of a Python application after it has been created.
@@ -1058,6 +1059,7 @@ public static class PythonAppResourceBuilderExtensions
     ///     .WithArgs("main:app", "--reload");
     /// </code>
     /// </example>
+    [AspireExport]
     public static IResourceBuilder<T> WithEntrypoint<T>(
         this IResourceBuilder<T> builder, EntrypointType entrypointType, string entrypoint) where T : PythonAppResource
     {
@@ -1130,6 +1132,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to pip install command.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for method chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method creates a child resource that runs <c>pip install</c> in the working directory of the Python application.
@@ -1154,6 +1157,7 @@ public static class PythonAppResourceBuilderExtensions
     /// </code>
     /// </example>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    [AspireExport]
     public static IResourceBuilder<T> WithPip<T>(this IResourceBuilder<T> builder, bool install = true, string[]? installArgs = null)
         where T : PythonAppResource
     {
@@ -1211,6 +1215,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="install">When true (default), automatically runs uv sync before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="args">Optional custom arguments to pass to the uv command. If not provided, defaults to ["sync"].</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for method chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method creates a child resource that runs <c>uv sync</c> in the working directory of the Python application.
@@ -1250,6 +1255,7 @@ public static class PythonAppResourceBuilderExtensions
     /// </code>
     /// </example>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    [AspireExport]
     public static IResourceBuilder<T> WithUv<T>(this IResourceBuilder<T> builder, bool install = true, string[]? args = null)
         where T : PythonAppResource
     {
@@ -1334,6 +1340,7 @@ public static class PythonAppResourceBuilderExtensions
             }
 
             var installer = new PythonInstallerResource(installerName, builder.Resource);
+            installer.Annotations.Add(NameValidationPolicyAnnotation.None);
             var installerBuilder = builder.ApplicationBuilder.AddResource(installer)
                 .WithParentRelationship(builder.Resource)
                 .ExcludeFromManifest()
@@ -1346,7 +1353,7 @@ public static class PythonAppResourceBuilderExtensions
                 installerBuilder.WithExplicitStart();
             }
 
-            builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((_, _) =>
+            builder.ApplicationBuilder.OnBeforeStart((_, _) =>
             {
                 // Set the installer's working directory to match the resource's working directory
                 // and set the install command and args based on the resource's annotations
@@ -1407,6 +1414,7 @@ public static class PythonAppResourceBuilderExtensions
 
         // Create new venv creator resource
         var venvCreator = new PythonVenvCreatorResource(venvCreatorName, builder.Resource, venvPath);
+        venvCreator.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         // Determine which Python command to use
         string pythonCommand;

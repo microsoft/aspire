@@ -37,6 +37,11 @@
         <target state="translated">Comando mancante</target>
         <note />
       </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">La risorsa '{0}' ha una durata permanente, ma nel progetto AppHost non sono configurati segreti utente. I valori dei parametri generati (come le password) possono cambiare ad ogni riavvio, causando la ricreazione dei contenitori persistenti. Eseguire 'aspire secret set' per inizializzare i segreti utente.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RequiredCommandNotFound">
         <source>Required command '{0}' was not found on PATH or at the specified location.</source>
         <target state="translated">Non è possibile trovare il comando richiesto '{0}' in PATH o nel percorso specificato.</target>
@@ -55,11 +60,6 @@
       <trans-unit id="RequiredCommandValidationFailedWithLink">
         <source>Command '{0}' validation failed: {1}. For installation instructions, see: {2}</source>
         <target state="translated">Convalida del comando '{0}' non riuscita: {1}. Per le istruzioni di installazione, vedi: {2}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="PersistentContainerWithoutUserSecrets">
-        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' in the AppHost directory to configure secrets.</source>
-        <target state="new">Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' in the AppHost directory to configure secrets.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceMayFailToStart">

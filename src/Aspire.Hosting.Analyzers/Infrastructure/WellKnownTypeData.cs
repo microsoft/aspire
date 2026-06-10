@@ -13,10 +13,14 @@ internal static class WellKnownTypeData
         Aspire_Hosting_AspireExportAttribute,
         Aspire_Hosting_AspireUnionAttribute,
         Aspire_Hosting_AspireDtoAttribute,
+        Aspire_Hosting_AspireExportIgnoreAttribute,
         Aspire_Hosting_ApplicationModel_IResource,
         Aspire_Hosting_ApplicationModel_IResourceBuilder_1,
+        Aspire_Hosting_IDistributedApplicationBuilder,
         System_Threading_Tasks_Task,
         System_Threading_Tasks_Task_1,
+        System_Threading_Tasks_ValueTask,
+        System_Threading_Tasks_ValueTask_1,
 
         // Date/time and scalar types
         System_DateTimeOffset,
@@ -33,6 +37,7 @@ internal static class WellKnownTypeData
         System_Collections_Generic_IList_1,
         System_Collections_Generic_IReadOnlyList_1,
         System_Collections_Generic_IReadOnlyCollection_1,
+        System_Collections_Generic_IEnumerable_1,
         System_Collections_Generic_IReadOnlyDictionary_2
     }
 
@@ -43,10 +48,14 @@ internal static class WellKnownTypeData
         "Aspire.Hosting.AspireExportAttribute",
         "Aspire.Hosting.AspireUnionAttribute",
         "Aspire.Hosting.AspireDtoAttribute",
+        "Aspire.Hosting.AspireExportIgnoreAttribute",
         "Aspire.Hosting.ApplicationModel.IResource",
         "Aspire.Hosting.ApplicationModel.IResourceBuilder`1",
+        "Aspire.Hosting.IDistributedApplicationBuilder",
         "System.Threading.Tasks.Task",
         "System.Threading.Tasks.Task`1",
+        "System.Threading.Tasks.ValueTask",
+        "System.Threading.Tasks.ValueTask`1",
 
         // Date/time and scalar types
         "System.DateTimeOffset",
@@ -63,6 +72,7 @@ internal static class WellKnownTypeData
         "System.Collections.Generic.IList`1",
         "System.Collections.Generic.IReadOnlyList`1",
         "System.Collections.Generic.IReadOnlyCollection`1",
+        "System.Collections.Generic.IEnumerable`1",
         "System.Collections.Generic.IReadOnlyDictionary`2"
     ];
 }

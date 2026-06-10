@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECERTIFICATES001 // WithoutHttpsCertificate is experimental
+
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -68,9 +70,8 @@ public class TestProgram : IDisposable
         AppBuilder = builder;
 
         string testPrefix = string.IsNullOrEmpty(testName) ? "" : $"{testName}-";
-        var serviceAPath = Path.Combine(Projects.TestProject_AppHost.ProjectPath, @"..\TestProject.ServiceA\TestProject.ServiceA.csproj");
 
-        ServiceABuilder = AppBuilder.AddProject($"{testPrefix}servicea", serviceAPath, launchProfileName: "http");
+        ServiceABuilder = AppBuilder.AddProject<Projects.ServiceA>($"{testPrefix}servicea", launchProfileName: "http");
         ServiceBBuilder = AppBuilder.AddProject<Projects.ServiceB>($"{testPrefix}serviceb", launchProfileName: "http");
         ServiceCBuilder = AppBuilder.AddProject<Projects.ServiceC>($"{testPrefix}servicec", launchProfileName: "http");
         WorkerABuilder = AppBuilder.AddProject<Projects.WorkerA>($"{testPrefix}workera");
@@ -83,7 +84,8 @@ public class TestProgram : IDisposable
             if (!resourcesToSkip.HasFlag(TestResourceNames.redis))
             {
                 var redis = AppBuilder.AddRedis($"{testPrefix}redis")
-                    .WithImageRegistry(AspireTestContainerRegistry);
+                    .WithImageRegistry(AspireTestContainerRegistry)
+                    .WithoutHttpsCertificate();
                 IntegrationServiceABuilder = IntegrationServiceABuilder.WithReference(redis);
             }
             if (!resourcesToSkip.HasFlag(TestResourceNames.postgres) || !resourcesToSkip.HasFlag(TestResourceNames.efnpgsql))

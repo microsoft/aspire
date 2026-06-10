@@ -4,7 +4,7 @@
 namespace Aspire.Dashboard.Configuration;
 
 /// <summary>
-/// Authentication mode for Dashboard API endpoints (MCP and Telemetry API).
+/// Authentication mode for Dashboard API endpoints.
 /// </summary>
 public enum ApiAuthMode
 {

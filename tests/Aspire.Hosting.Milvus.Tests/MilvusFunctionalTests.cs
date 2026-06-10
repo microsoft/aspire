@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.TestUtilities;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -94,8 +96,7 @@ public class MilvusFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                // Milvus container runs as root and will create the directory.
-                bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+                bindMountPath = Path.Combine(Directory.CreateTempSubdirectory().FullName, "data");
 
                 milvus1.WithDataBindMount(bindMountPath);
             }
@@ -194,7 +195,7 @@ public class MilvusFunctionalTests(ITestOutputHelper testOutputHelper)
             {
                 try
                 {
-                    Directory.Delete(bindMountPath, recursive: true);
+                    Directory.Delete(Path.GetDirectoryName(bindMountPath)!, recursive: true);
                 }
                 catch
                 {
@@ -203,4 +204,15 @@ public class MilvusFunctionalTests(ITestOutputHelper testOutputHelper)
             }
         }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Milvus_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddMilvus("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
 }

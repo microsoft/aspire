@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests.ApplicationModel.Docker;
 
+[Trait("Partition", "4")]
 public class DockerfileBuilderCallbackAnnotationTests
 {
     [Fact]

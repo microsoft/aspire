@@ -11,14 +11,33 @@ internal sealed class TestCliUpdateNotifier : ICliUpdateNotifier
 
     public Func<bool>? IsUpdateAvailableCallback { get; set; }
 
+    public Func<DirectoryInfo, CancellationToken, Task<CliVersionStatus>>? GetVersionStatusAsyncCallback { get; set; }
+
+    public Func<DirectoryInfo, CancellationToken, Task>? CheckForCliUpdatesAsyncCallback { get; set; }
+
+    public Action? NotifyIfUpdateAvailableCallback { get; set; }
+
     public Task CheckForCliUpdatesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        if (CheckForCliUpdatesAsyncCallback is not null)
+        {
+            return CheckForCliUpdatesAsyncCallback(workingDirectory, cancellationToken);
+        }
+
         return Task.CompletedTask;
+    }
+
+    public Task<CliVersionStatus> GetVersionStatusAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        return GetVersionStatusAsyncCallback is not null
+            ? GetVersionStatusAsyncCallback(workingDirectory, cancellationToken)
+            : Task.FromResult(new CliVersionStatus("13.0.0", null, null));
     }
 
     public void NotifyIfUpdateAvailable()
     {
         NotifyWasCalled = true;
+        NotifyIfUpdateAvailableCallback?.Invoke();
     }
 
     public bool IsUpdateAvailable()

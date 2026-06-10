@@ -2,8 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.OpenCode;
+using Aspire.Cli.Agents.Playwright;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
@@ -22,7 +25,7 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         await File.WriteAllTextAsync(configPath, "{ invalid json content");
 
         var openCodeCliRunner = new FakeOpenCodeCliRunner(new SemVersion(1, 0, 0));
-        var scanner = new OpenCodeAgentEnvironmentScanner(openCodeCliRunner, NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new OpenCodeAgentEnvironmentScanner(openCodeCliRunner, CreatePlaywrightCliInstaller(), NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -48,7 +51,7 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         await File.WriteAllTextAsync(configPath, "");
 
         var openCodeCliRunner = new FakeOpenCodeCliRunner(new SemVersion(1, 0, 0));
-        var scanner = new OpenCodeAgentEnvironmentScanner(openCodeCliRunner, NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new OpenCodeAgentEnvironmentScanner(openCodeCliRunner, CreatePlaywrightCliInstaller(), NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -72,7 +75,7 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         await File.WriteAllTextAsync(configPath, originalContent);
 
         var openCodeCliRunner = new FakeOpenCodeCliRunner(new SemVersion(1, 0, 0));
-        var scanner = new OpenCodeAgentEnvironmentScanner(openCodeCliRunner, NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new OpenCodeAgentEnvironmentScanner(openCodeCliRunner, CreatePlaywrightCliInstaller(), NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -96,6 +99,17 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
             WorkingDirectory = workingDirectory,
             RepositoryRoot = workingDirectory
         };
+    }
+
+    private static PlaywrightCliInstaller CreatePlaywrightCliInstaller()
+    {
+        return new PlaywrightCliInstaller(
+            new FakeNpmRunner(),
+            new FakeNpmProvenanceChecker(),
+            new FakePlaywrightCliRunner(),
+            new TestInteractionService(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PlaywrightCliInstaller>.Instance);
     }
 
     private sealed class FakeOpenCodeCliRunner(SemVersion? version) : IOpenCodeCliRunner

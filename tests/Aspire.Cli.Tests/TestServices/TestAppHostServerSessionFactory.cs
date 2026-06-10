@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
 
@@ -14,7 +15,7 @@ internal sealed class TestAppHostServerSessionFactory : IAppHostServerSessionFac
     public Task<AppHostServerSessionResult> CreateAsync(
         string appHostPath,
         string sdkVersion,
-        IEnumerable<(string PackageId, string Version)> packages,
+        IEnumerable<IntegrationReference> integrations,
         Dictionary<string, string>? launchSettingsEnvVars,
         bool debug,
         CancellationToken cancellationToken)

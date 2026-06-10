@@ -4,7 +4,6 @@
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
-using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -16,9 +15,12 @@ namespace Aspire.Hosting;
 public static class AzureProvisionerExtensions
 {
     /// <summary>
-    /// Adds support for generating azure resources dynamically during application startup.
-    /// The application must configure the appropriate subscription, location.
+    /// Adds support for generating Azure resources dynamically during application startup.
+    /// The application must configure the appropriate Azure subscription and location before resources can be provisioned.
     /// </summary>
+    /// <param name="builder">The distributed application builder.</param>
+    /// <returns>The distributed application builder.</returns>
+    [AspireExport]
     public static IDistributedApplicationBuilder AddAzureProvisioning(this IDistributedApplicationBuilder builder)
     {
         // Always add the Azure environment, even if the user doesn't explicitly add it.
@@ -26,8 +28,8 @@ public static class AzureProvisionerExtensions
         builder.AddAzureEnvironment();
 #pragma warning restore ASPIREAZURE001
 
-        builder.Services.TryAddEventingSubscriber<AzureResourcePreparer>();
-        builder.Services.TryAddEventingSubscriber<AzureProvisioner>();
+        builder.Services.TryAddSingleton<AzureResourcePreparer>();
+        builder.Services.TryAddSingleton<AzureProvisioner>();
 
         // Attempt to read azure configuration from configuration
         builder.Services.AddOptions<AzureProvisionerOptions>()

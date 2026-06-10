@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class RequiredCommandAnnotationTests
 {
     [Fact]
@@ -129,18 +130,18 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_IsRegistered()
+    public async Task RequiredCommandValidationEventingSubscriber_IsRegistered()
     {
         var builder = DistributedApplication.CreateBuilder();
 
         await using var app = builder.Build();
 
         var subscribers = app.Services.GetServices<IDistributedApplicationEventingSubscriber>();
-        Assert.Contains(subscribers, s => s is RequiredCommandValidationLifecycleHook);
+        Assert.Contains(subscribers, s => s is RequiredCommandValidationEventingSubscriber);
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_ValidatesExistingCommand()
+    public async Task RequiredCommandValidationEventingSubscriber_ValidatesExistingCommand()
     {
         var builder = DistributedApplication.CreateBuilder();
         var command = OperatingSystem.IsWindows() ? "cmd" : "sh";
@@ -157,7 +158,7 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_LogsWarningForMissingCommand()
+    public async Task RequiredCommandValidationEventingSubscriber_LogsWarningForMissingCommand()
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.AddContainer("test", "image").WithRequiredCommand("this-command-definitely-does-not-exist-12345");
@@ -174,7 +175,7 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_IncludesHelpLinkInWarning()
+    public async Task RequiredCommandValidationEventingSubscriber_IncludesHelpLinkInWarning()
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.AddContainer("test", "image")
@@ -192,7 +193,7 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_CallsValidationCallback()
+    public async Task RequiredCommandValidationEventingSubscriber_CallsValidationCallback()
     {
         var builder = DistributedApplication.CreateBuilder();
         var callbackInvoked = false;
@@ -217,7 +218,7 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_CallsValidationCallbackWithContext()
+    public async Task RequiredCommandValidationEventingSubscriber_CallsValidationCallbackWithContext()
     {
         var builder = DistributedApplication.CreateBuilder();
         var command = OperatingSystem.IsWindows() ? "cmd" : "sh";
@@ -245,7 +246,7 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_LogsWarningOnFailedValidationCallback()
+    public async Task RequiredCommandValidationEventingSubscriber_LogsWarningOnFailedValidationCallback()
     {
         var builder = DistributedApplication.CreateBuilder();
         var command = OperatingSystem.IsWindows() ? "cmd" : "sh";
@@ -268,7 +269,7 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_ValidatesMultipleAnnotations()
+    public async Task RequiredCommandValidationEventingSubscriber_ValidatesMultipleAnnotations()
     {
         var builder = DistributedApplication.CreateBuilder();
         var command = OperatingSystem.IsWindows() ? "cmd" : "sh";
@@ -289,7 +290,7 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_CoalescesNotificationsForSameCommand()
+    public async Task RequiredCommandValidationEventingSubscriber_CoalescesNotificationsForSameCommand()
     {
         var builder = DistributedApplication.CreateBuilder();
         const string missingCommand = "this-command-definitely-does-not-exist-coalesce-test";
@@ -311,25 +312,23 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_CachesSuccessfulValidation()
+    public async Task RequiredCommandValidationEventingSubscriber_CachesSuccessfulValidation()
     {
         var builder = DistributedApplication.CreateBuilder();
         var command = OperatingSystem.IsWindows() ? "cmd" : "sh";
         var callbackCount = 0;
 
+        Task<RequiredCommandValidationResult> callback(RequiredCommandValidationContext _)
+        {
+            Interlocked.Increment(ref callbackCount);
+            return Task.FromResult(RequiredCommandValidationResult.Success());
+        }
+
         builder.AddContainer("test1", "image")
-            .WithRequiredCommand(command, ctx =>
-            {
-                Interlocked.Increment(ref callbackCount);
-                return Task.FromResult(RequiredCommandValidationResult.Success());
-            });
+            .WithRequiredCommand(command, callback);
 
         builder.AddContainer("test2", "image")
-            .WithRequiredCommand(command, ctx =>
-            {
-                Interlocked.Increment(ref callbackCount);
-                return Task.FromResult(RequiredCommandValidationResult.Success());
-            });
+            .WithRequiredCommand(command, callback);
 
         await using var app = builder.Build();
         await SubscribeHooksAsync(app);
@@ -346,7 +345,42 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_CallsInteractionServiceForMissingCommand()
+    public async Task RequiredCommandValidationLifecycleHook_DoesNotCacheAcrossDifferentValidationCallbacks()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var command = OperatingSystem.IsWindows() ? "cmd" : "sh";
+        var callbackCount = 0;
+
+        builder.AddContainer("test1", "image")
+            .WithRequiredCommand(command, _ =>
+            {
+                Interlocked.Increment(ref callbackCount);
+                return Task.FromResult(RequiredCommandValidationResult.Success());
+            });
+
+        builder.AddContainer("test2", "image")
+            .WithRequiredCommand(command, _ =>
+            {
+                Interlocked.Increment(ref callbackCount);
+                return Task.FromResult(RequiredCommandValidationResult.Success());
+            });
+
+        await using var app = builder.Build();
+        await SubscribeHooksAsync(app);
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource1 = appModel.Resources.Single(r => r.Name == "test1");
+        var resource2 = appModel.Resources.Single(r => r.Name == "test2");
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource1, app.Services));
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource2, app.Services));
+
+        Assert.Equal(2, callbackCount);
+    }
+
+    [Fact]
+    public async Task RequiredCommandValidationEventingSubscriber_CallsInteractionServiceForMissingCommand()
     {
         var builder = DistributedApplication.CreateBuilder();
         const string missingCommand = "this-command-does-not-exist-interaction-test";
@@ -378,7 +412,7 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_DoesNotCallInteractionServiceWhenUnavailable()
+    public async Task RequiredCommandValidationEventingSubscriber_DoesNotCallInteractionServiceWhenUnavailable()
     {
         var builder = DistributedApplication.CreateBuilder();
         const string missingCommand = "this-command-does-not-exist-unavailable-test";
@@ -402,7 +436,7 @@ public class RequiredCommandAnnotationTests
     }
 
     [Fact]
-    public async Task RequiredCommandValidationLifecycleHook_CoalescesInteractionServiceCalls()
+    public async Task RequiredCommandValidationEventingSubscriber_CoalescesInteractionServiceCalls()
     {
         var builder = DistributedApplication.CreateBuilder();
         const string missingCommand = "this-command-does-not-exist-coalesce-interaction-test";
@@ -435,7 +469,7 @@ public class RequiredCommandAnnotationTests
     }
 
     /// <summary>
-    /// Helper method to subscribe all eventing subscribers (including RequiredCommandValidationLifecycleHook)
+    /// Helper method to subscribe all eventing subscribers (including RequiredCommandValidationEventingSubscriber)
     /// to the eventing system. This simulates what happens during app.StartAsync().
     /// </summary>
     private static async Task SubscribeHooksAsync(DistributedApplication app)

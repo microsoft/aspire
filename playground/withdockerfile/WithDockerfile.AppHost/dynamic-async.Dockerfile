@@ -3,6 +3,6 @@ WORKDIR /app
 COPY . .
 RUN go build -o qots .
 
-FROM mcr.microsoft.com/cbl-mariner/base/core:2.0.20260102
+FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
 COPY --from=builder /app/qots /qots
 ENTRYPOINT ["/qots"]

@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ja" original="../RestoreCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Restore dependencies and generate SDK code for an AppHost</source>
+        <target state="new">Restore dependencies and generate SDK code for an AppHost</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnrecognizedAppHostType">
+        <source>Unrecognized AppHost type.</source>
+        <target state="new">Unrecognized AppHost type.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoringSdkCode">
+        <source>Restoring SDK code...</source>
+        <target state="new">Restoring SDK code...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoreSucceeded">
+        <source>SDK code restored successfully for {0}.</source>
+        <target state="new">SDK code restored successfully for {0}.</target>
+        <note>{0} is the AppHost project file name.</note>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

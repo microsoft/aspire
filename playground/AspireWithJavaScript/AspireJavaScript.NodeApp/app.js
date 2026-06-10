@@ -69,7 +69,7 @@ app.use((err, req, res, next) => {
 });
 
 // General 404 handler (for non-API routes)
-app.use('*', (req, res) => {
+app.use((req, res) => {
     res.status(404).json({
         message: 'Route not found',
         path: req.originalUrl

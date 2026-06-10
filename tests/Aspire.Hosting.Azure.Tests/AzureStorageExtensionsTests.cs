@@ -146,7 +146,7 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(storage.Resource);
 
-        Assert.All(["azurite", "-l", "/data", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0"], x => args.Contains(x));
+        Assert.All(["azurite", "-l", "/data", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--disableProductStyleUrl"], x => args.Contains(x));
 
         if (enableApiVersionCheck)
         {
@@ -167,6 +167,7 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
         var args = await ArgumentEvaluator.GetArgumentListAsync(storage.Resource);
 
         Assert.Contains("--skipApiVersionCheck", args);
+        Assert.Contains("--disableProductStyleUrl", args);
     }
 
     [Fact]

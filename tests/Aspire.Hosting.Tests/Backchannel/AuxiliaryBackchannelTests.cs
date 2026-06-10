@@ -10,10 +10,12 @@ using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
 
 namespace Aspire.Hosting.Backchannel;
 
+[Trait("Partition", "4")]
 public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 {
     [Fact]
@@ -30,26 +32,26 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service and verify it started
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
         Assert.True(File.Exists(service.SocketPath));
 
         // Connect a client
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
-        await socket.ConnectAsync(endpoint).WaitAsync(TimeSpan.FromSeconds(60));
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
 
         // Verify the connected event was published
-        var connectedEvent = await connectedEventReceived.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        var connectedEvent = await connectedEventReceived.Task.DefaultTimeout();
         Assert.NotNull(connectedEvent);
         Assert.Equal(service.SocketPath, connectedEvent.SocketPath);
 
         socket.Dispose();
-        await app.StopAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -70,11 +72,11 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Connect multiple clients concurrently
@@ -84,9 +86,9 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
 
-        await client1Socket.ConnectAsync(endpoint).WaitAsync(TimeSpan.FromSeconds(60));
-        await client2Socket.ConnectAsync(endpoint).WaitAsync(TimeSpan.FromSeconds(60));
-        await client3Socket.ConnectAsync(endpoint).WaitAsync(TimeSpan.FromSeconds(60));
+        await client1Socket.ConnectAsync(endpoint).DefaultTimeout();
+        await client2Socket.ConnectAsync(endpoint).DefaultTimeout();
+        await client3Socket.ConnectAsync(endpoint).DefaultTimeout();
 
         // Give some time for events to be published
         await Task.Delay(1000);
@@ -100,43 +102,42 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         client1Socket.Dispose();
         client2Socket.Dispose();
         client3Socket.Dispose();
-        await app.StopAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
     public async Task CanInvokeRpcMethodOnAuxiliaryBackchannel()
     {
         // This test verifies that RPC methods can be invoked
-        // When the Dashboard is not part of the app model, null should be returned
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Connect a client
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
-        await socket.ConnectAsync(endpoint).WaitAsync(TimeSpan.FromSeconds(60));
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
 
         using var stream = new NetworkStream(socket, ownsSocket: true);
         using var rpc = JsonRpc.Attach(stream);
 
-        // Invoke the GetDashboardMcpConnectionInfoAsync RPC method
-        var connectionInfo = await rpc.InvokeAsync<DashboardMcpConnectionInfo?>(
-            "GetDashboardMcpConnectionInfoAsync",
+        // Invoke the GetAppHostInformationAsync RPC method
+        var appHostInfo = await rpc.InvokeAsync<AppHostInformation>(
+            "GetAppHostInformationAsync",
             Array.Empty<object>()
-        ).WaitAsync(TimeSpan.FromSeconds(60));
+        ).DefaultTimeout();
 
-        // Since the dashboard is not part of the app model, it should return null
-        Assert.Null(connectionInfo);
+        Assert.NotNull(appHostInfo);
+        Assert.True(appHostInfo.ProcessId > 0);
 
-        await app.StopAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -147,17 +148,17 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Connect a client
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
-        await socket.ConnectAsync(endpoint).WaitAsync(TimeSpan.FromSeconds(60));
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
 
         using var stream = new NetworkStream(socket, ownsSocket: true);
         using var rpc = JsonRpc.Attach(stream);
@@ -166,7 +167,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         var appHostInfo = await rpc.InvokeAsync<AppHostInformation>(
             "GetAppHostInformationAsync",
             Array.Empty<object>()
-        ).WaitAsync(TimeSpan.FromSeconds(60));
+        ).DefaultTimeout();
 
         // The AppHost path should be set
         Assert.NotNull(appHostInfo);
@@ -176,7 +177,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         // The ProcessId should be set and valid
         Assert.True(appHostInfo.ProcessId > 0);
 
-        await app.StopAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -188,11 +189,11 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Create multiple clients and invoke RPC methods concurrently
@@ -205,22 +206,22 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
             using var stream = new NetworkStream(socket, ownsSocket: true);
             using var rpc = JsonRpc.Attach(stream);
 
-            var connectionInfo = await rpc.InvokeAsync<DashboardMcpConnectionInfo?>(
-                "GetDashboardMcpConnectionInfoAsync",
+            var appHostInfo = await rpc.InvokeAsync<AppHostInformation>(
+                "GetAppHostInformationAsync",
                 Array.Empty<object>()
             );
 
-            // Since the dashboard is not part of the app model, it should return null
-            Assert.Null(connectionInfo);
+            Assert.NotNull(appHostInfo);
+            Assert.True(appHostInfo.ProcessId > 0);
 
-            return connectionInfo;
+            return appHostInfo;
         });
 
-        var results = await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(60));
+        var results = await Task.WhenAll(tasks).DefaultTimeout();
         Assert.Equal(5, results.Length);
-        Assert.All(results, Assert.Null);
+        Assert.All(results, Assert.NotNull);
 
-        await app.StopAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -232,17 +233,17 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Connect a client
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
-        await socket.ConnectAsync(endpoint).WaitAsync(TimeSpan.FromSeconds(60));
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
 
         using var stream = new NetworkStream(socket, ownsSocket: true);
         using var rpc = JsonRpc.Attach(stream);
@@ -251,7 +252,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         var appHostInfo = await rpc.InvokeAsync<AppHostInformation>(
             "GetAppHostInformationAsync",
             Array.Empty<object>()
-        ).WaitAsync(TimeSpan.FromSeconds(60));
+        ).DefaultTimeout();
 
         // Verify the AppHost path is returned
         Assert.NotNull(appHostInfo);
@@ -266,35 +267,38 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         // So we just verify the path is non-empty and rooted
         outputHelper.WriteLine($"AppHost path returned: {appHostInfo.AppHostPath}");
 
-        await app.StopAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
-    public async Task SocketPathUsesAuxiPrefix()
+    public async Task SocketPathUsesCompactFormat()
     {
-        // This test verifies that the socket path uses "auxi.sock." prefix instead of "aux.sock."
-        // to avoid Windows reserved device name issues (AUX is reserved on Windows < 11)
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
-        // Verify that the socket path uses "auxi.sock." prefix
         var fileName = Path.GetFileName(service.SocketPath);
-        Assert.StartsWith("auxi.sock.", fileName);
+        Assert.Matches("^[A-Za-z0-9_-]{19}\\.[0-9]+$", fileName);
 
-        // Verify that the socket file can be created (not blocked by Windows reserved names)
+        var directory = Path.GetDirectoryName(service.SocketPath);
+        Assert.NotNull(directory);
+        Assert.EndsWith(Path.Combine(".aspire", "cli", "bch"), directory);
+        Assert.True(
+            BackchannelConstants.GetSocketPathByteCountIncludingNull(service.SocketPath) <= BackchannelConstants.GetMaxSocketPathBytesIncludingNull(),
+            $"Socket path should fit the platform byte limit: {service.SocketPath}");
+
         Assert.True(File.Exists(service.SocketPath), $"Socket file should exist at: {service.SocketPath}");
 
         outputHelper.WriteLine($"Socket path: {service.SocketPath}");
 
-        await app.StopAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -309,17 +313,17 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Connect a client
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
-        await socket.ConnectAsync(endpoint).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
 
         using var stream = new NetworkStream(socket, ownsSocket: true);
         using var rpc = JsonRpc.Attach(stream);
@@ -330,7 +334,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
             await rpc.InvokeAsync<JsonElement>(
                 "CallResourceMcpToolAsync",
                 new object[] { "nonexistent-resource", "some-tool", new Dictionary<string, object?>() }
-            ).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+            ).DefaultTimeout();
         });
 
         Assert.Contains("not found", ex.Message, StringComparison.OrdinalIgnoreCase);
@@ -350,17 +354,17 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Connect a client
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
-        await socket.ConnectAsync(endpoint).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
 
         using var stream = new NetworkStream(socket, ownsSocket: true);
         using var rpc = JsonRpc.Attach(stream);
@@ -371,7 +375,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
             await rpc.InvokeAsync<JsonElement>(
                 "CallResourceMcpToolAsync",
                 new object[] { "mycontainer", "some-tool", new Dictionary<string, object?>() }
-            ).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+            ).DefaultTimeout();
         });
 
         Assert.Contains("MCP endpoint annotation", ex.Message, StringComparison.OrdinalIgnoreCase);
@@ -387,17 +391,17 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Connect a client
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
-        await socket.ConnectAsync(endpoint).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
 
         using var stream = new NetworkStream(socket, ownsSocket: true);
         using var rpc = JsonRpc.Attach(stream);
@@ -406,7 +410,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         await rpc.InvokeAsync(
             "StopAppHostAsync",
             Array.Empty<object>()
-        ).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        ).DefaultTimeout();
 
         // The app should eventually stop
         // We give it some time since StopAppHostAsync initiates shutdown asynchronously
@@ -429,41 +433,44 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetCapabilitiesAsyncReturnsV1AndV2()
+    public async Task GetCapabilitiesAsyncReturnsCurrentCapabilities()
     {
-        // This test verifies that GetCapabilitiesAsync returns both v1 and v2 capabilities
+        // This test verifies that GetCapabilitiesAsync returns the current capabilities.
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Connect a client
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
-        await socket.ConnectAsync(endpoint).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
 
-        using var stream = new NetworkStream(socket, ownsSocket: true);
-        using var rpc = JsonRpc.Attach(stream);
+        {
+            using var stream = new NetworkStream(socket, ownsSocket: true);
+            using var rpc = JsonRpc.Attach(stream);
 
-        // Invoke the GetCapabilitiesAsync RPC method
-        var response = await rpc.InvokeAsync<GetCapabilitiesResponse>(
-            "GetCapabilitiesAsync",
-            new object?[] { null }
-        ).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+            // Invoke the GetCapabilitiesAsync RPC method
+            var response = await rpc.InvokeAsync<GetCapabilitiesResponse>(
+                "GetCapabilitiesAsync",
+                new object?[] { null }
+            ).DefaultTimeout();
 
-        // Verify capabilities include both v1 and v2
-        Assert.NotNull(response);
-        Assert.NotNull(response.Capabilities);
-        Assert.Contains(AuxiliaryBackchannelCapabilities.V1, response.Capabilities);
-        Assert.Contains(AuxiliaryBackchannelCapabilities.V2, response.Capabilities);
+            // Verify the current capability set.
+            Assert.NotNull(response);
+            Assert.NotNull(response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.V1, response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.V2, response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.V3, response.Capabilities);
+        }
 
-        await app.StopAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -474,17 +481,17 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Connect a client
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
-        await socket.ConnectAsync(endpoint).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
 
         using var stream = new NetworkStream(socket, ownsSocket: true);
         using var rpc = JsonRpc.Attach(stream);
@@ -493,7 +500,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         var response = await rpc.InvokeAsync<GetAppHostInfoResponse>(
             "GetAppHostInfoAsync",
             new object?[] { null }
-        ).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        ).DefaultTimeout();
 
         // Verify the response contains expected fields
         Assert.NotNull(response);
@@ -503,7 +510,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         Assert.NotEmpty(response.AppHostPath);
         Assert.NotNull(response.AspireHostVersion);
 
-        await app.StopAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -517,17 +524,17 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await app.StartAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StartAsync().DefaultTimeout();
 
         // Get the service
         var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
-        await service.ListeningTask.WaitAsync(TimeSpan.FromSeconds(60));
+        await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
         // Connect a client
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
-        await socket.ConnectAsync(endpoint).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
 
         using var stream = new NetworkStream(socket, ownsSocket: true);
         using var rpc = JsonRpc.Attach(stream);
@@ -536,7 +543,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         var response = await rpc.InvokeAsync<GetResourcesResponse>(
             "GetResourcesAsync",
             new object?[] { null }
-        ).WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        ).DefaultTimeout();
 
         // Verify the response contains resources
         Assert.NotNull(response);
@@ -546,6 +553,61 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         // Verify the parameter resource is in the list
         Assert.Contains(response.Resources, r => r.Name == "myparam");
 
-        await app.StopAsync().WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task AbruptClientDisconnectDoesNotLogError()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
+
+        builder.Services.AddLogging(b =>
+        {
+            b.AddFakeLogging();
+        });
+
+        using var app = builder.Build();
+
+        await app.StartAsync().DefaultTimeout();
+
+        var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
+        await service.ListeningTask.DefaultTimeout();
+        Assert.NotNull(service.SocketPath);
+
+        // Connect a client and invoke an RPC method to ensure the connection is fully established
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
+        await socket.ConnectAsync(endpoint).DefaultTimeout();
+
+        using var stream = new NetworkStream(socket, ownsSocket: false);
+        using var rpc = JsonRpc.Attach(stream);
+
+        await rpc.InvokeAsync<AppHostInformation>(
+            "GetAppHostInformationAsync",
+            Array.Empty<object>()
+        ).DefaultTimeout();
+
+        // Force an RST (connection reset) by setting linger with zero timeout, then closing the socket
+        socket.LingerState = new LingerOption(true, 0);
+        rpc.Dispose();
+        stream.Dispose();
+        socket.Dispose();
+
+        var collector = app.Services.GetFakeLogCollector();
+
+        // Wait for the server to process the disconnect and emit a Debug log
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
+        {
+            var logs = collector.GetSnapshot();
+
+            var hasDebugLog = logs.Any(l =>
+                l.Level == LogLevel.Debug &&
+                l.Category == typeof(AuxiliaryBackchannelService).FullName &&
+                l.Message.Contains("Client disconnected from auxiliary backchannel"));
+
+            return hasDebugLog;
+        }, "Expected a Debug log for client disconnect and no Error logs from AuxiliaryBackchannelService");
+
+        await app.StopAsync().DefaultTimeout();
     }
 }

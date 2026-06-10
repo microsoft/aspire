@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.Network;
 
@@ -58,6 +59,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
             .WithSecurityRule(new AzureSecurityRule
             {
                 Name = "allow-https",
+                Description = "Allow HTTPS traffic from any source",
                 Priority = 100,
                 Direction = SecurityRuleDirection.Inbound,
                 Access = SecurityRuleAccess.Allow,
@@ -77,9 +79,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
         vnet.AddSubnet("web-subnet", "10.0.1.0/24")
             .WithNetworkSecurityGroup(nsg);
 
-        var manifest = await AzureManifestUtils.GetManifestWithBicep(vnet.Resource);
-
-        await Verify(manifest.BicepText, extension: "bicep");
+        await AzureManifestUtils.VerifyAllAzureBicep(builder);
     }
 
     [Fact]
@@ -135,9 +135,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
         vnet.AddSubnet("web-subnet", "10.0.1.0/24")
             .WithNetworkSecurityGroup(nsg);
 
-        var manifest = await AzureManifestUtils.GetManifestWithBicep(vnet.Resource);
-
-        await Verify(manifest.BicepText, extension: "bicep");
+        await AzureManifestUtils.VerifyAllAzureBicep(builder);
     }
 
     [Fact]
@@ -165,9 +163,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
         vnet.AddSubnet("subnet2", "10.0.2.0/24")
             .WithNetworkSecurityGroup(nsg);
 
-        var manifest = await AzureManifestUtils.GetManifestWithBicep(vnet.Resource);
-
-        await Verify(manifest.BicepText, extension: "bicep");
+        await AzureManifestUtils.VerifyAllAzureBicep(builder);
     }
 
     [Fact]
@@ -258,9 +254,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
         vnet.AddSubnet("subnet2", "10.0.2.0/24")
             .WithNetworkSecurityGroup(nsg2);
 
-        var manifest = await AzureManifestUtils.GetManifestWithBicep(vnet.Resource);
-
-        await Verify(manifest.BicepText, extension: "bicep");
+        await AzureManifestUtils.VerifyAllAzureBicep(builder);
     }
 
     [Fact]
@@ -299,5 +293,49 @@ public class AzureNetworkSecurityGroupExtensionsTests
         var manifest = await AzureManifestUtils.GetManifestWithBicep(nsg.Resource);
 
         await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddNetworkSecurityGroup_WithSourceAddressPrefixReference_GeneratesCorrectBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var pip = builder.AddPublicIPAddress("mypip");
+
+        builder.AddNetworkSecurityGroup("web-nsg")
+            .WithSecurityRule(new AzureSecurityRule
+            {
+                Name = "allow-from-pip",
+                Priority = 100,
+                Direction = SecurityRuleDirection.Inbound,
+                Access = SecurityRuleAccess.Allow,
+                Protocol = SecurityRuleProtocol.Tcp,
+                DestinationPortRange = "443",
+                SourceAddressPrefixReference = ReferenceExpression.Create($"{pip.Resource.IpAddress}")
+            });
+
+        await AzureManifestUtils.VerifyAllAzureBicep(builder);
+    }
+
+    [Fact]
+    public async Task AddNetworkSecurityGroup_WithDestinationAddressPrefixReference_GeneratesCorrectBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var pip = builder.AddPublicIPAddress("mypip");
+
+        builder.AddNetworkSecurityGroup("web-nsg")
+            .WithSecurityRule(new AzureSecurityRule
+            {
+                Name = "route-to-pip",
+                Priority = 100,
+                Direction = SecurityRuleDirection.Outbound,
+                Access = SecurityRuleAccess.Allow,
+                Protocol = SecurityRuleProtocol.Tcp,
+                DestinationPortRange = "443",
+                DestinationAddressPrefixReference = ReferenceExpression.Create($"{pip.Resource.IpAddress}")
+            });
+
+        await AzureManifestUtils.VerifyAllAzureBicep(builder);
     }
 }
