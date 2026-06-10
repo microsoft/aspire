@@ -50,7 +50,6 @@ public class BackchannelContractTests
         typeof(ExecuteResourceCommandResponse),
         typeof(WaitForResourceResponse),
         typeof(GetPipelineStepsResponse),
-        typeof(GetTerminalInfoRequest),
         typeof(GetTerminalInfoResponse),
         typeof(TerminalReplicaInfo),
         typeof(TerminalPeerInfo),
