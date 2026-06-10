@@ -357,6 +357,10 @@ loose_file_deps:
     targets: [test:QuarantineTools.Tests]
     reason: QuarantineTools.Tests exercises the quarantine/disable source-rewriting logic
   - paths:
+      - tools/SelectTests/**
+    targets: [test:Infrastructure.Tests]
+    reason: SelectTests acceptance/behavior tests live in Infrastructure.Tests/TestTriggerMap
+  - paths:
       - .github/workflows/**
       - eng/pipelines/**
       - eng/Signing.props
