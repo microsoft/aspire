@@ -65,6 +65,7 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire terminal attach frontend");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Ctrl+B D", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitAsync(3000);
 
         await auto.TypeAsync("h");
         await auto.EnterAsync();
