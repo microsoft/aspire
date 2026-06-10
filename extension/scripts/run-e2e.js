@@ -817,8 +817,7 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion) {
 </Project>
 `);
 
-  fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
-
+  fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")

@@ -352,6 +352,38 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
         spec.PemCertificates = pemCertificates;
 
+        // Configure the terminal spec if the resource has a TerminalAnnotation.
+        // Containers are always single-replica, so we use the host at index 0
+        // (TerminalAnnotation always has at least one entry). PTY allocation
+        // is implemented by DCP for Windows (ConPTY), Linux, and macOS
+        // (Unix98 /dev/ptmx); the container runtime CLI's `attach` command
+        // is what actually gets PTY-attached, so behaviour is uniform across
+        // hosts that support docker/podman.
+        if (modelContainer.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
+        {
+            var terminalAnnotation = terminalAnnotations.FirstOrDefault();
+            if (terminalAnnotation is not null)
+            {
+                if (terminalAnnotation.TerminalHosts.Count > 0)
+                {
+                    spec.Terminal = new TerminalSpec
+                    {
+                        UdsPath = terminalAnnotation.TerminalHosts[0].Layout.ProducerUdsPath,
+                        // The Aspire terminal host owns the listener at UdsPath; DCP must dial it.
+                        SocketMode = "connect",
+                        Cols = terminalAnnotation.Options.Columns,
+                        Rows = terminalAnnotation.Options.Rows
+                    };
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Could not determine a producer UDS path for container resource '{ResourceName}'; terminal will not be attached.",
+                        modelContainer.Name);
+                }
+            }
+        }
+
         var dcpInfo = await _dcpDependencyCheckService.GetDcpInfoAsync(cancellationToken: cToken).ConfigureAwait(false);
         if (dcpInfo is not null)
         {
@@ -835,7 +867,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     new()
                     {
                         Model = context.Resource,
-                        ServiceProvider = _executionContext.ServiceProvider,
+                        Services = _executionContext.Services,
                         HttpsCertificateContext = context.HttpsCertificateContext,
                     },
                     cancellationToken).ConfigureAwait(false);
@@ -889,7 +921,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     {
         if (modelContainerResource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault() is { } dockerfileBuildAnnotation)
         {
-            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.ServiceProvider, cancellationToken).ConfigureAwait(false);
+            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.Services, cancellationToken).ConfigureAwait(false);
 
             var dcpBuildArgs = new List<EnvVar>();
 
@@ -939,7 +971,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
 #pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
             var buildOptionsContext = await modelContainerResource.ProcessContainerBuildOptionsCallbackAsync(
-                executionContext.ServiceProvider,
+                executionContext.Services,
                 logger,
                 executionContext,
                 cancellationToken).ConfigureAwait(false);

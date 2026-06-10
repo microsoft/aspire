@@ -135,9 +135,11 @@ internal sealed class AppHostConnectionResolver(
             }
 
             var targetPath = projectFile.FullName;
-            var matchingSockets = AppHostHelper.FindMatchingSockets(
+            var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
                 targetPath,
-                executionContext.HomeDirectory.FullName);
+                executionContext.HomeDirectory.FullName,
+                Environment.ProcessId,
+                logger);
 
             // Try each matching socket until we get a connection
             foreach (var socketPath in matchingSockets)

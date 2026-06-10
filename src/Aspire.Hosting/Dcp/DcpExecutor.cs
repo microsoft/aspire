@@ -1367,7 +1367,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             }
         }
 
-        var ev = new ResourceEndpointsAllocatedEvent(resource, _executionContext.ServiceProvider);
+        var ev = new ResourceEndpointsAllocatedEvent(resource, _executionContext.Services);
         await _distributedApplicationEventing.PublishAsync(ev, EventDispatchBehavior.BlockingSequential, ct).ConfigureAwait(false);
         return true;
     }

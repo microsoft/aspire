@@ -55,6 +55,24 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         };
     }
 
+    private static RuntimeSpec CreateTypeScriptRuntimeSpec()
+    {
+        return CreateTestSpec(
+            execute: new CommandSpec
+            {
+                Command = "npx",
+                Args = ["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"]
+            },
+            preExecute:
+            [
+                new CommandSpec
+                {
+                    Command = "npx",
+                    Args = ["--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"]
+                }
+            ]);
+    }
+
     [Fact]
     public void Language_ReturnsSpecLanguage()
     {
@@ -161,6 +179,30 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         Assert.Equal("typecheck-cmd", launcher.Calls[0].Command);
         Assert.Equal(["--project", directory.FullName], launcher.Calls[0].Args);
         Assert.Equal("run-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task RunAsync_NoBuildSkipsTypeScriptTscAndRunsAppHost()
+    {
+        var spec = CreateTypeScriptRuntimeSpec();
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        var (exitCode, _) = await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            CancellationToken.None,
+            noBuild: true);
+
+        Assert.Equal(0, exitCode);
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("npx", call.Command);
+        Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName], call.Args);
     }
 
     [Fact]
@@ -346,7 +388,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal("publish-cmd", launcher.LastCommand);
         Assert.Contains(launcher.LastArgs, a => a.Contains("--output") && a.Contains("/out"));
@@ -367,11 +409,71 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal(2, launcher.Calls.Count);
         Assert.Equal("typecheck-cmd", launcher.Calls[0].Command);
         Assert.Equal("publish-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task PublishAsync_CallsAfterAppHostLaunchedAfterPreExecute()
+    {
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
+            publishExecute: new CommandSpec { Command = "publish-cmd", Args = ["{appHostFile}", "{args}"] },
+            preExecute:
+            [
+                new CommandSpec { Command = "typecheck-cmd", Args = ["--project", "{appHostDir}"] }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+        var afterAppHostLaunchedCalls = 0;
+
+        await runtime.PublishAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            ["--output", "/out"],
+            launcher,
+            afterAppHostLaunchedAsync: () =>
+            {
+                afterAppHostLaunchedCalls++;
+                Assert.Equal(2, launcher.Calls.Count);
+                Assert.Equal("publish-cmd", launcher.Calls[1].Command);
+                return Task.CompletedTask;
+            },
+            cancellationToken: CancellationToken.None);
+
+        Assert.Equal(1, afterAppHostLaunchedCalls);
+        Assert.Equal(2, launcher.Calls.Count);
+        Assert.Equal("publish-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task PublishAsync_NoBuildSkipsTypeScriptTscAndRunsAppHost()
+    {
+        var spec = CreateTypeScriptRuntimeSpec();
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        var (exitCode, _) = await runtime.PublishAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            ["--operation", "publish"],
+            launcher,
+            noBuild: true,
+            cancellationToken: CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("npx", call.Command);
+        Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName, "--operation", "publish"], call.Args);
     }
 
     [Fact]
@@ -383,7 +485,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), null, launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), null, launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal("run-cmd", launcher.LastCommand);
     }
@@ -479,7 +581,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--extra", "arg"], launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--extra", "arg"], launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal(appHostFile.FullName, launcher.LastArgs[0]);
         Assert.Equal("--extra", launcher.LastArgs[1]);

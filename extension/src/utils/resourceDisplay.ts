@@ -2,12 +2,12 @@ import { ResourceState, ResourceType, CommandName, ParameterPropertyName } from 
 import { ResourceJson, ResourceCommandInputType, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { parameterValueMissing } from '../loc/strings';
 
-// Sort commands by registration order, then name, since the CLI keys them alphabetically in JSON.
+// Sort commands by sort order, then name.
 export function compareResourceCommands(
     [nameA, a]: [string, ResourceCommandJson],
     [nameB, b]: [string, ResourceCommandJson]): number {
-    const orderA = a.registrationOrder ?? 0;
-    const orderB = b.registrationOrder ?? 0;
+    const orderA = a.sortOrder ?? 0;
+    const orderB = b.sortOrder ?? 0;
     return orderA !== orderB ? orderA - orderB : nameA.localeCompare(nameB);
 }
 
