@@ -288,6 +288,84 @@ public class InputViewModelTests
     }
 
     [Fact]
+    public void SetInput_DisabledToEnabledInputUsesIncomingValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Subscription",
+            InputType = InputType.Choice,
+            Placeholder = "Select subscription ID",
+            Disabled = true
+        };
+        var viewModel = new InputViewModel(input);
+
+        var updatedInput = new InteractionInput
+        {
+            Label = "Subscription",
+            InputType = InputType.Choice,
+            Placeholder = "Select subscription ID",
+            Value = "12345678-1234-1234-1234-123456789012"
+        };
+        updatedInput.Options.Add("12345678-1234-1234-1234-123456789012", "Test Subscription");
+
+        viewModel.SetInput(updatedInput);
+
+        Assert.False(viewModel.InputDisabled);
+        Assert.Equal("12345678-1234-1234-1234-123456789012", viewModel.Value);
+    }
+
+    [Fact]
+    public void SetInput_EnabledToDisabledInputUsesIncomingValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Location",
+            InputType = InputType.Choice,
+            Value = "local"
+        };
+        var viewModel = new InputViewModel(input);
+
+        var updatedInput = new InteractionInput
+        {
+            Label = "Location",
+            InputType = InputType.Choice,
+            Disabled = true,
+            Value = "server"
+        };
+
+        viewModel.SetInput(updatedInput);
+
+        Assert.True(viewModel.InputDisabled);
+        Assert.Equal("server", viewModel.Value);
+    }
+
+    [Fact]
+    public void SetInput_LoadingCompletionUsesIncomingValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Subscription",
+            InputType = InputType.Choice,
+            Loading = true,
+            Value = "local"
+        };
+        var viewModel = new InputViewModel(input);
+
+        var updatedInput = new InteractionInput
+        {
+            Label = "Subscription",
+            InputType = InputType.Choice,
+            Value = "server"
+        };
+        updatedInput.Options.Add("server", "Server");
+
+        viewModel.SetInput(updatedInput);
+
+        Assert.False(viewModel.InputDisabled);
+        Assert.Equal("server", viewModel.Value);
+    }
+
+    [Fact]
     public void SetInput_EnabledInputPreservesLocalValue()
     {
         var input = new InteractionInput

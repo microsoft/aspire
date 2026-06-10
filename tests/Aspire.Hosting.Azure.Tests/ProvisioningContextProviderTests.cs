@@ -5,10 +5,12 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using System.Reflection;
+using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -81,6 +83,78 @@ public class ProvisioningContextProviderTests
         var exception = await Assert.ThrowsAsync<MissingConfigurationException>(
             () => provider.CreateProvisioningContextAsync(CancellationToken.None));
         Assert.Contains("Azure subscription id is required", exception.Message);
+    }
+
+    [Fact]
+    public async Task CreateProvisioningContextAsync_DoesNotReuseStaleInMemoryOptionsAfterReset()
+    {
+        // Arrange
+        var optionValues = new AzureProvisionerOptions();
+        var options = Options.Create(optionValues);
+        var environment = ProvisioningTestHelpers.CreateEnvironment();
+        var logger = ProvisioningTestHelpers.CreateLogger();
+        var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
+        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
+        var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
+
+        var provider = new RunModeProvisioningContextProvider(
+            _defaultInteractionService,
+            options,
+            environment,
+            logger,
+            armClientProvider,
+            userPrincipalProvider,
+            tokenCredentialProvider,
+            deploymentStateManager,
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+
+        // Simulate previously prompted values still hanging around in memory after reset.
+        optionValues.SubscriptionId = "12345678-1234-1234-1234-123456789012";
+        optionValues.Location = "westus2";
+        optionValues.ResourceGroup = "stale-rg";
+        optionValues.AllowResourceGroupCreation = true;
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<MissingConfigurationException>(
+            () => provider.CreateProvisioningContextAsync(CancellationToken.None));
+        Assert.Contains("Azure subscription id is required", exception.Message);
+    }
+
+    [Fact]
+    public async Task CreateProvisioningContextAsync_RehydratesStringBooleanAllowResourceGroupCreation()
+    {
+        var optionValues = new AzureProvisionerOptions();
+        var options = Options.Create(optionValues);
+        var environment = ProvisioningTestHelpers.CreateEnvironment();
+        var logger = ProvisioningTestHelpers.CreateLogger();
+        var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
+        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
+        var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
+        var azureSection = await deploymentStateManager.AcquireSectionAsync("Azure", CancellationToken.None);
+        azureSection.Data["SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        azureSection.Data["Location"] = "westus3";
+        azureSection.Data["ResourceGroup"] = "rehydrated-rg";
+        azureSection.Data["AllowResourceGroupCreation"] = "true";
+        await deploymentStateManager.SaveSectionAsync(azureSection, CancellationToken.None);
+
+        var provider = new RunModeProvisioningContextProvider(
+            _defaultInteractionService,
+            options,
+            environment,
+            logger,
+            armClientProvider,
+            userPrincipalProvider,
+            tokenCredentialProvider,
+            deploymentStateManager,
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+
+        var context = await provider.CreateProvisioningContextAsync(CancellationToken.None);
+
+        Assert.Equal("westus3", context.Location.Name);
+        Assert.Equal("rehydrated-rg", context.ResourceGroup.Name);
+        Assert.True(optionValues.AllowResourceGroupCreation);
     }
 
     [Fact]

@@ -17,6 +17,10 @@ public sealed class InputViewModel
 
     public void SetInput(InteractionInput input)
     {
+        // Interaction updates carry a full server-side snapshot even when only one input changed. Keep
+        // local values by default so an update for a dependent choice does not clobber text the user is
+        // typing elsewhere in the dialog. ShouldUseIncomingValue captures the cases where the server is
+        // authoritative because the field is being dynamically loaded or is not currently editable.
         var value = Input is null || ShouldUseIncomingValue(Input, input)
             ? input.Value
             : Input.Value;
@@ -125,8 +129,12 @@ public sealed class InputViewModel
 
     private static bool ShouldUseIncomingValue(InteractionInput current, InteractionInput incoming)
     {
-        // Preserve local edits during ordinary updates, but accept server-provided values when
-        // dynamic loading completes or when the input is disabled and therefore server-owned.
-        return (current.Loading && !incoming.Loading) || incoming.Disabled;
+        // Dynamic loading can replace both the option list and the selected value. When loading
+        // completes, the server value is the one validated against the freshly loaded options.
+        //
+        // Disabled inputs are also server-owned because the user could not have made a meaningful local
+        // edit while the control was unavailable. This includes disabled -> enabled transitions, such as
+        // Azure Subscription ID becoming editable after tenant-specific subscriptions are loaded.
+        return (current.Loading && !incoming.Loading) || current.Disabled || incoming.Disabled;
     }
 }
