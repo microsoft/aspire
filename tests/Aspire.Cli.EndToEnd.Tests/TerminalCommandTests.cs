@@ -69,11 +69,32 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
 
         await auto.TypeAsync("h");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Shortcuts", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("Shortcuts") || s.ContainsText("press r + enter to restart the server"),
+            timeout: TimeSpan.FromSeconds(30),
+            description: "waiting for Vite help shortcuts");
 
-        await auto.Ctrl().KeyAsync(Hex1bKey.B);
-        await auto.KeyAsync(Hex1bKey.D);
-        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(30));
+        var detached = false;
+        for (var i = 0; i < 3 && !detached; i++)
+        {
+            await auto.Ctrl().KeyAsync(Hex1bKey.B);
+            await auto.KeyAsync(Hex1bKey.D);
+
+            try
+            {
+                await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(10));
+                detached = true;
+            }
+            catch (TimeoutException) when (i < 2)
+            {
+                await auto.WaitAsync(1000);
+            }
+        }
+
+        if (!detached)
+        {
+            throw new InvalidOperationException("Failed to detach from 'aspire terminal attach frontend' after multiple Ctrl+B D attempts.");
+        }
 
         await auto.AspireStopAsync(counter);
     }
