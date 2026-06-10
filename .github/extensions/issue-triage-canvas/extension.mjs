@@ -1726,6 +1726,7 @@ function renderHtml() {
         pageSize: defaultPreferences.pageSize,
         filtersExpanded: defaultPreferences.filtersExpanded,
         dateRange: { min: 0, max: 0, from: 0, to: 0, initialized: false },
+        dateRangeMode: "default",
       };
       let refreshPollTimer = null;
 
@@ -1947,16 +1948,20 @@ function renderHtml() {
         return ((day - range.min) / (range.max - range.min)) * 100;
       }
 
+      function timelineFilteredIssues() {
+        return state.issues.filter((issue) => issueMatchesActiveFilters(issue, { includeDate: false }));
+      }
+
       function renderTimelineHistogram() {
         const histogram = el("timelineHistogram");
         histogram.innerHTML = "";
 
         const range = state.dateRange;
-        if (!range.initialized || state.issues.length === 0) {
+        const timelineIssues = timelineFilteredIssues();
+        if (!range.initialized || timelineIssues.length === 0) {
           return;
         }
 
-        const timelineIssues = state.issues.filter((issue) => issueMatchesActiveFilters(issue, { includeDate: false }));
         const bucketCount = Math.min(96, Math.max(24, Math.ceil(timelineIssues.length / 2)));
         const buckets = Array.from({ length: bucketCount }, () => 0);
         const span = Math.max(1, range.max - range.min + 1);
@@ -2012,27 +2017,27 @@ function renderHtml() {
         renderTimelineHistogram();
       }
 
-      function configureTimeline() {
-        if (state.issues.length === 0) {
+      function configureTimeline(timelineIssues = state.issues) {
+        if (timelineIssues.length === 0) {
           state.dateRange = { min: 0, max: 0, from: 0, to: 0, initialized: false };
           syncTimelineControls();
           return;
         }
 
-        const issueDays = state.issues.map((issue) => dayValue(issue.createdAt));
+        const issueDays = timelineIssues.map((issue) => dayValue(issue.createdAt));
         const min = Math.min(...issueDays);
         const max = Math.max(...issueDays);
         const previous = state.dateRange;
         const defaultTo = Math.max(min, defaultTimelineTo(max));
-        const next = previous.initialized
-          ? {
-              min,
-              max,
-              from: clamp(previous.from, min, max),
-              to: clamp(previous.to, min, max),
-              initialized: true,
-            }
-          : { min, max, from: min, to: defaultTo, initialized: true };
+        const next = { min, max, from: min, to: defaultTo, initialized: true };
+
+        if (previous.initialized && state.dateRangeMode === "all") {
+          next.to = max;
+        }
+        else if (previous.initialized && state.dateRangeMode === "custom") {
+          next.from = clamp(previous.from, min, max);
+          next.to = clamp(previous.to, min, max);
+        }
 
         if (next.from > next.to) {
           if (previous.initialized) {
@@ -2067,6 +2072,7 @@ function renderHtml() {
           to: clamp(to, range.min, range.max),
           initialized: true,
         };
+        state.dateRangeMode = "custom";
         resetPage();
         syncTimelineControls();
         render();
@@ -2079,6 +2085,7 @@ function renderHtml() {
         }
 
         state.dateRange = { ...range, from: range.min, to: Math.max(range.min, defaultTimelineTo(range.max)) };
+        state.dateRangeMode = "default";
         resetPage();
         syncTimelineControls();
         render();
@@ -2091,6 +2098,7 @@ function renderHtml() {
         }
 
         state.dateRange = { ...range, from: range.min, to: range.max };
+        state.dateRangeMode = "all";
         resetPage();
         syncTimelineControls();
         render();
@@ -2305,6 +2313,8 @@ function renderHtml() {
       }
 
       function render() {
+        configureTimeline(timelineFilteredIssues());
+
         const content = el("content");
         const issues = filteredIssues();
         const page = pageIssues(issues);
@@ -2611,6 +2621,7 @@ function renderHtml() {
       el("scopeFilter").addEventListener("change", () => {
         state.scope = el("scopeFilter").value === "all" ? "all" : "mine";
         state.dateRange = { min: 0, max: 0, from: 0, to: 0, initialized: false };
+        state.dateRangeMode = "default";
         resetPage();
         void savePreferences({ scope: state.scope });
         refresh().catch((error) => {
