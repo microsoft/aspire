@@ -730,10 +730,11 @@ internal static class CliE2EAutomatorHelpers
             : "$ASPIRE_E2E_WORKSPACE/_aspire-start.json";
 
         var isolatedFlag = isolated ? " --isolated" : "";
+        var startupTimeoutSeconds = Math.Max(1, (int)Math.Ceiling(effectiveTimeout.TotalSeconds));
 
         // Keep aspire start as a single shell pipeline so tee captures the exact JSON emitted to the terminal while
         // pipefail preserves the real CLI exit code instead of letting tee mask build/startup failures.
-        await auto.TypeAsync($"(set -o pipefail; aspire start{isolatedFlag} --format json | tee \"{jsonFile}\")");
+        await auto.TypeAsync($"(set -o pipefail; ASPIRE_CLI_START_TIMEOUT={startupTimeoutSeconds.ToString(CultureInfo.InvariantCulture)} aspire start{isolatedFlag} --format json | tee \"{jsonFile}\")");
         await auto.EnterAsync();
 
         // Wait for the command to finish — check for success or error exit.

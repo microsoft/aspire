@@ -21,6 +21,7 @@ export interface ResourceCommandJson {
     description: string | null;
     visibility?: string | null;
     state?: string | null;
+    sortOrder?: number | null;
     argumentInputs?: ResourceCommandArgumentInputJson[] | null;
 }
 
@@ -208,6 +209,9 @@ export class AppHostDataRepository {
     private _workspaceAppHostDiscoveryComplete = false;
     private _workspaceAppHostDiscoveryUsesWorkspaceRoot = false;
     private _workspaceAppHostDiscoveryVersion = 0;
+    private _workspaceAppHostDiscoveryInProgress = false;
+    private _workspaceAppHostDiscoveryRefreshQueued = false;
+    private _workspaceAppHostDiscoveryCancellationSource: vscode.CancellationTokenSource | undefined;
     private readonly _appHostDiscoveryChangeDisposable: vscode.Disposable;
     private readonly _workspaceFoldersChangeDisposable: vscode.Disposable;
     private readonly _appHostDiscoveryService: AppHostDiscoveryService;
@@ -389,6 +393,7 @@ export class AppHostDataRepository {
         this._stopDescribeWatch();
         this._stopAllGlobalDescribes();
         this._stopOneShotProcesses();
+        this._cancelWorkspaceAppHostDiscovery();
         this._configChangeDisposable.dispose();
         this._appHostDiscoveryChangeDisposable.dispose();
         this._workspaceFoldersChangeDisposable.dispose();
@@ -406,9 +411,12 @@ export class AppHostDataRepository {
     }
 
     private get _shouldPoll(): boolean {
-        // Workspace mode still polls ps after the selected AppHost path is known so
-        // a running AppHost can be shown even when describe has no resources to emit.
-        return this._dataActive && (this._viewMode === 'global' || this._workspaceAppHostCandidatePaths.length > 0);
+        // Workspace discovery can take longer than `aspire ps`. Poll immediately so
+        // already-running AppHosts appear in the pane while idle candidates stream in.
+        return this._dataActive
+            && (this._viewMode === 'global'
+                || !this._workspaceAppHostDiscoveryComplete
+                || this._workspaceAppHostCandidatePaths.length > 0);
     }
 
     private get _shouldWatchWorkspace(): boolean {
@@ -454,6 +462,14 @@ export class AppHostDataRepository {
     // ── Workspace app host (from aspire ls) ──
 
     private _fetchWorkspaceAppHost(options?: { forceRefresh?: boolean }): void {
+        if (this._workspaceAppHostDiscoveryInProgress) {
+            this._workspaceAppHostDiscoveryRefreshQueued = true;
+            // Let the current discovery finish so we don't start overlapping CLI work, but
+            // prevent its now-stale result from briefly restoring old AppHost candidates.
+            this._workspaceAppHostDiscoveryVersion++;
+            return;
+        }
+
         const discoveryVersion = ++this._workspaceAppHostDiscoveryVersion;
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -470,8 +486,12 @@ export class AppHostDataRepository {
 
         extensionLogOutputChannel.info('Fetching workspace apphost via shared AppHost discovery');
 
-        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh).then(appHosts => {
-            if (!this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+        const cancellationSource = new vscode.CancellationTokenSource();
+        this._workspaceAppHostDiscoveryInProgress = true;
+        this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
+
+        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token).then(appHosts => {
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
 
@@ -479,7 +499,7 @@ export class AppHostDataRepository {
             this._workspaceAppHostDiscoveryComplete = true;
             this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
         }).catch(error => {
-            if (!this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
 
@@ -490,7 +510,27 @@ export class AppHostDataRepository {
             this._setDescribeError(errorFetchingAppHosts(String(error)));
             this._updateWorkspaceContext({ clearLoading: true });
             this._syncPolling();
+        }).finally(() => {
+            cancellationSource.dispose();
+            if (this._workspaceAppHostDiscoveryCancellationSource !== cancellationSource) {
+                return;
+            }
+
+            this._workspaceAppHostDiscoveryCancellationSource = undefined;
+            this._workspaceAppHostDiscoveryInProgress = false;
+            if (this._workspaceAppHostDiscoveryRefreshQueued && !this._disposed) {
+                this._workspaceAppHostDiscoveryRefreshQueued = false;
+                this._fetchWorkspaceAppHost({ forceRefresh: true });
+            }
         });
+    }
+
+    private _cancelWorkspaceAppHostDiscovery(): void {
+        this._workspaceAppHostDiscoveryRefreshQueued = false;
+        this._workspaceAppHostDiscoveryCancellationSource?.cancel();
+        this._workspaceAppHostDiscoveryCancellationSource?.dispose();
+        this._workspaceAppHostDiscoveryCancellationSource = undefined;
+        this._workspaceAppHostDiscoveryInProgress = false;
     }
 
     private _handleWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[], selectedAppHostPath: string | null): void {
@@ -809,7 +849,10 @@ export class AppHostDataRepository {
             return aspireCliDescribeNotSupported(aspireDescribeMinimumVersion);
         }
 
-        if (exitCode !== 0 && this._workspaceAppHostPath) {
+        // A clean exit before `ps` observes the AppHost can happen while the app is still starting.
+        // Once `ps` reports the workspace AppHost as running, an empty describe stream means the
+        // AppHost cannot serve workspace resources even if the CLI process exits successfully.
+        if (this._workspaceAppHostPath && (exitCode !== 0 || this._workspaceAppHost !== undefined)) {
             return appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion);
         }
 
@@ -1185,14 +1228,14 @@ export class AppHostDataRepository {
         const hasWorkspaceAppHost = this._workspaceAppHost !== undefined;
         const hasResources = this._workspaceResources.size > 0;
         const hasRunningAppHosts = this._appHosts.length > 0;
+        const hasDashboardUrl = Boolean(this._workspaceAppHost?.dashboardUrl)
+            || Array.from(this._workspaceResources.values()).some(resource => Boolean(resource.dashboardUrl))
+            || this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
         const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
         vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
-        // `aspire.noRunningAppHosts` gates the Open Dashboard command palette entry,
-        // which requires a live dashboard URL. Keep this distinct from `noAppHosts`
-        // (which also considers discovered idle candidates) so the palette entry
-        // doesn't appear when only idle candidates exist — invoking it would silently
-        // no-op because no dashboard URL is available.
-        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasRunningAppHosts);
+        // Keep this distinct from `noAppHosts`, which also considers discovered idle
+        // candidates that have no live dashboard URL.
+        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
         const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
@@ -1333,10 +1376,11 @@ export class AppHostDataRepository {
         }
 
         if (this._viewMode === 'global' && this._loadingGlobal) {
+            const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
             this._loadingGlobal = false;
             this._updateLoadingContext();
             vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
-            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', this._appHosts.length === 0);
+            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
         }
     }
 
@@ -1444,8 +1488,9 @@ export class AppHostDataRepository {
             }
 
             if (changed) {
+                const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
                 vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', appHosts.length === 0);
-                vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', appHosts.length === 0);
+                vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
                 this._onDidChangeData.fire();
             }
         } catch (e) {
@@ -1466,9 +1511,15 @@ export class AppHostDataRepository {
 
     private _handleWorkspacePsOutput(appHosts: readonly AppHostDisplayInfo[]): void {
         let workspaceAppHostPath = this._workspaceAppHostPath;
-        const workspaceAppHosts = this._workspaceAppHostCandidatePaths.length > 0
-            ? appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)))
-            : [];
+        const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
+        let workspaceAppHosts: AppHostDisplayInfo[];
+        if (this._workspaceAppHostCandidatePaths.length === 0 && discoveryPending) {
+            workspaceAppHosts = appHosts.filter(appHost => isPathInWorkspace(appHost.appHostPath));
+        } else if (this._workspaceAppHostCandidatePaths.length > 0) {
+            workspaceAppHosts = appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)));
+        } else {
+            workspaceAppHosts = [];
+        }
         let workspaceAppHost = workspaceAppHostPath
             ? workspaceAppHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, workspaceAppHostPath))
             : undefined;
@@ -1515,7 +1566,7 @@ export class AppHostDataRepository {
         }
 
         if (changed || this._loadingWorkspace) {
-            this._updateWorkspaceContext({ clearLoading: true });
+            this._updateWorkspaceContext({ clearLoading: !discoveryPending || workspaceAppHosts.length > 0 });
         }
     }
 
@@ -1778,6 +1829,18 @@ function getCommandOutputSuffix(stdout: string, stderr: string): string {
     const output = (stderr || stdout).trim();
 
     return output ? `: ${output}` : '';
+}
+
+function isPathInWorkspace(filePath: string): boolean {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        return false;
+    }
+
+    const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
+    return relativePath !== ''
+        && !relativePath.startsWith('..')
+        && !path.isAbsolute(relativePath);
 }
 
 function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {

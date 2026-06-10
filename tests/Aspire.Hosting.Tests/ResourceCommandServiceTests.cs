@@ -8,8 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
-
 [Trait("Partition", "2")]
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 {
@@ -1336,7 +1334,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 displayName: "My command",
                 executeCommand: e =>
                 {
-                    var interactionService = e.ServiceProvider.GetRequiredService<IInteractionService>();
+                    var interactionService = e.Services.GetRequiredService<IInteractionService>();
                     isAvailableDuringExecution = interactionService.IsAvailable;
                     return Task.FromResult(CommandResults.Success());
                 });
@@ -1366,7 +1364,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 displayName: "My command",
                 executeCommand: e =>
                 {
-                    var interactionService = e.ServiceProvider.GetRequiredService<IInteractionService>();
+                    var interactionService = e.Services.GetRequiredService<IInteractionService>();
                     isAvailableDuringExecution = interactionService.IsAvailable;
                     return Task.FromResult(CommandResults.Success());
                 });
@@ -1621,4 +1619,3 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001

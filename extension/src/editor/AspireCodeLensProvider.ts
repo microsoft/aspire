@@ -4,6 +4,7 @@ import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostRe
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
 import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand } from '../views/AspireAppHostTreeProvider';
+import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, HealthStatus, StateStyle, ResourceType } from './resourceConstants';
@@ -28,6 +29,7 @@ import {
     codeLensCommand,
     codeLensOpenDashboard,
     codeLensViewAppHostLogs,
+    codeLensResourceValueMissing,
 } from '../loc/strings';
 
 export class AspireCodeLensProvider implements vscode.CodeLensProvider {
@@ -251,7 +253,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             }
         }
 
-        let tooltipText = `${resource.displayName ?? resource.name}: ${state}${healthStatus ? ` (${healthStatus})` : ''}`;
+        let tooltipText = `${resource.displayName ?? resource.name}: ${getResourceStateDescription(state)}${healthStatus ? ` (${healthStatus})` : ''}`;
         const reports = resource.healthReports;
         if (reports && healthStatus && healthStatus !== HealthStatus.Healthy) {
             const failing = Object.entries(reports).filter(([, r]) => r.status !== HealthStatus.Healthy);
@@ -266,6 +268,18 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             tooltip: tooltipText,
             arguments: [resource.displayName ?? resource.name, appHost.appHostPath],
         }));
+
+        // Parameter value lens (secrets masked, long values truncated) so the value is
+        // visible inline next to the state, matching the dashboard and tree view.
+        const parameterValue = getParameterValueDescription(resource);
+        if (parameterValue !== undefined) {
+            lenses.push(new vscode.CodeLens(range, {
+                title: parameterValue,
+                command: 'aspire-vscode.codeLensRevealResource',
+                tooltip: parameterValue,
+                arguments: [resource.displayName ?? resource.name, appHost.appHostPath],
+            }));
+        }
 
         // Action lenses based on available commands
         const restartCommand = getEnabledCommand(commands, 'restart', 'resource-restart');
@@ -310,7 +324,10 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
         // Custom commands (non-standard ones like "Reset Database")
         const standardCommands = new Set(['restart', 'resource-restart', 'stop', 'resource-stop', 'start', 'resource-start']);
-        for (const [cmdName, cmd] of Object.entries(commands) as [string, ResourceCommandJson][]) {
+        // Sort by (order, name) so custom command lenses appear in the dashboard registration order.
+        const customCommands = (Object.entries(commands) as [string, ResourceCommandJson][])
+            .sort(compareResourceCommands);
+        for (const [cmdName, cmd] of customCommands) {
             if (!standardCommands.has(cmdName) && isEnabledCommand(cmd) && isCommandVisibleToUi(cmd)) {
                 const displayName = getNormalizedCommandText(cmd.displayName);
                 const description = getNormalizedCommandText(cmd.description);
@@ -367,6 +384,8 @@ export function getCodeLensStateLabel(state: string, stateStyle: string, exitCod
                 return exitCode != null && exitCode !== 0 ? codeLensResourceStoppedErrorWithExitCode(exitCode) : codeLensResourceStoppedError;
             }
             return exitCode != null && exitCode !== 0 ? codeLensResourceStoppedWithExitCode(exitCode) : codeLensResourceStopped;
+        case ResourceState.ValueMissing:
+            return codeLensResourceValueMissing;
         default:
             return state || codeLensResourceStopped;
     }

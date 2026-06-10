@@ -217,7 +217,7 @@ public static class PostgresBuilderExtensions
                 destinationPath: "/pgadmin4",
                 callback: async (context, cancellationToken) =>
                 {
-                    var appModel = context.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+                    var appModel = context.Services.GetRequiredService<DistributedApplicationModel>();
                     var postgresInstances = builder.ApplicationBuilder.Resources.OfType<PostgresServerResource>();
 
                     return [
@@ -333,7 +333,7 @@ public static class PostgresBuilderExtensions
                 destinationPath: "/",
                 callback: async (context, ct) =>
                 {
-                    var appModel = context.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+                    var appModel = context.Services.GetRequiredService<DistributedApplicationModel>();
                     var postgresInstances = builder.ApplicationBuilder.Resources.OfType<PostgresDatabaseResource>();
 
                     // Add the bookmarks to the pgweb container
@@ -421,7 +421,7 @@ public static class PostgresBuilderExtensions
         // When running in the context of Codespaces we need to set some additional environment
         // variables so that PGAdmin will trust the forwarded headers that Codespaces port
         // forwarding will send.
-        var config = context.ExecutionContext.ServiceProvider.GetRequiredService<IConfiguration>();
+        var config = context.ExecutionContext.Services.GetRequiredService<IConfiguration>();
         if (context.ExecutionContext.IsRunMode && config.GetValue<bool>("CODESPACES", false))
         {
             context.EnvironmentVariables["PGADMIN_CONFIG_PROXY_X_HOST_COUNT"] = "1";

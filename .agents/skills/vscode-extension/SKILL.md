@@ -146,6 +146,18 @@ not yet clear. If that exploration reproduces the issue, convert the scenario in
 fixing the bug unless there is a strong, explicit reason not to. You can test a custom CLI build by
 pointing the `Aspire Cli Executable Path` setting at your locally built `aspire`.
 
+## Pull request evidence
+
+When opening a PR for a user-visible VS Code extension change, include proof in the PR body. Prefer
+before/after screenshots for changed UI, notifications, tree views, browser flows, or error states.
+If you include a before screenshot, include an actual after screenshot of the changed state too;
+focused tests, E2E state files, logs, or command output can support the after case, but they are not
+a substitute for the after visual. Include a short video or recording when the behavior is
+interactive, timing-sensitive, or difficult to understand from static images. If screenshots or video
+are not appropriate, say why and include the closest useful evidence instead. Redact tokens, secrets,
+local usernames, private paths, private URLs, and any other sensitive details before putting evidence
+in a public PR body.
+
 ## Gotchas
 
 - Do not modify `package.json` / `yarn.lock` / `package-lock.json` unless explicitly asked; when you

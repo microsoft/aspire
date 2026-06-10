@@ -1,4 +1,4 @@
-// ===== Aspire.java =====
+﻿// ===== Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1217,6 +1217,37 @@ public class CancellationToken {
     private volatile boolean cancelled = false;
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
 
+    // Remote token id supplied by the AppHost when this token is materialized for a
+    // callback argument. Null for locally-created tokens. Retained so cancellation can
+    // be correlated back to the AppHost if needed.
+    private final String remoteTokenId;
+
+    CancellationToken() {
+        this.remoteTokenId = null;
+    }
+
+    private CancellationToken(String remoteTokenId) {
+        this.remoteTokenId = remoteTokenId;
+    }
+
+    /**
+     * Materializes a cancellation token from a transport value sent by the AppHost.
+     * When the AppHost invokes a callback that accepts a CancellationToken it passes a
+     * remote token id (a string); generated code calls this to turn that wire value into
+     * a CancellationToken instance. Mirrors the TypeScript/Go SDK behavior.
+     */
+    static CancellationToken fromValue(Object value) {
+        if (value instanceof CancellationToken token) {
+            return token;
+        }
+        if (value instanceof String tokenId) {
+            return new CancellationToken(tokenId);
+        }
+        return new CancellationToken();
+    }
+
+    String getRemoteTokenId() { return remoteTokenId; }
+
     void cancel() {
         cancelled = true;
         for (Runnable listener : listeners) {
@@ -1791,9 +1822,9 @@ public class TestDatabaseResource extends ResourceBuilderBase {
     }
 
     /** Adds an optional string parameter */
-    public TestDatabaseResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public TestDatabaseResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -2002,8 +2033,8 @@ public class TestDatabaseResource extends ResourceBuilderBase {
     }
 
     /** Adds a data volume */
-    public TestDatabaseResource withDataVolume(WithDataVolumeOptions options) {
-        var name = options == null ? null : options.getName();
+    public TestDatabaseResource withDataVolume(WithDataVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withDataVolumeImpl(name);
     }
 
@@ -2063,9 +2094,9 @@ public class TestDatabaseResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public TestDatabaseResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestDatabaseResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -2089,9 +2120,9 @@ public class TestDatabaseResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -2421,9 +2452,9 @@ public class TestRedisResource extends ResourceBuilderBase {
     }
 
     /** Adds an optional string parameter */
-    public TestRedisResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public TestRedisResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -2733,9 +2764,9 @@ public class TestRedisResource extends ResourceBuilderBase {
     }
 
     /** Adds a data volume with persistence */
-    public TestRedisResource withDataVolume(WithDataVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public TestRedisResource withDataVolume(WithDataVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withDataVolumeImpl(name, isReadOnly);
     }
 
@@ -2798,9 +2829,9 @@ public class TestRedisResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public TestRedisResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestRedisResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -2824,9 +2855,9 @@ public class TestRedisResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public TestRedisResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestRedisResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -2997,9 +3028,9 @@ public class TestVaultResource extends ResourceBuilderBase {
     }
 
     /** Adds an optional string parameter */
-    public TestVaultResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public TestVaultResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -3257,9 +3288,9 @@ public class TestVaultResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public TestVaultResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestVaultResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -3283,9 +3314,9 @@ public class TestVaultResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public TestVaultResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestVaultResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 

@@ -1,4 +1,3 @@
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -12,7 +11,6 @@ using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
 using Spectre.Console.Rendering;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -844,7 +842,6 @@ internal sealed record PromptData(string PromptId, IReadOnlyList<PromptInputData
 internal sealed record PromptCompletion(string PromptId, PublishingPromptInputAnswer[] Answers, bool UpdateResponse);
 
 // Enhanced TestConsoleInteractionService that tracks interaction types
-[SuppressMessage("Usage", "ASPIREINTERACTION001:Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.")]
 internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInteractionService
 {
     private readonly Queue<(string response, ResponseType type)> _responses = new();

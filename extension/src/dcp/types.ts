@@ -56,15 +56,31 @@ export function isGoLaunchConfiguration(obj: any): obj is GoLaunchConfiguration 
     return obj && obj.type === 'go';
 }
 
-export interface NodeLaunchConfiguration extends ExecutableLaunchConfiguration {
-    type: "node"; // Provided by VS Code's built-in js-debug, no extension needed
+export interface JavaScriptRuntimeLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "node" | "bun";
     script_path?: string;
     runtime_executable?: string;
     working_directory?: string;
+    // Optional on purpose: an older AppHost (version skew vs the extension) won't emit this field at
+    // all, leaving it undefined. Undefined is the legitimate legacy signal that tells the extension to
+    // fall back to positional/runtime inference. Do not make it required.
+    launch_method?: "direct" | "package-manager";
 }
+
+export function isJavaScriptRuntimeLaunchConfiguration(obj: any): obj is JavaScriptRuntimeLaunchConfiguration {
+    return obj && (obj.type === 'node' || obj.type === 'bun');
+}
+
+export type NodeLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { type: "node" };
 
 export function isNodeLaunchConfiguration(obj: any): obj is NodeLaunchConfiguration {
     return obj && obj.type === 'node';
+}
+
+export type BunLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { type: "bun" };
+
+export function isBunLaunchConfiguration(obj: any): obj is BunLaunchConfiguration {
+    return obj && obj.type === 'bun';
 }
 
 export interface BrowserLaunchConfiguration extends ExecutableLaunchConfiguration {

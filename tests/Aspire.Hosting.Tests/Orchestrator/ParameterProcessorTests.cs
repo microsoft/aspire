@@ -14,7 +14,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREUSERSECRETS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -788,7 +787,7 @@ public class ParameterProcessorTests
                {
                    // This should not throw InvalidOperationException
                    // when using the proper execution context constructor
-                   var sp = context.ExecutionContext.ServiceProvider;
+                   var sp = context.ExecutionContext.Services;
                    serviceProviderAccessed = sp is not null;
                    context.EnvironmentVariables["TEST_ENV"] = param;
                });
@@ -1292,7 +1291,7 @@ public class ParameterProcessorTests
         var executionContext = new DistributedApplicationExecutionContext(
             new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, "manifest")
             {
-                ServiceProvider = serviceProvider
+                Services = serviceProvider
             });
 
         var parameterProcessor = CreateParameterProcessor(executionContext: executionContext);
