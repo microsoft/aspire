@@ -106,10 +106,10 @@ public static partial class OtlpHelpers
                     if (instanceId != null && Guid.TryParse(instanceId, out var guid))
                     {
                         Span<char> chars = stackalloc char[32];
-                        var result = guid.TryFormat(chars, charsWritten: out _, format: "N");
+                        var result = guid.TryFormat(chars, out var charsWritten, format: "N");
                         Debug.Assert(result, "Guid.TryFormat not successful.");
 
-                        instanceId = chars.Slice(chars.Length - 8).ToString();
+                        instanceId = chars.Slice(charsWritten - 8, 8).ToString();
                     }
 
                     if (instanceId == null)
