@@ -27,7 +27,7 @@
     <BlazorAssetPackage Include="11" PackageVersion="$(MicrosoftAspNetCoreAppInternalAssetsNet11Version)" />
   </ItemGroup>
 
-  <Target Name="CopyBlazorWebJs" BeforeTargets="BeforeBuild">
+  <Target Name="CopyBlazorWebJs" BeforeTargets="BeforeBuild;PrepareForPublish">
     <Copy SourceFiles="$(NuGetPackageRoot)microsoft.aspnetcore.app.internal.assets\%(BlazorAssetPackage.PackageVersion)\_framework\blazor.web.js"
           DestinationFiles="$(MSBuildProjectDirectory)\wwwroot\framework\blazor.web.%(BlazorAssetPackage.Identity).js"
           SkipUnchangedFiles="true"

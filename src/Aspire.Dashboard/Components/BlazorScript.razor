@@ -8,4 +8,12 @@
     blazor.web.js into wwwroot/framework/blazor.web.{major}.js. This component selects the right file
     based on the running runtime version.
 *@
-<script src="framework/blazor.web.@(Environment.Version.Major).js"></script>
+@{
+    // Supported major versions that have pre-built blazor.web.js files (see BlazorAssets.targets).
+    // When adding a new runtime, update BlazorAssets.targets + eng/Versions.props and adjust MaxSupportedMajor.
+    const int MinSupportedMajor = 10;
+    const int MaxSupportedMajor = 11;
+
+    var major = Math.Clamp(Environment.Version.Major, MinSupportedMajor, MaxSupportedMajor);
+}
+<script src="framework/blazor.web.@(major).js"></script>
