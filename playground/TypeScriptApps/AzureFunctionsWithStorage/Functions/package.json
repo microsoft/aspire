@@ -10,9 +10,7 @@
     "start": "func start"
   },
   "dependencies": {
-    "@azure/functions": "^4.7.0",
-    "@azure/identity": "^4.13.1",
-    "@azure/storage-blob": "^12.27.0"
+    "@azure/functions": "^4.7.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

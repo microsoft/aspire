@@ -11,44 +11,60 @@ app.innerHTML = `
     <p class="eyebrow">Aspire + Azure Functions</p>
     <h1>TypeScript Functions with Azure Storage</h1>
     <p>
-      Call the Aspire-modeled TypeScript Azure Function and write a sample blob
-      to the configured Azure Storage container.
+      Call the Aspire-modeled TypeScript Azure Function to write a sample blob
+      immediately, or enqueue background work for a storage queue-triggered
+      function to process asynchronously.
     </p>
   </section>
-  <form id="blob-form" class="card">
+  <form id="work-form" class="card">
     <label for="name">Name</label>
     <div class="form-row">
       <input id="name" name="name" value="Aspire" autocomplete="off" />
-      <button type="submit">Write blob</button>
+      <button type="submit">Write blob now</button>
+      <button id="queue-button" type="button">Queue background work</button>
     </div>
   </form>
   <pre id="result" class="result" aria-live="polite">Ready.</pre>
 `;
 
-const form = document.querySelector<HTMLFormElement>("#blob-form");
+const form = document.querySelector<HTMLFormElement>("#work-form");
 const input = document.querySelector<HTMLInputElement>("#name");
+const queueButton = document.querySelector<HTMLButtonElement>("#queue-button");
 const result = document.querySelector<HTMLPreElement>("#result");
 
-if (!form || !input || !result) {
+if (!form || !input || !queueButton || !result) {
     throw new Error("Missing frontend controls.");
 }
 
-form.addEventListener("submit", async (event) => {
+const formElement = form;
+const inputElement = input;
+const queueButtonElement = queueButton;
+const resultElement = result;
+
+formElement.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const name = input.value.trim() || "Aspire";
-    result.textContent = "Writing blob...";
+    await callFunction("storageHttpTrigger", "Writing blob...");
+});
+
+queueButtonElement.addEventListener("click", async () => {
+    await callFunction("enqueueBackgroundWork", "Queueing background work...");
+});
+
+async function callFunction(functionName: string, pendingMessage: string): Promise<void> {
+    const name = inputElement.value.trim() || "Aspire";
+    resultElement.textContent = pendingMessage;
 
     try {
-        const response = await fetch(`/api/storageHttpTrigger?name=${encodeURIComponent(name)}`);
+        const response = await fetch(`/api/${functionName}?name=${encodeURIComponent(name)}`);
         const body = await response.json();
 
         if (!response.ok) {
             throw new Error(body.error ?? `Function returned HTTP ${response.status}.`);
         }
 
-        result.textContent = JSON.stringify(body, null, 2);
+        resultElement.textContent = JSON.stringify(body, null, 2);
     } catch (error) {
-        result.textContent = error instanceof Error ? error.message : String(error);
+        resultElement.textContent = error instanceof Error ? error.message : String(error);
     }
-});
+}

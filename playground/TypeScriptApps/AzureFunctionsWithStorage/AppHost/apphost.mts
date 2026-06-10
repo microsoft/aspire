@@ -10,12 +10,16 @@ await builder.addAzureContainerAppEnvironment("azure");
 const storage = await builder.addAzureStorage("storage").runAsEmulator();
 const blobs = await storage.addBlobs("blobs");
 const samples = await storage.addBlobContainer("samples");
+const queues = await storage.addQueues("queues");
+const backgroundWork = await storage.addQueue("background-work");
 
 const functions = await builder
     .addAzureFunctionsApp("functions", "../Functions", AzureFunctionsLanguage.TypeScript)
     .withExternalHttpEndpoints()
     .withReference(blobs).waitFor(blobs)
-    .withReference(samples).waitFor(samples);
+    .waitFor(samples)
+    .withReference(queues, { connectionName: "workQueue" }).waitFor(queues)
+    .waitFor(backgroundWork);
 
 await builder
     .addViteApp("frontend", "../Frontend")
