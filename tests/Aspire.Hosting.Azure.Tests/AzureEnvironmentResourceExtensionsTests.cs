@@ -749,9 +749,17 @@ public class AzureEnvironmentResourceExtensionsTests
         var data = AssertCommandJsonData(result);
         Assert.Equal(AzureProvisioningController.GetAzureResourceCommandName, data["command"]?.GetValue<string>());
         Assert.Equal("storage", data["resourceName"]?.GetValue<string>());
+        Assert.Equal("westus2", data["azureLocation"]?.GetValue<string>());
         Assert.Equal("westus3", data["location"]?.GetValue<string>());
+        Assert.Equal("westus3", data["effectiveLocation"]?.GetValue<string>());
         Assert.NotNull(result.Data);
         Assert.True(result.Data!.DisplayImmediately);
+
+        var azureContext = Assert.IsType<JsonObject>(data["azureContext"]);
+        Assert.Equal(subscriptionId, azureContext["subscriptionId"]?.GetValue<string>());
+        Assert.Equal(tenantId, azureContext["tenantId"]?.GetValue<string>());
+        Assert.Equal(resourceGroup, azureContext["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("westus2", azureContext["location"]?.GetValue<string>());
 
         var deployment = Assert.IsType<JsonObject>(data["deployment"]);
         Assert.True(deployment["hasState"]?.GetValue<bool>());
@@ -1989,7 +1997,10 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal(AzureProvisioningController.ChangeResourceLocationCommandName, data["command"]?.GetValue<string>());
         Assert.Equal("storage", data["resourceName"]?.GetValue<string>());
         Assert.Equal("westus3", data["location"]?.GetValue<string>());
+        Assert.Equal("westus3", data["effectiveLocation"]?.GetValue<string>());
         Assert.Equal("eastus", data["azureLocation"]?.GetValue<string>());
+        var azureContext = Assert.IsType<JsonObject>(data["azureContext"]);
+        Assert.Equal("eastus", azureContext["location"]?.GetValue<string>());
     }
 
     [Fact]
@@ -2616,6 +2627,11 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal("87654321-4321-4321-4321-210987654321", data["tenantId"]?.GetValue<string>());
         Assert.Equal("cli-rg-é", data["resourceGroup"]?.GetValue<string>());
         Assert.Equal("westus3", data["azureLocation"]?.GetValue<string>());
+        var azureContext = Assert.IsType<JsonObject>(data["azureContext"]);
+        Assert.Equal("12345678-1234-1234-1234-123456789012", azureContext["subscriptionId"]?.GetValue<string>());
+        Assert.Equal("87654321-4321-4321-4321-210987654321", azureContext["tenantId"]?.GetValue<string>());
+        Assert.Equal("cli-rg-é", azureContext["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("westus3", azureContext["location"]?.GetValue<string>());
         Assert.Contains("cli-rg-é", result.Data!.Value, StringComparison.Ordinal);
         Assert.DoesNotContain("\\u00E9", result.Data.Value, StringComparison.OrdinalIgnoreCase);
 

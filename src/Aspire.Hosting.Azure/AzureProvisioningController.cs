@@ -1726,8 +1726,10 @@ internal sealed class AzureProvisioningController(
     {
         var json = await CreateCommandResultJsonAsync(commandName, resourceName, cancellationToken).ConfigureAwait(false);
         var targetResources = GetTargetAzureResources(model, resourceName);
+        var effectiveLocation = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResources[0]), cancellationToken).ConfigureAwait(false);
         json["resourceCount"] = targetResources.Count;
-        json["location"] = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResources[0]), cancellationToken).ConfigureAwait(false);
+        json["location"] = effectiveLocation;
+        json["effectiveLocation"] = effectiveLocation;
         return json;
     }
 
@@ -1740,8 +1742,10 @@ internal sealed class AzureProvisioningController(
         // named so agents can map the command output back to the visible dashboard resource.
         var targetResource = targetResources[0];
         var json = await CreateCommandResultJsonAsync(GetAzureResourceCommandName, resourceName, cancellationToken).ConfigureAwait(false);
+        var effectiveLocation = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResource), cancellationToken).ConfigureAwait(false);
         json["resourceCount"] = targetResources.Count;
-        json["location"] = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResource), cancellationToken).ConfigureAwait(false);
+        json["location"] = effectiveLocation;
+        json["effectiveLocation"] = effectiveLocation;
 
         if (targetResource.AzureResource is AzureBicepResource bicepResource)
         {
@@ -1907,7 +1911,14 @@ internal sealed class AzureProvisioningController(
             ["subscriptionId"] = context.SubscriptionId,
             ["tenantId"] = context.TenantId,
             ["resourceGroup"] = context.ResourceGroup,
-            ["azureLocation"] = context.Location
+            ["azureLocation"] = context.Location,
+            ["azureContext"] = new JsonObject
+            {
+                ["subscriptionId"] = context.SubscriptionId,
+                ["tenantId"] = context.TenantId,
+                ["resourceGroup"] = context.ResourceGroup,
+                ["location"] = context.Location
+            }
         };
 
         if (!string.IsNullOrEmpty(resourceName))
