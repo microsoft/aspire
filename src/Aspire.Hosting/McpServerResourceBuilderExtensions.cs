@@ -448,7 +448,7 @@ public static class McpServerResourceBuilderExtensions
 
     private static async Task<(McpTool Tool, JsonObject Arguments)> GetMcpToolCallAsync(HttpCommandRequestContext ctx, IReadOnlyList<McpTool> tools)
     {
-        var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
+        var interactionService = ctx.Services.GetRequiredService<IInteractionService>();
         if (!string.IsNullOrWhiteSpace(GetMcpArgumentValue(ctx.Arguments, McpToolArgumentName)) || !interactionService.IsAvailable)
         {
             var selectedTool = GetSelectedMcpTool(ctx.Arguments, tools);
@@ -466,7 +466,7 @@ public static class McpServerResourceBuilderExtensions
 
     private static async Task<McpTool> PromptForMcpToolAsync(HttpCommandRequestContext ctx, IReadOnlyList<McpTool> tools)
     {
-        var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
+        var interactionService = ctx.Services.GetRequiredService<IInteractionService>();
         var toolInput = new InteractionInput
         {
             Name = McpToolArgumentName,
@@ -509,7 +509,7 @@ public static class McpServerResourceBuilderExtensions
 
     private static async Task<JsonObject> PromptForMcpToolParameterInputsAsync(HttpCommandRequestContext ctx, McpTool tool, IReadOnlyList<McpToolParameterInput> parameterInputs)
     {
-        var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
+        var interactionService = ctx.Services.GetRequiredService<IInteractionService>();
         var result = await interactionService.PromptInputsAsync(
             title: $"Invoke {tool.Name}",
             message: "Enter the tool arguments.",
@@ -565,7 +565,7 @@ public static class McpServerResourceBuilderExtensions
 
     private static async Task<JsonObject> PromptForMcpToolRawArgumentsAsync(HttpCommandRequestContext ctx, McpTool tool)
     {
-        var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
+        var interactionService = ctx.Services.GetRequiredService<IInteractionService>();
         var argumentsInput = new InteractionInput
         {
             Name = McpToolArgumentsArgumentName,

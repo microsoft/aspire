@@ -360,7 +360,6 @@ export interface InteractionInput {
     inputType?: InputType;
     required?: boolean;
     options?: InteractionInputOption[];
-    dynamicLoading?: unknown;
     value?: string;
     placeholder?: string;
     allowCustomChoice?: boolean;
@@ -456,6 +455,62 @@ async function getInteractionInputs(collection: InteractionInputCollection): Pro
 registerHandleWrapper(interactionInputCollectionTypeId, (handle, client) =>
     new InteractionInputCollection(handle as InteractionInputCollectionHandle, client)
 );
+
+/**
+ * Thenable wrapper for {@link InteractionInputCollection} that enables fluent by-name access.
+ *
+ * Collection-returning getters (for example `result.inputs()`, `validationContext.inputs()`, and a
+ * command's `arguments()`) return this instead of a bare `Promise<InteractionInputCollection>`. It
+ * is awaitable — `await x.inputs()` still resolves to the {@link InteractionInputCollection} — but
+ * it also forwards the by-name accessors, so callers can chain `await result.inputs().value("color")`
+ * without an intermediate await. The C#, Go, Java, and Python surfaces already chain this way; this
+ * restores the same ergonomics for TypeScript, where the underlying accessor is an async RPC.
+ */
+export interface InteractionInputCollectionPromise extends PromiseLike<InteractionInputCollection> {
+    /** Returns a snapshot copy of all inputs in the collection. */
+    toArray(): Promise<InteractionInput[]>;
+    /** Gets the input with the specified name, or `undefined` if no such input exists. */
+    get(name: string): Promise<InteractionInput | undefined>;
+    /** Gets the input with the specified name, throwing if no such input exists. */
+    required(name: string): Promise<InteractionInput>;
+    /** Gets the value of the input with the specified name, or `undefined` if absent. */
+    value(name: string): Promise<string | undefined>;
+    /** Gets the value of the input with the specified name, throwing if absent or unset. */
+    requiredValue(name: string): Promise<string>;
+}
+
+export class InteractionInputCollectionPromiseImpl implements InteractionInputCollectionPromise {
+    constructor(private _promise: Promise<InteractionInputCollection>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = InteractionInputCollection, TResult2 = never>(
+        onfulfilled?: ((value: InteractionInputCollection) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    toArray(): Promise<InteractionInput[]> {
+        return this._promise.then(c => c.toArray());
+    }
+
+    get(name: string): Promise<InteractionInput | undefined> {
+        return this._promise.then(c => c.get(name));
+    }
+
+    required(name: string): Promise<InteractionInput> {
+        return this._promise.then(c => c.required(name));
+    }
+
+    value(name: string): Promise<string | undefined> {
+        return this._promise.then(c => c.value(name));
+    }
+
+    requiredValue(name: string): Promise<string> {
+        return this._promise.then(c => c.requiredValue(name));
+    }
+}
 
 // ============================================================================
 // ResourceBuilderBase

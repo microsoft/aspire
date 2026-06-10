@@ -425,7 +425,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         {
             // If the dashboard has an HTTPS endpoint and we haven't already applied an HTTPS certificate configuration (no HttpsCertificateConfigurationCallbackAnnotation),
             // apply a default configuration with a valid trusted dev cert instance.
-            var developerCertificateService = executionContext.ServiceProvider.GetRequiredService<IDeveloperCertificateService>();
+            var developerCertificateService = executionContext.Services.GetRequiredService<IDeveloperCertificateService>();
             var trustDeveloperCertificate = developerCertificateService.TrustCertificate;
             if (dashboardResource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var certificateAuthorityAnnotation))
             {
@@ -611,7 +611,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             // If allowed origins are not configured then calculate allowed origins from endpoints.
             if (string.IsNullOrEmpty(allowedOrigins))
             {
-                var model = context.ExecutionContext.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+                var model = context.ExecutionContext.Services.GetRequiredService<DistributedApplicationModel>();
                 allowedOrigins = GetAllowedOriginsFromResourceEndpoints(model);
             }
 

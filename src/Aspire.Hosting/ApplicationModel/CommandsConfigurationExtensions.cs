@@ -25,7 +25,7 @@ internal static class CommandsConfigurationExtensions
             displayName: CommandStrings.StartName,
             executeCommand: async context =>
             {
-                var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
+                var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
                 return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStarted, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
@@ -58,7 +58,7 @@ internal static class CommandsConfigurationExtensions
             displayName: CommandStrings.StopName,
             executeCommand: async context =>
             {
-                var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
+                var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
                 return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStopped, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
@@ -97,7 +97,7 @@ internal static class CommandsConfigurationExtensions
             displayName: CommandStrings.RestartName,
             executeCommand: async context =>
             {
-                var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
+                var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
                 await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
@@ -193,10 +193,10 @@ internal static class CommandsConfigurationExtensions
 
     private static async Task<ExecuteCommandResult> ExecuteRebuildAsync(ExecuteCommandContext context, ProjectResource projectResource)
     {
-        var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
-        var resourceNotificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
-        var loggerService = context.ServiceProvider.GetRequiredService<ResourceLoggerService>();
-        var model = context.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+        var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
+        var resourceNotificationService = context.Services.GetRequiredService<ResourceNotificationService>();
+        var loggerService = context.Services.GetRequiredService<ResourceLoggerService>();
+        var model = context.Services.GetRequiredService<DistributedApplicationModel>();
 
         var rebuilderResource = model.Resources.OfType<ProjectRebuilderResource>().FirstOrDefault(r => r.Parent == projectResource);
         if (rebuilderResource is null)

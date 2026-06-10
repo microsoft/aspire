@@ -9,12 +9,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 /// <summary>
 /// A service to interact with the current development environment.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public interface IInteractionService
 {
     /// <summary>
@@ -106,7 +103,7 @@ internal record QueueLoadOptions(
     CancellationToken CancellationToken,
     InteractionInput Input,
     InteractionInputCollection AllInputs,
-    IServiceProvider ServiceProvider);
+    IServiceProvider Services);
 
 internal sealed class InputLoadingState(InputLoadOptions options)
 {
@@ -173,7 +170,7 @@ internal sealed class InputLoadingState(InputLoadOptions options)
                 {
                     AllInputs = options.AllInputs,
                     Input = options.Input,
-                    Services = options.ServiceProvider,
+                    Services = options.Services,
                     CancellationToken = currentToken
                 }).ConfigureAwait(false);
                 lock (_lock)
@@ -202,7 +199,6 @@ internal sealed class InputLoadingState(InputLoadOptions options)
 /// Use this class to specify how and when dynamic input data should be loaded. This type is intended for advanced
 /// scenarios where input loading behavior must be customized.
 /// </remarks>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class InputLoadOptions
 {
     /// <summary>
@@ -229,7 +225,6 @@ public sealed class InputLoadOptions
 /// <summary>
 /// The context for dynamic input loading. Used with <see cref="InputLoadOptions.LoadCallback"/>.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class LoadInputContext
 {
     /// <summary>
@@ -256,7 +251,6 @@ public sealed class LoadInputContext
 /// <summary>
 /// Represents an input for an interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireDto]
 [DebuggerDisplay("Name = {Name}, InputType = {InputType}, Required = {Required}, Value = {Value}")]
 public sealed class InteractionInput
@@ -327,6 +321,11 @@ public sealed class InteractionInput
     /// Dynamic loading is used to load data and update inputs after a prompt has started.
     /// It can also be used to reload data and update inputs after a dependant input has changed.
     /// </summary>
+    // Excluded from the ATS surface: InputLoadOptions holds a non-serializable LoadCallback delegate, and the
+    // dynamic-loading payload is always stripped from interaction results at runtime (see InteractionExports.ToResultInput).
+    // Polyglot app hosts configure dynamic loading through InteractionInputBuilder.WithDynamicLoading, never by reading
+    // this property back, so advertising it on the result DTO would describe a value that is always null on the wire.
+    [AspireExportIgnore(Reason = "InputLoadOptions carries a non-serializable callback and is never populated on interaction results.")]
     public InputLoadOptions? DynamicLoading
     {
         get => _dynamicLoading;
@@ -374,7 +373,6 @@ public sealed class InteractionInput
 /// <summary>
 /// A collection of interaction inputs that supports both indexed and name-based access.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport]
 [DebuggerDisplay("Count = {Count}")]
 public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
@@ -552,7 +550,6 @@ public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
 /// <summary>
 /// Specifies the type of input for an <see cref="InteractionInput"/>.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum InputType
 {
     /// <summary>
@@ -580,7 +577,6 @@ public enum InputType
 /// <summary>
 /// Options for configuring an inputs dialog interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class InputsDialogInteractionOptions : InteractionOptions
 {
     internal static new InputsDialogInteractionOptions Default { get; } = new();
@@ -595,7 +591,6 @@ public class InputsDialogInteractionOptions : InteractionOptions
 /// <summary>
 /// Represents the context for validating inputs in an inputs dialog interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport(ExposeProperties = true)]
 public sealed class InputsDialogValidationContext
 {
@@ -614,7 +609,6 @@ public sealed class InputsDialogValidationContext
     /// <summary>
     /// Gets the service provider for resolving services during validation.
     /// </summary>
-    [AspireExportIgnore(Reason = "IServiceProvider is not part of the polyglot validation surface.")]
     public required IServiceProvider Services { get; init; }
 
     /// <summary>
@@ -650,7 +644,6 @@ public sealed class InputsDialogValidationContext
 /// <summary>
 /// Options for configuring a message box interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class MessageBoxInteractionOptions : InteractionOptions
 {
     internal static MessageBoxInteractionOptions CreateDefault() => new();
@@ -664,7 +657,6 @@ public class MessageBoxInteractionOptions : InteractionOptions
 /// <summary>
 /// Options for configuring a notification interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class NotificationInteractionOptions : InteractionOptions
 {
     internal static NotificationInteractionOptions CreateDefault() => new();
@@ -688,7 +680,6 @@ public class NotificationInteractionOptions : InteractionOptions
 /// <summary>
 /// Specifies the intent or purpose of a message in an interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum MessageIntent
 {
     /// <summary>
@@ -720,7 +711,6 @@ public enum MessageIntent
 /// <summary>
 /// Optional configuration for interactions added with <see cref="InteractionService"/>.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class InteractionOptions
 {
     internal static InteractionOptions Default { get; } = new();
@@ -787,7 +777,6 @@ public static class InteractionResult
 /// <summary>
 /// Represents the result of an interaction.
 /// </summary>
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class InteractionResult<T>
 {
     /// <summary>
@@ -807,5 +796,3 @@ public class InteractionResult<T>
         Canceled = canceled;
     }
 }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

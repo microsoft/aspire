@@ -14,9 +14,6 @@ var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41Mini);
 
 var a2aAgent = builder.AddUvicornApp("a2a-jsonrpc-agent", "../weather-agent-python", "weather_agent_python.main:app")
     .WithUv()
-    .WithReference(project)
-    .WithReference(chat)
-    .WaitFor(chat)
     .AsAgent(AgentProtocol.A2A);
 
 builder.AddProject<Projects.ResponsesAgent>("responses-agent")

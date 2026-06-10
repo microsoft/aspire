@@ -112,7 +112,7 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.mts"]);
         Assert.Contains("('$handle' in json || '$expr' in json)", files["base.mts"]);
         Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.mts"]);
-        Assert.Contains("arguments(): Promise<InteractionInputCollection>", aspireTs);
+        Assert.Contains("arguments(): InteractionInputCollectionPromise", aspireTs);
         Assert.DoesNotContain("setArguments", aspireTs);
     }
 
@@ -1057,8 +1057,15 @@ public class AtsTypeScriptCodeGeneratorTests
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.mts"];
+        var processCommandExportOptions = Assert.Single(atsContext.DtoTypes, dto => dto.Name == "ProcessCommandExportOptions");
+        var createProcessSpec = Assert.Single(processCommandExportOptions.Properties, property => property.Name == "CreateProcessSpec");
 
+        Assert.True(createProcessSpec.IsOptional);
         Assert.Contains("const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback", aspireTs);
+        Assert.Contains("createProcessSpec?: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>;", aspireTs);
+        Assert.Contains("const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback", aspireTs);
+        Assert.Contains("__optionsForRpcData[\"createProcessSpec\"] = ____optionsForRpcCreateProcessSpecId;", aspireTs);
+        Assert.Contains("@deprecated Use withProcessCommand with createProcessSpec in the options object instead.", aspireTs);
         Assert.Contains("const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;", aspireTs);
         Assert.Contains("const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };", aspireTs);
         Assert.Contains("const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback", aspireTs);

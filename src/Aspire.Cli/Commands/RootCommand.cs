@@ -13,6 +13,7 @@ using System.Diagnostics;
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -148,6 +149,7 @@ internal sealed class RootCommand : BaseRootCommand
         DescribeCommand describeCommand,
         LogsCommand logsCommand,
         IntegrationCommand integrationCommand,
+        TerminalCommand terminalCommand,
         AddCommand addCommand,
         PublishCommand publishCommand,
         DeployCommand deployCommand,
@@ -174,6 +176,7 @@ internal sealed class RootCommand : BaseRootCommand
         ExtensionInternalCommand extensionInternalCommand,
         IBundleService bundleService,
         IInteractionService interactionService,
+        IFeatures features,
         IAnsiConsole ansiConsole)
         : base(RootCommandStrings.Description)
     {
@@ -247,6 +250,12 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(describeCommand);
         Subcommands.Add(logsCommand);
         Subcommands.Add(integrationCommand);
+        // 'aspire terminal' is hidden behind a feature flag while WithTerminal() is experimental.
+        // Toggle with `aspire config set features.terminalCommandsEnabled true`.
+        if (features.IsFeatureEnabled(KnownFeatures.TerminalCommandsEnabled, defaultValue: false))
+        {
+            Subcommands.Add(terminalCommand);
+        }
         Subcommands.Add(addCommand);
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);

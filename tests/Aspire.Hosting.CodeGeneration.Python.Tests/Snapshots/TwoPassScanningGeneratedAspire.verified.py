@@ -1510,9 +1510,15 @@ CertificateTrustScope = typing.Literal["None", "Append", "Override", "System"]
 
 CommandResultFormat = typing.Literal["Text", "Json", "Markdown"]
 
+ContainerImageDestination = typing.Literal["Registry", "Archive"]
+
+ContainerImageFormat = typing.Literal["Docker", "Oci"]
+
 ContainerLifetime = typing.Literal["Session", "Persistent"]
 
 ContainerMountType = typing.Literal["BindMount", "Volume"]
+
+ContainerTargetPlatform = typing.Literal["LinuxAmd64", "LinuxArm64", "AllLinux", "LinuxArm", "Linux386", "WindowsAmd64", "WindowsArm64"]
 
 DistributedApplicationOperation = typing.Literal["Run", "Publish"]
 
@@ -1527,6 +1533,8 @@ IconVariant = typing.Literal["Regular", "Filled"]
 ImagePullPolicy = typing.Literal["Default", "Always", "Missing", "Never"]
 
 InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number"]
+
+MessageIntent = typing.Literal["None", "Success", "Warning", "Error", "Information", "Confirmation"]
 
 OtlpProtocol = typing.Literal["Grpc", "HttpProtobuf", "HttpJson"]
 
@@ -1555,6 +1563,12 @@ WaitBehavior = typing.Literal["WaitOnResourceUnavailable", "StopOnResourceUnavai
 class DockerfileBaseImageParameters(typing.TypedDict, total=False):
     build_image: str
     runtime_image: str
+
+
+class RequiredCommandValidationParameters(typing.TypedDict, total=False):
+    command: typing.Required[str]
+    validation_callback: typing.Required[typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]]
+    help_link: str
 
 
 class CommandParameters(typing.TypedDict, total=False):
@@ -1638,6 +1652,12 @@ class ContainerCertificatePathsParameters(typing.TypedDict, total=False):
 class ContainerFilesParameters(typing.TypedDict, total=False):
     destination_path: typing.Required[str]
     source_path: typing.Required[str]
+    options: ContainerFilesOptions
+
+
+class ContainerFilesCallbackParameters(typing.TypedDict, total=False):
+    destination_path: typing.Required[str]
+    callback: typing.Required[typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]]]
     options: ContainerFilesOptions
 
 
@@ -1745,6 +1765,10 @@ class AddContainerOptions(typing.TypedDict, total=False):
     Image: str
     Tag: str | None
 
+class BoolInteractionResult(typing.TypedDict, total=False):
+    Canceled: bool
+    Value: bool
+
 class CertificateTrustExecutionConfigurationContext(typing.TypedDict, total=False):
     CertificateBundlePath: ReferenceExpression
     CertificateDirectoriesPath: ReferenceExpression
@@ -1760,13 +1784,13 @@ class CommandOptions(typing.TypedDict, total=False):
     Description: str | None
     Parameter: typing.Any
     Arguments: typing.Iterable[InteractionInput]
-    ValidateArguments: typing.Callable
+    ValidateArguments: typing.Callable[[InputsDialogValidationContext], None]
     Visibility: ResourceCommandVisibility
     ConfirmationMessage: str | None
     IconName: str | None
     IconVariant: IconVariant | None
     IsHighlighted: bool
-    UpdateState: typing.Callable
+    UpdateState: typing.Callable[[UpdateCommandStateContext], ResourceCommandState]
 
 class CommandResultData(typing.TypedDict, total=False):
     Value: str
@@ -1787,6 +1811,21 @@ class CreateBuilderOptions(typing.TypedDict, total=False):
     DashboardApplicationName: str | None
     AllowUnsecuredTransport: bool
     EnableResourceLogging: bool
+
+class CreateInteractionInputOptions(typing.TypedDict, total=False):
+    Label: str | None
+    Description: str | None
+    EnableDescriptionMarkdown: bool | None
+    Required: bool | None
+    Placeholder: str | None
+    Value: str | None
+    AllowCustomChoice: bool | None
+    Disabled: bool | None
+    MaxLength: int | None
+
+class DynamicLoadingOptions(typing.TypedDict, total=False):
+    AlwaysLoadOnStart: bool | None
+    DependsOnInputs: typing.Iterable[str]
 
 class ExecuteCommandResult(typing.TypedDict, total=False):
     Success: bool
@@ -1821,7 +1860,7 @@ class HttpCommandExportOptions(typing.TypedDict, total=False):
     CommandName: str | None
     EndpointName: str | None
     MethodName: str | None
-    PrepareRequest: typing.Callable
+    PrepareRequest: typing.Callable[[HttpCommandPrepareRequestContext], HttpCommandRequestExportData]
     ResultMode: HttpCommandResultMode
 
 class HttpCommandRequestExportData(typing.TypedDict, total=False):
@@ -1849,6 +1888,14 @@ class HttpsCertificateInfo(typing.TypedDict, total=False):
     Issuer: str
     Thumbprint: str | None
 
+class InputInteractionResult(typing.TypedDict, total=False):
+    Canceled: bool
+    Input: InteractionInput
+
+class InteractionChoiceOption(typing.TypedDict, total=False):
+    Value: str
+    Label: str
+
 class InteractionInput(typing.TypedDict, total=False):
     Name: str
     Label: str | None
@@ -1857,12 +1904,37 @@ class InteractionInput(typing.TypedDict, total=False):
     InputType: InputType
     Required: bool
     Options: typing.Iterable[typing.Any]
-    DynamicLoading: typing.Any
     Value: str | None
     Placeholder: str | None
     AllowCustomChoice: bool
     Disabled: bool
     MaxLength: int | None
+
+class InteractionInputsDialogOptions(typing.TypedDict, total=False):
+    PrimaryButtonText: str | None
+    SecondaryButtonText: str | None
+    ShowSecondaryButton: bool | None
+    ShowDismiss: bool | None
+    EnableMessageMarkdown: bool | None
+    ValidationCallback: typing.Callable[[InputsDialogValidationContext], None]
+
+class InteractionMessageBoxOptions(typing.TypedDict, total=False):
+    PrimaryButtonText: str | None
+    SecondaryButtonText: str | None
+    ShowSecondaryButton: bool | None
+    ShowDismiss: bool | None
+    EnableMessageMarkdown: bool | None
+    Intent: MessageIntent | None
+
+class InteractionNotificationOptions(typing.TypedDict, total=False):
+    PrimaryButtonText: str | None
+    SecondaryButtonText: str | None
+    ShowSecondaryButton: bool | None
+    ShowDismiss: bool | None
+    EnableMessageMarkdown: bool | None
+    Intent: MessageIntent | None
+    LinkText: str | None
+    LinkUrl: str | None
 
 class ParameterCustomInputOptions(typing.TypedDict, total=False):
     InputType: InputType | None
@@ -1884,6 +1956,7 @@ class ProcessCommandExportOptions(typing.TypedDict, total=False):
     InheritEnvironmentVariables: bool | None
     StandardInputContent: str | None
     KillEntireProcessTree: bool | None
+    CreateProcessSpec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]
     CommandOptions: CommandOptions
     MaxOutputLineCount: int | None
     DisplayImmediately: bool | None
@@ -2853,6 +2926,170 @@ class AbstractHostEnvironment:
         return result
 
 
+class AbstractInteractionService:
+    """Type class for AbstractInteractionService."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AbstractInteractionService(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def is_available(self) -> bool:
+        """Gets a value indicating whether the interaction service is available to prompt the user."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/isAvailable',
+            rpc_args,
+        )
+        return result
+
+    def prompt_confirmation(self, title: str, message: str, *, options: InteractionMessageBoxOptions | None = None, timeout: int | None = None) -> BoolInteractionResult:
+        """Prompts the user for confirmation with an OK/Cancel dialog."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptConfirmation',
+            rpc_args,
+        )
+        return typing.cast(BoolInteractionResult, result)
+
+    def prompt_message_box(self, title: str, message: str, *, options: InteractionMessageBoxOptions | None = None, timeout: int | None = None) -> BoolInteractionResult:
+        """Prompts the user with a message box dialog."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptMessageBox',
+            rpc_args,
+        )
+        return typing.cast(BoolInteractionResult, result)
+
+    def prompt_notification(self, title: str, message: str, *, options: InteractionNotificationOptions | None = None, timeout: int | None = None) -> BoolInteractionResult:
+        """Prompts the user with a notification."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptNotification',
+            rpc_args,
+        )
+        return typing.cast(BoolInteractionResult, result)
+
+    def prompt_input(self, title: str, message: str, input: InteractionInputBuilder, *, options: InteractionInputsDialogOptions | None = None, timeout: int | None = None) -> InputInteractionResult:
+        """Prompts the user for a single input."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        rpc_args['input'] = input
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptInput',
+            rpc_args,
+        )
+        return typing.cast(InputInteractionResult, result)
+
+    def prompt_inputs(self, title: str, message: str, inputs: typing.Iterable[InteractionInputBuilder], *, options: InteractionInputsDialogOptions | None = None, timeout: int | None = None) -> InputsInteractionResult:
+        """Prompts the user for multiple inputs."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        rpc_args['inputs'] = inputs
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptInputs',
+            rpc_args,
+        )
+        return typing.cast(InputsInteractionResult, result)
+
+    def create_text_input(self, name: str, *, options: CreateInteractionInputOptions | None = None) -> InteractionInputBuilder:
+        """Creates a single-line text input."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['name'] = name
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createTextInput',
+            rpc_args,
+        )
+        return typing.cast(InteractionInputBuilder, result)
+
+    def create_secret_input(self, name: str, *, options: CreateInteractionInputOptions | None = None) -> InteractionInputBuilder:
+        """Creates a secret (masked) text input."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['name'] = name
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createSecretInput',
+            rpc_args,
+        )
+        return typing.cast(InteractionInputBuilder, result)
+
+    def create_boolean_input(self, name: str, *, options: CreateInteractionInputOptions | None = None) -> InteractionInputBuilder:
+        """Creates a boolean (checkbox) input."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['name'] = name
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createBooleanInput',
+            rpc_args,
+        )
+        return typing.cast(InteractionInputBuilder, result)
+
+    def create_number_input(self, name: str, *, options: CreateInteractionInputOptions | None = None) -> InteractionInputBuilder:
+        """Creates a numeric input."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['name'] = name
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createNumberInput',
+            rpc_args,
+        )
+        return typing.cast(InteractionInputBuilder, result)
+
+    def create_choice_input(self, name: str, *, choices: typing.Iterable[InteractionChoiceOption] | None = None, options: CreateInteractionInputOptions | None = None) -> InteractionInputBuilder:
+        """Creates a choice input that selects from a list of options."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['name'] = name
+        if choices is not None:
+            rpc_args['choices'] = choices
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createChoiceInput',
+            rpc_args,
+        )
+        return typing.cast(InteractionInputBuilder, result)
+
+
 class AbstractLogger:
     """Type class for AbstractLogger."""
 
@@ -3136,6 +3373,15 @@ class AbstractServiceProvider:
             rpc_args,
         )
         return typing.cast(AbstractDistributedApplicationEventing, result)
+
+    def get_interaction_service(self) -> AbstractInteractionService:
+        """Gets the interaction service from the service provider."""
+        rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getInteractionService',
+            rpc_args,
+        )
+        return typing.cast(AbstractInteractionService, result)
 
     def get_logger_factory(self) -> AbstractLoggerFactory:
         """Gets the logger factory from the service provider."""
@@ -3550,6 +3796,279 @@ class ConnectionStringAvailableEvent:
         return typing.cast(AbstractServiceProvider, result)
 
 
+class ContainerBuildOptionsCallbackContext:
+    """Type class for ContainerBuildOptionsCallbackContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ContainerBuildOptionsCallbackContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def resource(self) -> AbstractResource:
+        """Gets the resource being built."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.resource',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractResource, result)
+
+    @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """Gets the service provider."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    @_cached_property
+    def logger(self) -> AbstractLogger:
+        """Gets the logger instance."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.logger',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractLogger, result)
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+    @_cached_property
+    def execution_context(self) -> DistributedApplicationExecutionContext:
+        """Gets the distributed application execution context."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.executionContext',
+            {'context': self._handle}
+        )
+        return typing.cast(DistributedApplicationExecutionContext, result)
+
+    @_uncached_property
+    def destination(self) -> ContainerImageDestination | None:
+        """Gets or sets the destination for the container image."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.destination',
+            {'context': self._handle}
+        )
+        return typing.cast(ContainerImageDestination | None, result)
+
+    @destination.setter
+    def destination(self, value: ContainerImageDestination | None) -> None:
+        """Sets the Destination property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setDestination',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def output_path(self) -> str | None:
+        """Gets or sets the output path for the container archive."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.outputPath',
+            {'context': self._handle}
+        )
+        return typing.cast(str | None, result)
+
+    @output_path.setter
+    def output_path(self, value: str | None) -> None:
+        """Sets the OutputPath property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setOutputPath',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def image_format(self) -> ContainerImageFormat | None:
+        """Gets or sets the container image format."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.imageFormat',
+            {'context': self._handle}
+        )
+        return typing.cast(ContainerImageFormat | None, result)
+
+    @image_format.setter
+    def image_format(self, value: ContainerImageFormat | None) -> None:
+        """Sets the ImageFormat property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setImageFormat',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def target_platform(self) -> ContainerTargetPlatform | None:
+        """Gets or sets the target platform for the container."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.targetPlatform',
+            {'context': self._handle}
+        )
+        return typing.cast(ContainerTargetPlatform | None, result)
+
+    @target_platform.setter
+    def target_platform(self, value: ContainerTargetPlatform | None) -> None:
+        """Sets the TargetPlatform property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setTargetPlatform',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def local_image_name(self) -> str | None:
+        """Gets or sets the local image name for the built container."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageName',
+            {'context': self._handle}
+        )
+        return typing.cast(str | None, result)
+
+    @local_image_name.setter
+    def local_image_name(self, value: str | None) -> None:
+        """Sets the LocalImageName property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageName',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def local_image_tag(self) -> str | None:
+        """Gets or sets the local image tag for the built container."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageTag',
+            {'context': self._handle}
+        )
+        return typing.cast(str | None, result)
+
+    @local_image_tag.setter
+    def local_image_tag(self, value: str | None) -> None:
+        """Sets the LocalImageTag property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageTag',
+            {'context': self._handle, 'value': value}
+        )
+
+
+class ContainerFileSystemCallbackContext:
+    """Type class for ContainerFileSystemCallbackContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ContainerFileSystemCallbackContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """A `IServiceProvider` that can be used to resolve services in the callback."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    @_cached_property
+    def model(self) -> AbstractResource:
+        """The app model resource the callback is associated with."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.model',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractResource, result)
+
+    def create_file(self, name: str, *, contents: str | None = None, source_path: str | None = None, owner: int | None = None, group: int | None = None, mode: int | None = None, continue_on_error: bool | None = None) -> ContainerFileSystemItem:
+        """Creates a container file entry with inline contents or a host source path."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['name'] = name
+        if contents is not None:
+            rpc_args['contents'] = contents
+        if source_path is not None:
+            rpc_args['sourcePath'] = source_path
+        if owner is not None:
+            rpc_args['owner'] = owner
+        if group is not None:
+            rpc_args['group'] = group
+        if mode is not None:
+            rpc_args['mode'] = mode
+        if continue_on_error is not None:
+            rpc_args['continueOnError'] = continue_on_error
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createFile',
+            rpc_args,
+        )
+        return typing.cast(ContainerFileSystemItem, result)
+
+    def create_certificate_file(self, name: str, *, contents: str | None = None, source_path: str | None = None, owner: int | None = None, group: int | None = None, mode: int | None = None, continue_on_error: bool | None = None) -> ContainerFileSystemItem:
+        """Creates a PEM container certificate file entry with the OpenSSL subject-hash symlink."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['name'] = name
+        if contents is not None:
+            rpc_args['contents'] = contents
+        if source_path is not None:
+            rpc_args['sourcePath'] = source_path
+        if owner is not None:
+            rpc_args['owner'] = owner
+        if group is not None:
+            rpc_args['group'] = group
+        if mode is not None:
+            rpc_args['mode'] = mode
+        if continue_on_error is not None:
+            rpc_args['continueOnError'] = continue_on_error
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createCertificateFile',
+            rpc_args,
+        )
+        return typing.cast(ContainerFileSystemItem, result)
+
+    def create_dir(self, name: str, entries: typing.Iterable[ContainerFileSystemItem], *, owner: int | None = None, group: int | None = None, mode: int | None = None) -> ContainerFileSystemItem:
+        """Creates a container directory entry containing the specified child entries."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['name'] = name
+        rpc_args['entries'] = entries
+        if owner is not None:
+            rpc_args['owner'] = owner
+        if group is not None:
+            rpc_args['group'] = group
+        if mode is not None:
+            rpc_args['mode'] = mode
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createDirectory',
+            rpc_args,
+        )
+        return typing.cast(ContainerFileSystemItem, result)
+
+
+class ContainerFileSystemItem:
+    """Type class for ContainerFileSystemItem."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ContainerFileSystemItem(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+
 class ContainerImagePushOptions:
     """Type class for ContainerImagePushOptions."""
 
@@ -3850,6 +4369,15 @@ class DistributedApplicationExecutionContext:
         """The `IServiceProvider` for the AppHost."""
         result = self._client.invoke_capability(
             'Aspire.Hosting/DistributedApplicationExecutionContext.serviceProvider',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """The `IServiceProvider` for the AppHost."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/DistributedApplicationExecutionContext.services',
             {'context': self._handle}
         )
         return typing.cast(AbstractServiceProvider, result)
@@ -4793,6 +5321,15 @@ class ExecuteCommandContext:
         return self._handle
 
     @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """The service provider."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    @_cached_property
     def resource_name(self) -> str:
         """The resource name."""
         result = self._client.invoke_capability(
@@ -4877,6 +5414,144 @@ class HttpCommandPrepareRequestContext:
             {'context': self._handle}
         )
         return typing.cast(InteractionInputCollection, result)
+
+
+class HttpsCertificateConfigurationCallbackAnnotationContext:
+    """Type class for HttpsCertificateConfigurationCallbackAnnotationContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"HttpsCertificateConfigurationCallbackAnnotationContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def execution_context(self) -> DistributedApplicationExecutionContext:
+        """Gets the `DistributedApplicationExecutionContext` for this session."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.executionContext',
+            {'context': self._handle}
+        )
+        return typing.cast(DistributedApplicationExecutionContext, result)
+
+    @_cached_property
+    def resource(self) -> AbstractResource:
+        """Gets the resource to which the annotation is applied."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.resource',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractResource, result)
+
+    @_cached_property
+    def certificate_path(self) -> ReferenceExpression:
+        """A value provider that will resolve to a path to the certificate file."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificatePath',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    @_cached_property
+    def key_path(self) -> ReferenceExpression:
+        """A value provider that will resolve to a path to the private key for the certificate."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    @_cached_property
+    def pfx_path(self) -> ReferenceExpression:
+        """A value provider that will resolve to a path to a PFX file for the key pair."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.pfxPath',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+    @_cached_property
+    def arguments(self) -> CommandLineArgsEditor:
+        """Gets the editor used to manipulate the command-line arguments in polyglot callbacks."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.arguments',
+            {'context': self._handle}
+        )
+        return typing.cast(CommandLineArgsEditor, result)
+
+    @_cached_property
+    def env(self) -> EnvironmentEditor:
+        """Gets the editor used to set environment variables in polyglot callbacks."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.environment',
+            {'context': self._handle}
+        )
+        return typing.cast(EnvironmentEditor, result)
+
+
+class HttpsEndpointUpdateCallbackContext:
+    """Type class for HttpsEndpointUpdateCallbackContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"HttpsEndpointUpdateCallbackContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """Gets the `IServiceProvider` instance from the application."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    @_cached_property
+    def resource(self) -> AbstractResource:
+        """Gets the `IResource` that is being configured for HTTPS."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.resource',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractResource, result)
+
+    @_cached_property
+    def model(self) -> DistributedApplicationModel:
+        """Gets the `DistributedApplicationModel` instance."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.model',
+            {'context': self._handle}
+        )
+        return typing.cast(DistributedApplicationModel, result)
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
 
 
 class InitializeResourceEvent:
@@ -4972,6 +5647,15 @@ class InputsDialogValidationContext:
         )
         token.cancel()
 
+    @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """Gets the service provider for resolving services during validation."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/InputsDialogValidationContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
     def add_validation_error(self, input_name: str, error_message: str) -> None:
         """Adds a validation error for the input with the specified name."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
@@ -4981,6 +5665,88 @@ class InputsDialogValidationContext:
             'Aspire.Hosting/InputsDialogValidationContext.addValidationError',
             rpc_args
         )
+
+
+class InputsInteractionResult:
+    """Type class for InputsInteractionResult."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"InputsInteractionResult(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def canceled(self) -> bool:
+        """Gets a value indicating whether the interaction was canceled by the user."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/InputsInteractionResult.canceled',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @_cached_property
+    def inputs(self) -> InteractionInputCollection:
+        """Gets the inputs returned from the interaction. Empty when `Canceled` is `true`."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/InputsInteractionResult.inputs',
+            {'context': self._handle}
+        )
+        return typing.cast(InteractionInputCollection, result)
+
+
+class InteractionInputBuilder:
+    """Type class for InteractionInputBuilder."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"InteractionInputBuilder(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def with_choice_options(self, choices: typing.Iterable[InteractionChoiceOption]) -> InteractionInputBuilder:
+        """Sets the choice options for the input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['choices'] = choices
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/withChoiceOptions',
+            rpc_args,
+        )
+        return typing.cast(InteractionInputBuilder, result)
+
+    def with_value(self, value: str) -> InteractionInputBuilder:
+        """Sets the value of the input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['value'] = value
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/withValue',
+            rpc_args,
+        )
+        return typing.cast(InteractionInputBuilder, result)
+
+    def with_dynamic_loading(self, callback: typing.Callable[[InteractionInputLoadContext], None], *, options: DynamicLoadingOptions | None = None) -> InteractionInputBuilder:
+        """Attaches a callback that dynamically loads or updates the input after the prompt starts."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/withDynamicLoading',
+            rpc_args,
+        )
+        return typing.cast(InteractionInputBuilder, result)
 
 
 class InteractionInputCollection:
@@ -5006,6 +5772,110 @@ class InteractionInputCollection:
             rpc_args,
         )
         return result
+
+    def get(self, name: str) -> InteractionInput | None:
+        """Get the input with the specified name, or None if no input matches."""
+        lookup_name = name.lower()
+        for interaction_input in self.to_array():
+            input_name = interaction_input.get("Name")
+            if input_name is not None and input_name.lower() == lookup_name:
+                return interaction_input
+        return None
+
+    def required(self, name: str) -> InteractionInput:
+        """Get the input with the specified name, or raise ValueError if no input matches."""
+        interaction_input = self.get(name)
+        if interaction_input is None:
+            raise ValueError(f"no input with name '{name}' was found")
+        return interaction_input
+
+    def value(self, name: str) -> str:
+        """Get the input value with the specified name, or an empty string if no input matches."""
+        interaction_input = self.get(name)
+        if interaction_input is None:
+            return ""
+        return interaction_input.get("Value") or ""
+
+    def required_value(self, name: str) -> str:
+        """Get the input value with the specified name, or raise ValueError if no input matches."""
+        return self.required(name).get("Value") or ""
+
+
+class InteractionInputLoadContext:
+    """Type class for InteractionInputLoadContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"InteractionInputLoadContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def inputs(self) -> InteractionInputCollection:
+        """Gets all inputs in the prompt, including the one currently loading."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/InteractionInputLoadContext.inputs',
+            {'context': self._handle}
+        )
+        return typing.cast(InteractionInputCollection, result)
+
+    def input(self) -> InteractionLoadingInput:
+        """Gets a handle to the input that is loading. Mutate the input through this handle."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/input',
+            rpc_args,
+        )
+        return typing.cast(InteractionLoadingInput, result)
+
+
+class InteractionLoadingInput:
+    """Type class for InteractionLoadingInput."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"InteractionLoadingInput(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def get_name(self) -> str:
+        """Gets the name of the input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/getName',
+            rpc_args,
+        )
+        return result
+
+    def set_choice_options(self, choices: typing.Iterable[InteractionChoiceOption]) -> None:
+        """Sets the choice options for the input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['choices'] = choices
+        self._client.invoke_capability(
+            'Aspire.Hosting.Ats/setChoiceOptions',
+            rpc_args
+        )
+
+    def set_value(self, value: str) -> None:
+        """Sets the value of the input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['value'] = value
+        self._client.invoke_capability(
+            'Aspire.Hosting.Ats/setValue',
+            rpc_args
+        )
 
 
 class LogFacade:
@@ -5583,6 +6453,101 @@ class ReferenceExpressionBuilder:
             rpc_args,
         )
         return typing.cast(ReferenceExpression, result)
+
+
+class RequiredCommandValidationContext:
+    """Type class for RequiredCommandValidationContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"RequiredCommandValidationContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def resolved_path(self) -> str:
+        """Gets the resolved full path to the command executable."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.resolvedPath',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """Gets the service provider for accessing application services."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+    def success(self) -> RequiredCommandValidationResult:
+        """Creates a successful validation result."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.success',
+            rpc_args,
+        )
+        return typing.cast(RequiredCommandValidationResult, result)
+
+    def failure(self, validation_message: str) -> RequiredCommandValidationResult:
+        """Creates a failed validation result with the specified message."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['validationMessage'] = validation_message
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.failure',
+            rpc_args,
+        )
+        return typing.cast(RequiredCommandValidationResult, result)
+
+
+class RequiredCommandValidationResult:
+    """Type class for RequiredCommandValidationResult."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"RequiredCommandValidationResult(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def is_valid(self) -> bool:
+        """Gets a value indicating whether the command validation succeeded."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.isValid',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @_cached_property
+    def validation_message(self) -> str | None:
+        """Gets an optional validation message describing why validation failed."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.validationMessage',
+            {'context': self._handle}
+        )
+        return typing.cast(str | None, result)
 
 
 class ResourceCommandService:
@@ -6252,6 +7217,15 @@ class UpdateCommandStateContext:
         )
         return typing.cast(UpdateCommandStateResourceSnapshot, result)
 
+    @_cached_property
+    def services(self) -> AbstractServiceProvider:
+        """The service provider."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
 
 # ============================================================================
 # Interface Classes
@@ -6271,6 +7245,10 @@ class AbstractResource(abc.ABC):
     @abc.abstractmethod
     def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
         """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start."""
+
+    @abc.abstractmethod
+    def with_required_command_validation(self, command: str, validation_callback: typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult], *, help_link: str | None = None) -> typing.Self:
+        """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic."""
 
     @abc.abstractmethod
     def with_session_lifetime(self) -> typing.Self:
@@ -6325,6 +7303,10 @@ class AbstractResource(abc.ABC):
         """Adds a command to the resource that starts a local process created by a callback when invoked."""
 
     @abc.abstractmethod
+    def subscribe_https_endpoints_update(self, callback: typing.Callable[[HttpsEndpointUpdateCallbackContext], None]) -> typing.Self:
+        """Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup."""
+
+    @abc.abstractmethod
     def with_relationship(self, resource_builder: AbstractResource, type: str) -> typing.Self:
         """Adds a relationship to another resource using its builder."""
 
@@ -6351,6 +7333,10 @@ class AbstractResource(abc.ABC):
     @abc.abstractmethod
     def with_hidden_on_completion(self, *, exit_code: int | None = None, exit_codes: typing.Iterable[int] | None = None) -> typing.Self:
         """Hides the resource from default resource lists after successful completion"""
+
+    @abc.abstractmethod
+    def with_terminal(self) -> typing.Self:
+        """Adds an interactive terminal session to a resource using the default terminal options."""
 
     @abc.abstractmethod
     def with_pipeline_step_factory(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None, tags: typing.Iterable[str] | None = None, description: str | None = None) -> typing.Self:
@@ -6383,6 +7369,10 @@ class AbstractResource(abc.ABC):
     @abc.abstractmethod
     def create_execution_config(self) -> AbstractExecutionConfigurationBuilder:
         """Creates an execution configuration builder for the specified resource."""
+
+    @abc.abstractmethod
+    def with_container_build_options(self, callback: typing.Callable[[ContainerBuildOptionsCallbackContext], None]) -> typing.Self:
+        """Configures container build options for a compute resource using an async callback."""
 
     @abc.abstractmethod
     def with_optional_string(self, *, value: str | None = None, enabled: bool = True) -> typing.Self:
@@ -6645,6 +7635,10 @@ class AbstractResourceWithEnvironment(AbstractResource):
         """Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied."""
 
     @abc.abstractmethod
+    def with_https_certificate_config(self, callback: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]) -> typing.Self:
+        """Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication."""
+
+    @abc.abstractmethod
     def test_with_env_callback(self, callback: typing.Callable[[TestEnvironmentContext], None]) -> typing.Self:
         """Configures environment with callback (test version)"""
 
@@ -6695,6 +7689,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     container_registry: AbstractResource
     dockerfile_base_image: DockerfileBaseImageParameters | typing.Literal[True]
     required_command: str | tuple[str, str]
+    required_command_validation: tuple[str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]] | RequiredCommandValidationParameters
     session_lifetime: typing.Literal[True]
     persistent_lifetime: typing.Literal[True]
     lifetime_of: AbstractResource
@@ -6708,6 +7703,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     command: tuple[str, str, typing.Callable[[ExecuteCommandContext], ExecuteCommandResult]] | CommandParameters
     process_command: tuple[str, str, ProcessCommandExportOptions]
     process_command_factory: tuple[str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]] | ProcessCommandFactoryParameters
+    subscribe_https_endpoints_update: typing.Callable[[HttpsEndpointUpdateCallbackContext], None]
     relationship: tuple[AbstractResource, str]
     parent_relationship: AbstractResource
     child_relationship: AbstractResource
@@ -6715,12 +7711,14 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     exclude_from_mcp: typing.Literal[True]
     hidden: typing.Literal[True]
     hidden_on_completion: HiddenOnCompletionParameters | typing.Literal[True]
+    terminal: typing.Literal[True]
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
     on_before_resource_started: typing.Callable[[BeforeResourceStartedEvent], None]
     on_resource_stopped: typing.Callable[[ResourceStoppedEvent], None]
     on_initialize_resource: typing.Callable[[InitializeResourceEvent], None]
     on_resource_ready: typing.Callable[[ResourceReadyEvent], None]
+    container_build_options: typing.Callable[[ContainerBuildOptionsCallbackContext], None]
     optional_string: OptionalStringParameters | typing.Literal[True]
     config: TestConfigDto
     created_at: datetime.datetime
@@ -6786,6 +7784,20 @@ class _BaseResource(AbstractResource):
             rpc_args['helpLink'] = help_link
         result = self._client.invoke_capability(
             'Aspire.Hosting/withRequiredCommand',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_required_command_validation(self, command: str, validation_callback: typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult], *, help_link: str | None = None) -> typing.Self:
+        """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['command'] = command
+        rpc_args['validationCallback'] = self._client.register_callback(validation_callback)
+        if help_link is not None:
+            rpc_args['helpLink'] = help_link
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withRequiredCommandValidation',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -6943,6 +7955,17 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
+    def subscribe_https_endpoints_update(self, callback: typing.Callable[[HttpsEndpointUpdateCallbackContext], None]) -> typing.Self:
+        """Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_relationship(self, resource_builder: AbstractResource, type: str) -> typing.Self:
         """Adds a relationship to another resource using its builder."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -7019,6 +8042,16 @@ class _BaseResource(AbstractResource):
             rpc_args['exitCodes'] = exit_codes
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHiddenOnCompletion',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_terminal(self) -> typing.Self:
+        """Adds an interactive terminal session to a resource using the default terminal options."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withTerminal',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -7116,6 +8149,17 @@ class _BaseResource(AbstractResource):
             rpc_args,
         )
         return typing.cast(AbstractExecutionConfigurationBuilder, result)
+
+    def with_container_build_options(self, callback: typing.Callable[[ContainerBuildOptionsCallbackContext], None]) -> typing.Self:
+        """Configures container build options for a compute resource using an async callback."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
 
     def with_optional_string(self, *, value: str | None = None, enabled: bool = True) -> typing.Self:
         """Adds an optional string parameter"""
@@ -7370,6 +8414,20 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommand', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'required_command'. Expected: str or (str, str)")
+        if _required_command_validation := kwargs.pop("required_command_validation", None):
+            if _validate_tuple_types(_required_command_validation, (str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["command"] = typing.cast(tuple[str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]], _required_command_validation)[0]
+                rpc_args["validationCallback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]], _required_command_validation)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommandValidation', rpc_args))
+            elif _validate_dict_types(_required_command_validation, RequiredCommandValidationParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["command"] = typing.cast(RequiredCommandValidationParameters, _required_command_validation)["command"]
+                rpc_args["validationCallback"] = client.register_callback(typing.cast(RequiredCommandValidationParameters, _required_command_validation)["validation_callback"])
+                rpc_args["helpLink"] = typing.cast(RequiredCommandValidationParameters, _required_command_validation).get("help_link")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommandValidation', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'required_command_validation'. Expected: (str, Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]) or RequiredCommandValidationParameters")
         if _session_lifetime := kwargs.pop("session_lifetime", None):
             if _session_lifetime is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7483,6 +8541,13 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProcessCommandFactory', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'process_command_factory'. Expected: (str, str, Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]) or ProcessCommandFactoryParameters")
+        if _subscribe_https_endpoints_update := kwargs.pop("subscribe_https_endpoints_update", None):
+            if _validate_type(_subscribe_https_endpoints_update, typing.Callable[[HttpsEndpointUpdateCallbackContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsEndpointUpdateCallbackContext], None], _subscribe_https_endpoints_update))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/subscribeHttpsEndpointsUpdate', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'subscribe_https_endpoints_update'. Expected: Callable[[HttpsEndpointUpdateCallbackContext], None]")
         if _relationship := kwargs.pop("relationship", None):
             if _validate_tuple_types(_relationship, (AbstractResource, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7540,6 +8605,12 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'hidden_on_completion'. Expected: HiddenOnCompletionParameters or Literal[True]")
+        if _terminal := kwargs.pop("terminal", None):
+            if _terminal is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTerminal', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'terminal'. Expected: Literal[True]")
         if _pipeline_step_factory := kwargs.pop("pipeline_step_factory", None):
             if _validate_tuple_types(_pipeline_step_factory, (str, typing.Callable[[PipelineStepContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7592,6 +8663,13 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceReady', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_ready'. Expected: Callable[[ResourceReadyEvent], None]")
+        if _container_build_options := kwargs.pop("container_build_options", None):
+            if _validate_type(_container_build_options, typing.Callable[[ContainerBuildOptionsCallbackContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerBuildOptionsCallbackContext], None], _container_build_options))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerBuildOptions', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'container_build_options'. Expected: Callable[[ContainerBuildOptionsCallbackContext], None]")
         if _optional_string := kwargs.pop("optional_string", None):
             if _validate_dict_types(_optional_string, OptionalStringParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7791,6 +8869,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     build_secret: tuple[str, ParameterResource]
     container_certificate_paths: ContainerCertificatePathsParameters | typing.Literal[True]
     container_files: tuple[str, str] | ContainerFilesParameters
+    container_files_callback: tuple[str, typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]]] | ContainerFilesCallbackParameters
     dockerfile_builder: tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]] | DockerfileBuilderParameters
     container_network_alias: str
     mcp_server: McpServerParameters | typing.Literal[True]
@@ -7820,6 +8899,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     certificate_trust_scope: CertificateTrustScope
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
+    https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
     compute_env: AbstractComputeEnvironmentResource
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
@@ -8040,6 +9120,20 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             rpc_args['options'] = options
         result = self._client.invoke_capability(
             'Aspire.Hosting/withContainerFiles',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_container_files_callback(self, destination_path: str, callback: typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]], *, options: ContainerFilesOptions | None = None) -> typing.Self:
+        """Creates or updates files and/or folders at the destination path in the container using entries produced by a callback."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['destinationPath'] = destination_path
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withContainerFilesCallback',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8443,6 +9537,17 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_https_certificate_config(self, callback: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]) -> typing.Self:
+        """Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_compute_env(self, compute_env_resource: AbstractComputeEnvironmentResource) -> typing.Self:
         """Configures the compute environment for the compute resource."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -8732,6 +9837,20 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerFiles', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_files'. Expected: (str, str) or ContainerFilesParameters")
+        if _container_files_callback := kwargs.pop("container_files_callback", None):
+            if _validate_tuple_types(_container_files_callback, (str, typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["destinationPath"] = typing.cast(tuple[str, typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]]], _container_files_callback)[0]
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]]], _container_files_callback)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerFilesCallback', rpc_args))
+            elif _validate_dict_types(_container_files_callback, ContainerFilesCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["destinationPath"] = typing.cast(ContainerFilesCallbackParameters, _container_files_callback)["destination_path"]
+                rpc_args["callback"] = client.register_callback(typing.cast(ContainerFilesCallbackParameters, _container_files_callback)["callback"])
+                rpc_args["options"] = typing.cast(ContainerFilesCallbackParameters, _container_files_callback).get("options")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerFilesCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'container_files_callback'. Expected: (str, Callable[[ContainerFileSystemCallbackContext, CancellationToken], Iterable[ContainerFileSystemItem]]) or ContainerFilesCallbackParameters")
         if _dockerfile_builder := kwargs.pop("dockerfile_builder", None):
             if _validate_tuple_types(_dockerfile_builder, (str, typing.Callable[[DockerfileBuilderCallbackContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9026,6 +10145,13 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withoutHttpsCertificate', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'without_https_certificate'. Expected: Literal[True]")
+        if _https_certificate_config := kwargs.pop("https_certificate_config", None):
+            if _validate_type(_https_certificate_config, typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None], _https_certificate_config))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsCertificateConfiguration', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'https_certificate_config'. Expected: Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]")
         if _compute_env := kwargs.pop("compute_env", None):
             if _validate_type(_compute_env, AbstractComputeEnvironmentResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9154,6 +10280,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     certificate_trust_scope: CertificateTrustScope
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
+    https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
     compute_env: AbstractComputeEnvironmentResource
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
@@ -9574,6 +10701,17 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting/withoutHttpsCertificate',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_https_certificate_config(self, callback: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]) -> typing.Self:
+        """Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -10005,6 +11143,13 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withoutHttpsCertificate', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'without_https_certificate'. Expected: Literal[True]")
+        if _https_certificate_config := kwargs.pop("https_certificate_config", None):
+            if _validate_type(_https_certificate_config, typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None], _https_certificate_config))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsCertificateConfiguration', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'https_certificate_config'. Expected: Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]")
         if _compute_env := kwargs.pop("compute_env", None):
             if _validate_type(_compute_env, AbstractComputeEnvironmentResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10140,6 +11285,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     certificate_trust_scope: CertificateTrustScope
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
+    https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
     compute_env: AbstractComputeEnvironmentResource
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
@@ -10552,6 +11698,17 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_https_certificate_config(self, callback: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]) -> typing.Self:
+        """Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_compute_env(self, compute_env_resource: AbstractComputeEnvironmentResource) -> typing.Self:
         """Configures the compute environment for the compute resource."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -10957,6 +12114,13 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withoutHttpsCertificate', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'without_https_certificate'. Expected: Literal[True]")
+        if _https_certificate_config := kwargs.pop("https_certificate_config", None):
+            if _validate_type(_https_certificate_config, typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None], _https_certificate_config))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsCertificateConfiguration', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'https_certificate_config'. Expected: Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]")
         if _compute_env := kwargs.pop("compute_env", None):
             if _validate_type(_compute_env, AbstractComputeEnvironmentResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11680,6 +12844,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedAp
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder", AbstractExecutionConfigurationBuilder)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult", AbstractExecutionConfigurationResult)
 _register_handle_wrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", AbstractHostEnvironment)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.IInteractionService", AbstractInteractionService)
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger", AbstractLogger)
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory", AbstractLoggerFactory)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep", AbstractReportingStep)
@@ -11694,6 +12859,9 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeS
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", CommandLineArgsCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor", CommandLineArgsEditor)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", ConnectionStringAvailableEvent)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext", ContainerBuildOptionsCallbackContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext", ContainerFileSystemCallbackContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem", ContainerFileSystemItem)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions", ContainerImagePushOptions)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext", ContainerImagePushOptionsCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference", ContainerImageReference)
@@ -11715,9 +12883,15 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Environ
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", EventingSubscriberRegistrationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", ExecuteCommandContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext", HttpCommandPrepareRequestContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext", HttpsCertificateConfigurationCallbackAnnotationContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext", HttpsEndpointUpdateCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", InitializeResourceEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", InputsDialogValidationContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult", InputsInteractionResult)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder", InteractionInputBuilder)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", InteractionInputCollection)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext", InteractionInputLoadContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput", InteractionLoadingInput)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", LogFacade)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", PipelineConfigurationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext", PipelineContext)
@@ -11728,6 +12902,8 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFa
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary", PipelineSummary)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions", ProjectResourceOptions)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", ReferenceExpressionBuilder)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext", RequiredCommandValidationContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult", RequiredCommandValidationResult)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", ResourceCommandService)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent", ResourceEndpointsAllocatedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", ResourceLoggerService)

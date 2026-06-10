@@ -194,17 +194,15 @@ internal sealed class AspireVersionCheck(
 
     private string? TryReadIdentityChannel()
     {
-        try
+        if (identityChannelReader.TryReadChannel(out var channel, out var error))
         {
-            return identityChannelReader.ReadChannel();
+            return channel;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // Identity channel is informational; a misconfigured dev build
-            // (no AspireCliChannel assembly metadata) must not break doctor.
-            logger.LogDebug(ex, "Could not read identity channel for doctor output.");
-            return null;
-        }
+
+        // Identity channel is informational; a misconfigured dev build
+        // (no AspireCliChannel assembly metadata) must not break doctor.
+        logger.LogDebug("Could not read identity channel for doctor output: {Error}", error);
+        return null;
     }
 
     private async Task<EnvironmentCheckResult?> GetAppHostVersionCheckAsync(CancellationToken cancellationToken)

@@ -8,7 +8,7 @@ namespace Infrastructure.Tests;
 
 public sealed class NpmCliPackageTests
 {
-    private readonly string _repoRoot = FindRepoRoot();
+    private readonly string _repoRoot = RepoRoot.Path;
 
     [Fact]
     public async Task LauncherDetectsMuslArm64AndThrowsUnsupported()
@@ -295,22 +295,5 @@ public sealed class NpmCliPackageTests
         Assert.True(
             matchingRules.Length == 1,
             $"Expected exactly one {elementName} for '{include}' using '{certificateName}' in the AspireCliNpmPackage signing scope, but found {matchingRules.Length}.");
-    }
-
-    private static string FindRepoRoot()
-    {
-        string? current = AppContext.BaseDirectory;
-
-        while (current is not null)
-        {
-            if (File.Exists(Path.Combine(current, "Aspire.slnx")))
-            {
-                return current;
-            }
-
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not find repository root containing Aspire.slnx");
     }
 }
