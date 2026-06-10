@@ -55,25 +55,18 @@ public class KubernetesServiceTests
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
 
-        // Simulate DCP having flushed only the first part of the kubeconfig. The content is cut off mid-way
-        // through a double-quoted scalar, which is a faithful "half-written file" and deterministically fails
-        // YAML parsing. The production read pipeline handles that (KubeConfigException/YamlException/IOException)
-        // and retries instead of caching a broken client.
-        File.WriteAllText(kubeconfigPath, """
-            apiVersion: v1
-            kind: Config
-            clusters:
-            - name: dcp
-              cluster:
-                server: "http://127.0.0.1
-            """);
+        // Simulate DCP having flushed only the first part of the kubeconfig
+        WritePartialKubeconfig(kubeconfigPath);
 
         var listTask = service.ListAsync<Container>(cancellationToken: cts.Token);
 
+        // Give the read pipeline time to observe and retry the partial file before we finish writing it.
         await Task.Delay(300, cts.Token);
 
         await using var server = await TestDcpApiServer.StartAsync(cts.Token);
-        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        // Finish the write by appending the remainder onto the same file. In-flight DCP calls will now succeed.
+        CompleteKubeconfig(kubeconfigPath, server.Port);
 
         var result = await listTask;
         Assert.Empty(result);
@@ -82,24 +75,34 @@ public class KubernetesServiceTests
     private static (KubernetesService Service, string KubeconfigPath, IDisposable FileSystem) CreateService()
     {
         var configuration = new ConfigurationBuilder().Build();
-        var fileSystem = new FileSystemService(configuration);
-        var locations = new Locations(fileSystem);
 
-        var dcpOptions = Options.Create(new DcpOptions
+        // Decouple the kubeconfig location from the production FileSystemService
+        var fileSystem = new TestFileSystemService();
+        try
         {
-            // Poll quickly so the kubeconfig file-wait/read retries react promptly in tests.
-            KubernetesConfigReadRetryIntervalMilliseconds = 50,
-            KubernetesConfigReadRetryCount = 300,
-        });
+            var locations = new Locations(fileSystem);
 
-        var service = new KubernetesService(NullLogger<KubernetesService>.Instance, dcpOptions, locations, configuration)
+            var dcpOptions = Options.Create(new DcpOptions
+            {
+                // Poll quickly so the kubeconfig file-wait/read retries react promptly in tests.
+                KubernetesConfigReadRetryIntervalMilliseconds = 50,
+                KubernetesConfigReadRetryCount = 300,
+            });
+
+            var service = new KubernetesService(NullLogger<KubernetesService>.Instance, dcpOptions, locations, configuration)
+            {
+                // Generous enough that the test can flip the kubeconfig before the retry budget is exhausted.
+                MaxRetryDuration = TimeSpan.FromSeconds(30),
+            };
+
+            return (service, locations.DcpKubeconfigPath, fileSystem);
+        }
+        catch
         {
-            // Generous enough that the test can flip the kubeconfig before the retry budget is exhausted.
-            MaxRetryDuration = TimeSpan.FromSeconds(30),
-        };
-
-        // Computing the path also creates the (real) temp session directory the kubeconfig lives in.
-        return (service, locations.DcpKubeconfigPath, fileSystem);
+            // Don't orphan the temp directory if wiring up the service fails before the test takes ownership.
+            fileSystem.Dispose();
+            throw;
+        }
     }
 
     private static void WriteKubeconfig(string path, int port)
@@ -130,6 +133,103 @@ public class KubernetesServiceTests
         var tempPath = path + ".tmp";
         File.WriteAllText(tempPath, content);
         File.Move(tempPath, path, overwrite: true);
+    }
+
+    private static void WritePartialKubeconfig(string path)
+    {
+        // A genuine prefix of the final kubeconfig that stops in the middle of the double-quoted server value.
+        // The unterminated quote makes this deterministically fail YAML parsing, which models DCP having only
+        // flushed part of the file. There is intentionally no trailing newline, so appending the remainder in
+        // CompleteKubeconfig closes the quote and yields exactly-valid YAML.
+        File.WriteAllText(path, """
+            apiVersion: v1
+            kind: Config
+            clusters:
+            - name: dcp
+              cluster:
+                server: "http://127.0.0.1:
+            """);
+    }
+
+    private static void CompleteKubeconfig(string path, int port)
+    {
+        // Append (do not rewrite) the remainder of the kubeconfig that WritePartialKubeconfig left unfinished.
+        // The remainder begins by closing the open server scalar ({port}") so the combined file parses as a
+        // valid kubeconfig pointing at the loopback fake server with no auth.
+        File.AppendAllText(path, string.Format(CultureInfo.InvariantCulture, """
+            {0}"
+            contexts:
+            - name: dcp
+              context:
+                cluster: dcp
+                user: dcp
+            current-context: dcp
+            users:
+            - name: dcp
+              user:
+                token: dcp-test-token
+            """, port));
+    }
+
+    // A self-contained IFileSystemService for these tests. It hands Locations a single, uniquely-suffixed temp
+    // directory that the test owns, decoupling the kubeconfig location from the production FileSystemService so
+    // concurrent runs on the same machine never share a path. Every file a test writes lives under this root, so
+    // disposing the fake (always, via `using`) removes the kubeconfig and any partial/temp files regardless of the
+    // test outcome.
+    private sealed class TestFileSystemService : IFileSystemService, IDisposable
+    {
+        private readonly TestTempFileSystemService _tempDirectory = new();
+
+        public ITempFileSystemService TempDirectory => _tempDirectory;
+
+        public void Dispose() => _tempDirectory.Dispose();
+
+        private sealed class TestTempFileSystemService : ITempFileSystemService, IDisposable
+        {
+            private string? _root;
+
+            public TempDirectory CreateTempSubdirectory(string? prefix = null)
+            {
+                // Created lazily (Locations calls this exactly once) so the directory can't be orphaned if the
+                // test fails to take ownership, and with a random suffix so each test instance is isolated.
+                _root ??= Directory.CreateTempSubdirectory("test-kubeconfig-").FullName;
+                return new TestTempDirectory(_root);
+            }
+
+            public TempFile CreateTempFile(string? fileName = null)
+                => throw new NotSupportedException("The kubeconfig tests only allocate a temp subdirectory.");
+
+            public void Dispose()
+            {
+                if (_root is null)
+                {
+                    return;
+                }
+
+                try
+                {
+                    if (Directory.Exists(_root))
+                    {
+                        Directory.Delete(_root, recursive: true);
+                    }
+                }
+                catch
+                {
+                    // Best-effort cleanup; a teardown failure must never mask the test result.
+                }
+            }
+        }
+
+        // The owning TestTempFileSystemService deletes the root recursively on Dispose, 
+        // so this handle has nothing of its own to release.
+        private sealed class TestTempDirectory(string path) : TempDirectory
+        {
+            public override string Path => path;
+
+            public override void Dispose()
+            {
+            }
+        }
     }
 
     // A minimal stand-in for the DCP API server. It answers every request with an empty Kubernetes list, which
