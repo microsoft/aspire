@@ -123,7 +123,6 @@ interface GlobalDescribeStream {
 export class AppHostDataRepository {
     private static readonly _processShutdownGracePeriodMs = 5000;
     private static readonly _appHostStopRefreshDelayMs = 400;
-    private static readonly _resumePsFollowPollDelayMs = 50;
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
@@ -164,7 +163,7 @@ export class AppHostDataRepository {
     private _supportsPsFollow = true;
     private _fetchInProgress = false;
     private _postStopRefreshTimer: ReturnType<typeof setTimeout> | undefined;
-    private _resumePsFollowTimer: ReturnType<typeof setTimeout> | undefined;
+    private _resumePsFollowCallbacks: Array<() => void> = [];
 
     // ── Global mode per-AppHost describe streams ──
     // In global mode `ps` only returns AppHost-level data, so to populate
@@ -398,10 +397,7 @@ export class AppHostDataRepository {
             clearTimeout(this._postStopRefreshTimer);
             this._postStopRefreshTimer = undefined;
         }
-        if (this._resumePsFollowTimer) {
-            clearTimeout(this._resumePsFollowTimer);
-            this._resumePsFollowTimer = undefined;
-        }
+        this._resumePsFollowCallbacks = [];
         this._stopPolling();
         this._stopDescribeWatch();
         this._stopAllGlobalDescribes();
@@ -461,8 +457,7 @@ export class AppHostDataRepository {
         if (this._shouldPoll) {
             const pollingActive = this._pollingInterval !== undefined
                 || this._psProcesses.size > 0
-                || this._fetchInProgress
-                || this._resumePsFollowTimer !== undefined;
+                || this._fetchInProgress;
             if (refreshBeforeFollowOnResume && !pollingActive && this._supportsPsFollow) {
                 this._restartPsWithAuthoritativeSnapshot();
             } else {
@@ -1132,10 +1127,7 @@ export class AppHostDataRepository {
     private _stopPolling(): void {
         this._psFetchVersion++;
         this._fetchInProgress = false;
-        if (this._resumePsFollowTimer) {
-            clearTimeout(this._resumePsFollowTimer);
-            this._resumePsFollowTimer = undefined;
-        }
+        this._resumePsFollowCallbacks = [];
         if (this._pollingInterval) {
             clearInterval(this._pollingInterval);
             this._pollingInterval = undefined;
@@ -1261,6 +1253,7 @@ export class AppHostDataRepository {
                 this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
             }
             this._fetchInProgress = false;
+            this._notifyPsSnapshotCompleted();
         });
     }
 
@@ -1271,35 +1264,40 @@ export class AppHostDataRepository {
         }
 
         this._fetchAppHosts();
-        this._scheduleFollowResumeAfterSnapshot();
+        this._resumePsFollowAfterSnapshot();
     }
 
-    private _scheduleFollowResumeAfterSnapshot(): void {
+    private _resumePsFollowAfterSnapshot(): void {
         if (!this._supportsPsFollow) {
             return;
         }
 
-        if (this._resumePsFollowTimer) {
-            clearTimeout(this._resumePsFollowTimer);
-            this._resumePsFollowTimer = undefined;
-        }
-
-        const resumeWhenReady = () => {
+        const resume = () => {
             if (this._disposed || !this._shouldPoll) {
-                return;
-            }
-
-            if (this._fetchInProgress) {
-                this._resumePsFollowTimer = setTimeout(resumeWhenReady, AppHostDataRepository._resumePsFollowPollDelayMs);
-                (this._resumePsFollowTimer as { unref?: () => void }).unref?.();
                 return;
             }
 
             this._startPsPolling();
         };
 
-        this._resumePsFollowTimer = setTimeout(resumeWhenReady, 0);
-        (this._resumePsFollowTimer as { unref?: () => void }).unref?.();
+        if (this._fetchInProgress) {
+            this._resumePsFollowCallbacks.push(resume);
+            return;
+        }
+
+        resume();
+    }
+
+    private _notifyPsSnapshotCompleted(): void {
+        if (this._fetchInProgress || this._resumePsFollowCallbacks.length === 0) {
+            return;
+        }
+
+        const callbacks = this._resumePsFollowCallbacks;
+        this._resumePsFollowCallbacks = [];
+        for (const callback of callbacks) {
+            callback();
+        }
     }
 
     private _isCurrentPsFetch(fetchVersion: number): boolean {
@@ -1515,6 +1513,7 @@ export class AppHostDataRepository {
                 extensionLogOutputChannel.warn(errorMessage);
                 this._setPsError(errorMessage);
                 this._fetchInProgress = false;
+                this._notifyPsSnapshotCompleted();
                 this._clearLoadingForCurrentView();
             }
             return;
