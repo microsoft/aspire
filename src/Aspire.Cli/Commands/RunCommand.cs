@@ -78,9 +78,8 @@ internal sealed class RunCommand : BaseCommand
 
     private static readonly TimeSpan s_appHostStartupCancellationTimeout = TimeSpan.FromSeconds(5);
 
-    // Graceful shutdown budget for `aspire run`. DCP gets a cooperative window to drain DCP
+    // Graceful shutdown budget for `aspire run`. DCP gets a cooperative window to drain
     // resources before the central drain budget arms and ladders escalate to forceful kill.
-    // See plan §10 for the budget rationale.
     internal static readonly TimeSpan s_gracefulShutdownBudget = TimeSpan.FromSeconds(5);
 
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
