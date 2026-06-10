@@ -234,6 +234,50 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('runResourceCommand uses one-shot CLI runner', async () => {
+        const resourceProcess = new TestChildProcess();
+        spawnStub.returns(resourceProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const runPromise = repository.runResourceCommand('api', ' /workspace/AppHost.csproj ', 'stop');
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['resource', 'api', 'stop', '--apphost', '/workspace/AppHost.csproj']);
+            assert.strictEqual(spawnStub.firstCall.args[3].noExtensionVariables, true);
+
+            resourceProcess.markExited(0);
+            spawnStub.firstCall.args[3].exitCallback(0);
+
+            await runPromise;
+        } finally {
+            repository.dispose();
+        }
+    });
+
+    test('runResourceCommand rejects failures with CLI diagnostics', async () => {
+        const resourceProcess = new TestChildProcess();
+        spawnStub.returns(resourceProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const runPromise = repository.runResourceCommand('api', '/workspace/AppHost.csproj', 'start');
+            await waitForMicrotasks();
+
+            spawnStub.firstCall.args[3].stderrCallback('resource is disabled');
+            resourceProcess.markExited(1);
+            spawnStub.firstCall.args[3].exitCallback(1);
+
+            await assert.rejects(runPromise, (error: unknown) => {
+                assert.ok(error instanceof AspireCliFailedError);
+                assert.match(error.message, /resource is disabled/);
+                return true;
+            });
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('fetchAppHostsOnce rejects describe failure even after partial resource output', async () => {
         const psProcess = new TestChildProcess();
         const describeProcess = new TestChildProcess();

@@ -6,7 +6,8 @@ import * as vscode from 'vscode';
 import WebSocket from 'ws';
 import AspireDcpServer from '../dcp/AspireDcpServer';
 import waitForExpect from 'wait-for-expect';
-import { SessionTerminatedNotification } from '../dcp/types';
+import { AspireResourceDebugSession, SessionTerminatedNotification } from '../dcp/types';
+import { extensionLogOutputChannel } from '../utils/logging';
 
 suite('Aspire DCP server', () => {
     let dcpServer: AspireDcpServer;
@@ -315,7 +316,45 @@ suite('Aspire DCP server', () => {
 
         assert.strictEqual(pendingNotifications.has(dcpId), false);
     });
+
+    test('stop run session attempts remaining debug sessions after one stop fails', async () => {
+        dcpServer = await AspireDcpServer.create(() => null);
+        const firstStop = sinon.stub().resolves();
+        const failingStop = sinon.stub().rejects(new Error('stop failed'));
+        const finalStop = sinon.stub().resolves();
+        const runId = 'run-with-multiple-debug-sessions';
+        const serverInternals = dcpServer as unknown as {
+            runsBySession: Map<string, AspireResourceDebugSession[]>;
+            testRunSessionLeaseIdByRunId: Map<string, string>;
+            stopRunSession(runId: string): Promise<void>;
+        };
+
+        serverInternals.runsBySession.set(runId, [
+            createResourceDebugSession('first-resource', firstStop),
+            createResourceDebugSession('failing-resource', failingStop),
+            createResourceDebugSession('final-resource', finalStop),
+        ]);
+        serverInternals.testRunSessionLeaseIdByRunId.set(runId, 'lease-id');
+        const logErrorStub = sinon.stub(extensionLogOutputChannel, 'error');
+
+        await serverInternals.stopRunSession(runId);
+
+        assert.strictEqual(firstStop.calledOnce, true);
+        assert.strictEqual(failingStop.calledOnce, true);
+        assert.strictEqual(finalStop.calledOnce, true);
+        assert.strictEqual(serverInternals.runsBySession.has(runId), false);
+        assert.strictEqual(serverInternals.testRunSessionLeaseIdByRunId.has(runId), false);
+        assert.strictEqual(logErrorStub.calledWith(sinon.match('Error stopping debug session failing-resource')), true);
+    });
 });
+
+function createResourceDebugSession(id: string, stopSession: sinon.SinonStub): AspireResourceDebugSession {
+    return {
+        id,
+        session: {} as vscode.DebugSession,
+        stopSession,
+    };
+}
 
 async function requestDcpServer(
     server: AspireDcpServer,

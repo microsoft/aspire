@@ -790,7 +790,11 @@ export default class AspireDcpServer {
         const baseDebugSessions = this.runsBySession.get(runId);
         try {
             for (const debugSession of baseDebugSessions || []) {
-                await debugSession.stopSession();
+                try {
+                    await debugSession.stopSession();
+                } catch (err) {
+                    extensionLogOutputChannel.error(`Error stopping debug session ${debugSession.id} for run session ${runId}: ${err}`);
+                }
             }
         } finally {
             this.runsBySession.delete(runId);

@@ -40,7 +40,6 @@ import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser'
 import { readGitCommitSha } from './utils/versionInfo';
 import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgumentsLoader';
-import { spawnCliProcess } from './debugger/languages/cli';
 import { AppHostDisplayInfo, ResourceCommandJson, ResourceJson, isMatchingAppHostPath } from './views/AppHostDataRepository';
 import { AppHostDiscoveryService } from './utils/appHostDiscovery';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from './services/AppHostLaunchService';
@@ -467,10 +466,10 @@ function createExtensionApi(
       return appHosts.map(appHost => cloneAppHostState(appHost, false));
     },
     async stopResource(resourceName: string, appHostPath: string): Promise<void> {
-      return executePublicResourceCommand(terminalProvider, resourceName, appHostPath, 'stop');
+      return dataRepository.runResourceCommand(resourceName, appHostPath, 'stop');
     },
     async startResource(resourceName: string, appHostPath: string): Promise<void> {
-      return executePublicResourceCommand(terminalProvider, resourceName, appHostPath, 'start');
+      return dataRepository.runResourceCommand(resourceName, appHostPath, 'start');
     },
     acquireTestRunSession: (options) => dcpServer.acquireTestRunSession(options),
     releaseTestRunSession: (id) => dcpServer.releaseTestRunSession(id),
@@ -1174,48 +1173,6 @@ function cloneDebugConsoleOutputEvent(event: AspireDebugConsoleOutputEvent, sequ
 
 function getDashboardUrl(dataRepository: AppHostDataRepository, appHostPath?: string): string | undefined {
   return sanitizeDashboardUrl(getSensitiveDashboardUrl(dataRepository, appHostPath));
-}
-
-async function executePublicResourceCommand(terminalProvider: AspireTerminalProvider, resourceName: string, appHostPath: string, commandName: 'start' | 'stop'): Promise<void> {
-  const trimmedAppHostPath = appHostPath.trim();
-  if (!trimmedAppHostPath || !path.isAbsolute(trimmedAppHostPath)) {
-    throw new Error('appHostPath must be a non-empty absolute path');
-  }
-
-  const cliPath = await terminalProvider.getAspireCliExecutablePath();
-  const args = ['resource', resourceName, commandName, '--apphost', trimmedAppHostPath];
-  return new Promise<void>((resolve, reject) => {
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-
-    spawnCliProcess(terminalProvider, cliPath, args, {
-      noExtensionVariables: true,
-      stdoutCallback: (data) => { stdout += data; },
-      stderrCallback: (data) => { stderr += data; },
-      exitCallback: (code) => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-        if (code === 0) {
-          resolve();
-        } else {
-          const output = (stderr || stdout).trim();
-          reject(new Error(`aspire resource ${commandName} exited with code ${code}${output ? `: ${output}` : ''}`));
-        }
-      },
-      errorCallback: (error) => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-        reject(error);
-      },
-    });
-  });
 }
 
 function getSensitiveDashboardUrl(dataRepository: AppHostDataRepository, appHostPath?: string): string | undefined {

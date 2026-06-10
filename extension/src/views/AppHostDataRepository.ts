@@ -387,6 +387,15 @@ export class AppHostDataRepository {
         })));
     }
 
+    async runResourceCommand(resourceName: string, appHostPath: string, commandName: 'start' | 'stop'): Promise<void> {
+        const trimmedAppHostPath = appHostPath.trim();
+        if (!trimmedAppHostPath || !path.isAbsolute(trimmedAppHostPath)) {
+            throw new Error('appHostPath must be a non-empty absolute path');
+        }
+
+        await this._runCliCommand(`aspire resource ${commandName}`, ['resource', resourceName, commandName, '--apphost', trimmedAppHostPath]);
+    }
+
     dispose(): void {
         this._disposed = true;
         this._stopPolling();
@@ -1038,11 +1047,21 @@ export class AppHostDataRepository {
     }
 
     private async _runCliJson<T>(command: string, args: string[]): Promise<T> {
+        const { stdout } = await this._runCliCommand(command, args);
+
+        try {
+            return JSON.parse(stdout);
+        } catch (error) {
+            throw new AspireCliParseError(command, stdout, error);
+        }
+    }
+
+    private async _runCliCommand(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath().catch(error => {
             throw new AspireCliNotInstalledError(String(error));
         });
 
-        return new Promise<T>((resolve, reject) => {
+        return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
             let stdout = '';
             let stderr = '';
             let settled = false;
@@ -1082,11 +1101,7 @@ export class AppHostDataRepository {
                         return;
                     }
 
-                    try {
-                        settle(() => resolve(JSON.parse(stdout)));
-                    } catch (error) {
-                        settle(() => reject(new AspireCliParseError(command, stdout, error)));
-                    }
+                    settle(() => resolve({ stdout, stderr }));
                 },
                 errorCallback: (error) => {
                     settle(() => reject(new AspireCliNotInstalledError(error.message)));
