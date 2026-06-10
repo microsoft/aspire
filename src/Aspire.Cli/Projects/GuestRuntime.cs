@@ -188,6 +188,7 @@ internal sealed class GuestRuntime
     /// <param name="launcher">Strategy for launching the process.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="noBuild">Whether to skip pre-execution build/check commands.</param>
+    /// <param name="afterAppHostLaunchedAsync">Callback invoked after the AppHost execute command has launched.</param>
     /// <returns>A tuple of the exit code and captured output.</returns>
     public async Task<(int ExitCode, OutputCollector? Output)> PublishAsync(
         FileInfo appHostFile,
@@ -196,7 +197,8 @@ internal sealed class GuestRuntime
         string[]? publishArgs,
         IGuestProcessLauncher launcher,
         CancellationToken cancellationToken,
-        bool noBuild = false)
+        bool noBuild = false,
+        Func<Task>? afterAppHostLaunchedAsync = null)
     {
         var commandSpec = _spec.PublishExecute ?? _spec.Execute;
 
@@ -213,7 +215,7 @@ internal sealed class GuestRuntime
         var phase = _spec.PublishExecute is not null
             ? ProfilingTelemetry.Values.GuestCommandPhasePublishExecute
             : ProfilingTelemetry.Values.GuestCommandPhaseExecute;
-        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, publishArgs, phase, launcher, cancellationToken);
+        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, publishArgs, phase, launcher, cancellationToken, afterLaunchAsync: afterAppHostLaunchedAsync);
     }
 
     private async Task<(int ExitCode, OutputCollector? Output)> RunPreExecuteCommandsAsync(

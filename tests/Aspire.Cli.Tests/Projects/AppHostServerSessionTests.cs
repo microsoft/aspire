@@ -112,6 +112,27 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout()
+    {
+        var project = new RecordingAppHostServerProject();
+
+        await using var session = AppHostServerSession.Start(
+            project,
+            environmentVariables: null,
+            debug: false,
+            NullLogger<AppHostServerSession>.Instance);
+
+        var stopwatch = Stopwatch.StartNew();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => session.GetRpcClientAsync(TestContext.Current.CancellationToken));
+        stopwatch.Stop();
+
+        Assert.Contains("AppHost server process exited before the RPC connection could be established", exception.Message);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
+            $"Expected RPC connection to fail promptly after the server process exited, but it took {stopwatch.Elapsed}.");
+    }
+
+    [Fact]
     public async Task CreateAsync_DisposesProjectWhenPrepareFails()
     {
         var project = new FakeFailingAppHostServerProject(Directory.GetCurrentDirectory());
