@@ -616,7 +616,14 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     activity.AddKubeconfigFileDetected();
 
                     var buildConfigStopwatch = Stopwatch.StartNew();
-                    var config = await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(kubeconfig: fileInfo, useRelativePaths: false).ConfigureAwait(false);
+                    // Open the file with FileShare.ReadWrite | FileShare.Delete so we do not interfere with DCP
+                    // if we happen to open the file while DCP is still writing to it.
+                    var kubeconfigStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                    KubernetesClientConfiguration config;
+                    await using (kubeconfigStream.ConfigureAwait(false))
+                    {
+                        config = await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(kubeconfigStream).ConfigureAwait(false);
+                    }
                     buildConfigStopwatch.Stop();
                     readStopwatch.Stop();
 
