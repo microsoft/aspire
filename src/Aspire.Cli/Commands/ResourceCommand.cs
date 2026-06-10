@@ -82,7 +82,7 @@ internal sealed class ResourceCommand : BaseCommand
     {
         _backchannelMonitor = backchannelMonitor;
         _projectLocator = projectLocator;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
         _logger = logger;
 
         Arguments.Add(s_resourceArgument);

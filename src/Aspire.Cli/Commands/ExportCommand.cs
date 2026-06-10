@@ -61,7 +61,7 @@ internal sealed class ExportCommand : BaseCommand
         _httpClientFactory = httpClientFactory;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
