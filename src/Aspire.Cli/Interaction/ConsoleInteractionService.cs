@@ -347,7 +347,7 @@ internal class ConsoleInteractionService : IInteractionService
         return result;
     }
 
-    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
@@ -356,10 +356,18 @@ internal class ConsoleInteractionService : IInteractionService
         // Materialize once to avoid re-enumerating the choices enumerable.
         var choicesList = choices as IReadOnlyList<T> ?? choices.ToList();
 
+        // The non-interactive validation set defaults to the visible choices, but callers
+        // can pass a narrower bindingChoices subset when some visible items should never
+        // be addressable from the command-line option (e.g., a UX-only "configure MCP
+        // server" entry that lives in the same multi-select prompt as the real catalog).
+        var bindingChoicesList = bindingChoices is null
+            ? choicesList
+            : bindingChoices as IReadOnlyList<T> ?? bindingChoices.ToList();
+
         var (wasProvided, value, defaultValue) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
         {
-            return MatchChoicesOrThrow(value, binding!, choicesList, choiceFormatter);
+            return MatchChoicesOrThrow(value, binding!, bindingChoicesList, choiceFormatter);
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -368,7 +376,7 @@ internal class ConsoleInteractionService : IInteractionService
             {
                 if (binding.NonInteractiveDefaultValue != null)
                 {
-                    return MatchChoicesOrThrow(binding.NonInteractiveDefaultValue, binding, choicesList, choiceFormatter);
+                    return MatchChoicesOrThrow(binding.NonInteractiveDefaultValue, binding, bindingChoicesList, choiceFormatter);
                 }
 
                 ThrowNonInteractiveError(binding.SymbolDisplayName);
@@ -792,7 +800,11 @@ internal class ConsoleInteractionService : IInteractionService
     internal void ThrowNonInteractiveInvalidValue<T>(string value, string symbolDisplayName, IEnumerable<T> choices, Func<T, string> choiceFormatter) where T : notnull
     {
         DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, value, symbolDisplayName));
-        var availableChoices = string.Join(", ", choices.Select(c => choiceFormatter(c)));
+        // Strip Spectre markup from each formatted choice so non-interactive callers see plain
+        // text. Some choice formatters intentionally include [bold]/[dim]/etc. tokens for the
+        // interactive multi-select renderer; those tokens would otherwise leak verbatim through
+        // DisplaySubtleMessage and confuse anyone diagnosing a typoed --option value.
+        var availableChoices = string.Join(", ", choices.Select(c => choiceFormatter(c).RemoveSpectreFormatting()));
         DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, availableChoices));
         throw new NonInteractiveException(symbolDisplayName);
     }

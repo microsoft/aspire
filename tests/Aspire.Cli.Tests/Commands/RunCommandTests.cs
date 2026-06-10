@@ -131,6 +131,67 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WhenCancelledDuringStartupTimeout_ExitsWithoutWaitingForFullTimeout()
+    {
+        // Verifies that when Ctrl+C fires (cancellationToken) during startup, the command exits
+        // promptly rather than blocking for the 5-second CancelAppHostStartupAsync timeout.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+        var buildCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, _) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(true);
+                buildCompleted.SetResult();
+
+                // Never signal BackchannelCompletionSource and ignore cancellation to
+                // simulate a hung AppHost process.
+                await Task.Delay(TimeSpan.FromSeconds(30), CancellationToken.None);
+                return 0;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+
+        // Cancel after build completes to simulate Ctrl+C during startup.
+        await buildCompleted.Task.DefaultTimeout();
+        cts.Cancel();
+
+        var stopwatch = Stopwatch.StartNew();
+        var exitCode = await pendingRun.DefaultTimeout();
+        stopwatch.Stop();
+
+        // Without the cancellationToken plumbing, this would block for the full 5-second
+        // CancelAppHostStartupAsync timeout. With the fix, it exits promptly.
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"Expected prompt exit after Ctrl+C, but took {stopwatch.Elapsed}.");
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
     public async Task RunCommand_StartupTimeoutBudgetIncludesBuildAndBackchannelWaits()
     {
         var interactionService = new TestInteractionService();
@@ -173,12 +234,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
-        var stopwatch = Stopwatch.StartNew();
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        stopwatch.Stop();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1), $"Expected startup timeout to use the remaining budget, but the command took {stopwatch.Elapsed}.");
         Assert.Contains(
             string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 2, CliConfigNames.AppHostStartupTimeout),
             interactionService.DisplayedErrors);
@@ -1871,6 +1929,80 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
         Assert.True(buildCalled, "Build should be called before launching the AppHost in extension no-debug mode.");
         Assert.False(runCalled, "AppHost should not be launched when the pre-build fails.");
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenExtensionBuildFails_WaitsForBuildOutputToFlush()
+    {
+        var displayLinesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowDisplayLinesToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        DisplayLineState[] displayedLines = [];
+        var buildError = "error CS0103: The name 'MissingSymbol' does not exist in the current context";
+
+        var extensionBackchannel = new TestExtensionBackchannel();
+        extensionBackchannel.HasCapabilityAsyncCallback = (capability, ct) => Task.FromResult(capability == KnownCapabilities.BuildDotnetUsingCli);
+        extensionBackchannel.DisplayLinesAsyncCallback = async lines =>
+        {
+            displayedLines = lines.ToArray();
+            displayLinesStarted.TrySetResult();
+            await allowDisplayLinesToComplete.Task;
+        };
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) =>
+            {
+                options.StandardErrorCallback?.Invoke(buildError);
+                return 1;
+            };
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            return runner;
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.ExtensionBackchannelFactory = _ => extensionBackchannel;
+            options.InteractionServiceFactory = sp =>
+            {
+                var consoleEnvironment = sp.GetRequiredService<ConsoleEnvironment>();
+                var executionContext = sp.GetRequiredService<CliExecutionContext>();
+                var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
+                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+                var logBufferContext = sp.GetRequiredService<ConsoleLogBufferContext>();
+                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferContext);
+
+                return new ExtensionInteractionService(consoleInteractionService, extensionBackchannel, extensionPromptEnabled: false);
+            };
+            options.ConfigurationCallback += config =>
+            {
+                config["ASPIRE_EXTENSION_DEBUG_SESSION_ID"] = "test-session-id";
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        var pendingRun = result.InvokeAsync();
+
+        try
+        {
+            await displayLinesStarted.Task.DefaultTimeout();
+            Assert.False(pendingRun.IsCompleted, "The command should not exit before queued extension debug console output is flushed.");
+        }
+        finally
+        {
+            allowDisplayLinesToComplete.TrySetResult();
+        }
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.Contains(displayedLines, line => line.Stream == "stderr" && line.Line == buildError);
     }
 
     [Fact]

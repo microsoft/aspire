@@ -11,7 +11,6 @@ using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // DockerfileBuilder is experimental
 #pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental
-#pragma warning disable ASPIREATS001 // AspireExportIgnore is experimental
 
 namespace Aspire.Hosting;
 
@@ -21,10 +20,6 @@ namespace Aspire.Hosting;
 [Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class BlazorGatewayExtensions
 {
-    // Derive the .NET image tag from the runtime version of the app host process.
-    // The Gateway is a file-based app compiled with the same SDK, so the major.minor
-    // version of the running host matches the required SDK/ASP.NET base images.
-    // Pre-release runtimes (preview/RC) use suffixed tags like "10.0-preview" or "11.0-rc".
     private static readonly string s_dotNetImageTag = GetDotNetImageTag();
     private const string DotNetSdkImageRepo = "mcr.microsoft.com/dotnet/sdk";
     private const string DotNetAspNetImageRepo = "mcr.microsoft.com/dotnet/aspnet";
@@ -84,7 +79,7 @@ public static class BlazorGatewayExtensions
     [AspireExportIgnore(Reason = "Open generic type parameter TProject is not ATS-compatible.")]
     public static IResourceBuilder<BlazorWasmAppResource> AddBlazorWasmProject<TProject>(
         this IDistributedApplicationBuilder builder,
-        string name)
+        [ResourceName] string name)
         where TProject : IProjectMetadata, new()
     {
         var metadata = new TProject();
@@ -201,8 +196,7 @@ public static class BlazorGatewayExtensions
         var annotation = GetOrAddGatewayAppsAnnotation(gateway.Resource);
 
         var gatewayOutputRoot = Path.Combine(
-            gateway.ApplicationBuilder.AppHostDirectory,
-            "obj", "Aspire.Hosting.Blazor", "gateways", gateway.Resource.Name);
+            GetBlazorStorePath(gateway.ApplicationBuilder), "gateways", gateway.Resource.Name);
 
         if (!annotation.IsInitialized)
         {
@@ -216,6 +210,20 @@ public static class BlazorGatewayExtensions
                 var httpGatewayEndpoint = GetEndpointIfDefined(gateway.Resource, "http");
                 var gatewayEndpoint = httpsGatewayEndpoint ?? httpGatewayEndpoint
                     ?? throw new InvalidOperationException($"The gateway '{gateway.Resource.Name}' must define an HTTP or HTTPS endpoint.");
+
+                // Resolve the HTTP OTLP endpoint for WASM client proxying.
+                // WASM clients use HTTP/protobuf (not gRPC), so we need the HTTP endpoint.
+                // First try to resolve from the dashboard resource model (handles randomized ports
+                // and isolated mode). Fall back to configuration for cases where the dashboard
+                // resource isn't in the model (e.g. external dashboard).
+                var httpOtlpEndpointUrl = ResolveHttpOtlpEndpointUrl(context, gateway.ApplicationBuilder.Configuration);
+
+                if (httpOtlpEndpointUrl is null && registeredApps.Any(a => a.ProxyBlazorTelemetry))
+                {
+                    context.Logger.LogWarning(
+                        "OTLP telemetry proxying was requested but no dashboard HTTP endpoint could be resolved. " +
+                        "WASM client telemetry will not be forwarded.");
+                }
 
                 if (context.ExecutionContext.IsPublishMode)
                 {
@@ -247,15 +255,7 @@ public static class BlazorGatewayExtensions
                 await EndpointsManifestTransformer.MergeRuntimeManifestsAsync(manifests, mergedRuntimePath, context.Logger, context.CancellationToken).ConfigureAwait(false);
                 context.EnvironmentVariables["staticWebAssets"] = mergedRuntimePath;
 
-                // Resolve the HTTP OTLP endpoint for WASM client proxying.
-                // WASM clients use HTTP/protobuf (not gRPC), so we need the HTTP endpoint.
-                // First try to resolve from the dashboard resource model (handles randomized ports
-                // and isolated mode). Fall back to configuration for cases where the dashboard
-                // resource isn't in the model (e.g. external dashboard).
-                var httpOtlpEndpointUrl = ResolveHttpOtlpEndpointUrl(context, gateway.ApplicationBuilder.Configuration);
-                var resourceLoggerService = context.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
-
-                GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint, httpOtlpEndpointUrl, resourceLoggerService);
+                GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint, httpOtlpEndpointUrl);
             });
         }
 
@@ -413,14 +413,14 @@ public static class BlazorGatewayExtensions
         var relativeProjectPath = Path.GetRelativePath(
             project.SolutionRoot, wasmApp.Resource.ProjectPath).Replace('\\', '/');
 
-        // Copy the PrefixEndpoints.cs script into a project-local build folder so it's
-        // available inside the Docker build context without clobbering the solution root.
+        // Copy PrefixEndpoints.cs into .aspire/scripts/ within the solution root so it's
+        // included in the Docker build context.
         var scriptSource = GetScriptPath("PrefixEndpoints.cs");
-        var scriptRelativePath = Path.Combine(project.RelativeProjectPath, "obj", "Aspire.Hosting.Blazor", "PrefixEndpoints.cs")
-            .Replace('\\', '/');
-        var scriptDest = Path.Combine(project.SolutionRoot, scriptRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        var scriptDest = Path.Combine(project.SolutionRoot, ".aspire", "scripts", "PrefixEndpoints.cs");
         Directory.CreateDirectory(Path.GetDirectoryName(scriptDest)!);
         File.Copy(scriptSource, scriptDest, overwrite: true);
+        var scriptRelativePath = Path.GetRelativePath(project.SolutionRoot, scriptDest)
+            .Replace('\\', '/');
 
         var companion = gateway.ApplicationBuilder.AddResource(
             new BlazorWasmPublishResource(publishResourceName))
@@ -464,6 +464,19 @@ public static class BlazorGatewayExtensions
         }
 
         return scriptPath;
+    }
+
+    private const string AspireStorePathKey = "Aspire:Store:Path";
+
+    /// <summary>
+    /// Gets the Blazor-specific store path under the Aspire store directory.
+    /// </summary>
+    private static string GetBlazorStorePath(IDistributedApplicationBuilder builder)
+    {
+        var storePath = builder.Configuration[AspireStorePathKey]
+            ?? builder.AppHostDirectory;
+
+        return Path.Combine(storePath, ".aspire", "blazor");
     }
 
     private static List<EndpointReferenceAnnotation> GetServiceDiscoveryReferences(IResource resource)
@@ -606,7 +619,7 @@ public static class BlazorGatewayExtensions
         DistributedApplicationModel? model;
         try
         {
-            model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+            model = context.ExecutionContext.Services.GetService<DistributedApplicationModel>();
         }
         catch (InvalidOperationException)
         {
@@ -637,30 +650,58 @@ public static class BlazorGatewayExtensions
     }
 
     /// <summary>
-    /// Resolves the Docker image tag for the .NET SDK/ASP.NET base images.
-    /// Returns "Major.Minor" for stable releases (e.g. "10.0", "11.0"),
-    /// and appends "-preview" or "-rc" for pre-release runtimes to match the
-    /// MCR tag naming convention (e.g. "10.0-preview", "11.0-rc").
+    /// Resolves the Docker image tag for .NET base images. Uses the maximum of the build-time
+    /// stamped version and the actual runtime version, with pre-release suffix when applicable.
     /// </summary>
     private static string GetDotNetImageTag()
     {
-        var tag = $"{Environment.Version.Major}.{Environment.Version.Minor}";
+        var runtimeMajor = Environment.Version.Major;
+        var runtimeMinor = Environment.Version.Minor;
 
-        // The runtime's informational version contains the full pre-release label,
-        // e.g. "10.0.0-preview.7.25352.1+..." or "11.0.0-rc.1.25400.3+...".
-        // Stable/servicing builds use "10.0.6-servicing..." which we ignore.
-        var informationalVersion = (System.Reflection.AssemblyInformationalVersionAttribute?)
-            Attribute.GetCustomAttribute(typeof(object).Assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
+        var stampedMajor = runtimeMajor;
+        var stampedMinor = runtimeMinor;
 
-        if (informationalVersion is not null)
+        var stampedValue = typeof(BlazorGatewayExtensions).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), inherit: false)
+            .OfType<System.Reflection.AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "BlazorGatewayDotNetImageTag")
+            ?.Value;
+
+        if (!string.IsNullOrEmpty(stampedValue))
         {
-            if (informationalVersion.InformationalVersion.Contains("-preview", StringComparison.OrdinalIgnoreCase))
+            var parts = stampedValue.Split('.');
+            if (parts.Length >= 2
+                && int.TryParse(parts[0], out var sMajor)
+                && int.TryParse(parts[1], out var sMinor))
             {
-                tag += "-preview";
+                stampedMajor = sMajor;
+                stampedMinor = sMinor;
             }
-            else if (informationalVersion.InformationalVersion.Contains("-rc", StringComparison.OrdinalIgnoreCase))
+        }
+
+        var major = Math.Max(runtimeMajor, stampedMajor);
+        var minor = (major == runtimeMajor && major == stampedMajor)
+            ? Math.Max(runtimeMinor, stampedMinor)
+            : (major == runtimeMajor ? runtimeMinor : stampedMinor);
+
+        var tag = $"{major}.{minor}";
+
+        // Append pre-release suffix when the runtime version won and is pre-release.
+        if (major == runtimeMajor && minor == runtimeMinor)
+        {
+            var informationalVersion = (System.Reflection.AssemblyInformationalVersionAttribute?)
+                Attribute.GetCustomAttribute(typeof(object).Assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
+
+            if (informationalVersion is not null)
             {
-                tag += "-rc";
+                if (informationalVersion.InformationalVersion.Contains("-preview", StringComparison.OrdinalIgnoreCase))
+                {
+                    tag += "-preview";
+                }
+                else if (informationalVersion.InformationalVersion.Contains("-rc", StringComparison.OrdinalIgnoreCase))
+                {
+                    tag += "-rc";
+                }
             }
         }
 

@@ -6,12 +6,25 @@
     <PackageTags>aspire integration hosting blazor webassembly gateway</PackageTags>
     <Description>Blazor WebAssembly hosting support for Aspire.</Description>
     <NoWarn>$(NoWarn);ASPIREBLAZOR001</NoWarn>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
   </PropertyGroup>
 
   <PropertyGroup>
     <MinCodeCoverage>0</MinCodeCoverage>
     <EnablePackageValidation>false</EnablePackageValidation>
+    <!-- The minimum .NET version for Docker images used in the Blazor gateway publish pipeline.
+         Derived from the highest TFM in the repo (currently net10.0). The Gateway.cs file-based
+         app and the WASM client projects target this version, so published containers must use
+         matching SDK/runtime base images. -->
+    <BlazorGatewayDotNetImageTag>10.0</BlazorGatewayDotNetImageTag>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BlazorGatewayDotNetImageTag</_Parameter1>
+      <_Parameter2>$(BlazorGatewayDotNetImageTag)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />

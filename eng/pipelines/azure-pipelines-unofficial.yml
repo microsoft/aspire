@@ -173,18 +173,26 @@ extends:
                   targetPath: '$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)'
 
               - task: DownloadPipelineArtifact@2
-                displayName: 🟣Download Native CLI Tool Packages
+                displayName: 🟣Download Native CLI Packages
                 inputs:
                   itemPattern: |
                     **/Aspire.Cli*.nupkg
+                    !**/Aspire.Cli*.symbols.nupkg
+                    **/microsoft-aspire-cli*.tgz
                   targetPath: '$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)'
+
+              # Pull the native AOT symbols staged by build_sign_native so arcade can
+              # route them on to MSDL/SymWeb during the `-publish` step below. See
+              # docs/ci/cli-native-symbols.md for the full architecture.
+              - template: /eng/pipelines/templates/download_native_symbols.yml@self
 
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   & "$(Build.SourcesDirectory)/eng/scripts/stage-native-cli-tool-packages.ps1" `
                     -DownloadRoot "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)" `
-                    -ShippingDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
-                displayName: 🟣Stage Native CLI Tool Packages
+                    -ShippingDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping" `
+                    -RequireNpmPackages
+                displayName: 🟣Stage Native CLI Packages
 
               - task: PowerShell@2
                 displayName: 🟣List artifacts packages contents
@@ -209,14 +217,9 @@ extends:
                   targetType: 'inline'
                   script: Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$(Build.SourcesDirectory)\.npmrc"
 
-              - task: PowerShell@2
-                displayName: 🟣Install yarn
-                inputs:
-                  targetType: 'inline'
-                  script: |
-                    npm install -g yarn@1.22.22
-                    yarn --version
-                  workingDirectory: '$(Build.SourcesDirectory)'
+              - template: /eng/pipelines/templates/install-corepack.yml
+                parameters:
+                  displayPrefix: '🟣'
 
               - task: PowerShell@2
                 displayName: 🟣Install vsce
@@ -236,6 +239,15 @@ extends:
                   repoLogPath: $(Build.Arcade.LogsPath)
                   repoTestResultsPath: $(Build.Arcade.TestResultsPath)
                   isWindows: true
+                  # Unofficial is monolithic — it has no downstream `assemble`
+                  # stage that owns -publish — so run Arcade's Publish target
+                  # inline here to keep Publishing.props validations exercised.
+                  runPublish: true
+                  # The unofficial pipeline is monolithic — it has no parallel
+                  # template_tests stage like azure-pipelines.yml — so the
+                  # inline Aspire.Templates.Tests run lives here, matching
+                  # behavior prior to the official pipeline restructure.
+                  runTemplateTests: true
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
@@ -370,7 +382,6 @@ extends:
                 artifactVersion: $(aspireArtifactVersion)
                 channel: $(installerChannel)
                 archiveRoot: $(Pipeline.Workspace)/native-archives
-                skipUrlValidation: true
 
           - job: Homebrew
             displayName: Homebrew Cask
@@ -392,6 +403,4 @@ extends:
               parameters:
                 version: $(aspireVersion)
                 channel: $(installerChannel)
-                artifactVersion: $(aspireArtifactVersion)
                 archiveRoot: $(Pipeline.Workspace)/native-archives
-                skipUrlValidation: true

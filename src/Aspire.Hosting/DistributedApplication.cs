@@ -516,7 +516,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// in refer to <see cref="DistributedApplicationExecutionContext" />.
     /// </para>
     /// </remarks>
-    [AspireExport("run")]
+    [AspireExport("run", RunSyncOnBackgroundThread = true)]
     public virtual async Task RunAsync(CancellationToken cancellationToken = default)
     {
         ProfilingTelemetry.EnsureInitialized(_host.Services);

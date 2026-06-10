@@ -10,19 +10,19 @@ namespace Aspire.Hosting
 {
     public static partial class AzureAppConfigurationExtensions
     {
-        [AspireExport(Description = "Adds an Azure App Configuration resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationResource> AddAzureAppConfiguration(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Configures Azure App Configuration to run with the local emulator", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource>>? configureEmulator = null) { throw null; }
 
-        [AspireExport(Description = "Adds a data bind mount for the App Configuration emulator")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> builder, string? path = null) { throw null; }
 
-        [AspireExport(Description = "Adds a data volume for the App Configuration emulator")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> WithDataVolume(this ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> builder, string? name = null) { throw null; }
 
-        [AspireExport(Description = "Sets the host port for the App Configuration emulator")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> WithHostPort(this ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> builder, int? port) { throw null; }
 
         [AspireExportIgnore(Reason = "AppConfigurationBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureAppConfigurationRole-based overload instead.")]

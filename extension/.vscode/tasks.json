@@ -4,9 +4,40 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"type": "npm",
-			"script": "watch",
-			"problemMatcher": "$ts-webpack-watch",
+			"label": "yarn: install extension",
+			"type": "shell",
+			"command": "yarn install",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "extension: prepare",
+			"dependsOn": [
+				"yarn: install extension"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "yarn: watch extension",
+			"type": "shell",
+			"command": "yarn run watch",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": {
+				"owner": "webpack",
+				"fileLocation": "absolute",
+				"pattern": {
+					"regexp": "a^"
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "\\[webpack-cli\\] Compiler starting|^\\$ webpack --watch",
+					"endsPattern": "^webpack [\\d.]+ compiled (successfully|with \\d+ warnings?) in \\d+ ms$"
+				}
+			},
 			"isBackground": true,
 			"presentation": {
 				"reveal": "never",
@@ -15,28 +46,39 @@
 			"group": {
 				"kind": "build",
 				"isDefault": true
-			},
-			"label": "npm: watch extension"
+			}
 		},
 		{
-			"type": "npm",
-			"script": "watch-tests",
-			"problemMatcher": "$tsc-watch",
+			"label": "tasks: watch extension",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"extension: prepare",
+				"yarn: watch extension"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "yarn: watch-tests extension",
+			"type": "shell",
+			"command": "yarn run watch-tests",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
 			"isBackground": true,
+			"problemMatcher": "$tsc-watch",
 			"presentation": {
-				"reveal": "never",
+				"reveal": "silent",
 				"group": "watchers"
 			},
-			"group": "build",
-			"label": "npm: watch-tests extension"
+			"group": "build"
 		},
 		{
 			"label": "tasks: watch-tests extension",
 			"dependsOn": [
-				"npm: watch",
-				"npm: watch-tests"
+				"tasks: watch extension",
+				"yarn: watch-tests extension"
 			],
-			"problemMatcher": [],
+			"problemMatcher": []
 		}
 	]
 }

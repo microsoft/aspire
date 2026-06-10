@@ -1457,6 +1457,67 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public async Task PromptForSelectionsAsync_NonInteractive_CliProvidedInvalidValue_OmitsItemsOutsideBindingChoices()
+    {
+        // The visible multi-select prompt may include UX-only entries (e.g. a "Configure MCP server"
+        // applicator) that share the prompt with the real catalog but must not be addressable from
+        // the --option value. Callers narrow non-interactive validation via the bindingChoices subset;
+        // entries outside that subset must not leak into the "Available values" rejection message.
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var visibleChoices = new[] { "alpha", "beta", "ux-only-entry" };
+        var bindingChoices = new[] { "alpha", "beta" };
+
+        var option = new System.CommandLine.Option<string?>("--items");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("--items invalid");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        await Assert.ThrowsAsync<NonInteractiveException>(() =>
+            interactionService.PromptForSelectionsAsync("Select:", visibleChoices, x => x, binding: binding, bindingChoices: bindingChoices, cancellationToken: CancellationToken.None));
+
+        var outputString = output.ToString();
+        Assert.Contains("alpha", outputString);
+        Assert.Contains("beta", outputString);
+        Assert.DoesNotContain("ux-only-entry", outputString);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionsAsync_NonInteractive_CliProvidedInvalidValue_StripsSpectreMarkupFromChoiceLabels()
+    {
+        // Choice formatters sometimes return Spectre.Console markup (e.g. "[bold]Label[/]") so the
+        // interactive multi-select can render styled text. The non-interactive rejection message is
+        // plain text, so those tokens must be stripped rather than printed verbatim — otherwise a
+        // user who mistypes --option sees `[bold]Label[/]` in the "Available values" list.
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var choices = new[] { "alpha", "beta" };
+
+        var option = new System.CommandLine.Option<string?>("--items");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("--items invalid");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        await Assert.ThrowsAsync<NonInteractiveException>(() =>
+            interactionService.PromptForSelectionsAsync(
+                "Select:",
+                choices,
+                x => $"[bold]{x}[/] [dim](styled)[/]",
+                binding: binding,
+                cancellationToken: CancellationToken.None));
+
+        var outputString = output.ToString();
+        Assert.Contains("alpha", outputString);
+        Assert.Contains("beta", outputString);
+        Assert.Contains("(styled)", outputString);
+        Assert.DoesNotContain("[bold]", outputString);
+        Assert.DoesNotContain("[/]", outputString);
+        Assert.DoesNotContain("[dim]", outputString);
+    }
+
+    [Fact]
     public async Task PromptForSelectionAsync_NonInteractive_WithDefaultValue_ReturnsMatch()
     {
         var output = new StringBuilder();

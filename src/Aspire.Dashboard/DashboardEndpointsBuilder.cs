@@ -151,16 +151,15 @@ public static class DashboardEndpointsBuilder
             [FromQuery] int? limit,
             [FromQuery] bool? follow,
             [FromQuery] string? search,
-            [FromQuery] double? minDurationMs,
             CancellationToken cancellationToken) =>
         {
             if (follow == true)
             {
-                await StreamNdjsonAsync(httpContext, service.FollowSpansAsync(resource, traceId, hasError, search, minDurationMs, cancellationToken), cancellationToken).ConfigureAwait(false);
+                await StreamNdjsonAsync(httpContext, service.FollowSpansAsync(resource, traceId, hasError, search, cancellationToken), cancellationToken).ConfigureAwait(false);
                 return Results.Empty;
             }
 
-            var response = service.GetSpans(resource, traceId, hasError, limit, search, minDurationMs);
+            var response = service.GetSpans(resource, traceId, hasError, limit, search);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -212,10 +211,9 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string[]? resource,
             [FromQuery] bool? hasError,
             [FromQuery] int? limit,
-            [FromQuery] string? search,
-            [FromQuery] double? minDurationMs) =>
+            [FromQuery] string? search) =>
         {
-            var response = service.GetTraces(resource, hasError, limit, search, minDurationMs);
+            var response = service.GetTraces(resource, hasError, limit, search);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -231,10 +229,9 @@ public static class DashboardEndpointsBuilder
         // GET /api/telemetry/traces/{traceId} - Get a specific trace with all spans in OTLP format
         group.MapGet("/traces/{traceId}", (
             TelemetryApiService service,
-            string traceId,
-            [FromQuery] double? minDurationMs) =>
+            string traceId) =>
         {
-            var response = service.GetTrace(traceId, minDurationMs);
+            var response = service.GetTrace(traceId);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails

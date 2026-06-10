@@ -1,15 +1,13 @@
 import * as assert from 'assert';
-import type { ChildProcessWithoutNullStreams } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
-import * as cliModule from '../debugger/languages/cli';
-import type { SpawnProcessOptions } from '../debugger/languages/cli';
-import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { yesLabel } from '../loc/strings';
-import { checkForExistingAppHostPathInWorkspace, findAppHostsWithAspireLs, getCommonExcludeGlob, findAspireSettingsFiles } from '../utils/workspace';
+import { checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireSettingsFiles } from '../utils/workspace';
+import { AppHostDiscoveryService, getWorkspaceAppHostProjectSearchResult } from '../utils/appHostDiscovery';
+import { getAppHostDiscoveryExcludeGlob } from '../utils/workspaceFileSearch';
 
 suite('utils/workspace tests', () => {
     let sandbox: sinon.SinonSandbox;
@@ -74,16 +72,34 @@ suite('utils/workspace tests', () => {
         // IDE/Tool directories
         assert.ok(glob.includes('**/.vs/**'), 'Should exclude .vs');
         assert.ok(glob.includes('**/.vscode-test/**'), 'Should exclude .vscode-test');
+        assert.ok(glob.includes('**/.worktrees/**'), 'Should exclude git worktrees');
+        assert.ok(glob.includes('**/.claude/**'), 'Should exclude agent worktrees');
         assert.ok(glob.includes('**/.idea/**'), 'Should exclude .idea');
         assert.ok(glob.includes('**/.git/**'), 'Should exclude .git');
     });
 
+    test('getAppHostDiscoveryExcludeGlob skips user patterns that cannot be safely composed', () => {
+        sandbox.stub(vscode.workspace, 'getConfiguration').callsFake((section?: string) => ({
+            get: () => section === 'files'
+                ? {
+                    '**/safe-generated/**': true,
+                    '**/{generated,tmp}/**': true,
+                }
+                : {
+                    '**/safe-search/**': true,
+                    '**/coverage,dist/**': true,
+                },
+        } as unknown as vscode.WorkspaceConfiguration));
+
+        const glob = getAppHostDiscoveryExcludeGlob();
+
+        assert.ok(glob.includes('**/safe-generated/**'), 'Should include safe files.exclude pattern');
+        assert.ok(glob.includes('**/safe-search/**'), 'Should include safe search.exclude pattern');
+        assert.ok(!glob.includes('**/{generated,tmp}/**'), 'Should skip nested brace pattern');
+        assert.ok(!glob.includes('**/coverage,dist/**'), 'Should skip comma pattern');
+    });
+
     test('AppHost selection quick pick shows aspire ls language and status metadata', async () => {
-        const terminalProvider = {
-            getAspireCliExecutablePath: async () => 'aspire',
-            createEnvironment: () => ({}),
-        } as unknown as AspireTerminalProvider;
-        let spawnOptions: SpawnProcessOptions | undefined;
         sandbox.stub(vscode.workspace, 'workspaceFolders').value([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -92,30 +108,20 @@ suite('utils/workspace tests', () => {
         sandbox.stub(vscode.workspace, 'findFiles').resolves([]);
         sandbox.stub(vscode.window, 'showInformationMessage').resolves(yesLabel as never);
         const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
-        sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-            spawnOptions = options;
-            return { kill: () => true } as ChildProcessWithoutNullStreams;
-        });
-
-        const disposable = await checkForExistingAppHostPathInWorkspace(terminalProvider, () => true, async () => { });
-        assert.ok(spawnOptions);
-        assert.ok(spawnOptions.stdoutCallback);
-        assert.ok(spawnOptions.exitCallback);
-        spawnOptions.stdoutCallback(JSON.stringify([
+        const appHostDiscoveryService = createAppHostDiscoveryService([
             {
-                relativePath: 'apps/Store/AppHost.csproj',
                 path: '/workspace/apps/Store/AppHost.csproj',
                 language: 'csharp',
                 status: 'buildable',
             },
             {
-                relativePath: 'samples/Store/AppHost.csproj',
                 path: '/workspace/samples/Store/AppHost.csproj',
                 language: 'typescript/nodejs',
                 status: 'possibly-unbuildable',
             },
-        ]));
-        spawnOptions.exitCallback(0);
+        ]);
+
+        const disposable = await checkForExistingAppHostPathInWorkspace(appHostDiscoveryService, () => true, async () => { });
         await waitForStubCall(showQuickPickStub);
 
         const items = showQuickPickStub.getCall(0).args[0] as readonly vscode.QuickPickItem[];
@@ -125,12 +131,12 @@ suite('utils/workspace tests', () => {
             detail: item.detail,
         })), [
             {
-                label: 'apps/Store/AppHost.csproj',
+                label: path.join('apps', 'Store', 'AppHost.csproj'),
                 description: 'C# · buildable',
                 detail: '/workspace/apps/Store/AppHost.csproj',
             },
             {
-                label: 'samples/Store/AppHost.csproj',
+                label: path.join('samples', 'Store', 'AppHost.csproj'),
                 description: 'TypeScript · possibly-unbuildable',
                 detail: '/workspace/samples/Store/AppHost.csproj',
             },
@@ -146,20 +152,15 @@ suite('utils/workspace tests', () => {
         const secondDiscoveredAppHostPath = path.join(workspaceRoot, 'samples', 'Store', 'AppHost.csproj');
 
         try {
-            fs.writeFileSync(path.join(workspaceRoot, 'aspire.config.json'), JSON.stringify({
+            const configPath = path.join(workspaceRoot, 'aspire.config.json');
+            fs.writeFileSync(configPath, JSON.stringify({
                 appHost: {
                     path: configuredAppHostPath,
                 },
             }));
-
-            const terminalProvider = {
-                getAspireCliExecutablePath: async () => 'aspire',
-                createEnvironment: () => ({}),
-            } as unknown as AspireTerminalProvider;
-            let spawnOptions: SpawnProcessOptions | undefined;
-            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                spawnOptions = options;
-                return { kill: () => true } as ChildProcessWithoutNullStreams;
+            sandbox.stub(vscode.workspace, 'findFiles').callsFake(async (include) => {
+                const pattern = typeof include === 'string' ? include : include.pattern;
+                return pattern.includes('aspire.config.json') ? [vscode.Uri.file(configPath)] : [];
             });
 
             const rootFolder = {
@@ -167,28 +168,24 @@ suite('utils/workspace tests', () => {
                 name: 'workspace',
                 index: 0,
             };
-            const discovery = findAppHostsWithAspireLs(terminalProvider, 'aspire', rootFolder);
-
-            assert.ok(spawnOptions);
-            assert.ok(spawnOptions.stdoutCallback);
-            assert.ok(spawnOptions.exitCallback);
-            spawnOptions.stdoutCallback(JSON.stringify([
+            const result = await getWorkspaceAppHostProjectSearchResult(rootFolder, [
                 {
-                    relativePath: 'apps/Store/AppHost.csproj',
                     path: discoveredAppHostPath,
                     language: 'csharp',
                     status: 'buildable',
                 },
                 {
-                    relativePath: 'samples/Store/AppHost.csproj',
                     path: secondDiscoveredAppHostPath,
                     language: 'csharp',
                     status: 'buildable',
                 },
-            ]));
-            spawnOptions.exitCallback(0);
-
-            const result = await discovery.result;
+                {
+                    path: configuredAppHostPath,
+                    language: null,
+                    status: 'buildable',
+                    selected: true,
+                },
+            ]);
 
             assert.strictEqual(result.selected_project_file, configuredAppHostPath);
             assert.deepStrictEqual(result.all_project_file_candidates, [
@@ -229,4 +226,11 @@ async function waitForStubCall(stub: sinon.SinonStub): Promise<void> {
     }
 
     assert.ok(stub.called);
+}
+
+function createAppHostDiscoveryService(candidates: Awaited<ReturnType<AppHostDiscoveryService['discover']>>): AppHostDiscoveryService {
+    return {
+        onDidChangeCandidates: () => ({ dispose: () => { } }),
+        discover: async () => candidates,
+    } as unknown as AppHostDiscoveryService;
 }

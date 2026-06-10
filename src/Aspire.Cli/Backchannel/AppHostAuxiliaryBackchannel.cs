@@ -20,6 +20,13 @@ namespace Aspire.Cli.Backchannel;
 /// </summary>
 internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 {
+    private static readonly string[] s_clientCapabilities =
+    [
+        AuxiliaryBackchannelCapabilities.V1,
+        AuxiliaryBackchannelCapabilities.V2,
+        AuxiliaryBackchannelCapabilities.V3
+    ];
+
     private readonly ILogger _logger;
     private JsonRpc? _rpc;
     private bool _disposed;
@@ -82,6 +89,14 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     public bool SupportsV2 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V2);
 
     /// <inheritdoc />
+    // Per-feature capability strings (e.g. Terminals_V1) are deliberately preferred over a
+    // monolithic "rev the whole aux backchannel version" approach. See
+    // docs/specs/cli-backchannel.md §3 ("Capability Negotiation Over Version Numbers"). When
+    // the CLI starts using a new RPC, add a new capability constant in
+    // src/Aspire.Hosting/Backchannel/BackchannelDataTypes.cs (advertised by the AppHost RPC
+    // target) and surface a SupportsXxx property here for the call site to gate on. This way
+    // a single new method never requires every consumer to upgrade an opaque version field.
+    public bool SupportsTerminalsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.Terminals_V1);
     public bool SupportsV3 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V3);
 
     /// <summary>
@@ -332,6 +347,22 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <inheritdoc />
     public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
     {
+        if (SupportsV2)
+        {
+            var response = await GetResourcesV2Async(new GetResourcesRequest
+            {
+                ClientCapabilities = s_clientCapabilities
+            }, cancellationToken).ConfigureAwait(false);
+            var snapshots = response.Resources.ToList();
+
+            if (!includeHidden)
+            {
+                snapshots = snapshots.Where(s => !ResourceSnapshotMapper.IsHiddenResource(s)).ToList();
+            }
+
+            return snapshots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
         var rpc = EnsureConnected();
 
         _logger.LogDebug("Getting resource snapshots");
@@ -363,6 +394,24 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <inheritdoc />
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        if (SupportsV2)
+        {
+            await foreach (var snapshot in WatchResourcesV2Async(new WatchResourcesRequest
+            {
+                ClientCapabilities = s_clientCapabilities
+            }, cancellationToken).ConfigureAwait(false))
+            {
+                if (!includeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
+                {
+                    continue;
+                }
+
+                yield return snapshot;
+            }
+
+            yield break;
+        }
+
         var rpc = EnsureConnected();
 
         _logger.LogDebug("Starting resource snapshots watch");
@@ -555,6 +604,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <returns>The resources response.</returns>
     public async Task<GetResourcesResponse> GetResourcesV2Async(GetResourcesRequest? request = null, CancellationToken cancellationToken = default)
     {
+        request = AddClientCapabilities(request);
+
         if (!SupportsV2)
         {
             // Fall back to v1
@@ -596,6 +647,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         WatchResourcesRequest? request = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        request = AddClientCapabilities(request);
+
         if (!SupportsV2)
         {
             // Fall back to v1
@@ -639,6 +692,30 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         {
             yield return snapshot;
         }
+    }
+
+    private static GetResourcesRequest AddClientCapabilities(GetResourcesRequest? request)
+    {
+        return request is null
+            ? new GetResourcesRequest { ClientCapabilities = s_clientCapabilities }
+            : new GetResourcesRequest
+            {
+                TraceContext = request.TraceContext,
+                Filter = request.Filter,
+                ClientCapabilities = s_clientCapabilities
+            };
+    }
+
+    private static WatchResourcesRequest AddClientCapabilities(WatchResourcesRequest? request)
+    {
+        return request is null
+            ? new WatchResourcesRequest { ClientCapabilities = s_clientCapabilities }
+            : new WatchResourcesRequest
+            {
+                TraceContext = request.TraceContext,
+                Filter = request.Filter,
+                ClientCapabilities = s_clientCapabilities
+            };
     }
 
     /// <summary>
@@ -933,6 +1010,66 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             cancellationToken).ConfigureAwait(false);
 
         _logger.LogDebug("Wait for resource '{ResourceName}' completed: success={Success}, state={State}", resourceName, response.Success, response.State);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Gets terminal information for a resource.
+    /// </summary>
+    public async Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
+    {
+        // Gate on the per-feature Terminals_V1 capability rather than the v2 envelope:
+        // an AppHost can speak aux.v2 without having terminal support compiled in. We
+        // must not call GetTerminalInfoAsync against such an AppHost or the RPC will
+        // surface as an unknown-method error to the caller.
+        if (!SupportsTerminalsV1)
+        {
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Getting terminal info for resource '{ResourceName}'", resourceName);
+
+        var request = new GetTerminalInfoRequest { ResourceName = resourceName };
+
+        var response = await rpc.InvokeWithCancellationAsync<GetTerminalInfoResponse>(
+            "GetTerminalInfoAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("Terminal info for '{ResourceName}': available={Available}, replicas={ReplicaCount}",
+            resourceName, response.IsAvailable, response.Replicas?.Length ?? 0);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost. Older AppHosts without
+    /// the <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability are
+    /// short-circuited to an empty response so the CLI can render a clean "nothing to show"
+    /// message rather than a mysterious RPC error.
+    /// </summary>
+    public async Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsTerminalsV1)
+        {
+            return new ListTerminalsResponse { Terminals = Array.Empty<TerminalSummary>() };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Listing all terminal-enabled resources.");
+
+        var request = new ListTerminalsRequest();
+
+        var response = await rpc.InvokeWithCancellationAsync<ListTerminalsResponse>(
+            "ListTerminalsAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("ListTerminals returned {Count} terminal-enabled resource(s).", response.Terminals.Length);
 
         return response;
     }

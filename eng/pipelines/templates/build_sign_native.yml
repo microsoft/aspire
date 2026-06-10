@@ -6,6 +6,28 @@ parameters:
   extraBuildArgs: ''
   codeSign: false
   teamName: ''
+  # When non-empty, the per-RID job matching this RID runs an additional
+  # `ComputeVars` step at the end that evaluates the three installer-pipeline
+  # variables (aspireVersion / aspireArtifactVersion / installerChannel) and
+  # exposes them as job outputs. This lets the downstream prepare_installers
+  # stage depend only on build_sign_native (instead of waiting for the slower
+  # assemble stage), unhitching ~14 min of installer-prep work from the
+  # critical path. Pick a fast, reliable RID (linux-x64) so the host job
+  # finishes early and the dotnet SDK is already restored by the build.
+  computeVarsRid: ''
+  # Optional override for AspireCliChannel. Accepted values: 'auto' (default;
+  # let computeCliChannel below pick stable/staging/daily/pr-<N> from Build.Reason
+  # and Build.SourceBranch), 'stable', 'staging', 'daily'. Set this to 'stable'
+  # when running the official ship pipeline so the GA CLI binary is baked with
+  # AspireCliChannel=stable (and aspire init then writes a nuget.org-only
+  # nuget.config, which is correct because the packages have been promoted to
+  # nuget.org). For routine stabilizing builds from a release/* branch — which
+  # also set DotNetFinalVersionKind=release — leave this on 'auto' so the
+  # channel falls through to 'staging' and aspire init writes a nuget.config
+  # that maps Aspire.* to the staging feed. See
+  # https://github.com/microsoft/aspire/issues/17527 for the bug that made this
+  # override necessary.
+  aspireCliChannelOverride: 'auto'
 
 jobs:
 
@@ -68,7 +90,22 @@ jobs:
           # Installing Microbuild plugin fails due to https://github.com/dotnet/arcade/issues/15946#issuecomment-3045780552
           # because of the preview sdk. To fix that `restore` from `global.json` so the above step
           # does not have to install anything.
-          - script: $(Build.SourcesDirectory)/$(scriptName) -restore /p:Configuration=$(_BuildConfig)
+          #
+          # Narrow restore to the projects this native job actually packs. With the
+          # Skip flags below + TargetRids, eng/Build.props lines 42-94 collapse
+          # ProjectToBuild from 100+ projects (every src/, tests/, playground/) to
+          # just 2: src/Aspire.Cli/Aspire.Cli.csproj (clipack imports as msbuild
+          # task) + eng/clipack/Aspire.Cli.<rid>.csproj. Tools.proj restore (which
+          # is what actually populates the SDK so MicroBuild plugin install works)
+          # is unconditional and unaffected. Saves ~3-4 min off Windows native
+          # critical path, ~1 min off macOS, ~2 min off linux.
+          - script: >-
+              $(Build.SourcesDirectory)/$(scriptName) -restore
+              /p:Configuration=$(_BuildConfig)
+              /p:SkipManagedBuild=true
+              /p:SkipTestProjects=true
+              /p:SkipPlaygroundProjects=true
+              /p:TargetRids=${{ targetRid }}
             displayName: 🟣Restore
 
         steps:
@@ -84,15 +121,32 @@ jobs:
               $reason = '$(Build.Reason)'
               $sourceBranch = '$(Build.SourceBranch)'
               $prNumber = '$(System.PullRequest.PullRequestNumber)'
+              # Template-time substitution: the value is the resolved
+              # aspireCliChannelOverride parameter literal, never a runtime
+              # variable. Quoting protects an empty/default value.
+              $override = '${{ parameters.aspireCliChannelOverride }}'
               Write-Host "Build.Reason: '$reason'"
               Write-Host "Build.SourceBranch: '$sourceBranch'"
               Write-Host "System.PullRequest.PullRequestNumber: '$prNumber'"
+              Write-Host "aspireCliChannelOverride: '$override'"
 
               $versionKind = & "$(Build.SourcesDirectory)/$(dotnetScript)" msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
               $versionKind = $versionKind.Trim()
               Write-Host "DotNetFinalVersionKind: '$versionKind'"
 
-              if ($reason -eq 'PullRequest') {
+              if ($override -and $override -ne 'auto') {
+                # Operator override path. Validate against the same accepted set
+                # that IdentityChannelReader.IsValidChannel enforces at CLI startup
+                # so a typo here fails the pipeline step rather than producing a
+                # binary that refuses to boot. pr-<N> is intentionally excluded
+                # from the override set — PR builds always come from the
+                # PullRequest reason arm below.
+                if ($override -notin @('stable', 'staging', 'daily')) {
+                  throw "aspireCliChannelOverride='$override' is not one of: auto, stable, staging, daily."
+                }
+                $channel = $override.ToLowerInvariant()
+              }
+              elseif ($reason -eq 'PullRequest') {
                 # Defense in depth: validate digit-only PR number rather than just
                 # non-emptiness. If the agent ever returns the literal macro string
                 # (e.g. '$(System.PullRequest.PullRequestNumber)' unresolved) this
@@ -105,10 +159,21 @@ jobs:
                 # Bake the resolved hive label directly into AspireCliChannel. The CLI
                 # consumes this verbatim and avoids the legacy "pr" + parsed-PrNumber join.
                 $channel = "pr-$prNumber"
+              } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
+                # Release/internal-release branches always produce staging artifacts —
+                # they are published to the staging feed for dogfooding and only later
+                # promoted to nuget.org. This must be checked BEFORE the
+                # `versionKind == release` arm, because a release-branch build also sets
+                # StabilizePackageVersion=true (→ DotNetFinalVersionKind=release) once
+                # we are stabilizing for ship. Without this ordering, the stabilized
+                # staging build would bake AspireCliChannel=stable and `aspire init`
+                # would drop a nuget.config with no staging feed mapping, causing
+                # `aspire add` to resolve Aspire.* packages from nuget.org (older
+                # versions) or fail to resolve the +sha-pinned Aspire.AppHost.Sdk.
+                # See https://github.com/microsoft/aspire/issues/17527.
+                $channel = 'staging'
               } elseif ($versionKind -eq 'release') {
                 $channel = 'stable'
-              } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
-                $channel = 'staging'
               } else {
                 # main and any other branch fall through to daily
                 $channel = 'daily'
@@ -169,6 +234,11 @@ jobs:
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
               displayName: 🟣Restore execute permission on aspire-managed
 
+          - task: NodeTool@0
+            displayName: 🟣Install node.js
+            inputs:
+              versionSpec: '22.x'
+
           - script: >-
               $(Build.SourcesDirectory)/$(dotnetScript)
               msbuild
@@ -212,6 +282,21 @@ jobs:
               $verifyParams.ArchivePath = $archive[0].FullName
               & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" @verifyParams
             displayName: 🟣Verify CLI tool nupkg (${{ targetRid }})
+
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $verifyParams = @{
+                PackagesDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)"
+                Rid = "${{ targetRid }}"
+              }
+              $archiveFilter = if ("${{ targetRid }}".StartsWith('win-')) { "aspire-cli-${{ targetRid }}-*.zip" } else { "aspire-cli-${{ targetRid }}-*.tar.gz" }
+              $archive = @(Get-ChildItem -Path $verifyParams.PackagesDir -Filter $archiveFilter -Recurse -File -ErrorAction SilentlyContinue)
+              if ($archive.Count -ne 1) {
+                throw "Expected exactly one CLI archive for ${{ targetRid }}, but found $($archive.Count): $($archive.FullName -join ', ')"
+              }
+              $verifyParams.ArchivePath = $archive[0].FullName
+              & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-npm-package.ps1" @verifyParams
+            displayName: 🟣Verify CLI npm package (${{ targetRid }})
 
           # Verify the signed CLI archive can execute and create a project.
           # Only runs when the target RID architecture matches the build agent
@@ -259,6 +344,142 @@ jobs:
               env:
                 ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
                 DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+          # Native AOT debug symbols (aspire.pdb on Windows,
+          # Aspire.Cli.<rid>.<version>.symbols.nupkg on Linux/macOS) are
+          # produced as first-class MSBuild outputs by the per-RID clipack
+          # project (eng/clipack/Common.projitems _PackNativeAotSymbols
+          # target + eng/clipack/Aspire.Cli.NativeSymbols.proj helper).
+          # They land in $(Build.SourcesDirectory)/artifacts/native-symbols-staging/<rid>/
+          # before this step runs. See docs/ci/cli-native-symbols.md.
+          - task: 1ES.PublishBuildArtifacts@1
+            displayName: 🟣Publish native symbols (${{ targetRid }})
+            condition: always()
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/artifacts/native-symbols-staging/${{ targetRid }}'
+              ArtifactName: native_symbols_${{ replace(targetRid, '-', '_') }}
+
+          - ${{ if and(ne(parameters.computeVarsRid, ''), eq(targetRid, parameters.computeVarsRid)) }}:
+            # Compute the three installer-pipeline variables here so the
+            # downstream prepare_installers stage can depend on
+            # build_sign_native (the shorter critical-path stage) instead of
+            # waiting for assemble. The dotnet SDK is already bootstrapped by
+            # this point (the heavy build steps above have run), so each
+            # MSBuild evaluation is sub-second. Outputs are exposed via
+            # ##vso[task.setvariable variable=X;isOutput=true]value and read
+            # downstream as stageDependencies.build_sign_native.BuildNative_<rid>.outputs['ComputeVars.<var>'].
+            - pwsh: |
+                $ErrorActionPreference = 'Stop'
+
+                # MSBuild evaluations here must use the SAME OfficialBuildId
+                # behavior as the producer jobs (the per-RID native pack steps
+                # above), or the version we publish to prepare_installers won't
+                # match the version stamped into the microsoft-aspire-cli-<rid>.tgz
+                # / Aspire.Cli.<rid>.nupkg files that those installer jobs then
+                # try to find. _OfficialBuildIdArgs is '/p:OfficialBuildId=<num>'
+                # on non-PR builds (where producers stamp preview versions) and
+                # empty string on PRs and public/test-signed runs (where
+                # producers stamp non-preview '13.x.y-dev' versions). Splat it
+                # as an array so the empty case adds zero args rather than an
+                # empty positional arg that MSBuild would reject.
+                $officialArgs = @()
+                if ('$(_OfficialBuildIdArgs)'.Trim() -ne '') {
+                  $officialArgs = @('$(_OfficialBuildIdArgs)'.Trim())
+                }
+
+                # aspireVersion: the eventual nupkg-stamped version of
+                # Aspire.Hosting.AppHost. The assemble stage previously read
+                # this from the nupkg filename in Shipping; here we evaluate
+                # PackageVersion directly via Arcade's versioning targets,
+                # which doesn't need a built nupkg. Sanity-check the result
+                # looks like a semver before publishing it so consumers fail
+                # fast on an evaluation bug.
+                $aspireVersion = & "$(Build.SourcesDirectory)/$(dotnetScript)" msbuild `
+                  "$(Build.SourcesDirectory)/src/Aspire.Hosting.AppHost/Aspire.Hosting.AppHost.csproj" `
+                  -getProperty:PackageVersion `
+                  @officialArgs
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Error "Failed to evaluate Aspire.Hosting.AppHost PackageVersion (exit $LASTEXITCODE)."
+                  exit 1
+                }
+                $aspireVersion = $aspireVersion.Trim()
+
+                if ($aspireVersion -notmatch '^\d+\.\d+\.\d+') {
+                  Write-Error "Computed aspireVersion '$aspireVersion' does not look like a valid semver. PackageVersion evaluation failed."
+                  exit 1
+                }
+                Write-Host "Detected Aspire version: $aspireVersion"
+                Write-Host "##vso[task.setvariable variable=aspireVersion;isOutput=true]$aspireVersion"
+
+                # Tag the build so the release pipeline can auto-derive
+                # ReleaseVersion. See assemble's original computeVersion step
+                # for the full rationale on the 'release-version - ' prefix.
+                Write-Host "##vso[build.addbuildtag]release-version - $aspireVersion"
+
+                # aspireArtifactVersion: same shape as aspireVersion on
+                # non-release builds; on release branches with
+                # StabilizePackageVersion=true the SuppressFinalPackageVersion
+                # path strips the build-id suffix so the installer artifact
+                # name stays stable across rebuilds.
+                $artifactVersion = & "$(Build.SourcesDirectory)/$(dotnetScript)" msbuild `
+                  "$(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj" `
+                  -getProperty:PackageVersion `
+                  -property:SuppressFinalPackageVersion=true `
+                  @officialArgs
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Error "Failed to evaluate Aspire.Dashboard PackageVersion (exit $LASTEXITCODE)."
+                  exit 1
+                }
+                $artifactVersion = $artifactVersion.Trim()
+                if ($artifactVersion -notmatch '^\d+\.\d+\.\d+') {
+                  Write-Error "Computed aspireArtifactVersion '$artifactVersion' does not look like a valid semver."
+                  exit 1
+                }
+                Write-Host "Detected installer artifact version: $artifactVersion"
+                Write-Host "##vso[task.setvariable variable=aspireArtifactVersion;isOutput=true]$artifactVersion"
+
+                # installerChannel: derived from eng/Versions.props. Same
+                # safety gate as assemble's original computeChannel — if the
+                # branch is a release/* with StabilizePackageVersion=true, the
+                # channel must resolve to 'stable' or we refuse to publish
+                # prerelease installer artifacts under a stable release-branch
+                # name (defense in depth against a misaligned property
+                # override).
+                $versionKind = & "$(Build.SourcesDirectory)/$(dotnetScript)" msbuild `
+                  "$(Build.SourcesDirectory)/eng/Versions.props" `
+                  -getProperty:DotNetFinalVersionKind
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Error "Failed to read DotNetFinalVersionKind from eng/Versions.props (exit $LASTEXITCODE)."
+                  exit 1
+                }
+                $versionKind = $versionKind.Trim()
+                Write-Host "DotNetFinalVersionKind: '$versionKind'"
+
+                if ($versionKind -eq 'release') {
+                  $channel = 'stable'
+                } else {
+                  $channel = 'prerelease'
+                }
+
+                $stabilize = & "$(Build.SourcesDirectory)/$(dotnetScript)" msbuild `
+                  "$(Build.SourcesDirectory)/eng/Versions.props" `
+                  -getProperty:StabilizePackageVersion
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Error "Failed to read StabilizePackageVersion from eng/Versions.props. Cannot evaluate release-branch safety gate."
+                  exit 1
+                }
+                $stabilize = $stabilize.Trim()
+                $isReleaseBranch = '$(Build.SourceBranch)'.StartsWith('refs/heads/release/') -or '$(Build.SourceBranch)'.StartsWith('refs/heads/internal/release/')
+                Write-Host "StabilizePackageVersion: '$stabilize'  isReleaseBranch=$isReleaseBranch"
+                if ($isReleaseBranch -and $stabilize -eq 'true' -and $channel -ne 'stable') {
+                  Write-Error "Release branch + StabilizePackageVersion=true but installer channel computed as '$channel'. Refusing."
+                  exit 1
+                }
+
+                Write-Host "Installer channel: $channel"
+                Write-Host "##vso[task.setvariable variable=installerChannel;isOutput=true]$channel"
+              name: ComputeVars
+              displayName: 🟣Compute installer-pipeline vars (aspireVersion / aspireArtifactVersion / installerChannel)
 
           - task: 1ES.PublishBuildArtifacts@1
             displayName: 🟣Publish Artifacts

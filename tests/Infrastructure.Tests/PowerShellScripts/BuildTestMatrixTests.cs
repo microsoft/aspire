@@ -19,7 +19,7 @@ public class BuildTestMatrixTests : IDisposable
     public BuildTestMatrixTests(ITestOutputHelper output)
     {
         _output = output;
-        _scriptPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "build-test-matrix.ps1");
+        _scriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "build-test-matrix.ps1");
     }
 
     public void Dispose() => _tempDir.Dispose();
@@ -654,7 +654,7 @@ public class BuildTestMatrixTests : IDisposable
     {
         // Validates that CITestsProperties.props is well-formed XML
         // and contains the expected property definitions.
-        var propsPath = Path.Combine(FindRepoRoot(), "eng", "testing", "CITestsProperties.props");
+        var propsPath = Path.Combine(RepoRoot.Path, "eng", "testing", "CITestsProperties.props");
         Assert.True(File.Exists(propsPath), $"CITestsProperties.props not found at {propsPath}");
 
         var doc = new System.Xml.XmlDocument();
@@ -747,27 +747,13 @@ public class BuildTestMatrixTests : IDisposable
             ?? throw new InvalidOperationException("Failed to parse matrix JSON");
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root");
-    }
-
     /// <summary>
     /// Reads the CITestsProperties.props XML file and returns
     /// the list of property names (Include attributes).
     /// </summary>
     private static HashSet<string> ReadCITestsPropertyNames()
     {
-        var propsPath = Path.Combine(FindRepoRoot(), "eng", "testing", "CITestsProperties.props");
+        var propsPath = Path.Combine(RepoRoot.Path, "eng", "testing", "CITestsProperties.props");
         var doc = new System.Xml.XmlDocument();
         doc.Load(propsPath);
 

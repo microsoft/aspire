@@ -369,7 +369,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
 
@@ -468,7 +468,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
 
@@ -524,7 +524,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
 
@@ -583,7 +583,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
 

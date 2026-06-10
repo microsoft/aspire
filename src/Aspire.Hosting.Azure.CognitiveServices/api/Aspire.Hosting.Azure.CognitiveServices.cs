@@ -10,17 +10,17 @@ namespace Aspire.Hosting
 {
     public static partial class AzureOpenAIExtensions
     {
-        [AspireExport(Description = "Adds an Azure OpenAI resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIResource> AddAzureOpenAI(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
         [AspireExportIgnore(Reason = "Obsolete API that accepts AzureOpenAIDeployment which is not ATS-compatible.")]
         [System.Obsolete("AddDeployment taking an AzureOpenAIDeployment is deprecated. Please the AddDeployment overload that returns an AzureOpenAIDeploymentResource instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIResource> AddDeployment(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIResource> builder, ApplicationModel.AzureOpenAIDeployment deployment) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure OpenAI deployment resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIDeploymentResource> AddDeployment(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIResource> builder, string name, string modelName, string modelVersion) { throw null; }
 
-        [AspireExport(Description = "Configures properties of an Azure OpenAI deployment", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIDeploymentResource> WithProperties(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIDeploymentResource> builder, System.Action<ApplicationModel.AzureOpenAIDeploymentResource> configure) { throw null; }
 
         [AspireExportIgnore(Reason = "CognitiveServicesBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the enum-based overload instead.")]

@@ -84,13 +84,23 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
 
             var entries = logEntries.GetEntries().ToList();
 
-            // Apply full-text search filter on log content
+            // Console logs have no structured attributes, so all search text is treated as
+            // free-text fragments matched against the log content and resource name.
             if (!string.IsNullOrEmpty(search))
             {
-                entries = entries.Where(e =>
-                    (e.Content is not null && e.Content.Contains(search, StringComparisons.FullTextSearch)) ||
-                    (e.RawContent is not null && e.RawContent.Contains(search, StringComparisons.FullTextSearch)))
-                    .ToList();
+                var fragments = SearchTextParser.ParseFragments(search);
+                if (fragments.Length > 0)
+                {
+                    entries = entries.Where(e =>
+                        SearchTextParser.MatchesAllFragments(
+                            fragments,
+                            (e.Content ?? string.Empty, e.RawContent ?? string.Empty, e.ResourcePrefix ?? string.Empty),
+                            static (state, fragment) =>
+                                state.Item1.Contains(fragment, StringComparisons.FullTextSearch) ||
+                                state.Item2.Contains(fragment, StringComparisons.FullTextSearch) ||
+                                state.Item3.Contains(fragment, StringComparisons.FullTextSearch)))
+                        .ToList();
+                }
             }
 
             // When search is applied, total reflects matching entries. Otherwise, use the

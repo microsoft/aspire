@@ -643,6 +643,15 @@ public static class GoHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
+        // WithDelveServer changes the resource into a headless Delve process that IDEs attach to
+        // manually. Leaving the VS Code launch annotation in place would make DCP hand execution to
+        // the IDE instead of starting that Delve server.
+        var debuggingAnnotation = builder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (debuggingAnnotation is not null)
+        {
+            builder.Resource.Annotations.Remove(debuggingAnnotation);
+        }
+
         // Switch the underlying executable from "go" to "dlv" using Replace so that
         // calling WithDelveServer more than once is idempotent.
         return builder
@@ -659,17 +668,58 @@ public static class GoHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var workingDirectory = Path.GetFullPath(builder.Resource.WorkingDirectory);
+        var resource = builder.Resource;
 
         return builder.WithDebugSupport(
-            mode => new GoLaunchConfiguration
+            mode =>
             {
-                Program = workingDirectory,
-                Mode = mode,
-                WorkingDirectory = workingDirectory
+                // Resolve annotations when DCP creates the launch configuration so later
+                // resource mutations such as WithWorkingDirectory(...) are reflected.
+                var workingDirectory = Path.GetFullPath(resource.WorkingDirectory);
+                var packagePath = resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var packagePathAnnotation)
+                    ? packagePathAnnotation.PackagePath
+                    : ".";
+                var buildFlags = BuildFlagsString(resource);
+
+                return new GoLaunchConfiguration
+                {
+                    Program = Path.GetFullPath(packagePath, workingDirectory),
+                    Mode = mode,
+                    WorkingDirectory = workingDirectory,
+                    BuildFlags = buildFlags.Length > 0 ? buildFlags : null
+                };
             },
-            "go");
+            "go",
+            static ctx =>
+            {
+                // The executable resource normally starts as:
+                //   go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [app args]
+                // In IDE mode VS Code's Go debugger owns the tool/build/package portion via
+                // program/buildFlags, so only the user program arguments should remain.
+                if (ctx.Args is not [string runCommand, ..] || runCommand != "run")
+                {
+                    return;
+                }
+
+                ctx.Args.RemoveAt(0);
+
+                while (ctx.Args is [string arg, ..] && IsGoRunBuildFlag(arg))
+                {
+                    ctx.Args.RemoveAt(0);
+                }
+
+                if (ctx.Args.Count > 0)
+                {
+                    ctx.Args.RemoveAt(0);
+                }
+            });
     }
+
+    private static bool IsGoRunBuildFlag(string arg) =>
+        arg == "-race" ||
+        arg.StartsWith("-tags=", StringComparison.Ordinal) ||
+        arg.StartsWith("-ldflags=", StringComparison.Ordinal) ||
+        arg.StartsWith("-gcflags=", StringComparison.Ordinal);
 
     /// <summary>
     /// Builds the <c>go build</c> command for the generated Dockerfile, propagating any

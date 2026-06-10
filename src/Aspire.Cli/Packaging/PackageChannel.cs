@@ -85,12 +85,15 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .DistinctBy(p => $"{p.Id}-{p.Version}");
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
-        // prerelease packages. This filters out this noise.
+        // prerelease packages. Keep the current CLI/SDK version so shipped CLIs can resolve their
+        // matching template package from daily/staging feeds, then filter out the remaining noise.
+        var currentCliVersion = VersionHelper.GetDefaultSdkVersion();
         var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
         {
             { Quality: PackageChannelQuality.Both } => true,
             { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
             { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
+            { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: false } } when string.Equals(p.Version, currentCliVersion, StringComparison.OrdinalIgnoreCase) => true,
             _ => false
         });
 

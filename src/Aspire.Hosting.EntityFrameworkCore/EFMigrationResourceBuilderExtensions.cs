@@ -23,9 +23,9 @@ public static class EFMigrationResourceBuilderExtensions
     /// <returns>The resource builder for chaining.</returns>
     /// <remarks>
     /// <para>
-    /// When enabled, migrations will be applied during AppHost startup.
-    /// This only affects local run-mode execution. The migrations resource is not deployed with the app,
-    /// so the command has no effect during publish or deployment.
+    /// When enabled, migrations are applied during AppHost startup. This only affects local
+    /// run-mode execution. The migrations resource is not deployed with the app, so this method
+    /// has no effect during publish or deployment.
     /// </para>
     /// <para>
     /// A health check is automatically registered for this resource, allowing other resources to use
@@ -113,12 +113,12 @@ public static class EFMigrationResourceBuilderExtensions
     /// <param name="targetRuntime">
     /// The target runtime identifier for the bundle (e.g., <c>linux-x64</c>, <c>win-x64</c>).
     /// If <see langword="null"/> and <paramref name="publishContainer"/> is <see langword="true"/>,
-    /// defaults to <c>linux-x64</c> so the bundle can run inside a Linux container image. When
-    /// <paramref name="publishContainer"/> is <see langword="false"/> the current runtime is used.
+    /// defaults to <c>linux-x64</c> to match the default Linux base container image used for the
+    /// generated <c>Dockerfile</c>. If <see langword="null"/> and <paramref name="publishContainer"/>
+    /// is <see langword="false"/>, the bundle targets the runtime hosting <c>aspire publish</c>.
     /// </param>
     /// <param name="selfContained">
     /// If <see langword="true"/>, creates a self-contained bundle that includes the .NET runtime.
-    /// Never defaulted by <paramref name="publishContainer"/> — user-specified value is always respected.
     /// </param>
     /// <param name="publishContainer">
     /// If <see langword="true"/>, the bundle is published as a container image that applies migrations
@@ -141,10 +141,17 @@ public static class EFMigrationResourceBuilderExtensions
     /// under the <c>efmigrations</c> folder. When <paramref name="publishContainer"/> is
     /// <see langword="true"/>, Aspire also generates a <c>Dockerfile</c> that packages the bundle into
     /// a container image; the container reads the connection string from a
-    /// <c>ConnectionStrings__&lt;name&gt;</c> environment variable provided by the referenced database
-    /// resource (call <c>.WithReference(db)</c> on the migration builder, or the connection string is
-    /// injected automatically for every <see cref="IResourceWithConnectionString"/> that the migration
-    /// resource <c>.WaitFor</c>s).
+    /// <c>ConnectionStrings__&lt;name&gt;</c> environment variable injected automatically for a
+    /// <see cref="IResourceWithConnectionString"/> that the migration resource references or waits on.
+    /// </para>
+    /// <para>
+    /// The startup project (the project on which <c>AddEFMigrations</c> was invoked) and the
+    /// migrations project (configured via <see cref="WithMigrationsProject(IResourceBuilder{EFMigrationResource}, string)"/>
+    /// or <see cref="WithMigrationsProject{TProject}(IResourceBuilder{EFMigrationResource})"/>, if
+    /// different) must both list the target runtime in their <c>&lt;RuntimeIdentifiers&gt;</c> MSBuild property.
+    /// If <paramref name="publishContainer"/> = <see langword="true"/>, by default this means
+    /// adding at minimum <c>&lt;RuntimeIdentifiers&gt;linux-x64&lt;/RuntimeIdentifiers&gt;</c> to
+    /// both projects.
     /// </para>
     /// </remarks>
     [AspireExport]
@@ -184,8 +191,8 @@ public static class EFMigrationResourceBuilderExtensions
     /// <param name="outputDirectory">The output directory path relative to the project root.</param>
     /// <returns>The resource builder for chaining.</returns>
     /// <remarks>
-    /// If not specified, migrations will be placed in the default 'Migrations' directory.
-    /// Example: "Data/Migrations" or "Infrastructure/Migrations".
+    /// If not specified, migrations will be placed in the default <c>Migrations</c> directory.
+    /// Example: <c>Data/Migrations</c> or <c>Infrastructure/Migrations</c>.
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<EFMigrationResource> WithMigrationOutputDirectory(this IResourceBuilder<EFMigrationResource> builder, string outputDirectory)
@@ -203,7 +210,7 @@ public static class EFMigrationResourceBuilderExtensions
     /// <returns>The resource builder for chaining.</returns>
     /// <remarks>
     /// If not specified, the namespace will be derived from the project's default namespace.
-    /// Example: "MyApp.Data.Migrations" or "MyApp.Infrastructure.Migrations".
+    /// Example: <c>MyApp.Data.Migrations</c> or <c>MyApp.Infrastructure.Migrations</c>.
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<EFMigrationResource> WithMigrationNamespace(this IResourceBuilder<EFMigrationResource> builder, string @namespace)
@@ -223,7 +230,8 @@ public static class EFMigrationResourceBuilderExtensions
     /// <para>
     /// Use this method when the migrations are in a different project than the startup project.
     /// The target project's path will be used for migration operations while the startup project
-    /// remains the original project.
+    /// remains the original project. The project resource on which AddEFMigrations is invoked
+    /// should be the startup project (the project that contains the DbContext configuration).
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
@@ -246,14 +254,9 @@ public static class EFMigrationResourceBuilderExtensions
     /// <para>
     /// Use this method when the migrations are in a different project than the startup project.
     /// The target project's path will be used for migration operations while the startup project
-    /// remains the original project.
+    /// remains the original project. The project resource on which AddEFMigrations is invoked
+    /// should be the startup project (the project that contains the DbContext configuration).
     /// </para>
-    /// <example>
-    /// <code>
-    /// var migrations = project.AddEFMigrations&lt;MyDbContext&gt;("migrations")
-    ///     .WithMigrationsProject&lt;Projects.MyMigrationsProject&gt;();
-    /// </code>
-    /// </example>
     /// </remarks>
     [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type. Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> WithMigrationsProject<TProject>(this IResourceBuilder<EFMigrationResource> builder)
@@ -297,6 +300,10 @@ public static class EFMigrationResourceBuilderExtensions
     private const string WindowsImageTagSuffix = "-nanoserver-ltsc2022";
     private const string ConnectionStringEnvVarPrefix = "ConnectionStrings__";
 
+    // Mirrors Aspire.Dashboard.Model.KnownRelationshipTypes.Reference, which is internal to
+    // Aspire.Hosting and not visible from this project. Kept in sync with that constant.
+    private const string ReferenceRelationshipType = "Reference";
+
     private static void ConfigureBundleContainer(IResourceBuilder<EFMigrationResource> builder)
     {
         var migrationResource = builder.Resource;
@@ -318,12 +325,13 @@ public static class EFMigrationResourceBuilderExtensions
         builder.WithPipelineStepFactory(EFResourceBuilderExtensions.CreateMigrationPipelineStep);
 
         // Once the application model is finalized we know which IResourceWithConnectionString
-        // dependencies the user declared via WaitFor. Forward them through the standard environment
-        // callback so the compute environment injects ConnectionStrings__<name> for the bundle
-        // container the same way it does for any other compute resource.
+        // dependencies the user declared via WithReference or WaitFor.
+        // Forward them through the standard environment callback so the compute environment
+        // injects ConnectionStrings__<name> for the bundle container the same way it does for
+        // any other compute resource.
         builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
         {
-            var connectionStringResource = GetSingleWaitedOnConnectionStringResource(migrationResource);
+            var connectionStringResource = GetSingleConnectionStringResource(migrationResource);
             var envVar = connectionStringResource.ConnectionStringEnvironmentVariable
                 ?? ConnectionStringEnvVarPrefix + connectionStringResource.Name;
 
@@ -350,30 +358,27 @@ public static class EFMigrationResourceBuilderExtensions
         return Path.Combine(builder.ApplicationBuilder.AppHostDirectory, "aspire-output");
     }
 
-    private static IResourceWithConnectionString GetSingleWaitedOnConnectionStringResource(EFMigrationResource migrationResource)
+    private static IResourceWithConnectionString GetSingleConnectionStringResource(EFMigrationResource migrationResource)
     {
-        // WaitForStart adds an implicit WaitAnnotation for the parent of an IResourceWithParent
-        // dependency (see ResourceBuilderExtensions.WaitForStartCore), so waiting on a database
-        // resource implicitly adds a wait on its server — both land here. Filter ancestors out
-        // so the most-specific (leaf) resource wins when the set is parent-related.
-        var candidates = new List<IResourceWithConnectionString>();
-        if (migrationResource.TryGetAnnotationsOfType<WaitAnnotation>(out var waitAnnotations))
+        // Prefer explicit references declared via .WithReference(<db>): those are the user's
+        // explicit statement of which connection string the bundle should target. Only when no
+        // such reference exists do we fall back to inferring it from .WaitFor(<db>) dependencies.
+        var candidates = CollectConnectionStringCandidates<ResourceRelationshipAnnotation>(
+            migrationResource,
+            annotation => annotation.Type == ReferenceRelationshipType ? annotation.Resource : null);
+
+        if (candidates.Count == 0)
         {
-            foreach (var wait in waitAnnotations)
-            {
-                if (wait.Resource is IResourceWithConnectionString connectionStringResource
-                    && !candidates.Any(c => ReferenceEquals(c, connectionStringResource)))
-                {
-                    candidates.Add(connectionStringResource);
-                }
-            }
+            candidates = CollectConnectionStringCandidates<WaitAnnotation>(
+                migrationResource,
+                annotation => annotation.Resource);
         }
 
         if (candidates.Count == 0)
         {
             throw new InvalidOperationException(
                 $"Cannot publish migration bundle '{migrationResource.Name}' as a container: add " +
-                $"'.WaitFor(<database>)' with a database resource that exposes a connection string.");
+                $"'.WithReference(<database>)' and/or '.WaitFor(<database>)' with a database resource that exposes a connection string.");
         }
 
         // Drop any candidate that is an ancestor (via IResourceWithParent) of another candidate.
@@ -391,9 +396,30 @@ public static class EFMigrationResourceBuilderExtensions
         var unrelated = string.Join(", ", leaves.Select(l => $"'{l.Name}'"));
         throw new InvalidOperationException(
             $"Cannot publish migration bundle '{migrationResource.Name}' as a container: multiple " +
-            $"unrelated waited-on resources expose a connection string ({unrelated}). A migration " +
-            $"bundle targets exactly one database — only call '.WaitFor' with a single " +
-            $"IResourceWithConnectionString, or waited-on resources that share a parent chain.");
+            $"resources expose a connection string ({unrelated}). A migration " +
+            $"bundle targets exactly one database — only reference or wait on a single " +
+            $"IResourceWithConnectionString, or resources that share a parent chain.");
+    }
+
+    private static List<IResourceWithConnectionString> CollectConnectionStringCandidates<TAnnotation>(
+        EFMigrationResource migrationResource,
+        Func<TAnnotation, IResource?> resourceSelector)
+        where TAnnotation : IResourceAnnotation
+    {
+        var candidates = new List<IResourceWithConnectionString>();
+        if (migrationResource.TryGetAnnotationsOfType<TAnnotation>(out var annotations))
+        {
+            foreach (var annotation in annotations)
+            {
+                if (resourceSelector(annotation) is IResourceWithConnectionString connectionStringResource
+                    && !candidates.Any(c => ReferenceEquals(c, connectionStringResource)))
+                {
+                    candidates.Add(connectionStringResource);
+                }
+            }
+        }
+
+        return candidates;
     }
 
     private static bool IsAncestorOf(IResource candidate, IResource descendant)
@@ -490,7 +516,7 @@ public static class EFMigrationResourceBuilderExtensions
 
     internal static string GenerateDockerfile(EFMigrationResource migrationResource)
     {
-        var primary = GetSingleWaitedOnConnectionStringResource(migrationResource);
+        var primary = GetSingleConnectionStringResource(migrationResource);
 
         var envVarName = primary.ConnectionStringEnvironmentVariable
             ?? ConnectionStringEnvVarPrefix + primary.Name;

@@ -359,7 +359,8 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
     {
         // Sleep significantly longer than the probe timeout we configure so
         // the timeout path is the one that completes the await.
-        using var fakePeer = FakePeerScript.BuildSleeper(outputHelper, sleepSeconds: 30);
+        var fakeSleep = TimeSpan.FromSeconds(30);
+        using var fakePeer = FakePeerScript.BuildSleeper(outputHelper, sleepSeconds: (int)fakeSleep.TotalSeconds);
 
         // Construct a probe with a deliberately tight timeout so the test
         // doesn't have to wait the production 5s budget.
@@ -375,9 +376,11 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
         // timeout entirely (the bug class this test catches). Windows CI under
         // saturated CPU / slow disk has been observed to take ~5s just for the
         // fake-peer cmd.exe spawn + kill round-trip, so the budget needs to be
-        // well above 5s to avoid noise without losing the bound.
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(15),
-            $"Expected probe to return within 15s after its 300ms timeout; took {sw.Elapsed}.");
+        // well above 5s to avoid noise without losing the bound. The important
+        // invariant is that the probe returns through its timeout path well
+        // before the fake peer could exit on its own.
+        Assert.True(sw.Elapsed < fakeSleep / 2,
+            $"Expected probe to return before the fake peer could exit on its own; took {sw.Elapsed}.");
     }
 
     [Fact]
@@ -618,7 +621,7 @@ internal abstract record ScriptBody
             var lines = Stdout.Split('\n');
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if not \"%~1\" == \"doctor\" exit /b 127");
+            AppendBatchContainsArgGuard(sb, "doctor");
             foreach (var line in lines)
             {
                 sb.Append("echo ").AppendLine(line.TrimEnd('\r'));
@@ -645,7 +648,7 @@ internal abstract record ScriptBody
         {
             var sb = new StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if not \"%~1\" == \"doctor\" exit /b 127");
+            AppendBatchContainsArgGuard(sb, "doctor");
             sb.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"[Console]::Error.Write(('x' * {ByteCount}))\"");
             sb.AppendLine($"exit /b {ExitCode}");
             return sb.ToString();
@@ -708,8 +711,10 @@ internal abstract record ScriptBody
         {
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if \"%~1\" == \"doctor\" goto :doctor");
-            sb.AppendLine("if \"%~1\" == \"--version\" goto :version");
+            sb.AppendLine("echo %* | findstr /C:\"doctor\" > nul");
+            sb.AppendLine("if not errorlevel 1 goto :doctor");
+            sb.AppendLine("echo %* | findstr /C:\"--version\" > nul");
+            sb.AppendLine("if not errorlevel 1 goto :version");
             sb.AppendLine("exit /b 127");
             sb.AppendLine(":doctor");
             foreach (var line in DoctorStdout.Split('\n'))
@@ -800,5 +805,11 @@ internal abstract record ScriptBody
 
         var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(stderr));
         sb.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"$bytes=[Convert]::FromBase64String('{encoded}'); [Console]::Error.Write([Text.Encoding]::UTF8.GetString($bytes))\"");
+    }
+
+    private static void AppendBatchContainsArgGuard(StringBuilder sb, string arg)
+    {
+        sb.AppendLine($"echo %* | findstr /C:\"{arg}\" > nul");
+        sb.AppendLine("if errorlevel 1 exit /b 127");
     }
 }

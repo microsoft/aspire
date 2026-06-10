@@ -288,15 +288,35 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         var scripts = EnsureJsonObject(packageJson, "scripts");
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(rootDirectory, _logger);
         var relativeAppHostDirectory = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(rootDirectory.FullName, appHostDirectory.FullName));
+        var preservedScriptNames = AddRootTypeScriptAppHostDelegateScripts(scripts, appHostDirectory, relativeAppHostDirectory, _logger);
 
-        scripts["aspire:start"] = CreateRootDelegateScript(toolchain, relativeAppHostDirectory, "aspire:start");
-        scripts["aspire:build"] = CreateRootDelegateScript(toolchain, relativeAppHostDirectory, "aspire:build");
-        scripts["aspire:dev"] = CreateRootDelegateScript(toolchain, relativeAppHostDirectory, "aspire:dev");
+        if (preservedScriptNames.Count > 0)
+        {
+            _interactionService.DisplayMessage(
+                KnownEmojis.Warning,
+                $"Preserved existing package.json script(s) {string.Join(", ", preservedScriptNames)}. Run the AppHost directly from {relativeAppHostDirectory} or remove the existing script(s) and rerun 'aspire init' to regenerate the root delegates.");
+        }
 
         var serializedPackageJson = SerializePackageJson(packageJson, existingContent);
         await File.WriteAllTextAsync(packageJsonPath, serializedPackageJson, cancellationToken);
+    }
+
+    internal static IReadOnlyList<string> AddRootTypeScriptAppHostDelegateScripts(JsonObject scripts, TypeScriptAppHostToolchain toolchain, string relativeAppHostDirectory)
+    {
+        List<string>? preservedScriptNames = null;
+
+        AddRootTypeScriptAppHostDelegateScript(scripts, toolchain, relativeAppHostDirectory, "aspire:start", ref preservedScriptNames);
+        AddRootTypeScriptAppHostDelegateScript(scripts, toolchain, relativeAppHostDirectory, "aspire:build", ref preservedScriptNames);
+        AddRootTypeScriptAppHostDelegateScript(scripts, toolchain, relativeAppHostDirectory, "aspire:dev", ref preservedScriptNames);
+
+        return preservedScriptNames ?? [];
+    }
+
+    internal static IReadOnlyList<string> AddRootTypeScriptAppHostDelegateScripts(JsonObject scripts, DirectoryInfo appHostDirectory, string relativeAppHostDirectory, ILogger? logger)
+    {
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, logger);
+        return AddRootTypeScriptAppHostDelegateScripts(scripts, toolchain, relativeAppHostDirectory);
     }
 
     internal static string SerializePackageJson(JsonObject packageJson, string existingContent)
@@ -351,6 +371,26 @@ internal sealed class ScaffoldingService : IScaffoldingService
             TypeScriptAppHostToolchain.Bun => $"bun --cwd {relativeAppHostDirectory} run {scriptName}",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
+    }
+
+    private static void AddRootTypeScriptAppHostDelegateScript(JsonObject scripts, TypeScriptAppHostToolchain toolchain, string relativeAppHostDirectory, string scriptName, ref List<string>? preservedScriptNames)
+    {
+        var delegateScript = CreateRootDelegateScript(toolchain, relativeAppHostDirectory, scriptName);
+        if (scripts[scriptName] is JsonValue existingScriptValue &&
+            existingScriptValue.TryGetValue<string>(out var existingScript) &&
+            string.Equals(existingScript, delegateScript, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (scripts[scriptName] is not null)
+        {
+            preservedScriptNames ??= [];
+            preservedScriptNames.Add(scriptName);
+            return;
+        }
+
+        scripts[scriptName] = delegateScript;
     }
 
     private async Task<int> InstallDependenciesAsync(

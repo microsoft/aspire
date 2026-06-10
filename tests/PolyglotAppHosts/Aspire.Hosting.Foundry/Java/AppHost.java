@@ -1,4 +1,5 @@
 import aspire.*;
+import java.util.Map;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
@@ -62,7 +63,7 @@ void main() throws Exception {
         var funcTool = project.addFunctionTool("func-tool", "myFunc", "{}");
 
         // Prompt Agent
-        var _promptAgent = project.addPromptAgent(chat, "prompt-agent");
+        var _promptAgent = project.addPromptAgent("prompt-agent", chat);
         _promptAgent.withTool(codeInterpreter);
         _promptAgent.withTool(fileSearch);
         _promptAgent.withTool(webSearch);
@@ -106,15 +107,13 @@ server.listen(port, '127.0.0.1');
 """
             });
 
-        hostedAgent.publishAsHostedAgent(new PublishAsHostedAgentOptions()
-            .project(project)
-            .configure((configuration) -> {
-                configuration.setDescription("Validation hosted agent");
-                configuration.setCpu(1);
-                configuration.setMemory(2);
-                configuration.metadata().put("scenario", "validation");
-                configuration.environmentVariables().put("VALIDATION_MODE", "true");
-            }));
+        var hostedAgentOptions = new HostedAgentOptions();
+        hostedAgentOptions.setDescription("Validation hosted agent");
+        hostedAgentOptions.setCpu(1.0);
+        hostedAgentOptions.setMemory(2.0);
+        hostedAgentOptions.setMetadata(Map.of("scenario", "validation"));
+        hostedAgentOptions.setEnvironmentVariables(Map.of("VALIDATION_MODE", "true"));
+        hostedAgent.asHostedAgent(project, hostedAgentOptions);
 
         var api = builder.addContainer("api", "nginx");
         foundry.withContainerRegistryRoleAssignments(registry, new AzureContainerRegistryRole[] {

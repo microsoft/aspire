@@ -483,7 +483,48 @@ public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOu
         Assert.Same(builder, result);
     }
 
+    [Fact]
+    public void SubscribeToInterfaceThrowsArgumentException()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            builder.Eventing.Subscribe<IDistributedApplicationEvent>((_, _) => Task.CompletedTask));
+
+        Assert.Contains("IDistributedApplicationEvent", ex.Message);
+        Assert.Contains("concrete", ex.Message);
+    }
+
+    [Fact]
+    public void SubscribeToAbstractClassThrowsArgumentException()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            builder.Eventing.Subscribe<AbstractDummyEvent>((_, _) => Task.CompletedTask));
+
+        Assert.Contains("AbstractDummyEvent", ex.Message);
+        Assert.Contains("concrete", ex.Message);
+    }
+
+    [Fact]
+    public void SubscribeResourceScopedToInterfaceThrowsArgumentException()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddResource(new TestResource("test"));
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            builder.Eventing.Subscribe<IDistributedApplicationResourceEvent>(resource.Resource, (_, _) => Task.CompletedTask));
+
+        Assert.Contains("IDistributedApplicationResourceEvent", ex.Message);
+        Assert.Contains("concrete", ex.Message);
+    }
+
     public class DummyEvent : IDistributedApplicationEvent
+    {
+    }
+
+    public abstract class AbstractDummyEvent : IDistributedApplicationEvent
     {
     }
 

@@ -18,6 +18,7 @@ internal interface IAppHostCliBackchannel
     Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(CancellationToken cancellationToken);
+    Task WaitForDisconnectAsync(CancellationToken cancellationToken);
     Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken);
     Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken);
     IAsyncEnumerable<PublishingActivity> GetPublishingActivitiesAsync(CancellationToken cancellationToken);
@@ -34,6 +35,7 @@ internal sealed class AppHostCliBackchannel(
 {
     private const string BaselineCapability = "baseline.v2";
     private TaskCompletionSource<JsonRpc> _rpcTaskCompletionSource = new();
+    private TaskCompletionSource _disconnectTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private string? _socketPath;
     private bool _autoReconnect;
     private CancellationToken _cancellationToken;
@@ -49,6 +51,17 @@ internal sealed class AppHostCliBackchannel(
         {
             return _rpcTaskCompletionSource.Task;
         }
+    }
+
+    public async Task WaitForDisconnectAsync(CancellationToken cancellationToken)
+    {
+        Task disconnectTask;
+        lock (_lock)
+        {
+            disconnectTask = _disconnectTaskCompletionSource.Task;
+        }
+
+        await disconnectTask.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task RequestStopAsync(CancellationToken cancellationToken)
@@ -301,6 +314,10 @@ internal sealed class AppHostCliBackchannel(
             _socketPath = socketPath;
             _autoReconnect = autoReconnect;
             _cancellationToken = cancellationToken;
+            lock (_lock)
+            {
+                _disconnectTaskCompletionSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
 
             var connectingLogLevel = retryCount % 10 == 0 ? LogLevel.Debug : LogLevel.Trace;
             logger.Log(connectingLogLevel, "Connecting to AppHost backchannel at {SocketPath} (autoReconnect={AutoReconnect}, retryCount={RetryCount})", socketPath, autoReconnect, retryCount);
@@ -339,6 +356,8 @@ internal sealed class AppHostCliBackchannel(
                         BaselineCapability
                         );
                 }
+
+                rpc.Disconnected += OnRpcDisconnected;
 
                 // Set up auto-reconnect if enabled
                 if (autoReconnect)
@@ -399,6 +418,15 @@ internal sealed class AppHostCliBackchannel(
                 }
             }
         });
+    }
+
+    private void OnRpcDisconnected(object? sender, JsonRpcDisconnectedEventArgs args)
+    {
+        logger.LogDebug("Backchannel disconnected: {Reason}", args.Reason);
+        lock (_lock)
+        {
+            _disconnectTaskCompletionSource.TrySetResult();
+        }
     }
 
     private void ResetForReconnection()

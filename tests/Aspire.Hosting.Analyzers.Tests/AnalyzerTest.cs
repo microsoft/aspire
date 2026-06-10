@@ -3,7 +3,6 @@
 
 using System.Reflection;
 using System.Runtime.Versioning;
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Testing;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Testing;
@@ -27,20 +26,7 @@ internal static class AnalyzerTest
                 // This is required to allow the use of top-level statements in the test source.
                 OutputKind = Microsoft.CodeAnalysis.OutputKind.ConsoleApplication
             },
-            ReferenceAssemblies = GetReferenceAssemblies(includeAspireHostingReference),
-            // Suppress ASPIREATS001 (experimental API) warnings in test code
-            SolutionTransforms =
-            {
-                (solution, projectId) =>
-                {
-                    var project = solution.GetProject(projectId)!;
-                    var compilationOptions = project.CompilationOptions!;
-                    var specificDiagnosticOptions = compilationOptions.SpecificDiagnosticOptions
-                        .Add("ASPIREATS001", ReportDiagnostic.Suppress);
-                    compilationOptions = compilationOptions.WithSpecificDiagnosticOptions(specificDiagnosticOptions);
-                    return solution.WithProjectCompilationOptions(projectId, compilationOptions);
-                }
-            }
+            ReferenceAssemblies = GetReferenceAssemblies(includeAspireHostingReference)
         };
         test.ExpectedDiagnostics.AddRange(expectedDiagnostics);
         return test;

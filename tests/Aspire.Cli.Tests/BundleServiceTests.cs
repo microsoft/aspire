@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Shared;
 
 namespace Aspire.Cli.Tests;
@@ -43,20 +44,22 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ComputeDefaultExtractDir_NoSidecar_ReturnsParentOfBinaryDirectory()
+    public void ComputeDefaultExtractDir_NoSidecar_ReturnsDefaultAspireHomeDirectory()
     {
-        // Legacy no-sidecar fallback: a sidecar-less install still walks one level up
-        // from the binary's directory to preserve the historical
-        // ~/.aspire/bin/aspire → ~/.aspire/ mapping that pre-dates the sidecar.
+        // Sidecar-less installs do not prove the binary's directory is user-writable.
+        // Use Aspire home so arbitrary install locations such as read-only package
+        // stores can still extract the embedded bundle.
+        var expected = CliPathHelper.GetDefaultAspireHomeDirectory();
+
         if (OperatingSystem.IsWindows())
         {
             var result = BundleService.ComputeDefaultExtractDir(@"C:\Users\test\.aspire\bin\aspire.exe");
-            Assert.Equal(@"C:\Users\test\.aspire", result);
+            Assert.Equal(expected, result);
         }
         else
         {
             var result = BundleService.ComputeDefaultExtractDir("/home/test/.aspire/bin/aspire");
-            Assert.Equal("/home/test/.aspire", result);
+            Assert.Equal(expected, result);
         }
     }
 

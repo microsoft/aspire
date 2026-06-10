@@ -42,12 +42,14 @@ public class FieldTelemetryFilter : TelemetryFilter
             KnownStructuredLogFields.OriginalFormatField => "OriginalFormat",
             KnownStructuredLogFields.CategoryField => "Category",
             KnownStructuredLogFields.EventNameField => "EventName",
+            KnownStructuredLogFields.TimestampField => "Timestamp",
             KnownTraceFields.NameField => "Name",
             KnownTraceFields.SpanIdField => "SpanId",
             KnownTraceFields.TraceIdField => "TraceId",
             KnownTraceFields.KindField => "Kind",
             KnownTraceFields.StatusField => "Status",
             KnownTraceFields.DurationField => "Duration (ms)",
+            KnownTraceFields.TimestampField => "Timestamp",
             KnownSourceFields.NameField => "Source",
             KnownResourceFields.ServiceNameField => "Resource",
             _ => name
@@ -55,6 +57,26 @@ public class FieldTelemetryFilter : TelemetryFilter
     }
 
     public static bool IsNumericField(string name) => name is KnownTraceFields.DurationField;
+
+    /// <summary>
+    /// Returns true when the field represents a timestamp that should be compared as a date.
+    /// Filter values for these fields are parsed as <see cref="DateTime"/> and compared using
+    /// milliseconds stored in the field value from <see cref="OtlpSpan.GetFieldValue"/> / <see cref="OtlpLogEntry.GetFieldValue"/>.
+    /// </summary>
+    public static bool IsDateField(string name) => name is KnownTraceFields.TimestampField or KnownStructuredLogFields.TimestampField;
+
+    internal static FieldType GetFieldType(string name)
+    {
+        if (IsNumericField(name))
+        {
+            return FieldType.Numeric;
+        }
+        if (IsDateField(name))
+        {
+            return FieldType.Date;
+        }
+        return FieldType.String;
+    }
 
     public static string ConditionToString(FilterCondition c, IStringLocalizer<StructuredFiltering>? loc) =>
         c switch
@@ -75,10 +97,13 @@ public class FieldTelemetryFilter : TelemetryFilter
         {
             FilterCondition.Equals => (a, b) => string.Equals(a, b, StringComparisons.OtlpFieldValue),
             FilterCondition.Contains => (a, b) => a != null && a.Contains(b, StringComparisons.OtlpFieldValue),
-            // Condition.GreaterThan => (a, b) => a > b,
-            // Condition.LessThan => (a, b) => a < b,
-            // Condition.GreaterThanOrEqual => (a, b) => a >= b,
-            // Condition.LessThanOrEqual => (a, b) => a <= b,
+            // Comparison operators are only meaningful for numeric fields. For string fields,
+            // never match — following the same approach as GitHub search, which only allows
+            // comparison operators on known numeric qualifiers.
+            FilterCondition.GreaterThan => static (a, b) => false,
+            FilterCondition.LessThan => static (a, b) => false,
+            FilterCondition.GreaterThanOrEqual => static (a, b) => false,
+            FilterCondition.LessThanOrEqual => static (a, b) => false,
             FilterCondition.NotEqual => (a, b) => !string.Equals(a, b, StringComparisons.OtlpFieldValue),
             FilterCondition.NotContains => (a, b) => a != null && !a.Contains(b, StringComparisons.OtlpFieldValue),
             _ => throw new ArgumentOutOfRangeException(nameof(c), c, null)
@@ -131,6 +156,32 @@ public class FieldTelemetryFilter : TelemetryFilter
         return func(fieldNumber, filterNumber);
     }
 
+    /// <summary>
+    /// Compares a field value (stored as milliseconds since DateTime.MinValue) against a filter value (a date string).
+    /// Milliseconds fit within double's exact integer range (max ~3.16×10^14 vs 2^53 ≈ 9×10^15).
+    /// </summary>
+    private static bool TryMatchDate(string fieldMillisecondsValue, string filterDateValue, FilterCondition condition)
+    {
+        if (!long.TryParse(fieldMillisecondsValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fieldMs))
+        {
+            return false;
+        }
+
+        if (!DateTime.TryParse(filterDateValue, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeLocal, out var filterDate))
+        {
+            return false;
+        }
+
+        if (condition is not (FilterCondition.Equals or FilterCondition.GreaterThan or FilterCondition.LessThan or FilterCondition.GreaterThanOrEqual or FilterCondition.LessThanOrEqual or FilterCondition.NotEqual))
+        {
+            return false;
+        }
+
+        var filterMs = filterDate.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond;
+        var func = ConditionToFuncNumber(condition);
+        return func(fieldMs, filterMs);
+    }
+
     public bool HasNumericMatch(double fieldValue)
     {
         if (!double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var filterNumber) ||
@@ -175,26 +226,35 @@ public class FieldTelemetryFilter : TelemetryFilter
                 }
             default:
                 {
-                    var func = ConditionToFuncString(Condition);
-                    return input.Where(x => func(OtlpLogEntry.GetFieldValue(x, Field) ?? string.Empty, Value));
+                    var fieldType = GetFieldType(Field);
+                    return input.Where(x =>
+                    {
+                        var fieldValue = OtlpLogEntry.GetFieldValue(x, Field) ?? string.Empty;
+                        return fieldType switch
+                        {
+                            FieldType.Numeric => TryMatchNumber(fieldValue, Value, Condition),
+                            FieldType.Date => TryMatchDate(fieldValue, Value, Condition),
+                            _ => ConditionToFuncString(Condition)(fieldValue, Value)
+                        };
+                    });
                 }
         }
     }
 
     public override bool Apply(OtlpSpan span)
     {
-        var fieldValue = OtlpSpan.GetFieldValue(span, Field);
+        var fieldValues = OtlpSpan.GetFieldValue(span, Field);
         var isNot = Condition is FilterCondition.NotEqual or FilterCondition.NotContains;
-        var isNumeric = IsNumericField(Field);
+        var fieldType = GetFieldType(Field);
 
         if (!isNot)
         {
             // Or
-            if (fieldValue.Value1 != null && IsMatch(fieldValue.Value1, Value, Condition, isNumeric))
+            if (fieldValues.Value1 != null && IsMatch(fieldValues.Value1, Value, Condition, fieldType))
             {
                 return true;
             }
-            if (fieldValue.Value2 != null && IsMatch(fieldValue.Value2, Value, Condition, isNumeric))
+            if (fieldValues.Value2 != null && IsMatch(fieldValues.Value2, Value, Condition, fieldType))
             {
                 return true;
             }
@@ -203,9 +263,9 @@ public class FieldTelemetryFilter : TelemetryFilter
         {
             // And — both values must satisfy the not-equal/not-contains condition.
             // When Value2 is null (most fields only have one value), Value1 alone is sufficient.
-            if (fieldValue.Value1 != null && IsMatch(fieldValue.Value1, Value, Condition, isNumeric))
+            if (fieldValues.Value1 != null && IsMatch(fieldValues.Value1, Value, Condition, fieldType))
             {
-                if (fieldValue.Value2 is null || IsMatch(fieldValue.Value2, Value, Condition, isNumeric))
+                if (fieldValues.Value2 is null || IsMatch(fieldValues.Value2, Value, Condition, fieldType))
                 {
                     return true;
                 }
@@ -214,15 +274,14 @@ public class FieldTelemetryFilter : TelemetryFilter
 
         return false;
 
-        static bool IsMatch(string fieldValue, string filterValue, FilterCondition condition, bool isNumeric)
+        static bool IsMatch(string fieldValue, string filterValue, FilterCondition condition, FieldType fieldType)
         {
-            if (isNumeric)
+            return fieldType switch
             {
-                return TryMatchNumber(fieldValue, filterValue, condition);
-            }
-
-            var func = ConditionToFuncString(condition);
-            return func(fieldValue, filterValue);
+                FieldType.Numeric => TryMatchNumber(fieldValue, filterValue, condition),
+                FieldType.Date => TryMatchDate(fieldValue, filterValue, condition),
+                _ => ConditionToFuncString(condition)(fieldValue, filterValue)
+            };
         }
     }
 
@@ -251,4 +310,11 @@ public class FieldTelemetryFilter : TelemetryFilter
 
         return true;
     }
+}
+
+internal enum FieldType
+{
+    String,
+    Numeric,
+    Date
 }

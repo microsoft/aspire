@@ -7,7 +7,7 @@ import { stripComments } from 'jsonc-parser';
  */
 export async function readJsonFile(uri: vscode.Uri): Promise<any> {
     const buffer = await vscode.workspace.fs.readFile(uri);
-    const raw = buffer.toString();
+    const raw = Buffer.from(buffer).toString('utf8');
     return JSON.parse(stripComments(raw));
 }
 

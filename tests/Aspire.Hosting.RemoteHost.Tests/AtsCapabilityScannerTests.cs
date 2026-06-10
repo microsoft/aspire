@@ -364,16 +364,37 @@ public class AtsCapabilityScannerTests
 
         var dto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(HttpCommandExportOptions)));
         Assert.Equal(nameof(HttpCommandExportOptions), dto.Name);
+        var commandOptionsProperty = Assert.Single(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandOptions));
+        Assert.True(commandOptionsProperty.IsOptional);
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.EndpointName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.MethodName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.ResultMode));
+        var prepareRequestProperty = Assert.Single(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.PrepareRequest));
+        Assert.True(prepareRequestProperty.IsCallback);
+        Assert.True(prepareRequestProperty.IsOptional);
+
+        var callbackParameter = Assert.Single(prepareRequestProperty.CallbackParameters!);
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(HttpCommandPrepareRequestContext)), callbackParameter.Type.TypeId);
+        Assert.Equal(AtsTypeCategory.Handle, callbackParameter.Type.Category);
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(HttpCommandRequestExportData)), prepareRequestProperty.CallbackReturnType?.TypeId);
+        Assert.Equal(AtsTypeCategory.Dto, prepareRequestProperty.CallbackReturnType?.Category);
+
         Assert.DoesNotContain(dto.Properties, p => p.Name == "Parameter");
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.HttpClientName));
-        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.PrepareRequest));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.Method));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.EndpointSelector));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.GetCommandResult));
+
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting/withHttpCommandPrepareRequest");
+
+        var requestDataDto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(HttpCommandRequestExportData)));
+        Assert.Equal(nameof(HttpCommandRequestExportData), requestDataDto.Name);
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.MethodName));
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.Headers));
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.Content));
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.ContentType));
     }
 
     [Fact]

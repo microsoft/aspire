@@ -108,35 +108,11 @@ public class DashboardUrlsTests
     }
 
     [Fact]
-    public void TelemetrySpansApiUrl_WithMinimumDuration_AppendsMinDurationQueryParameter()
-    {
-        var url = DashboardUrls.TelemetrySpansApiUrl("http://localhost:18888", minDurationMs: 50.5);
-
-        Assert.Contains("minDurationMs=50.5", url);
-    }
-
-    [Fact]
     public void TelemetryTracesApiUrl_WithSearch_AppendsSearchQueryParameter()
     {
         var url = DashboardUrls.TelemetryTracesApiUrl("http://localhost:18888", search: "timeout");
 
         Assert.Contains("search=timeout", url);
-    }
-
-    [Fact]
-    public void TelemetryTracesApiUrl_WithMinimumDuration_AppendsMinDurationQueryParameter()
-    {
-        var url = DashboardUrls.TelemetryTracesApiUrl("http://localhost:18888", minDurationMs: 50.5);
-
-        Assert.Contains("minDurationMs=50.5", url);
-    }
-
-    [Fact]
-    public void TelemetryTraceDetailApiUrl_WithMinimumDuration_AppendsMinDurationQueryParameter()
-    {
-        var url = DashboardUrls.TelemetryTraceDetailApiUrl("http://localhost:18888", "trace1", minDurationMs: 50.5);
-
-        Assert.Contains("minDurationMs=50.5", url);
     }
 
     [Fact]

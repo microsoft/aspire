@@ -8,8 +8,7 @@
     2. Extracts the CLI archive to a temp location
     3. Verifies the archive shape contains the native CLI payload and no install-route sidecar
     4. Runs 'aspire --version' to validate the binary executes
-    5. Runs 'aspire new aspire-starter' to test C# starter creation
-    6. Cleans up temp directories
+    5. Cleans up temp directories
 
 .PARAMETER ArchivePath
     Path to the CLI archive (.zip or .tar.gz)
@@ -115,29 +114,6 @@ function Test-ArchiveSidecar {
         throw "$ridFamily-* archive '$ArchiveFileName' must not contain '.aspire-install.json' (per-RID archives are shared across install routes; each route authors its own sidecar after extraction). Found: $($strayPaths -join ', ')"
     }
     Write-Step "$ridFamily-* archive correctly omits the install-route sidecar."
-}
-
-function Test-CSharpStarterProject {
-    param(
-        [Parameter(Mandatory = $true)][string]$AspireBin,
-        [Parameter(Mandatory = $true)][string]$ProjectRoot
-    )
-
-    Write-Step "Running 'aspire new aspire-starter --name VerifyApp --output $ProjectRoot --non-interactive --nologo'..."
-    & $AspireBin new aspire-starter --name VerifyApp --output $ProjectRoot --non-interactive --nologo 2>&1 | Write-Host
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err "'aspire new aspire-starter' failed with exit code $LASTEXITCODE"
-        exit 1
-    }
-
-    $appHostDir = Join-Path $ProjectRoot "VerifyApp.AppHost"
-    if (-not (Test-Path $appHostDir)) {
-        Write-Err "Expected project directory 'VerifyApp.AppHost' not found after 'aspire new aspire-starter'"
-        Get-ChildItem $ProjectRoot | Format-Table
-        exit 1
-    }
-
-    Write-Ok "'aspire new aspire-starter' created project successfully"
 }
 
 $userHome = Get-UserHome
@@ -248,16 +224,20 @@ try {
     Write-Host "  Version: $versionOutput"
     Write-Ok "'aspire --version' succeeded"
 
-    # Step 4: Create starter project with aspire new. The C# starter exercises
-    # template engine + bundle self-extraction without requiring a NuGet restore.
-    # The TypeScript starter check (#17274) is intentionally not invoked here:
-    # its packager-managed AppHost bootstrap triggers a NuGet restore whose
-    # transitive deps resolve to api.nuget.org, which the 1ES signed-build agent
-    # has no egress to. Re-adding it requires either an internal NuGet mirror
-    # config or skipping the auto-restore. Tracked in #17345.
-    $csharpProjectDir = Join-Path $verifyTmpDir "VerifyApp"
-    New-Item -ItemType Directory -Path $csharpProjectDir -Force | Out-Null
-    Test-CSharpStarterProject -AspireBin $aspireBin -ProjectRoot $csharpProjectDir
+    # Note: 'aspire new aspire-starter' was previously invoked here to exercise the
+    # template engine + bundle self-extraction path. It has been removed because the
+    # template lookup is not actually offline — it queries NuGet feeds via
+    # TemplateNuGetConfigService.ResolveTemplatePackageAsync. The step only ever
+    # succeeded on release branches because builds were mis-baked with
+    # AspireCliChannel=stable, which routed the lookup to nuget.org and found a
+    # previously-shipped Aspire.ProjectTemplates version. Once #17528 corrected the
+    # release-branch builds to bake AspireCliChannel=staging, the implicit identity
+    # channel switched to a staging feed that is not reachable from the 1ES signed-
+    # build agent, and the step started failing with "No template versions were
+    # found." This mirrors the prior removal of the TypeScript starter check
+    # (#17274 / tracked in #17345) for the same egress reason. Re-adding meaningful
+    # starter coverage in the signed-build verifier requires either an internal
+    # NuGet mirror or a no-network template path.
 
     Write-Host ""
     Write-Host "=========================================="

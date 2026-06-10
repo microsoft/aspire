@@ -172,6 +172,11 @@
         <target state="translated">Impossible d’écrire dans le répertoire d’installation « {0} ». Exécutez la mise à jour avec des autorisations élevées (par exemple, en utilisant sudo sur Linux/macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NpmSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from npm, run:</source>
+        <target state="new">To update the Aspire CLI when installed from npm, run:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NuGetConfigDirOptionDescription">
         <source>Directory to create or update the NuGet.config file in</source>
         <target state="new">Directory to create or update the NuGet.config file in</target>

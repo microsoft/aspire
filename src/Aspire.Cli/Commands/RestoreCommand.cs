@@ -9,7 +9,6 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -45,26 +44,22 @@ internal sealed class RestoreCommand : BaseCommand
         ILanguageDiscovery languageDiscovery,
         IDotNetCliRunner runner,
         IDotNetSdkInstaller sdkInstaller,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
         ILogger<RestoreCommand> logger,
         ICSharpCliManagedAppHostModuleGenerator cliManagedModuleGenerator,
         IIntegrationClosureRestorer integrationClosureRestorer,
-        AspireCliTelemetry telemetry)
-        : base("restore", RestoreCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("restore", RestoreCommandStrings.Description, services)
     {
         _projectLocator = projectLocator;
         _projectFactory = projectFactory;
         _languageDiscovery = languageDiscovery;
         _runner = runner;
         _sdkInstaller = sdkInstaller;
-        _interactionService = interactionService;
+        _interactionService = services.InteractionService;
         _logger = logger;
         _cliManagedModuleGenerator = cliManagedModuleGenerator;
         _integrationClosureRestorer = integrationClosureRestorer;
-        _features = features;
+        _features = services.Features;
 
         Options.Add(s_appHostOption);
     }

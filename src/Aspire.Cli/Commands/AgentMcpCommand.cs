@@ -5,14 +5,11 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
-using Aspire.Cli.Mcp;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Mcp;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Shared.Mcp;
@@ -53,10 +50,6 @@ internal sealed class AgentMcpCommand : BaseCommand
     internal IReadOnlyDictionary<string, CliMcpTool> KnownTools => _knownTools;
 
     public AgentMcpCommand(
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor,
         IMcpTransportFactory transportFactory,
         ILoggerFactory loggerFactory,
@@ -66,8 +59,8 @@ internal sealed class AgentMcpCommand : BaseCommand
         IDocsSearchService docsSearchService,
         IDocsIndexService docsIndexService,
         IHttpClientFactory httpClientFactory,
-        AspireCliTelemetry telemetry)
-        : base("mcp", AgentCommandStrings.McpCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("mcp", AgentCommandStrings.McpCommand_Description, services)
     {
         _auxiliaryBackchannelMonitor = auxiliaryBackchannelMonitor;
         _transportFactory = transportFactory;
@@ -78,7 +71,7 @@ internal sealed class AgentMcpCommand : BaseCommand
         _environmentChecker = environmentChecker;
         _docsSearchService = docsSearchService;
         _docsIndexService = docsIndexService;
-        _executionContext = executionContext;
+        _executionContext = services.ExecutionContext;
         _resourceToolRefreshService = new McpResourceToolRefreshService(auxiliaryBackchannelMonitor, loggerFactory.CreateLogger<McpResourceToolRefreshService>());
 
         Options.Add(s_dashboardUrlOption);

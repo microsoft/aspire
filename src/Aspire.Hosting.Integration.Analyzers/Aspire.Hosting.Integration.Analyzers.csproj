@@ -13,7 +13,7 @@
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>aspire hosting analyzers ats polyglot integration</PackageTags>
-    <Description>Experimental analyzers for Aspire hosting integration authors.</Description>
+    <Description>Analyzers for Aspire hosting integration authors.</Description>
     <LangVersion>12.0</LangVersion>
     <!--
       Analyzer projects don't need XML docs

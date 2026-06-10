@@ -10,25 +10,25 @@ namespace Aspire.Hosting
 {
     public static partial class SqlServerBuilderExtensions
     {
-        [AspireExport(Description = "Adds a SQL Server database resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, string name, string? databaseName = null) { throw null; }
 
-        [AspireExport(Description = "Adds a SQL Server container resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> AddSqlServer(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null, int? port = null) { throw null; }
 
-        [AspireExport(Description = "Defines the SQL script used to create the database")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerDatabaseResource> WithCreationScript(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerDatabaseResource> builder, string script) { throw null; }
 
-        [AspireExport(Description = "Adds a bind mount for the SQL Server data folder")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport(Description = "Adds a named volume for the SQL Server data folder")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExport(Description = "Sets the host port for the SQL Server resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithHostPort(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, int? port) { throw null; }
 
-        [AspireExport(Description = "Configures the password for the SQL Server resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithPassword(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> password) { throw null; }
     }
 }

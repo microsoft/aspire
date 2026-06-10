@@ -5,16 +5,20 @@ import {
     WellKnownPipelineTags,
     createBuilder,
     CertificateTrustScope,
+    ContainerImageDestination,
+    ContainerImageFormat,
+    ContainerTargetPlatform,
     EndpointProperty,
     HealthStatus,
     IconVariant,
     InputType,
+    MessageIntent,
     OtlpProtocol,
     ProbeType,
     ResourceCommandState,
     refExpr,
 } from './.aspire/modules/aspire.mjs';
-import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext } from './.aspire/modules/aspire.mjs';
+import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext, HealthCheckResult, InteractionChoiceOption } from './.aspire/modules/aspire.mjs';
 import { fileURLToPath } from 'node:url';
 
 const builder = await createBuilder();
@@ -90,12 +94,22 @@ const exe = await builder.addExecutable("myexe", "echo", ".", ["hello"]);
 // addProject (pre-existing)
 const project = await builder.addProject("myproject", "./src/MyProject", { launchProfileOrOptions: "https" });
 const projectWithoutLaunchProfile = await builder.addProject("myproject-noprofile", "./src/MyProject");
+await project.withEndpointsInEnvironment(["https"]);
 // ATS exports ReferenceEnvironmentInjectionFlags as a DTO-shaped object in TypeScript.
 const referenceEnvironmentOptions = {
     connectionString: true,
     serviceDiscovery: true,
 };
 await project.withReferenceEnvironment(referenceEnvironmentOptions);
+
+const customHealthCheck = async (): Promise<HealthCheckResult> => ({
+    status: HealthStatus.Healthy,
+    description: "custom health check",
+    data: {
+        custom: "value",
+    },
+});
+await builder.addHealthCheck("custom_check", customHealthCheck);
 
 // addCSharpApp
 const csharpApp = await builder.addCSharpApp("csharpapp", "./src/CSharpApp");
@@ -145,6 +159,25 @@ await container.withContainerCertificatePaths({
     defaultCertificateBundlePaths: ["/etc/ssl/certs/ca-certificates.crt"],
     defaultCertificateDirectoryPaths: ["/etc/ssl/certs", "/usr/local/share/ca-certificates"],
 });
+await container.withContainerFiles("/usr/lib/aspire/container-files", ".", {
+    defaultOwner: 1000,
+    defaultGroup: 1000,
+    umask: 0o022,
+});
+
+// withContainerFilesCallback — build entries dynamically via the context factory methods
+await container.withContainerFilesCallback("/usr/lib/aspire/container-files", async (filesCtx) => {
+    const filesServices = await filesCtx.services();
+    const filesLoggerFactory = await filesServices.getLoggerFactory();
+    const filesLogger = await filesLoggerFactory.createLogger("ValidationAppHost.ContainerFilesCallback");
+    await filesLogger.logInformation("ContainerFilesCallback services");
+
+    const appConfig = await filesCtx.createFile("app.conf", { contents: "key=value", mode: 0o644 });
+    const nestedConfig = await filesCtx.createFile("nested.conf", { contents: "nested=true" });
+    const confDir = await filesCtx.createDirectory("conf.d", [nestedConfig], { mode: 0o755 });
+    const cert = await filesCtx.createCertificateFile("server.pem", { contents: "-----BEGIN CERTIFICATE-----" });
+    return [appConfig, confDir, cert];
+}, { defaultOwner: 1000, defaultGroup: 1000, umask: 0o022 });
 
 // withImageRegistry
 await container.withImageRegistry("docker.io");
@@ -320,6 +353,16 @@ await container.withMcpServer({ path: "/mcp" });
 
 // withRequiredCommand
 await container.withRequiredCommand("docker");
+
+// withRequiredCommandValidation
+await container.withRequiredCommandValidation("docker", async (validationCtx) => {
+    const _validationResolvedPath = await validationCtx.resolvedPath();
+    const validationServices = await validationCtx.services();
+    const validationLoggerFactory = await validationServices.getLoggerFactory();
+    const validationLogger = await validationLoggerFactory.createLogger("ValidationAppHost.RequiredCommandValidation");
+    await validationLogger.logInformation("RequiredCommandValidation services");
+    return await validationCtx.success();
+});
 
 // ===================================================================
 // DotnetToolResourceExtensions.cs — NEW exports
@@ -704,6 +747,7 @@ await container.withUrl(refExpr`http://${endpoint}`);
 
 // withHealthCheck
 await container.withHealthCheck("http");
+await container.withHealthCheck("custom_check");
 
 // withCommand
 await container.withCommand("noop", "Noop", async () => {
@@ -712,6 +756,10 @@ await container.withCommand("noop", "Noop", async () => {
     commandOptions: {
         updateState: async (ctx) => {
             const snapshot = await ctx.resourceSnapshot();
+            const updateStateServices = await ctx.services();
+            const updateStateLoggerFactory = await updateStateServices.getLoggerFactory();
+            const updateStateLogger = await updateStateLoggerFactory.createLogger("ValidationAppHost.UpdateCommandState");
+            await updateStateLogger.logInformation("UpdateCommandState services");
 
             return snapshot.healthStatus === HealthStatus.Healthy
                 ? ResourceCommandState.Enabled
@@ -721,9 +769,13 @@ await container.withCommand("noop", "Noop", async () => {
 });
 await container.withCommand("echo", "Echo", async (ctx) => {
     const commandInputs = await ctx.arguments();
-    const commandArguments = await commandInputs.toArray();
+    const message = await commandInputs.value("message");
+    const echoServices = await ctx.services();
+    const echoLoggerFactory = await echoServices.getLoggerFactory();
+    const echoLogger = await echoLoggerFactory.createLogger("ValidationAppHost.EchoCommand");
+    await echoLogger.logInformation("Echo command services");
 
-    return { success: commandArguments[0]?.value === "hello" };
+    return { success: message === "hello" };
 }, {
     commandOptions: {
         arguments: [
@@ -732,7 +784,13 @@ await container.withCommand("echo", "Echo", async (ctx) => {
                 inputType: InputType.Text,
                 required: true
             }
-        ]
+        ],
+        validateArguments: async (ctx) => {
+            const validationServices = await ctx.services();
+            const validationLoggerFactory = await validationServices.getLoggerFactory();
+            const validationLogger = await validationLoggerFactory.createLogger("ValidationAppHost.ValidateCommandArguments");
+            await validationLogger.logInformation("Validate command arguments services");
+        }
     }
 });
 await container.withCommand("restart", "Restart", async (ctx) => {
@@ -742,6 +800,197 @@ await container.withCommand("restart", "Restart", async (ctx) => {
         arguments: { message: "hello" },
         cancellationToken
     });
+});
+// Test bench for the polyglot IInteractionService API: prompts for a region, then dynamically
+// loads the available zones for that region into a second choice input. Reached via the command's
+// service provider (services().getInteractionService()), which only prompts when the
+// interaction service is available (the interactive dashboard path).
+await container.withCommand("pick-zone", "Pick Zone", async (ctx) => {
+    const interactionService = await ctx.services().getInteractionService();
+
+    if (!(await interactionService.isAvailable())) {
+        return { success: true, message: "Interaction service is not available." };
+    }
+
+    const regionInput = await interactionService.createChoiceInput("region", {
+        choices: [{ value: "us", label: "United States" }, { value: "eu", label: "Europe" }]
+    });
+
+    const zoneInput = await interactionService
+        .createChoiceInput("zone")
+        .withDynamicLoading(async (loadContext) => {
+            const region = await loadContext.inputs().value("region");
+
+            const zones: InteractionChoiceOption[] = region === "eu"
+                ? [{ value: "eu-west", label: "EU West" }, { value: "eu-north", label: "EU North" }]
+                : [{ value: "us-east", label: "US East" }, { value: "us-west", label: "US West" }];
+
+            await loadContext.input().setChoiceOptions(zones);
+        });
+
+    const result = await interactionService.promptInputs(
+        "Pick a zone",
+        "Choose a region, then pick a zone from the dynamically loaded options.",
+        [regionInput, zoneInput]);
+
+    const canceled = await result.canceled();
+    return { success: !canceled, canceled };
+});
+// Exhaustive coverage of the remaining IInteractionService surface so every newly added member is
+// exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
+// the dynamic-loading context accessors/setters, and the option/result DTO fields.
+await container.withCommand("interaction-showcase", "Interaction Showcase", async (ctx) => {
+    const interactionService = await ctx.services().getInteractionService();
+
+    if (!(await interactionService.isAvailable())) {
+        return { success: true, message: "Interaction service is not available." };
+    }
+
+    const confirmation = await interactionService.promptConfirmation("Confirm", "Proceed?", {
+        primaryButtonText: "Yes",
+        secondaryButtonText: "No",
+        showSecondaryButton: true,
+        showDismiss: true,
+        enableMessageMarkdown: true,
+        intent: MessageIntent.Confirmation
+    });
+
+    const messageBox = await interactionService.promptMessageBox("Notice", "Read this.", {
+        primaryButtonText: "OK",
+        intent: MessageIntent.Information
+    });
+
+    const notification = await interactionService.promptNotification("Heads up", "Something happened.", {
+        intent: MessageIntent.Warning,
+        linkText: "Learn more",
+        linkUrl: "https://aspire.dev",
+        showDismiss: true
+    });
+
+    const textInput = await interactionService.createTextInput("name", {
+        label: "Name",
+        description: "Your **name**",
+        enableDescriptionMarkdown: true,
+        required: true,
+        placeholder: "Jane Doe",
+        value: "Jane",
+        maxLength: 64,
+        disabled: false
+    });
+    const secretInput = await interactionService.createSecretInput("password", { required: true });
+    const booleanInput = await interactionService.createBooleanInput("enabled", { value: "true" });
+    const numberInput = await interactionService.createNumberInput("count", { value: "1" });
+    const choiceInput = await interactionService.createChoiceInput("color", {
+        choices: [{ value: "r", label: "Red" }, { value: "g", label: "Green" }],
+        options: { allowCustomChoice: true }
+    });
+    const presetInput = await interactionService.createTextInput("greeting").withValue("hello");
+    const sizeInput = await interactionService
+        .createChoiceInput("size")
+        .withChoiceOptions([{ value: "s", label: "Small" }, { value: "l", label: "Large" }]);
+    const dependentInput = await interactionService
+        .createChoiceInput("shade")
+        .withDynamicLoading(async (loadContext) => {
+            const input = loadContext.input();
+            const inputName = await input.getName();
+            const color = await loadContext.inputs().value("color");
+
+            await input.setChoiceOptions(color === "r"
+                ? [{ value: "crimson", label: "Crimson" }, { value: "scarlet", label: "Scarlet" }]
+                : [{ value: "lime", label: "Lime" }, { value: "forest", label: "Forest" }]);
+            await input.setValue(inputName);
+        }, {
+            alwaysLoadOnStart: true,
+            dependsOnInputs: ["color"]
+        });
+
+    const single = await interactionService.promptInput(
+        "Single input",
+        "Enter a value.",
+        interactionService.createTextInput("solo"),
+        {
+            primaryButtonText: "Save",
+            validationCallback: async (validationContext) => {
+                const solo = await validationContext.inputs().value("solo");
+                if (!solo) {
+                    await validationContext.addValidationError("solo", "A value is required.");
+                }
+            }
+        });
+
+    const multi = await interactionService.promptInputs(
+        "Multiple inputs",
+        "Fill out the form.",
+        [textInput, secretInput, booleanInput, numberInput, choiceInput, presetInput, sizeInput, dependentInput],
+        {
+            primaryButtonText: "Submit",
+            enableMessageMarkdown: true,
+            validationCallback: async (validationContext) => {
+                const name = await validationContext.inputs().value("name");
+                if (name === "bad") {
+                    await validationContext.addValidationError("name", "Name cannot be 'bad'.");
+                }
+            }
+        });
+
+    const selectedColor = await multi.inputs().value("color");
+    const soloValue = single.input?.value;
+
+    const multiCanceled = await multi.canceled();
+    const success = !confirmation.canceled
+        && confirmation.value === true
+        && !messageBox.canceled
+        && !notification.canceled
+        && !single.canceled
+        && !multiCanceled;
+
+    return {
+        success,
+        canceled: multiCanceled,
+        message: `color=${selectedColor ?? ""} solo=${soloValue ?? ""}`
+    };
+});
+
+// withHttpsCertificateConfiguration
+await container.withHttpsCertificateConfiguration(async (certCtx) => {
+    const _certResource = await certCtx.resource();
+    const _certIsRunMode: boolean = await certCtx.executionContext().isRunMode();
+    const certificatePath = await certCtx.certificatePath();
+    const keyPath = await certCtx.keyPath();
+    const certArgs = await certCtx.arguments();
+    await certArgs.add("--certificate");
+    await certArgs.add(certificatePath);
+    await certArgs.add("--key");
+    await certArgs.add(keyPath);
+    const certEnv = await certCtx.environment();
+    await certEnv.set("Kestrel__Certificates__Path", certificatePath);
+    await certEnv.set("Kestrel__Certificates__KeyPath", keyPath);
+});
+
+// subscribeHttpsEndpointsUpdate
+await container.subscribeHttpsEndpointsUpdate(async (httpsCtx) => {
+    const _httpsResource = await httpsCtx.resource();
+    const _httpsModel = await httpsCtx.model();
+    const httpsServices = await httpsCtx.services();
+    const httpsLoggerFactory = await httpsServices.getLoggerFactory();
+    const httpsLogger = await httpsLoggerFactory.createLogger("ValidationAppHost.HttpsEndpointsUpdate");
+    await httpsLogger.logInformation("HttpsEndpointsUpdate services");
+});
+
+// withContainerBuildOptions
+await container.withContainerBuildOptions(async (buildCtx) => {
+    await buildCtx.destination.set(ContainerImageDestination.Registry);
+    await buildCtx.imageFormat.set(ContainerImageFormat.Oci);
+    await buildCtx.targetPlatform.set(ContainerTargetPlatform.LinuxAmd64);
+    await buildCtx.outputPath.set("./artifacts/container-image");
+    await buildCtx.localImageName.set("validation-image");
+    await buildCtx.localImageTag.set("latest");
+    const _buildResource = await buildCtx.resource();
+    const _buildExecutionContext = await buildCtx.executionContext();
+    const buildServices = await buildCtx.services();
+    const buildLoggerFactory = await buildServices.getLoggerFactory();
+    const buildLogger = await buildLoggerFactory.createLogger("ValidationAppHost.ContainerBuildOptions");
+    await buildLogger.logInformation("ContainerBuildOptions services");
 });
 
 // withProcessCommand
@@ -765,10 +1014,58 @@ await container.withProcessCommand("node-stdin", "Node stdin", {
     },
     maxOutputLineCount: 10,
 });
+await container.withProcessCommand("node-message", "Node message", {
+    createProcessSpec: async (context) => {
+        const args = await context.arguments();
+        const message = await args.requiredValue("message");
+
+        return {
+            executablePath: "node",
+            arguments: ["-e", "console.log(process.argv[1])", message],
+        };
+    },
+    commandOptions: {
+        description: "Runs node with an argument supplied when the process command is invoked.",
+        iconName: "WindowConsole",
+        arguments: [
+            {
+                name: "message",
+                inputType: InputType.Text,
+                required: true,
+            },
+        ],
+    },
+    maxOutputLineCount: 10,
+    displayImmediately: false,
+});
 
 // withHttpCommand
 await container.withHttpCommand("/health", "Health Check");
-await container.withHttpCommand("/api/reset", "Reset", { methodName: "POST", confirmationMessage: "Are you sure?" });
+await container.withHttpCommand("/api/reset", "Reset", {
+    methodName: "POST",
+    prepareRequest: async (context) => {
+        const args = await context.arguments();
+        const message = await args.requiredValue("message");
+
+        return {
+            content: JSON.stringify({ message }),
+            contentType: "application/json",
+            headers: {
+                "X-Message": message,
+            },
+        };
+    },
+    commandOptions: {
+        arguments: [
+            {
+                name: "message",
+                inputType: InputType.Text,
+                required: true,
+            },
+        ],
+    },
+    confirmationMessage: "Are you sure?",
+});
 
 const app = await builder.build();
 await app.run();

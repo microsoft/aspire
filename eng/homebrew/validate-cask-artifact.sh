@@ -4,6 +4,27 @@ set -euo pipefail
 # Validates a generated Aspire Homebrew cask. The script intentionally keeps
 # upload/submission concerns out of validation so GitHub Actions and Azure
 # DevOps can both use the same checks.
+#
+# Validation modes:
+#   * LiveRelease  — Validates against the live GitHub release for the cask's
+#                    version. Runs the full `brew audit --cask --online
+#                    --signing` (the same gauntlet Homebrew/homebrew-cask's
+#                    per-cask CI runs for a bump PR) plus a real
+#                    `brew install`/`brew uninstall` cycle. Used by the
+#                    release pipeline after `PublishReleaseAssetsJob` has
+#                    uploaded the aspire-cli-osx-* archives to the GitHub
+#                    release.
+#   * LiveArchives — Validates against the cask file alone, without depending
+#                    on the cask URL resolving (the GitHub release for the
+#                    version-being-built doesn't exist yet at source-build
+#                    time). Runs `brew audit --cask --no-signing` — all
+#                    structural checks (style, syntax, naming, verified-vs-url
+#                    consistency, version format, conflicts, depends_on
+#                    rules). Drops `--online` because several `audit_*`
+#                    methods (download, signing, rosetta, min_os) try to
+#                    fetch the cask URL when --online is set, and that URL
+#                    doesn't resolve yet. LiveRelease covers the --online
+#                    checks on every released version.
 
 usage() {
   cat <<EOF
@@ -14,9 +35,7 @@ Required:
 
 Optional:
   --channel CHANNEL          Installer channel: stable or prerelease
-  --archive-root PATH        Root directory containing locally built CLI archives
-  --validation-mode MODE     Full, Offline, or GenerateOnly (default: Full)
-  --summary-path PATH        Write validation-summary.json for release submission
+  --validation-mode MODE     LiveRelease or LiveArchives (default: LiveRelease)
   --help                     Show this help message
 EOF
   exit 1
@@ -24,29 +43,25 @@ EOF
 
 CASK_FILE=""
 CHANNEL="stable"
-ARCHIVE_ROOT=""
-VALIDATION_MODE="Full"
-SUMMARY_PATH=""
+VALIDATION_MODE="LiveRelease"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --cask-file) CASK_FILE="$2"; shift 2 ;;
     --channel) CHANNEL="$2"; shift 2 ;;
-    --archive-root) ARCHIVE_ROOT="$2"; shift 2 ;;
     --validation-mode) VALIDATION_MODE="$2"; shift 2 ;;
-    --summary-path) SUMMARY_PATH="$2"; shift 2 ;;
     --help) usage ;;
     *) echo "Unknown option: $1" >&2; usage ;;
   esac
 done
 
+shopt -s nocasematch
 case "$VALIDATION_MODE" in
-  Full|Offline|GenerateOnly) ;;
-  full) VALIDATION_MODE="Full" ;;
-  offline) VALIDATION_MODE="Offline" ;;
-  generateonly|generate-only) VALIDATION_MODE="GenerateOnly" ;;
-  *) echo "Error: --validation-mode must be Full, Offline, or GenerateOnly." >&2; exit 1 ;;
+  liverelease)  VALIDATION_MODE="LiveRelease" ;;
+  livearchives) VALIDATION_MODE="LiveArchives" ;;
+  *) echo "Error: --validation-mode must be LiveRelease or LiveArchives." >&2; exit 1 ;;
 esac
+shopt -u nocasematch
 
 case "$CHANNEL" in
   stable|prerelease) ;;
@@ -71,172 +86,14 @@ if [[ "$CASK_NAME" != "aspire" ]]; then
   exit 1
 fi
 
-if [[ "$VALIDATION_MODE" == "GenerateOnly" ]]; then
-  echo "Skipping Homebrew cask validation because validation mode is GenerateOnly."
-  exit 0
-fi
-
-read_cask_version() {
-  local cask_file="$1"
-  awk -F'"' '/^[[:space:]]*version[[:space:]]+"/ { print $2; exit }' "$cask_file"
-}
-
-# Detects whether the Aspire cask already exists in the upstream
-# Homebrew/homebrew-cask repository. Echoes 'true' if the cask is new (404 from
-# the contents API), 'false' if it already exists (200), and exits non-zero on
-# any other response so we don't silently mis-classify the audit mode.
-#
-# brew audit treats new submissions and updates differently: `--new` enables
-# extra checks (e.g. canonical naming) that fail on existing casks. The PR body
-# template downstream also keys "validated as a new upstream cask" off the same
-# signal, so getting this wrong produces misleading review text in the bot PR.
-detect_upstream_cask_is_new() {
-  local cask_name="$1"
-  local first_letter="${cask_name:0:1}"
-  local target_path="Casks/$first_letter/$cask_name.rb"
-  local api_url="https://api.github.com/repos/Homebrew/homebrew-cask/contents/$target_path"
-  local status_code
-  local curl_args=(-sS -o /dev/null -w "%{http_code}")
-
-  # Authenticate when a token is available. Unauthenticated GitHub API requests
-  # are throttled to 60/hour shared across the runner IP pool, which routinely
-  # produces 403s on hosted CI; an installation/PAT/Actions token raises that
-  # to 1000/hour or more. GH_TOKEN is the convention used by the `gh` CLI and
-  # by most repo scripts; GITHUB_TOKEN is the default exposed by GitHub Actions.
-  local token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-  if [[ -n "$token" ]]; then
-    curl_args+=(-H "Authorization: Bearer $token" -H "X-GitHub-Api-Version: 2022-11-28")
-  fi
-
-  status_code="$(curl "${curl_args[@]}" "$api_url")"
-  case "$status_code" in
-    200) echo "false" ;;
-    404) echo "true" ;;
-    *) echo "Error: could not determine whether $target_path exists upstream (HTTP $status_code)" >&2; exit 1 ;;
-  esac
-}
-
-find_archive() {
-  local archive_root="$1"
-  local archive_name="$2"
-  local matches=()
-  local match
-
-  while IFS= read -r match; do
-    matches+=("$match")
-  done < <(find "$archive_root" -type f -name "$archive_name" -print | LC_ALL=C sort)
-
-  if [[ "${#matches[@]}" -eq 0 ]]; then
-    echo "Error: could not find $archive_name under $archive_root" >&2
-    exit 1
-  fi
-
-  if [[ "${#matches[@]}" -gt 1 ]]; then
-    echo "Error: found multiple $archive_name archives under $archive_root:" >&2
-    printf '  %s\n' "${matches[@]}" >&2
-    exit 1
-  fi
-
-  printf '%s' "${matches[0]}"
-}
-
-start_archive_server() {
-  local archive_root="$1"
-  local version="$2"
-  local server_root="$3"
-  local port_file="$4"
-
-  local arm_archive
-  local x64_archive
-  arm_archive="$(find_archive "$archive_root" "aspire-cli-osx-arm64-$version.tar.gz")"
-  x64_archive="$(find_archive "$archive_root" "aspire-cli-osx-x64-$version.tar.gz")"
-
-  mkdir -p "$server_root"
-  cp "$arm_archive" "$server_root/aspire-cli-osx-arm64-$version.tar.gz"
-  cp "$x64_archive" "$server_root/aspire-cli-osx-x64-$version.tar.gz"
-
-  python3 - "$server_root" "$port_file" <<'PY' &
-import http.server
-import socketserver
-import sys
-
-root = sys.argv[1]
-port_file = sys.argv[2]
-
-class ArchiveHandler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=root, **kwargs)
-
-    def log_message(self, format, *args):
-        pass
-
-    def copyfile(self, source, outputfile):
-        try:
-            super().copyfile(source, outputfile)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
-
-class ArchiveServer(socketserver.TCPServer):
-    allow_reuse_address = True
-
-with ArchiveServer(("127.0.0.1", 0), ArchiveHandler) as httpd:
-    with open(port_file, "w", encoding="utf-8") as f:
-        f.write(str(httpd.server_address[1]))
-    httpd.serve_forever()
-PY
-
-  ARCHIVE_SERVER_PID=$!
-
-  for _ in {1..100}; do
-    if [[ -s "$port_file" ]]; then
-      return
-    fi
-    sleep 0.1
-  done
-
-  echo "Error: timed out waiting for local archive server to start." >&2
-  exit 1
-}
-
-rewrite_cask_for_local_archives() {
-  local cask_file="$1"
-  local local_url_prefix="$2"
-  local verified_host="$3"
-
-  ruby - "$cask_file" "$local_url_prefix" "$verified_host" <<'RUBY'
-cask_path = ARGV[0]
-local_url_prefix = ARGV[1]
-verified_host = ARGV[2]
-lines = File.readlines(cask_path, chomp: true)
-rewritten = []
-skip_verified = false
-
-lines.each do |line|
-  stripped = line.strip
-  if stripped.start_with?('url "https://ci.dot.net/public/aspire/')
-    rewritten << "  url \"#{local_url_prefix}/aspire-cli-osx-\#{arch}-\#{version}.tar.gz\","
-    rewritten << "      verified: \"#{verified_host}\""
-    skip_verified = true
-    next
-  end
-
-  if skip_verified && stripped.start_with?('verified: "ci.dot.net/public/aspire/"')
-    skip_verified = false
-    next
-  end
-
-  skip_verified = false
-  rewritten << line
-end
-
-File.write(cask_path, rewritten.join("\n") + "\n")
-RUBY
-}
+# Aspire CLI is distributed for macOS only via Homebrew cask, and the
+# pipeline only submits version bumps for an already-merged upstream cask.
+# Initial cask submissions to Homebrew/homebrew-cask are handled manually by
+# a human contributor; this script intentionally does not include the
+# `brew audit --new` checks that only apply to first-time submissions.
 
 TAP_NAME="local/aspire"
 TAP_ROOT=""
-ARCHIVE_SERVER_PID=""
-TEMP_DIR=""
 
 remove_tap() {
   local tap_name="$1"
@@ -253,15 +110,6 @@ remove_tap() {
 cleanup() {
   remove_tap "$TAP_NAME"
   remove_tap "local/aspire-test"
-
-  if [[ -n "$ARCHIVE_SERVER_PID" ]]; then
-    kill "$ARCHIVE_SERVER_PID" >/dev/null 2>&1 || true
-    wait "$ARCHIVE_SERVER_PID" >/dev/null 2>&1 || true
-  fi
-
-  if [[ -n "$TEMP_DIR" ]]; then
-    rm -rf "$TEMP_DIR"
-  fi
 }
 
 echo "Validating Ruby syntax..."
@@ -269,8 +117,8 @@ ruby -c "$CASK_FILE"
 echo "ruby -c aspire.rb succeeded."
 
 if ! command -v brew >/dev/null 2>&1; then
-  if [[ "$VALIDATION_MODE" == "Full" ]]; then
-    echo "Error: brew is required for Full validation mode, but it was not found in PATH." >&2
+  if [[ "$VALIDATION_MODE" == "LiveRelease" ]]; then
+    echo "Error: brew is required for LiveRelease validation mode, but it was not found in PATH." >&2
     exit 1
   fi
 
@@ -294,67 +142,57 @@ cp "$TAPPED_CASK_PATH" "$CASK_FILE"
 brew style --cask "$TAPPED_CASK_PATH"
 echo "brew style --fix reported no offenses after copying aspire.rb into a temporary local tap."
 
-AUDIT_CASK_PATH="$TAPPED_CASK_PATH"
-AUDIT_NOTE=""
-
-if [[ "$VALIDATION_MODE" == "Offline" ]]; then
-  if [[ -z "$ARCHIVE_ROOT" ]]; then
-    echo "Skipping online audit because validation mode is Offline and no archive root was provided."
-    trap - EXIT
-    cleanup
-    exit 0
-  fi
-
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "Error: python3 is required to run Offline online audit against local archive URLs." >&2
-    exit 1
-  fi
-
-  cask_version="$(read_cask_version "$CASK_FILE")"
-  if [[ -z "$cask_version" ]]; then
-    echo "Error: could not read version from $CASK_FILE" >&2
-    exit 1
-  fi
-
-  TEMP_DIR="$(mktemp -d)"
-  port_file="$TEMP_DIR/archive-server.port"
-  start_archive_server "$ARCHIVE_ROOT" "$cask_version" "$TEMP_DIR/archives" "$port_file"
-  archive_port="$(cat "$port_file")"
-
-  cp "$CASK_FILE" "$AUDIT_CASK_PATH"
-  rewrite_cask_for_local_archives "$AUDIT_CASK_PATH" "http://127.0.0.1:$archive_port" "127.0.0.1:$archive_port/"
-  AUDIT_NOTE=" against local archive URLs"
-fi
+echo ""
+# Tap-level syntax check: validates that every cask in the tap can be parsed
+# on every supported platform. Upstream's syntax (macos-N) CI job runs the
+# equivalent command and rejects casks that fail to evaluate on a non-host
+# platform (e.g. a macOS-only cask with no `depends_on macos:` declared).
+# Matches `Homebrew/homebrew-cask:.github/workflows/ci.yml` `brew test-bot
+# --only-tap-syntax` step.
+echo "Running brew test-bot --only-tap-syntax against local tap..."
+brew test-bot --tap "$TAP_NAME" --only-tap-syntax
+echo "brew test-bot --only-tap-syntax succeeded."
 
 echo ""
-if [[ "$VALIDATION_MODE" == "Offline" ]]; then
-  echo "Skipping upstream cask probe because validation mode is Offline; running standard audit."
-  IS_NEW_CASK="false"
-else
-  echo "Determining whether $CASK_NAME is a new upstream cask..."
-  IS_NEW_CASK="$(detect_upstream_cask_is_new "$CASK_NAME")"
-  if [[ "$IS_NEW_CASK" == "true" ]]; then
-    echo "Detected new upstream cask; running new-cask audit."
-  else
-    echo "Detected existing upstream cask; running standard audit."
-  fi
-fi
-
-echo ""
+# Match the audit arg set that Homebrew/homebrew-cask CI runs for an existing
+# cask bump: `brew audit --cask --online --signing <cask>`. (`--new` is added
+# upstream only when the cask is being submitted for the first time, which is
+# a human-driven path not covered by this pipeline.)
+#
+# In LiveRelease mode `--online` is brew's depth flag that enables the
+# network-requiring audit methods on top of the structural ones: archive
+# download + SHA256 verify, livecheck resolution, github/gitlab repo probes,
+# homepage redirect detection.
+#
+# In LiveArchives mode the cask URL points at a github.com/microsoft/aspire
+# release that does not exist yet (the release pipeline uploads it later),
+# so `--online` is *omitted*. Several `audit_*` methods download the cask
+# archive — not just `audit_download` itself but also `audit_signing`,
+# `audit_rosetta`, and `audit_min_os` (they call `extract_artifacts`, which
+# fetches the cask URL). Excluding them individually with `--except` is
+# brittle because any new `--online`-gated audit method that touches the
+# archive in a future brew release would silently start failing.
+# `--no-signing` is also used because PR-build / source-build archives are
+# unsigned/ad-hoc-signed CI artifacts, not notarized release assets — even
+# if we could fetch them, `audit_signing` would reject them.
+#
+# What we lose in LiveArchives by dropping `--online`:
+#   * github/gitlab repo probes (e.g. "is microsoft/aspire archived?")
+#   * homepage redirect / 404 detection against aspire.dev
+#   * livecheck strategy resolution
+# All of these run in LiveRelease in `HomebrewValidateJob` for every
+# released version, so a regression in any of them surfaces there.
 echo "Auditing cask via local tap..."
-audit_args=(--cask --online)
-if [[ "$IS_NEW_CASK" == "true" ]]; then
-  audit_args+=(--new)
-fi
-if [[ "$VALIDATION_MODE" == "Offline" ]]; then
-  audit_args+=(--no-signing)
+audit_args=(--cask --online --signing)
+if [[ "$VALIDATION_MODE" == "LiveArchives" ]]; then
+  audit_args=(--cask --no-signing)
 fi
 audit_args+=("$TAP_NAME/$CASK_NAME")
 audit_command="brew audit ${audit_args[*]}"
 brew audit "${audit_args[@]}"
-echo "$audit_command worked successfully$AUDIT_NOTE."
+echo "$audit_command worked successfully."
 
-if [[ "$VALIDATION_MODE" == "Full" ]]; then
+if [[ "$VALIDATION_MODE" == "LiveRelease" ]]; then
   echo ""
   echo "Testing cask install/uninstall: $CASK_FILE"
 
@@ -400,49 +238,6 @@ if [[ "$VALIDATION_MODE" == "Full" ]]; then
     echo "Error: aspire command still found in PATH after uninstall." >&2
     exit 1
   fi
-fi
-
-if [[ -n "$SUMMARY_PATH" && "$VALIDATION_MODE" == "Full" ]]; then
-  if [[ "$CHANNEL" == "stable" ]]; then
-    is_stable_release=true
-  else
-    is_stable_release=false
-  fi
-
-  mkdir -p "$(dirname "$SUMMARY_PATH")"
-  cat > "$SUMMARY_PATH" <<EOF
-{
-  "schemaVersion": 1,
-  "validatedByPreparePipeline": true,
-  "isStableRelease": $is_stable_release,
-  "isNewCask": $IS_NEW_CASK,
-  "checks": {
-    "rubySyntax": {
-      "status": "passed",
-      "details": "ruby -c aspire.rb"
-    },
-    "brewStyle": {
-      "status": "passed",
-      "details": "brew style --fix reported no offenses after copying aspire.rb into a temporary local tap"
-    },
-    "brewAudit": {
-      "status": "passed",
-      "details": "$audit_command"
-    },
-    "brewInstall": {
-      "status": "passed",
-      "details": "HOMEBREW_NO_INSTALL_FROM_API=1 brew install --cask local/aspire-test/aspire"
-    },
-    "brewUninstall": {
-      "status": "passed",
-      "details": "brew uninstall --cask local/aspire-test/aspire"
-    }
-  }
-}
-EOF
-
-  echo "Wrote Homebrew validation summary to $SUMMARY_PATH"
-  cat "$SUMMARY_PATH"
 fi
 
 trap - EXIT

@@ -41,7 +41,8 @@ internal static class PackageJsonMerger
     /// <summary>
     /// Merges scaffold-generated package.json content with existing content.
     /// Preserves all existing properties and scripts. Scaffold scripts that conflict
-    /// with existing names are added under the <c>aspire:</c> prefix. Non-conflicting
+    /// with existing names are added under the <c>aspire:</c> prefix. Existing scripts,
+    /// including <c>aspire:</c>-prefixed scripts, are preserved. Non-conflicting
     /// <c>aspire:X</c> scripts get a convenience alias <c>X</c> pointing to
     /// <c>{toolchain} run aspire:X</c>.
     /// </summary>
@@ -140,7 +141,7 @@ internal static class PackageJsonMerger
     /// <remarks>
     /// For each scaffold script:
     /// <list type="bullet">
-    /// <item>Already <c>aspire:</c> prefixed → always added/updated</item>
+    /// <item>Already <c>aspire:</c> prefixed → added only when missing</item>
     /// <item>Not prefixed, conflicts with existing → added as <c>aspire:{name}</c></item>
     /// <item>Not prefixed, no conflict → added with the original name</item>
     /// </list>
@@ -158,8 +159,7 @@ internal static class PackageJsonMerger
 
             if (name.StartsWith(AspirePrefix, StringComparison.Ordinal))
             {
-                // Already prefixed — always set it
-                existingScripts[name] = command;
+                existingScripts[name] ??= command;
             }
             else if (existingScripts[name] is not null)
             {

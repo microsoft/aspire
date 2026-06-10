@@ -26,8 +26,16 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Func<string, IReadOnlyList<string>, string>? SelectionCallback { get; set; }
     public Func<IRenderable, Func<Action<IRenderable>, Task>, Task>? DisplayLiveAsyncCallback { get; set; }
+    public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
+    public bool FlushAsyncCalled { get; private set; }
 
     public IExtensionBackchannel Backchannel { get; } = serviceProvider.GetRequiredService<IExtensionBackchannel>();
+
+    public Task FlushAsync(CancellationToken cancellationToken = default)
+    {
+        FlushAsyncCalled = true;
+        return Task.CompletedTask;
+    }
 
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
@@ -75,7 +83,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         return Task.FromResult(choicesArray.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
         if (!choices.Any())
         {
@@ -135,6 +143,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
+        DisplayedLines.AddRange(lines);
     }
 
     public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)

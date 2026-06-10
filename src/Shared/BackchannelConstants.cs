@@ -286,6 +286,17 @@ internal static class BackchannelConstants
     }
 
     /// <summary>
+    /// Computes the search pattern for randomized socket files created with the specified logical
+    /// socket prefix.
+    /// </summary>
+    public static string ComputeSocketFileSearchPattern(string socketPrefix)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(socketPrefix);
+
+        return $"{GetCompactCliSocketPrefix(socketPrefix)}{new string('?', CompactInstanceIdLength)}";
+    }
+
+    /// <summary>
     /// Computes the socket path prefix for finding compact sockets.
     /// </summary>
     /// <remarks>

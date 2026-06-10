@@ -8,127 +8,181 @@
 //------------------------------------------------------------------------------
 namespace Aspire.Hosting
 {
+    public static partial class CertManagerExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerResource> AddCertManager(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name, string? chartVersion = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> AddIssuer(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerResource> builder, string name) { throw null; }
+
+        [AspireExport("withAcmeServerParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithAcmeServer(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string serverUrl, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> email) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithAcmeServer(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string serverUrl, string email) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithHttp01Solver(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder) { throw null; }
+
+        [AspireExport("withLetsEncryptProductionParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptProduction(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> email) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptProduction(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string email) { throw null; }
+
+        [AspireExport("withLetsEncryptStagingParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptStaging(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> email) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptStaging(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string email) { throw null; }
+
+        [AspireExport("withGatewayTlsIssuer")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> issuer) { throw null; }
+    }
+
     public static partial class KubernetesAspireDashboardResourceBuilderExtensions
     {
-        [AspireExport(Description = "Enables or disables forwarded headers support for the Aspire dashboard")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> WithForwardedHeaders(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> builder, bool enabled = true) { throw null; }
 
-        [AspireExport(Description = "Sets the Kubernetes Service ports for the OTLP endpoints")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> WithOtlpServicePort(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> builder, int? grpcPort = null, int? httpPort = null) { throw null; }
 
-        [AspireExport(Description = "Sets the Kubernetes Service port for the Aspire dashboard")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> WithServicePort(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> builder, int? port = null) { throw null; }
     }
 
     public static partial class KubernetesEnvironmentExtensions
     {
-        [AspireExport(Description = "Adds a Kubernetes publishing environment")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> AddKubernetesEnvironment(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds a named node pool to a Kubernetes environment")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesNodePoolResource> AddNodePool(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name) { throw null; }
 
-        [AspireExport("configureDashboard", MethodName = "configureDashboard", Description = "Configures the Aspire dashboard resource for the Kubernetes environment", RunSyncOnBackgroundThread = true)]
+        [AspireExport("configureDashboard", MethodName = "configureDashboard", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> WithDashboard(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, System.Action<ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource>> configure) { throw null; }
 
-        [AspireExport(Description = "Enables or disables the Aspire dashboard for the Kubernetes environment")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> WithDashboard(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, bool enabled = true) { throw null; }
 
-        [AspireExport(Description = "Configures Helm chart deployment settings", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> WithHelm(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, System.Action<Kubernetes.HelmChartOptions>? configure = null) { throw null; }
 
-        [AspireExport("withKubernetesNodePool", MethodName = "withNodePool", Description = "Schedules a workload on a specific Kubernetes node pool")]
+        [AspireExport("withKubernetesNodePool", MethodName = "withNodePool")]
         public static ApplicationModel.IResourceBuilder<T> WithNodePool<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesNodePoolResource> nodePool)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport(Description = "Configures properties of a Kubernetes environment", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> WithProperties(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, System.Action<Kubernetes.KubernetesEnvironmentResource> configure) { throw null; }
     }
 
     public static partial class KubernetesGatewayExtensions
     {
-        [AspireExport(Description = "Adds a Kubernetes Gateway API Gateway resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> AddGateway(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name) { throw null; }
 
-        [AspireExport("withGatewayAnnotationParam", Description = "Adds a parameterized Kubernetes metadata annotation to a Gateway")]
+        [AspireExport("withGatewayAnnotationParam")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithGatewayAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string key, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> value) { throw null; }
 
-        [AspireExport(Description = "Adds a Kubernetes metadata annotation to a Gateway")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithGatewayAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string key, string value) { throw null; }
 
-        [AspireExport("withGatewayClassParam", Description = "Sets a parameterized GatewayClass for a Kubernetes Gateway")]
+        [AspireExport("withGatewayClassParam")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithGatewayClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> className) { throw null; }
 
-        [AspireExport(Description = "Sets the GatewayClass for a Kubernetes Gateway")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithGatewayClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string className) { throw null; }
 
-        [AspireExport("withGatewayHostnameParam", Description = "Adds a parameterized hostname to a Kubernetes Gateway")]
+        [AspireExport("withGatewayHostnameParam")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithHostname(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> hostname) { throw null; }
 
-        [AspireExport("withGatewayHostname", MethodName = "withHostname", Description = "Adds a hostname to a Kubernetes Gateway")]
+        [AspireExport("withGatewayHostname", MethodName = "withHostname")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithHostname(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string hostname) { throw null; }
 
-        [AspireExport("withGatewayPathRoute", Description = "Adds a path-based route to a Kubernetes Gateway")]
-        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithRoute(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.IngressPathType pathType = Kubernetes.IngressPathType.Prefix) { throw null; }
+        [AspireExport("withGatewayPathRoute")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithRoute(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.GatewayPathMatchType pathType = Kubernetes.GatewayPathMatchType.PathPrefix) { throw null; }
 
-        [AspireExport("withGatewayHostRoute", Description = "Adds a host-and-path route to a Kubernetes Gateway")]
-        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithRoute(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string host, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.IngressPathType pathType = Kubernetes.IngressPathType.Prefix) { throw null; }
+        [AspireExport("withGatewayHostRoute")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithRoute(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string host, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.GatewayPathMatchType pathType = Kubernetes.GatewayPathMatchType.PathPrefix) { throw null; }
 
-        [AspireExport("withGatewayTlsParam", Description = "Configures TLS on a Kubernetes Gateway with a parameterized secret")]
+        [AspireExport("withGatewayTlsParam")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> secretName) { throw null; }
 
-        [AspireExport("withGatewayTls", MethodName = "withTls", Description = "Configures TLS on a Kubernetes Gateway listener")]
+        [AspireExport("withGatewayTls", MethodName = "withTls")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string secretName) { throw null; }
 
-        [AspireExport("withGatewayTlsAuto", Description = "Configures TLS on a Kubernetes Gateway with an auto-generated secret")]
+        [AspireExport("withGatewayTlsAuto")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder) { throw null; }
+    }
+
+    public static partial class KubernetesHelmChartExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> AddHelmChart(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name, string chartReference, string chartVersion) { throw null; }
+
+        [AspireExport("withHelmChartDestroy")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> WithDestroy(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> builder) { throw null; }
+
+        [AspireExport("withHelmChartForceConflicts")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> WithForceConflicts(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> builder) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> WithHelmValue(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> builder, string key, string value) { throw null; }
+
+        [AspireExport("withHelmChartNamespace")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> WithNamespace(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> builder, string @namespace) { throw null; }
+
+        [AspireExport("withHelmChartReleaseName")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> WithReleaseName(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> builder, string releaseName) { throw null; }
     }
 
     public static partial class KubernetesIngressExtensions
     {
-        [AspireExport(Description = "Adds a Kubernetes Ingress resource for HTTP routing")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> AddIngress(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name) { throw null; }
 
-        [AspireExport(Description = "Sets the default backend for a Kubernetes Ingress")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithDefaultBackend(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, ApplicationModel.EndpointReference endpoint) { throw null; }
 
-        [AspireExport("withIngressHostnameParam", Description = "Adds a parameterized hostname to a Kubernetes Ingress")]
+        [AspireExport("withIngressHostnameParam")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithHostname(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> hostname) { throw null; }
 
-        [AspireExport("withIngressHostname", MethodName = "withHostname", Description = "Adds a hostname to a Kubernetes Ingress")]
+        [AspireExport("withIngressHostname", MethodName = "withHostname")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithHostname(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string hostname) { throw null; }
 
-        [AspireExport("withIngressAnnotationParam", Description = "Adds a parameterized Kubernetes metadata annotation to an Ingress")]
+        [AspireExport("withIngressAnnotationParam")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithIngressAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string key, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> value) { throw null; }
 
-        [AspireExport(Description = "Adds a Kubernetes metadata annotation to a Kubernetes Ingress")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithIngressAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string key, string value) { throw null; }
 
-        [AspireExport("withIngressClassParam", Description = "Sets a parameterized ingress class for a Kubernetes Ingress")]
+        [AspireExport("withIngressClassParam")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithIngressClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> className) { throw null; }
 
-        [AspireExport(Description = "Sets the ingress class for a Kubernetes Ingress")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithIngressClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string className) { throw null; }
 
-        [AspireExport("withIngressPathRoute", Description = "Adds a path-based route to a Kubernetes Ingress")]
-        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithRoute(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.IngressPathType pathType = Kubernetes.IngressPathType.Prefix) { throw null; }
+        [AspireExport("withIngressPath")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithPath(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.IngressPathType pathType = Kubernetes.IngressPathType.Prefix) { throw null; }
 
-        [AspireExport("withIngressHostRoute", Description = "Adds a host-and-path route to a Kubernetes Ingress")]
-        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithRoute(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string host, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.IngressPathType pathType = Kubernetes.IngressPathType.Prefix) { throw null; }
+        [AspireExport("withIngressHostAndPath")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithPath(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string host, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.IngressPathType pathType = Kubernetes.IngressPathType.Prefix) { throw null; }
 
-        [AspireExport("withIngressTlsParam", Description = "Configures TLS for a Kubernetes Ingress with a parameterized secret")]
+        [AspireExport("withIngressTlsParam")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> secretName) { throw null; }
 
-        [AspireExport("withIngressTls", MethodName = "withTls", Description = "Configures TLS for a Kubernetes Ingress using a K8S secret")]
+        [AspireExport("withIngressTls", MethodName = "withTls")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string secretName) { throw null; }
 
-        [AspireExport("withIngressTlsAuto", Description = "Configures TLS for a Kubernetes Ingress with an auto-generated secret")]
+        [AspireExport("withIngressTlsAuto")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder) { throw null; }
     }
 
     public static partial class KubernetesServiceExtensions
     {
-        [AspireExport(Description = "Publishes the resource as a Kubernetes service")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> PublishAsKubernetesService<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Kubernetes.KubernetesResource> configure)
             where T : ApplicationModel.IComputeResource { throw null; }
     }
@@ -136,6 +190,31 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Kubernetes
 {
+    [AspireExport]
+    public sealed partial class CertManagerIssuerResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<CertManagerResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public CertManagerIssuerResource(string name, CertManagerResource parent) : base(default!) { }
+
+        public CertManagerResource Parent { get { throw null; } }
+    }
+
+    [AspireExport]
+    public sealed partial class CertManagerResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public CertManagerResource(string name, KubernetesEnvironmentResource environment, KubernetesHelmChartResource helmChart) : base(default!) { }
+
+        public KubernetesHelmChartResource HelmChart { get { throw null; } }
+
+        public KubernetesEnvironmentResource Parent { get { throw null; } }
+    }
+
+    public enum GatewayPathMatchType
+    {
+        PathPrefix = 0,
+        Exact = 1,
+        RegularExpression = 2
+    }
+
     public sealed partial class HelmChartDescriptionAnnotation : ApplicationModel.IResourceAnnotation
     {
         public HelmChartDescriptionAnnotation(ApplicationModel.ReferenceExpression description) { }
@@ -259,6 +338,22 @@ namespace Aspire.Hosting.Kubernetes
     }
 
     [AspireExport]
+    public sealed partial class KubernetesHelmChartResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public KubernetesHelmChartResource(string name, KubernetesEnvironmentResource environment, string chartReference, string chartVersion) : base(default!) { }
+
+        public string ChartReference { get { throw null; } }
+
+        public string ChartVersion { get { throw null; } }
+
+        public string? Namespace { get { throw null; } set { } }
+
+        public KubernetesEnvironmentResource Parent { get { throw null; } }
+
+        public string? ReleaseName { get { throw null; } set { } }
+    }
+
+    [AspireExport]
     public partial class KubernetesIngressResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
     {
         public KubernetesIngressResource(string name, KubernetesEnvironmentResource environment) : base(default!) { }
@@ -290,6 +385,7 @@ namespace Aspire.Hosting.Kubernetes
     {
         public KubernetesResource(string name, ApplicationModel.IResource resource, KubernetesEnvironmentResource kubernetesEnvironmentResource) : base(default!) { }
 
+        [AspireExportIgnore(Reason = "Kubernetes manifest resource types are C#-only customization objects and are not part of the polyglot SDK surface.")]
         public System.Collections.Generic.List<Resources.BaseKubernetesResource> AdditionalResources { get { throw null; } }
 
         public Resources.ConfigMap? ConfigMap { get { throw null; } set { } }

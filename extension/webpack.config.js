@@ -38,6 +38,10 @@ const extensionConfig = {
 					},
 				],
 			},
+      {
+        test: /\.wasm$/,
+        type: 'asset/resource'
+      },
     ]
   },
   devtool: 'source-map',

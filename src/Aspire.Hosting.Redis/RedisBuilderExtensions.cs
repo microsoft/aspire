@@ -167,7 +167,7 @@ public static class RedisBuilderExtensions
 
                 if (ctx.Password is not null)
                 {
-                    var resourceLogger = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                    var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                     var logger = resourceLogger.GetLogger(redis);
                     logger.LogError($"Cannot configure an encrypted certificate for redis resource '{redis.Name}'");
                 }
@@ -191,9 +191,9 @@ public static class RedisBuilderExtensions
                     .WithArgs(argsCtx =>
                     {
                         argsCtx.Args.Add("--tls-port");
-                        argsCtx.Args.Add(redis.GetEndpoint(RedisResource.PrimaryEndpointName).Property(EndpointProperty.Port));
+                        argsCtx.Args.Add(redis.GetEndpoint(RedisResource.PrimaryEndpointName).Property(EndpointProperty.TargetPort));
                         argsCtx.Args.Add("--port");
-                        argsCtx.Args.Add(redis.GetEndpoint(RedisResource.SecondaryEndpointName).Property(EndpointProperty.Port));
+                        argsCtx.Args.Add(redis.GetEndpoint(RedisResource.SecondaryEndpointName).Property(EndpointProperty.TargetPort));
                     });
             });
         }
@@ -365,7 +365,7 @@ public static class RedisBuilderExtensions
 
                     if (ctx.Password != null)
                     {
-                        var resourceLogger = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                        var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                         var logger = resourceLogger.GetLogger(resource);
                         logger.LogError($"Cannot configure an encrypted certificate for redis insight resource '{resource.Name}'");
                     }

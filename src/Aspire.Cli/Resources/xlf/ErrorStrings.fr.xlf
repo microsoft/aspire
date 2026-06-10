@@ -57,10 +57,35 @@
         <target state="new">Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</target>
         <note />
       </trans-unit>
+      <trans-unit id="CodegenDebugHeader">
+        <source>Diagnostic details:</source>
+        <target state="new">Diagnostic details:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CodegenDebugHint">
+        <source>Run with '--debug' for full diagnostic details.</source>
+        <target state="new">Run with '--debug' for full diagnostic details.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CodegenIncompatibleSdkSummary">
+        <source>{0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again.</source>
+        <target state="new">{0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again.</target>
+        <note>{0} is the AppHost language display name, e.g. 'TypeScript (Node.js)'.</note>
+      </trans-unit>
+      <trans-unit id="CodegenVersionSkewWarning">
+        <source>The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</source>
+        <target state="new">The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</target>
+        <note>{0} is the CLI version, {1} is the SDK version configured in aspire.config.json.</note>
+      </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
         <target state="needs-review-translation">Cette commande n’est pas encore prise en charge avec les hôtes d’application à fichier unique.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationFileMustBeJsonObject">
+        <source>The configuration file '{0}' must contain a JSON object.</source>
+        <target state="new">The configuration file '{0}' must contain a JSON object.</target>
+        <note>{0} is the configuration file path that the user authored.</note>
       </trans-unit>
       <trans-unit id="ConfigurationKeyNotFound">
         <source>Configuration key {0} not found.</source>
@@ -76,6 +101,16 @@
         <source>Configuration value is required.</source>
         <target state="translated">La valeur de la configuration est requise.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ConfiguredAppHostPathHasInvalidCharacters">
+        <source>The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</source>
+        <target state="new">The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</target>
+        <note>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</note>
+      </trans-unit>
+      <trans-unit id="ConfiguredAppHostPathMustBeString">
+        <source>The configured AppHost path in '{0}' ('{1}') must be a JSON string.</source>
+        <target state="new">The configured AppHost path in '{0}' ('{1}') must be a JSON string.</target>
+        <note>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</note>
       </trans-unit>
       <trans-unit id="CouldNotParseAspireSDKVersion">
         <source>Could not parse Aspire.Hosting package version.</source>

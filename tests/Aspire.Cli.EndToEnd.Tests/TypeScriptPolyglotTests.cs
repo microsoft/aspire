@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
@@ -42,11 +43,9 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -134,7 +133,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(toolchain, "tsconfig.apphost.json"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 7: Run the apphost
         await auto.TypeAsync("aspire run");
@@ -154,10 +153,93 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Step 8: Stop the apphost
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
+    }
 
-        await pendingRun;
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task TypeScriptAppHostWithVite_AllowsDifferentGuestPkgManager()
+    {
+        const string appHostToolchain = "pnpm";
+        const string guestToolchain = "npm";
+
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
+            ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
+        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
+        await auto.DeclineAgentInitPromptAsync(counter);
+
+        TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, appHostToolchain, cleanInstallState: true);
+
+        if (localChannel is not null)
+        {
+            CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
+        }
+
+        await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        var viteProjectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "viteapp");
+        TypeScriptAppHostToolchainTestHelpers.SetPackageManager(viteProjectRoot, guestToolchain, cleanInstallState: true);
+
+        await auto.TypeAsync($"cd viteapp && {TypeScriptAppHostToolchainTestHelpers.GetInstallCommand(guestToolchain)} && cd ..");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
+        await auto.EnterAsync();
+        await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
+        File.WriteAllText(appHostPath, """
+            // Aspire TypeScript AppHost
+            // For more information, see: https://aspire.dev
+
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
+
+            const builder = await createBuilder();
+
+            await builder.addViteApp("viteapp", "./viteapp");
+
+            await builder.build().run();
+            """);
+
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        var appHostLockFilePath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            TypeScriptAppHostToolchainTestHelpers.GetLockFileName(appHostToolchain));
+        Assert.True(
+            File.Exists(appHostLockFilePath),
+            $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(appHostToolchain)} restore to create '{appHostLockFilePath}'.");
+
+        var guestLockFilePath = Path.Combine(
+            viteProjectRoot,
+            TypeScriptAppHostToolchainTestHelpers.GetLockFileName(guestToolchain));
+        Assert.True(
+            File.Exists(guestLockFilePath),
+            $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(guestToolchain)} install to create '{guestLockFilePath}'.");
+
+        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(appHostToolchain, "tsconfig.apphost.json"));
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 
     [Theory]
@@ -174,11 +256,9 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -215,14 +295,10 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForAnyPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
-    public async Task InitTypeScriptAppHost_AugmentsExistingViteRepoAtRoot()
+    public async Task InitTypeScriptAppHost_AugmentsExistingViteRepoInWorkspaceSubdirectory()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -237,9 +313,6 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         string? originalDevScript = null;
         string? originalBuildScript = null;
         string? originalPreviewScript = null;
@@ -248,14 +321,27 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         await auto.InstallAspireCliAsync(strategy, counter);
         await auto.EnablePolyglotSupportAsync(counter);
 
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"),
+            """
+            {
+              "name": "workspace-root",
+              "private": true,
+              "workspaces": [
+                "packages/*"
+              ]
+            }
+            """);
+
         // Create brownfield Vite project
-        await auto.TypeAsync("mkdir brownfield && cd brownfield");
+        await auto.TypeAsync("mkdir -p packages/brownfield && cd packages/brownfield");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -264,7 +350,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         // Capture original package.json scripts and tsconfig before aspire init
-        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "brownfield");
+        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "packages", "brownfield");
         var packageJson = JsonNode.Parse(File.ReadAllText(Path.Combine(projectRoot, "package.json")))!.AsObject();
         var scripts = packageJson["scripts"]!.AsObject();
         originalDevScript = scripts["dev"]?.GetValue<string>();
@@ -272,6 +358,8 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         originalPreviewScript = scripts["preview"]?.GetValue<string>();
         originalPackageType = packageJson["type"]?.GetValue<string>();
         originalTsConfig = File.ReadAllText(Path.Combine(projectRoot, "tsconfig.json"));
+        scripts["aspire:start"] = "custom-apphost-start";
+        File.WriteAllText(Path.Combine(projectRoot, "package.json"), packageJson.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
         // LocalHive strategy only: PrepareLocalChannel returned a real channel,
         // so write the per-project aspire.config.json to point at the in-repo
@@ -300,7 +388,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         Assert.Equal(originalDevScript, scripts["dev"]?.GetValue<string>());
         Assert.Equal(originalBuildScript, scripts["build"]?.GetValue<string>());
         Assert.Equal(originalPreviewScript, scripts["preview"]?.GetValue<string>());
-        Assert.Equal("npm --prefix aspire-apphost run aspire:start", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("custom-apphost-start", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("npm --prefix aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("npm --prefix aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal(originalPackageType, packageJson["type"]?.GetValue<string>());
@@ -376,9 +464,5 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }
