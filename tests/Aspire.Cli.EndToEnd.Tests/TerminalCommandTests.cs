@@ -77,11 +77,12 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
         var detached = false;
         for (var i = 0; i < 3 && !detached; i++)
         {
-            await auto.SequenceAsync(
-                builder => builder
-                    .Ctrl().Key(Hex1bKey.B)
-                    .Key(Hex1bKey.D),
-                description: "detach chord Ctrl+B then D");
+            // In CI we occasionally lose the chord when both keys are injected in the same burst.
+            // Sending the prefix and chord key as separate events with a short delay matches
+            // interactive behavior more closely.
+            await auto.Ctrl().KeyAsync(Hex1bKey.B);
+            await auto.WaitAsync(300);
+            await auto.KeyAsync(Hex1bKey.D);
 
             try
             {
