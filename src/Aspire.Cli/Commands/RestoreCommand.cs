@@ -33,6 +33,9 @@ internal sealed class RestoreCommand : BaseCommand
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly IInteractionService _interactionService;
     private readonly ILogger<RestoreCommand> _logger;
+    private readonly ICSharpCliManagedAppHostModuleGenerator _cliManagedModuleGenerator;
+    private readonly IIntegrationClosureRestorer _integrationClosureRestorer;
+    private readonly IFeatures _features;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
 
@@ -47,6 +50,8 @@ internal sealed class RestoreCommand : BaseCommand
         CliExecutionContext executionContext,
         IInteractionService interactionService,
         ILogger<RestoreCommand> logger,
+        ICSharpCliManagedAppHostModuleGenerator cliManagedModuleGenerator,
+        IIntegrationClosureRestorer integrationClosureRestorer,
         AspireCliTelemetry telemetry)
         : base("restore", RestoreCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
@@ -57,6 +62,9 @@ internal sealed class RestoreCommand : BaseCommand
         _sdkInstaller = sdkInstaller;
         _interactionService = interactionService;
         _logger = logger;
+        _cliManagedModuleGenerator = cliManagedModuleGenerator;
+        _integrationClosureRestorer = integrationClosureRestorer;
+        _features = features;
 
         Options.Add(s_appHostOption);
     }
@@ -135,6 +143,29 @@ internal sealed class RestoreCommand : BaseCommand
 
                 var appHostDirectory = effectiveAppHostFile.Directory!;
                 _logger.LogDebug("Restoring packages for {AppHost} in {Directory}", effectiveAppHostFile.FullName, appHostDirectory.FullName);
+
+                // For CLI-managed file-based AppHosts, route restore through IntegrationClosureRestorer
+                // so the integration closure cache under .aspire/integrations/apphosts/<hash>/ is
+                // materialized with a probe manifest the runtime AppHost can consume. This mirrors
+                // the PrebuiltAppHostServer restore path used for polyglot AppHosts.
+                if (DotNetAppHostProject.IsCliManagedSingleFileAppHost(effectiveAppHostFile, _features))
+                {
+                    var layout = await _interactionService.ShowStatusAsync(
+                        RestoreCommandStrings.RestoringSdkCode,
+                        async () => await _integrationClosureRestorer.RestoreAsync(effectiveAppHostFile, new IntegrationClosureRestoreOptions(), cancellationToken),
+                        emoji: KnownEmojis.Gear);
+
+                    if (layout is null)
+                    {
+                        return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
+                    }
+
+                    _interactionService.DisplaySuccess(
+                        string.Format(CultureInfo.CurrentCulture, RestoreCommandStrings.RestoreSucceeded, effectiveAppHostFile.Name));
+                    return CommandResult.Success();
+                }
+
+                await _cliManagedModuleGenerator.TryGenerateAsync(effectiveAppHostFile, cancellationToken);
 
                 var restoreExitCode = await _interactionService.ShowStatusAsync(
                     RestoreCommandStrings.RestoringSdkCode,

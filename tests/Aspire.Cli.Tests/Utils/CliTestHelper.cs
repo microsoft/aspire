@@ -178,6 +178,8 @@ internal static class CliTestHelper
         services.AddSingleton<ProfileCaptureService>();
 
         // AppHost project handlers - must match Program.cs registration pattern
+        services.AddSingleton<ICSharpCliManagedAppHostModuleGenerator, CSharpCliManagedAppHostModuleGenerator>();
+        services.AddSingleton<IIntegrationClosureRestorer, IntegrationClosureRestorer>();
         services.AddSingleton<DotNetAppHostProject>();
         services.AddSingleton<Func<LanguageInfo, GuestAppHostProject>>(sp =>
         {
@@ -564,7 +566,7 @@ internal sealed class CliServiceCollectionTestOptions
         var templateNuGetConfigService = serviceProvider.GetRequiredService<TemplateNuGetConfigService>();
         var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, prompter, executionContext, sdkInstaller, features, telemetry, hostEnvironment, templateNuGetConfigService);
         var projectFactory = serviceProvider.GetRequiredService<IAppHostProjectFactory>();
-        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, templateNuGetConfigService, cliTemplateLogger);
+        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, templateNuGetConfigService, features, cliTemplateLogger);
         return new TemplateProvider([dotNetFactory, cliFactory]);
     };
 

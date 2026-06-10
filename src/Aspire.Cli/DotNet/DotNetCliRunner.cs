@@ -49,6 +49,7 @@ internal sealed class ProcessInvocationOptions
 {
     public Action<string>? StandardOutputCallback { get; set; }
     public Action<string>? StandardErrorCallback { get; set; }
+    public Dictionary<string, string> MSBuildProperties { get; } = [];
 
     public bool NoLaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
@@ -79,6 +80,9 @@ internal sealed class DotNetCliRunner(
     private const int MaxSearchRetries = 3;
     private static long s_binlogSequence;
     private static readonly TimeSpan[] s_searchRetryDelays = [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)];
+
+    private static string[] GetMSBuildPropertyArguments(ProcessInvocationOptions options)
+        => [.. options.MSBuildProperties.Select(static property => $"/p:{property.Key}={property.Value}")];
 
     internal static string GetBackchannelSocketPath()
     {
@@ -716,11 +720,12 @@ internal sealed class DotNetCliRunner(
         var nonInteractiveSwitch = watch ? "--non-interactive" : string.Empty;
         // Add --verbose flag when using watch and debug is enabled
         var verboseSwitch = watch && options.Debug ? "--verbose" : string.Empty;
+        var msBuildProperties = GetMSBuildPropertyArguments(options);
 
         string[] cliArgs = isSingleFile switch
         {
             false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, "--project", projectFile.FullName, "--", .. args],
-            true => ["run", noProfileSwitch, "--file", projectFile.FullName, "--", .. args]
+            true => ["run", noProfileSwitch, "--file", projectFile.FullName, .. msBuildProperties, "--", .. args]
         };
 
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
@@ -1031,7 +1036,7 @@ internal sealed class DotNetCliRunner(
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
-        string[] cliArgs = ["restore", projectFilePath.FullName];
+        string[] cliArgs = ["restore", projectFilePath.FullName, .. GetMSBuildPropertyArguments(options)];
 
         return await ExecuteAsync(
             args: cliArgs,
@@ -1048,7 +1053,7 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         var noRestoreSwitch = noRestore ? "--no-restore" : string.Empty;
-        string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName];
+        string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName, .. GetMSBuildPropertyArguments(options)];
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
 
         return await ExecuteAsync(

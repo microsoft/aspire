@@ -10,6 +10,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -42,6 +43,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly Program.CliLoggingOptions _loggingOptions;
     private readonly IAppHostInfoResolver _appHostInfoResolver;
     private readonly IConfigurationService _configurationService;
+    private readonly ICSharpCliManagedAppHostModuleGenerator _cliManagedModuleGenerator;
+    private readonly IIntegrationClosureRestorer _integrationClosureRestorer;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
@@ -64,6 +67,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         Program.CliLoggingOptions loggingOptions,
         IAppHostInfoResolver appHostInfoResolver,
         IConfigurationService configurationService,
+        ICSharpCliManagedAppHostModuleGenerator cliManagedModuleGenerator,
+        IIntegrationClosureRestorer integrationClosureRestorer,
         TimeProvider? timeProvider = null)
     {
         _runner = runner;
@@ -80,6 +85,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _loggingOptions = loggingOptions;
         _appHostInfoResolver = appHostInfoResolver;
         _configurationService = configurationService;
+        _cliManagedModuleGenerator = cliManagedModuleGenerator;
+        _integrationClosureRestorer = integrationClosureRestorer;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -120,14 +127,42 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Handle single-file apphosts (apphost.cs)
         if (extension == ".cs" && appHostFile.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase))
         {
-            // Check for #:sdk Aspire.AppHost.Sdk directive
-            return IsValidSingleFileAppHost(appHostFile);
+            return IsValidSingleFileAppHost(appHostFile) || IsCliManagedSingleFileAppHost(appHostFile, _features);
         }
 
         return false;
     }
 
+    internal static bool IsCliManagedSingleFileAppHost(FileInfo candidateFile, IFeatures features)
+    {
+        return IsCSharpCliManagedAppHostEnabled(candidateFile, features)
+            && IsSingleFileAppHostCandidate(candidateFile)
+            && !HasAspireAppHostSdkDirective(candidateFile);
+    }
+
+    private static bool IsCSharpCliManagedAppHostEnabled(FileInfo candidateFile, IFeatures features)
+    {
+        if (features.IsFeatureEnabled(KnownFeatures.CSharpCliManagedAppHostEnabled, defaultValue: false))
+        {
+            return true;
+        }
+
+        if (candidateFile.Directory is not { } appHostDirectory)
+        {
+            return false;
+        }
+
+        var configDirectory = ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
+        var config = AspireConfigFile.Load(configDirectory.FullName);
+        return config?.Features?.TryGetValue(KnownFeatures.CSharpCliManagedAppHostEnabled, out var enabled) == true && enabled;
+    }
+
     private static bool IsValidSingleFileAppHost(FileInfo candidateFile)
+    {
+        return IsSingleFileAppHostCandidate(candidateFile) && HasAspireAppHostSdkDirective(candidateFile);
+    }
+
+    private static bool IsSingleFileAppHostCandidate(FileInfo candidateFile)
     {
         // Check no sibling .csproj files exist
         var siblingCsprojFiles = candidateFile.Directory!.EnumerateFiles("*.csproj", SearchOption.TopDirectoryOnly);
@@ -136,7 +171,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return false;
         }
 
-        // Check for #:sdk Aspire.AppHost.Sdk directive
+        return true;
+    }
+
+    private static bool HasAspireAppHostSdkDirective(FileInfo candidateFile)
+    {
         try
         {
             using var reader = candidateFile.OpenText();
@@ -189,8 +228,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         {
             // For single-file apphosts, validate that:
             // 1. No sibling .csproj files exist (otherwise it's part of a project)
-            // 2. The file contains the #:sdk Aspire.AppHost.Sdk directive
-            return new AppHostValidationResult(IsValid: IsValidSingleFileAppHost(appHostFile));
+            // 2. The file contains the #:sdk Aspire.AppHost.Sdk directive, or is a CLI-managed AppHost.
+            return new AppHostValidationResult(IsValid: IsValidSingleFileAppHost(appHostFile) || IsCliManagedSingleFileAppHost(appHostFile, _features));
         }
 
         // The resolver owns the cache/MSBuild fallback so validation and later run/publish
@@ -250,6 +289,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         using var activity = _profilingTelemetry.StartAppHostRun();
 
         var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile);
+        var isCliManagedSingleFileAppHost = IsCliManagedSingleFileAppHost(effectiveAppHostFile, _features);
 
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
 
@@ -283,6 +323,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         await EnsureDevCertificatesTrustedAsync(context, env, cancellationToken);
 
+        if (isCliManagedSingleFileAppHost)
+        {
+            await _cliManagedModuleGenerator.TryGenerateAsync(effectiveAppHostFile, cancellationToken);
+        }
+
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
         var preparationExitCode = await PrepareAppHostAsync(
             context,
@@ -297,9 +342,13 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return exitCode;
         }
 
-        var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
+        var canQueryCliBundleProperty = !isCliManagedSingleFileAppHost && (!isSingleFileAppHost || !context.NoBuild);
         BundleLayoutLease? cliBundleLease = null;
-        if (canQueryCliBundleProperty && await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
+        if (isCliManagedSingleFileAppHost)
+        {
+            cliBundleLease = await ConfigureCliManagedAppHostEnvironmentAsync(effectiveAppHostFile, env, cancellationToken);
+        }
+        else if (canQueryCliBundleProperty && await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
         {
             cliBundleLease = await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
         }
@@ -322,6 +371,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             StartDebugSession = context.StartDebugSession,
             Debug = context.Debug
         };
+        if (isCliManagedSingleFileAppHost)
+        {
+            CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(runOptions);
+        }
 
         // The backchannel completion source is the contract with RunCommand
         // We signal this when the backchannel is ready, RunCommand uses it for UX
@@ -486,6 +539,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             StandardOutputCallback = buildOutputCollector.AppendOutput,
             StandardErrorCallback = buildOutputCollector.AppendError,
         };
+        if (IsCliManagedSingleFileAppHost(effectiveAppHostFile, _features))
+        {
+            CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(buildOptions);
+        }
 
         var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, context.NoRestore, buildOptions, context.WorkingDirectory, cancellationToken);
         buildActivity.SetAppHostBuildExitCode(buildExitCode);
@@ -1046,7 +1103,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
 
         var effectiveAppHostFile = context.AppHostFile;
-        var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile) && IsValidSingleFileAppHost(effectiveAppHostFile);
+        var isCliManagedSingleFileAppHost = IsCliManagedSingleFileAppHost(effectiveAppHostFile, _features);
+        var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile) && (IsValidSingleFileAppHost(effectiveAppHostFile) || isCliManagedSingleFileAppHost);
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
 
         // Check compatibility for project-based apphosts
@@ -1072,9 +1130,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             }
         }
 
-        using var cliBundleLease = await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken)
-            ? await ConfigureCliBundleEnvironmentAsync(env, cancellationToken)
-            : null;
+        using var cliBundleLease = isCliManagedSingleFileAppHost
+            ? await ConfigureCliManagedAppHostEnvironmentAsync(effectiveAppHostFile, env, cancellationToken)
+            : await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken)
+                ? await ConfigureCliBundleEnvironmentAsync(env, cancellationToken)
+                : null;
 
         // Build the apphost (unless --no-build is specified)
         if (!isSingleFileAppHost && !context.NoBuild)
@@ -1085,6 +1145,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 StandardOutputCallback = buildOutputCollector.AppendOutput,
                 StandardErrorCallback = buildOutputCollector.AppendError,
             };
+            if (isCliManagedSingleFileAppHost)
+            {
+                CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(buildOptions);
+            }
 
             var buildExitCode = await AppHostHelper.BuildAppHostAsync(
                 _runner,
@@ -1105,6 +1169,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 return CliExitCodes.FailedToBuildArtifacts;
             }
         }
+        else if (isSingleFileAppHost && isCliManagedSingleFileAppHost)
+        {
+            await _cliManagedModuleGenerator.TryGenerateAsync(effectiveAppHostFile, cancellationToken);
+        }
 
         // Create collector and store in context for exception handling
         var runOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.AppHost);
@@ -1117,6 +1185,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             NoLaunchProfile = true,
             StartDebugSession = context.StartDebugSession
         };
+        if (isCliManagedSingleFileAppHost)
+        {
+            CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(runOptions);
+        }
 
         if (isSingleFileAppHost)
         {
@@ -1141,6 +1213,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         var outputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Package);
         context.OutputCollector = outputCollector;
 
+        if (await TryAddPackageToCliManagedAppHostAsync(context, outputCollector, cancellationToken))
+        {
+            return true;
+        }
+
         var options = new ProcessInvocationOptions
         {
             StandardOutputCallback = outputCollector.AppendOutput,
@@ -1156,6 +1233,53 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             cancellationToken);
 
         return result == 0;
+    }
+
+    private async Task<bool> TryAddPackageToCliManagedAppHostAsync(AddPackageContext context, OutputCollector outputCollector, CancellationToken cancellationToken)
+    {
+        if (!IsCliManagedSingleFileAppHost(context.AppHostFile, _features))
+        {
+            return false;
+        }
+
+        var appHostDirectory = context.AppHostFile.Directory;
+        if (appHostDirectory is null)
+        {
+            return false;
+        }
+
+        var configDirectory = ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
+        var config = AspireConfigFile.Load(configDirectory.FullName) ?? new AspireConfigFile();
+        config.AddOrUpdatePackage(context.PackageId, context.PackageVersion);
+
+        var packageSourceOverride = PackageSourceOverrideMappings.HasCredentialMaterial(context.Source ?? string.Empty)
+            ? null
+            : context.Source;
+        await _cliManagedModuleGenerator.TryGenerateAsync(context.AppHostFile, config, configDirectory, packageSourceOverride, cancellationToken);
+
+        // Persist config now so that any downstream consumer (including the closure restorer's
+        // own internal call to TryGenerateAsync) sees the newly added package on disk.
+        config.Save(configDirectory.FullName);
+
+        var options = new ProcessInvocationOptions
+        {
+            StandardOutputCallback = outputCollector.AppendOutput,
+            StandardErrorCallback = outputCollector.AppendError,
+        };
+        CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(options);
+
+        // Re-materialize the integration closure cache (probe manifest + libs path) so the next
+        // `aspire run` resolves the newly added package without requiring an explicit `aspire restore`.
+        var layout = await _integrationClosureRestorer.RestoreAsync(
+            context.AppHostFile,
+            new IntegrationClosureRestoreOptions { BuildInvocationOptions = options },
+            cancellationToken);
+        if (layout is null)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /// <inheritdoc />
@@ -1262,6 +1386,62 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         layoutLease?.AddEnvironment(env);
         return layoutLease;
+    }
+
+    private async Task<BundleLayoutLease?> ConfigureCliManagedAppHostEnvironmentAsync(FileInfo appHostFile, Dictionary<string, string> env, CancellationToken cancellationToken)
+    {
+        var layoutLease = await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
+
+        // Attach the integration closure cache (probe manifest + libs path) materialized by
+        // `aspire restore`. Mirrors PrebuiltAppHostServer.CreateStartInfo so the runtime AppHost
+        // resolves integration assemblies from .aspire/integrations/apphosts/<hash>/ regardless of
+        // whether we're in CLI-managed mode (this code path) or polyglot/prebuilt mode.
+        var closureLayout = _integrationClosureRestorer.TryLoad(appHostFile);
+        if (closureLayout is not null)
+        {
+            env[KnownConfigNames.IntegrationProbeManifestPath] = closureLayout.ProbeManifestPath;
+            if (!string.IsNullOrWhiteSpace(closureLayout.IntegrationLibsPath))
+            {
+                env[KnownConfigNames.IntegrationLibsPath] = closureLayout.IntegrationLibsPath;
+            }
+        }
+
+        if (env.ContainsKey(BundleDiscovery.DcpPathEnvVar) &&
+            env.ContainsKey(BundleDiscovery.DashboardPathEnvVar))
+        {
+            return layoutLease;
+        }
+
+        var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(appHostFile.Directory?.FullName);
+        if (repoRoot is null)
+        {
+            return layoutLease;
+        }
+
+        if (!env.ContainsKey(BundleDiscovery.DcpPathEnvVar))
+        {
+            var (buildOs, buildArch) = DotNetBasedAppHostServerProject.GetBuildPlatform();
+            var dcpPackageName = $"microsoft.developercontrolplane.{buildOs}-{buildArch}";
+            var dcpVersion = DotNetBasedAppHostServerProject.GetDcpVersionFromRepo(repoRoot, buildOs, buildArch);
+            env[BundleDiscovery.DcpPathEnvVar] = Path.Combine(GetNuGetPackageRoot(), dcpPackageName, dcpVersion, "tools");
+        }
+
+        if (!env.ContainsKey(BundleDiscovery.DashboardPathEnvVar))
+        {
+            env[BundleDiscovery.DashboardPathEnvVar] = Path.Combine(repoRoot, "artifacts", "bin", "Aspire.Dashboard", "Debug", "net8.0", "Aspire.Dashboard.dll");
+        }
+
+        return layoutLease;
+    }
+
+    private static string GetNuGetPackageRoot()
+    {
+        if (Environment.GetEnvironmentVariable("NUGET_PACKAGES") is { Length: > 0 } packagesPath)
+        {
+            return packagesPath;
+        }
+
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
     }
 
     /// <summary>

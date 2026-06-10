@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Projects;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -159,6 +160,198 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         }, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_CliManagedSingleFileAppHostGeneratesModuleBeforeBuild()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        WriteAspireConfigJson(_workspace.WorkspaceRoot.FullName, """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.1"
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner();
+        var project = CreateDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+        });
+
+        runner.BuildAsyncCallback = (projectFile, noRestore, options, _) =>
+        {
+            Assert.Equal(appHostFile.FullName, projectFile.FullName);
+            Assert.False(noRestore);
+            Assert.Equal("true", options.MSBuildProperties[CSharpCliManagedAppHostModuleGenerator.BuildPropertyName]);
+
+            var moduleProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj");
+            var targetsPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets");
+            Assert.True(File.Exists(moduleProjectPath));
+            Assert.True(File.Exists(targetsPath));
+            Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(targetsPath));
+            return 0;
+        };
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
+        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, _, _, options, _) =>
+        {
+            Assert.Equal(appHostFile.FullName, projectFile.FullName);
+            Assert.False(watch);
+            Assert.True(noBuild);
+            Assert.False(noRestore);
+            Assert.Empty(args);
+            Assert.Equal("true", options.MSBuildProperties[CSharpCliManagedAppHostModuleGenerator.BuildPropertyName]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_CliManagedSingleFileAppHostCanBeEnabledFromAppHostConfig()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        WriteAspireConfigJson(_workspace.WorkspaceRoot.FullName, """
+            {
+              "features": {
+                "csharpCliManagedAppHostEnabled": true
+              },
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.1"
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner();
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.BuildAsyncCallback = (_, _, _, _) => 0;
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.NotNull(env);
+            Assert.Contains(BundleDiscovery.DcpPathEnvVar, env.Keys);
+            Assert.Contains(BundleDiscovery.DashboardPathEnvVar, env.Keys);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.True(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj")));
+    }
+
+    [Fact]
+    public void CanHandle_CliManagedSingleFileAppHostCanBeEnabledFromAppHostConfig()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        WriteAspireConfigJson(_workspace.WorkspaceRoot.FullName, """
+            {
+              "features": {
+                "csharpCliManagedAppHostEnabled": true
+              }
+            }
+            """);
+
+        var project = CreateDotNetAppHostProject(new TestDotNetCliRunner());
+
+        Assert.True(project.CanHandle(appHostFile));
+    }
+
+    [Fact]
+    public async Task PublishAsync_CliManagedSingleFileAppHostGeneratesModuleAndSetsBuildProperty()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        var runner = new TestDotNetCliRunner();
+        var project = CreateDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+        });
+
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
+        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, _, _, options, _) =>
+        {
+            Assert.Equal(appHostFile.FullName, projectFile.FullName);
+            Assert.False(watch);
+            Assert.True(noBuild);
+            Assert.False(noRestore);
+            Assert.Equal(["--operation", "publish", "--step", "publish"], args);
+            Assert.Equal("true", options.MSBuildProperties[CSharpCliManagedAppHostModuleGenerator.BuildPropertyName]);
+            Assert.True(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj")));
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.PublishAsync(new PublishContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Arguments = ["--operation", "publish", "--step", "publish"],
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task AddPackageAsync_CliManagedSingleFileAppHostUpdatesConfigAndRegeneratesModule()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        var runner = new TestDotNetCliRunner();
+        var project = CreateDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+        });
+
+        runner.BuildAsyncCallback = (projectFile, _, _, _) =>
+        {
+            // After the refactor the CLI-managed add path builds the integration module
+            // project (.aspire/modules/Aspire.csproj) via IntegrationClosureRestorer, not the
+            // user's apphost.cs.
+            var moduleProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj");
+            var targetsPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets");
+            Assert.Equal(moduleProjectPath, projectFile.FullName);
+            Assert.True(File.Exists(targetsPath));
+            Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(targetsPath));
+
+            var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+            var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureRestorer.IntegrationRestoreFolderName);
+            Directory.CreateDirectory(restoreDir);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureSourcesFileName), string.Empty);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureMetadataFileName), string.Empty);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureTargetsFileName), string.Empty);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ProjectRefAssemblyNamesFileName), string.Empty);
+            return 0;
+        };
+
+        var success = await project.AddPackageAsync(new AddPackageContext
+        {
+            AppHostFile = appHostFile,
+            PackageId = "Aspire.Hosting.Redis",
+            PackageVersion = "13.2.1"
+        }, CancellationToken.None);
+
+        Assert.True(success);
+
+        var config = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(config);
+        Assert.Equal("13.2.1", config.Packages!["Aspire.Hosting.Redis"]);
     }
 
     [Fact]
@@ -1400,6 +1593,19 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             var builder = DistributedApplication.CreateBuilder(args);
             builder.Build().Run();
             """.Replace("{0}", useCliBundleProperty, StringComparison.Ordinal));
+
+        return new FileInfo(appHostPath);
+    }
+
+    private FileInfo CreateCliManagedSingleFileAppHost()
+    {
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.cs");
+        File.WriteAllText(appHostPath, """
+            #:project .aspire/modules/Aspire.csproj
+
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.Build().Run();
+            """);
 
         return new FileInfo(appHostPath);
     }
