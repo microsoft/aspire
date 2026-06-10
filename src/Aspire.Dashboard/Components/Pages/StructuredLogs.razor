@@ -1,4 +1,4 @@
-﻿@page "/structuredlogs"
+@page "/structuredlogs"
 @page "/structuredlogs/resource/{resourceName}"
 
 @using Aspire.Dashboard.Resources
@@ -40,7 +40,7 @@
                                   SelectedResource="@PageViewModel.SelectedResource" />
 
             <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@ViewModel.HasErrors()" />
-            <FluentSearch @bind-Value="_filter"
+            <FluentTextInput InputMode="TextInputMode.Search" @bind-Value="_filter"
                           @bind-Value:after="HandleAfterFilterBindAsync"
                           Name="structured-logs-search"
                           Immediate="true"
@@ -68,7 +68,7 @@
             else
             {
                 <div slot="end">
-                    <FluentCounterBadge HorizontalPosition="70" Count="@(ViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                    <FluentCounterBadge OffsetX="70" Count="@(ViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
                         <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
                     </FluentCounterBadge>
                 </div>
@@ -76,7 +76,7 @@
 
             <DesktopToolbarDivider />
 
-            <FluentButton slot="end" Appearance="Appearance.Stealth"
+            <FluentButton slot="end" Appearance="ButtonAppearance.Transparent"
                           aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]"
                           OnClick="() => OpenFilterAsync(null)">
                 @if (ViewportInformation.IsDesktop)
@@ -119,7 +119,7 @@
                                                 ResizeType="DataGridResizeType.Discrete"
                                                 Virtualize="true"
                                                 RowClass="@GetRowClass"
-                                                GenerateHeader="GenerateHeaderOption.Sticky"
+                                                GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                                                 ItemSize="46"
                                                 OverscanCount="100"
                                                 ResizableColumns="true"

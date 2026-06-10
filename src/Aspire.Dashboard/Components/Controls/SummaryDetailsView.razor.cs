@@ -75,7 +75,7 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
     private string _panel1Size { get; set; } = "1fr";
     private string _panel2Size { get; set; } = "1fr";
     private bool _internalShowDetails;
-    private FluentSplitter? _splitterRef;
+    private FluentMultiSplitter? _splitterRef;
 
     public string EffectivePanel1Size => ViewportInformation.IsDesktop ? _panel1Size : "0fr";
     public string EffectivePanel2Size => ViewportInformation.IsDesktop ? _panel2Size : "1fr";
@@ -178,25 +178,28 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
 
         await RaiseOnResizeAsync();
 
-        // The FluentSplitter control will render during the async calls above, but with the wrong values.
+        // The splitter control will render during the async calls above, but with the wrong values.
         // We need to force a re-render to get the correct values.
         StateHasChanged();
     }
 
-    private async Task HandleSplitterResize(SplitterResizedEventArgs args)
+    private async Task HandleMultiSplitterResize(FluentMultiSplitterResizeEventArgs args)
     {
-        var totalSize = (float)(args.Panel1Size + args.Panel2Size);
-
-        var panel1Fraction = (args.Panel1Size / totalSize);
-
-        SetPanelSizes(panel1Fraction);
-
-        if (RememberSize)
+        // Pane index 0 is the first panel. NewSize is a percentage (0-100).
+        if (args.PaneIndex == 0)
         {
-            await SaveSizeToStorage(panel1Fraction);
-        }
+            var panel1Fraction = (float)(args.NewSize / 100.0);
+            panel1Fraction = Math.Clamp(panel1Fraction, 0f, 1f);
 
-        await RaiseOnResizeAsync();
+            SetPanelSizes(panel1Fraction);
+
+            if (RememberSize)
+            {
+                await SaveSizeToStorage(panel1Fraction);
+            }
+
+            await RaiseOnResizeAsync();
+        }
     }
 
     private async Task SaveSizeToStorage(float panel1Fraction)
@@ -261,63 +264,31 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
             hasChanged = true;
         }
 
-        GetPanelSizes(_splitterRef.Panel1Size, _splitterRef.Panel2Size, out var panel1Size, out var panel2Size, out var panel1Fraction);
-
-        if (panel1Size is null || panel2Size is null || panel1Fraction is null)
-        {
-            return;
-        }
+        var panel1Fraction = _panel1Fraction;
 
         if (shortcut is AspireKeyboardShortcut.IncreasePanelSize)
         {
-            SetPanelSizes(panel1Fraction.Value - 0.05f);
+            SetPanelSizes(panel1Fraction - 0.05f);
             hasChanged = true;
         }
         else if (shortcut is AspireKeyboardShortcut.DecreasePanelSize)
         {
-            SetPanelSizes(panel1Fraction.Value + 0.05f);
+            SetPanelSizes(panel1Fraction + 0.05f);
             hasChanged = true;
         }
 
-        GetPanelSizes(_splitterRef.Panel1Size, _splitterRef.Panel2Size, out _, out _, out var newPanel1Fraction);
-
-        if (newPanel1Fraction is null || !hasChanged)
+        if (!hasChanged)
         {
             return;
         }
 
-        await SaveSizeToStorage(newPanel1Fraction.Value);
+        await SaveSizeToStorage(_panel1Fraction);
         await InvokeAsync(async () =>
         {
             await RaiseOnResizeAsync();
 
             StateHasChanged();
         });
-
-        return;
-
-        static void GetPanelSizes(
-            string? panel1SizeString,
-            string? panel2SizeString,
-            out float? panel1Size,
-            out float? panel2Size,
-            out float? panel1Fraction)
-        {
-            if (panel1SizeString is null || !panel1SizeString.EndsWith("fr")
-                || panel2SizeString is null || !panel2SizeString.EndsWith("fr"))
-            {
-                panel1Size = null;
-                panel2Size = null;
-                panel1Fraction = null;
-                return;
-            }
-
-            panel1Size = (float)Convert.ToDouble(panel1SizeString[..^2], CultureInfo.InvariantCulture);
-            panel2Size = (float)Convert.ToDouble(panel2SizeString[..^2], CultureInfo.InvariantCulture);
-
-            var newTotalSize = (float)(panel1Size + panel2Size);
-            panel1Fraction = panel1Size.Value / newTotalSize;
-        }
     }
 
     private string GetSizeStorageKey()

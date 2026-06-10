@@ -8,13 +8,12 @@ using Aspire.Dashboard.Model.Markdown;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 using DialogsLoc = Aspire.Dashboard.Resources.Dialogs;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class AIAgentsDialog : IDialogContentComponent
+public partial class AIAgentsDialog
 {
     private MarkdownProcessor? _markdownProcessor;
 

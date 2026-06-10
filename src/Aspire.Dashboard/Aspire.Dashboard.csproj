@@ -3,7 +3,7 @@
   <PropertyGroup>
     <!-- This list of runtimes needs to match the set of runtimes specified in eng/workloads/workloads.csproj -->
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <!-- Enable System.GC.DynamicAdaptationMode to get a GC that dynamically adapts to the application's memory use. -->
     <GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
     <!--
@@ -11,12 +11,6 @@
       CS8002: Referenced assembly does not have a strong name
     -->
     <NoWarn>$(NoWarn);CS1591;CS8002</NoWarn>
-
-    <!-- This Application is a framework-dependent application that targets .NET 8.0. This means that the
-    application is not able to run if the place where it is deployed does not have the .NET 8.0 runtime installed.
-    Given we want to be able to support people running on environments where they only have the 9.0 SDK/runtime installed,
-    we allow roll-forward to the next major in order to support these customers.-->
-    <RollForward>Major</RollForward>
 
     <DefineConstants>$(DefineConstants);ASPIRE_DASHBOARD</DefineConstants>
 

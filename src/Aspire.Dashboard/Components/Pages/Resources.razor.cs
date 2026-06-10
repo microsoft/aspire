@@ -881,7 +881,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private Task OnTabChangeAsync(FluentTab newTab)
     {
-        var id = newTab.Id?.Substring("tab-".Length);
+        var id = newTab?.Id?.Substring("tab-".Length);
 
         if (id is null
             || !Enum.TryParse(typeof(ResourceViewKind), id, out var o)
@@ -993,17 +993,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
 
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
-    }
-
-    private async Task ContextMenuClosed(Microsoft.AspNetCore.Components.Web.MouseEventArgs args)
-    {
-        if (_contextMenu is { } menu)
-        {
-            await menu.CloseAsync();
-        }
-
-        _contextMenuClosedTcs?.TrySetResult();
-        _contextMenuClosedTcs = null;
     }
 
     // IComponentWithTelemetry impl

@@ -1,4 +1,4 @@
-﻿@namespace Aspire.Dashboard.Components
+@namespace Aspire.Dashboard.Components
 
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.Dashboard.Resources
@@ -11,7 +11,7 @@
             <h5>@Loc[nameof(ControlsStrings.ChartContainerFiltersHeader)]</h5>
             <FluentDataGrid Items="@Queryable.AsQueryable(DimensionFilters)"
                             GridTemplateColumns="200px 1fr auto"
-                            GenerateHeader="GenerateHeaderOption.None"
+                            GenerateHeader="DataGridGeneratedHeaderType.None"
                             RowSize="DataGridRowSize.Medium">
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
@@ -52,13 +52,12 @@
                         }
                         <FluentButton id="@id"
                                       IconEnd="@(new Icons.Regular.Size20.Filter())"
-                                      Appearance="@(context.AreAllValuesSelected is true ? Appearance.Stealth : Appearance.Accent)"
+                                      Appearance="@(context.AreAllValuesSelected is true ? ButtonAppearance.Transparent : ButtonAppearance.Primary)"
                                       @onclick="() => context.PopupVisible = !context.PopupVisible"
                                       aria-label="@(context.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])"/>
                         @* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
-                        <FluentPopover AnchorId="@id" @bind-Open="context.PopupVisible" VerticalThreshold="@(Math.Min((context.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
-                            <Header>@context.Name</Header>
-                            <Body>
+                        <FluentPopover AnchorId="@id" @bind-Open="context.PopupVisible" AutoFocus="false">
+                            <div class="popover-header">@context.Name</div>
                             <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
                                 <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
                                                 ThreeState="true"
@@ -76,7 +75,6 @@
                                                     @bind-Value:set="c => OnTagSelectionChangedAsync(context, tag, c)"/>
                                 }
                             </FluentStack>
-                            </Body>
                         </FluentPopover>
                     </AspireTemplateColumn>
                 </ChildContent>

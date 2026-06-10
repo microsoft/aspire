@@ -1,9 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
-using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Model;
@@ -13,11 +11,8 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class DashboardDialogService(
     IDialogService dialogService,
-    IStringLocalizer<Dialogs> dialogsLoc,
     DimensionManager dimensionManager)
 {
-    private string CloseButtonText => dialogsLoc[nameof(Dialogs.DialogCloseButtonText)];
-
     /// <summary>
     /// Gets the current viewport information from the dimension manager.
     /// </summary>
@@ -29,98 +24,169 @@ public sealed class DashboardDialogService(
     public bool IsDesktop => dimensionManager.ViewportInformation.IsDesktop;
 
     /// <summary>
-    /// Shows a dialog with the specified content and parameters.
-    /// Automatically sets the dismiss title to the localized close button text if not specified.
+    /// Shows a dialog with the specified content and options.
     /// </summary>
-    /// <typeparam name="TDialog">The type of dialog component to show.</typeparam>
-    /// <param name="content">The content to pass to the dialog.</param>
-    /// <param name="parameters">The dialog parameters.</param>
-    /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowDialogAsync<TDialog>(object content, DialogParameters parameters)
-        where TDialog : IDialogContentComponent
+    public async Task<DialogResult> ShowDialogAsync<TDialog>(object content, DialogOptions options)
+        where TDialog : ComponentBase
     {
-        SetDefaultDismissTitle(parameters);
-        return await dialogService.ShowDialogAsync<TDialog>(content, parameters).ConfigureAwait(false);
+        options.Data = content;
+        return await dialogService.ShowDialogAsync<TDialog>(options).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Shows a dialog with the specified parameters.
-    /// Automatically sets the dismiss title to the localized close button text if not specified.
+    /// Shows a dialog with the specified options.
     /// </summary>
-    /// <typeparam name="TDialog">The type of dialog component to show.</typeparam>
-    /// <param name="parameters">The dialog parameters.</param>
-    /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowDialogAsync<TDialog>(DialogParameters parameters)
-        where TDialog : IDialogContentComponent
+    public async Task<DialogResult> ShowDialogAsync<TDialog>(DialogOptions options)
+        where TDialog : ComponentBase
     {
-        SetDefaultDismissTitle(parameters);
-        return await dialogService.ShowDialogAsync<TDialog>(parameters).ConfigureAwait(false);
+        return await dialogService.ShowDialogAsync<TDialog>(options).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Shows a panel dialog with the specified content and parameters.
-    /// Automatically sets the dismiss title to the localized close button text if not specified.
+    /// Shows a panel/drawer dialog with the specified content and options.
     /// </summary>
-    /// <typeparam name="TDialog">The type of dialog component to show.</typeparam>
-    /// <param name="content">The content to pass to the dialog.</param>
-    /// <param name="parameters">The dialog parameters.</param>
-    /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowPanelAsync<TDialog>(object content, DialogParameters parameters)
-        where TDialog : IDialogContentComponent
+    public async Task<DialogResult> ShowPanelAsync<TDialog>(object content, DialogOptions options)
+        where TDialog : ComponentBase
     {
-        SetDefaultDismissTitle(parameters);
-        return await dialogService.ShowPanelAsync<TDialog>(content, parameters).ConfigureAwait(false);
+        options.Data = content;
+        return await dialogService.ShowDrawerAsync<TDialog>(options).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Shows a panel dialog with the specified parameters.
-    /// Automatically sets the dismiss title to the localized close button text if not specified.
+    /// Shows a panel/drawer dialog with the specified options.
     /// </summary>
-    /// <typeparam name="TDialog">The type of dialog component to show.</typeparam>
-    /// <param name="parameters">The dialog parameters.</param>
-    /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowPanelAsync<TDialog>(DialogParameters parameters)
-        where TDialog : IDialogContentComponent
+    public async Task<DialogResult> ShowPanelAsync<TDialog>(DialogOptions options)
+        where TDialog : ComponentBase
     {
-        SetDefaultDismissTitle(parameters);
-        return await dialogService.ShowPanelAsync<TDialog>(parameters).ConfigureAwait(false);
+        return await dialogService.ShowDrawerAsync<TDialog>(options).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Shows a confirmation dialog with the specified message.
     /// </summary>
-    /// <param name="message">The confirmation message to display.</param>
-    /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowConfirmationAsync(string message)
+    public async Task<DialogResult> ShowConfirmationAsync(string message)
     {
         return await dialogService.ShowConfirmationAsync(message).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Shows a message box dialog with the specified content and parameters.
-    /// Automatically sets the dismiss title to the localized close button text if not specified.
+    /// Shows a message box dialog with the specified options.
     /// </summary>
-    /// <param name="parameters">The message box parameters.</param>
-    /// <returns>A reference to the opened dialog.</returns>
-    public async Task<IDialogReference> ShowMessageBoxAsync(DialogParameters<MessageBoxContent> parameters)
+    public async Task<DialogResult> ShowMessageBoxAsync(MessageBoxOptions options)
     {
-        SetDefaultDismissTitle(parameters);
-        return await dialogService.ShowMessageBoxAsync(parameters).ConfigureAwait(false);
+        return await dialogService.ShowMessageBoxAsync(options).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shows a dialog with the specified content and parameters (v4-style).
+    /// </summary>
+    public Task<DialogResult> ShowDialogAsync<TDialog>(object content, DialogParameters parameters)
+        where TDialog : ComponentBase
+    {
+        return ShowDialogAsync<TDialog>(content, parameters.ToDialogOptions());
+    }
+
+    /// <summary>
+    /// Shows a dialog with the specified parameters (v4-style).
+    /// </summary>
+    public Task<DialogResult> ShowDialogAsync<TDialog>(DialogParameters parameters)
+        where TDialog : ComponentBase
+    {
+        return ShowDialogAsync<TDialog>(parameters.ToDialogOptions());
+    }
+
+    /// <summary>
+    /// Shows a panel/drawer dialog with the specified content and parameters (v4-style).
+    /// </summary>
+    public Task<DialogResult> ShowPanelAsync<TDialog>(object content, DialogParameters parameters)
+        where TDialog : ComponentBase
+    {
+        return ShowPanelAsync<TDialog>(content, parameters.ToDialogOptions());
+    }
+
+    /// <summary>
+    /// Shows a panel/drawer dialog with the specified parameters (v4-style).
+    /// </summary>
+    public Task<DialogResult> ShowPanelAsync<TDialog>(DialogParameters parameters)
+        where TDialog : ComponentBase
+    {
+        return ShowPanelAsync<TDialog>(parameters.ToDialogOptions());
+    }
+
+    /// <summary>
+    /// Shows a message box dialog using v4-style parameters.
+    /// </summary>
+    public async Task<DialogResult> ShowMessageBoxAsync(DialogParameters<MessageBoxContent> parameters)
+    {
+        var options = new MessageBoxOptions
+        {
+            Title = parameters.Title,
+            Message = parameters.Content?.MarkupMessage?.ToString(),
+        };
+        return await dialogService.ShowMessageBoxAsync(options).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Creates a dialog callback for handling dialog results.
     /// </summary>
-    /// <param name="receiver">The component that will receive the callback.</param>
-    /// <param name="callback">The callback function to execute when the dialog closes.</param>
-    /// <returns>An event callback for the dialog result.</returns>
     public EventCallback<DialogResult> CreateDialogCallback(object receiver, Func<DialogResult, Task> callback)
     {
-        return dialogService.CreateDialogCallback(receiver, callback);
+        return new EventCallbackFactory().Create(receiver, callback);
     }
 
-    private void SetDefaultDismissTitle(DialogParameters parameters)
+    /// <summary>
+    /// Opens a dialog and returns the dialog instance for tracking/closing externally.
+    /// In v5, ShowDialogAsync blocks until the dialog is closed. This method fires
+    /// the dialog open in the background and captures the instance via OnStateChange.
+    /// </summary>
+    public async Task<IDialogInstance> OpenDialogInstanceAsync<TDialog>(object content, DialogOptions options)
+        where TDialog : ComponentBase
     {
-        parameters.DismissTitle ??= CloseButtonText;
+        var instanceTcs = new TaskCompletionSource<IDialogInstance>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var existingOnStateChange = options.OnStateChange;
+        options.OnStateChange = args =>
+        {
+            if (args.State == DialogState.Open && args.Instance is not null)
+            {
+                instanceTcs.TrySetResult(args.Instance);
+            }
+
+            existingOnStateChange?.Invoke(args);
+        };
+
+        options.Data = content;
+
+        // Fire the dialog open without awaiting the result (it blocks until close).
+        _ = dialogService.ShowDialogAsync<TDialog>(options);
+
+        return await instanceTcs.Task.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Opens a panel/drawer dialog and returns the dialog instance for tracking/closing externally.
+    /// </summary>
+    public async Task<IDialogInstance> OpenPanelInstanceAsync<TDialog>(object content, DialogOptions options)
+        where TDialog : ComponentBase
+    {
+        var instanceTcs = new TaskCompletionSource<IDialogInstance>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var existingOnStateChange = options.OnStateChange;
+        options.OnStateChange = args =>
+        {
+            if (args.State == DialogState.Open && args.Instance is not null)
+            {
+                instanceTcs.TrySetResult(args.Instance);
+            }
+
+            existingOnStateChange?.Invoke(args);
+        };
+
+        options.Data = content;
+
+        // Fire the panel open without awaiting the result (it blocks until close).
+        _ = dialogService.ShowDrawerAsync<TDialog>(options);
+
+        return await instanceTcs.Task.ConfigureAwait(false);
     }
 }

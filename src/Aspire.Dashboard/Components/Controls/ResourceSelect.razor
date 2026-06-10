@@ -1,20 +1,17 @@
-﻿@using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Resources
 
-<FluentInputLabel Label="@Loc[nameof(ControlsStrings.ResourceLabel)]"
-                  ForId="@_selectId"
-                  Orientation="Orientation.Horizontal"
-                  class="@LabelClass" />
+<label for="@_selectId" class="fluent-input-label @LabelClass">@Loc[nameof(ControlsStrings.ResourceLabel)]</label>
 
-<FluentSelect Items="Resources"
+<FluentSelect TOption="SelectViewModel<ResourceTypeDetails>"
+              TValue="SelectViewModel<ResourceTypeDetails>"
+              Items="Resources"
               Disabled="@(Resources is null)"
               @key="@Resources?.Count()"
               Id="@_selectId"
-              OptionValue="@(c => c!.Name)"
               OptionDisabled="@(c => !CanSelectGrouping && c!.Id?.Type is Otlp.Model.OtlpResourceType.ResourceGrouping)"
-              OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c!.Name))"
-              @bind-SelectedOption="SelectedResource"
-              @bind-SelectedOption:after="SelectedResourceChangedCore"
-              ValueChanged="ValuedChanged"
+              OptionText="@(c => c!.Name)"
+              @bind-Value="SelectedResource"
+              @bind-Value:after="SelectedResourceChangedCore"
               AriaLabel="@AriaLabel"
               Class="resource-list"
               Height="@GetPopupHeight()">

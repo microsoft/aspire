@@ -1,11 +1,11 @@
-﻿@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Model
 @using Aspire.Dashboard.Resources
 @using System.Collections.Immutable
 @using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons
 @inject IStringLocalizer<ControlsStrings> Loc
 
 <div class="structured-log-details-layout">
-    <FluentToolbar Orientation="Orientation.Horizontal">
+    <div role="toolbar" class="fluent-toolbar">
         <div>
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceLabel)] <strong>@ViewModel.LogEntry.ResourceView.Resource.ResourceName</strong>
         </div>
@@ -13,24 +13,22 @@
         <div title="@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Full)">
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsTimestampLabel)] <strong>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</strong>
         </div>
-        <FluentSearch Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
+        <FluentTextInput InputMode="TextInputMode.Search" Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
                       Immediate="true"
                       Autofocus="true"
                       AutoComplete="off"
-                      @bind-Value="_filter"
-                      slot="end" />
-        <FluentDivider slot="end" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
-        <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
+                      @bind-Value="_filter" />
+        <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
+        <AspireMenuButton ButtonAppearance="ButtonAppearance.Subtle"
                           Icon="@(new Icons.Regular.Size20.Options())"
                           Items="@_logActionsMenuItems"
-                          Title="@Loc[nameof(ControlsStrings.ActionsButtonText)]"
-                          slot="end" />
-    </FluentToolbar>
+                          Title="@Loc[nameof(ControlsStrings.ActionsButtonText)]" />
+    </div>
     <div class="property-grid-container">
         <FluentAccordion>
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsLogEntryHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <FluentBadge Shape="BadgeShape.Circular">
                         @FilteredItems.Count()
                     </FluentBadge>
                 </div>
@@ -42,7 +40,7 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsContextHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <FluentBadge Shape="BadgeShape.Circular">
                         @FilteredContextItems.Count()
                     </FluentBadge>
                 </div>
@@ -56,7 +54,7 @@
             {
                 <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsExceptionHeader)]" Expanded="true">
                     <div slot="end">
-                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                        <FluentBadge Shape="BadgeShape.Circular">
                             @FilteredExceptionItems.Count()
                         </FluentBadge>
                     </div>
@@ -68,7 +66,7 @@
             }
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <FluentBadge Shape="BadgeShape.Circular">
                         @FilteredResourceItems.Count()
                     </FluentBadge>
                 </div>

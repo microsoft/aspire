@@ -18,7 +18,7 @@ using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposable
+public partial class ManageDataDialog : IAsyncDisposable
 {
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -61,7 +61,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     private readonly HashSet<string> _expandedResourceNames = new(StringComparers.ResourceName);
     private readonly HashSet<(string ResourceName, AspireDataType DataType)> _selectedRows = [];
     private readonly CancellationTokenSource _cts = new();
-    private readonly Icon _iconUnselectedMultiple = new Icons.Regular.Size20.CheckboxUnchecked().WithColor(Color.FillInverse);
+    private readonly Icon _iconUnselectedMultiple = new Icons.Regular.Size20.CheckboxUnchecked().WithColor(Color.Lightweight);
     private readonly Icon _iconSelectedMultiple = new Icons.Filled.Size20.CheckboxChecked();
     private readonly Icon _iconIndeterminate = new Icons.Filled.Size20.CheckboxIndeterminate();
     private Task? _resourceSubscriptionTask;

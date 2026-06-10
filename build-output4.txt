@@ -1,0 +1,11 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Development\Source\aspire\src\Aspire.Dashboard\Model\TraceLinkHelpers.cs(7,1): error IDE0005: Using directive is unnecessary. (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0005) [C:\Development\Source\aspire\src\Aspire.Dashboard\Aspire.Dashboard.csproj]
+
+Build FAILED.
+
+C:\Development\Source\aspire\src\Aspire.Dashboard\Model\TraceLinkHelpers.cs(7,1): error IDE0005: Using directive is unnecessary. (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0005) [C:\Development\Source\aspire\src\Aspire.Dashboard\Aspire.Dashboard.csproj]
+    0 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:10.96

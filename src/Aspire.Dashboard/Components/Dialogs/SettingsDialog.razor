@@ -1,4 +1,4 @@
-﻿@using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Resources
 @using Humanizer
 @inject IStringLocalizer<Dialogs> Loc
 
@@ -19,15 +19,12 @@
         <div class="input-container">
             <FluentSelect
                 TOption="CultureInfo"
-                ChangeOnEnterOnly="true"
-                Position="SelectPosition.Below"
+                TValue="CultureInfo"
                 Label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 Items="@_languageOptions"
-                OptionValue="@(c => c!.Name)"
                 OptionText="@(c => c!.NativeName.Humanize())"
-                ValueChanged="@ValueChanged"
-                @bind-SelectedOption="@_selectedUiCulture"
-                @bind-SelectedOption:after="@OnLanguageChanged"
+                @bind-Value="@_selectedUiCulture"
+                @bind-Value:after="@OnLanguageChanged"
                 Class="language-select"/>
 
             <p class="setting-subtext">@Loc[nameof(Dialogs.SettingsDialogLanguagePageReloads)]</p>

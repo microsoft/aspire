@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Text;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
@@ -85,7 +86,7 @@ internal static class DashboardUIHelpers
         {
             options.Title = title;
             options.Body = message;
-            options.Intent = MessageIntent.Info;
+            options.Intent = MessageBarIntent.Info;
             options.Section = "MessagesTop";
             options.AllowDismiss = true;
             options.OnClose = m =>

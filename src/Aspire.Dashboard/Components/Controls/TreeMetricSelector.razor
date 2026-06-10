@@ -9,7 +9,7 @@
 
 @if (IncludeLabel)
 {
-    <FluentInputLabel Label="@Loc[nameof(Metrics.MetricsInsturementNameGridNameColumnHeader)]" ForId="metric-selector" />
+    <label for="metric-selector" class="fluent-input-label">@Loc[nameof(Metrics.MetricsInsturementNameGridNameColumnHeader)]</label>
 }
 
 <FluentTreeView Id="metric-selector" Class="metrics-tree" @bind-CurrentSelected="@PageViewModel.SelectedTreeItem" @bind-CurrentSelected:after="HandleSelectedTreeItemChangedAsync">

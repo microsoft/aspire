@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @using Aspire.Dashboard.Components.ResourcesGridColumns
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
@@ -20,7 +20,7 @@
         </PageTitleSection>
 
         <ToolbarSection>
-            <FluentSearch Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+            <FluentTextInput InputMode="TextInputMode.Search" Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Name="resources-search"
@@ -34,7 +34,7 @@
             @if (ViewportInformation.IsDesktop)
             {
                 <FluentButton id="resourceFilterButton" slot="end"
-                              Appearance="@(NoFiltersSet ? Appearance.Stealth : Appearance.Accent)"
+                              Appearance="@(NoFiltersSet ? ButtonAppearance.Transparent : ButtonAppearance.Primary)"
                               IconEnd="@(new Icons.Regular.Size20.Filter())"
                               @onclick="() => _isFilterPopupVisible = !_isFilterPopupVisible"
                               Title="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])"
@@ -42,7 +42,7 @@
 
                 @if (HasViewOptionsMenu())
                 {
-                    <AspireMenuButton ButtonAppearance="Appearance.Stealth"
+                    <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
                                       Icon="@(new Icons.Regular.Size20.Options())"
                                       Items="@_resourcesMenuItems"
                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"
@@ -73,16 +73,12 @@
         <MainSection>
             <FluentPopover AnchorId="resourceFilterButton"
                            @bind-Open="_isFilterPopupVisible"
-                           AutoFocus="true"
-                           FixedPlacement="true"
                            Class="resources-filter-popup">
-                <Body>
                     <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
                                      ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
                                      ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
                                      OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
                                      OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
-                </Body>
             </FluentPopover>
 
             <SummaryDetailsView DetailsTitle="@(SelectedResource != null ? $"{SelectedResource.ResourceType}: {GetResourceName(SelectedResource)}" : null)"
@@ -100,7 +96,7 @@
                             *@
                             @if (!_hideResourceGraph)
                             {
-                                <FluentTabs Class="resources-tab-header" ActiveTabId="@($"tab-{PageViewModel.SelectedViewKind}")" OnTabChange="@OnTabChangeAsync" Size="null">
+                                <FluentTabs Class="resources-tab-header" ActiveTabId="@($"tab-{PageViewModel.SelectedViewKind}")" ActiveTabChanged="@OnTabChangeAsync" Size="null">
                                     <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Table}")"
                                                Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerTableTab)]"
@@ -127,7 +123,7 @@
                                                     HeaderCellAsButtonWithMenu="true"
                                                     ResizeType="DataGridResizeType.Discrete"
                                                     Virtualize="true"
-                                                    GenerateHeader="GenerateHeaderOption.Sticky"
+                                                    GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                                                     ItemSize="46"
                                                     OverscanCount="100"
                                                     ItemsProvider="@GetData"
@@ -150,8 +146,8 @@
                                                     <span @onclick:stopPropagation="true" class="main-grid-expand-container @(context.IsCollapsed ? "main-grid-collapsed" : "main-grid-expanded")">
                                                         @if (context.Children.Count > 0)
                                                         {
-                                                            <FluentButton aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="Appearance.Lightweight" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
-                                                                <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Neutral" />
+                                                            <FluentButton aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="ButtonAppearance.Subtle" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
+                                                                <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Default" />
                                                             </FluentButton>
                                                         }
                                                     </span>
@@ -227,23 +223,23 @@
                                     <svg class="resource-graph">
                                     </svg>
                                     <div class="resource-graph-controls">
-                                        <FluentButton Appearance="Appearance.Stealth"
+                                        <FluentButton Appearance="ButtonAppearance.Transparent"
                                                       Class="graph-zoom-in"
                                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]">
-                                            <FluentIcon Value="new Icons.Regular.Size24.ZoomIn()" Color="Color.Accent" />
+                                            <FluentIcon Value="new Icons.Regular.Size24.ZoomIn()" Color="Color.Primary" />
                                         </FluentButton>
-                                        <FluentButton Appearance="Appearance.Stealth"
+                                        <FluentButton Appearance="ButtonAppearance.Transparent"
                                                       Class="graph-zoom-out"
                                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]">
-                                            <FluentIcon Value="new Icons.Regular.Size24.ZoomOut()" Color="Color.Accent" />
+                                            <FluentIcon Value="new Icons.Regular.Size24.ZoomOut()" Color="Color.Primary" />
                                         </FluentButton>
-                                        <FluentButton Appearance="Appearance.Stealth"
+                                        <FluentButton Appearance="ButtonAppearance.Transparent"
                                                       Class="graph-reset"
                                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">
-                                            <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Accent" />
+                                            <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Primary" />
                                         </FluentButton>
                                     </div>
                                 </div>

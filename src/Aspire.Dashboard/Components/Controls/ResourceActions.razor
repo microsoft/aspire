@@ -1,4 +1,4 @@
-﻿@namespace Aspire.Dashboard.Components
+@namespace Aspire.Dashboard.Components
 @using Aspire.Dashboard.Resources
 
 @if (ViewportInformation.IsDesktop)
@@ -11,7 +11,7 @@
         {
             var highlightedCommand = _highlightedCommands[i];
 
-            <FluentButton Appearance="Appearance.Lightweight" Title="@(!string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription()) ? highlightedCommand.GetDisplayDescription() : highlightedCommand.GetDisplayName())" OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))" Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
+            <FluentButton Appearance="ButtonAppearance.Subtle" Title="@(!string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription()) ? highlightedCommand.GetDisplayDescription() : highlightedCommand.GetDisplayName())" OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))" Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
                 @if (!string.IsNullOrEmpty(highlightedCommand.IconName) && IconResolver.ResolveIconName(highlightedCommand.IconName, IconSize.Size16, highlightedCommand.IconVariant) is { } icon)
                 {
                     <FluentIcon Value="@icon" Width="16px" />
@@ -28,14 +28,14 @@
         }
     }
 
-    <FluentButton Appearance="Appearance.Lightweight" Title="@Loc[nameof(Resources.ResourceActionConsoleLogsText)]" OnClick="@(() => NavigationManager.NavigateTo(Aspire.Dashboard.Utils.DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(Resource, ResourceByName))))">
+    <FluentButton Appearance="ButtonAppearance.Subtle" Title="@Loc[nameof(Resources.ResourceActionConsoleLogsText)]" OnClick="@(() => NavigationManager.NavigateTo(Aspire.Dashboard.Utils.DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(Resource, ResourceByName))))">
         <FluentIcon Value="@s_consoleLogsIcon" />
     </FluentButton>
 
     <FluentDivider Class="action-divider" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
 }
 
-<AspireMenuButton ButtonAppearance="Appearance.Lightweight"
+<AspireMenuButton ButtonAppearance="ButtonAppearance.Subtle"
                   Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
                   Items="@_menuItems"
                   @ref="_menuButton"

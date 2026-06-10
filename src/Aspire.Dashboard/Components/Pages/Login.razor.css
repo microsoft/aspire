@@ -86,7 +86,7 @@
     margin: calc(var(--design-unit) * 2px);
 }
 
-.token-help-container fluent-anchor {
+.token-help-container fluent-anchor-button {
     width: fit-content;
 }
 

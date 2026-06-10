@@ -8,7 +8,7 @@ using Microsoft.FluentUI.AspNetCore.Components.Utilities;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenu : FluentComponentBase
+public partial class AspireMenu(LibraryConfiguration configuration) : FluentComponentBase(configuration)
 {
     private FluentMenu? _menu;
 
@@ -43,23 +43,24 @@ public partial class AspireMenu : FluentComponentBase
     {
         if (_menu is { } menu)
         {
-            await menu.CloseAsync();
+            await menu.CloseMenuAsync();
         }
     }
 
     public async Task OpenAsync(int screenWidth, int screenHeight, int clientX, int clientY)
     {
-        if (_menu is { } menu)
+        if (_menu is not null)
         {
             // Calculate the position to display the context menu using the cursor position (clientX, clientY)
             // together with the screen width and height.
             // The menu may need to be displayed above or left of the cursor to fit in the screen.
+            const int horizontalThreshold = 200;
             var left = 0;
             var right = 0;
             var top = 0;
             var bottom = 0;
 
-            if (clientX + menu.HorizontalThreshold > screenWidth)
+            if (clientX + horizontalThreshold > screenWidth)
             {
                 right = screenWidth - clientX;
             }
@@ -106,14 +107,5 @@ public partial class AspireMenu : FluentComponentBase
             await onClick();
         }
         Open = false;
-    }
-
-    private Task OnOpenChanged(bool open)
-    {
-        Open = open;
-
-        return OpenChanged.HasDelegate
-            ? OpenChanged.InvokeAsync(open)
-            : Task.CompletedTask;
     }
 }

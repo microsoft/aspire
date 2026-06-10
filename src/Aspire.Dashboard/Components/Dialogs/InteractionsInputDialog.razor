@@ -1,21 +1,21 @@
-﻿@using Aspire.Dashboard.Components.Controls.Chart
+@using Aspire.Dashboard.Components.Controls.Chart
 @using Aspire.Dashboard.Model.Interaction
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.DashboardService.Proto.V1
 @using Dialogs = Aspire.Dashboard.Resources.Dialogs
 @using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons
-@implements IDialogContentComponent<InteractionsInputsDialogViewModel>
 
-<FluentDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
-    <FluentStack VerticalAlignment="VerticalAlignment.Center">
-        <FluentLabel Typo="Typography.PaneHeader">
-            @Dialog.Instance.Parameters.Title
-        </FluentLabel>
-    </FluentStack>
-</FluentDialogHeader>
 
 <FluentDialogBody Class="interaction-input-dialog">
+    <TitleTemplate>
+        <FluentStack VerticalAlignment="VerticalAlignment.Center">
+            <FluentLabel Typo="Typography.PaneHeader">
+                @Dialog.Options?.Header?.Title
+            </FluentLabel>
+        </FluentStack>
+    </TitleTemplate>
+    <ChildContent>
     @if (!string.IsNullOrEmpty(Content.Message))
     {
         <div class="interaction-message">
@@ -39,7 +39,7 @@
                                 @*
                                 * Immediate value of true on text input ensures the value is set to the server token with every key press in textbox.
                                 *@
-                                <FluentTextField @ref="@_elementRefs[input.ViewModel]"
+                                <FluentTextInput @ref="@_elementRefs[input.ViewModel]"
                                                  @bind-Value="input.ViewModel.Value"
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
                                                  Required="input.ViewModel.Input.Required"
@@ -59,7 +59,7 @@
                                 * AutoComplete value of one-time-code on password input prevents the browser asking to save the value.
                                 * Immediate value of true on text input ensures the value is set to the server token with every key press in textbox.
                                 *@
-                                <FluentTextField @ref="@_elementRefs[input.ViewModel]"
+                                <FluentTextInput @ref="@_elementRefs[input.ViewModel]"
                                                  @bind-Value="input.ViewModel.Value"
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
                                                  Required="input.ViewModel.Input.Required"
@@ -69,14 +69,14 @@
                                                  Disabled="input.ViewModel.InputDisabled"
                                                  aria-describedby="@input.DescriptionId"
                                                  Maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)">
-                                    <FluentButton Appearance="Appearance.Stealth"
+                                    <FluentButton Appearance="ButtonAppearance.Transparent"
                                                   Title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
                                                   OnClick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
                                                   class="secret-text-toggle-button"
                                                   slot="end">
                                         <FluentIcon Value="@GetSecretTextIcon(input.ViewModel)" />
                                     </FluentButton>
-                                </FluentTextField>
+                                </FluentTextInput>
                             </InteractionInputField>
                             break;
                         case InputType.Choice:
@@ -92,6 +92,7 @@
                                 {
                                     <FluentSelect @key="input.ViewModel.InputKey"
                                                   TOption="SelectViewModel<string>"
+                                                  TValue="string"
                                                   @ref="@_elementRefs[input.ViewModel]"
                                                   @bind-Value="input.ViewModel.Value"
                                                   Placeholder="@input.ViewModel.Input.Placeholder"
@@ -99,9 +100,7 @@
                                                   Items="input.ViewModel.SelectOptions"
                                                   OptionValue="@(vm => vm.Id)"
                                                   OptionText="@(vm => vm.Name)"
-                                                  OptionTitle="@(vm => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                   Height="250px"
-                                                  Position="SelectPosition.Below"
                                                   Disabled="input.ViewModel.InputDisabled"
                                                   aria-describedby="@input.DescriptionId">
                                     </FluentSelect>
@@ -110,6 +109,7 @@
                                 {
                                     <FluentCombobox @key="input.ViewModel.InputKey"
                                                     TOption="SelectViewModel<string>"
+                                                    TValue="string"
                                                     @ref="@_elementRefs[input.ViewModel]"
                                                     @bind-Value="input.ViewModel.Value"
                                                     Placeholder="@input.ViewModel.Input.Placeholder"
@@ -117,9 +117,7 @@
                                                     Items="@input.ViewModel.FilteredOptions()"
                                                     OptionValue="@(vm => vm.Id)"
                                                     OptionText="@(vm => vm.Name)"
-                                                    OptionTitle="@(vm => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                     Height="250px"
-                                                    Position="SelectPosition.Below"
                                                     Disabled="input.ViewModel.InputDisabled"
                                                     Immediate="true"
                                                     ImmediateDelay="@FluentUIExtensions.InputDelay"
@@ -150,7 +148,7 @@
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
-                                <FluentNumberField TValue="int?"
+                                <FluentNumberInput TValue="int?"
                                                    @ref="@_elementRefs[input.ViewModel]"
                                                    @bind-Value="input.ViewModel.NumberValue"
                                                    Placeholder="@input.ViewModel.Input.Placeholder"
@@ -172,16 +170,16 @@
         @* Hidden submit is so the form is submitted when the user presses enter. *@
         <button type="submit" style="display:none"></button>
     </EditForm>
-</FluentDialogBody>
-
-<FluentDialogFooter>
-    <FluentButton Appearance="Appearance.Accent" OnClick="@SubmitAsync">
-        @Dialog.Instance.Parameters.PrimaryAction
-    </FluentButton>
-    @if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.SecondaryAction))
-    {
-        <FluentButton Appearance="Appearance.Neutral" OnClick="@CancelAsync">
-            @Dialog.Instance.Parameters.SecondaryAction
+    </ChildContent>
+    <ActionTemplate>
+        <FluentButton Appearance="ButtonAppearance.Primary" OnClick="@SubmitAsync">
+            @Dialog.Options?.Footer?.PrimaryAction?.Label
         </FluentButton>
-    }
-</FluentDialogFooter>
+        @if (!string.IsNullOrEmpty(Dialog.Options?.Footer?.SecondaryAction?.Label))
+        {
+            <FluentButton OnClick="@CancelAsync">
+                @Dialog.Options?.Footer?.SecondaryAction?.Label
+            </FluentButton>
+        }
+    </ActionTemplate>
+</FluentDialogBody>

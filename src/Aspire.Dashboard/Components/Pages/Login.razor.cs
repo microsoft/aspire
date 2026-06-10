@@ -15,7 +15,7 @@ namespace Aspire.Dashboard.Components.Pages;
 public partial class Login : IAsyncDisposable, IComponentWithTelemetry
 {
     private IJSObjectReference? _jsModule;
-    private FluentTextField? _tokenTextField;
+    private FluentTextInput? _tokenTextField;
     private ValidationMessageStore? _messageStore;
 
     private TokenFormModel _formModel = default!;
@@ -71,7 +71,10 @@ public partial class Login : IAsyncDisposable, IComponentWithTelemetry
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Pages/Login.razor.js");
 
-            _tokenTextField?.FocusAsync();
+            if (_tokenTextField?.Element is { Id: not null } element)
+            {
+                await element.FocusAsync();
+            }
         }
     }
 

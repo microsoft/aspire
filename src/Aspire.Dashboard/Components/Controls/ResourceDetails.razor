@@ -11,26 +11,24 @@
 
 <div class="resource-details-layout">
 
-    <FluentToolbar Orientation="Orientation.Horizontal">
-        <FluentSearch Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+    <div role="toolbar" class="fluent-toolbar">
+        <FluentTextInput InputMode="TextInputMode.Search" Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
                       Immediate="true"
                       Autofocus="true"
                       AutoComplete="off"
-                      @bind-Value="_filter"
-                      slot="end" />
-        <FluentDivider slot="end" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
-        <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
+                      @bind-Value="_filter" />
+        <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
+        <AspireMenuButton ButtonAppearance="ButtonAppearance.Subtle"
                           ButtonClass="resource-details-actions"
                           Icon="@(new Icons.Regular.Size20.Options())"
                           Items="@_resourceActionsMenuItems"
-                          Title="@Loc[nameof(Aspire.Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"
-                          slot="end" />
-    </FluentToolbar>
+                          Title="@Loc[nameof(Aspire.Dashboard.Resources.Resources.ResourcesChangeViewOptions)]" />
+    </div>
     <div class="property-grid-container">
         <FluentAccordion>
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <FluentBadge Shape="BadgeShape.Circular">
                         @FilteredResourceProperties.Count()
                     </FluentBadge>
                 </div>
@@ -43,7 +41,7 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]" Expanded="@_isUrlsExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <FluentBadge Shape="BadgeShape.Circular">
                         @FilteredUrls.Count()
                     </FluentBadge>
                 </div>
@@ -87,7 +85,7 @@
             {
                 <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]" Expanded="@_isVolumesExpanded">
                     <div slot="end">
-                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                        <FluentBadge Shape="BadgeShape.Circular">
                             @FilteredVolumes.Count()
                         </FluentBadge>
                     </div>
@@ -132,7 +130,7 @@
             }
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]" Expanded="@_isRelationshipsExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <FluentBadge Shape="BadgeShape.Circular">
                         @FilteredRelationships.Count()
                     </FluentBadge>
                 </div>
@@ -155,13 +153,13 @@
                         @string.Join(", ", context.Types)
                     </TemplateColumn>
                     <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
-                        <FluentButton Appearance="Appearance.Lightweight" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Subtle" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
                     </TemplateColumn>
                 </FluentDataGrid>
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]" Expanded="@_isBackRelationshipsExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <FluentBadge Shape="BadgeShape.Circular">
                         @FilteredBackRelationships.Count()
                     </FluentBadge>
                 </div>
@@ -184,13 +182,13 @@
                         @string.Join(", ", context.Types)
                     </TemplateColumn>
                     <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
-                        <FluentButton Appearance="Appearance.Lightweight" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Subtle" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
                     </TemplateColumn>
                 </FluentDataGrid>
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]" Expanded="@_isHealthChecksExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <FluentBadge Shape="BadgeShape.Circular">
                         @FilteredHealthReports.Count()
                     </FluentBadge>
                 </div>
@@ -222,7 +220,7 @@
                             <ContentBeforeValue>
                                 @if (context.HealthStatus is null)
                                 {
-                                    <FluentProgressRing Width="16px" Style="display: inline-block;" Class="severity-icon" />
+                                    <FluentSpinner Width="16px" Style="display: inline-block;" Class="severity-icon" />
                                 }
                                 else
                                 {
@@ -248,7 +246,7 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]" Expanded="@_isEnvironmentVariablesExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <FluentBadge Shape="BadgeShape.Circular">
                         @FilteredEnvironmentVariables.Count()
                     </FluentBadge>
                 </div>

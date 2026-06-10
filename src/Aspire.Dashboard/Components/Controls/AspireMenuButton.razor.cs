@@ -5,11 +5,12 @@ using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.FluentUI.AspNetCore.Components.Utilities;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenuButton : FluentComponentBase
+public partial class AspireMenuButton(LibraryConfiguration configuration) : FluentComponentBase(configuration)
 {
     private static readonly Icon s_defaultIcon = new Icons.Regular.Size24.ChevronDown();
 
@@ -40,7 +41,7 @@ public partial class AspireMenuButton : FluentComponentBase
     public required IList<MenuButtonItem> Items { get; set; }
 
     [Parameter]
-    public Appearance? ButtonAppearance { get; set; }
+    public ButtonAppearance? ButtonAppearance { get; set; }
 
     [Parameter]
     public string? Title { get; set; }

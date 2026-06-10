@@ -8,7 +8,7 @@ using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class InteractionInputField : FluentComponentBase
+public partial class InteractionInputField(LibraryConfiguration configuration) : FluentComponentBase(configuration)
 {
     [Parameter]
     public required string? ForId { get; set; }

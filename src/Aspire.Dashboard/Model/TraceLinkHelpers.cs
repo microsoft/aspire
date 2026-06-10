@@ -4,7 +4,6 @@
 using System.Globalization;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
-using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -52,7 +51,7 @@ public static class TraceLinkHelpers
             {
                 Content = new MessageBoxContent
                 {
-                    Intent = MessageBoxIntent.Info,
+                    Intent = MessageBarIntent.Info,
                     Icon = new Icons.Filled.Size24.Info(),
                     IconColor = Color.Info,
                     MarkupMessage = new MarkupString(unavailableText),
@@ -62,32 +61,9 @@ public static class TraceLinkHelpers
                 SecondaryAction = loc[nameof(Dialogs.OpenSpanDialogCancelButtonText)]
             }).ConfigureAwait(false);
 
-            // Task that polls for the span to be available.
-            var waitForTraceTask = Task.Run(async () =>
-            {
-                while (!cts.IsCancellationRequested)
-                {
-                    isAvailable = await isAvailableCallback(cancellationToken).ConfigureAwait(false);
-                    if (isAvailable)
-                    {
-                        await dispatcher(async () =>
-                        {
-                            await reference.CloseAsync(DialogResult.Ok<bool>(true)).ConfigureAwait(false);
-                        }).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await Task.Delay(TimeSpan.FromSeconds(0.5), cts.Token).ConfigureAwait(false);
-                    }
-                }
-            }, cts.Token);
-
-            var result = await reference.Result.ConfigureAwait(false);
-            cts.Cancel();
-
-            await TaskHelpers.WaitIgnoreCancelAsync(waitForTraceTask).ConfigureAwait(false);
-
-            if (result.Cancelled)
+            // In v5, ShowMessageBoxAsync blocks until the dialog is closed by the user.
+            // The dialog result indicates whether the user canceled.
+            if (reference.Cancelled)
             {
                 // Dialog was canceled before span was ready. Exit without navigating.
                 return false;

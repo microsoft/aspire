@@ -138,7 +138,7 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
     public RenderFragment<TItem> ExtraValueContent { get; set; } = s_emptyChildContent;
 
     [Parameter]
-    public GenerateHeaderOption GenerateHeader { get; set; } = GenerateHeaderOption.Default;
+    public DataGridGeneratedHeaderType GenerateHeader { get; set; } = DataGridGeneratedHeaderType.Default;
 
     [Parameter]
     public string? Class { get; set; }

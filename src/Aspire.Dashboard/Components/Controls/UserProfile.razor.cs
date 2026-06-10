@@ -33,6 +33,8 @@ public partial class UserProfile : ComponentBase
     public string ImageSize { get; set; } = "52px";
 
     private bool _showUserProfileMenu;
+    private bool _profileMenuOpen;
+    private readonly string _profileButtonId = $"profile-btn-{Guid.NewGuid():N}";
     private string? _name;
     private string? _username;
     private string? _initials;

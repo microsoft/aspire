@@ -17,7 +17,7 @@ using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Color = Microsoft.FluentUI.AspNetCore.Components.Color;
 using MessageIntentDto = Aspire.DashboardService.Proto.V1.MessageIntent;
-using MessageIntentUI = Microsoft.FluentUI.AspNetCore.Components.MessageIntent;
+using MessageIntentUI = Microsoft.FluentUI.AspNetCore.Components.MessageBarIntent;
 
 namespace Aspire.Dashboard.Components.Interactions;
 
@@ -30,7 +30,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
             TelemetryContext.Dispose();
         }
     }
-    internal record InteractionDialogReference(int InteractionId, IDialogReference Dialog, ComponentTelemetryContext TelemetryContext) : IDisposable
+    internal record InteractionDialogReference(int InteractionId, IDialogInstance Dialog, ComponentTelemetryContext TelemetryContext) : IDisposable
     {
         public void Dispose()
         {
@@ -139,7 +139,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
             // If there are no pending interactions then wait on this task to get notified when one is added.
             await waitForInteractionAvailableTask.WaitAsync(_cts.Token).ConfigureAwait(false);
 
-            IDialogReference? currentDialogReference = null;
+            IDialogInstance? currentDialogReference = null;
 
             await _semaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
             try
@@ -156,7 +156,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 var item = ((IList<WatchInteractionsResponseUpdate>)_pendingInteractions)[0];
                 _pendingInteractions.RemoveAt(0);
 
-                Func<DashboardDialogService, Task<IDialogReference>> openDialog;
+                Func<DashboardDialogService, Task<IDialogInstance>> openDialog;
                 string dialogComponentId;
 
                 if (item.MessageBox is { } messageBox)
@@ -172,7 +172,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                         if (dialogResult.Cancelled)
                         {
                             // There will be data in the dialog result on cancel if the secondary button is clicked.
-                            if (dialogResult.Data != null)
+                            if (dialogResult.GetValue<object>() != null)
                             {
                                 messageBox.Result = false;
                                 request.MessageBox = messageBox;
@@ -224,7 +224,12 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     }
 
                     dialogComponentId = TelemetryComponentIds.InteractionMessageBox;
-                    openDialog = dialogService => ShowMessageBoxAsync(dialogService, content, dialogParameters);
+                    openDialog = dialogService =>
+                    {
+                        var options = dialogParameters.ToDialogOptions();
+                        options.Data = content;
+                        return dialogService.OpenDialogInstanceAsync<Microsoft.FluentUI.AspNetCore.Components.Dialog.MessageBox.FluentMessageBox>(content, options);
+                    };
                 }
                 else if (item.InputsDialog is { } inputs)
                 {
@@ -267,7 +272,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     });
 
                     dialogComponentId = TelemetryComponentIds.InteractionInputsDialog;
-                    openDialog = dialogService => dialogService.ShowDialogAsync<InteractionsInputDialog>(vm, dialogParameters);
+                    openDialog = dialogService => dialogService.OpenDialogInstanceAsync<InteractionsInputDialog>(vm, dialogParameters.ToDialogOptions());
                 }
                 else
                 {
@@ -347,7 +352,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     case WatchInteractionsResponseUpdate.KindOneofCase.InputsDialog:
                         if (_interactionDialogReference != null &&
                             _interactionDialogReference.InteractionId == item.InteractionId &&
-                            _interactionDialogReference.Dialog.Instance.Content is InteractionsInputsDialogViewModel inputsVM)
+                            _interactionDialogReference.Dialog.Options?.Data is InteractionsInputsDialogViewModel inputsVM)
                         {
                             // If the dialog is already open for this interaction, update it with the new data.
                             await inputsVM.UpdateInteractionAsync(item);
@@ -392,7 +397,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                                 // It's safe to enable because content is always either HTML-encoded or generated from Markdown which is sanitized.
                                 options.UseMarkupString = true;
 
-                                options.Intent = MapMessageIntent(notification.Intent);
+                                options.Intent = MapMessageBarIntent(notification.Intent);
                                 options.Section = DashboardUIHelpers.MessageBarSection;
                                 options.AllowDismiss = item.ShowDismiss;
                                 if (!string.IsNullOrEmpty(notification.LinkText))
@@ -518,7 +523,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
         }
     }
 
-    private static MessageIntentUI MapMessageIntent(MessageIntentDto intent)
+    private static MessageIntentUI MapMessageBarIntent(MessageIntentDto intent)
     {
         return intent switch
         {
@@ -570,7 +575,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
             : Loc[nameof(Resources.Dialogs.InteractionButtonCancel)];
     }
 
-    public async Task<IDialogReference> ShowMessageBoxAsync(DashboardDialogService dialogService, MessageBoxContent content, DialogParameters parameters)
+    public async Task<DialogResult> ShowMessageBoxAsync(DashboardDialogService dialogService, MessageBoxContent content, DialogParameters parameters)
     {
         var dialogParameters = new DialogParameters<MessageBoxContent>
         {

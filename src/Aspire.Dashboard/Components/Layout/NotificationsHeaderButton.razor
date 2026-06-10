@@ -3,17 +3,16 @@
 @if (UnreadCount > 0)
 {
     <FluentButton Class="header-button"
-                  Appearance="Appearance.Stealth" OnClick="@HandleClick"
+                  Appearance="ButtonAppearance.Transparent" OnClick="@HandleClick"
                   Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
         <FluentCounterBadge Count="@UnreadCount"
-                            Max="9"
+                            OverflowCount="9"
                             ShowOverflow="true"
-                            BackgroundColor="@Color.FillInverse"
-                            Color="Color.Fill"
-                            Appearance="Appearance.Accent"
+                            Appearance="BadgeAppearance.Filled"
+                            Color="BadgeColor.Danger"
                             Style="border: 0;">
             <ChildContent>
-                <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" Style="vertical-align: bottom;" />
+                <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Default" Style="vertical-align: bottom;" />
             </ChildContent>
         </FluentCounterBadge>
     </FluentButton>
@@ -21,8 +20,8 @@
 else
 {
     <FluentButton Class="header-button"
-                  Appearance="Appearance.Stealth" OnClick="@HandleClick"
+                  Appearance="ButtonAppearance.Transparent" OnClick="@HandleClick"
                   Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
-        <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" />
+        <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Default" />
     </FluentButton>
 }

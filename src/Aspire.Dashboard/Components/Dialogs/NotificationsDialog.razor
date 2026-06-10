@@ -7,14 +7,14 @@
         @if (_notifications.Count == 0)
         {
             <div class="notification-center-empty">
-                <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" />
+                <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Default" />
                 <p>@Loc[nameof(Dialogs.NotificationCenterEmpty)]</p>
             </div>
         }
         else
         {
             <div class="notifications-dismiss">
-                <FluentButton Appearance="Appearance.Lightweight" OnClick="@DismissAll">
+                <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@DismissAll">
                     @Loc[nameof(Dialogs.NotificationCenterDismissAll)]
                 </FluentButton>
             </div>

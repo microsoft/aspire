@@ -46,7 +46,7 @@
 
                                 <DesktopToolbarDivider />
                             }
-                            <FluentSearch @bind-Value="_filter"
+                            <FluentTextInput InputMode="TextInputMode.Search" @bind-Value="_filter"
                                           @bind-Value:after="HandleAfterFilterBindAsync"
                                           Name="spans-search"
                                           Immediate="true"
@@ -70,7 +70,7 @@
                             else
                             {
                                 <div slot="end">
-                                    <FluentCounterBadge HorizontalPosition="70" Count="@(_filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                                    <FluentCounterBadge OffsetX="70" Count="@(_filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
                                         <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
                                     </FluentCounterBadge>
                                 </div>
@@ -78,11 +78,11 @@
 
                             <DesktopToolbarDivider />
 
-                            <FluentButton slot="end" Appearance="Appearance.Stealth" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" /></FluentButton>
+                            <FluentButton slot="end" Appearance="ButtonAppearance.Transparent" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" /></FluentButton>
 
                             <DesktopToolbarDivider />
 
-                            <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
+                            <AspireMenuButton ButtonAppearance="ButtonAppearance.Subtle"
                                               Icon="@(new Icons.Regular.Size20.Options())"
                                               Items="@_traceActionsMenuItems"
                                               Title="@ControlStringsLoc[nameof(ControlsStrings.ActionsButtonText)]" />
@@ -91,7 +91,7 @@
                 }
                 else
                 {
-                    <FluentSearch @bind-Value="_filter"
+                    <FluentTextInput InputMode="TextInputMode.Search" @bind-Value="_filter"
                                   @bind-Value:after="HandleAfterFilterBindAsync"
                                   Name="spans-search"
                                   Immediate="true"
@@ -104,15 +104,15 @@
                     @if (_filters.Count > 0)
                     {
                         <div slot="end">
-                            <FluentCounterBadge HorizontalPosition="70" Count="@(_filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                            <FluentCounterBadge OffsetX="70" Count="@(_filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
                                 <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
                             </FluentCounterBadge>
                         </div>
                     }
-                    <FluentButton slot="end" Appearance="Appearance.Stealth" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
+                    <FluentButton slot="end" Appearance="ButtonAppearance.Transparent" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
                         <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" /> @FilterLoc[nameof(StructuredFiltering.AddFilter)]
                     </FluentButton>
-                    <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
+                    <AspireMenuButton ButtonAppearance="ButtonAppearance.Subtle"
                                       Icon="@(new Icons.Regular.Size20.Options())"
                                       Items="@_traceActionsMenuItems"
                                       Title="@ControlStringsLoc[nameof(ControlsStrings.ActionsButtonText)]"
@@ -159,7 +159,7 @@
                         <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                             <FluentDataGrid @ref="_dataGrid"
                                             Virtualize="true"
-                                            GenerateHeader="GenerateHeaderOption.Sticky"
+                                            GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                                             Class="main-grid trace-view-grid enable-row-click"
                                             ResizableColumns="true"
                                             ItemsProvider="@GetData"
@@ -201,8 +201,8 @@
                                             <span @onclick:stopPropagation="true" style="margin-left: @(marginLeft)px;" class="main-grid-expand-container @(context.IsCollapsed ? "main-grid-collapsed" : "main-grid-expanded")">
                                                 @if (context.Children.Count > 0)
                                                 {
-                                                    <FluentButton aria-label="@ControlStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="Appearance.Lightweight" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
-                                                        <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Neutral" />
+                                                    <FluentButton aria-label="@ControlStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="ButtonAppearance.Subtle" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
+                                                        <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Default" />
                                                     </FluentButton>
                                                 }
                                             </span>
@@ -250,12 +250,12 @@
                                             <span @onclick:stopPropagation="true">
                                                 @if (IsGenAISpan(context))
                                                 {
-                                                    <FluentButton Appearance="Appearance.Lightweight"
+                                                    <FluentButton Appearance="ButtonAppearance.Subtle"
                                                                   Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                                                                   Class="genai-details-button"
                                                                   OnClick="() => OnGenAIClickedAsync(context.Span)">
                                                         <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
-                                                                    Color="Color.Accent" />
+                                                                    Color="Color.Primary" />
                                                     </FluentButton>
                                                 }
                                             </span>

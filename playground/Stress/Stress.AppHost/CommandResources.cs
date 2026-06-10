@@ -877,7 +877,7 @@ internal static class CommandResources
                 displayName: "Stop all resources",
                 executeCommand: async (c) =>
                 {
-                    await ExecuteCommandForAllResourcesAsync(c.ServiceProvider, KnownResourceCommands.StopCommand, c.CancellationToken);
+                    await ExecuteCommandForAllResourcesAsync(c.Services, KnownResourceCommands.StopCommand, c.CancellationToken);
                     return CommandResults.Success();
                 },
                 commandOptions: new() { IconName = "Stop", IconVariant = IconVariant.Filled })
@@ -886,7 +886,7 @@ internal static class CommandResources
                 displayName: "Start all resources",
                 executeCommand: async (c) =>
                 {
-                    await ExecuteCommandForAllResourcesAsync(c.ServiceProvider, KnownResourceCommands.StartCommand, c.CancellationToken);
+                    await ExecuteCommandForAllResourcesAsync(c.Services, KnownResourceCommands.StartCommand, c.CancellationToken);
                     return CommandResults.Success();
                 },
                 commandOptions: new() { IconName = "Play", IconVariant = IconVariant.Filled });

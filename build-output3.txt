@@ -1,0 +1,17 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Development\Source\aspire\src\Aspire.Dashboard\Model\TraceLinkHelpers.cs(54,30): error CS0103: The name 'MessageBarIntent' does not exist in the current context [C:\Development\Source\aspire\src\Aspire.Dashboard\Aspire.Dashboard.csproj]
+C:\Development\Source\aspire\src\Aspire.Dashboard\Model\TraceLinkHelpers.cs(56,33): error CS0103: The name 'Color' does not exist in the current context [C:\Development\Source\aspire\src\Aspire.Dashboard\Aspire.Dashboard.csproj]
+C:\Development\Source\aspire\src\Aspire.Dashboard\Model\DashboardDialogService.cs(16,31): error CS9113: Parameter 'dialogsLoc' is unread. [C:\Development\Source\aspire\src\Aspire.Dashboard\Aspire.Dashboard.csproj]
+C:\Development\Source\aspire\src\Aspire.Dashboard\Model\TraceLinkHelpers.cs(7,1): error IDE0005: Using directive is unnecessary. (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0005) [C:\Development\Source\aspire\src\Aspire.Dashboard\Aspire.Dashboard.csproj]
+
+Build FAILED.
+
+C:\Development\Source\aspire\src\Aspire.Dashboard\Model\TraceLinkHelpers.cs(54,30): error CS0103: The name 'MessageBarIntent' does not exist in the current context [C:\Development\Source\aspire\src\Aspire.Dashboard\Aspire.Dashboard.csproj]
+C:\Development\Source\aspire\src\Aspire.Dashboard\Model\TraceLinkHelpers.cs(56,33): error CS0103: The name 'Color' does not exist in the current context [C:\Development\Source\aspire\src\Aspire.Dashboard\Aspire.Dashboard.csproj]
+C:\Development\Source\aspire\src\Aspire.Dashboard\Model\DashboardDialogService.cs(16,31): error CS9113: Parameter 'dialogsLoc' is unread. [C:\Development\Source\aspire\src\Aspire.Dashboard\Aspire.Dashboard.csproj]
+C:\Development\Source\aspire\src\Aspire.Dashboard\Model\TraceLinkHelpers.cs(7,1): error IDE0005: Using directive is unnecessary. (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0005) [C:\Development\Source\aspire\src\Aspire.Dashboard\Aspire.Dashboard.csproj]
+    0 Warning(s)
+    4 Error(s)
+
+Time Elapsed 00:00:18.53

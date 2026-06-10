@@ -46,7 +46,7 @@ public partial class AspirePageContentLayout : ComponentBase
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
-    private IDialogReference? _toolbarPanel;
+    private IDialogInstance? _toolbarPanel;
 
     public bool IsToolbarPanelOpen => _toolbarPanel is not null;
 
@@ -73,25 +73,27 @@ public partial class AspirePageContentLayout : ComponentBase
 
     public async Task OpenMobileToolbarAsync()
     {
-        _toolbarPanel = await DialogService.ShowPanelAsync<ToolbarPanel>(
-            new MobileToolbar(
-                ToolbarSection!,
-                MobileToolbarButtonText ?? LayoutLoc[nameof(Resources.Layout.PageLayoutViewFilters)]),
-            new DialogParameters
+        var content = new MobileToolbar(
+            ToolbarSection!,
+            MobileToolbarButtonText ?? LayoutLoc[nameof(Resources.Layout.PageLayoutViewFilters)]);
+
+        var parameters = new DialogParameters
+        {
+            Alignment = HorizontalAlignment.Center,
+            Title = MobileToolbarButtonText ?? ControlsStringsLoc[nameof(ControlsStrings.ChartContainerFiltersHeader)],
+            Width = "100%",
+            Height = "90%",
+            Modal = false,
+            PrimaryAction = null,
+            SecondaryAction = null,
+            OnDialogClosing = async (_) =>
             {
-                Alignment = HorizontalAlignment.Center,
-                Title = MobileToolbarButtonText ?? ControlsStringsLoc[nameof(ControlsStrings.ChartContainerFiltersHeader)],
-                Width = "100%",
-                Height = "90%",
-                Modal = false,
-                PrimaryAction = null,
-                SecondaryAction = null,
-                OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, async () =>
-                {
-                    await InvokeListenersAsync();
-                    _toolbarPanel = null;
-                })
-            });
+                await InvokeListenersAsync();
+                _toolbarPanel = null;
+            }
+        };
+
+        _toolbarPanel = await DialogService.OpenPanelInstanceAsync<ToolbarPanel>(content, parameters.ToDialogOptions());
     }
 
     public async Task CloseMobileToolbarAsync()

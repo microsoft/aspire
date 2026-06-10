@@ -1,4 +1,4 @@
-﻿@namespace Aspire.Dashboard.Components
+@namespace Aspire.Dashboard.Components
 
 @using Aspire.Dashboard.Resources
 @using Metrics = Aspire.Dashboard.Components.Pages.Metrics
@@ -30,7 +30,7 @@ else
                 </div>
             }
         </div>
-        <FluentTabs ActiveTabId="@($"tab-{ActiveView}")" OnTabChange="@OnTabChangeAsync" Size="null">
+        <FluentTabs ActiveTabId="@($"tab-{ActiveView}")" ActiveTabChanged="@OnTabChangeAsync" Size="null">
             <FluentTab LabelClass="tab-label"
                        Id="@($"tab-{Metrics.MetricViewKind.Graph}")"
                        aria-label="@Loc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]"

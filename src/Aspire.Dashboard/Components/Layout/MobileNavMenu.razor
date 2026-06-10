@@ -1,4 +1,4 @@
-﻿<FluentMenu Class="aspire-menu-container" Open="@IsNavMenuOpen" Anchored="false" Style="grid-area: nav-menu; height: 100vh; margin-top: 2px; overflow-y: auto;">
+﻿<FluentMenu Class="aspire-menu-container" Style="grid-area: nav-menu; height: 100vh; margin-top: 2px; overflow-y: auto;">
     @foreach (var item in GetMobileNavMenuEntries())
     {
         <FluentMenuItem OnClick="@(async () => { CloseNavMenu(); await item.OnClick(); })" Style="height: 40px; width: 100vw; margin-bottom: 6px;" title="@item.Text">
@@ -15,7 +15,7 @@
                     }
                     else
                     {
-                        <FluentIcon Class="align-text-bottom" Value="@icon" Slot="start" Color="Color.Neutral" />
+                        <FluentIcon Class="align-text-bottom" Value="@icon" Slot="start" Color="Color.Default" />
                     }
                 </span>
             }

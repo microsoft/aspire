@@ -24,7 +24,7 @@
                             <div>
                                 <div class="initial-prompt-title">
                                     <FluentIcon Value="@initialPrompt.Icon"
-                                                Color="Color.Accent"
+                                                Color="Color.Primary"
                                                 Class="initial-prompt-icon" />
                                     <span>@((MarkupString)ChatViewModel.MarkdownProcessor.ToHtml(initialPrompt.ButtonTitle, suppressSurroundingParagraph: true))</span>
                                 </div>
@@ -84,35 +84,35 @@
                                     attributes["aria-label"] = Loc[nameof(AIAssistant.CopyMessageButtonText)];
                                 }
                                 <FluentButton Id="@($"{chatMessage.ElementId}-copy")"
-                                              Appearance="Appearance.Stealth"
+                                              Appearance="ButtonAppearance.Transparent"
                                               Title="@Loc[nameof(AIAssistant.CopyMessageButtonText)]"
                                               AdditionalAttributes="attributes">
-                                    <FluentIcon Class="copy-icon" Style="display:inline" Value="@(new Icons.Regular.Size16.Copy())" Color="Color.Neutral" />
-                                    <FluentIcon Class="checkmark-icon" Style="display:none" Value="@(new Icons.Regular.Size16.Checkmark())" Color="Color.Neutral" />
+                                    <FluentIcon Class="copy-icon" Style="display:inline" Value="@(new Icons.Regular.Size16.Copy())" Color="Color.Default" />
+                                    <FluentIcon Class="checkmark-icon" Style="display:none" Value="@(new Icons.Regular.Size16.Checkmark())" Color="Color.Default" />
                                 </FluentButton>
                             </span>
                             <span>
-                                <FluentButton Appearance="Appearance.Stealth"
+                                <FluentButton Appearance="ButtonAppearance.Transparent"
                                               OnClick="@(() => LikeChatMessage(chatMessage))"
                                               Title="@Loc[nameof(AIAssistant.LikeMessageButtonText)]"
                                               aria-label="@Loc[nameof(AIAssistant.LikeMessageButtonText)]">
-                                    <FluentIcon Value="@(!chatMessage.IsLiked ? (Icon)new Icons.Regular.Size16.ThumbLike() : new Icons.Filled.Size16.ThumbLike())" Color="Color.Neutral" />
+                                    <FluentIcon Value="@(!chatMessage.IsLiked ? (Icon)new Icons.Regular.Size16.ThumbLike() : new Icons.Filled.Size16.ThumbLike())" Color="Color.Default" />
                                 </FluentButton>
                             </span>
                             <span>
-                                <FluentButton Appearance="Appearance.Stealth"
+                                <FluentButton Appearance="ButtonAppearance.Transparent"
                                               OnClick="@(() => DislikeChatMessage(chatMessage))"
                                               Title="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]"
                                               aria-label="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]">
-                                    <FluentIcon Value="@(!chatMessage.IsDisliked ? (Icon)new Icons.Regular.Size16.ThumbDislike() : new Icons.Filled.Size16.ThumbDislike())" Color="Color.Neutral" />
+                                    <FluentIcon Value="@(!chatMessage.IsDisliked ? (Icon)new Icons.Regular.Size16.ThumbDislike() : new Icons.Filled.Size16.ThumbDislike())" Color="Color.Default" />
                                 </FluentButton>
                             </span>
                             <span>
-                                <FluentButton Appearance="Appearance.Stealth"
+                                <FluentButton Appearance="ButtonAppearance.Transparent"
                                               OnClick="@(() => RetryChatMessageAsync(chatMessage))"
                                               Title="@Loc[nameof(AIAssistant.RetryMessageButtonText)]"
                                               aria-label="@Loc[nameof(AIAssistant.RetryMessageButtonText)]">
-                                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowSync())" Color="Color.Neutral" Style="transform: rotate(90deg);" />
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowSync())" Color="Color.Default" Style="transform: rotate(90deg);" />
                                 </FluentButton>
                             </span>
                         </div>
@@ -159,10 +159,10 @@
                                           IconColor="Color.Custom"
                                           IconCustomColor="var(--foreground-settings-text)"
                                           Items="@_modelMenuItems"
-                                          ButtonAppearance="Appearance.Neutral"
+                                          ButtonAppearance="ButtonAppearance.Default"
                                           ButtonClass="model-button" />
                     }
-                    <FluentButton Appearance="Appearance.Stealth" Type="ButtonType.Submit" id="chat-form-submit" class="send-button" Disabled="@(!IsSubmitEnabled())" aria-label="@Loc[nameof(AIAssistant.SidebarSendMessage)]" Title="@Loc[nameof(AIAssistant.SidebarSendMessage)]">
+                    <FluentButton Appearance="ButtonAppearance.Transparent" Type="ButtonType.Submit" id="chat-form-submit" class="send-button" Disabled="@(!IsSubmitEnabled())" aria-label="@Loc[nameof(AIAssistant.SidebarSendMessage)]" Title="@Loc[nameof(AIAssistant.SidebarSendMessage)]">
                         <FluentIcon Value="@GetSubmitIcon()" />
                     </FluentButton>
                 </div>
@@ -171,7 +171,7 @@
     </div>
     <div class="@Class" id="chat-scroll-bottom-container">
         <FluentButton Id="chat-scroll-bottom-button" Style="display: none;">
-            <FluentIcon Value="new Icons.Regular.Size16.ArrowDown()" Color="Color.Neutral" />
+            <FluentIcon Value="new Icons.Regular.Size16.ArrowDown()" Color="Color.Default" />
         </FluentButton>
     </div>
 }

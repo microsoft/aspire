@@ -7,7 +7,7 @@ using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class NotificationsDialog : IDialogContentComponent, IDisposable
+public partial class NotificationsDialog : IDisposable
 {
     private IReadOnlyList<NotificationMessage> _notifications = [];
 
@@ -15,7 +15,7 @@ public partial class NotificationsDialog : IDialogContentComponent, IDisposable
     public required INotificationService NotificationService { get; init; }
 
     [CascadingParameter]
-    public FluentDialog Dialog { get; set; } = default!;
+    public IDialogInstance Dialog { get; set; } = default!;
 
     protected override void OnInitialized()
     {

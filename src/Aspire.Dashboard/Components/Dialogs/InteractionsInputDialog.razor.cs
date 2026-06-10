@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Resources;
@@ -22,7 +21,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     public InteractionsInputsDialogViewModel Content { get; set; } = default!;
 
     [CascadingParameter]
-    public FluentDialog Dialog { get; set; } = default!;
+    public IDialogInstance Dialog { get; set; } = default!;
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
@@ -37,7 +36,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     private EditContext _editContext = default!;
     private ValidationMessageStore _validationMessages = default!;
     private List<InputViewModel> _inputDialogInputViewModels = default!;
-    private Dictionary<InputViewModel, FluentComponentBase?> _elementRefs = default!;
+    private Dictionary<InputViewModel, IFluentComponentBase?> _elementRefs = default!;
     private MarkdownProcessor _markdownProcessor = default!;
     private IJSObjectReference? _jsModule;
 
@@ -89,21 +88,9 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             // Focus the first input when the dialog loads.
             if (_inputDialogInputViewModels.Count > 0 && _elementRefs.TryGetValue(_inputDialogInputViewModels[0], out var firstInputElement))
             {
-                if (firstInputElement is FluentInputBase<string> textInput)
+                if (firstInputElement?.Id is not null)
                 {
-                    textInput.FocusAsync();
-                }
-                else if (firstInputElement is FluentInputBase<bool> boolInput)
-                {
-                    boolInput.FocusAsync();
-                }
-                else if (firstInputElement is FluentInputBase<int?> numberInput)
-                {
-                    numberInput.FocusAsync();
-                }
-                else if (firstInputElement is FluentInputBase<SelectViewModel<string>> selectInput)
-                {
-                    selectInput.FocusAsync();
+                    await JS.InvokeVoidAsync("eval", $"document.getElementById('{firstInputElement.Id}')?.focus()");
                 }
             }
         }
@@ -202,9 +189,9 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     {
         inputModel.IsSecretTextVisible = !inputModel.IsSecretTextVisible;
 
-        if (_jsModule != null && _elementRefs.TryGetValue(inputModel, out var element) && element != null)
+        if (_jsModule != null && _elementRefs.TryGetValue(inputModel, out var element) && element is IFluentComponentBase componentBase)
         {
-            await _jsModule.InvokeVoidAsync("togglePasswordVisibility", element.Id);
+            await _jsModule.InvokeVoidAsync("togglePasswordVisibility", componentBase.Id);
         }
     }
 

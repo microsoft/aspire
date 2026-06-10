@@ -1,4 +1,4 @@
-﻿@inject IStringLocalizer<Resources.StructuredLogs> Loc
+@inject IStringLocalizer<Resources.StructuredLogs> Loc
 
 @{
     var logLevelSelectId = $"log-level-select-{Guid.NewGuid():N}";
@@ -6,20 +6,17 @@
 
 @if (ViewportInformation.IsDesktop)
 {
-    <FluentInputLabel slot="end"
-                      Label="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevels)]"
-                      ForId="@logLevelSelectId"
-                      Orientation="@(ViewportInformation.IsDesktop ? Orientation.Horizontal : Orientation.Vertical)" />
+    <label for="@logLevelSelectId" class="fluent-input-label">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevels)]</label>
 
     <DesktopToolbarDivider />
 
     <FluentSelect TOption="SelectViewModel<LogLevel?>"
+                  TValue="SelectViewModel<LogLevel?>"
                   Id="@logLevelSelectId"
                   Items="@LogLevels"
-                  Position="SelectPosition.Below"
                   OptionText="@(c => c.Name)"
-                  @bind-SelectedOption="@LogLevel"
-                  @bind-SelectedOption:after="@HandleSelectedLogLevelChangedInternalAsync"
+                  @bind-Value="@LogLevel"
+                  @bind-Value:after="@HandleSelectedLogLevelChangedInternalAsync"
                   Width="120px"
                   Style="min-width: auto;"
                   AriaLabel="@Loc[nameof(Resources.StructuredLogs.StructuredLogsSelectMinimumLogLevel)]"
@@ -29,13 +26,13 @@ else
 {
     <div>
         <FluentSelect TOption="SelectViewModel<LogLevel?>"
+                  TValue="SelectViewModel<LogLevel?>"
                       Id="@logLevelSelectId"
                       Items="@LogLevels"
-                      Position="SelectPosition.Below"
                       OptionText="@(c => c.Name)"
                       Label="@Loc[nameof(Resources.StructuredLogs.StructuredLogsLevels)]"
-                      @bind-SelectedOption="@LogLevel"
-                      @bind-SelectedOption:after="@HandleSelectedLogLevelChangedInternalAsync"
+                      @bind-Value="@LogLevel"
+                      @bind-Value:after="@HandleSelectedLogLevelChangedInternalAsync"
                       Width="120px"
                       Style="min-width: auto;"
                       AriaLabel="@Loc[nameof(Resources.StructuredLogs.StructuredLogsSelectMinimumLogLevel)]"

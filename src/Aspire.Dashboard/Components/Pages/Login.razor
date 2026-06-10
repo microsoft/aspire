@@ -1,4 +1,4 @@
-﻿@page "/login"
+@page "/login"
 @layout EmptyLayout
 @attribute [AllowAnonymous]
 @inject IStringLocalizer<Dashboard.Resources.Login> Loc
@@ -21,16 +21,16 @@
                     * AutoComplete value of one-time-code prevents the browser asking to save the value.
                     * Immediate value of true ensures the value is set to the server token with every key press in textbox.
                     *@
-                    <FluentTextField @ref="_tokenTextField" Id="token-text-field" @bind-Value="_formModel.Token"
+                    <FluentTextInput @ref="_tokenTextField" Id="token-text-field" @bind-Value="_formModel.Token"
                                      Placeholder="@Loc[nameof(Dashboard.Resources.Login.TextFieldPlaceholder)]"
                                      TextFieldType="TextFieldType.Password" AutoComplete="one-time-code" Class="token-entry-text" Immediate="true" />
                 </div>
                 <div class="token-validation">
-                    <FluentValidationMessage For="() => _formModel.Token" />
+                    <ValidationMessage For="() => _formModel.Token" />
                 </div>
                 <div class="token-entry-footer">
                     <a href="@NavigationManager.Uri" id="helpLink">@Loc[nameof(Dashboard.Resources.Login.WhereIsMyTokenLinkText)]</a>
-                    <FluentButton Appearance="Appearance.Accent" Name="submit-token" Type="ButtonType.Submit">@Loc[nameof(Dashboard.Resources.Login.LogInButtonText)]</FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Primary" Name="submit-token" Type="ButtonType.Submit">@Loc[nameof(Dashboard.Resources.Login.LogInButtonText)]</FluentButton>
                     <FluentTooltip Anchor="helpLink" MaxWidth="650px" aria-label="https://go.microsoft.com/fwlink/?linkid=2265718">
                         <div class="token-help-container">
                             <div>
@@ -43,10 +43,10 @@
                                 <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine1)]</p>
                                 <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine2)]</p>
                             </div>
-                            <FluentAnchor Href="https://go.microsoft.com/fwlink/?linkid=2265718" Target="_blank"
-                                          Appearance="Appearance.Hypertext">
+                            <FluentAnchorButton Href="https://go.microsoft.com/fwlink/?linkid=2265718" Target="LinkTarget.Blank"
+                                          Appearance="ButtonAppearance.Transparent">
                                 @Loc[nameof(Dashboard.Resources.Login.MoreInfoLinkText)]
-                            </FluentAnchor>
+                            </FluentAnchorButton>
                         </div>
                     </FluentTooltip>
                 </div>

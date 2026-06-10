@@ -1,4 +1,4 @@
-﻿@page "/traces"
+@page "/traces"
 @page "/traces/resource/{resourceName}"
 
 @using Aspire.Dashboard.Resources
@@ -39,7 +39,7 @@
                                   SelectedResource="@PageViewModel.SelectedResource" />
 
             <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@TracesViewModel.HasErrors()" />
-            <FluentSearch @bind-Value="_filter"
+            <FluentTextInput InputMode="TextInputMode.Search" @bind-Value="_filter"
                           @bind-Value:after="HandleAfterFilterBindAsync"
                           Name="traces-search"
                           Immediate="true"
@@ -67,7 +67,7 @@
             else
             {
                 <div slot="end">
-                    <FluentCounterBadge HorizontalPosition="70" Count="@(TracesViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                    <FluentCounterBadge OffsetX="70" Count="@(TracesViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
                         <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
                     </FluentCounterBadge>
                 </div>
@@ -77,11 +77,11 @@
 
             @if (ViewportInformation.IsDesktop)
             {
-                <FluentButton slot="end" Appearance="Appearance.Stealth" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" /></FluentButton>
+                <FluentButton slot="end" Appearance="ButtonAppearance.Transparent" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" /></FluentButton>
             }
             else
             {
-                <FluentButton slot="end" Appearance="Appearance.Stealth" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
+                <FluentButton slot="end" Appearance="ButtonAppearance.Transparent" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
                     <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" /> @FilterLoc[nameof(StructuredFiltering.AddFilter)]
                 </FluentButton>
             }
@@ -96,7 +96,7 @@
                                     ResizeType="DataGridResizeType.Discrete"
                                     Virtualize="true"
                                     RowClass="@GetRowClass"
-                                    GenerateHeader="GenerateHeaderOption.Sticky"
+                                    GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                                     ItemSize="46"
                                     OverscanCount="100"
                                     ResizableColumns="true"
@@ -123,11 +123,11 @@
                                     <span @onclick:stopPropagation="true">
                                         @if (HasGenAISpans(context))
                                         {
-                                            <FluentButton Appearance="Appearance.Lightweight"
+                                            <FluentButton Appearance="ButtonAppearance.Subtle"
                                                           Title="@ControlsStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                                                           OnClick="() => OnGenAIClickedAsync(context)">
                                                 <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
-                                                            Color="Color.Accent" />
+                                                            Color="Color.Primary" />
                                             </FluentButton>
                                         }
                                     </span>
@@ -177,7 +177,7 @@
                                 <div class="duration-container">
                                     @if (ViewportInformation.IsDesktop)
                                     {
-                                        <FluentProgressRing Class="duration-ring"
+                                        <FluentSpinner Class="duration-ring"
                                                             Min="0"
                                                             Max="@DashboardUIHelpers.SafeConvertToMilliseconds(TracesViewModel.MaxDuration)"
                                                             Value="@DashboardUIHelpers.SafeConvertToMilliseconds(context.Duration)"

@@ -369,8 +369,8 @@ fluent-dialog fluent-toolbar {
 */
 fluent-dialog fluent-button[appearance=stealth]:not(:hover)::part(control),
 fluent-dialog fluent-button[appearance=lightweight]:not(:hover)::part(control),
-fluent-dialog fluent-anchor[appearance=stealth]:not(:hover)::part(control),
-fluent-dialog fluent-anchor[appearance=lightweight]:not(:hover)::part(control) {
+fluent-dialog fluent-anchor-button[appearance=stealth]:not(:hover)::part(control),
+fluent-dialog fluent-anchor-button[appearance=lightweight]:not(:hover)::part(control) {
     background: transparent;
 }
 
@@ -448,12 +448,12 @@ td .long-inner-content {
 
 .selected-row,
 .selected-row fluent-button[appearance=lightweight]:not(:hover)::part(control),
-.selected-row fluent-anchor[appearance=lightweight]:not(:hover)::part(control) {
+.selected-row fluent-anchor-button[appearance=lightweight]:not(:hover)::part(control) {
     background-color: var(--neutral-fill-secondary-rest); /* Same color as the menu hover */
 }
 
 .selected-row fluent-button[appearance=lightweight]:hover::part(control),
-.selected-row fluent-anchor[appearance=lightweight]:hover::part(control){
+.selected-row fluent-anchor-button[appearance=lightweight]:hover::part(control) {
     background-color: var(--neutral-fill-stealth-rest); /* Essentially inverts the hover compared to an unselected row */
 }
 
@@ -515,15 +515,15 @@ fluent-switch.table-switch::part(label) {
     If ShowHover is enabled on a FluentDataGrid, we need to tweak the way anchors and buttons
     are colored when a row is hovered
 */
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor[appearance=lightweight]::part(control):not(:hover),
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor[appearance=stealth]::part(control):not(:hover),
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor-button[appearance=lightweight]::part(control):not(:hover),
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor-button[appearance=stealth]::part(control):not(:hover),
 .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-button[appearance=lightweight]::part(control):not(:hover),
 .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-button[appearance=stealth]::part(control):not(:hover) {
     background-color: var(--datagrid-hover-color);
 }
 
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor[appearance=lightweight]::part(control):hover,
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor[appearance=stealth]::part(control):hover,
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor-button[appearance=lightweight]::part(control):hover,
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-anchor-button[appearance=stealth]::part(control):hover,
 .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-button[appearance=lightweight]::part(control):hover,
 .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover fluent-button[appearance=stealth]::part(control):hover {
     background-color: var(--fill-color);
@@ -964,4 +964,24 @@ fluent-tooltip[anchor="dialog_close"] > div {
 
 fluent-dialog#chat-modal-dialog fluent-button[appearance=stealth]:not(:hover)::part(control) {
     background: var(--chat-background-color);
+}
+
+.header {
+    display: flex;
+    z-index: 10;
+    flex-shrink: 0;
+    background-color: var(--accent-fill-rest);
+    font-family: var(--body-font);
+    font-weight: bold;
+    font-size: var(--type-ramp-plus-1-font-size);
+    line-height: var(--type-ramp-plus-1-line-height);
+    color: var(--fill-color);
+}
+
+.header .header-gutters {
+    display: flex;
+    position: relative;
+    align-items: center;
+    width: 100%;
+    margin: 0.5rem 1.5rem;
 }

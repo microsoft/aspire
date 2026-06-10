@@ -1,4 +1,4 @@
-﻿@page "/consolelogs"
+@page "/consolelogs"
 @page "/consolelogs/resource/{resourceName}"
 
 @using Aspire.Dashboard.Resources
@@ -41,7 +41,7 @@
 
                 @foreach (var command in _highlightedCommands)
                 {
-                    <FluentButton Appearance="Appearance.Lightweight"
+                    <FluentButton Appearance="ButtonAppearance.Subtle"
                                   Title="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
                                   Disabled="@(command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
                                   OnClick="@(() => ExecuteResourceCommandAsync(command))"
@@ -59,7 +59,7 @@
 
                 if (_resourceMenuItems.Count > 0)
                 {
-                    <AspireMenuButton ButtonAppearance="@(ViewportInformation.IsDesktop ? Appearance.Lightweight : Appearance.Neutral)"
+                    <AspireMenuButton ButtonAppearance="@(ViewportInformation.IsDesktop ? ButtonAppearance.Subtle : null)"
                                       Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
                                       Items="@_resourceMenuItems"
                                       Title="@ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)]"
@@ -73,7 +73,7 @@
                 <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
 
                 <AspireMenuButton
-                    ButtonAppearance="Appearance.Lightweight"
+                    ButtonAppearance="ButtonAppearance.Subtle"
                     Icon="@(new Icons.Regular.Size20.Options())"
                     Items="@_logsMenuItems"
                     Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]"

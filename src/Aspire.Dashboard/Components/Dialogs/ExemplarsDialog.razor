@@ -1,8 +1,8 @@
-﻿@using Aspire.Dashboard.Components.Controls.Chart
+@using Aspire.Dashboard.Components.Controls.Chart
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Dialogs = Aspire.Dashboard.Resources.Dialogs
-@implements IDialogContentComponent<ExemplarsDialogViewModel>
+
 
 @inject IStringLocalizer<Dialogs> Loc
 
@@ -24,7 +24,7 @@
                 @FormatMetricValue(context.Value)
             </TemplateColumn>
             <TemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogDetailsColumnHeader)]">
-                <FluentButton Appearance="Appearance.Lightweight" OnClick="@(() => OnViewDetailsAsync(context))">View</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => OnViewDetailsAsync(context))">View</FluentButton>
             </TemplateColumn>
         </ChildContent>
         <EmptyContent>

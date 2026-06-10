@@ -61,18 +61,18 @@
         margin-bottom: 0;
     }
 
-    ::deep.layout > header > .header-gutters > fluent-anchor {
+    ::deep.layout > header > .header-gutters > fluent-anchor-button {
         font-size: var(--type-ramp-plus-2-font-size);
     }
 
-    ::deep .aspire-icon fluent-anchor.logo::part(control) {
+    ::deep .aspire-icon fluent-anchor-button.logo::part(control) {
         padding: 0;
         border: none;
     }
 
-    ::deep .aspire-icon fluent-anchor.logo,
-    ::deep .aspire-icon fluent-anchor.logo::part(control),
-    ::deep .aspire-icon fluent-anchor.logo::part(content) {
+    ::deep .aspire-icon fluent-anchor-button.logo,
+    ::deep .aspire-icon fluent-anchor-button.logo::part(control),
+    ::deep .aspire-icon fluent-anchor-button.logo::part(content) {
         height: 24px;
         width: 24px;
     }
@@ -139,7 +139,7 @@
         background-color: var(--neutral-layer-4);
     }
 
-    ::deep.layout > .aspire-icon fluent-anchor {
+    ::deep.layout > .aspire-icon fluent-anchor-button {
         margin-left: 5px;
     }
 
@@ -152,18 +152,18 @@
         margin-bottom: 0;
     }
 
-    ::deep.layout > header > .header-gutters > fluent-anchor {
+    ::deep.layout > header > .header-gutters > fluent-anchor-button {
         font-size: var(--type-ramp-plus-2-font-size);
     }
 
-    ::deep .aspire-icon fluent-anchor.logo::part(control) {
+    ::deep .aspire-icon fluent-anchor-button.logo::part(control) {
         padding: 0;
         border: none;
     }
 
-    ::deep .aspire-icon fluent-anchor.logo,
-    ::deep .aspire-icon fluent-anchor.logo::part(control),
-    ::deep .aspire-icon fluent-anchor.logo::part(content) {
+    ::deep .aspire-icon fluent-anchor-button.logo,
+    ::deep .aspire-icon fluent-anchor-button.logo::part(control),
+    ::deep .aspire-icon fluent-anchor-button.logo::part(content) {
         height: 24px;
         width: 24px;
     }
@@ -181,26 +181,31 @@
     padding-right: 0;
 }
 
-::deep.layout > header > .header-gutters > fluent-button[appearance=stealth]:not(:hover)::part(control),
-::deep.layout > header > .header-gutters > fluent-anchor[appearance=stealth]:not(:hover)::part(control),
-::deep.layout > header > .header-gutters > fluent-anchor[appearance=stealth].logo::part(control),
-::deep.layout > .aspire-icon fluent-anchor[appearance=stealth].logo::part(control) {
+::deep.layout > header > .header-gutters > fluent-button[appearance=stealth]:not(:hover)::part(content),
+::deep.layout > header > .header-gutters > fluent-anchor-button[appearance=stealth]:not(:hover)::part(content),
+::deep.layout > header > .header-gutters > fluent-anchor-button[appearance=stealth].logo::part(content),
+::deep.layout > .aspire-icon fluent-anchor-button[appearance=stealth].logo::part(content) {
     background-color: var(--neutral-layer-4);
 }
 
 ::deep .header-gutters .header-button {
     height: 100%;
     display: block;
+    min-width: 50px;
+    padding: 0;
 }
 
-::deep .header-gutters .header-button::part(control) {
+::deep .header-gutters .header-button::part(content) {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
     width: 50px;
     height: 100%;
     border-radius: 0;
     background-color: var(--neutral-fill-secondary-rest);
 }
 
-::deep.layout > header > .header-gutters > .header-button-selected:not(:hover)::part(control) {
+::deep.layout > header > .header-gutters > .header-button-selected:not(:hover)::part(content) {
     background-color: var(--chat-background-color) !important;
 }
 

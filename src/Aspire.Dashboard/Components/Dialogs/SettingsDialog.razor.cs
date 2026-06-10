@@ -10,7 +10,7 @@ using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class SettingsDialog : IDialogContentComponent, IDisposable
+public partial class SettingsDialog : IDisposable
 {
     private string? _currentSetting;
     private List<CultureInfo> _languageOptions = null!;
@@ -32,7 +32,7 @@ public partial class SettingsDialog : IDialogContentComponent, IDisposable
     public required DashboardDialogService DialogService { get; init; }
 
     [CascadingParameter]
-    public FluentDialog Dialog { get; set; } = default!;
+    public IDialogInstance Dialog { get; set; } = default!;
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -91,11 +91,6 @@ public partial class SettingsDialog : IDialogContentComponent, IDisposable
         NavigationManager.NavigateTo(
             DashboardUrls.SetLanguageUrl(_selectedUiCulture.Name, uri),
             forceLoad: true);
-    }
-
-    private static void ValueChanged(string? value)
-    {
-        // Do nothing. Required for FluentUI Blazor to trigger SelectedOptionChanged.
     }
 
     private async Task LaunchManageDataAsync()

@@ -14,10 +14,10 @@
         @Entry.Title
     </div>
     <div class="notification-entry-close">
-        <FluentButton Appearance="Appearance.Stealth"
+        <FluentButton Appearance="ButtonAppearance.Transparent"
                       aria-label="@Loc[nameof(Dialogs.NotificationEntryDismiss)]"
                       OnClick="@HandleDismiss">
-            <FluentIcon Value="@(new Icons.Regular.Size16.Dismiss())" Color="@Color.Neutral" />
+            <FluentIcon Value="@(new Icons.Regular.Size16.Dismiss())" Color="@Color.Default" />
         </FluentButton>
     </div>
 
@@ -29,7 +29,7 @@
         }
         @if (Entry.PrimaryAction is { } primaryAction)
         {
-            <FluentButton Appearance="Appearance.Neutral"
+            <FluentButton
                           OnClick="@HandlePrimaryAction"
                           Class="notification-entry-action">
                 @primaryAction.Text

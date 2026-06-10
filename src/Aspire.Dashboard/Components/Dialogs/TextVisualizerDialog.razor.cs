@@ -19,6 +19,7 @@ public partial class TextVisualizerDialog : ComponentBase
     private List<SelectViewModel<string>> _options = null!;
     private string? _selectedFormat;
     private bool _isLoading = true;
+    private bool _formatMenuOpen;
     private MarkdownProcessor? _markdownProcessor;
     internal TextVisualizerViewModel TextVisualizerViewModel { get; set; } = default!;
 
@@ -106,8 +107,6 @@ public partial class TextVisualizerDialog : ComponentBase
         }
     }
 
-    private void OnFormatOptionChanged(MenuChangeEventArgs args) => ChangeFormat(args.Id, args.Value);
-
     public void ChangeFormat(string? newFormat, string? text)
     {
         _selectedFormat = text;
@@ -119,7 +118,7 @@ public partial class TextVisualizerDialog : ComponentBase
         return _markdownProcessor ??= new MarkdownProcessor(ControlsStringsLoc, safeUrlSchemes: MarkdownHelpers.SafeUrlSchemes, extensions: []);
     }
 
-    public static async Task<IDialogReference> OpenDialogAsync(OpenTextVisualizerDialogOptions options)
+    public static async Task<DialogResult> OpenDialogAsync(OpenTextVisualizerDialogOptions options)
     {
         var width = options.DialogService.IsDesktop ? "75vw" : "100vw";
         var parameters = new DialogParameters
@@ -128,7 +127,7 @@ public partial class TextVisualizerDialog : ComponentBase
             Width = $"min(1000px, {width})",
             TrapFocus = true,
             Modal = true,
-            PreventScroll = true,
+            PreventDismissOnOverlayClick = true,
         };
 
         return await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(

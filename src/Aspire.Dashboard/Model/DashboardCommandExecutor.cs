@@ -8,7 +8,7 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
-using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageIntent;
+using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageBarIntent;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Model;
@@ -89,8 +89,7 @@ public sealed class DashboardCommandExecutor(
     {
         if (!string.IsNullOrWhiteSpace(command.ConfirmationMessage))
         {
-            var dialogReference = await dialogService.ShowConfirmationAsync(command.ConfirmationMessage).ConfigureAwait(false);
-            var result = await dialogReference.Result.ConfigureAwait(false);
+            var result = await dialogService.ShowConfirmationAsync(command.ConfirmationMessage).ConfigureAwait(false);
             if (result.Cancelled)
             {
                 return;
@@ -115,21 +114,16 @@ public sealed class DashboardCommandExecutor(
         var toastParameters = new ToastParameters<CommunicationToastContent>()
         {
             Id = Guid.NewGuid().ToString(),
-            Intent = ToastIntent.Progress,
+            Intent = ToastIntent.Info,
             Title = toastStartingTitle,
             Content = new CommunicationToastContent(),
             Timeout = 0 // App logic will handle closing the toast
         };
 
         // Track whether toast is closed by timeout or user action.
+        // In FluentUI v5, the OnClose event was removed from IToastService.
+        // Toast dismiss tracking is no longer globally observable; the toast auto-dismisses via timeout.
         var toastClosed = false;
-        Action<string?> closeCallback = (id) =>
-        {
-            if (id == toastParameters.Id)
-            {
-                toastClosed = true;
-            }
-        };
 
         ResourceCommandResponseViewModel response;
         // The CTS intentionally outlives the command execution to ensure we can close the toast in all scenarios
@@ -138,7 +132,6 @@ public sealed class DashboardCommandExecutor(
         var closeToastCts = new CancellationTokenSource();
         try
         {
-            toastService.OnClose += closeCallback;
             // Show a toast immediately to indicate the command is starting.
             toastService.ShowCommunicationToast(toastParameters);
 
@@ -157,7 +150,6 @@ public sealed class DashboardCommandExecutor(
         }
         finally
         {
-            toastService.OnClose -= closeCallback;
         }
 
         // Update toast and notification with the result.
@@ -255,7 +247,7 @@ public sealed class DashboardCommandExecutor(
         }
     }
 
-    // Copied from FluentUI.
+    // Maps ToastIntent to an icon and color for display purposes.
     private static (Icon Icon, Color Color)? GetIntentIcon(ToastIntent intent)
     {
         return intent switch
@@ -264,13 +256,7 @@ public sealed class DashboardCommandExecutor(
             ToastIntent.Warning => (new Icons.Filled.Size24.Warning(), Color.Warning),
             ToastIntent.Error => (new Icons.Filled.Size24.DismissCircle(), Color.Error),
             ToastIntent.Info => (new Icons.Filled.Size24.Info(), Color.Info),
-            ToastIntent.Progress => (new Icons.Regular.Size24.Flash(), Color.Neutral),
-            ToastIntent.Upload => (new Icons.Regular.Size24.ArrowUpload(), Color.Neutral),
-            ToastIntent.Download => (new Icons.Regular.Size24.ArrowDownload(), Color.Neutral),
-            ToastIntent.Event => (new Icons.Regular.Size24.CalendarLtr(), Color.Neutral),
-            ToastIntent.Mention => (new Icons.Regular.Size24.Person(), Color.Neutral),
-            ToastIntent.Custom => null,
-            _ => throw new InvalidOperationException()
+            _ => null
         };
     }
 
@@ -298,15 +284,12 @@ public sealed class DashboardCommandExecutor(
             _ => null
         };
 
-        var reference = await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+        await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
         {
             DialogService = dialogService,
             ValueDescription = command.GetDisplayName(),
             Value = response.Result.Value,
             FixedFormat = fixedFormat
         }).ConfigureAwait(true);
-
-        // Await the result to wait here until the dialog is closed.
-        await reference.Result.ConfigureAwait(true);
     }
 }

@@ -2,13 +2,11 @@
 @typeparam T
 
 <div class="summary-details-container">
-    <FluentSplitter Orientation="@Orientation" Collapsed="@(!_internalShowDetails || !ViewportInformation.IsDesktop)"
-                    OnResized="HandleSplitterResize"
-                    Panel1Size="@EffectivePanel1Size" Panel2Size="@EffectivePanel2Size"
-                    Panel1MinSize="@PanelMinimumSize" Panel2MinSize="@PanelMinimumSize"
-                    BarSize="5"
-                    @ref="_splitterRef">
-        <Panel1>
+    <FluentMultiSplitter Orientation="@Orientation"
+                         OnResize="HandleMultiSplitterResize"
+                         BarSize="5"
+                         @ref="_splitterRef">
+        <FluentMultiSplitterPane Size="@EffectivePanel1Size" Min="@PanelMinimumSize">
             @*
                 The summary container should never be added/removed from the DOM. If it is added/removed then content dynamically
                 added by JS libraries, such as the resource graph, will be lost when switching between desktop and mobile views.
@@ -25,8 +23,9 @@
                             Details="@(SelectedValue is not null ? Details?.Invoke(SelectedValue) : null)"
                             Orientation="@Orientation" />
             }
-        </Panel1>
-        <Panel2>
+        </FluentMultiSplitterPane>
+        <FluentMultiSplitterPane Size="@EffectivePanel2Size" Min="@PanelMinimumSize"
+                                 Collapsed="@(!_internalShowDetails || !ViewportInformation.IsDesktop)">
             @if (_internalShowDetails && ViewportInformation.IsDesktop)
             {
                 <DetailView DetailsTitle="@DetailsTitle"
@@ -36,6 +35,6 @@
                             Details="@(SelectedValue is not null ? Details?.Invoke(SelectedValue) : null)"
                             Orientation="@Orientation" />
             }
-        </Panel2>
-    </FluentSplitter>
+        </FluentMultiSplitterPane>
+    </FluentMultiSplitter>
 </div>

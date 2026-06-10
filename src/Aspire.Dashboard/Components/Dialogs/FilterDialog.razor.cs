@@ -24,7 +24,7 @@ public partial class FilterDialog : IAsyncDisposable
         new SelectViewModel<FilterCondition> { Id = condition, Name = FieldTelemetryFilter.ConditionToString(condition, FilterLoc) };
 
     [CascadingParameter]
-    public FluentDialog? Dialog { get; set; }
+    public IDialogInstance? Dialog { get; set; }
 
     [Parameter]
     public FilterDialogViewModel Content { get; set; } = default!;

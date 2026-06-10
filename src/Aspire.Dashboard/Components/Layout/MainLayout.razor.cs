@@ -26,7 +26,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private IJSObjectReference? _keyboardHandlers;
     private DotNetObjectReference<ShortcutManager>? _shortcutManagerReference;
     private DotNetObjectReference<MainLayout>? _layoutReference;
-    private IDialogReference? _openPageDialog;
+    private string? _openDialogId;
     private IDisposable? _aiDisplayChangedSubscription;
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
@@ -159,7 +159,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                         Href = "https://aka.ms/aspire/api-endpoint-unsecured",
                         Target = "_blank"
                     };
-                    options.Intent = MessageIntent.Warning;
+                    options.Intent = MessageBarIntent.Warning;
                     options.Section = DashboardUIHelpers.MessageBarSection;
                     options.AllowDismiss = true;
                     options.OnClose = async m =>
@@ -227,25 +227,18 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Width = "700px",
             Height = "auto",
             Id = HelpDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+            OnDialogClosing = HandleDialogClose
         };
 
-        if (_openPageDialog is not null)
-        {
-            if (Equals(_openPageDialog.Id, HelpDialogId) && !_openPageDialog.Result.IsCompleted)
-            {
-                return;
-            }
+        if (_openDialogId is not null) { return; }
 
-            await _openPageDialog.CloseAsync();
-        }
-
-        _openPageDialog = await DialogService.ShowDialogAsync<HelpDialog>(parameters).ConfigureAwait(true);
+        _openDialogId = parameters.Id; await DialogService.ShowDialogAsync<HelpDialog>(parameters).ConfigureAwait(true); _openDialogId = null;
     }
 
-    private void HandleDialogClose(DialogInstance dialogResult)
+    private Task HandleDialogClose(IDialogInstance _)
     {
-        _openPageDialog = null;
+        _openDialogId = null;
+        return Task.CompletedTask;
     }
 
     public async Task LaunchAIAgentsAsync()
@@ -262,20 +255,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Width = "700px",
             Height = "auto",
             Id = AIAgentsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+            OnDialogClosing = HandleDialogClose
         };
 
-        if (_openPageDialog is not null)
-        {
-            if (Equals(_openPageDialog.Id, AIAgentsDialogId) && !_openPageDialog.Result.IsCompleted)
-            {
-                return;
-            }
+        if (_openDialogId is not null) { return; }
 
-            await _openPageDialog.CloseAsync();
-        }
-
-        _openPageDialog = await DialogService.ShowDialogAsync<AIAgentsDialog>(parameters).ConfigureAwait(true);
+        _openDialogId = parameters.Id; await DialogService.ShowDialogAsync<AIAgentsDialog>(parameters).ConfigureAwait(true); _openDialogId = null;
     }
 
     public async Task LaunchSettingsAsync()
@@ -291,29 +276,21 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Width = "300px",
             Height = "auto",
             Id = SettingsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+            OnDialogClosing = HandleDialogClose
         };
 
-        if (_openPageDialog is not null)
-        {
-            if (Equals(_openPageDialog.Id, SettingsDialogId) && !_openPageDialog.Result.IsCompleted)
-            {
-                return;
-            }
-
-            await _openPageDialog.CloseAsync();
-        }
+        if (_openDialogId is not null) { return; }
 
         // Ensure the currently set theme is immediately available to display in settings dialog.
         await ThemeManager.EnsureInitializedAsync();
 
         if (ViewportInformation.IsDesktop)
         {
-            _openPageDialog = await DialogService.ShowPanelAsync<SettingsDialog>(parameters).ConfigureAwait(true);
+            _openDialogId = parameters.Id; await DialogService.ShowPanelAsync<SettingsDialog>(parameters).ConfigureAwait(true); _openDialogId = null;
         }
         else
         {
-            _openPageDialog = await DialogService.ShowDialogAsync<SettingsDialog>(parameters).ConfigureAwait(true);
+            _openDialogId = parameters.Id; await DialogService.ShowDialogAsync<SettingsDialog>(parameters).ConfigureAwait(true); _openDialogId = null;
         }
     }
 
@@ -330,26 +307,18 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Width = "350px",
             Height = "auto",
             Id = NotificationsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+            OnDialogClosing = HandleDialogClose
         };
 
-        if (_openPageDialog is not null)
-        {
-            if (Equals(_openPageDialog.Id, NotificationsDialogId) && !_openPageDialog.Result.IsCompleted)
-            {
-                return;
-            }
-
-            await _openPageDialog.CloseAsync();
-        }
+        if (_openDialogId is not null) { return; }
 
         if (ViewportInformation.IsDesktop)
         {
-            _openPageDialog = await DialogService.ShowPanelAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
+            _openDialogId = parameters.Id; await DialogService.ShowPanelAsync<NotificationsDialog>(parameters).ConfigureAwait(true); _openDialogId = null;
         }
         else
         {
-            _openPageDialog = await DialogService.ShowDialogAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
+            _openDialogId = parameters.Id; await DialogService.ShowDialogAsync<NotificationsDialog>(parameters).ConfigureAwait(true); _openDialogId = null;
         }
     }
 

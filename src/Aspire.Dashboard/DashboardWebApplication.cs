@@ -272,7 +272,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
                 // Only loopback proxies are allowed by default. Clear that restriction because forwarders are
                 // being enabled by explicit configuration.
-                options.KnownNetworks.Clear();
+                options.KnownIPNetworks.Clear();
                 options.KnownProxies.Clear();
             });
         }
@@ -314,6 +314,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, BrowserLinkOutgoingPeerResolver>());
 
         builder.Services.AddFluentUIComponents();
+
+        builder.Services.AddScoped<IMessageService, MessageService>();
 
         builder.Services.AddSingleton<IconResolver>();
 

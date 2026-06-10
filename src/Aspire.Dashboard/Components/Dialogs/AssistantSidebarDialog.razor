@@ -21,15 +21,15 @@
                         <div style="align-content: center;display: flex;flex-wrap: wrap;">
                             @if (Content.Chat.DisplayState == AssistantChatDisplayState.Chat)
                             {
-                                <FluentButton Appearance="Appearance.Stealth" OnClick="() => StartNewChatAsync()" aria-label="@Loc[nameof(AIAssistant.SidebarNewChat)]" Title="@Loc[nameof(AIAssistant.SidebarNewChat)]">
-                                    <FluentIcon Value="@(new Icons.Regular.Size16.ChatAdd())" Width="16px" Color="Color.Neutral" />
+                                <FluentButton Appearance="ButtonAppearance.Transparent" OnClick="() => StartNewChatAsync()" aria-label="@Loc[nameof(AIAssistant.SidebarNewChat)]" Title="@Loc[nameof(AIAssistant.SidebarNewChat)]">
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.ChatAdd())" Width="16px" Color="Color.Default" />
                                 </FluentButton>
-                                <FluentButton Appearance="Appearance.Stealth" OnClick="() => ExpandDialogAsync(openedForMobileView: false)" aria-label="@Loc[nameof(AIAssistant.SidebarExpandDialog)]" Title="@Loc[nameof(AIAssistant.SidebarExpandDialog)]">
-                                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowExpand())" Width="16px" Color="Color.Neutral" />
+                                <FluentButton Appearance="ButtonAppearance.Transparent" OnClick="() => ExpandDialogAsync(openedForMobileView: false)" aria-label="@Loc[nameof(AIAssistant.SidebarExpandDialog)]" Title="@Loc[nameof(AIAssistant.SidebarExpandDialog)]">
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowExpand())" Width="16px" Color="Color.Default" />
                                 </FluentButton>
                             }
-                            <FluentButton Appearance="Appearance.Stealth" OnClick="CloseDialog" aria-label="@DialogsLoc[nameof(Dialogs.DialogCloseButtonText)]" Title="@DialogsLoc[nameof(Dialogs.DialogCloseButtonText)]">
-                                <FluentIcon Value="@(new Icons.Regular.Size16.Dismiss())" Width="16px" Color="Color.Neutral" />
+                            <FluentButton Appearance="ButtonAppearance.Transparent" OnClick="CloseDialog" aria-label="@DialogsLoc[nameof(Dialogs.DialogCloseButtonText)]" Title="@DialogsLoc[nameof(Dialogs.DialogCloseButtonText)]">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Dismiss())" Width="16px" Color="Color.Default" />
                             </FluentButton>
                         </div>
                     </div>

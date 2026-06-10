@@ -1,4 +1,4 @@
-﻿@namespace Aspire.Dashboard.Components.Controls
+@namespace Aspire.Dashboard.Components.Controls
 
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
@@ -82,7 +82,7 @@
                     @if (context.Exemplars.Count > 0)
                     {
                         @* min-width ensures a consistent button width up to 999 metrics *@
-                        <FluentButton Appearance="Appearance.Accent"
+                        <FluentButton Appearance="ButtonAppearance.Primary"
                                       aria-label="@Loc[nameof(ControlsStrings.MetricTableViewExemplarsLabel)]"
                                       @onclick="() => OpenExemplarsDialogAsync(context)"
                                       Style="min-width: 45px">@context.Exemplars.Count</FluentButton>

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -14,7 +15,7 @@ public partial class AssistantModalDialog : IAsyncDisposable
     public AssistantDialogViewModel Content { get; set; } = default!;
 
     [CascadingParameter]
-    private FluentDialog Dialog { get; set; } = default!;
+    private IDialogInstance Dialog { get; set; } = default!;
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
@@ -95,10 +96,12 @@ public partial class AssistantModalDialog : IAsyncDisposable
             Width = "min(800px, 100vw)",
             TrapFocus = true,
             Modal = true,
-            PreventScroll = true
+            PreventDismissOnOverlayClick = true
         };
 
-        await dialogService.ShowDialogAsync<AssistantModalDialog>(viewModel, parameters);
+        var options = parameters.ToDialogOptions();
+        options.Data = viewModel;
+        await dialogService.ShowDialogAsync<AssistantModalDialog>(options);
     }
 
     private async Task CloseAndDisplaySidebarAsync()

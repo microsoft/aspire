@@ -1,38 +1,40 @@
-﻿@using Aspire.Dashboard.Extensions
+@using Aspire.Dashboard.Extensions
 @using Aspire.Dashboard.Resources
 
 @inject IStringLocalizer<Dialogs> Loc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
-@implements IDialogContentComponent<Aspire.Dashboard.Model.TextVisualizerDialogViewModel>
 
-<FluentDialogHeader ShowDismiss="true">
-    <div class="dialog-title-grid">
-        <FluentIcon Value="@(new Icons.Regular.Size24.SlideSearch())" Style="grid-area: dialog-icon; align-self: center;" />
-        <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
-            @Content.Description
-        </FluentLabel>
-
-        @if (!HasFixedFormat)
-        {
-            <div Style="grid-area: dialog-format;">
-                <FluentMenuButton id="@_openSelectFormatButtonId"
-                                  ButtonAppearance="Appearance.Stealth"
-                                  IconEnd="@(new Icons.Regular.Size24.SlideTextEdit())"
-                                  Text="@(_selectedFormat ?? Loc[nameof(Dialogs.TextVisualizerSelectFormatType)])"
-                                  aria-label="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
-                                  OnMenuChanged="@OnFormatOptionChanged">
-                    @foreach (var option in _options)
-                    {
-                        <FluentMenuItem Class="overflow-fluent-menu-item" Id="@option.Id" Disabled="@(!EnabledOptions.Contains(option.Id))" Value="@option.Id" title="@option.Name">@option.Name</FluentMenuItem>
-                    }
-                </FluentMenuButton>
-            </div>
-        }
-    </div>
-</FluentDialogHeader>
 
 <FluentDialogBody>
-    <div class="text-visualizer-container">
+    <TitleTemplate>
+        <div class="dialog-title-grid">
+            <FluentIcon Value="@(new Icons.Regular.Size24.SlideSearch())" Style="grid-area: dialog-icon; align-self: center;" />
+            <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
+                @Content.Description
+            </FluentLabel>
+
+            @if (!HasFixedFormat)
+            {
+                <div Style="grid-area: dialog-format;">
+                    <FluentButton Id="@_openSelectFormatButtonId"
+                                  Appearance="ButtonAppearance.Transparent"
+                                  IconEnd="@(new Icons.Regular.Size24.SlideTextEdit())"
+                                  aria-label="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
+                                  OnClick="@(() => _formatMenuOpen = !_formatMenuOpen)">
+                        @(_selectedFormat ?? Loc[nameof(Dialogs.TextVisualizerSelectFormatType)])
+                    </FluentButton>
+                    <FluentMenu Anchor="@_openSelectFormatButtonId" @bind-Open="_formatMenuOpen">
+                        @foreach (var option in _options)
+                        {
+                            <FluentMenuItem Class="overflow-fluent-menu-item" Disabled="@(!EnabledOptions.Contains(option.Id))" OnClick="@(() => ChangeFormat(option.Id, option.Name))">@option.Name</FluentMenuItem>
+                        }
+                    </FluentMenu>
+                </div>
+            }
+        </div>
+    </TitleTemplate>
+    <ChildContent>
+        <div class="text-visualizer-container">
         @if (IsTextContentDisplayed)
         {
             if (IsMarkdownFormat)
@@ -91,7 +93,6 @@
                 </FluentButton>
             </div>
         </div>
-    </div>
+        </div>
+    </ChildContent>
 </FluentDialogBody>
-
-<FluentDialogFooter Visible="false" />

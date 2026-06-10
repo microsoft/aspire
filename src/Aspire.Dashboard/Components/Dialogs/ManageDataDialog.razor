@@ -12,7 +12,7 @@
                     Items="@GetGridItems()"
                     ItemSize="46"
                     Virtualize="true"
-                    GenerateHeader="GenerateHeaderOption.Sticky"
+                    GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                     GridTemplateColumns="2fr 1fr"
                     TGridItem="ManageDataGridItem"
                     OnRowClick="@OnRowClicked"
@@ -25,7 +25,7 @@
                     <div style="display: flex; justify-content: flex-start;">
                         <div style="width: calc(100% - 10px);">
                             <div class="name-title-text">
-                                <FluentButton Appearance="Appearance.Lightweight"
+                                <FluentButton Appearance="ButtonAppearance.Subtle"
                                               IconEnd="@GetHeaderCheckboxIcon()"
                                               OnClick="OnSelectAllClicked"
                                               Disabled="@(_resourceDataRows.Count == 0)"
@@ -46,16 +46,16 @@
                             <span @onclick:stopPropagation="true" class="main-grid-expand-container @(IsResourceExpanded(context.ResourceRow.Name) ? "main-grid-expanded" : "main-grid-collapsed")">
                                 @if (context.ResourceRow.TelemetryData.Count > 0)
                                 {
-                                    <FluentButton Appearance="Appearance.Lightweight"
+                                    <FluentButton Appearance="ButtonAppearance.Subtle"
                                                   Class="main-grid-expand-button"
                                                   OnClick="@(() => OnToggleExpand(context.ResourceRow))"
                                                   aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]">
-                                        <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Neutral" />
+                                        <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Default" />
                                     </FluentButton>
                                 }
                             </span>
                             <span @onclick:stopPropagation="true">
-                                <FluentButton Appearance="Appearance.Lightweight"
+                                <FluentButton Appearance="ButtonAppearance.Subtle"
                                               IconEnd="@GetResourceCheckboxIcon(context.ResourceRow)"
                                               OnClick="@(() => OnSelectRowClicked(context.ResourceRow))"
                                               style="margin-right: 8px;" />
@@ -83,7 +83,7 @@
                         else if (context.IsNestedRow && context.NestedRow is not null && context.ParentResourceName is not null)
                         {
                             <span @onclick:stopPropagation="true">
-                                <FluentButton Appearance="Appearance.Lightweight"
+                                <FluentButton Appearance="ButtonAppearance.Subtle"
                                               IconEnd="@(IsDataRowSelected(context.ParentResourceName, context.NestedRow.DataType) ? _iconSelectedMultiple : _iconUnselectedMultiple)"
                                               OnClick="@(() => OnSelectDataRowClicked(context.ParentResourceName, context.NestedRow.DataType))"
                                               style="margin-right: 8px;" />
@@ -99,7 +99,7 @@
                     <span @onclick:stopPropagation="true">
                         @foreach (var dataRow in context.ResourceRow.TelemetryData)
                         {
-                            <FluentButton Appearance="Appearance.Lightweight"
+                            <FluentButton Appearance="ButtonAppearance.Subtle"
                                           IconEnd="@dataRow.Icon"
                                           OnClick="@(() => NavigateToDataPage(dataRow))"
                                           Title="@GetDataTypeDisplayName(dataRow.DataType)"

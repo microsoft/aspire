@@ -1,32 +1,33 @@
-﻿@if (_showUserProfileMenu)
+@if (_showUserProfileMenu)
 {
     <AuthorizeView>
         <Authorized>
             <div class="profile-menu-container">
-                <FluentProfileMenu Initials="@_initials"
-                                   EMail="@_username"
-                                   FullName="@_name"
-                                   ButtonSize="@ButtonSize"
-                                   FooterLink="">
-                    <HeaderTemplate>
+                <FluentButton Id="@_profileButtonId"
+                              Appearance="ButtonAppearance.Transparent"
+                              Class="profile-button"
+                              OnClick="@(() => _profileMenuOpen = !_profileMenuOpen)">
+                    <FluentAvatar Name="@_name" Initials="@_initials" />
+                </FluentButton>
+                <FluentPopover AnchorId="@_profileButtonId" @bind-Open="_profileMenuOpen">
+                    <div class="profile-popover-content">
                         <FluentStack VerticalAlignment="VerticalAlignment.Center">
                             <FluentLabel>@Loc[nameof(Resources.Login.LoggedInAs)]</FluentLabel>
                             <FluentSpacer />
                             <form @formname="sign-out-form" class="sign-out-form" action="authentication/logout" method="post">
                                 <AntiforgeryToken />
-                                <FluentButton Appearance="Appearance.Stealth" Type="ButtonType.Submit">Sign out</FluentButton>
+                                <FluentButton Appearance="ButtonAppearance.Transparent" Type="ButtonType.Submit">Sign out</FluentButton>
                             </form>
                         </FluentStack>
-                    </HeaderTemplate>
-                    <ChildContent>
-                        <FluentStack class="inner-persona-container">
-                            <FluentPersona Initials="@_initials" ImageSize="@ImageSize" Class="inner-persona">
+                        <FluentStack Class="inner-persona-container">
+                            <FluentAvatar Name="@_name" Initials="@_initials" Class="inner-persona" />
+                            <div>
                                 <div class="full-name">@_name</div>
                                 <div class="user-id">@_username</div>
-                            </FluentPersona>
+                            </div>
                         </FluentStack>
-                    </ChildContent>
-                </FluentProfileMenu>
+                    </div>
+                </FluentPopover>
             </div>
         </Authorized>
     </AuthorizeView>

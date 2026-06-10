@@ -8,55 +8,57 @@
 
 <div class="layout" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     <div class="aspire-icon">
-        <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
+        <FluentAnchorButton Appearance="ButtonAppearance.Transparent" Href="/" Class="logo"
                       title="@Loc[nameof(Layout.MainLayoutAspire)]"
                       aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
             <FluentIcon Value="@(new AspireIcons.Size24.Logo())"/>
-        </FluentAnchor>
+        </FluentAnchorButton>
     </div>
 
     @if (ViewportInformation.IsDesktop)
     {
-        <FluentHeader>
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
-                <ApplicationName/>
-            </FluentAnchor>
-            <div class="flex-filler"></div>
-            <FluentAnchor Class="header-button"
-                          Appearance="Appearance.Stealth"
-                          Href="https://aka.ms/aspire/repo" Target="_blank" Rel="noreferrer noopener"
-                          Title="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
-                <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Neutral"/>
-            </FluentAnchor>
-            <FluentButton Class="header-button"
-                          Appearance="Appearance.Stealth" OnClick="@LaunchHelpAsync"
-                          Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
-                <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Neutral"/>
-            </FluentButton>
-            @if (Options.CurrentValue.UI.DisableAgentHelp != true)
-            {
+        <header class="header" style="height: 50px;">
+            <div class="header-gutters">
+                <FluentAnchorButton Appearance="ButtonAppearance.Transparent" Href="/" Class="logo">
+                    <ApplicationName/>
+                </FluentAnchorButton>
+                <div class="flex-filler"></div>
+                <FluentAnchorButton Class="header-button"
+                              Appearance="ButtonAppearance.Transparent"
+                              Href="https://aka.ms/aspire/repo" Target="LinkTarget.Blank" Rel="noreferrer noopener"
+                              Title="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
+                    <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Default"/>
+                </FluentAnchorButton>
                 <FluentButton Class="header-button"
-                              Appearance="Appearance.Stealth" OnClick="@LaunchAIAgentsAsync"
-                              Title="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]">
-                    <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Neutral"/>
+                              Appearance="ButtonAppearance.Transparent" OnClick="@LaunchHelpAsync"
+                              Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
+                    <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Default"/>
                 </FluentButton>
-            }
-            @if (AIContextProvider.Enabled)
-            {
-                <FluentButton Class="@("header-button" + ((AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog) ? " header-button-selected" : ""))"
-                              Appearance="Appearance.Stealth" OnClick="@LaunchAssistantAsync"
-                              Title="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]" aria-label="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]">
-                    <FluentIcon Value="@(new AspireIcons.Size24.GitHubCopilot())" Color="Color.Neutral" />
+                @if (Options.CurrentValue.UI.DisableAgentHelp != true)
+                {
+                    <FluentButton Class="header-button"
+                                  Appearance="ButtonAppearance.Transparent" OnClick="@LaunchAIAgentsAsync"
+                                  Title="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]">
+                        <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Default"/>
+                    </FluentButton>
+                }
+                @if (AIContextProvider.Enabled)
+                {
+                    <FluentButton Class="@("header-button" + ((AIContextProvider.AssistantChatViewModel is {} chatVm && AIContextProvider.ShowAssistantSidebarDialog) ? " header-button-selected" : ""))"
+                                  Appearance="ButtonAppearance.Transparent" OnClick="@LaunchAssistantAsync"
+                                  Title="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]" aria-label="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]">
+                        <FluentIcon Value="@(new AspireIcons.Size24.GitHubCopilot())" Color="Color.Default" />
+                    </FluentButton>
+                }
+                <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
+                <FluentButton Class="header-button"
+                              Appearance="ButtonAppearance.Transparent" OnClick="@LaunchSettingsAsync"
+                              Title="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
+                    <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" Color="Color.Default"/>
                 </FluentButton>
-            }
-            <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
-            <FluentButton Class="header-button"
-                          Appearance="Appearance.Stealth" OnClick="@LaunchSettingsAsync"
-                          Title="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
-                <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" Color="Color.Neutral"/>
-            </FluentButton>
-            <UserProfile/>
-        </FluentHeader>
+                <UserProfile />
+            </div>
+        </header>
 
         @if (AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog)
         {
@@ -66,21 +68,21 @@
     }
     else
     {
-        <FluentHeader>
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
+        <header class="fluent-header">
+            <FluentAnchorButton Appearance="ButtonAppearance.Transparent" Href="/" Class="logo">
                 <ApplicationName/>
-            </FluentAnchor>
+            </FluentAnchorButton>
             <div class="flex-filler"></div>
 
             <UserProfile/>
             <FluentButton
                 IconEnd="@(_isNavMenuOpen ? new Icons.Regular.Size24.Dismiss() : new Icons.Regular.Size24.Navigation())"
                 Title="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
-                Appearance="Appearance.Stealth"
+                Appearance="ButtonAppearance.Transparent"
                 BackgroundColor="transparent"
                 OnClick="@(() => _isNavMenuOpen = !_isNavMenuOpen)"
                 Class="navigation-button"/>
-        </FluentHeader>
+        </header>
 
         <MobileNavMenu
             IsNavMenuOpen="_isNavMenuOpen"
@@ -95,17 +97,17 @@
     }
 
     <div class="messagebar-container">
-        <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
+        @* MessageBar provider removed in FluentUI v5 - messages are rendered inline *@
         @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
         {
             <div class="layout-sidebar-spacer"></div>
         }
     </div>
     <div class="layout-body-container">
-        <FluentBodyContent Class="custom-body-content body-content">
-            <FluentToastProvider MaxToastCount="3" Timeout="5000" />
+        <div class="custom-body-content body-content">
+            <FluentToastProvider />
             @Body
-        </FluentBodyContent>
+        </div>
         @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
         {
             <div class="layout-sidebar-spacer"></div>
@@ -114,7 +116,7 @@
 
     <FluentDialogProvider/>
     <FluentTooltipProvider />
-    <FluentMenuProvider />
+
     <InteractionsProvider />
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
