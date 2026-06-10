@@ -15,6 +15,15 @@ const defaultRecentIssueCutoffDays = 30;
 const authoredIssueCacheTtlMs = 5 * 60 * 1000;
 const allIssueCacheTtlMs = 60 * 60 * 1000;
 const issueCacheMaxAgeMs = 24 * 60 * 60 * 1000;
+const issueTriagePreferencePageSizes = [25, 50, 100, 250];
+const defaultIssueTriagePreferences = {
+    dismissed: [],
+    selectedAreaLabels: [],
+    selectedCategories: [],
+    scope: "mine",
+    pageSize: 50,
+    filtersExpanded: false,
+};
 const servers = new Map();
 const issueCache = new Map();
 const issueRefreshes = new Map();
@@ -22,14 +31,16 @@ const issueRefreshes = new Map();
 let copilotSession;
 
 function execFileAsync(file, args, options = {}) {
+    const { env, ...execOptions } = options;
+
     return new Promise((resolve, reject) => {
         execFile(
             file,
             args,
             {
                 maxBuffer: 10 * 1024 * 1024,
-                env: { ...process.env, GH_PAGER: "cat", ...options.env },
-                ...options,
+                ...execOptions,
+                env: { ...process.env, GH_PAGER: "cat", ...env },
             },
             (error, stdout, stderr) => {
                 if (error) {
@@ -283,6 +294,93 @@ function issueCacheFilePath(scope) {
     const copilotHome = process.env.COPILOT_HOME || join(homedir(), ".copilot");
     const sessionId = copilotSession?.sessionId || "unknown-session";
     return join(copilotHome, "extensions", extensionName, "artifacts", sessionId, `issues-${normalizeScope(scope)}.json`);
+}
+
+function issueTriagePreferencesFilePath() {
+    const copilotHome = process.env.COPILOT_HOME || join(homedir(), ".copilot");
+    const sessionId = copilotSession?.sessionId || "unknown-session";
+    return join(copilotHome, "extensions", extensionName, "artifacts", sessionId, "preferences.json");
+}
+
+function hasOwnProperty(value, property) {
+    return Object.prototype.hasOwnProperty.call(value, property);
+}
+
+function uniqueValues(values) {
+    return [...new Set(values)];
+}
+
+function normalizeIssueNumberList(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return uniqueValues(value
+        .map((number) => Number(number))
+        .filter((number) => Number.isInteger(number) && number > 0));
+}
+
+function normalizeStringList(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return uniqueValues(value.filter((item) => typeof item === "string"));
+}
+
+function normalizePreferencePageSize(value, fallback = defaultIssueTriagePreferences.pageSize) {
+    const pageSize = Number(value);
+    return issueTriagePreferencePageSizes.includes(pageSize) ? pageSize : fallback;
+}
+
+function normalizeIssueTriagePreferences(input = {}, fallback = defaultIssueTriagePreferences) {
+    const source = input && typeof input === "object" ? input : {};
+    return {
+        dismissed: hasOwnProperty(source, "dismissed") ? normalizeIssueNumberList(source.dismissed) : [...fallback.dismissed],
+        selectedAreaLabels: hasOwnProperty(source, "selectedAreaLabels") ? normalizeStringList(source.selectedAreaLabels) : [...fallback.selectedAreaLabels],
+        selectedCategories: hasOwnProperty(source, "selectedCategories") ? normalizeStringList(source.selectedCategories) : [...fallback.selectedCategories],
+        scope: hasOwnProperty(source, "scope") ? normalizeScope(source.scope) : fallback.scope,
+        pageSize: hasOwnProperty(source, "pageSize") ? normalizePreferencePageSize(source.pageSize, fallback.pageSize) : fallback.pageSize,
+        filtersExpanded: hasOwnProperty(source, "filtersExpanded") ? source.filtersExpanded === true : fallback.filtersExpanded,
+    };
+}
+
+async function readIssueTriagePreferences() {
+    try {
+        const preferences = normalizeIssueTriagePreferences(JSON.parse(await readFile(issueTriagePreferencesFilePath(), "utf8")));
+        return { preferences, exists: true, warnings: [] };
+    }
+    catch (error) {
+        if (error?.code === "ENOENT") {
+            return { preferences: normalizeIssueTriagePreferences(), exists: false, warnings: [] };
+        }
+
+        if (error instanceof SyntaxError) {
+            const warning = `Stored preferences could not be parsed; defaults were used. ${String(error.message || error)}`;
+            await copilotSession?.log(`Issue triage preferences load failed: ${warning}`, { level: "warning", ephemeral: true });
+            return { preferences: normalizeIssueTriagePreferences(), exists: true, warnings: [warning] };
+        }
+
+        throw error;
+    }
+}
+
+async function writeIssueTriagePreferences(preferences) {
+    const filePath = issueTriagePreferencesFilePath();
+    const normalizedPreferences = normalizeIssueTriagePreferences(preferences);
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, `${JSON.stringify(normalizedPreferences)}\n`, "utf8");
+    return normalizedPreferences;
+}
+
+async function updateIssueTriagePreferences(patch) {
+    const current = await readIssueTriagePreferences();
+    const preferences = normalizeIssueTriagePreferences(patch, current.preferences);
+    return {
+        preferences: await writeIssueTriagePreferences(preferences),
+        exists: true,
+        warnings: current.warnings,
+    };
 }
 
 function issueCacheTtlMs(scope) {
@@ -659,6 +757,37 @@ async function readJsonBody(req) {
     }
 
     return body ? JSON.parse(body) : {};
+}
+
+function isAllowedPostRequest(req) {
+    const host = req.headers.host;
+    if (!host) {
+        return false;
+    }
+
+    const expectedOrigin = `http://${host}`;
+    const origin = req.headers.origin;
+    if (origin && !isSameOrigin(origin, expectedOrigin)) {
+        return false;
+    }
+
+    const fetchSite = req.headers["sec-fetch-site"];
+    if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
+        return false;
+    }
+
+    return true;
+}
+
+function isSameOrigin(origin, expectedOrigin) {
+    try {
+        const actual = new URL(origin);
+        const expected = new URL(expectedOrigin);
+        return actual.origin === expected.origin;
+    }
+    catch {
+        return false;
+    }
 }
 
 function normalizeCloseInput(input) {
@@ -1350,21 +1479,252 @@ function renderHtml() {
     </header>
     <main id="content"></main>
     <script>
+      const el = (id) => document.getElementById(id);
+      const preferencePageSizes = [25, 50, 100, 250];
+      const defaultPreferences = {
+        dismissed: [],
+        selectedAreaLabels: [],
+        selectedCategories: [],
+        scope: "mine",
+        pageSize: 50,
+        filtersExpanded: false,
+      };
+      const persistenceWarnings = [];
+      let baseStatus = el("status").textContent || "Loading...";
+
+      function formatError(error) {
+        return error && error.message ? error.message : String(error);
+      }
+
+      function setStatus(message) {
+        baseStatus = message;
+        const warning = persistenceWarnings[persistenceWarnings.length - 1];
+        el("status").textContent = warning ? message + " Preference storage warning: " + warning : message;
+      }
+
+      function reportPersistenceWarning(message, error) {
+        const warning = error ? message + " " + formatError(error) : message;
+        console.warn(warning);
+        persistenceWarnings.push(warning);
+        setStatus(baseStatus);
+      }
+
+      function hasOwnProperty(value, property) {
+        return Object.prototype.hasOwnProperty.call(value, property);
+      }
+
+      function uniqueValues(values) {
+        return [...new Set(values)];
+      }
+
+      function normalizePreferenceIssueNumbers(value) {
+        if (!Array.isArray(value)) {
+          return [];
+        }
+
+        return uniqueValues(value
+          .map((number) => Number(number))
+          .filter((number) => Number.isInteger(number) && number > 0));
+      }
+
+      function normalizePreferenceStrings(value) {
+        if (!Array.isArray(value)) {
+          return [];
+        }
+
+        return uniqueValues(value.filter((item) => typeof item === "string"));
+      }
+
+      function normalizePreferencePageSize(value, fallback) {
+        const pageSize = Number(value);
+        return preferencePageSizes.includes(pageSize) ? pageSize : fallback;
+      }
+
+      function normalizePreferenceScope(value) {
+        return value === "all" ? "all" : "mine";
+      }
+
+      function normalizeClientPreferences(preferences, fallback = defaultPreferences) {
+        const source = preferences && typeof preferences === "object" ? preferences : {};
+        return {
+          dismissed: hasOwnProperty(source, "dismissed") ? normalizePreferenceIssueNumbers(source.dismissed) : [...fallback.dismissed],
+          selectedAreaLabels: hasOwnProperty(source, "selectedAreaLabels") ? normalizePreferenceStrings(source.selectedAreaLabels) : [...fallback.selectedAreaLabels],
+          selectedCategories: hasOwnProperty(source, "selectedCategories") ? normalizePreferenceStrings(source.selectedCategories) : [...fallback.selectedCategories],
+          scope: hasOwnProperty(source, "scope") ? normalizePreferenceScope(source.scope) : fallback.scope,
+          pageSize: hasOwnProperty(source, "pageSize") ? normalizePreferencePageSize(source.pageSize, fallback.pageSize) : fallback.pageSize,
+          filtersExpanded: hasOwnProperty(source, "filtersExpanded") ? source.filtersExpanded === true : fallback.filtersExpanded,
+        };
+      }
+
+      function readLocalStorageItem(key) {
+        try {
+          return localStorage.getItem(key);
+        }
+        catch (error) {
+          reportPersistenceWarning("Browser preference storage could not be read for " + key + ".", error);
+          return null;
+        }
+      }
+
+      function readLocalJsonArray(keys, label, normalize) {
+        for (const key of keys) {
+          const value = readLocalStorageItem(key);
+          if (value === null) {
+            continue;
+          }
+
+          try {
+            const parsed = JSON.parse(value);
+            if (!Array.isArray(parsed)) {
+              reportPersistenceWarning("Stored " + label + " in browser preference storage was not an array and was ignored.");
+              continue;
+            }
+
+            return normalize(parsed);
+          }
+          catch (error) {
+            reportPersistenceWarning("Stored " + label + " in browser preference storage was malformed and was ignored.", error);
+          }
+        }
+
+        return null;
+      }
+
+      function readLocalPreferences() {
+        const preferences = {};
+        let hasPreferences = false;
+        const dismissed = readLocalJsonArray(["issue-triage-dismissed"], "dismissed issues", normalizePreferenceIssueNumbers);
+        if (dismissed) {
+          preferences.dismissed = dismissed;
+          hasPreferences = true;
+        }
+
+        const selectedAreaLabels = readLocalJsonArray(["issue-triage-labels", "issue-triage-area-labels"], "area label filters", normalizePreferenceStrings);
+        if (selectedAreaLabels) {
+          preferences.selectedAreaLabels = selectedAreaLabels;
+          hasPreferences = true;
+        }
+
+        const selectedCategories = readLocalJsonArray(["issue-triage-categories"], "category filters", normalizePreferenceStrings);
+        if (selectedCategories) {
+          preferences.selectedCategories = selectedCategories;
+          hasPreferences = true;
+        }
+
+        const scope = readLocalStorageItem("issue-triage-scope");
+        if (scope === "all" || scope === "mine") {
+          preferences.scope = scope;
+          hasPreferences = true;
+        }
+        else if (scope !== null) {
+          reportPersistenceWarning("Stored scope preference in browser preference storage was invalid and was ignored.");
+        }
+
+        const pageSizeValue = readLocalStorageItem("issue-triage-page-size");
+        if (pageSizeValue !== null) {
+          const pageSize = Number(pageSizeValue);
+          if (preferencePageSizes.includes(pageSize)) {
+            preferences.pageSize = pageSize;
+            hasPreferences = true;
+          }
+          else {
+            reportPersistenceWarning("Stored page size preference in browser preference storage was invalid and was ignored.");
+          }
+        }
+
+        const filtersExpanded = readLocalStorageItem("issue-triage-filters-expanded");
+        if (filtersExpanded === "true" || filtersExpanded === "false") {
+          preferences.filtersExpanded = filtersExpanded === "true";
+          hasPreferences = true;
+        }
+        else if (filtersExpanded !== null) {
+          reportPersistenceWarning("Stored filters expanded preference in browser preference storage was invalid and was ignored.");
+        }
+
+        return hasPreferences ? preferences : null;
+      }
+
+      function applyPreferences(preferences) {
+        const next = normalizeClientPreferences(preferences);
+        state.dismissed = new Set(next.dismissed);
+        state.selectedAreaLabels = new Set(next.selectedAreaLabels);
+        state.selectedCategories = new Set(next.selectedCategories);
+        state.scope = next.scope;
+        state.pageSize = next.pageSize;
+        state.filtersExpanded = next.filtersExpanded;
+        el("scopeFilter").value = state.scope;
+        el("pageSize").value = String(state.pageSize);
+        el("filtersPanel").open = state.filtersExpanded;
+        updateFiltersToggleText();
+      }
+
+      async function loadPreferences() {
+        const localPreferences = readLocalPreferences();
+
+        try {
+          const response = await fetch("/api/preferences");
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || response.statusText);
+          }
+
+          for (const warning of payload.warnings || []) {
+            reportPersistenceWarning(warning);
+          }
+
+          let preferences = normalizeClientPreferences(payload.preferences);
+          if (localPreferences && (payload.exists === false || (payload.warnings || []).length > 0)) {
+            preferences = await savePreferences(localPreferences) || normalizeClientPreferences(localPreferences, preferences);
+          }
+
+          applyPreferences(preferences);
+        }
+        catch (error) {
+          reportPersistenceWarning("Durable preferences could not be loaded; using available browser preferences or defaults for this board.", error);
+          applyPreferences(localPreferences || defaultPreferences);
+        }
+      }
+
+      async function savePreferences(patch) {
+        try {
+          const response = await fetch("/api/preferences", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(patch),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || response.statusText);
+          }
+
+          for (const warning of payload.warnings || []) {
+            reportPersistenceWarning(warning);
+          }
+
+          return normalizeClientPreferences(payload.preferences);
+        }
+        catch (error) {
+          reportPersistenceWarning("Preferences could not be saved.", error);
+          return null;
+        }
+      }
+
       const state = {
         issues: [],
         selected: new Set(),
-        dismissed: new Set(JSON.parse(localStorage.getItem("issue-triage-dismissed") || "[]")),
-        selectedAreaLabels: new Set(JSON.parse(localStorage.getItem("issue-triage-labels") || localStorage.getItem("issue-triage-area-labels") || "[]")),
-        selectedCategories: new Set(JSON.parse(localStorage.getItem("issue-triage-categories") || "[]")),
+        dismissed: new Set(),
+        selectedAreaLabels: new Set(),
+        selectedCategories: new Set(),
         areaLabels: [],
         areaLabelCounts: new Map(),
         categoryCounts: new Map(),
         sessionRequests: new Map(),
-        scope: localStorage.getItem("issue-triage-scope") === "all" ? "all" : "mine",
+        scope: defaultPreferences.scope,
         fetchedAt: null,
         query: "",
         page: 1,
-        pageSize: [25, 50, 100, 250].includes(Number(localStorage.getItem("issue-triage-page-size"))) ? Number(localStorage.getItem("issue-triage-page-size")) : 50,
+        pageSize: defaultPreferences.pageSize,
+        filtersExpanded: defaultPreferences.filtersExpanded,
         dateRange: { min: 0, max: 0, from: 0, to: 0, initialized: false },
       };
       let refreshPollTimer = null;
@@ -1453,12 +1813,6 @@ function renderHtml() {
           matches: (issue) => issueAgeDaysForClient(issue) >= 180 && issue.comments <= 3 && issue.thumbsUp <= 1 && issue.totalReactions <= 2,
         },
       ];
-
-      const el = (id) => document.getElementById(id);
-      el("scopeFilter").value = state.scope;
-      el("pageSize").value = String(state.pageSize);
-      el("filtersPanel").open = localStorage.getItem("issue-triage-filters-expanded") === "true";
-      updateFiltersToggleText();
 
       function escapeHtml(value) {
         return String(value)
@@ -1747,12 +2101,11 @@ function renderHtml() {
       }
 
       function persistAreaLabels() {
-        localStorage.setItem("issue-triage-labels", JSON.stringify([...state.selectedAreaLabels]));
-        localStorage.removeItem("issue-triage-area-labels");
+        void savePreferences({ selectedAreaLabels: [...state.selectedAreaLabels] });
       }
 
       function persistCategories() {
-        localStorage.setItem("issue-triage-categories", JSON.stringify([...state.selectedCategories]));
+        void savePreferences({ selectedCategories: [...state.selectedCategories] });
       }
 
       function renderCategoryFilter() {
@@ -2054,18 +2407,18 @@ function renderHtml() {
 
         refreshPollTimer = setTimeout(() => {
           refresh({ quiet: true, preservePage: true }).catch((error) => {
-            el("status").textContent = error.message;
+            setStatus(error.message);
           });
         }, 2500);
       }
 
       async function refresh(options = {}) {
         if (!options.quiet) {
-          el("status").textContent = options.hard
+          setStatus(options.hard
             ? "Hard refreshing " + scopeLabel() + " from GitHub..."
             : options.delta
               ? "Checking for changed " + scopeLabel() + " in the background..."
-              : "Loading " + scopeLabel() + "...";
+              : "Loading " + scopeLabel() + "...");
         }
 
         const params = new URLSearchParams({ scope: state.scope });
@@ -2114,7 +2467,7 @@ function renderHtml() {
           : payload.expiresAt
             ? " Cache fresh until " + new Date(payload.expiresAt).toLocaleTimeString() + "."
             : "";
-        el("status").textContent = payload.issues.length + " " + scopeLabel() + " loaded " + source + " at " + new Date(payload.fetchedAt).toLocaleTimeString() + "." + delta + freshness;
+        setStatus(payload.issues.length + " " + scopeLabel() + " loaded " + source + " at " + new Date(payload.fetchedAt).toLocaleTimeString() + "." + delta + freshness);
       }
 
       async function closeSelected(reason) {
@@ -2128,7 +2481,7 @@ function renderHtml() {
           return;
         }
 
-        el("status").textContent = "Closing selected issues...";
+        setStatus("Closing selected issues...");
         const response = await fetch("/api/close", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2146,8 +2499,8 @@ function renderHtml() {
           state.selected.delete(number);
           state.dismissed.delete(number);
         }
-        localStorage.setItem("issue-triage-dismissed", JSON.stringify([...state.dismissed]));
-        el("status").textContent = \`Closed \${payload.closed.length} issue(s). Failures: \${payload.failures.length}.\`;
+        await savePreferences({ dismissed: [...state.dismissed] });
+        setStatus(\`Closed \${payload.closed.length} issue(s). Failures: \${payload.failures.length}.\`);
         populateCategoryFilter();
         populateAreaFilter();
         render();
@@ -2157,7 +2510,7 @@ function renderHtml() {
         for (const number of state.selected) {
           state.dismissed.add(number);
         }
-        localStorage.setItem("issue-triage-dismissed", JSON.stringify([...state.dismissed]));
+        void savePreferences({ dismissed: [...state.dismissed] });
         state.selected.clear();
         render();
       }
@@ -2259,28 +2612,29 @@ function renderHtml() {
         state.scope = el("scopeFilter").value === "all" ? "all" : "mine";
         state.dateRange = { min: 0, max: 0, from: 0, to: 0, initialized: false };
         resetPage();
-        localStorage.setItem("issue-triage-scope", state.scope);
+        void savePreferences({ scope: state.scope });
         refresh().catch((error) => {
-          el("status").textContent = error.message;
+          setStatus(error.message);
         });
       });
       el("filtersPanel").addEventListener("toggle", () => {
+        state.filtersExpanded = el("filtersPanel").open;
         updateFiltersToggleText();
-        localStorage.setItem("issue-triage-filters-expanded", String(el("filtersPanel").open));
+        void savePreferences({ filtersExpanded: state.filtersExpanded });
       });
       el("createdFrom").addEventListener("input", () => setDateRangeFromInputs("from"));
       el("createdTo").addEventListener("input", () => setDateRangeFromInputs("to"));
       el("resetTimeline").addEventListener("click", resetTimeline);
       el("includeRecent").addEventListener("click", includeRecentIssues);
       el("refreshIssues").addEventListener("click", () => refresh({ delta: true, preservePage: true }).catch((error) => {
-        el("status").textContent = error.message;
+        setStatus(error.message);
       }));
       el("hardRefreshIssues").addEventListener("click", () => refresh({ hard: true }).catch((error) => {
-        el("status").textContent = error.message;
+        setStatus(error.message);
       }));
       el("pageSize").addEventListener("change", () => {
         state.pageSize = Number(el("pageSize").value);
-        localStorage.setItem("issue-triage-page-size", String(state.pageSize));
+        void savePreferences({ pageSize: state.pageSize });
         resetPage();
         render();
       });
@@ -2312,14 +2666,19 @@ function renderHtml() {
       });
       el("dismissSelected").addEventListener("click", dismissSelected);
       el("closeNotPlanned").addEventListener("click", () => closeSelected("not_planned").catch((error) => {
-        el("status").textContent = error.message;
+        setStatus(error.message);
       }));
       el("closeCompleted").addEventListener("click", () => closeSelected("completed").catch((error) => {
-        el("status").textContent = error.message;
+        setStatus(error.message);
       }));
 
-      refresh().catch((error) => {
-        el("status").textContent = error.message;
+      async function initialize() {
+        await loadPreferences();
+        await refresh();
+      }
+
+      initialize().catch((error) => {
+        setStatus(error.message);
       });
     </script>
   </body>
@@ -2327,9 +2686,14 @@ function renderHtml() {
 }
 
 async function handleRequest(req, res) {
-    const url = new URL(req.url ?? "/", "http://127.0.0.1");
-
     try {
+        const url = new URL(req.url ?? "/", "http://127.0.0.1");
+
+        if ((req.method === "POST" || req.method === "PATCH") && !isAllowedPostRequest(req)) {
+            jsonResponse(res, 403, { error: "Forbidden" });
+            return;
+        }
+
         if (req.method === "GET" && url.pathname === "/") {
             const html = renderHtml();
             res.writeHead(200, {
@@ -2337,6 +2701,16 @@ async function handleRequest(req, res) {
                 "Cache-Control": "no-store",
             });
             res.end(html);
+            return;
+        }
+
+        if (req.method === "GET" && url.pathname === "/api/preferences") {
+            jsonResponse(res, 200, await readIssueTriagePreferences());
+            return;
+        }
+
+        if (req.method === "PATCH" && url.pathname === "/api/preferences") {
+            jsonResponse(res, 200, await updateIssueTriagePreferences(await readJsonBody(req)));
             return;
         }
 
