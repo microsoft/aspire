@@ -1320,7 +1320,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (this._isKnownRunningAppHost(appHostPath)) {
             this._trackStoppingAppHost(appHostPath);
         }
-        this._repository.requestAppHostStopRefresh(appHostPath);
+        this._repository.requestAppHostStopRefresh?.(appHostPath);
         this._onDidChangeTreeData.fire();
     }
 
