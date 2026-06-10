@@ -903,7 +903,11 @@ async function executeE2eControlCommand(
     }
     case 'stopDebugging': {
       markStarted();
+      const runningAppHostPaths = appHostTreeProvider.appHosts.map(appHost => appHost.appHostPath);
       await vscode.debug.stopDebugging();
+      for (const appHostPath of runningAppHostPaths) {
+        appHostTreeProvider.notifyAppHostStopping(appHostPath);
+      }
       return undefined;
     }
     case 'closeAllEditors': {
