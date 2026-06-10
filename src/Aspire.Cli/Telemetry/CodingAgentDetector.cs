@@ -19,7 +19,12 @@ internal sealed class CodingAgentDetector(IConfiguration configuration) : ICodin
         new("claude", ["CLAUDECODE", "CLAUDE_CODE", "CLAUDE_CODE_ENTRYPOINT"]),
         new("cursor", ["CURSOR_EDITOR", "CURSOR_AI", "CURSOR_TRACE_ID", "CURSOR_AGENT"]),
         new("gemini", ["GEMINI_CLI"]),
+        // GitHub Copilot CLI (legacy gh extension: GITHUB_COPILOT_CLI_MODE; new Copilot CLI: GH_COPILOT_WORKING_DIRECTORY, COPILOT_CLI, COPILOT_MODEL, COPILOT_ALLOW_ALL, or COPILOT_GITHUB_TOKEN is set).
         new("copilot-cli", ["COPILOT_CLI", "GITHUB_COPILOT_CLI_MODE", "GH_COPILOT_WORKING_DIRECTORY", "COPILOT_MODEL", "COPILOT_ALLOW_ALL", "COPILOT_GITHUB_TOKEN"]),
+        // GitHub Copilot agent mode in VS Code, which sets AI_AGENT=github_copilot_vscode_agent and COPILOT_AGENT=1 on the terminals it runs commands in.
+        // See https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/terminalContrib/chatAgentTools/browser/toolTerminalCreator.ts
+        new("copilot-vscode", ["AI_AGENT"], "github_copilot_vscode_agent"),
+        new("copilot-vscode", ["COPILOT_AGENT"]),
         new("codex", ["CODEX_CLI", "CODEX_SANDBOX", "CODEX_CI", "CODEX_THREAD_ID"]),
         new("aider", ["OR_APP_NAME"], "Aider"),
         new("plandex", ["OR_APP_NAME"], "plandex"),
@@ -59,19 +64,12 @@ internal sealed class CodingAgentDetector(IConfiguration configuration) : ICodin
         return agentNames is { Count: > 0 } ? string.Join(", ", agentNames) : null;
     }
 
-    private sealed class DetectionRule
+    private sealed class DetectionRule(string agentName, string[] variableNames, string? expectedValue = null)
     {
-        private readonly string[] _variableNames;
-        private readonly string? _expectedValue;
+        private readonly string[] _variableNames = variableNames;
+        private readonly string? _expectedValue = expectedValue;
 
-        public DetectionRule(string agentName, string[] variableNames, string? expectedValue = null)
-        {
-            AgentName = agentName;
-            _variableNames = variableNames;
-            _expectedValue = expectedValue;
-        }
-
-        public string AgentName { get; }
+        public string AgentName { get; } = agentName;
 
         public bool IsMatch(IConfiguration configuration)
         {
