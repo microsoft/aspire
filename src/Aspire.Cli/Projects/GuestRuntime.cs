@@ -186,9 +186,9 @@ internal sealed class GuestRuntime
     /// <param name="environmentVariables">Environment variables to set for the process.</param>
     /// <param name="publishArgs">Additional arguments for publishing.</param>
     /// <param name="launcher">Strategy for launching the process.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="noBuild">Whether to skip pre-execution build/check commands.</param>
     /// <param name="afterAppHostLaunchedAsync">Callback invoked after the AppHost execute command has launched.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A tuple of the exit code and captured output.</returns>
     public async Task<(int ExitCode, OutputCollector? Output)> PublishAsync(
         FileInfo appHostFile,
@@ -196,9 +196,9 @@ internal sealed class GuestRuntime
         IDictionary<string, string> environmentVariables,
         string[]? publishArgs,
         IGuestProcessLauncher launcher,
-        CancellationToken cancellationToken,
         bool noBuild = false,
-        Func<Task>? afterAppHostLaunchedAsync = null)
+        Func<Task>? afterAppHostLaunchedAsync = null,
+        CancellationToken cancellationToken = default)
     {
         var commandSpec = _spec.PublishExecute ?? _spec.Execute;
 

@@ -14,6 +14,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -124,10 +125,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         var stopwatch = Stopwatch.StartNew();
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => session.GetRpcClientAsync(TestContext.Current.CancellationToken));
+            () => session.GetRpcClientAsync(TestContext.Current.CancellationToken)).DefaultTimeout();
         stopwatch.Stop();
 
-        Assert.Contains("AppHost server process exited before the RPC connection could be established", exception.Message);
+        Assert.Equal("AppHost server process exited before the RPC connection could be established. Exit code: 0.", exception.Message);
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
             $"Expected RPC connection to fail promptly after the server process exited, but it took {stopwatch.Elapsed}.");
     }

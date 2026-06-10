@@ -1917,7 +1917,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
-        return await _guestRuntime.PublishAsync(appHostFile, directory, environmentVariables, publishArgs, _guestRuntime.CreateDefaultLauncher(), cancellationToken, noBuild: noBuild, afterAppHostLaunchedAsync: afterAppHostLaunchedAsync);
+        return await _guestRuntime.PublishAsync(appHostFile, directory, environmentVariables, publishArgs, _guestRuntime.CreateDefaultLauncher(), noBuild: noBuild, afterAppHostLaunchedAsync: afterAppHostLaunchedAsync, cancellationToken: cancellationToken);
     }
 
     /// <summary>
