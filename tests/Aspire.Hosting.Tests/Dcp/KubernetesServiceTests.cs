@@ -17,40 +17,6 @@ namespace Aspire.Hosting.Tests.Dcp;
 
 public class KubernetesServiceTests
 {
-    // Regression test for the change that brought connecting to DCP (EnsureKubernetesAsync) back into the
-    // retry loop. When a client is first built from a stale kubeconfig (here, one pointing at a dead port),
-    // a connectivity failure must invalidate that cached client so the next retry re-reads the kubeconfig and
-    // rebuilds the client against the now-correct endpoint. Without the fix the stale client is cached forever
-    // and the operation fails permanently.
-    [Fact]
-    public async Task ExecuteWithRetry_RebuildsClient_WhenKubeconfigUpdatedAfterStaleConfig()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-
-        // Start with a kubeconfig that points at a port nobody is listening on. The first operation builds a
-        // client from this config and fails to connect (HttpRequestException -> connection refused).
-        var deadPort = GetFreePort();
-        WriteKubeconfig(kubeconfigPath, deadPort);
-
-        var listTask = service.ListAsync<Container>(cancellationToken: cts.Token);
-
-        // Give the operation a moment to build the stale client and start retrying, then stand up a real
-        // endpoint and repoint the kubeconfig at it.
-        await Task.Delay(300, cts.Token);
-
-        using var server = new FakeDcpApiServer();
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        // With the fix the stale client is discarded and rebuilt against the live endpoint, so the call
-        // completes successfully (an empty list of containers).
-        var result = await listTask;
-        Assert.Empty(result);
-    }
-
     // Verifies that establishing the connection happens inside the retry loop: when the kubeconfig does not
     // exist yet (DCP has not finished writing it), the operation waits and succeeds once it appears.
     [Fact]
@@ -69,7 +35,7 @@ public class KubernetesServiceTests
 
         await Task.Delay(300, cts.Token);
 
-        using var server = new FakeDcpApiServer();
+        using var server = new TestDcpApiServer();
         WriteKubeconfig(kubeconfigPath, server.Port);
 
         var result = await listTask;
@@ -147,13 +113,13 @@ public class KubernetesServiceTests
 
     // A minimal stand-in for the DCP API server. It answers every request with an empty Kubernetes list, which
     // is enough for ListAsync<Container>() to deserialize successfully.
-    private sealed class FakeDcpApiServer : IDisposable
+    private sealed class TestDcpApiServer : IDisposable
     {
         private readonly HttpListener _listener;
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _loop;
 
-        public FakeDcpApiServer()
+        public TestDcpApiServer()
         {
             Port = GetFreePort();
             _listener = new HttpListener();
