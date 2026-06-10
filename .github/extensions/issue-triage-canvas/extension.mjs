@@ -25,6 +25,7 @@ const defaultIssueTriagePreferences = {
     filtersExpanded: false,
 };
 const servers = new Map();
+const liveViews = new Map();
 const issueCache = new Map();
 const issueRefreshes = new Map();
 
@@ -302,6 +303,13 @@ function issueTriagePreferencesFilePath() {
     return join(copilotHome, "extensions", extensionName, "artifacts", sessionId, "preferences.json");
 }
 
+function issueCachePaths() {
+    return {
+        all: issueCacheFilePath("all"),
+        mine: issueCacheFilePath("mine"),
+    };
+}
+
 function hasOwnProperty(value, property) {
     return Object.prototype.hasOwnProperty.call(value, property);
 }
@@ -326,6 +334,144 @@ function normalizeStringList(value) {
     }
 
     return uniqueValues(value.filter((item) => typeof item === "string"));
+}
+
+function normalizeInteger(value, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+    const number = Number(value);
+    if (!Number.isInteger(number)) {
+        return fallback;
+    }
+
+    return Math.max(min, Math.min(max, number));
+}
+
+function normalizeBoolean(value, fallback = false) {
+    return typeof value === "boolean" ? value : fallback;
+}
+
+function normalizeDateRange(value) {
+    const source = value && typeof value === "object" ? value : {};
+    return {
+        initialized: source.initialized === true,
+        mode: typeof source.mode === "string" ? source.mode : "default",
+        from: typeof source.from === "string" ? source.from : "",
+        to: typeof source.to === "string" ? source.to : "",
+        min: typeof source.min === "string" ? source.min : "",
+        max: typeof source.max === "string" ? source.max : "",
+    };
+}
+
+function normalizeIssueData(issue) {
+    const number = Number(issue?.number);
+    if (!Number.isInteger(number) || number <= 0) {
+        return null;
+    }
+
+    return {
+        number,
+        title: typeof issue?.title === "string" ? issue.title : "",
+        url: typeof issue?.url === "string" ? issue.url : `https://github.com/${repo}/issues/${number}`,
+        author: typeof issue?.author === "string" ? issue.author : "",
+        state: typeof issue?.state === "string" ? issue.state : "OPEN",
+        createdAt: typeof issue?.createdAt === "string" ? issue.createdAt : "",
+        updatedAt: typeof issue?.updatedAt === "string" ? issue.updatedAt : "",
+        comments: normalizeInteger(issue?.comments, 0),
+        thumbsUp: normalizeInteger(issue?.thumbsUp, 0),
+        totalReactions: normalizeInteger(issue?.totalReactions, 0),
+        assignees: normalizeStringList(issue?.assignees),
+        labels: normalizeStringList(issue?.labels),
+        categories: normalizeStringList(issue?.categories),
+        categoryIds: normalizeStringList(issue?.categoryIds),
+        group: typeof issue?.group === "string" ? issue.group : "",
+        reason: typeof issue?.reason === "string" ? issue.reason : "",
+        score: normalizeInteger(issue?.score, 0),
+    };
+}
+
+function normalizeIssueDataList(issues) {
+    if (!Array.isArray(issues)) {
+        return [];
+    }
+
+    return issues.map(normalizeIssueData).filter(Boolean);
+}
+
+function normalizeFacetList(facets) {
+    if (!Array.isArray(facets)) {
+        return [];
+    }
+
+    return facets
+        .map((facet) => {
+            if (!facet || typeof facet !== "object") {
+                return null;
+            }
+
+            return {
+                id: typeof facet.id === "string" ? facet.id : "",
+                label: typeof facet.label === "string" ? facet.label : "",
+                count: normalizeInteger(facet.count, 0),
+                selected: facet.selected === true,
+            };
+        })
+        .filter((facet) => facet && facet.label);
+}
+
+function sliceItems(items, input, defaultLimit = 100) {
+    const offset = normalizeInteger(input?.offset, 0, { min: 0, max: items.length });
+    const limit = normalizeInteger(input?.limit, defaultLimit, { min: 0, max: 2_000 });
+    return {
+        offset,
+        limit,
+        total: items.length,
+        items: items.slice(offset, offset + limit),
+    };
+}
+
+function normalizeLiveView(input) {
+    const source = input && typeof input === "object" ? input : {};
+    const filters = source.filters && typeof source.filters === "object" ? source.filters : {};
+    const pagination = source.pagination && typeof source.pagination === "object" ? source.pagination : {};
+    const facets = source.facets && typeof source.facets === "object" ? source.facets : {};
+    const filteredIssues = normalizeIssueDataList(source.filteredIssues);
+    const pageIssues = normalizeIssueDataList(source.pageIssues);
+
+    return {
+        repo,
+        updatedAt: new Date().toISOString(),
+        cachePaths: issueCachePaths(),
+        filters: {
+            scope: normalizeScope(filters.scope),
+            query: typeof filters.query === "string" ? filters.query : "",
+            group: typeof filters.group === "string" ? filters.group : "all",
+            groupLabel: typeof filters.groupLabel === "string" ? filters.groupLabel : "",
+            sort: typeof filters.sort === "string" ? filters.sort : "created",
+            sortLabel: typeof filters.sortLabel === "string" ? filters.sortLabel : "",
+            showDismissed: normalizeBoolean(filters.showDismissed),
+            selectedAreaLabels: normalizeStringList(filters.selectedAreaLabels),
+            selectedCategories: normalizeStringList(filters.selectedCategories),
+            dateRange: normalizeDateRange(filters.dateRange),
+        },
+        pagination: {
+            page: normalizeInteger(pagination.page, 1, { min: 1 }),
+            pageSize: normalizePreferencePageSize(pagination.pageSize),
+            totalPages: normalizeInteger(pagination.totalPages, 1, { min: 1 }),
+            start: normalizeInteger(pagination.start, 0),
+            end: normalizeInteger(pagination.end, 0),
+            filteredTotal: normalizeInteger(pagination.filteredTotal, filteredIssues.length),
+            loadedTotal: normalizeInteger(pagination.loadedTotal, 0),
+        },
+        selection: {
+            selectedIssueNumbers: normalizeIssueNumberList(source.selection?.selectedIssueNumbers),
+            dismissedIssueNumbers: normalizeIssueNumberList(source.selection?.dismissedIssueNumbers),
+        },
+        facets: {
+            labels: normalizeFacetList(facets.labels),
+            categories: normalizeFacetList(facets.categories),
+        },
+        filteredIssues,
+        pageIssues,
+    };
 }
 
 function normalizePreferencePageSize(value, fallback = defaultIssueTriagePreferences.pageSize) {
@@ -892,6 +1038,101 @@ async function requestSimilarIssues(input) {
         title: issue.title,
         url: issue.url,
         messageId,
+    };
+}
+
+async function getIssueDataModel(input = {}) {
+    const scope = normalizeScope(input?.scope);
+    const mode = input?.mode === "delta" || input?.mode === "hard" ? input.mode : "cache";
+    const result = await fetchIssues(scope, { mode });
+    const requestedNumbers = normalizeIssueNumberList(input?.numbers);
+    const requestedNumberSet = new Set(requestedNumbers);
+    const issues = requestedNumberSet.size > 0
+        ? result.issues.filter((issue) => requestedNumberSet.has(issue.number))
+        : result.issues;
+    const sliced = sliceItems(normalizeIssueDataList(issues), input);
+
+    return {
+        repo,
+        scope,
+        query: result.query,
+        cachePath: issueCacheFilePath(scope),
+        cached: result.cached,
+        stale: result.stale,
+        refreshInProgress: result.refreshInProgress,
+        delta: result.delta,
+        fetchedAt: result.fetchedAt,
+        expiresAt: result.expiresAt,
+        total: sliced.total,
+        offset: sliced.offset,
+        limit: sliced.limit,
+        issues: sliced.items,
+    };
+}
+
+function getLiveView(instanceId) {
+    const view = liveViews.get(instanceId);
+    if (!view) {
+        throw new CanvasError("live_view_unavailable", "The issue triage board has not reported a live view yet. Open or refresh the canvas, then try again.");
+    }
+
+    return view;
+}
+
+function getLiveViewData(instanceId, input = {}) {
+    const view = getLiveView(instanceId);
+    const includeFilteredIssues = input?.includeFilteredIssues === true;
+    const filteredSlice = includeFilteredIssues ? sliceItems(view.filteredIssues, input) : null;
+
+    return {
+        repo: view.repo,
+        updatedAt: view.updatedAt,
+        cachePaths: view.cachePaths,
+        filters: view.filters,
+        pagination: view.pagination,
+        selection: view.selection,
+        facets: view.facets,
+        pageIssues: view.pageIssues,
+        filteredIssues: filteredSlice?.items,
+        filteredIssueOffset: filteredSlice?.offset,
+        filteredIssueLimit: filteredSlice?.limit,
+        filteredIssueTotal: view.filteredIssues.length,
+    };
+}
+
+function getFilteredIssueData(instanceId, input = {}) {
+    const view = getLiveView(instanceId);
+    const sliced = sliceItems(view.filteredIssues, input, 250);
+
+    return {
+        repo: view.repo,
+        updatedAt: view.updatedAt,
+        filters: view.filters,
+        pagination: view.pagination,
+        total: sliced.total,
+        offset: sliced.offset,
+        limit: sliced.limit,
+        issues: sliced.items,
+    };
+}
+
+function getFacetData(instanceId) {
+    const view = getLiveView(instanceId);
+    return {
+        repo: view.repo,
+        updatedAt: view.updatedAt,
+        filters: view.filters,
+        facets: view.facets,
+    };
+}
+
+function updateLiveView(instanceId, input) {
+    const view = normalizeLiveView(input);
+    liveViews.set(instanceId, view);
+    return {
+        updatedAt: view.updatedAt,
+        filteredTotal: view.filteredIssues.length,
+        pageTotal: view.pageIssues.length,
     };
 }
 
@@ -1770,6 +2011,9 @@ function renderHtml() {
         dateRangeMode: "default",
       };
       let refreshPollTimer = null;
+      let liveViewUpdateTimer = null;
+      let lastLiveViewPayload = "";
+      let liveViewWarningReported = false;
 
       const defaultRecentIssueCutoffDays = ${defaultRecentIssueCutoffDays};
       const dayMs = 86_400_000;
@@ -2378,6 +2622,124 @@ function renderHtml() {
         return issues;
       }
 
+      function issueForLiveView(issue) {
+        const categories = categoriesForIssue(issue);
+        return {
+          number: issue.number,
+          title: issue.title,
+          url: issue.url,
+          author: issue.author,
+          state: issue.state || "OPEN",
+          createdAt: issue.createdAt,
+          updatedAt: issue.updatedAt,
+          comments: issue.comments,
+          thumbsUp: issue.thumbsUp,
+          totalReactions: issue.totalReactions,
+          assignees: issue.assignees,
+          labels: issue.labels,
+          categories: categories.map((category) => category.label),
+          categoryIds: categories.map((category) => category.id),
+          group: issue.group,
+          reason: issue.reason,
+          score: issue.score,
+        };
+      }
+
+      function selectedOptionText(id) {
+        return el(id).selectedOptions[0]?.textContent || "";
+      }
+
+      function dateRangeForLiveView() {
+        const range = state.dateRange;
+        return {
+          initialized: range.initialized,
+          mode: state.dateRangeMode,
+          from: range.initialized ? dayToDate(range.from) : "",
+          to: range.initialized ? dayToDate(range.to) : "",
+          min: range.initialized ? dayToDate(range.min) : "",
+          max: range.initialized ? dayToDate(range.max) : "",
+        };
+      }
+
+      function facetsForLiveView() {
+        return {
+          labels: state.areaLabels.map((label) => ({
+            id: label,
+            label,
+            count: state.areaLabelCounts.get(label) || 0,
+            selected: state.selectedAreaLabels.has(label),
+          })),
+          categories: issueCategoryDefinitions.map((category) => ({
+            id: category.id,
+            label: category.label,
+            count: state.categoryCounts.get(category.id) || 0,
+            selected: state.selectedCategories.has(category.id),
+          })),
+        };
+      }
+
+      function buildLiveView(filtered, page) {
+        return {
+          filters: {
+            scope: state.scope,
+            query: el("search").value.trim(),
+            group: el("group").value,
+            groupLabel: selectedOptionText("group"),
+            sort: el("sort").value,
+            sortLabel: selectedOptionText("sort"),
+            showDismissed: el("showDismissed").checked,
+            selectedAreaLabels: [...state.selectedAreaLabels],
+            selectedCategories: [...state.selectedCategories],
+            dateRange: dateRangeForLiveView(),
+          },
+          pagination: {
+            page: state.page,
+            pageSize: state.pageSize,
+            totalPages: page.totalPages,
+            start: page.start,
+            end: page.end,
+            filteredTotal: filtered.length,
+            loadedTotal: state.issues.length,
+          },
+          selection: {
+            selectedIssueNumbers: [...state.selected],
+            dismissedIssueNumbers: [...state.dismissed],
+          },
+          facets: facetsForLiveView(),
+          filteredIssues: filtered.map(issueForLiveView),
+          pageIssues: page.issues.map(issueForLiveView),
+        };
+      }
+
+      function queueLiveViewUpdate(filtered, page) {
+        const payload = JSON.stringify(buildLiveView(filtered, page));
+        if (payload === lastLiveViewPayload) {
+          return;
+        }
+
+        lastLiveViewPayload = payload;
+        if (liveViewUpdateTimer) {
+          clearTimeout(liveViewUpdateTimer);
+        }
+
+        liveViewUpdateTimer = setTimeout(() => {
+          fetch("/api/view-state", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload,
+          }).then((response) => {
+            if (!response.ok) {
+              throw new Error(response.statusText);
+            }
+          }).catch((error) => {
+            if (!liveViewWarningReported) {
+              liveViewWarningReported = true;
+              reportPersistenceWarning("Live view state could not be shared with the agent.", error);
+            }
+          });
+        }, 100);
+      }
+
       function render() {
         configureTimeline(timelineFilteredIssues());
         populateCategoryFilter();
@@ -2414,6 +2776,7 @@ function renderHtml() {
         renderCategoryFilter();
         renderAreaFilter();
         renderTimelineHistogram();
+        queueLiveViewUpdate(issues, page);
       }
 
       function renderTable(issues) {
@@ -2775,7 +3138,7 @@ function renderHtml() {
 </html>`;
 }
 
-async function handleRequest(req, res) {
+async function handleRequest(instanceId, req, res) {
     try {
         const url = new URL(req.url ?? "/", "http://127.0.0.1");
 
@@ -2801,6 +3164,11 @@ async function handleRequest(req, res) {
 
         if (req.method === "PATCH" && url.pathname === "/api/preferences") {
             jsonResponse(res, 200, await updateIssueTriagePreferences(await readJsonBody(req)));
+            return;
+        }
+
+        if (req.method === "POST" && url.pathname === "/api/view-state") {
+            jsonResponse(res, 200, updateLiveView(instanceId, await readJsonBody(req)));
             return;
         }
 
@@ -2852,9 +3220,9 @@ async function handleRequest(req, res) {
     }
 }
 
-async function startServer() {
+async function startServer(instanceId) {
     const server = createServer((req, res) => {
-        void handleRequest(req, res);
+        void handleRequest(instanceId, req, res);
     });
 
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -2913,6 +3281,91 @@ copilotSession = await joinSession({
                             maybe: issues.filter((issue) => issue.group === "maybe").length,
                             keep: issues.filter((issue) => issue.group === "keep").length,
                         };
+                    },
+                },
+                {
+                    name: "get_issue_data_model",
+                    description: "Return cached issue data using the same issue model as the triage board.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            scope: {
+                                type: "string",
+                                enum: ["mine", "all"],
+                                default: "mine",
+                            },
+                            mode: {
+                                type: "string",
+                                enum: ["cache", "delta", "hard"],
+                                default: "cache",
+                            },
+                            numbers: {
+                                type: "array",
+                                items: { type: "integer" },
+                            },
+                            offset: {
+                                type: "integer",
+                                default: 0,
+                            },
+                            limit: {
+                                type: "integer",
+                                default: 100,
+                            },
+                        },
+                    },
+                    handler: async (ctx) => {
+                        return await getIssueDataModel(ctx.input);
+                    },
+                },
+                {
+                    name: "get_live_view",
+                    description: "Return the latest live browser view state, including active filters, facets, pagination, and visible issues.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            includeFilteredIssues: {
+                                type: "boolean",
+                                default: false,
+                            },
+                            offset: {
+                                type: "integer",
+                                default: 0,
+                            },
+                            limit: {
+                                type: "integer",
+                                default: 100,
+                            },
+                        },
+                    },
+                    handler: async (ctx) => {
+                        return getLiveViewData(ctx.instanceId, ctx.input);
+                    },
+                },
+                {
+                    name: "get_filtered_issues",
+                    description: "Return issues matching the current live filters in the triage board.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            offset: {
+                                type: "integer",
+                                default: 0,
+                            },
+                            limit: {
+                                type: "integer",
+                                default: 250,
+                            },
+                        },
+                    },
+                    handler: async (ctx) => {
+                        return getFilteredIssueData(ctx.instanceId, ctx.input);
+                    },
+                },
+                {
+                    name: "get_facets",
+                    description: "Return the latest live label and category facets with contextual counts and selected state.",
+                    handler: async (ctx) => {
+                        return getFacetData(ctx.instanceId);
                     },
                 },
                 {
@@ -2998,7 +3451,7 @@ copilotSession = await joinSession({
             open: async (ctx) => {
                 let entry = servers.get(ctx.instanceId);
                 if (!entry) {
-                    entry = await startServer();
+                    entry = await startServer(ctx.instanceId);
                     servers.set(ctx.instanceId, entry);
                 }
 
@@ -3012,6 +3465,7 @@ copilotSession = await joinSession({
                 const entry = servers.get(ctx.instanceId);
                 if (entry) {
                     servers.delete(ctx.instanceId);
+                    liveViews.delete(ctx.instanceId);
                     await new Promise((resolve) => entry.server.close(() => resolve()));
                 }
             },
