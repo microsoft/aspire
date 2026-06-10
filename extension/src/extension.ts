@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as https from 'https';
 
 import { addCommand } from './commands/add';
 import { RpcClient } from './server/rpcClient';
@@ -364,7 +365,7 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(appHostLaunchService.onDidChangeLaunchingState(fireStateChanged));
   context.subscriptions.push(appHostTreeProvider.onDidChangeStoppingState(fireStateChanged));
   context.subscriptions.push(aspireExtensionContext.onDidChangeDebugSessions(fireStateChanged));
-  const e2eStateFileBridge = createE2eStateFileBridge(context, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event);
+  const e2eStateFileBridge = createE2eStateFileBridge(context, dcpServer, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event);
   context.subscriptions.push(e2eStateFileBridge);
 
   const api = createExtensionApi(context, rpcServer, dcpServer, dataRepository, appHostLaunchService, appHostTreeProvider, onDidChangeStateEmitter.event);
@@ -499,6 +500,7 @@ function createStateSnapshot(
 
 function createE2eStateFileBridge(
   context: vscode.ExtensionContext,
+  dcpServer: AspireDcpServer,
   dataRepository: AppHostDataRepository,
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider,
@@ -618,7 +620,7 @@ function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, appHostTreeProvider, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, dcpServer, appHostTreeProvider, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', result };
           }
           else {
@@ -717,6 +719,7 @@ function getE2eErrorMessage(error: unknown): string {
 
 async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
+  dcpServer: AspireDcpServer,
   appHostTreeProvider: AspireAppHostTreeProvider,
   command: AspireExtensionE2EControlCommand,
   markStarted: () => void
@@ -905,6 +908,10 @@ async function executeE2eControlCommand(
       markStarted();
       return context.extension.packageJSON;
     }
+    case 'getDcpRunSessionInfo': {
+      markStarted();
+      return await getDcpRunSessionInfoForE2E(dcpServer);
+    }
     case 'getExtensionFileStatus': {
       markStarted();
       return getExtensionFileStatus(context, command.relativePaths);
@@ -1021,6 +1028,47 @@ function getE2eBreakpoints(): Array<{ filePath: string; line: number; enabled: b
       line: breakpoint.location.range.start.line,
       enabled: breakpoint.enabled,
     }));
+}
+
+// Used by the E2E bridge to verify the packaged extension's externally-visible
+// DCP /info response, not just the in-process capability helper.
+async function getDcpRunSessionInfoForE2E(dcpServer: AspireDcpServer): Promise<unknown> {
+  const { address, token } = dcpServer.connectionInfo;
+
+  return await new Promise((resolve, reject) => {
+    const request = https.get(`https://${address}/info`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'microsoft-developer-dcp-instance-id': 'aspire-extension-e2e',
+      },
+      // The E2E bridge is opt-in via ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE and calls
+      // the extension's loopback-only DCP server, which uses a per-session
+      // self-signed certificate.
+      rejectUnauthorized: false,
+    }, response => {
+      const chunks: Buffer[] = [];
+      response.on('data', chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      response.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        if (response.statusCode !== 200) {
+          reject(new Error(`DCP /info returned HTTP ${response.statusCode}: ${body}`));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(body));
+        }
+        catch (error) {
+          reject(error);
+        }
+      });
+    });
+
+    request.on('error', reject);
+    request.setTimeout(10000, () => {
+      request.destroy(new Error('DCP /info request timed out'));
+    });
+  });
 }
 
 function getExtensionFileStatus(context: vscode.ExtensionContext, relativePaths: readonly string[]): Record<string, boolean> {

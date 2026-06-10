@@ -2,7 +2,9 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 import * as path from 'path';
+import { getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import { getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
 import { azureFunctionsNodeDebuggerExtension } from '../debugger/languages/azureFunctions';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import { AspireResourceExtendedDebugConfiguration, AzureFunctionsNodeLaunchConfiguration } from '../dcp/types';
@@ -11,6 +13,13 @@ suite('Azure Functions Node Debugger Tests', () => {
     const fakeAspireDebugSession = {} as AspireDebugSession;
 
     teardown(() => sinon.restore());
+
+    test('advertises Node Functions support when Node debugging is available', () => {
+        const capabilities = getSupportedCapabilities();
+
+        assert.ok(capabilities.includes('azure-functions-node'));
+        assert.ok(getResourceDebuggerExtensions().some(extension => extension.resourceType === 'azure-functions-node'));
+    });
 
     test('starts functions host task and attaches to debug-only node inspector port', async () => {
         const taskExecution = { terminate: sinon.spy() } as unknown as vscode.TaskExecution;

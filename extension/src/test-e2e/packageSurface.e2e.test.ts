@@ -41,6 +41,11 @@ interface DiagnosticResult {
     code?: string | number;
 }
 
+interface DcpRunSessionInfo {
+    protocols_supported?: string[];
+    supported_launch_configurations?: string[];
+}
+
 suite('Aspire package contribution surface E2E', function () {
     this.timeout(240000);
 
@@ -58,6 +63,7 @@ suite('Aspire package contribution surface E2E', function () {
         const sourcePackage = readSourcePackageJson();
         const installedPackage = (await executeE2eControlCommand({ name: 'getExtensionPackageJson' })).result as PackageJson;
         const registeredCommands = (await executeE2eControlCommand({ name: 'getRegisteredAspireCommands' })).result as string[];
+        const dcpRunSessionInfo = (await executeE2eControlCommand({ name: 'getDcpRunSessionInfo' })).result as DcpRunSessionInfo;
 
         const sourceCommandIds = getPackageCommandIds(sourcePackage);
         const installedCommandIds = getPackageCommandIds(installedPackage);
@@ -83,6 +89,7 @@ suite('Aspire package contribution surface E2E', function () {
         assert.ok(installedPackage.activationEvents?.includes('onCommand:aspire-vscode.installCliStable'));
         assert.ok(installedPackage.activationEvents?.includes('onCommand:aspire-vscode.verifyCliInstalled'));
         assert.ok(getWalkthroughCompletionEvents(installedPackage).includes('onCommand:aspire-vscode.verifyCliInstalled'));
+        assert.ok(dcpRunSessionInfo.supported_launch_configurations?.includes('azure-functions-node'));
     });
 
     test('keeps hidden menus, debugger schema, welcome states, colors, and packaged assets intact', async () => {
