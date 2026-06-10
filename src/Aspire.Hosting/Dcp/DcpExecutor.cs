@@ -861,7 +861,9 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     private static string GetPersistedProxylessEndpointPortKey(IResource resource, EndpointAnnotation endpoint)
     {
-        return $"Aspire:ProxylessEndpointPorts:{resource.Name}:{endpoint.Name}";
+        // Schema suggested by https://github.com/microsoft/aspire/issues/13597:
+        // Resources:<resource-name>:<endpoint-name>:port
+        return $"Resources:{resource.Name}:{endpoint.Name}:port";
     }
 
     private static void ValidateEndpointBeforeDynamicPublicPortAllocation(IResource resource, EndpointAnnotation endpoint)

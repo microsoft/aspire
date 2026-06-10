@@ -1023,7 +1023,7 @@ public class DcpExecutorTests
 
         var svc = kubernetesService.CreatedResources.OfType<Service>().Single(s => s.Name() == "CoolProgram");
         Assert.Equal(allocatedPort, svc.Status?.EffectivePort);
-        Assert.Equal(allocatedPort.ToString(CultureInfo.InvariantCulture), userSecretsManager.Secrets["Aspire:ProxylessEndpointPorts:CoolProgram:http"]);
+        Assert.Equal(allocatedPort.ToString(CultureInfo.InvariantCulture), userSecretsManager.Secrets["Resources:CoolProgram:http:port"]);
     }
 
     [Fact]
@@ -1059,7 +1059,7 @@ public class DcpExecutorTests
         var svc = kubernetesService.CreatedResources.OfType<Service>().Single(s => s.Name() == "database");
         Assert.Equal(allocatedPort, svc.Status?.EffectivePort);
         Assert.Equal(allocatedPort, svc.Spec.Port);
-        Assert.Equal(allocatedPort.ToString(CultureInfo.InvariantCulture), userSecretsManager.Secrets["Aspire:ProxylessEndpointPorts:database:http"]);
+        Assert.Equal(allocatedPort.ToString(CultureInfo.InvariantCulture), userSecretsManager.Secrets["Resources:database:http:port"]);
     }
 
     [Fact]
@@ -1196,7 +1196,7 @@ public class DcpExecutorTests
         var configDict = new Dictionary<string, string?>
         {
             ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-            ["Aspire:ProxylessEndpointPorts:PersistentProgram:http"] = persistedPort.ToString(CultureInfo.InvariantCulture)
+            ["Resources:PersistentProgram:http:port"] = persistedPort.ToString(CultureInfo.InvariantCulture)
         };
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
         var userSecretsManager = new MockUserSecretsManager();
