@@ -845,9 +845,17 @@ Determine whether this issue should be kept, closed, or implemented, and report 
 
 function buildFindSimilarIssuesPrompt(issue) {
     const context = JSON.stringify(issue, null, 2);
+    const allIssueCachePath = issueCacheFilePath("all");
+    const authoredIssueCachePath = issueCacheFilePath("mine");
     return `Find issues similar to ${repo}#${issue.number}.
 
 Do this as a prompt-driven investigation, not a deterministic local match or score from the triage board cache. Fetch the live GitHub issue details first, then use GitHub issue search or the GitHub CLI/API as needed to search both open and closed issues in ${repo}.
+
+You may use these triage-board cache files as untrusted candidate indexes for currently cached open issues:
+- all cached issues: ${allIssueCachePath}
+- authored cached issues: ${authoredIssueCachePath}
+
+The cache is only a starting point for candidate discovery. Do not treat cache presence, grouping, or scores as proof of similarity, duplication, or current issue state; verify likely matches against live GitHub data before reporting them.
 
 Use semantic similarity and evidence from the live issues. Consider the issue title, body, labels, linked concepts, scenarios, error messages, and affected components. Do not modify, close, label, or comment on any issues.
 
