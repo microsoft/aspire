@@ -24,33 +24,42 @@ class Aspire < Formula
     depends_on "llvm" => :build
   end
 
-  # Per-RID .NET SDK builds, vendored. The version (__SDK_VERSION__) is sourced
-  # from the release tag's global.json; URLs and SHA256s are resolved per release
-  # by eng/homebrew-core/generate-formula.sh against dotnet's release metadata.
+  # Vendored .NET SDK, pinned to __SDK_VERSION__ (sourced from the release tag's
+  # global.json). URLs and SHA256s are resolved per release against dotnet's
+  # release metadata and substituted into the placeholders below.
   #
   # We vendor because homebrew-core's `dotnet` formula tracks the 1xx feature
   # band only (livecheck regex `/^v?(\d+\.\d+\.1\d\d)$/i`); we develop and test
   # against the SDK version pinned in global.json (currently 2xx band). Shipping
   # a binary built against a different SDK than upstream tests would be a real
   # correctness risk for production releases.
-  resource "dotnet-sdk-osx-arm64" do
-    url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-osx-arm64.tar.gz"
-    sha256 "__SHA_OSX_ARM64__"
-  end
-
-  resource "dotnet-sdk-osx-x64" do
-    url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-osx-x64.tar.gz"
-    sha256 "__SHA_OSX_X64__"
-  end
-
-  resource "dotnet-sdk-linux-x64" do
-    url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-linux-x64.tar.gz"
-    sha256 "__SHA_LINUX_X64__"
-  end
-
-  resource "dotnet-sdk-linux-arm64" do
-    url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-linux-arm64.tar.gz"
-    sha256 "__SHA_LINUX_ARM64__"
+  #
+  # A single resource with per-platform url/sha256 (the homebrew-core idiom,
+  # e.g. crystal.rb's `boot` resource) means brew fetches only the current
+  # platform's SDK (~230 MB) rather than all four RIDs (~950 MB), which is what
+  # separate top-level resource blocks would force since brew downloads every
+  # declared resource before `install` runs.
+  resource "dotnet-sdk" do
+    on_macos do
+      on_arm do
+        url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-osx-arm64.tar.gz"
+        sha256 "__SHA_OSX_ARM64__"
+      end
+      on_intel do
+        url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-osx-x64.tar.gz"
+        sha256 "__SHA_OSX_X64__"
+      end
+    end
+    on_linux do
+      on_arm do
+        url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-linux-arm64.tar.gz"
+        sha256 "__SHA_LINUX_ARM64__"
+      end
+      on_intel do
+        url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-linux-x64.tar.gz"
+        sha256 "__SHA_LINUX_X64__"
+      end
+    end
   end
 
   def install
@@ -58,10 +67,12 @@ class Aspire < Formula
     os   = OS.mac? ? "osx" : "linux"
     rid  = "#{os}-#{arch}"
 
-    # Stage the per-RID SDK into the buildpath so the build runs from a known
+    # Stage the vendored SDK into the buildpath so the build runs from a known
     # toolset. `resource(...).stage` is the only step that must stay in Ruby
-    # (it's Homebrew DSL); everything else is delegated below.
-    resource("dotnet-sdk-#{rid}").stage do
+    # (it's Homebrew DSL); everything else is delegated below. The `dotnet-sdk`
+    # resource resolves to the current platform's SDK via its on_macos/on_linux
+    # + on_arm/on_intel guards.
+    resource("dotnet-sdk").stage do
       (buildpath/"dotnet-sdk").install Dir["./*"]
     end
 
