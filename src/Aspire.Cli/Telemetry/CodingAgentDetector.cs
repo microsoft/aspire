@@ -19,7 +19,7 @@ internal sealed class CodingAgentDetector(IConfiguration configuration) : ICodin
         new("claude", ["CLAUDECODE", "CLAUDE_CODE", "CLAUDE_CODE_ENTRYPOINT"]),
         new("cursor", ["CURSOR_EDITOR", "CURSOR_AI", "CURSOR_TRACE_ID", "CURSOR_AGENT"]),
         new("gemini", ["GEMINI_CLI"]),
-        new("copilot", ["GITHUB_COPILOT_CLI_MODE", "GH_COPILOT_WORKING_DIRECTORY", "COPILOT_CLI", "COPILOT_AGENT", "COPILOT_MODEL", "COPILOT_ALLOW_ALL", "COPILOT_GITHUB_TOKEN"]),
+        new("copilot-cli", ["COPILOT_CLI", "GITHUB_COPILOT_CLI_MODE", "GH_COPILOT_WORKING_DIRECTORY", "COPILOT_MODEL", "COPILOT_ALLOW_ALL", "COPILOT_GITHUB_TOKEN"]),
         new("codex", ["CODEX_CLI", "CODEX_SANDBOX", "CODEX_CI", "CODEX_THREAD_ID"]),
         new("aider", ["OR_APP_NAME"], "Aider"),
         new("plandex", ["OR_APP_NAME"], "plandex"),
