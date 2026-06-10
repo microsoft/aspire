@@ -4,12 +4,13 @@
 #pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService is for evaluation purposes only.
 
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -35,7 +36,43 @@ public class KubernetesServiceTests
 
         await Task.Delay(300, cts.Token);
 
-        using var server = new TestDcpApiServer();
+        await using var server = await TestDcpApiServer.StartAsync(cts.Token);
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var result = await listTask;
+        Assert.Empty(result);
+    }
+
+    // Verifies that establishing the connection survives a partially-written kubeconfig: when the file exists
+    // but DCP has only flushed part of it (so it does not yet parse as a valid kubeconfig), the read is retried
+    // and the operation succeeds once the complete, valid kubeconfig is written.
+    [Fact]
+    public async Task ExecuteWithRetry_EstablishesConnection_WhenKubeconfigInitiallyPartiallyWritten()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+
+        // Simulate DCP having flushed only the first part of the kubeconfig. The content is cut off mid-way
+        // through a double-quoted scalar, which is a faithful "half-written file" and deterministically fails
+        // YAML parsing. The production read pipeline handles that (KubeConfigException/YamlException/IOException)
+        // and retries instead of caching a broken client.
+        File.WriteAllText(kubeconfigPath, """
+            apiVersion: v1
+            kind: Config
+            clusters:
+            - name: dcp
+              cluster:
+                server: "http://127.0.0.1
+            """);
+
+        var listTask = service.ListAsync<Container>(cancellationToken: cts.Token);
+
+        await Task.Delay(300, cts.Token);
+
+        await using var server = await TestDcpApiServer.StartAsync(cts.Token);
         WriteKubeconfig(kubeconfigPath, server.Port);
 
         var result = await listTask;
@@ -95,102 +132,56 @@ public class KubernetesServiceTests
         File.Move(tempPath, path, overwrite: true);
     }
 
-    private static int GetFreePort()
-    {
-        // Bind to port 0 to let the OS pick a free port, then release it. There is a small race before the
-        // port is (intentionally, for the dead-port case) left unused, which is acceptable for a loopback test.
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        try
-        {
-            return ((IPEndPoint)listener.LocalEndpoint).Port;
-        }
-        finally
-        {
-            listener.Stop();
-        }
-    }
-
     // A minimal stand-in for the DCP API server. It answers every request with an empty Kubernetes list, which
     // is enough for ListAsync<Container>() to deserialize successfully.
-    private sealed class TestDcpApiServer : IDisposable
+    //
+    // It runs a real Kestrel server bound to port 0 so the OS assigns a free port that Kestrel actually binds and
+    // holds for the lifetime of the server. The bound port is read back after startup. This avoids the classic
+    // "probe a free port then release it and hope nobody grabs it before we rebind" race.
+    private sealed class TestDcpApiServer : IAsyncDisposable
     {
-        private readonly HttpListener _listener;
-        private readonly CancellationTokenSource _cts = new();
-        private readonly Task _loop;
+        private readonly WebApplication _app;
 
-        public TestDcpApiServer()
+        private TestDcpApiServer(WebApplication app, int port)
         {
-            Port = GetFreePort();
-            _listener = new HttpListener();
-            _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
-            _listener.Start();
-            _loop = Task.Run(ProcessRequestsAsync);
+            _app = app;
+            Port = port;
         }
 
         public int Port { get; }
 
-        private async Task ProcessRequestsAsync()
+        public static async Task<TestDcpApiServer> StartAsync(CancellationToken cancellationToken = default)
         {
-            while (!_cts.IsCancellationRequested)
-            {
-                HttpListenerContext context;
-                try
-                {
-                    context = await _listener.GetContextAsync();
-                }
-                catch (Exception) when (_cts.IsCancellationRequested)
-                {
-                    return;
-                }
-                catch (HttpListenerException)
-                {
-                    return;
-                }
-                catch (ObjectDisposedException)
-                {
-                    return;
-                }
+            var builder = WebApplication.CreateSlimBuilder();
+            // Keep the test output clean; the fake server's logs are noise.
+            builder.Logging.ClearProviders();
+            // Port 0 lets the OS pick a free port that Kestrel binds and holds. After StartAsync the addresses
+            // feature (exposed via app.Urls) is rewritten with the resolved address, so we can read the real port.
+            builder.WebHost.UseUrls("http://127.0.0.1:0");
 
-                try
-                {
-                    var body = Encoding.UTF8.GetBytes("""{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"ContainerList","items":[]}""");
-                    context.Response.StatusCode = (int)HttpStatusCode.OK;
-                    context.Response.ContentType = "application/json";
-                    context.Response.ContentLength64 = body.Length;
-                    await context.Response.OutputStream.WriteAsync(body);
-                    context.Response.OutputStream.Close();
-                }
-                catch
-                {
-                    // Ignore failures writing the response; the test's retry loop will simply try again.
-                }
-            }
+            var app = builder.Build();
+
+            // Answer every request with an empty container list.
+            app.Run(async context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status200OK;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("""{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"ContainerList","items":[]}""");
+            });
+
+            await app.StartAsync(cancellationToken).ConfigureAwait(false);
+
+            // e.g. "http://127.0.0.1:54321" -> 54321
+            var address = app.Urls.First();
+            var port = new Uri(address).Port;
+
+            return new TestDcpApiServer(app, port);
         }
 
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
-            _cts.Cancel();
-            try
-            {
-                _listener.Stop();
-                _listener.Close();
-            }
-            catch
-            {
-                // Best effort shutdown.
-            }
-
-            try
-            {
-                _loop.Wait(TimeSpan.FromSeconds(5));
-            }
-            catch
-            {
-                // Best effort shutdown.
-            }
-
-            _cts.Dispose();
+            await _app.StopAsync().ConfigureAwait(false);
+            await _app.DisposeAsync().ConfigureAwait(false);
         }
     }
 }
