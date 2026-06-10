@@ -481,7 +481,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             return await resiliencePipeline.ExecuteAsync(async (cancellationToken) =>
             {
                 // Establish (or re-establish) the connection to DCP inside the retry loop,
-                // to guard against a failure from partially-written kubeconfig.
+                // to guard against a failure from missing or partially-written kubeconfig.
                 var clientReady = await EnsureKubernetesAsync(cancellationToken).ConfigureAwait(false);
                 if (clientReady.Initialized)
                 {
