@@ -8,7 +8,6 @@ using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
-using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
@@ -103,25 +102,25 @@ public sealed partial class LogViewer
     {
         if (_logsChanged)
         {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
+            //await JS.InvokeVoidAsync("resetContinuousScrollPosition");
             _logsChanged = false;
         }
         if (firstRender)
         {
             Logger.LogDebug("Initializing log viewer.");
 
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
+            //await JS.InvokeVoidAsync("initializeContinuousScroll");
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
     }
 
     private void OnBrowserResize(object? o, EventArgs args)
     {
-        InvokeAsync(async () =>
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-        });
+        //InvokeAsync(async () =>
+        //{
+        //    await JS.InvokeVoidAsync("resetContinuousScrollPosition");
+        //    await JS.InvokeVoidAsync("initializeContinuousScroll");
+        //});
     }
 
     private string GetDisplayTimestamp(DateTimeOffset timestamp)

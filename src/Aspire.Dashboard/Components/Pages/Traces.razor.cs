@@ -20,7 +20,6 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -273,15 +272,19 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         {
             StateHasChanged();
         }
+        if (_dataGrid != null && FluentDataGridHelper<OtlpTrace>.TrySetAnchorModeEnd(_dataGrid))
+        {
+            StateHasChanged();
+        }
 
         if (_resourceChanged)
         {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
+            //await JS.InvokeVoidAsync("resetContinuousScrollPosition");
             _resourceChanged = false;
         }
         if (firstRender)
         {
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
+            //await JS.InvokeVoidAsync("initializeContinuousScroll");
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
     }
@@ -290,8 +293,8 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     {
         InvokeAsync(async () =>
         {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
+            //await JS.InvokeVoidAsync("resetContinuousScrollPosition");
+            //await JS.InvokeVoidAsync("initializeContinuousScroll");
         });
     }
 

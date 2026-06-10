@@ -19,7 +19,13 @@
                     <span>@Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsFound)]</span>
                 </div>
             }
-            <Virtualize @ref="VirtualizeRef" ItemsProvider="@GetItems" ItemSize="20" OverscanCount="200" TItem="LogEntry">
+            <Virtualize @ref="VirtualizeRef"
+                        ItemsProvider="@GetItems"
+                        ItemComparer="@(EqualityComparer<LogEntry>.Default)"
+                        ItemSize="20"
+                        OverscanCount="200"
+                        TItem="LogEntry"
+                        AnchorMode="VirtualizeAnchorMode.End">
                 @if (context.Pause is { } pause)
                 {
                     // If this is a previous pause but no logs were obtained during the pause, we don't need to show anything.

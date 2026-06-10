@@ -439,15 +439,19 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         {
             StateHasChanged();
         }
+        if (_dataGrid != null && FluentDataGridHelper<OtlpLogEntry>.TrySetAnchorModeEnd(_dataGrid))
+        {
+            StateHasChanged();
+        }
 
         if (_resourceChanged)
         {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
+            //await JS.InvokeVoidAsync("resetContinuousScrollPosition");
             _resourceChanged = false;
         }
         if (firstRender)
         {
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
+            //await JS.InvokeVoidAsync("initializeContinuousScroll");
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
     }
@@ -456,8 +460,8 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         InvokeAsync(async () =>
         {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
+            //await JS.InvokeVoidAsync("resetContinuousScrollPosition");
+            //await JS.InvokeVoidAsync("initializeContinuousScroll");
         });
     }
 
