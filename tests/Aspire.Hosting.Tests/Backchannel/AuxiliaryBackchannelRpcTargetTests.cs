@@ -332,6 +332,50 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_RedactsSecretParameterValuesInEnvironmentVariables()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddParameter("dbpassword", "s3cr3t-value", secret: true);
+        builder.AddParameter("region", "public-value", secret: false);
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables = [
+                new EnvironmentVariableSnapshot("DB_PASSWORD", "s3cr3t-value", true),
+                new EnvironmentVariableSnapshot("REGION", "public-value", true),
+                new EnvironmentVariableSnapshot("PLAIN_VAR", "plain-value", true)
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result, r => r.Name == "myresource");
+
+        // The value that matches the secret parameter must be redacted; other values are untouched.
+        var dbPassword = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "DB_PASSWORD");
+        Assert.Null(dbPassword.Value);
+        var region = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "REGION");
+        Assert.Equal("public-value", region.Value);
+        var plainVar = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "PLAIN_VAR");
+        Assert.Equal("plain-value", plainVar.Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_MapsNonStringPropertiesAsStringsForLegacyCallers()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

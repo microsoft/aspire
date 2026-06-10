@@ -875,12 +875,14 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             })
             .ToArray();
 
-        // Build environment variables
+        // Build environment variables. Values that match a secret parameter's value are
+        // redacted so secrets don't leak through clients (e.g. aspire describe --format json).
+        var secretParameterValues = GetResolvedSecretParameterValues();
         var environmentVariables = snapshot.EnvironmentVariables
             .Select(e => new ResourceSnapshotEnvironmentVariable
             {
                 Name = e.Name,
-                Value = e.Value,
+                Value = e.Value is not null && secretParameterValues.Contains(e.Value) ? null : e.Value,
                 IsFromSpec = e.IsFromSpec
             })
             .ToArray();
@@ -944,6 +946,55 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             McpServer = mcpServer,
             Commands = commands
         };
+    }
+
+    /// <summary>
+    /// Collects the resolved values of secret parameters in the application model so they can
+    /// be redacted from data sent to clients. Only values that have already been resolved are
+    /// returned; this never triggers parameter value resolution.
+    /// </summary>
+    private HashSet<string> GetResolvedSecretParameterValues()
+    {
+        var secretValues = new HashSet<string>(StringComparer.Ordinal);
+
+        if (serviceProvider.GetService<DistributedApplicationModel>() is not { } appModel)
+        {
+            return secretValues;
+        }
+
+        foreach (var parameter in appModel.Resources.OfType<ParameterResource>())
+        {
+            if (!parameter.Secret)
+            {
+                continue;
+            }
+
+            if (parameter.WaitForValueTcs is { } waitForValueTcs)
+            {
+                // Run mode: peek at the resolved value without waiting for resolution.
+                if (waitForValueTcs.Task is { IsCompletedSuccessfully: true } valueTask &&
+                    valueTask.Result is { Length: > 0 } value)
+                {
+                    secretValues.Add(value);
+                }
+            }
+            else
+            {
+                try
+                {
+                    if (parameter.ValueInternal is { Length: > 0 } value)
+                    {
+                        secretValues.Add(value);
+                    }
+                }
+                catch
+                {
+                    // The parameter's value isn't available (e.g. missing configuration); nothing to redact.
+                }
+            }
+        }
+
+        return secretValues;
     }
 
     private static ResourceSnapshotCommandArgument CreateCommandArgument(InteractionInput input)
