@@ -130,7 +130,7 @@ public static class RedisBuilderExtensions
 
                 if (redis.TryGetAnnotationsOfType<RedisModuleAnnotation>(out var moduleAnnotations))
                 {
-                    foreach (var moduleAnnotation in moduleAnnotations)
+                    foreach (var moduleAnnotation in moduleAnnotations.Distinct())
                     {
                         additionalArgs.Add("--loadmodule");
                         additionalArgs.Add(moduleAnnotation.Path);
@@ -587,6 +587,13 @@ public static class RedisBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="path">The path to the Redis module <c>.so</c> file on the container. This should be an absolute path.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// This method loads a Redis module from a container path. The path must point to a <c>.so</c> file that exists in the Redis container image.
+    /// <code lang="csharp">
+    /// var cache = builder.AddRedis("cache")
+    ///                    .WithModule("/usr/local/lib/redis/modules/redisearch.so");
+    /// </code>
+    /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the canonical withModule export with a RedisNativeModule|string union.")]
     public static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, string path)
     {

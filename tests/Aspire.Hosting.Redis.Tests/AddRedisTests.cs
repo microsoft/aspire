@@ -693,6 +693,20 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("--loadmodule /usr/local/lib/redis/modules/redisearch.so --loadmodule /opt/redis/custom-module.so", args);
     }
 
+    [Fact]
+    public async Task WithModuleDeduplicatesCommandLineArgsForSameModule()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisNativeModule.Json)
+            .WithModule("/usr/local/lib/redis/modules/rejson.so");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource);
+
+        Assert.Equal(1, args.Count(arg => arg == "--loadmodule"));
+        Assert.Equal(1, args.Count(arg => arg == "/usr/local/lib/redis/modules/rejson.so"));
+    }
+
     private static async Task<string> GetCommandLineArgs(IResourceBuilder<RedisResource> builder)
     {
         var args = await ArgumentEvaluator.GetArgumentListAsync(builder.Resource);
