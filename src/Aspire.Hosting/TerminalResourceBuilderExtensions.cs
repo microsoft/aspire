@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
@@ -17,6 +18,8 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class TerminalResourceBuilderExtensions
 {
+    private const string TerminalExperimentalDiagnosticId = "ASPIRETERMINAL001";
+
     /// <summary>
     /// Configures a resource to expose an interactive terminal session.
     /// </summary>
@@ -59,6 +62,7 @@ public static class TerminalResourceBuilderExtensions
     ///     });
     /// </code>
     /// </example>
+    [Experimental(TerminalExperimentalDiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Polyglot app hosts use the parameterless withTerminal dispatcher export.")]
     public static IResourceBuilder<T> WithTerminal<T>(this IResourceBuilder<T> builder, Action<TerminalOptions>? configure = null)
         where T : IResource
@@ -113,7 +117,9 @@ public static class TerminalResourceBuilderExtensions
     [AspireExport("withTerminal")]
     internal static IResourceBuilder<T> WithTerminalForPolyglot<T>(this IResourceBuilder<T> builder)
         where T : IResource
+#pragma warning disable ASPIRETERMINAL001 // Internal dispatcher into the experimental API.
         => builder.WithTerminal();
+#pragma warning restore ASPIRETERMINAL001
 
     /// <summary>
     /// Reads the parent's final <see cref="ReplicaAnnotation"/> and creates one

@@ -1,6 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+// WithTerminal() is currently experimental (ASPIRETERMINAL001). Suppressed here
+// because this playground project intentionally exercises the experimental API.
+#pragma warning disable ASPIRETERMINAL001
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 // A multi-replica project that calls `WithTerminal()` so each replica gets its

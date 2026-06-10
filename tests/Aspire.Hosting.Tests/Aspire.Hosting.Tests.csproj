@@ -5,7 +5,7 @@
     <!--
       CS8002: Referenced assembly does not have a strong name. KubernetesClient package is unsigned, we ignore that warning on purpose
     -->
-    <NoWarn>$(NoWarn);CS8002</NoWarn>
+    <NoWarn>$(NoWarn);CS8002;ASPIRETERMINAL001</NoWarn>
 
     <!-- Do not run tests in Helix at all -->
     <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>

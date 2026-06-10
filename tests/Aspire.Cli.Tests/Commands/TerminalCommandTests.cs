@@ -17,7 +17,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     public async Task TerminalCommand_Help_Works()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -33,7 +33,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         // The 'terminal' parent command is non-runnable; it prints help when invoked
         // alone and returns InvalidCommand to mirror the DashboardCommand pattern.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -47,7 +47,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     public async Task TerminalAttachCommand_WhenNoResourceArgument_FailsParsing()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -61,7 +61,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     public async Task TerminalCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -294,7 +294,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     public async Task TerminalPsCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -633,6 +633,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled];
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
             configureOptions?.Invoke(options);
         });
