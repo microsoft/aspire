@@ -774,11 +774,10 @@ async function executeE2eControlCommand(
       return await commandPromise;
     }
     case 'publishAppHost': {
-      const element = getAppHostElement(appHostTreeProvider, command.appHostPath) as { appHostPath?: string };
-      if (!element.appHostPath) {
-        throw new Error('No AppHost path is available for the E2E control command.');
+      if (!command.appHostPath) {
+        throw new Error('Aspire extension E2E publishAppHost requires appHostPath.');
       }
-      const commandPromise = appHostLaunchService.launch(element.appHostPath, 'publish', true);
+      const commandPromise = appHostLaunchService.launch(command.appHostPath, 'publish', true);
       markStarted();
       return await commandPromise;
     }
@@ -789,7 +788,6 @@ async function executeE2eControlCommand(
       await commandPromise;
       return getActiveEditorInfo();
     }
-
     case 'viewAppHostSource': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.viewAppHostSource', element);
