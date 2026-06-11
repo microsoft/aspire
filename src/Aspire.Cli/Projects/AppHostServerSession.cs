@@ -180,6 +180,13 @@ internal sealed class AppHostServerSession : IAsyncDisposable
     /// <exception cref="ObjectDisposedException">Thrown if the session has been disposed.</exception>
     public Task<int> StartAsync()
     {
+        // Captures the lifetime of a failed start so we can dispose it AFTER releasing
+        // _startGate (DisposeAsync of an IsolatedProcess can synchronously drain pipe pumps
+        // and we don't want to pin the gate for that duration — see catch block below).
+        IAsyncDisposable? failedLifetime = null;
+        Exception? failureToRethrow = null;
+        TaskCompletionSource<int>? completionToReturn = null;
+
         // Hold _startGate across the entire startup body — env build, _project.Run, field
         // publication, Exited wiring, and stop registration. DisposeAsync's top-of-method lock
         // then either runs before us (and StartAsync sees _disposed and throws) or after us
@@ -307,26 +314,48 @@ internal sealed class AppHostServerSession : IAsyncDisposable
                 {
                     // Best effort — the lifetime disposal below handles the handles either way.
                 }
+                // Defer the lifetime disposal until after we exit _startGate. Disposal of
+                // IsolatedProcess can drain pipe pumps synchronously, and we don't want to pin
+                // the start gate for an unbounded duration (a concurrent DisposeAsync would
+                // queue behind us). The Kill above unblocks the pipes so the disposal should
+                // be quick, but the gate-release-then-dispose ordering is the safe shape.
+                failedLifetime = result.ProcessLifetime;
+                _processLifetime = null;
+                _serverProcess = null;
+                (_project as IDisposable)?.Dispose();
+                completion.TrySetException(ex);
+                failureToRethrow = ex;
+            }
+
+            if (failureToRethrow is null)
+            {
+                completionToReturn = completion;
+            }
+        }
+
+        if (failureToRethrow is not null)
+        {
+            if (failedLifetime is not null)
+            {
                 try
                 {
-                    // Synchronously wait for the disposal: StartAsync's contract is synchronous
-                    // until the returned Task is observed, and the cleanup window for the freshly
-                    // spawned child should be milliseconds (the kill above unblocks the pipes).
-                    result.ProcessLifetime.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    // Synchronously wait for disposal: StartAsync's contract is synchronous
+                    // until the returned Task is observed, and the cleanup window for the
+                    // freshly spawned child should be milliseconds now that the kill above
+                    // has unblocked the pipes. We are no longer holding _startGate, so a
+                    // concurrent DisposeAsync waiting on the gate is unblocked while we drain.
+                    failedLifetime.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 }
                 catch
                 {
                     // Best effort.
                 }
-                _processLifetime = null;
-                _serverProcess = null;
-                (_project as IDisposable)?.Dispose();
-                completion.TrySetException(ex);
-                throw;
             }
 
-            return completion.Task;
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failureToRethrow).Throw();
         }
+
+        return completionToReturn!.Task;
     }
 
     /// <summary>
