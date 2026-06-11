@@ -26,11 +26,6 @@ Diff hunks (`patch`) are intentionally NOT included: they are only needed
 on the rare doc-drafting path (Step 9), and embedding every patch here
 would bloat the context the agent re-sends each turn. The agent fetches
 the specific file patches it needs on demand when drafting.
-
-Running the tests
------------------
-
-    python3 -m unittest discover -s .github/workflows/pr-docs-check -v
 """
 
 from __future__ import annotations

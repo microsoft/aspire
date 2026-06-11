@@ -29,11 +29,6 @@ where `pr.json` is the curated PR context produced by `compute_pr_context.py`
 (it provides `author` and `assignees`) and `reviews.json` is the concatenated
 body of `GET /repos/microsoft/aspire/pulls/{N}/reviews?per_page=100`
 (paginated and JSON-arrayed).
-
-Running the tests
------------------
-
-    python3 -m unittest discover -s .github/workflows/pr-docs-check -v
 """
 
 from __future__ import annotations
