@@ -366,18 +366,24 @@ internal static class Selection
 
     // Per-job booleans for the if: conditions gating the non-.NET jobs. job:extension-e2e ->
     // run_extension_e2e, etc. Emitted for every job the map knows, so unselected ones are 'false'.
+    // In audit mode (default) every boolean is forced 'true' to match the full matrix that
+    // WriteMatrix emits: audit computes and reports the real selection (see WriteSummary) but then
+    // runs everything, so the non-.NET jobs must not be gated off either.
     private static void WriteJobBooleans(RunOptions options, SelectionResult result)
     {
         var githubOutput = Environment.GetEnvironmentVariable("GITHUB_OUTPUT");
         var allJobs = TriggerMap.Load(options.MapPath).AllJobTokens().ToHashSet(StringComparer.Ordinal);
+
+        // Audit mode emits run-all (every job true), mirroring the unfiltered matrix.
+        var auditRunAll = !options.Enforce;
 
         var lines = allJobs
             .OrderBy(j => j, StringComparer.Ordinal)
             .Select(job =>
             {
                 var name = "run_" + job["job:".Length..].Replace('-', '_');
-                // On ALL, every job runs too.
-                var value = (result.SelectsAll || result.Jobs.Contains(job)) ? "true" : "false";
+                // On ALL (or in audit mode), every job runs too.
+                var value = (auditRunAll || result.SelectsAll || result.Jobs.Contains(job)) ? "true" : "false";
                 return $"{name}={value}";
             })
             .ToList();
@@ -412,7 +418,7 @@ internal static class Selection
             ? $"changed-files {options.ChangedFilesPath}"
             : $"git diff {options.From}{(options.To is null ? " (working tree)" : $"..{options.To}")}";
         sb.AppendLine("### Options");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {(options.Enforce ? "enforcing" : "audit (full matrix still runs)")}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {(options.Enforce ? "enforcing" : "audit (advisory: the full matrix + all jobs run regardless of the selection below)")}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- change source: {source}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- force-all (kill switch): {options.ForceAll}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- layer 1 (dotnet-affected): {(options.SkipLayer1 || options.ForceAll ? "skipped" : $"{layer1Affected.Count} affected project(s) (production + test)")}");

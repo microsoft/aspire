@@ -148,6 +148,37 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
+    public void EveryTestProjectIsInTheSolutionSoLayer1CanSelectIt()
+    {
+        // A matrix test project that is NOT in Aspire.slnx is invisible to Layer 1 (dotnet-affected
+        // only walks the solution), so a change to a production dependency could never fan into it --
+        // it would silently never run in enforcing mode. Require every tests/<Name>/<Name>.csproj to
+        // be in the solution. (This invariant is what the Infrastructure.Tests / Aspire.Hosting.Maui
+        // .Tests additions satisfied; before them, both were silent Layer-1 blind spots.) Add to the
+        // allow-list only for a project deliberately kept out of PR CI, with a reason.
+        var allowList = new HashSet<string>(StringComparer.Ordinal)
+        {
+            // (none today)
+        };
+
+        var inSolution = LoadSolutionProjectPaths();
+        var testsRoot = Path.Combine(RepoRoot.Path, "tests");
+
+        var missing = Directory.EnumerateDirectories(testsRoot)
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrEmpty(name))
+            .Select(name => $"tests/{name}/{name}.csproj")
+            .Where(rel => File.Exists(Path.Combine(RepoRoot.Path, rel)))
+            .Where(rel => !inSolution.Contains(rel) && !allowList.Contains(rel))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(missing.Count == 0,
+            $"test projects not in Aspire.slnx (Layer 1 cannot select them, so a production-dependency " +
+            $"change would silently skip their tests): {string.Join(", ", missing)}");
+    }
+
+    [Fact]
     public void EveryProjectRuleGlobMatchesASolutionProject()
     {
         // project_rules key off the affected PROJECT set (Layer 1), matched by project-name glob.
