@@ -135,7 +135,14 @@ internal static class Selection
             .Select(name => name!)
             .ToHashSet(StringComparer.Ordinal);
 
-        var changedFiles = ResolveChangedFiles(options);
+        // Under --force-all the selector returns the full matrix regardless of the diff (see below),
+        // so skip resolving changed files and the Layer 1 graph closure entirely. Resolving them is
+        // not just wasted work: --force-all is the path taken when there is no usable diff base (or
+        // the [full ci] kill switch fired), so ResolveChangedFiles would otherwise throw for lack of
+        // a --from/--changed-files input.
+        var changedFiles = options.ForceAll
+            ? Array.Empty<string>()
+            : ResolveChangedFiles(options);
 
         var layer1Affected = (options.ForceAll || options.SkipLayer1)
             ? Array.Empty<string>()

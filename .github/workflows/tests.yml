@@ -94,22 +94,12 @@ jobs:
           ./dotnet.sh tool restore
 
           # SelectTests writes selected_matrix.json (full in audit, filtered in enforce), the run_*
-          # job booleans (to $GITHUB_OUTPUT), and the summary. If it fails outright, fail OPEN: emit
-          # the full matrix and set every run_* to true so coverage is never silently reduced.
-          if ! ./dotnet.sh run --project tools/SelectTests/SelectTests.csproj -- "${args[@]}"; then
-            echo "::warning::SelectTests failed; falling back to the full matrix and running all jobs."
-            cp all_tests.json selected_matrix.json
-            {
-              echo "run_polyglot=true"
-              echo "run_typescript_sdk=true"
-              echo "run_typescript_api_compat=true"
-              echo "run_extension_unit=true"
-              echo "run_extension_e2e=true"
-              echo "run_cli_starter=true"
-              echo "run_winget_installer=true"
-              echo "run_homebrew_installer=true"
-            } >> "$GITHUB_OUTPUT"
-          fi
+          # job booleans (to $GITHUB_OUTPUT), and the summary. The tool fails OPEN *by design* when it
+          # decides to (e.g. --force-all, or an unavailable diff base -> the full matrix + run-all), so
+          # a non-zero exit here means the selector itself crashed. Let that fail the step (and the
+          # run) rather than masking the bug behind a silent fallback; surfacing it is the whole point
+          # of the audit phase.
+          ./dotnet.sh run --project tools/SelectTests/SelectTests.csproj -- "${args[@]}"
 
       - name: Split matrix by dependency type
         id: split_matrix
