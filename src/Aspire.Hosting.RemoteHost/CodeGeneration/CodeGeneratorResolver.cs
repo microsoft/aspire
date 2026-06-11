@@ -63,6 +63,10 @@ internal sealed class CodeGeneratorResolver
     /// the bundled apphost server and the restored SDK assemblies). Callers use this to turn an
     /// otherwise-opaque "no generator found" failure into an actionable incompatible-SDK diagnostic.
     /// </summary>
+    /// <remarks>
+    /// This is also the only way unit tests can observe the swallowed load failures, since discovery
+    /// otherwise hides them; see <c>ResolverDiagnosticsTests</c>.
+    /// </remarks>
     public IReadOnlyList<ReflectionTypeLoadException> GetDiscoveryLoadFailures()
     {
         return _discovery.Value.LoadFailures;
