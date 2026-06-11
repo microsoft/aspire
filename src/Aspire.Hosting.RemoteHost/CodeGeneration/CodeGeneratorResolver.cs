@@ -57,14 +57,7 @@ internal sealed class CodeGeneratorResolver
     }
 
     /// <summary>
-    /// Gets the result of generator discovery: the resolved generators and any
-    /// <see cref="ReflectionTypeLoadException"/>s swallowed while probing assemblies. A non-empty
-    /// <see cref="DiscoveryResult.LoadFailures"/> almost always means a code generator was silently
-    /// dropped because of a binary mismatch (typically a diverged <c>Aspire.TypeSystem</c> version
-    /// between the bundled apphost server and the restored SDK assemblies); callers use it to turn an
-    /// otherwise-opaque "no generator found" failure into an actionable incompatible-SDK diagnostic.
-    /// Exposing the whole result (rather than a dedicated accessor) also lets unit tests observe the
-    /// swallowed failures, which discovery otherwise hides; see <c>ResolverDiagnosticsTests</c>.
+    /// Gets the result of generator discovery, including any load failures swallowed during probing.
     /// </summary>
     internal DiscoveryResult Discovery => _discovery.Value;
 
