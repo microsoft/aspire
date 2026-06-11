@@ -10,6 +10,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 /// <summary>
 /// A service to interact with the current development environment.
 /// </summary>

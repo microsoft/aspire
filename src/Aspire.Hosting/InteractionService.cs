@@ -13,8 +13,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 internal class InteractionService : IInteractionService
 {
+    internal const string DiagnosticId = "ASPIREINTERACTION001";
+
     // Tracks whether the current async flow is executing in a non-interactive context,
     // such as a resource command triggered by the CLI with NonInteractive=true.
     // When set, IsAvailable returns false so command callbacks know not to prompt the user.

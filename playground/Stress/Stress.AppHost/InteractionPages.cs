@@ -23,14 +23,14 @@ internal static class InteractionPages
         {
             IconName = "ThisIconDoesNotExist",
             Text = "Invalid Icon",
-            Url = "/pages/hello-world"
+            Url = "/pages/not-found"
         });
 
         interactionService.RegisterMenuButton(new MenuButtonOptions
         {
             IconName = "Document",
             Text = "This is an extremely long menu button text that should stress test the nav menu layout and overflow behavior",
-            Url = "/pages/hello-world"
+            Url = "/pages/long"
         });
     }
 
