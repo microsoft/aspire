@@ -82,7 +82,7 @@ Before starting a release:
    |-----------|-------------|---------|
    | `ReleaseVersion` | Override for the version label (used as `v<version>` tag). Leave as `auto` to derive from the source build's `release-version - *` tag, which is the normal case. Only set this when re-shipping under a corrected tag. | `auto` |
    | `IsPrerelease` | `true` for preview releases. Non-dry-run npm publishing is blocked for prereleases until the MicroBuild npm publish path supports non-`latest` dist-tags. | `false` |
-   | `DryRun` | Set `true` to test without publishing, promoting, tagging, or creating PRs. | `false` |
+   | `DryRun` | Set `true` to test without publishing, promoting, tagging, or creating PRs. The `GitHubTasks` stage becomes read-only: the `release-github-tasks.yml` dispatch and Homebrew live-release validation are skipped (no bot token mint, no dispatched Actions run), and CLI-asset upload verifies SHA512s only without uploading. | `false` |
    | `GaChannelName` | Target GA channel. | `Aspire 9.x GA` |
 
    **Advanced (leave defaults unless you know what you're doing):**
@@ -108,7 +108,7 @@ Before starting a release:
 4. Select the **Resources** button in the bottom right, then select the source build from the `aspire-build` dropdown.
    - The picker shows all recent builds from the `microsoft-aspire` pipeline regardless of branch. Pick the build that corresponds to the release branch and version you intend to ship.
    - Each build's tags are shown alongside its number. Verify the `release-version - X.Y.Z` tag matches the version you intend to ship before clicking **Run**. If the tag is missing, either re-run the source build after the tag-emitting change in `azure-pipelines.yml` is on that release branch or pass an explicit `ReleaseVersion` override.
-5. Click **Run** and monitor the pipeline. The final stage (`GitHubTasks`) dispatches `release-github-tasks.yml`, waits for it to complete, uploads the `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the newly-created GitHub release, and validates the Homebrew cask against that live release. The AzDO pipeline only succeeds if the enabled GitHub tasks, asset upload, and Homebrew validation succeed.
+5. Click **Run** and monitor the pipeline. In a real (non-dry-run) release, the final stage (`GitHubTasks`) dispatches `release-github-tasks.yml`, waits for it to complete, uploads the `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the newly-created GitHub release, and validates the Homebrew cask against that live release. The AzDO pipeline only succeeds if the enabled GitHub tasks, asset upload, and Homebrew validation succeed. Under `DryRun=true` the dispatch and Homebrew validation are skipped and the asset job only verifies SHA512s (see the `DryRun` row above).
 6. Verify packages appear on NuGet.org and npm, and verify that the `aspire-cli-*` archives are attached to the GitHub release.
 
 To publish only the VS Code extension after merging an extension release PR, run the same `release-publish-nuget` pipeline, select the signed source build from that merge, and set:
@@ -137,7 +137,7 @@ The npm release path validates Windows, Linux, and macOS install summaries, publ
 
 `commit_sha` and `release_branch` for the GitHub workflow are derived automatically from the source build resource, so there is no need to copy them by hand.
 
-> **Tip**: Use `DryRun: true` to test end-to-end without publishing, promoting, tagging, creating PRs, or uploading release assets. The dry-run state is propagated to the GitHub workflow as `dry_run: true`.
+> **Tip**: Use `DryRun: true` to test end-to-end without publishing, promoting, tagging, creating PRs, or uploading release assets. A dry run is read-only with respect to GitHub: the `release-github-tasks.yml` workflow is **not** dispatched (no bot installation token is minted and no Actions run is produced), and Homebrew live-release validation is skipped. The CLI-asset job still verifies the `aspire-cli-*` SHA512s locally but uploads nothing.
 
 ### Step 2: Prepare a VS Code extension release PR
 
@@ -340,9 +340,9 @@ Azure DevOps release-publish-nuget.yml
      -> promote BAR build to GA channel
   -> WinGetJob
   -> GitHubTasks
-     -> dispatch release-github-tasks.yml as aspire-repo-bot
-     -> upload aspire-cli-* assets to the GitHub release
-     -> validate Homebrew cask against the live release
+     -> dispatch release-github-tasks.yml as aspire-repo-bot   (skipped when DryRun=true)
+     -> upload aspire-cli-* assets to the GitHub release        (verify SHA512s only when DryRun=true)
+     -> validate Homebrew cask against the live release         (skipped when DryRun=true)
 
 GitHub release-github-tasks.yml
   -> create tag

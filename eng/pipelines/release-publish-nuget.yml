@@ -2013,7 +2013,7 @@ extends:
                   if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
                     Write-Host " (SKIPPED)"
                   } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (dispatched after Release stage; dry_run=true forwarded)"
+                    Write-Host " (SKIPPED in dry-run; no dispatch, no token mint, no Actions run)"
                   } else {
                     Write-Host " (dispatched after Release stage)"
                   }
@@ -2021,13 +2021,15 @@ extends:
                   if ("${{ parameters.SkipReleaseAssets }}" -eq "true") {
                     Write-Host " (SKIPPED)"
                   } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (verify only; no upload in dry-run)"
+                    Write-Host " (verify SHA512s only; no token mint or upload in dry-run)"
                   } else {
                     Write-Host " (uploaded after GitHub Tasks job)"
                   }
                   Write-Host "║ Homebrew Val:   ${{ parameters.SkipHomebrewValidation }}" -NoNewline
                   if ("${{ parameters.SkipHomebrewValidation }}" -eq "true") {
                     Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (SKIPPED in dry-run; needs a live GitHub release)"
                   } else {
                     Write-Host " (validates cask against live GH release after asset upload)"
                   }
@@ -2271,17 +2273,21 @@ extends:
       # SkipHomebrewValidation) so partial-failure re-runs can recover any
       # piece independently. Skipping all three skips the stage entirely.
       #
-      # DryRun behavior: this stage still runs when DryRun=true. DryRun is
-      # propagated to the GH workflow as dry_run=true (keeps it from
-      # creating tags/releases/PRs) and to the asset script (downloads and
-      # verifies SHA512s but skips the gh release upload). HomebrewValidateJob
-      # also runs under DryRun — it does not publish anything, it only audits
-      # and `brew install`/`brew uninstall` against a public URL. If the
-      # release for the version being validated does not yet exist (DryRun,
-      # or a re-run after assets were already uploaded), the job is expected
-      # to surface that as a real failure rather than be silently skipped.
-      # This lets a release manager validate the full AzDO → GitHub path
-      # end-to-end without performing a real release.
+      # DryRun behavior (issue #18129): DryRun=true is read-only for everything
+      # that reaches out to GitHub as the aspire-repo-bot App. The only piece
+      # that still runs is the local SHA512 verification:
+      #   - DispatchGitHubTasksJob is skipped — no installation token is minted,
+      #     no release-github-tasks.yml run is dispatched, and there is no
+      #     bot-authored Actions run to wait on.
+      #   - PublishReleaseAssetsJob still runs but takes the credential-less
+      #     path: it downloads the aspire-cli-* archives and verifies their
+      #     SHA512s without minting a token or uploading anything (no AppId /
+      #     PrivateKeyPem are passed to the script in DryRun).
+      #   - HomebrewValidateJob is skipped — it validates against the *live*
+      #     GitHub release URL for the version being shipped, which does not
+      #     exist in a dry run, so there is nothing meaningful to validate.
+      # A dry run therefore exercises the AzDO-side artifact plumbing and the
+      # local integrity check without leaving the pipeline.
       - stage: GitHubTasks
         displayName: 'Dispatch GitHub Release Tasks'
         # PrepareArtifacts is listed explicitly (in addition to Release) so the
@@ -2306,7 +2312,15 @@ extends:
         jobs:
           - job: DispatchGitHubTasksJob
             displayName: 'Dispatch and Wait for release-github-tasks workflow'
-            condition: eq('${{ parameters.SkipGitHubTasks }}', 'false')
+            # Gated on DryRun=false (issue #18129): a dry run must not mint a bot
+            # installation token, dispatch release-github-tasks.yml, or produce a
+            # visible bot-authored Actions run. There is nothing read-only this
+            # job can do, so it is skipped entirely in dry run.
+            condition: |
+              and(
+                eq('${{ parameters.SkipGitHubTasks }}', 'false'),
+                eq('${{ parameters.DryRun }}', 'false')
+              )
             timeoutInMinutes: 90
             pool:
               name: NetCore1ESPool-Internal
@@ -2355,6 +2369,10 @@ extends:
                     commit_sha          = "$(CommitShaDerived)"
                     release_branch      = "$(ReleaseBranchDerived)"
                     is_prerelease       = ([System.Convert]::ToBoolean("${{ parameters.IsPrerelease }}")).ToString().ToLowerInvariant()
+                    # Always "false": this job is gated on DryRun=false (issue
+                    # #18129), so a dry run skips it entirely rather than
+                    # dispatching the workflow in dry-run mode. Forward DryRun
+                    # anyway so the input stays correct if that gate ever changes.
                     dry_run             = ([System.Convert]::ToBoolean("${{ parameters.DryRun }}")).ToString().ToLowerInvariant()
                     # The AzDO pipeline owns idempotency for the *AzDO* side via its
                     # own Skip* parameters. The GH workflow skip_* flags stay at
@@ -2515,10 +2533,19 @@ extends:
                   $scriptArgs = @{
                     AssetsDir     = $assetsDir
                     Tag           = $tag
-                    AppId         = $env:ASPIRE_BOT_APP_ID
-                    PrivateKeyPem = $env:ASPIRE_BOT_PRIVATE_KEY
                   }
-                  if ($dryRun) { $scriptArgs.DryRun = $true }
+                  if ($dryRun) {
+                    # Read-only dry run (issue #18129): take the script's
+                    # credential-less path. Without AppId/PrivateKeyPem it
+                    # verifies SHA512s but mints no installation token and
+                    # performs no `gh release upload`. Passing the credentials
+                    # here would still mint a token even though the upload is
+                    # skipped, which is exactly what a dry run must avoid.
+                    $scriptArgs.DryRun = $true
+                  } else {
+                    $scriptArgs.AppId         = $env:ASPIRE_BOT_APP_ID
+                    $scriptArgs.PrivateKeyPem = $env:ASPIRE_BOT_PRIVATE_KEY
+                  }
 
                   & "$(Build.SourcesDirectory)/eng/pipelines/scripts/publish-release-cli-assets.ps1" @scriptArgs
                 displayName: 'Verify SHA512s and upload to GitHub Release'
@@ -2553,6 +2580,7 @@ extends:
             condition: |
               and(
                 eq('${{ parameters.SkipHomebrewValidation }}', 'false'),
+                eq('${{ parameters.DryRun }}', 'false'),
                 in(dependencies.PublishReleaseAssetsJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
               )
             timeoutInMinutes: 30
