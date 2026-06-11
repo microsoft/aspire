@@ -22,11 +22,9 @@ jobs:
       tests_matrix_requires_nugets_windows: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_windows }}
       tests_matrix_requires_nugets_macos: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_macos }}
       tests_matrix_requires_cli_archive: ${{ steps.split_matrix.outputs.tests_matrix_requires_cli_archive }}
-      # Selective CI (see docs/ci/test-trigger-selector-design.md). selection_enforced stays 'false'
-      # during the audit rollout: SelectTests writes the advisory "what enforcing would run" summary,
-      # but the full matrix + all jobs still run. Flip this ONE value to 'true' to enforce once audit
-      # data shows the selection is safe; the run_* gates below then take effect.
-      selection_enforced: 'false'
+      # Selective CI (see docs/ci/test-trigger-selector-design.md). The audit/enforce knob lives in
+      # the select_tests step (ENFORCE_SELECTION); tests.yml just consumes what the selector returns.
+      # In audit the selector returns run-all (run_* = true + the full matrix), so everything runs.
       run_polyglot: ${{ steps.select_tests.outputs.run_polyglot }}
       run_typescript_sdk: ${{ steps.select_tests.outputs.run_typescript_sdk }}
       run_typescript_api_compat: ${{ steps.select_tests.outputs.run_typescript_api_compat }}
@@ -54,11 +52,16 @@ jobs:
           HAS_RUN_ALL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'run-all-tests') }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.sha }}
+          # The ONE audit/enforce knob. 'false' (audit): the selector returns run-all -- the full
+          # matrix + run_* = true, plus the advisory "what enforcing would run" summary. Flip to
+          # 'true' to enforce (selective matrix + selective run_*) once the audit data looks safe.
+          ENFORCE_SELECTION: 'false'
         run: |
           set -euo pipefail
           printf '%s' "$ALL_TESTS" > all_tests.json
 
           args=(--repo-root . --matrix all_tests.json --output selected_matrix.json)
+          [ "$ENFORCE_SELECTION" = "true" ] && args+=(--enforce)
 
           # Kill switch: a [full ci] token in the PR body or the run-all-tests label forces everything.
           if printf '%s' "$PR_BODY" | grep -qiF '[full ci]' || [ "$HAS_RUN_ALL_LABEL" = "true" ]; then
@@ -80,12 +83,23 @@ jobs:
           # dotnet-affected (Layer 1 graph closure) ships as a local tool.
           ./dotnet.sh tool restore
 
-          # Audit mode (no --enforce): SelectTests emits the FULL matrix and writes run_* = true, plus
-          # the advisory summary. If anything fails, fall back to the full enumerated matrix so test
-          # coverage is never silently reduced. (To enforce, add --enforce here and flip
-          # selection_enforced above.)
-          ./dotnet.sh run --project tools/SelectTests/SelectTests.csproj -- "${args[@]}" \
-            || cp all_tests.json selected_matrix.json
+          # SelectTests writes selected_matrix.json (full in audit, filtered in enforce), the run_*
+          # job booleans (to $GITHUB_OUTPUT), and the summary. If it fails outright, fail OPEN: emit
+          # the full matrix and set every run_* to true so coverage is never silently reduced.
+          if ! ./dotnet.sh run --project tools/SelectTests/SelectTests.csproj -- "${args[@]}"; then
+            echo "::warning::SelectTests failed; falling back to the full matrix and running all jobs."
+            cp all_tests.json selected_matrix.json
+            {
+              echo "run_polyglot=true"
+              echo "run_typescript_sdk=true"
+              echo "run_typescript_api_compat=true"
+              echo "run_extension_unit=true"
+              echo "run_extension_e2e=true"
+              echo "run_cli_starter=true"
+              echo "run_winget_installer=true"
+              echo "run_homebrew_installer=true"
+            } >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Split matrix by dependency type
         id: split_matrix
@@ -157,7 +171,7 @@ jobs:
     ]
     # Audit: always runs. Enforcing: gated by the selector (the map ties the installer jobs to
     # Aspire.Acquisition.Tests via derived_targets).
-    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_winget_installer == 'true' }}
+    if: ${{ needs.setup_for_tests.outputs.run_winget_installer == 'true' }}
     with:
       installer: winget
 
@@ -169,7 +183,7 @@ jobs:
       build_cli_archive_macos,
       build_cli_archive_macos_x64,
     ]
-    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_homebrew_installer == 'true' }}
+    if: ${{ needs.setup_for_tests.outputs.run_homebrew_installer == 'true' }}
     with:
       installer: homebrew
 
@@ -287,8 +301,8 @@ jobs:
     name: Polyglot SDK Validation
     # Pull requests validate the current TypeScript AppHost LTS runtime. Main branch
     # builds add the older supported LTS runtime without adding that cost to every PR.
-    # Audit: the selector gate is a no-op (selection_enforced 'false'); enforcing adds run_polyglot.
-    if: ${{ (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_polyglot == 'true') }}
+    # In audit the selector returns run_polyglot=true, so this keeps its existing event behavior;
+    if: ${{ (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') && (needs.setup_for_tests.outputs.run_polyglot == 'true') }}
     uses: ./.github/workflows/polyglot-validation.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_linux]
     with:
@@ -299,7 +313,7 @@ jobs:
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 15
     needs: [setup_for_tests, build_packages, build_cli_archive_windows, build_cli_archive_windows_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_cli_starter == 'true') }}
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && (needs.setup_for_tests.outputs.run_cli_starter == 'true') }}
     strategy:
       fail-fast: false
       matrix:
@@ -381,7 +395,7 @@ jobs:
     # Audit: always runs. Enforcing: gated by run_extension_unit (extension/** changes). Also runs
     # when run_extension_e2e is set, because extension_e2e_tests `needs` this job -- gating it off
     # while e2e runs would skip e2e via need-propagation.
-    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
+    if: ${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
@@ -471,7 +485,7 @@ jobs:
     # explicitly overridden via COREPACK_HOME in the build entrypoints.
     runs-on: ubuntu-latest
     needs: [setup_for_tests]
-    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
+    if: ${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
@@ -518,23 +532,23 @@ jobs:
 
   extension_e2e_tests:
     name: Run VS Code extension E2E tests
-    # Audit: selection_enforced is 'false', so this always runs. Enforcing: gated by the selector's
-    # run_extension_e2e (the map's extension-e2e rule replaces the old extension_e2e_changes regex).
-    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
+    # In audit the selector returns run_extension_e2e=true, so this always runs; enforcing gates it
+    # (the map's extension-e2e rule replaces the old extension_e2e_changes regex).
+    if: ${{ needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     uses: ./.github/workflows/extension-e2e-tests.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
 
   typescript_sdk_tests:
     name: TypeScript SDK Unit Tests
     needs: [setup_for_tests]
-    # Audit: always runs (selection_enforced 'false'). Enforcing: gated by the selector.
-    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_typescript_sdk == 'true' }}
+    # In audit the selector returns these true, so this always runs; enforcing gates it.
+    if: ${{ needs.setup_for_tests.outputs.run_typescript_sdk == 'true' }}
     uses: ./.github/workflows/typescript-sdk-tests.yml
 
   typescript_api_compat:
     name: TypeScript API Compatibility
     needs: [setup_for_tests]
-    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_typescript_api_compat == 'true' }}
+    if: ${{ needs.setup_for_tests.outputs.run_typescript_api_compat == 'true' }}
     uses: ./.github/workflows/typescript-api-compat.yml
 
   results:
@@ -645,19 +659,17 @@ jobs:
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
                (github.event_name == 'pull_request' &&
-                ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_extension_unit == 'true')) ||
+                ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true')) ||
                  (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
-                 (needs.cli_starter_validation_windows.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_cli_starter == 'true')) ||
+                 (needs.cli_starter_validation_windows.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter == 'true')) ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
-                  (needs.setup_for_tests.outputs.selection_enforced != 'true' ||
-                   needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
+                  (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  (needs.typescript_api_compat.result == 'skipped' &&
-                  (needs.setup_for_tests.outputs.selection_enforced != 'true' ||
-                   needs.setup_for_tests.outputs.run_typescript_api_compat == 'true')) ||
+                  (needs.setup_for_tests.outputs.run_typescript_api_compat == 'true')) ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
-                 (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
-                 (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
+                 (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
+                 (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
                  needs.tests_no_nugets.result == 'skipped' ||
                  needs.tests_requires_nugets_linux.result == 'skipped' ||
                  needs.tests_requires_nugets_windows.result == 'skipped' ||
@@ -666,22 +678,21 @@ jobs:
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
                   needs.build_cli_e2e_image.result == 'skipped') ||
                  needs.tests_requires_cli_archive.result == 'skipped' ||
-                 (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_polyglot == 'true')))) ||
+                 (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.run_polyglot == 'true')))) ||
                (github.event_name != 'pull_request' &&
-                ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_extension_unit == 'true')) ||
+                ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true')) ||
                  (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
-                  (needs.setup_for_tests.outputs.selection_enforced != 'true' ||
-                   needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
+                  (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
-                 (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
-                 (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
+                 (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
+                 (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
                  needs.tests_no_nugets.result == 'skipped' ||
                  needs.tests_requires_nugets_linux.result == 'skipped' ||
                  needs.tests_requires_nugets_windows.result == 'skipped' ||
                  (github.ref == 'refs/heads/main' &&
-                  (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_polyglot == 'true'))) ||
+                  (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.run_polyglot == 'true'))) ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
                   needs.tests_requires_nugets_macos.result == 'skipped')))) }}
         run: |

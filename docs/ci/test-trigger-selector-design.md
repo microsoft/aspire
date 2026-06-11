@@ -10,8 +10,9 @@ Companion documents:
 - [`test-trigger-map.yml`](./test-trigger-map.yml) — its machine-readable form.
 
 **Status: wired in audit mode.** `tests.yml`'s `setup_for_tests` runs `SelectTests`
-and emits the advisory summary, but `selection_enforced` defaults to `'false'`, so
-the full matrix and all jobs still run. The numbers in the
+and emits the advisory summary, but it runs in audit mode (`ENFORCE_SELECTION:
+'false'`), so the selector returns run-all and the full matrix and all jobs still
+run. The numbers in the
 [Selectivity](#measured-selectivity) section are measured against the live repo
 (see [Reproducing the measurements](#reproducing-the-measurements)).
 
@@ -190,14 +191,15 @@ The extension-unit jobs (`extension_tests_win` / `extension_bootstrap_linux`) ga
 on `run_extension_unit` **or** `run_extension_e2e`, because `extension_e2e_tests`
 `needs:` them — gating them off while e2e runs would skip e2e via need-propagation.
 
-**Audit vs. enforce is one `setup_for_tests` output, `selection_enforced`** (default
-`'false'`). While `'false'`: SelectTests runs in audit mode (emits the full matrix
-and `run_* = true`, writes the advisory summary), every gate reads
-`selection_enforced != 'true' || run_X == 'true'`, so the full matrix and all jobs
-run — behavior is unchanged. Flipping it to `'true'` (and adding `--enforce` to the
-SelectTests invocation) makes the emitted matrix and the gates selective. The
-SelectTests step falls back to the full enumerated matrix on any failure, so test
-coverage is never silently reduced.
+**Audit vs. enforce is a single knob in the `select_tests` step,
+`ENFORCE_SELECTION`** (default `'false'`). The rest of `tests.yml` just consumes
+what the selector returns — every gate reads `run_X == 'true'`, and the split
+consumes the emitted matrix. In audit (`'false'`, no `--enforce`) the selector
+**returns run-all**: the full matrix plus `run_* = true`, with the advisory summary
+showing what enforcing *would* have selected. Flipping it to `'true'` makes the
+selector return the selective matrix and `run_*`, and the same gates then narrow.
+If SelectTests fails outright, the step fails **open** — emits the full matrix and
+sets every `run_*` to true — so coverage is never silently reduced.
 
 The kill switch is wired in the same step: a `[full ci]` token in the PR body or a
 `run-all-tests` label passes `--force-all`. Non-PR events (no reliable base SHA)
