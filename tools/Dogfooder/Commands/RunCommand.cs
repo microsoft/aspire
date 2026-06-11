@@ -51,7 +51,7 @@ internal sealed class RunCommand
 
         await using var terminal = Hex1bTerminal.CreateBuilder()
             .WithMouse(true)
-            .WithHex1bApp((app, _) =>
+            .WithHex1bApp(_ => { }, app =>
             {
                 capturedApp = app;
                 _state.Notifier.Changed += () => app.Invalidate();

@@ -211,7 +211,13 @@ internal sealed class IdentityResolver : IIdentityResolver
         // terminal default (`local`).
         try
         {
-            return new IdentityChannelReader(_assembly).ReadChannel();
+            // Main refactored IdentityChannelReader to a Try pattern (see PR #17828).
+            // Treat a `false` return the same as the old `InvalidOperationException`
+            // path: fall through to the terminal default so a malformed stamp does
+            // not nuke the whole resolver.
+            return new IdentityChannelReader(_assembly).TryReadChannel(out var channel, out _)
+                ? channel
+                : string.Empty;
         }
         catch (InvalidOperationException)
         {
