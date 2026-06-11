@@ -1,22 +1,33 @@
-# Test trigger map (machine-readable) -- the CURATED layer of selective CI.
+# Test trigger map (machine-readable) -- the CURATED layer (Layer 2) of selective CI.
 #
-# This file maps repo path globs -> CI targets that must run when a matching file changes.
-# It deliberately contains ONLY what the MSBuild project graph cannot see. The graph-derived
-# closure (ProjectReference edges, Central Package Management, Directory.Build.* , and
-# file-level <Compile Include> of another project's source) is computed at runtime by
-# `dotnet-affected` over Aspire.slnx (Layer 1); the selector unions that with the rules here
-# (Layer 2). So leaf integration -> own test, core fan-out, and the test-hub fan-out are NOT
-# enumerated here -- dotnet-affected reproduces them live and can never drift.
+# This file maps repo paths -> CI targets that must run when a matching file changes.
+# It deliberately contains ONLY what the MSBuild project graph cannot see, plus a low-maintenance
+# convention backstop. The graph-derived closure (ProjectReference edges, Central Package
+# Management, Directory.Build.*, and file-level <Compile Include> of another project's source) is
+# computed at runtime by `dotnet-affected` over Aspire.slnx (Layer 1). So leaf integration -> own
+# test, core fan-out, and link-compiled-file edges are NOT enumerated here.
 #
-# What stays curated here (graph-invisible):
-#   run_all_globs           build infrastructure / broadly shared code -> ALL
-#   curated_jobs            non-.NET jobs (polyglot, extension, typescript, ...) -- no MSBuild edge
-#   loose_file_deps         runtime/loose-file reads (tests reading files by path, hive installs)
-#   shared_source           shared dirs with no owning csproj (Components/Common, Vendoring)
-#   shared_compiled_source  specific files link-compiled elsewhere; the oracle (--assume-changes)
-#                           is project-granular and cannot verify these, so they stay static
-#   test_self               a test project's own folder change -> that test project
-#   groups                  named, reusable bundles of test: and/or job: targets
+# Selector flow (see test-trigger-selector-design.md):
+#   changed-files + Layer 1 (dotnet-affected) selected test projects
+#     -> per changed file, Layer 2 classifies it: convention / ignore / path_rule / leftover
+#     -> selected test set = Layer1 union Layer2-matched tests
+#     -> derived pass (fixpoint): each selected test may add jobs/tests
+#     -> ALL decision: a path_rule whose target is ALL, the kill switch, OR a leftover src/** file
+#        that is NOT Layer-1-owned (under no csproj in Aspire.slnx) forces the full matrix. Non-src
+#        leftovers are audit-only. ALL = full matrix + every job token.
+#
+# There are exactly four matchers -- a section is its own key only when the selector treats it
+# differently. Everything that is "a glob set -> a target set" lives in ONE section (path_rules);
+# the groupings inside it are comments, not behavior.
+#
+#   conventions      <name>-capture pattern -> target template; emitted only if the derived test
+#                    exists in the matrix (existence guard). Additive. Covers a test's own folder
+#                    and the Hosting/Components integration dirs.
+#   ignore           globs Layer 2 accounts for with NO target (Layer 1 covers them, or inert), so
+#                    they do not trip the run-all fallback.
+#   path_rules       a glob set -> a target set. targets may be test: / job: / a GROUP / ALL.
+#   derived_targets  a selected test project -> extra jobs/tests (fixpoint, cycle-safe).
+#   groups           named, reusable bundles of test:/job: targets (expand recursively).
 #
 # Companion docs: test-trigger-map.md, test-trigger-selector-design.md
 #
@@ -28,134 +39,91 @@
 #   job:extension-unit         tests.yml extension_tests_win + extension_bootstrap_linux
 #   job:extension-e2e          tests.yml -> extension-e2e-tests.yml (gated by extension_e2e_changes)
 #   job:cli-starter            tests.yml cli_starter_validation_windows
+#   job:winget-installer       tests.yml prepare_winget_installer_artifacts
+#   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
 #   job:api-diffs              generate-api-diffs.yml    (schedule-only today)
 #   job:ats-diffs              generate-ats-diffs.yml    (schedule-only today)
 #   job:deployment-e2e         deployment-tests.yml      (schedule/dispatch-only today)
 #   ALL                        full test matrix + all jobs
-#   <GROUP_NAME>               a named group (see groups:) expanding to its test:/job: members
-#
-# Resolution: union the targets of every rule whose glob matches a changed file, expanding
-# group names to their members, and union in the Layer 1 (dotnet-affected) test projects. Any
-# match in run_all_globs short-circuits to ALL. Self-changes to a test project always run that
-# project (see test_self).
+#   <GROUP_NAME>               a named group (see groups:) expanding recursively to its members
 version: 1
 
 # Named groups (test projects and/or jobs) -----------------------------------
 groups:
-  ALL_COMPONENT_TESTS:
-    - test:Aspire.Azure.AI.Inference.Tests
-    - test:Aspire.Azure.AI.OpenAI.Tests
-    - test:Aspire.Azure.Data.Tables.Tests
-    - test:Aspire.Azure.Messaging.EventHubs.Tests
-    - test:Aspire.Azure.Messaging.ServiceBus.Tests
-    - test:Aspire.Azure.Messaging.WebPubSub.Tests
-    - test:Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.Tests
-    - test:Aspire.Azure.Npgsql.Tests
-    - test:Aspire.Azure.Search.Documents.Tests
-    - test:Aspire.Azure.Security.KeyVault.Tests
-    - test:Aspire.Azure.Storage.Blobs.Tests
-    - test:Aspire.Azure.Storage.Files.DataLake.Tests
-    - test:Aspire.Azure.Storage.Queues.Tests
-    - test:Aspire.Confluent.Kafka.Tests
-    - test:Aspire.Hosting.Azure.Tests
-    - test:Aspire.Hosting.Garnet.Tests
-    - test:Aspire.Hosting.Kafka.Tests
-    - test:Aspire.Hosting.Milvus.Tests
-    - test:Aspire.Hosting.MongoDB.Tests
-    - test:Aspire.Hosting.MySql.Tests
-    - test:Aspire.Hosting.Nats.Tests
-    - test:Aspire.Hosting.Oracle.Tests
-    - test:Aspire.Hosting.PostgreSQL.Tests
-    - test:Aspire.Hosting.Qdrant.Tests
-    - test:Aspire.Hosting.RabbitMQ.Tests
-    - test:Aspire.Hosting.Redis.Tests
-    - test:Aspire.Hosting.SqlServer.Tests
-    - test:Aspire.Hosting.Valkey.Tests
-    - test:Aspire.Keycloak.Authentication.Tests
-    - test:Aspire.Microsoft.Azure.Cosmos.Tests
-    - test:Aspire.Microsoft.Azure.StackExchangeRedis.Tests
-    - test:Aspire.Microsoft.Data.SqlClient.Tests
-    - test:Aspire.Microsoft.EntityFrameworkCore.Cosmos.Tests
-    - test:Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests
-    - test:Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.Tests
-    - test:Aspire.Milvus.Client.Tests
-    - test:Aspire.MongoDB.Driver.Tests
-    - test:Aspire.MongoDB.Driver.v2.Tests
-    - test:Aspire.MongoDB.EntityFrameworkCore.Tests
-    - test:Aspire.MySqlConnector.Tests
-    - test:Aspire.NATS.Net.Tests
-    - test:Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests
-    - test:Aspire.Npgsql.Tests
-    - test:Aspire.OpenAI.Tests
-    - test:Aspire.Oracle.EntityFrameworkCore.Tests
-    - test:Aspire.Pomelo.EntityFrameworkCore.MySql.Tests
-    - test:Aspire.Qdrant.Client.Tests
-    - test:Aspire.RabbitMQ.Client.Tests
-    - test:Aspire.RabbitMQ.Client.v6.Tests
-    - test:Aspire.Seq.Tests
-    - test:Aspire.StackExchange.Redis.DistributedCaching.Tests
-    - test:Aspire.StackExchange.Redis.OutputCaching.Tests
-    - test:Aspire.StackExchange.Redis.Tests
-
   CLI_BUNDLE:
     - test:Aspire.Cli.EndToEnd.Tests
     - job:cli-starter
     - job:extension-e2e
 
-# 0. Test self-changes: tests/<X>/** -> test:<X> (applies to every test project) ----
-test_self:
-  pattern: tests/<TestProject>/**
-  target: test:<TestProject>
-  note: a change under a test project's own folder always runs that test project
+# Conventions: <name> captures one path segment; the derived target is emitted only when that test
+# project exists in the matrix (existence guard), so a folder with no same-named test (tests/Shared,
+# src/Aspire.Hosting.Azure.CosmosDB, ...) produces nothing here and falls through to path_rules /
+# Layer 1. Additive: only ever ADDS the conventional test; never removes Layer 1's result. The
+# Hosting/Components entries are a backstop for files dotnet-affected cannot attribute (non-MSBuild
+# items: data/resource files, files excluded from compile).
+conventions:
+  - pattern: tests/<name>/**                        # a test project's own folder -> that test
+    target: test:<name>
+  - pattern: src/Aspire.Hosting.<name>/**
+    target: test:Aspire.Hosting.<name>.Tests
+  - pattern: src/Components/<name>/**
+    target: test:<name>.Tests
 
-# 1. Catch-all: build infrastructure & shared code -> ALL ----------------------
-run_all_globs:
-  - global.json
-  - NuGet.config
-  - .config/dotnet-tools.json
-  - Directory.Build.props
-  - Directory.Build.targets
-  - Directory.Packages.props
-  - Aspire.slnx
-  - src/Directory.Build.props
-  - src/Directory.Build.targets
-  - tests/Directory.Build.props
-  - tests/Directory.Build.targets
-  - tests/Directory.Packages.props
-  - eng/*.props      # any root-level eng build prop (Versions, Testing, Build, Publishing, Signing, ...) -> err toward ALL
-  - eng/*.targets    # any root-level eng build target (Testing, AfterSigning, ReplaceText, ...) -> err toward ALL
-  - eng/OuterPreBuild.proj   # build-wide project-name validation traversal -> err toward ALL
-  - eng/Version.Details.xml
-  - eng/common/**
-  - src/Shared/**
-  - tests/Shared/**
-  - .github/actions/enumerate-tests/**
-  - eng/scripts/split-test-matrix-by-deps.ps1
-  - eng/TestEnumerationRunsheetBuilder/**
-  - eng/testing/CITestsProperties.props
-  - .github/workflows/tests.yml
-  - .github/workflows/run-tests.yml
-  - .github/workflows/specialized-test-runner.yml
-  - .github/workflows/build-packages.yml
-  - .github/workflows/build-cli-native-archives.yml
-  - .github/workflows/build-cli-e2e-image.yml
+# Ignore: files Layer 2 accounts for with NO target, so they do NOT trigger the run-all fallback.
+# Each is either covered precisely by Layer 1 (dotnet-affected sees the foreign <Compile Include>
+# consumers) or is inert. Not a no-op for selection: Layer 1 still unions in the real consumers.
+ignore:
+  - src/Components/Common/**                            # link-compiled into many components; Layer 1 covers
+  - src/Vendoring/OpenTelemetry.Instrumentation.*/**    # glob-compiled into the Redis/Kafka components; Layer 1 covers
+  - src/Vendoring/OpenTelemetry.Shared/**               # compiled by nothing (each instrumentation dir has its own Shared/); inert
 
-# 2. Shared source dirs with no owning csproj ----------------------------------
-shared_source:
-  - paths: [src/Components/Common/**]
-    targets: [ALL_COMPONENT_TESTS]   # compiled into many client components (Package.targets glob)
-  - paths: [src/Vendoring/OpenTelemetry.Instrumentation.StackExchangeRedis/**, src/Vendoring/OpenTelemetry.Shared/**]
-    targets: [test:Aspire.StackExchange.Redis.Tests, test:Aspire.StackExchange.Redis.DistributedCaching.Tests, test:Aspire.StackExchange.Redis.OutputCaching.Tests, test:Aspire.Microsoft.Azure.StackExchangeRedis.Tests]
-    note: vendored OTel sources compiled into src/Components/Aspire.StackExchange.Redis
-  - paths: [src/Vendoring/OpenTelemetry.Instrumentation.ConfluentKafka/**, src/Vendoring/OpenTelemetry.Shared/**]
-    targets: [test:Aspire.Confluent.Kafka.Tests]
-    note: vendored OTel sources compiled into src/Components/Aspire.Confluent.Kafka
+# Path rules: a glob set -> a target set. One mechanism; the comment headers below are organization
+# only. targets may be test: / job: / a GROUP name / ALL.
+path_rules:
 
-# 3. Curated job rules ---------------------------------------------------------
-curated_jobs:
-  - target: job:polyglot
-    reason: ATS typesystem -> per-language SDK generators -> RemoteHost server + CLI run + fixtures
-    paths:
+  # --- catch-all: build infrastructure & broadly shared code -> ALL --------------------------
+  - paths:
+      - global.json
+      - NuGet.config
+      - .config/dotnet-tools.json
+      - Directory.Build.props
+      - Directory.Build.targets
+      - Directory.Packages.props
+      - Aspire.slnx
+      - src/Directory.Build.props
+      - src/Directory.Build.targets
+      - tests/Directory.Build.props
+      - tests/Directory.Build.targets
+      - tests/Directory.Packages.props
+      - eng/*.props      # any root-level eng build prop (Versions, Testing, Build, Publishing, Signing, ...) -> err toward ALL
+      - eng/*.targets    # any root-level eng build target (Testing, AfterSigning, ReplaceText, ...) -> err toward ALL
+      - eng/OuterPreBuild.proj   # build-wide project-name validation traversal -> err toward ALL
+      - eng/Version.Details.xml
+      - eng/common/**
+      - src/Shared/**
+      - tests/Shared/**
+      - .github/actions/enumerate-tests/**
+      - eng/scripts/split-test-matrix-by-deps.ps1
+      - eng/TestEnumerationRunsheetBuilder/**
+      - eng/testing/CITestsProperties.props
+      - .github/workflows/tests.yml
+      - .github/workflows/run-tests.yml
+      - .github/workflows/specialized-test-runner.yml
+      - .github/workflows/build-packages.yml
+      - .github/workflows/build-cli-native-archives.yml
+      - .github/workflows/build-cli-e2e-image.yml
+    targets: [ALL]
+    reason: build infrastructure / broadly shared code -> run everything
+
+  # --- convention misses: integration dirs whose covering test is NOT the same-named one ------
+  - paths: [src/Aspire.Hosting.Azure.*/**]
+    targets: [test:Aspire.Hosting.Azure.Tests]
+    reason: Azure hosting integrations have no dedicated test; Aspire.Hosting.Azure.Tests is the aggregate
+  - paths: [src/Aspire.Hosting.Integration.Analyzers/**]
+    targets: [test:Aspire.Hosting.Analyzers.Tests]
+
+  # --- non-.NET jobs (no MSBuild edge) --------------------------------------------------------
+  - paths:
       - src/Aspire.TypeSystem/**
       - src/Aspire.Hosting.RemoteHost/**
       - src/Aspire.Managed/**
@@ -173,29 +141,28 @@ curated_jobs:
       - tests/PolyglotAppHosts/**
       - .github/workflows/polyglot-validation/**
       - .github/workflows/polyglot-validation.yml
-  - target: job:typescript-sdk
-    reason: vitest unit tests over generated TS SDK (@aspire/transport, @aspire/base)
-    paths:
+    targets: [job:polyglot]
+    reason: ATS typesystem -> per-language SDK generators -> RemoteHost server + CLI run + fixtures
+  - paths:
       - src/Aspire.Hosting.CodeGeneration.TypeScript/**
       - tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**
       - src/Aspire.Cli/Templating/Templates/ts-starter/**
       - .github/workflows/typescript-sdk-tests.yml
-  - target: job:typescript-api-compat
-    reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`
-    paths:
+    targets: [job:typescript-sdk]
+    reason: vitest unit tests over generated TS SDK (@aspire/transport, @aspire/base)
+  - paths:
       - src/Aspire.Hosting*/**
       - src/Aspire.Hosting*/api/*.ats.txt
       - src/**/*.tscompat.suppression.txt
       - src/Aspire.Cli/**
       - tools/TypeScriptApiCompat/**
       - .github/workflows/typescript-api-compat.yml
-  - target: job:extension-unit
+    targets: [job:typescript-api-compat]
+    reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`
+  - paths: [extension/**]
+    targets: [job:extension-unit]
     reason: extension_tests_win + extension_bootstrap_linux run yarn build/test in extension/
-    paths:
-      - extension/**
-  - target: job:extension-e2e
-    reason: verbatim curated filter in tests.yml extension_e2e_changes job (~line 269)
-    paths:
+  - paths:
       - extension/**
       - src/Aspire.Cli/**
       - src/Aspire/Cli/**
@@ -209,32 +176,32 @@ curated_jobs:
       - .github/workflows/extension-e2e-tests.yml
       - .github/workflows/build-packages.yml
       - .github/workflows/build-cli-native-archives.yml
-  - target: job:cli-starter
-    reason: Windows starter-app smoke installing the PR CLI via dogfood script
-    paths:
+    targets: [job:extension-e2e]
+    reason: verbatim curated filter in tests.yml extension_e2e_changes job
+  - paths:
       - eng/scripts/get-aspire-cli-pr.ps1
       - eng/scripts/cli-starter-validation.ps1
       - src/Aspire.Cli/**
       - src/Aspire/Cli/**
       - src/Aspire.TypeSystem/**
       - src/Aspire.Managed/**
-  - target: job:api-diffs
-    reason: SCHEDULE-ONLY today; regenerates src/*/api/*.cs reference baselines
-    paths:
+    targets: [job:cli-starter]
+    reason: Windows starter-app smoke installing the PR CLI via dogfood script
+  - paths:
       - src/**/*.csproj
       - src/**/api/*.cs
       - .github/workflows/generate-api-diffs.yml
-  - target: job:ats-diffs
-    reason: SCHEDULE-ONLY today; regenerates *.ats.txt via `aspire sdk dump`
-    paths:
+    targets: [job:api-diffs]
+    reason: SCHEDULE-ONLY today; regenerates src/*/api/*.cs reference baselines
+  - paths:
       - src/Aspire.Hosting*/**
       - src/Aspire.Hosting*/api/*.ats.txt
       - src/Aspire.Cli/**
       - src/**/*.tscompat.suppression.txt
       - .github/workflows/generate-ats-diffs.yml
-  - target: job:deployment-e2e
-    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
-    paths:
+    targets: [job:ats-diffs]
+    reason: SCHEDULE-ONLY today; regenerates *.ats.txt via `aspire sdk dump`
+  - paths:
       - tests/Aspire.Deployment.EndToEnd.Tests/**
       - src/Aspire.Hosting.Azure*/**
       - src/Aspire.Cli/**
@@ -243,27 +210,30 @@ curated_jobs:
       - src/Aspire.Managed/**
       - src/Aspire.ProjectTemplates/**
       - .github/workflows/deployment-tests.yml
-  - target: test:Aspire.EndToEnd.Tests
-    reason: OUTERLOOP-ONLY today (SkipTests on GH Actions unless RunOuterloopTests); builds testproject apphost against built nugets
-    paths:
+    targets: [job:deployment-e2e]
+    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
+
+  # --- outerloop / e2e test targets gated by path ---------------------------------------------
+  - paths:
       - tests/Aspire.EndToEnd.Tests/**
       - tests/testproject/**
       - src/Aspire.Hosting/**
       - src/Aspire.Hosting.AppHost/**
       - src/Aspire.Hosting.PostgreSQL/**
       - src/Aspire.Hosting.Redis/**
-  - target: test:Aspire.Cli.EndToEnd.Tests
-    reason: consumes the CLI native archive (RequiresCliArchive=true) built from these sources; runs aspire end-to-end
-    paths:
+    targets: [test:Aspire.EndToEnd.Tests]
+    reason: OUTERLOOP-ONLY today (SkipTests on GH Actions unless RunOuterloopTests); builds testproject apphost against built nugets
+  - paths:
       - src/Aspire.Cli/**
       - src/Aspire/Cli/**
       - src/Aspire.TypeSystem/**
       - src/Aspire.Managed/**
       - src/Aspire.AppHost.Sdk/**
       - eng/clipack/**
+    targets: [test:Aspire.Cli.EndToEnd.Tests]
+    reason: consumes the CLI native archive (RequiresCliArchive=true) built from these sources; runs aspire end-to-end
 
-# 4. Runtime / loose-file dependencies (invisible to the csproj graph) ----------
-loose_file_deps:
+  # --- runtime / loose-file dependencies (invisible to the csproj graph) ----------------------
   - paths:
       - eng/scripts/get-aspire-cli.sh
       - eng/scripts/get-aspire-cli.ps1
@@ -279,6 +249,14 @@ loose_file_deps:
       - eng/scripts/pack-cli-npm-package.ps1
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
     reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse this script
+  - paths:
+      - eng/winget/**
+    targets: [test:Aspire.Acquisition.Tests, job:winget-installer]
+    reason: WinGet manifest generation; prepare_winget_installer_artifacts builds from eng/winget, Acquisition.Tests exercises installer-mode
+  - paths:
+      - eng/homebrew/**
+    targets: [test:Aspire.Acquisition.Tests, job:homebrew-installer]
+    reason: Homebrew cask generation; prepare_homebrew_installer_artifacts builds from eng/homebrew, Acquisition.Tests exercises installer-mode
   - paths:
       - eng/dashboardpack/**
     targets: [test:Aspire.Hosting.Sdk.Tests]
@@ -313,121 +291,17 @@ loose_file_deps:
       - eng/Signing.props
     targets: [test:Infrastructure.Tests]
     reason: Infrastructure.Tests WorkflowScripts/Pipelines assert on workflow & pipeline files
-
   - paths: [eng/Bundle.proj]
     targets: [CLI_BUNDLE]
     reason: assembles the CLI bundle (Aspire.Managed + native CLI + DCP); consumed by CLI e2e/starter/extension, not integrations
 
-# 5. Shared compiled source: a specific src file link-compiled into other projects --
-#    Change to the FILE (not the whole owning project) runs the consuming test(s).
-shared_compiled_source:
-  - paths: [src/Aspire.AppHost.Sdk/Aspire.RuntimeIdentifier.Tool/NuGetUtils.cs]
-    targets: [test:Aspire.Hosting.Sdk.Tests]
-  - paths: [src/Aspire.Cli/Resources/AddCommandStrings.Designer.cs]
-    targets: [test:Aspire.Cli.EndToEnd.Tests]
-  - paths: [src/Aspire.Cli/Resources/ConsoleActivityLoggerStrings.Designer.cs]
-    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Deployment.EndToEnd.Tests]
-  - paths: [src/Aspire.Cli/Resources/HelpGroupStrings.Designer.cs]
-    targets: [test:Aspire.Cli.EndToEnd.Tests]
-  - paths: [src/Aspire.Cli/Resources/RootCommandStrings.Designer.cs]
-    targets: [test:Aspire.Cli.EndToEnd.Tests]
-  - paths: [src/Aspire.Cli/Resources/RunCommandStrings.Designer.cs]
-    targets: [test:Aspire.Cli.EndToEnd.Tests]
-  - paths: [src/Aspire.Cli/Resources/SharedCommandStrings.Designer.cs]
-    targets: [test:Aspire.Cli.EndToEnd.Tests]
-  - paths: [src/Aspire.Cli/Resources/StopCommandStrings.Designer.cs]
-    targets: [test:Aspire.Cli.EndToEnd.Tests]
-  - paths: [src/Aspire.Hosting.Analyzers/Infrastructure/BoundedCacheWithFactory.cs]
-    targets: [test:Aspire.Hosting.Analyzers.Tests]
-  - paths: [src/Aspire.Hosting.Analyzers/Infrastructure/WellKnownTypeData.cs]
-    targets: [test:Aspire.Hosting.Analyzers.Tests]
-  - paths: [src/Aspire.Hosting.Analyzers/Infrastructure/WellKnownTypes.cs]
-    targets: [test:Aspire.Hosting.Analyzers.Tests]
-  - paths: [src/Aspire.Hosting.Azure.EventHubs/EventHubsEmulatorContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.ServiceBus/ServiceBusEmulatorContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.Storage/AzureStorageEmulatorConnectionString.cs]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Browsers/*.cs]
-    targets: [test:Aspire.Hosting.Browsers.Tests]
-  - paths: [src/Aspire.Hosting.Browsers/Resources/*.Designer.cs]
-    targets: [test:Aspire.Hosting.Browsers.Tests]
-  - paths: [src/Aspire.Hosting.Garnet/GarnetContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Garnet.Tests]
-  - paths: [src/Aspire.Hosting.Kafka/KafkaContainerImageTags.cs]
-    targets: [test:Aspire.Confluent.Kafka.Tests, test:Aspire.Hosting.Kafka.Tests]
-  - paths: [src/Aspire.Hosting.Keycloak/KeycloakContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Keycloak.Tests]
-  - paths: [src/Aspire.Hosting.Milvus/MilvusContainerImageTags.cs]
-    targets: [test:Aspire.Milvus.Client.Tests]
-  - paths: [src/Aspire.Hosting.MongoDB/MongoDBContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.MongoDB.Tests, test:Aspire.MongoDB.Driver.Tests, test:Aspire.MongoDB.Driver.v2.Tests, test:Aspire.MongoDB.EntityFrameworkCore.Tests]
-  - paths: [src/Aspire.Hosting.MySql/MySqlContainerImageTags.cs]
-    targets: [test:Aspire.MySqlConnector.Tests, test:Aspire.Pomelo.EntityFrameworkCore.MySql.Tests]
-  - paths: [src/Aspire.Hosting.Nats/NatsContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Nats.Tests, test:Aspire.NATS.Net.Tests]
-  - paths: [src/Aspire.Hosting.Oracle/OracleContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Oracle.Tests]
-  - paths: [src/Aspire.Hosting.PostgreSQL/PostgresContainerImageTags.cs]
-    targets: [test:Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.Tests, test:Aspire.Azure.Npgsql.Tests, test:Aspire.Hosting.Tests, test:Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests, test:Aspire.Npgsql.Tests]
-  - paths: [src/Aspire.Hosting.Qdrant/QdrantContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Qdrant.Tests, test:Aspire.Qdrant.Client.Tests]
-  - paths: [src/Aspire.Hosting.RabbitMQ/RabbitMQContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.RabbitMQ.Tests, test:Aspire.RabbitMQ.Client.Tests, test:Aspire.RabbitMQ.Client.v6.Tests]
-  - paths: [src/Aspire.Hosting.Redis/RedisContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Tests, test:Aspire.StackExchange.Redis.Tests, test:Aspire.Templates.Tests]
-  - paths: [src/Aspire.Hosting.Seq/SeqContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Seq.Tests]
-  - paths: [src/Aspire.Hosting.SqlServer/SqlServerContainerImageTags.cs]
-    targets: [test:Aspire.Microsoft.Data.SqlClient.Tests, test:Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests]
-  - paths: [src/Aspire.Hosting.Valkey/ValkeyContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Valkey.Tests]
-  - paths: [src/Aspire.Hosting.Yarp/YarpContainerImageTags.cs]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.JavaScript.Tests, test:Aspire.Hosting.Tests]
-  - paths: [src/Aspire.Hosting/ApplicationModel/KnownResourceCommands.cs]
-    targets: [test:Aspire.Cli.Tests]
-  - paths: [src/Aspire.Hosting/ApplicationModel/ModelName.cs]
-    targets: [test:Aspire.Hosting.Analyzers.Tests, test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.Blazor.Tests, test:Aspire.Hosting.Browsers.Tests, test:Aspire.Hosting.Containers.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.DotnetTool.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Garnet.Tests, test:Aspire.Hosting.GitHub.Models.Tests, test:Aspire.Hosting.Go.Tests, test:Aspire.Hosting.JavaScript.Tests, test:Aspire.Hosting.Kubernetes.Tests, test:Aspire.Hosting.Milvus.Tests, test:Aspire.Hosting.MySql.Tests, test:Aspire.Hosting.Nats.Tests, test:Aspire.Hosting.OpenAI.Tests, test:Aspire.Hosting.Oracle.Tests, test:Aspire.Hosting.PostgreSQL.Tests, test:Aspire.Hosting.Python.Tests, test:Aspire.Hosting.Qdrant.Tests, test:Aspire.Hosting.RabbitMQ.Tests, test:Aspire.Hosting.Redis.Tests, test:Aspire.Hosting.Seq.Tests, test:Aspire.Hosting.Testing.Tests, test:Aspire.Hosting.Tests, test:Aspire.Hosting.Yarp.Tests]
-  - paths: [src/Aspire.Hosting/Backchannel/BackchannelDataTypes.cs]
-    targets: [test:Aspire.Cli.Tests]
-  - paths: [src/Aspire.Hosting/Dcp/Process/ProcessOutputCapture.cs]
-    targets: [test:Aspire.Hosting.Azure.Kubernetes.Tests, test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Kubernetes.Tests, test:Aspire.Hosting.Tests, test:Aspire.Hosting.Yarp.Tests]
-  - paths: [src/Aspire.Hosting/Dcp/Process/ProcessResult.cs]
-    targets: [test:Aspire.Hosting.Azure.Kubernetes.Tests, test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Kubernetes.Tests, test:Aspire.Hosting.Tests, test:Aspire.Hosting.Yarp.Tests]
-  - paths: [src/Aspire.Hosting/Dcp/Process/ProcessSpec.cs]
-    targets: [test:Aspire.Hosting.Azure.Kubernetes.Tests, test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Kubernetes.Tests, test:Aspire.Hosting.Tests, test:Aspire.Hosting.Yarp.Tests]
-  - paths: [src/Aspire.Hosting/Dcp/Process/ProcessUtil.cs]
-    targets: [test:Aspire.Hosting.Azure.Kubernetes.Tests, test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Kubernetes.Tests, test:Aspire.Hosting.Tests, test:Aspire.Hosting.Yarp.Tests]
-  - paths: [src/Aspire.Hosting/Resources/LaunchProfileStrings.Designer.cs]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting/Utils/FormattingHelpers.cs]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.Foundry.Tests]
-  - paths: [src/Components/Aspire.MongoDB.Driver/AspireMongoDBDriverExtensions.cs]
-    targets: [test:Aspire.MongoDB.Driver.v2.Tests]
-  - paths: [src/Components/Aspire.MongoDB.Driver/AssemblyInfo.cs]
-    targets: [test:Aspire.MongoDB.Driver.v2.Tests]
-  - paths: [src/Components/Aspire.MongoDB.Driver/MongoDBSettings.cs]
-    targets: [test:Aspire.MongoDB.Driver.v2.Tests]
-  - paths: [src/Components/Aspire.NATS.Net/NatsHealthCheck.cs]
-    targets: [test:Aspire.Hosting.Nats.Tests]
-  - paths: [src/Components/Aspire.Npgsql/NpgsqlCommon.cs]
-    targets: [test:Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.Tests, test:Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests]
-  - paths: [src/Components/Aspire.Qdrant.Client/QdrantHealthCheck.cs]
-    targets: [test:Aspire.Hosting.Qdrant.Tests]
-  - paths: [src/Components/Aspire.RabbitMQ.Client/AspireRabbitMQExtensions.cs]
-    targets: [test:Aspire.RabbitMQ.Client.v6.Tests]
-  - paths: [src/Components/Aspire.RabbitMQ.Client/AssemblyInfo.cs]
-    targets: [test:Aspire.RabbitMQ.Client.v6.Tests]
-  - paths: [src/Components/Aspire.RabbitMQ.Client/RabbitMQClientSettings.cs]
-    targets: [test:Aspire.RabbitMQ.Client.v6.Tests]
-  - paths: [src/Components/Aspire.RabbitMQ.Client/RabbitMQEventSourceLogForwarder.cs]
-    targets: [test:Aspire.RabbitMQ.Client.v6.Tests]
-  - paths: [src/Components/Common/ConfigurationSchemaAttributes.cs]
-    targets: [test:ConfigurationSchemaGenerator.Tests]
-    note: link-compiled into ConfigurationSchemaGenerator.Tests, which is not an ALL_COMPONENT_TESTS member
-
-# 6. Known gaps ----------------------------------------------------------------
-gaps:
-  - paths: [src/Aspire.Hosting.Orleans/**]
-    note: no Aspire.Hosting.Orleans.Tests exists; only covered transitively via src/Aspire.Hosting
+# Derived targets: selected test project -> extra jobs/tests. Applied to the UNION of Layer 1 and
+# Layer 2 selected tests, to a fixpoint (a derived test is itself expanded; cycle-safe). This is how
+# a job fires based on WHICH tests run, regardless of which file triggered them.
+derived_targets:
+  - tests: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests]
+    targets: [job:cli-starter]
+    reason: if the CLI is under test, validate the Windows starter-app install path
+  - tests: [test:Aspire.Acquisition.Tests]
+    targets: [job:cli-starter, job:winget-installer, job:homebrew-installer]
+    reason: acquisition covers the installers; prepare the WinGet/Homebrew installer artifacts too

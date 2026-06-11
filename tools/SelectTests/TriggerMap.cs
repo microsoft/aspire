@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.FileSystemGlobbing;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -17,34 +18,75 @@ internal sealed class TriggerMap
 
     public Dictionary<string, List<string>> Groups { get; set; } = new();
 
-    public TestSelfRule? TestSelf { get; set; }
+    public List<ConventionRule> Conventions { get; set; } = new();
 
-    public List<string> RunAllGlobs { get; set; } = new();
+    public List<string> Ignore { get; set; } = new();
 
-    public List<PathRule> SharedSource { get; set; } = new();
+    public List<PathRule> PathRules { get; set; } = new();
 
-    public List<JobRule> CuratedJobs { get; set; } = new();
+    public List<DerivedRule> DerivedTargets { get; set; } = new();
 
-    public List<PathRule> LooseFileDeps { get; set; } = new();
+    // Only four matchers exist; a section is a key only when the selector treats it differently.
+    // The graph closure (ProjectReference, CPM, Directory.Build.*, foreign <Compile Include>) is
+    // computed at runtime by dotnet-affected (Layer 1), so those edges are intentionally absent.
 
-    public List<PathRule> SharedCompiledSource { get; set; } = new();
-
-    // gaps: documents known-uncovered source on purpose, so it is not a selecting rule.
-    // ProjectReference closure, CPM, Directory.Build.*, and file-level <Compile Include> are
-    // computed at runtime by dotnet-affected (Layer 1), so leaf_source/core_source/test_hubs are
-    // intentionally absent here.
-
-    public IEnumerable<PathRule> AllPathRules()
+    // Every job: token the map can ever emit -- the "all jobs" set an ALL selection expands to.
+    // Collected from every section that can carry a job: target (path-rule targets, derived
+    // targets, and group members), so a job referenced only by a derived rule is still part of ALL.
+    public IEnumerable<string> AllJobTokens()
     {
-        foreach (var r in SharedSource) { yield return r; }
-        foreach (var r in LooseFileDeps) { yield return r; }
-        foreach (var r in SharedCompiledSource) { yield return r; }
+        var tokens = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var rule in PathRules)
+        {
+            foreach (var t in rule.Targets)
+            {
+                AddJobTokensFromTarget(tokens, t);
+            }
+        }
+
+        foreach (var d in DerivedTargets)
+        {
+            foreach (var t in d.Targets)
+            {
+                AddJobTokensFromTarget(tokens, t);
+            }
+        }
+
+        foreach (var members in Groups.Values)
+        {
+            foreach (var m in members)
+            {
+                AddIfJob(tokens, m);
+            }
+        }
+
+        return tokens;
     }
 
-    // Every job: token the map can ever emit — the "all jobs" set an ALL selection expands to.
-    public IEnumerable<string> AllJobTokens() =>
-        CuratedJobs.Select(j => j.Target)
-            .Where(t => t.StartsWith("job:", StringComparison.Ordinal));
+    // A target may be a job: token directly or a group name whose members include job: tokens.
+    private void AddJobTokensFromTarget(HashSet<string> tokens, string target)
+    {
+        if (target.StartsWith("job:", StringComparison.Ordinal))
+        {
+            tokens.Add(target);
+        }
+        else if (Groups.TryGetValue(target, out var members))
+        {
+            foreach (var m in members)
+            {
+                AddIfJob(tokens, m);
+            }
+        }
+    }
+
+    private static void AddIfJob(HashSet<string> tokens, string token)
+    {
+        if (token.StartsWith("job:", StringComparison.Ordinal))
+        {
+            tokens.Add(token);
+        }
+    }
 
     public static TriggerMap Load(string mapPath)
     {
@@ -64,6 +106,41 @@ internal sealed class TriggerMap
         matcher.AddInclude(glob);
         return matcher.Match(new[] { path }).HasMatches;
     }
+
+    // Expands a path_conventions rule against a changed file. The pattern carries a single <name>
+    // placeholder for one path segment and a trailing "/**"; e.g. "src/Components/<name>/**" against
+    // "src/Components/Aspire.Npgsql/Foo.cs" captures name="Aspire.Npgsql" and substitutes it into the
+    // target template ("test:<name>.Tests" -> "test:Aspire.Npgsql.Tests"). The caller applies the
+    // existence guard (only emit when the derived test project is in the matrix).
+    public static bool TryExpandConvention(ConventionRule rule, string path, out string target)
+    {
+        target = "";
+
+        var pattern = rule.Pattern;
+        // Only the "<prefix><name>/**" shape is supported; the trailing /** matches any file under
+        // the captured directory (including nested files).
+        var hasGlobSuffix = pattern.EndsWith("/**", StringComparison.Ordinal);
+        var core = hasGlobSuffix ? pattern[..^"/**".Length] : pattern;
+
+        var nameIndex = core.IndexOf("<name>", StringComparison.Ordinal);
+        if (nameIndex < 0)
+        {
+            return false;
+        }
+
+        var before = core[..nameIndex];
+        var after = core[(nameIndex + "<name>".Length)..];
+        var regex = "^" + Regex.Escape(before) + "([^/]+)" + Regex.Escape(after) + (hasGlobSuffix ? "/.+" : "") + "$";
+
+        var match = Regex.Match(path, regex);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        target = rule.Target.Replace("<name>", match.Groups[1].Value, StringComparison.Ordinal);
+        return true;
+    }
 }
 
 internal sealed class PathRule
@@ -75,24 +152,23 @@ internal sealed class PathRule
     public string? Note { get; set; }
 
     public string? Reason { get; set; }
-
-    public int? Fanout { get; set; }
 }
 
-internal sealed class JobRule
-{
-    public string Target { get; set; } = "";
-
-    public string? Reason { get; set; }
-
-    public List<string> Paths { get; set; } = new();
-}
-
-internal sealed class TestSelfRule
+// conventions entry: a capture pattern (with a single <name> placeholder for one path segment) and
+// a target template that substitutes the captured <name>.
+internal sealed class ConventionRule
 {
     public string Pattern { get; set; } = "";
 
     public string Target { get; set; } = "";
+}
 
-    public string? Note { get; set; }
+// derived_targets entry: when ANY of Tests is selected (by Layer 1 or Layer 2), add Targets.
+internal sealed class DerivedRule
+{
+    public List<string> Tests { get; set; } = new();
+
+    public List<string> Targets { get; set; } = new();
+
+    public string? Reason { get; set; }
 }

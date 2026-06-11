@@ -33,15 +33,24 @@ non-.NET jobs and loose-file reads.
 
 ## What stays curated here
 
-| Section | Why the graph can't see it |
-|---------|----------------------------|
-| `run_all_globs` | "build infrastructure → run everything" is not a graph concept |
-| `curated_jobs` | non-.NET jobs (polyglot, extension, TypeScript, …) — no MSBuild edge |
-| `loose_file_deps` | tests that read files by path at runtime; hive installs; packaging |
-| `shared_source` | shared dirs with no owning csproj (`src/Components/Common`, `src/Vendoring`) |
-| `shared_compiled_source` | specific files link-compiled elsewhere; verified statically because the oracle (`--assume-changes`) is project-granular and cannot confirm file-level edges |
-| `test_self` | a test project's own folder change → that test project |
-| `groups` | named, reusable bundles of `test:` and/or `job:` targets |
+Only four matchers exist — a section is its own key only when the selector treats
+it differently. Everything that is "a glob set → a target set" lives in one
+section (`path_rules`); the groupings inside it are comments.
+
+| Section | What it is |
+|---------|------------|
+| `conventions` | `<name>`-capture pattern → target template, emitted only if the derived test exists (existence guard). Additive. Covers a test's own folder (`tests/<name>/**`) and the Hosting/Components integration dirs (a backstop for non-MSBuild files the graph can't attribute). |
+| `ignore` | globs Layer 2 accounts for with **no** target (Layer 1 covers them, or inert), so they don't trip the run-all fallback |
+| `path_rules` | a glob set → a target set (`test:` / `job:` / a group / `ALL`). The single general matcher: catch-all-to-`ALL`, convention misses, non-.NET jobs, and loose-file reads all live here under comment headers |
+| `derived_targets` | "if any of these tests is selected, also run these jobs/tests" — a *test-set* relationship, not a file edge |
+| `groups` | named, reusable bundles of `test:`/`job:` targets (expand recursively) |
+
+The former `run_all_globs`, `test_self`, `convention_overrides`, `curated_jobs`,
+`loose_file_deps`, `shared_source`, `shared_compiled_source`, and `gaps` sections
+are **gone**: `run_all_globs` is a `path_rules` entry whose target is `ALL`;
+`test_self` is a convention; the override/job/loose buckets are all `path_rules`
+(they had no distinct selector behavior); and `dotnet-affected` owns the
+link-compiled / `Components/Common` edges at runtime, so those are not curated.
 
 ## Target vocabulary
 
@@ -54,41 +63,60 @@ non-.NET jobs and loose-file reads.
 | `job:extension-unit` | `tests.yml` `extension_tests_win` + `extension_bootstrap_linux` |
 | `job:extension-e2e` | `tests.yml` → [`extension-e2e-tests.yml`](../../.github/workflows/extension-e2e-tests.yml) (gated by `extension_e2e_changes`) |
 | `job:cli-starter` | `tests.yml` `cli_starter_validation_windows` |
+| `job:winget-installer` | `tests.yml` `prepare_winget_installer_artifacts` |
+| `job:homebrew-installer` | `tests.yml` `prepare_homebrew_installer_artifacts` |
 | `job:api-diffs` | [`generate-api-diffs.yml`](../../.github/workflows/generate-api-diffs.yml) — *schedule-only today* |
 | `job:ats-diffs` | [`generate-ats-diffs.yml`](../../.github/workflows/generate-ats-diffs.yml) — *schedule-only today* |
 | `job:deployment-e2e` | [`deployment-tests.yml`](../../.github/workflows/deployment-tests.yml) — *schedule/dispatch-only today* |
 | `ALL` | full test matrix + all jobs |
-| `<GROUP_NAME>` | a named group (see `groups:`) expanding to its `test:`/`job:` members |
+| `<GROUP_NAME>` | a named group (see `groups:`) expanding **recursively** to its `test:`/`job:` members |
 
 Base builds (packages, CLI native archives, installer artifacts, the CLI E2E
 image) are not modelled as targets: they are upstream `needs:` of the targets
 above and run whenever any dependent target runs. Their **workflow files** are in
-`run_all_globs` because a change to *how* they build can affect every consumer.
+the catch-all `path_rules` entry (target `ALL`) because a change to *how* they
+build can affect every consumer.
 
 ## Rule categories
 
 Rules are **additive**: a changed file activates the union of targets from every
-rule whose glob it matches, plus the Layer 1 projects. A match in `run_all_globs`
-short-circuits to `ALL`. Group names in a rule's targets expand to their members.
+rule whose glob it matches, plus the Layer 1 projects. A `path_rules` entry whose
+target is `ALL` selects the whole matrix. Group names in a rule's targets expand
+recursively to their members.
 
 ### Named groups (`groups`)
 
-Reusable bundles of `test:` and/or `job:` targets, so a glob can map to a named
+Reusable bundles of `test:` and/or `job:` targets, so a rule can map to a named
 set instead of repeating it. Example:
 
 ```yaml
 groups:
-  ALL_COMPONENT_TESTS: [test:Aspire.Npgsql.Tests, ...]   # ~50 client-component tests
   CLI_BUNDLE: [test:Aspire.Cli.EndToEnd.Tests, job:cli-starter, job:extension-e2e]
 ```
 
-### Test self-changes (`test_self`)
+Group members may themselves be group names; expansion is recursive and
+cycle-safe.
 
-`tests/<X>/**` → `test:<X>` for every test project.
+### Conventions (`conventions`)
 
-### Catch-all → `ALL` (`run_all_globs`)
+A `<name>` capture (one path segment) → a target template, emitted only when the
+derived test exists in the matrix (existence guard), and additive. This includes
+a test project's own folder and the integration/component backstop:
 
-Build infrastructure and broadly shared code re-run everything. Examples:
+```
+tests/<name>/**               -> test:<name>
+src/Aspire.Hosting.<name>/**  -> test:Aspire.Hosting.<name>.Tests
+src/Components/<name>/**       -> test:<name>.Tests
+```
+
+`tests/Shared/**`, `src/Aspire.Hosting.Azure.CosmosDB/**`, `Orleans`, etc. have no
+same-named test, so the guard drops them and they fall through to `path_rules` /
+Layer 1.
+
+### Catch-all → `ALL`
+
+A single `path_rules` entry whose target is `ALL`. Build infrastructure and
+broadly shared code re-run everything. Examples:
 
 ```
 global.json, NuGet.config, .config/dotnet-tools.json
@@ -100,52 +128,52 @@ src/Shared/**, tests/Shared/**
 
 Note `eng/OuterPreBuild.proj` (build-wide project-name validation) is here, but
 `eng/Bundle.proj` is **not** — it assembles only the CLI bundle, so it maps to
-`CLI_BUNDLE`, not `ALL`. `.proj` traversal files are invisible to `dotnet-affected`
-(not in the slnx; not a supported project type), so they must be curated.
+`CLI_BUNDLE`, not `ALL`.
 
-### Shared source with no owning csproj (`shared_source`)
+### Ignore (`ignore`)
 
-| Path | Targets |
-|------|---------|
-| `src/Components/Common/**` | `ALL_COMPONENT_TESTS` (compiled into many client components) |
-| `src/Vendoring/OpenTelemetry.Shared/**` (+ the StackExchange.Redis vendor dir) | the StackExchange.Redis client tests |
-| `src/Vendoring/OpenTelemetry.Shared/**` (+ the ConfluentKafka vendor dir) | `test:Aspire.Confluent.Kafka.Tests` |
-
-### Curated job rules (`curated_jobs`)
-
-Non-.NET jobs and a few outerloop/e2e `test:` targets gated by path. See the YAML
-for full globs. Highlights:
-
-- `job:polyglot` ← `src/Aspire.TypeSystem/**`, the `CodeGeneration.*` generators,
-  `src/Aspire.Cli/**`, `src/Aspire.Managed/**`, `tests/PolyglotAppHosts/**`, …
-- `job:extension-unit` / `job:extension-e2e` ← `extension/**` (e2e also CLI / hosting / dashboard)
-- `job:typescript-api-compat`, `job:ats-diffs` ← `src/Aspire.Hosting*/**` (so a hosting
-  integration change *does* trigger these — `Aspire.Hosting*` matches `Aspire.Hosting.Kafka`
-  etc., which is intended)
-
-### Runtime / loose-file dependencies (`loose_file_deps`)
-
-Dependencies invisible to the csproj graph. Highlights:
-
-| Path | Targets | Why |
-|------|---------|-----|
-| `eng/clipack/**` | `Aspire.Cli.Tests`, `Aspire.Cli.EndToEnd.Tests`, `Infrastructure.Tests` | `AspireJsLauncherTests` reads `eng/clipack/npm/aspire.js`; CLI archive consumed by e2e |
-| `eng/Bundle.proj` | `CLI_BUNDLE` | assembles the CLI bundle; consumed by CLI e2e/starter/extension, not integrations |
-| `src/Aspire.ProjectTemplates/**` | `Aspire.Templates.Tests` | installs the template hive (also covers the out-of-slnx template placeholder projects) |
-| `playground/**` | `Aspire.Playground.Tests` | builds/runs apps under `playground/` |
-| `.github/workflows/**`, `eng/pipelines/**` | `Infrastructure.Tests` | asserts on workflow/pipeline files |
-
-### Shared compiled source (`shared_compiled_source`)
-
-Specific `src` files link-compiled into *other* projects. A change to the **file**
-(not the whole owning project) runs the consuming test(s). `dotnet-affected` can
-see these in a real `--from`/`--to` diff, but the oracle cross-check uses
-`--assume-changes` (project-granular) and cannot, so they are kept here and
-verified statically. Example:
+Files Layer 2 deliberately accounts for with **no** target, so they don't trip
+the run-all fallback. Each is either covered precisely by Layer 1 (the graph sees
+the foreign `<Compile Include>` consumers) or is inert:
 
 ```
-src/Aspire.Hosting.PostgreSQL/PostgresContainerImageTags.cs
-  -> test:Aspire.Npgsql.Tests, test:Aspire.Azure.Npgsql.Tests, test:Aspire.Hosting.Tests, ...
+src/Components/Common/**                          # link-compiled into many components; Layer 1 covers (verified: 71 tests)
+src/Vendoring/OpenTelemetry.Instrumentation.*/**  # glob-compiled into Redis/Kafka components; Layer 1 covers
+src/Vendoring/OpenTelemetry.Shared/**             # compiled by nothing (each instrumentation dir has its own Shared/); inert
+```
+
+### Path rules (`path_rules`)
+
+The one general glob→targets matcher. `targets` may be `test:` / `job:` / a group
+name / `ALL`. Comment headers in the YAML group the entries by intent; the
+selector treats them all identically. Highlights:
+
+- **convention misses** — `src/Aspire.Hosting.Azure.*/** → test:Aspire.Hosting.Azure.Tests`
+  (the Azure hosting integrations have no dedicated test; the aggregate test covers them),
+  `src/Aspire.Hosting.Integration.Analyzers/** → test:Aspire.Hosting.Analyzers.Tests`.
+- **non-.NET jobs** — `job:polyglot` ← `src/Aspire.TypeSystem/**`, the `CodeGeneration.*`
+  generators, `src/Aspire.Cli/**`, …; `job:extension-unit` / `job:extension-e2e` ← `extension/**`;
+  `job:typescript-api-compat` / `job:ats-diffs` ← `src/Aspire.Hosting*/**` (so a hosting integration
+  change triggers these, and **every** Hosting file is "matched" by Layer 2 — a non-MSBuild Hosting
+  change never falls to the run-all fallback).
+- **loose-file deps** — `eng/clipack/**` (read by `Aspire.Cli.Tests`), `eng/winget/**` /
+  `eng/homebrew/**` (installer manifests → `Aspire.Acquisition.Tests` + the installer jobs),
+  `src/Aspire.ProjectTemplates/**` (template hive install), `playground/**`, `.github/workflows/**`
+  (asserted by `Infrastructure.Tests`), `eng/Bundle.proj` → `CLI_BUNDLE`.
+
+### Derived targets (`derived_targets`)
+
+"If **any** of these test projects is selected (by either layer), also run these
+targets." Applied to the union of Layer 1 and Layer 2 selected tests, to a
+fixpoint (a `test → test` edge whose target has its own rule is followed; cycles
+terminate). This is how a job fires based on *which tests run*, not on which file
+changed:
+
+```yaml
+- tests: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests]
+  targets: [job:cli-starter]
+- tests: [test:Aspire.Acquisition.Tests]
+  targets: [job:cli-starter, job:winget-installer, job:homebrew-installer]
 ```
 
 ## Maintenance
@@ -157,38 +185,41 @@ tell you exactly what to fix when the repo changes.
 Steady state:
 
 1. Make the change. The graph closure (Layer 1) tracks itself — you do **not**
-   edit the map for a new `ProjectReference` or a new `src` project that is in the
-   solution.
+   edit the map for a new `ProjectReference`, a new `src` project in the solution,
+   or a new foreign `<Compile Include>` edge (the graph reports those live).
 2. Run the verifier. Each failure names the offending path/project/target:
-   - new `src` project neither in `Aspire.slnx` nor curated → add a rule (or add
-     it to the solution);
-   - new foreign `<Compile Include>` edge → add a `shared_compiled_source` entry;
+   - new `src` project neither in `Aspire.slnx` nor matched by a rule → add a
+     `path_rules` entry (or add it to the solution);
+   - a `src/Aspire.Hosting.Azure.<service>` (or other convention-miss) dir whose
+     non-MSBuild changes should run a specific test → add a `path_rules` entry;
    - renamed/removed test project, job, or path → fix the name/glob.
 3. The selector's audit summary lists **unattributed changed files** — files no
-   rule matched and no project owns. A new non-.NET job or runtime file read shows
-   up there (nothing graph-based can flag it), prompting a `curated_jobs` /
-   `loose_file_deps` addition.
+   Layer 2 rule matched, not ignored, and not owned by a slnx project. A new
+   non-.NET job or runtime file read shows up there, prompting a `path_rules`
+   addition.
 
-When the curated sections need a periodic refresh, only the derived-style content
-is regenerable; the genuinely hand-owned knowledge (`curated_jobs`,
-`loose_file_deps`, and the build-infra judgment in `run_all_globs`) must be
-carried forward, never silently regenerated — it encodes dependencies a fresh
-codebase read cannot recover.
+The hand-owned knowledge (`conventions`, `ignore`, `path_rules`, `derived_targets`)
+encodes dependencies a fresh codebase read cannot recover, so carry it forward;
+never silently regenerate it.
 
 ## Caveats
 
-- **Compile-include is file-granular.** Link-compiling a single foreign `.cs`
-  file couples the consumer to that file only — `shared_compiled_source` is keyed
-  on the file, not the owning project, so a different file in the same project
-  does not drag the borrowed-file consumers.
-- **Safety vs. selectivity.** `run_all_globs` and the kill switch err toward
-  `ALL`; otherwise the selector relies on Layer 1 for `src` coverage. A missed
-  test is a silent regression; an extra test is just slower.
+- **Convention is a backstop, not the primary signal.** Normal compiled `.cs`
+  changes are attributed by Layer 1; the convention exists for the non-MSBuild
+  files the graph can't see, and to keep the common case selective instead of
+  falling to the run-all fallback.
+- **Run-all fallback.** A changed `src/**` file that no Layer 2 rule matched, that
+  isn't ignored, and that isn't under a project in `Aspire.slnx` forces the full
+  matrix. A missed test is a silent regression; an extra run is just slower.
+  Non-`src` leftovers are audit-only.
+- **Safety vs. selectivity.** The catch-all `ALL` rule, the run-all fallback, and
+  the kill switch err toward `ALL`; otherwise the selector relies on Layer 1 for
+  `src` coverage and the convention backstop for non-MSBuild files.
 - **Schedule/outerloop-only targets.** `api-diffs`, `ats-diffs`, `deployment-e2e`,
   and `Aspire.EndToEnd.Tests` are not in the regular PR matrix today; their rules
   give the *would-be* trigger paths.
+- **Integration dirs with no test.** `src/Aspire.Hosting.Orleans`,
+  `Aspire.Hosting.AppHost`, and `Aspire.Hosting.Tasks` have no dedicated test
+  project. Their MSBuild files are owned by Layer 1 and matched by the
+  `src/Aspire.Hosting*/**` job rules; nothing special is needed for them.
 
-## Known gaps
-
-- `src/Aspire.Hosting.Orleans/**` has no `Aspire.Hosting.Orleans.Tests` project;
-  it is covered only transitively (via the graph) through `src/Aspire.Hosting`.

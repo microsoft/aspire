@@ -19,55 +19,40 @@ public sealed class TestTriggerMap
 
     public Dictionary<string, List<string>> Groups { get; set; } = new();
 
-    public TestSelfRule? TestSelf { get; set; }
+    public List<ConventionRule> Conventions { get; set; } = new();
 
-    public List<string> RunAllGlobs { get; set; } = new();
+    public List<string> Ignore { get; set; } = new();
 
-    public List<PathRule> SharedSource { get; set; } = new();
+    public List<PathRule> PathRules { get; set; } = new();
 
-    public List<JobRule> CuratedJobs { get; set; } = new();
-
-    public List<PathRule> LooseFileDeps { get; set; } = new();
-
-    public List<PathRule> SharedCompiledSource { get; set; } = new();
-
-    public List<PathRule> Gaps { get; set; } = new();
+    public List<DerivedRule> DerivedTargets { get; set; } = new();
 
     /// <summary>
-    /// Every rule section that carries <c>paths</c> globs, in one sequence. The graph-derived
-    /// sections (leaf/core/test_hubs) are gone — <c>dotnet-affected</c> reproduces them — so this
-    /// is the curated surface only. <see cref="Gaps"/> is excluded: it documents known-uncovered
-    /// source on purpose, so it must not satisfy coverage.
+    /// The <c>conventions</c> patterns as plain globs (the <c>&lt;name&gt;</c> capture replaced by
+    /// <c>*</c>), so coverage/dead-glob checks can match them against tracked files.
     /// </summary>
-    public IEnumerable<PathRule> AllPathRules()
-    {
-        foreach (var r in SharedSource) { yield return r; }
-        foreach (var r in LooseFileDeps) { yield return r; }
-        foreach (var r in SharedCompiledSource) { yield return r; }
-    }
+    public IEnumerable<string> ConventionGlobs() =>
+        Conventions.Select(c => c.Pattern.Replace("<name>", "*", StringComparison.Ordinal));
 
     /// <summary>
-    /// Every glob that, when matched, should select at least one target — i.e. all rule paths
-    /// plus the curated-job paths and the catch-all globs. Drives source-project coverage.
+    /// Every glob that, when matched, accounts for a changed file — the convention patterns
+    /// (globified), the ignore globs, and every path-rule glob. Drives source-project coverage.
     /// </summary>
     public IEnumerable<string> AllSelectingGlobs()
     {
-        foreach (var g in RunAllGlobs) { yield return g; }
-        foreach (var r in AllPathRules())
+        foreach (var g in ConventionGlobs()) { yield return g; }
+        foreach (var g in Ignore) { yield return g; }
+        foreach (var r in PathRules)
         {
             foreach (var p in r.Paths) { yield return p; }
-        }
-        foreach (var j in CuratedJobs)
-        {
-            foreach (var p in j.Paths) { yield return p; }
         }
     }
 
     /// <summary>
-    /// Every concrete target string (<c>test:*</c> / <c>job:*</c> / <c>ALL*</c>) referenced
-    /// anywhere in the map: group members, every rule's targets, and the curated-job targets.
-    /// The <c>test_self</c> target is excluded because it is the literal placeholder
-    /// <c>test:&lt;TestProject&gt;</c>, not a concrete project reference.
+    /// Every concrete target string (<c>test:*</c> / <c>job:*</c> / <c>ALL</c> / group name)
+    /// referenced anywhere in the map: group members, every path rule's targets, and the
+    /// derived-target rules (both the keyed test and its targets). The <c>conventions</c> templates
+    /// are excluded because they carry a <c>&lt;name&gt;</c> placeholder, not a concrete ref.
     /// </summary>
     public IEnumerable<string> AllReferencedTargets()
     {
@@ -75,68 +60,51 @@ public sealed class TestTriggerMap
         {
             foreach (var t in members) { yield return t; }
         }
-        foreach (var r in AllPathRules())
+        foreach (var r in PathRules)
         {
             foreach (var t in r.Targets) { yield return t; }
         }
-        foreach (var j in CuratedJobs) { yield return j.Target; }
+        foreach (var d in DerivedTargets)
+        {
+            foreach (var t in d.Tests) { yield return t; }
+            foreach (var t in d.Targets) { yield return t; }
+        }
     }
 
     /// <summary>
-    /// Resolves which test projects the map selects for a single changed file: the union of
-    /// every matching rule's targets, with groups expanded to their member test projects.
-    /// <paramref name="selectsAll"/> is set when any matching rule yields the <c>ALL</c>
-    /// sentinel (the whole matrix), in which case the test-project set is not meaningful.
-    /// <c>job:</c> targets are ignored — this resolves test projects only.
+    /// Expands a <c>conventions</c> rule against a changed file (mirror of the tool's
+    /// <c>TriggerMap.TryExpandConvention</c>): a single <c>&lt;name&gt;</c> captures one path
+    /// segment and a trailing <c>/**</c> matches any file under it. The caller applies the existence
+    /// guard (only a derived test that is a real matrix project is selected).
     /// </summary>
-    public IReadOnlySet<string> SelectTestProjects(string changedPath, out bool selectsAll)
+    public static bool TryExpandConvention(ConventionRule rule, string path, out string target)
     {
-        selectsAll = false;
-        var result = new HashSet<string>(StringComparer.Ordinal);
+        target = "";
 
-        foreach (var (globs, targets) in SelectionRules())
+        var pattern = rule.Pattern;
+        var hasGlobSuffix = pattern.EndsWith("/**", StringComparison.Ordinal);
+        var core = hasGlobSuffix ? pattern[..^"/**".Length] : pattern;
+
+        var nameIndex = core.IndexOf("<name>", StringComparison.Ordinal);
+        if (nameIndex < 0)
         {
-            if (!globs.Any(g => GlobMatches(g, changedPath)))
-            {
-                continue;
-            }
-
-            foreach (var target in targets)
-            {
-                if (target == "ALL")
-                {
-                    selectsAll = true;
-                }
-                else if (Groups.TryGetValue(target, out var members))
-                {
-                    // Only test: members are test projects; job: members are ignored here.
-                    foreach (var m in members)
-                    {
-                        if (m.StartsWith("test:", StringComparison.Ordinal)) { result.Add(StripTestPrefix(m)); }
-                    }
-                }
-                else if (target.StartsWith("test:", StringComparison.Ordinal))
-                {
-                    result.Add(StripTestPrefix(target));
-                }
-                // job: targets are not test projects; ignore.
-            }
+            return false;
         }
 
-        return result;
+        var before = core[..nameIndex];
+        var after = core[(nameIndex + "<name>".Length)..];
+        var regex = "^" + System.Text.RegularExpressions.Regex.Escape(before) + "([^/]+)" +
+            System.Text.RegularExpressions.Regex.Escape(after) + (hasGlobSuffix ? "/.+" : "") + "$";
+
+        var match = System.Text.RegularExpressions.Regex.Match(path, regex);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        target = rule.Target.Replace("<name>", match.Groups[1].Value, StringComparison.Ordinal);
+        return true;
     }
-
-    private IEnumerable<(IReadOnlyList<string> Globs, IReadOnlyList<string> Targets)> SelectionRules()
-    {
-        // run_all_globs is a flat list of globs that all select the ALL sentinel.
-        yield return (RunAllGlobs, new[] { "ALL" });
-
-        foreach (var r in AllPathRules()) { yield return (r.Paths, r.Targets); }
-        foreach (var j in CuratedJobs) { yield return (j.Paths, new[] { j.Target }); }
-    }
-
-    private static string StripTestPrefix(string target) =>
-        target.StartsWith("test:", StringComparison.Ordinal) ? target["test:".Length..] : target;
 
     /// <summary>Matches a repo-relative '/'-separated path against a single map glob.</summary>
     public static bool GlobMatches(string glob, string path)
@@ -168,26 +136,23 @@ public sealed class PathRule
     public string? Note { get; set; }
 
     public string? Reason { get; set; }
-
-    public int? Fanout { get; set; }
 }
 
-/// <summary>A curated job rule: a single <c>job:</c> target gated by a set of path globs.</summary>
-public sealed class JobRule
-{
-    public string Target { get; set; } = "";
-
-    public string? Reason { get; set; }
-
-    public List<string> Paths { get; set; } = new();
-}
-
-/// <summary>The <c>test_self</c> rule: a test project's own folder always runs that project.</summary>
-public sealed class TestSelfRule
+/// <summary>A <c>conventions</c> entry: a capture pattern with a single <c>&lt;name&gt;</c>
+/// placeholder and a target template that substitutes the captured segment.</summary>
+public sealed class ConventionRule
 {
     public string Pattern { get; set; } = "";
 
     public string Target { get; set; } = "";
+}
 
-    public string? Note { get; set; }
+/// <summary>A <c>derived_targets</c> entry: selecting any of <see cref="Tests"/> adds <see cref="Targets"/>.</summary>
+public sealed class DerivedRule
+{
+    public List<string> Tests { get; set; } = new();
+
+    public List<string> Targets { get; set; } = new();
+
+    public string? Reason { get; set; }
 }

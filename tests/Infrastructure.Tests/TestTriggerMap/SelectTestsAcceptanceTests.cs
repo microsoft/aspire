@@ -7,273 +7,551 @@ using Xunit;
 namespace Infrastructure.Tests.TestTriggerMap;
 
 /// <summary>
-/// Behavior spec for the <see cref="TestSelector"/> tool, expressed as a contract:
-/// given a set of changed files (and, where relevant, the Layer 1 / <c>dotnet-affected</c>
-/// set injected as project names), assert on the returned <see cref="SelectionResult"/>
-/// (selected test projects, jobs, whether the full matrix is forced, and the unmatched files).
-///
-/// The selector only owns Layer 2 (the curated <c>docs/ci/test-trigger-map.yml</c>): the
-/// graph-derived project closure (leaf/core/test-hub fan-out) is computed at runtime by
-/// <c>dotnet-affected</c> and supplied to <see cref="TestSelector.Select"/>, so those edges are
-/// exercised here by injecting the Layer 1 set rather than by the map.
+/// Behavior spec for the <see cref="TestSelector"/> engine. These tests drive the selector with
+/// small SYNTHETIC maps (a temp <c>map.yml</c> + a fake matrix + fake project dirs), so they assert
+/// the resolution mechanisms — conventions, overrides, ignore, Layer-1 attribution, the run-all
+/// fallback, derived targets, and group expansion — without coupling to the contents of the real
+/// <c>docs/ci/test-trigger-map.yml</c>. A thin set of real-map invariant smokes (computed from the
+/// filesystem, never hardcoding project names) lives at the end; structural invariants of the real
+/// map are covered by <see cref="TestTriggerMapTests"/>.
 /// </summary>
 public sealed class SelectTestsAcceptanceTests
 {
-    private static readonly string s_mapPath = Path.Combine(RepoRoot.Path, "docs", "ci", "test-trigger-map.yml");
-    private static readonly IReadOnlyCollection<string> s_allTestProjects = EnumerateMatrixTestProjects();
+    // A synthetic map exercising every section. Test projects referenced here are supplied (or
+    // withheld) via the per-test matrix to drive the existence guard.
+    private const string SyntheticMap = """
+        version: 1
+        groups:
+          MIXED: [test:GroupTest, job:group-job]
+          ONLYTESTS: [test:T1, test:T2]
+          ONLYJOBS: [job:j1, job:j2]
+          OUTER: [test:T1, INNER]
+          INNER: [job:inner-job, test:T2]
+          CYCA: [test:T1, CYCB]
+          CYCB: [test:T2, CYCA]
+          HASALL: [ALL]
+        conventions:
+          - pattern: tests/<name>/**
+            target: test:<name>
+          - pattern: src/Aspire.Hosting.<name>/**
+            target: test:Aspire.Hosting.<name>.Tests
+          - pattern: src/Components/<name>/**
+            target: test:<name>.Tests
+        ignore:
+          - src/Shared/Inert/**
+          - src/Both/**
+        path_rules:
+          - paths: [global.json]
+            targets: [ALL]
+          - paths: [src/Aspire.Hosting.Azure.*/**]
+            targets: [test:Aspire.Hosting.Azure.Tests]
+          - paths: [src/Aspire.Hosting.*/**]
+            targets: [job:hostjob]
+          - paths: [src/CuratedThing/**]
+            targets: [job:cjob]
+          - paths: [eng/installer/**]
+            targets: [test:InstallerTests, job:installer]
+          - paths: [src/Both/**]
+            targets: [test:RealOne]
+          - paths: [src/grp/**]
+            targets: [MIXED]
+          - paths: [src/grp2/**]
+            targets: [MIXED]
+          - paths: [src/allgrp/**]
+            targets: [HASALL]
+          - paths: [src/cyc/**]
+            targets: [CYCA]
+          - paths: [src/outer/**]
+            targets: [OUTER]
+          - paths: [src/bogus/**]
+            targets: [BOGUS, test:RealOne]
+        derived_targets:
+          - tests: [test:CliTests, test:CliTestsTwo]
+            targets: [job:cli-starter]
+          - tests: [test:ChainA]
+            targets: [test:ChainB]
+          - tests: [test:ChainB]
+            targets: [job:chain-job]
+          - tests: [test:GrpTrigger]
+            targets: [MIXED]
+          - tests: [test:DerCycA]
+            targets: [test:DerCycB]
+          - tests: [test:DerCycB]
+            targets: [test:DerCycA]
+        """;
 
-    private static SelectionResult Select(params string[] changedFiles)
-        => new TestSelector(s_mapPath, s_allTestProjects).Select(changedFiles, [], new SelectorOptions());
+    // The matrix universe for the synthetic tests. Deliberately omits Aspire.Hosting.Ghost.Tests
+    // and Aspire.Hosting.Azure.CosmosDB.Tests so the existence guard / override paths are exercised.
+    private static readonly string[] s_matrix =
+    [
+        "Aspire.Hosting.Foo.Tests", "Foo.Tests", "Aspire.Hosting.Azure.Tests",
+        "Aspire.Hosting.Azure.Kusto.Tests", "GroupTest", "T1", "T2", "InstallerTests",
+        "CliTests", "CliTestsTwo", "ChainA", "ChainB", "RealOne", "GrpTrigger", "DerCycA", "DerCycB",
+        "SelfProj", "Layer1Only",
+    ];
 
-    private static SelectionResult SelectWithLayer1(string[] changedFiles, string[] layer1Affected)
-        => new TestSelector(s_mapPath, s_allTestProjects).Select(changedFiles, layer1Affected, new SelectorOptions());
+    private static TestSelector Selector(IEnumerable<string>? projectDirs = null)
+    {
+        var dir = Directory.CreateTempSubdirectory("selecttests");
+        var path = Path.Combine(dir.FullName, "map.yml");
+        File.WriteAllText(path, SyntheticMap);
+        return new TestSelector(
+            path,
+            s_matrix.ToHashSet(StringComparer.Ordinal),
+            (projectDirs ?? []).ToHashSet(StringComparer.Ordinal));
+    }
 
-    // --- run_all catch-all -> full matrix ---------------------------------------------------
+    private static SelectionResult Select(string[] files, string[]? layer1 = null, IEnumerable<string>? projectDirs = null)
+        => Selector(projectDirs).Select(files, layer1 ?? [], new SelectorOptions());
+
+    // --- A. Convention matching -------------------------------------------------------------
 
     [Fact]
-    public void BuildInfraChangeSelectsAll()
+    public void HostingConventionSelectsSameNamedTest()
     {
-        var result = Select("global.json");
+        var r = Select(["src/Aspire.Hosting.Foo/Bar.cs"]);
 
-        Assert.True(result.SelectsAll);
-        Assert.NotNull(result.EscalationReason);
+        Assert.Contains("Aspire.Hosting.Foo.Tests", r.TestProjects);
+        Assert.False(r.SelectsAll);
     }
 
     [Fact]
-    public void SelectsAllExpandsToFullMatrixAndAllJobs()
+    public void ComponentsConventionSelectsSameNamedTest()
     {
-        var result = Select("global.json");
+        var r = Select(["src/Components/Foo/Bar.cs"]);
 
-        Assert.True(result.TestProjects.SetEquals(s_allTestProjects),
-            "SelectsAll must expand TestProjects to the full matrix.");
-        Assert.Contains("job:polyglot", result.Jobs);
-        Assert.Contains("job:extension-e2e", result.Jobs);
+        Assert.Contains("Foo.Tests", r.TestProjects);
+        Assert.False(r.SelectsAll);
     }
 
     [Fact]
-    public void BuildOrchestrationProjSelectsAll()
+    public void ConventionExistenceGuardDropsTestNotInMatrix()
     {
-        // eng/OuterPreBuild.proj is build-wide project-name validation -> err toward ALL.
-        var result = Select("eng/OuterPreBuild.proj");
+        // No Aspire.Hosting.Ghost.Tests in the matrix; the dir is Layer-1-owned so it does not hit
+        // the fallback — the point is the convention emits no phantom target.
+        var r = Select(["src/Aspire.Hosting.Ghost/Bar.cs"], projectDirs: ["src/Aspire.Hosting.Ghost"]);
 
-        Assert.True(result.SelectsAll);
-    }
-
-    // --- shared source (no owning csproj) ---------------------------------------------------
-
-    [Fact]
-    public void ComponentsCommonSelectsAllComponents()
-    {
-        // src/Components/Common is compiled into many client components (group expansion).
-        var result = Select("src/Components/Common/HealthChecksExtensions.cs");
-
-        Assert.Contains("Aspire.Npgsql.Tests", result.TestProjects);
-        Assert.False(result.SelectsAll);
+        Assert.DoesNotContain("Aspire.Hosting.Ghost.Tests", r.TestProjects);
+        Assert.Empty(r.TestProjects);
+        Assert.False(r.SelectsAll);
     }
 
     [Fact]
-    public void VendoredOtelSelectsRedisAndKafka()
+    public void CoreHostingDirIsNotMatchedByConvention()
     {
-        var result = Select("src/Vendoring/OpenTelemetry.Shared/SomeShared.cs");
+        // src/Aspire.Hosting (no dotted suffix) must NOT match src/Aspire.Hosting.<name>. Owned so
+        // it does not fall to run-all; the assertion is that no convention test is added.
+        var r = Select(["src/Aspire.Hosting/Bar.cs"], projectDirs: ["src/Aspire.Hosting"]);
 
-        Assert.Contains("Aspire.StackExchange.Redis.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Confluent.Kafka.Tests", result.TestProjects);
-    }
-
-    // --- shared_compiled_source is FILE-granular --------------------------------------------
-
-    [Fact]
-    public void LinkCompiledFileSelectsItsConsumers()
-    {
-        // The shared constants file is link-compiled into several Npgsql tests; changing it runs them.
-        var result = Select("src/Aspire.Hosting.PostgreSQL/PostgresContainerImageTags.cs");
-
-        Assert.Contains("Aspire.Npgsql.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Azure.Npgsql.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Hosting.Tests", result.TestProjects);
+        Assert.Empty(r.TestProjects);
+        Assert.False(r.SelectsAll);
     }
 
     [Fact]
-    public void NonSharedFileInSameProjectDoesNotDragCompileConsumers()
+    public void ConventionCapturesDottedSegment()
     {
-        // A different file in the same project must NOT pull the borrowed-file consumers — file
-        // granularity. (The file still matches the src/Aspire.Hosting*/** curated job globs, which
-        // is expected; what matters is it does not select the Npgsql tests.)
-        var result = Select("src/Aspire.Hosting.PostgreSQL/PostgresBuilderExtensions.cs");
+        var r = Select(["src/Aspire.Hosting.Azure.Kusto/Bar.cs"]);
 
-        Assert.DoesNotContain("Aspire.Npgsql.Tests", result.TestProjects);
-    }
-
-    // --- loose-file / runtime dependencies --------------------------------------------------
-
-    [Fact]
-    public void ClipackChangeSelectsCliAndInfraTests()
-    {
-        var result = Select("eng/clipack/npm/aspire.js");
-
-        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
-        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Hosting.Azure.Kusto.Tests", r.TestProjects);
     }
 
     [Fact]
-    public void TemplatesChangeSelectsTemplatesTests()
+    public void ConventionIsAdditiveOverLayer1()
     {
-        var result = Select("src/Aspire.ProjectTemplates/templates/aspire-starter/Program.cs");
+        var r = Select(["src/Components/Foo/Bar.cs"], layer1: ["Layer1Only"]);
 
-        Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
+        Assert.Contains("Foo.Tests", r.TestProjects);
+        Assert.Contains("Layer1Only", r.TestProjects);
     }
 
     [Fact]
-    public void PlaygroundChangeSelectsPlaygroundTests()
+    public void ConventionMatchPreventsRunAllFallback()
     {
-        var result = Select("playground/TestShop/AppHost/Program.cs");
+        // Not Layer-1-owned and not ignored: only the convention match keeps this src file out of
+        // the run-all fallback.
+        var r = Select(["src/Components/Foo/Bar.cs"]);
 
-        Assert.Contains("Aspire.Playground.Tests", result.TestProjects);
+        Assert.False(r.SelectsAll);
+        Assert.Contains("Foo.Tests", r.TestProjects);
+        Assert.DoesNotContain("src/Components/Foo/Bar.cs", r.UnmatchedFiles);
     }
 
     [Fact]
-    public void GenericWorkflowChangeSelectsInfrastructureTestsOnly()
+    public void ConventionMatchesDeeplyNestedFile()
     {
-        var result = Select(".github/workflows/some-other-workflow.yml");
+        var r = Select(["src/Components/Foo/a/b/c/Deep.cs"]);
 
-        Assert.False(result.SelectsAll);
-        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+        Assert.Contains("Foo.Tests", r.TestProjects);
     }
 
-    // --- curated jobs -----------------------------------------------------------------------
+    // --- B. Convention overrides ------------------------------------------------------------
 
     [Fact]
-    public void ExtensionChangeTriggersExtensionJobs()
+    public void OverrideCoversConventionMissDir()
     {
-        var result = Select("extension/src/extension.ts");
+        // No Aspire.Hosting.Azure.CosmosDB.Tests in the matrix; the override maps the Azure family
+        // to the aggregate Azure test.
+        var r = Select(["src/Aspire.Hosting.Azure.CosmosDB/Bar.cs"]);
 
-        Assert.Contains("job:extension-unit", result.Jobs);
-        Assert.Contains("job:extension-e2e", result.Jobs);
-    }
-
-    [Fact]
-    public void TypeSystemChangeTriggersPolyglotNotAllHosting()
-    {
-        var result = Select("src/Aspire.TypeSystem/TypeModel.cs");
-
-        Assert.Contains("job:polyglot", result.Jobs);
-        Assert.DoesNotContain("Aspire.Hosting.Redis.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Hosting.Azure.Tests", r.TestProjects);
+        Assert.DoesNotContain("Aspire.Hosting.Azure.CosmosDB.Tests", r.TestProjects);
+        Assert.False(r.SelectsAll);
     }
 
     [Fact]
-    public void ComponentChangeTriggersNoJobs()
+    public void OverrideCoexistsWithConvention()
     {
-        // A pure client-component .cs change matches none of the curated job globs.
-        var result = Select("src/Components/Aspire.Npgsql/AspireNpgsqlExtensions.cs");
+        var r = Select(["src/Aspire.Hosting.Azure.Kusto/Bar.cs"]);
 
-        Assert.Empty(result.Jobs);
+        Assert.Contains("Aspire.Hosting.Azure.Kusto.Tests", r.TestProjects); // convention
+        Assert.Contains("Aspire.Hosting.Azure.Tests", r.TestProjects);       // override
     }
 
-    // --- named groups (test projects + jobs) ------------------------------------------------
+    // --- C. Ignore --------------------------------------------------------------------------
 
     [Fact]
-    public void CliBundleGroupExpandsToTestsAndJobs()
+    public void IgnoredFileContributesNoTargets()
     {
-        // eng/Bundle.proj maps to the CLI_BUNDLE group, which mixes a test project and two jobs.
-        var result = Select("eng/Bundle.proj");
+        var r = Select(["src/Shared/Inert/Thing.cs"]);
 
-        Assert.False(result.SelectsAll);
-        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
-        Assert.Contains("job:cli-starter", result.Jobs);
-        Assert.Contains("job:extension-e2e", result.Jobs);
-    }
-
-    // --- test_self --------------------------------------------------------------------------
-
-    [Fact]
-    public void TestSelfChangeRunsThatTest()
-    {
-        var result = Select("tests/Aspire.Cli.Tests/SomeTest.cs");
-
-        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
-    }
-
-    // --- Layer 1 (dotnet-affected) ownership of the project closure -------------------------
-
-    [Fact]
-    public void Layer1AffectedProjectsAreIncluded()
-    {
-        // A leaf integration change is owned by Layer 1 now: the curated map selects nothing for
-        // it, and the graph-derived projects are unioned in from the injected set.
-        var result = SelectWithLayer1(
-            ["src/Aspire.Hosting.Kafka/KafkaResource.cs"],
-            ["Aspire.Hosting.Kafka.Tests", "Aspire.Hosting.Redis.Tests"]);
-
-        Assert.Contains("Aspire.Hosting.Kafka.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Hosting.Redis.Tests", result.TestProjects);
+        Assert.Empty(r.TestProjects);
+        Assert.Empty(r.Jobs);
     }
 
     [Fact]
-    public void LeafComponentFileIsLayer2UnmatchedWithoutLayer1()
+    public void IgnoredSrcFileDoesNotForceRunAllOrReportUnmatched()
     {
-        // A client-component leaf file matches no curated rule (component closure is Layer 1's
-        // job), so the curated map selects nothing for it and it is reported unmatched. Hosting
-        // files differ — they match the src/Aspire.Hosting*/** curated job globs — so a component
-        // file is the clean "owned only by Layer 1" example.
-        var result = Select("src/Components/Aspire.Npgsql/AspireNpgsqlExtensions.cs");
+        // Not Layer-1-owned, but ignored -> must not escalate to ALL and must not be flagged.
+        var r = Select(["src/Shared/Inert/Thing.cs"]);
 
-        Assert.False(result.SelectsAll);
-        Assert.Empty(result.TestProjects);
-        Assert.Empty(result.Jobs);
-        Assert.Contains("src/Components/Aspire.Npgsql/AspireNpgsqlExtensions.cs", result.UnmatchedFiles);
-    }
-
-    // --- unattributed (unmatched) files -----------------------------------------------------
-
-    [Fact]
-    public void LooseFileMatchedByNoRuleIsReportedUnmatched()
-    {
-        var result = Select("docs/architecture/some-notes.md");
-
-        Assert.Contains("docs/architecture/some-notes.md", result.UnmatchedFiles);
-        Assert.False(result.SelectsAll);
+        Assert.False(r.SelectsAll);
+        Assert.DoesNotContain("src/Shared/Inert/Thing.cs", r.UnmatchedFiles);
     }
 
     [Fact]
-    public void RunAllFileIsNotReportedUnmatched()
+    public void IgnoreDoesNotSuppressAnExplicitMatch()
     {
-        var result = Select("global.json");
+        // src/Both/** is in BOTH the ignore list and a loose_file_deps rule. Ignore only prevents
+        // the fallback; the explicit rule's target still applies.
+        var r = Select(["src/Both/Thing.cs"]);
 
-        Assert.True(result.SelectsAll);
-        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("RealOne", r.TestProjects);
+        Assert.False(r.SelectsAll);
     }
 
-    // --- composition: union + kill switch ---------------------------------------------------
+    // --- D. Layer-1 attribution & run-all fallback ------------------------------------------
 
     [Fact]
-    public void MultipleChangesUnionTheirTargets()
+    public void OrphanSrcFileForcesRunAll()
     {
-        var result = Select("eng/Bundle.proj", "extension/src/extension.ts");
+        // Not owned, not matched, not ignored, under src/ -> the run-all fallback.
+        var r = Select(["src/Orphan/Thing.cs"]);
 
-        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
-        Assert.Contains("job:cli-starter", result.Jobs);
-        Assert.Contains("job:extension-unit", result.Jobs);
+        Assert.True(r.SelectsAll);
+        Assert.NotNull(r.EscalationReason);
+        Assert.Contains("src/Orphan/Thing.cs", r.UnmatchedFiles);
+    }
+
+    [Fact]
+    public void Layer1OwnedSrcFileDoesNotForceRunAll()
+    {
+        // Same shape as the orphan, but the dir is a project in the (fake) slnx -> Layer-1-owned.
+        var r = Select(["src/OwnedProj/Thing.cs"], projectDirs: ["src/OwnedProj"]);
+
+        Assert.False(r.SelectsAll);
+        Assert.Empty(r.TestProjects);
+        Assert.DoesNotContain("src/OwnedProj/Thing.cs", r.UnmatchedFiles);
+    }
+
+    [Fact]
+    public void LeftoverNonSrcFileIsAuditOnly()
+    {
+        var r = Select(["docs/architecture/notes.md"]);
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("docs/architecture/notes.md", r.UnmatchedFiles);
+    }
+
+    [Fact]
+    public void Layer1AffectedProjectsAreUnionedIn()
+    {
+        var r = Select(["src/OwnedProj/Thing.cs"], layer1: ["T1", "T2"], projectDirs: ["src/OwnedProj"]);
+
+        Assert.Contains("T1", r.TestProjects);
+        Assert.Contains("T2", r.TestProjects);
+    }
+
+    [Fact]
+    public void RunAllGlobForcesAllWithNoUnmatched()
+    {
+        var r = Select(["global.json"]);
+
+        Assert.True(r.SelectsAll);
+        Assert.Empty(r.UnmatchedFiles);
+    }
+
+    // --- E. Derived targets (fixpoint) ------------------------------------------------------
+
+    [Fact]
+    public void DerivedTargetFiresForLayer1SelectedTest()
+    {
+        var r = Select(["src/OwnedProj/Thing.cs"], layer1: ["CliTests"], projectDirs: ["src/OwnedProj"]);
+
+        Assert.Contains("job:cli-starter", r.Jobs);
+    }
+
+    [Fact]
+    public void DerivedTargetFiresForConventionSelectedTest()
+    {
+        // tests/<X>/** -> test:<X> (convention); CliTests then derives -> cli-starter.
+        var r = Select(["tests/CliTests/Foo.cs"]);
+
+        Assert.Contains("CliTests", r.TestProjects);
+        Assert.Contains("job:cli-starter", r.Jobs);
+    }
+
+    [Fact]
+    public void DerivedRuleFiresForAnyTriggerTestInItsList()
+    {
+        // The cli-starter rule lists two trigger tests; selecting the second one must fire it too.
+        var r = Select(["src/OwnedProj/Thing.cs"], layer1: ["CliTestsTwo"], projectDirs: ["src/OwnedProj"]);
+
+        Assert.Contains("job:cli-starter", r.Jobs);
+    }
+
+    [Fact]
+    public void TestWithNoDerivedRuleAddsNothing()
+    {
+        var r = Select(["src/OwnedProj/Thing.cs"], layer1: ["T1"], projectDirs: ["src/OwnedProj"]);
+
+        Assert.Empty(r.Jobs);
+    }
+
+    [Fact]
+    public void DerivedTargetsReachFixpointThroughTestChain()
+    {
+        // ChainA -> ChainB -> job:chain-job.
+        var r = Select(["src/OwnedProj/Thing.cs"], layer1: ["ChainA"], projectDirs: ["src/OwnedProj"]);
+
+        Assert.Contains("ChainB", r.TestProjects);
+        Assert.Contains("job:chain-job", r.Jobs);
+    }
+
+    [Fact]
+    public void DerivedTargetCycleTerminates()
+    {
+        // DerCycA -> DerCycB -> DerCycA. Must terminate with both selected.
+        var r = Select(["src/OwnedProj/Thing.cs"], layer1: ["DerCycA"], projectDirs: ["src/OwnedProj"]);
+
+        Assert.Contains("DerCycA", r.TestProjects);
+        Assert.Contains("DerCycB", r.TestProjects);
+    }
+
+    [Fact]
+    public void DerivedPassIsNoOpUnderSelectsAll()
+    {
+        var r = Select(["global.json"], layer1: ["CliTests"]);
+
+        Assert.True(r.SelectsAll);
+        // Under ALL, Jobs is the full vocabulary; cli-starter is present because it is a known token,
+        // not because the derived pass ran.
+        Assert.True(r.TestProjects.SetEquals(s_matrix));
+    }
+
+    // --- F. Composition / switches ----------------------------------------------------------
+
+    [Fact]
+    public void MultipleFilesUnionTheirTargets()
+    {
+        var r = Select(["src/Components/Foo/Bar.cs", "eng/installer/x.ps1"]);
+
+        Assert.Contains("Foo.Tests", r.TestProjects);
+        Assert.Contains("InstallerTests", r.TestProjects);
+        Assert.Contains("job:installer", r.Jobs);
     }
 
     [Fact]
     public void KillSwitchForcesAll()
     {
-        var result = new TestSelector(s_mapPath, s_allTestProjects)
-            .Select(["src/Aspire.Cli/Program.cs"], [], new SelectorOptions(ForceAll: true));
+        var r = Selector().Select(["src/Components/Foo/Bar.cs"], [], new SelectorOptions(ForceAll: true));
 
-        Assert.True(result.SelectsAll);
-        Assert.True(result.TestProjects.SetEquals(s_allTestProjects));
+        Assert.True(r.SelectsAll);
+        Assert.True(r.TestProjects.SetEquals(s_matrix));
+    }
+
+    [Fact]
+    public void SelectsAllExpandsToFullMatrixAndAllJobTokens()
+    {
+        var r = Select(["global.json"]);
+
+        Assert.True(r.TestProjects.SetEquals(s_matrix));
+        // Every job token referenced anywhere in the synthetic map is part of the ALL expansion.
+        Assert.Contains("job:installer", r.Jobs);
+        Assert.Contains("job:hostjob", r.Jobs);
+        Assert.Contains("job:cli-starter", r.Jobs);
+        Assert.Contains("job:group-job", r.Jobs);
+    }
+
+    [Fact]
+    public void EmptyChangeSelectsNothing()
+    {
+        var r = Select([]);
+
+        Assert.False(r.SelectsAll);
+        Assert.Empty(r.TestProjects);
+        Assert.Empty(r.Jobs);
+    }
+
+    // --- G. test_self / curated_jobs / loose_file_deps --------------------------------------
+
+    [Fact]
+    public void TestSelfChangeRunsThatTest()
+    {
+        var r = Select(["tests/SelfProj/SomeTest.cs"]);
+
+        Assert.Contains("SelfProj", r.TestProjects);
+    }
+
+    [Fact]
+    public void FileMatchingBothJobGlobAndConventionGetsBoth()
+    {
+        // src/Aspire.Hosting.Foo/** matches the convention AND the src/Aspire.Hosting.*/** job glob.
+        var r = Select(["src/Aspire.Hosting.Foo/Bar.cs"]);
+
+        Assert.Contains("Aspire.Hosting.Foo.Tests", r.TestProjects);
+        Assert.Contains("job:hostjob", r.Jobs);
+    }
+
+    [Fact]
+    public void LooseFileDepSelectsTestAndJob()
+    {
+        var r = Select(["eng/installer/manifest.yml"]);
+
+        Assert.Contains("InstallerTests", r.TestProjects);
+        Assert.Contains("job:installer", r.Jobs);
+    }
+
+    // --- I. Named-group mechanism -----------------------------------------------------------
+
+    [Fact]
+    public void GroupExpandsToMixedMembers()
+    {
+        var r = Select(["src/grp/Thing.cs"]);
+
+        Assert.Contains("GroupTest", r.TestProjects);
+        Assert.Contains("job:group-job", r.Jobs);
+    }
+
+    [Fact]
+    public void SameGroupFromTwoRulesIsDeduped()
+    {
+        var r = Select(["src/grp/A.cs", "src/grp2/B.cs"]);
+
+        Assert.Contains("GroupTest", r.TestProjects);
+        Assert.Contains("job:group-job", r.Jobs);
+    }
+
+    [Fact]
+    public void GroupExpandsFromDerivedRule()
+    {
+        var r = Select(["src/OwnedProj/Thing.cs"], layer1: ["GrpTrigger"], projectDirs: ["src/OwnedProj"]);
+
+        Assert.Contains("GroupTest", r.TestProjects);
+        Assert.Contains("job:group-job", r.Jobs);
+    }
+
+    [Fact]
+    public void NestedGroupsExpandRecursively()
+    {
+        // OUTER -> [test:T1, INNER]; INNER -> [job:inner-job, test:T2]. The inner group's members
+        // must be reached through the recursive expansion.
+        var r = Select(["src/outer/Thing.cs"]);
+
+        Assert.Contains("T1", r.TestProjects);
+        Assert.Contains("T2", r.TestProjects);
+        Assert.Contains("job:inner-job", r.Jobs);
+    }
+
+    [Fact]
+    public void CyclicGroupExpansionTerminates()
+    {
+        // CYCA -> [test:T1, CYCB]; CYCB -> [test:T2, CYCA]. Must terminate with both tests.
+        var r = Select(["src/cyc/Thing.cs"]);
+
+        Assert.Contains("T1", r.TestProjects);
+        Assert.Contains("T2", r.TestProjects);
+    }
+
+    [Fact]
+    public void UnknownTargetTokenIsIgnored()
+    {
+        // The rule targets [BOGUS, test:RealOne]; BOGUS is neither a group nor test:/job: -> ignored.
+        var r = Select(["src/bogus/Thing.cs"]);
+
+        Assert.Contains("RealOne", r.TestProjects);
+        Assert.DoesNotContain("BOGUS", r.TestProjects);
+    }
+
+    [Fact]
+    public void GroupContainingAllForcesSelectsAll()
+    {
+        var r = Select(["src/allgrp/Thing.cs"]);
+
+        Assert.True(r.SelectsAll);
+    }
+
+    // --- H. Real-map invariant smoke (computed from the filesystem; no hardcoded names) ------
+
+    [Fact]
+    public void RealMapLoadsAndConventionSelectsAComponentsTestWithoutSelectingAll()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "docs", "ci", "test-trigger-map.yml");
+        var matrix = EnumerateMatrixTestProjects();
+        var projectDirs = LoadProjectDirectories();
+        var selector = new TestSelector(mapPath, matrix, projectDirs);
+
+        // Pick a real src/Components/<dir> whose same-named test exists; the convention must select
+        // exactly that test name (derived from the dir, not hardcoded) and must not force ALL.
+        var (componentDir, expectedTest) = FirstComponentWithSameNamedTest(matrix);
+
+        var r = selector.Select([$"{componentDir}/__probe__.cs"], [], new SelectorOptions());
+
+        Assert.Contains(expectedTest, r.TestProjects);
+        Assert.False(r.SelectsAll);
+    }
+
+    private static (string Dir, string Test) FirstComponentWithSameNamedTest(IReadOnlyCollection<string> matrix)
+    {
+        var componentsRoot = Path.Combine(RepoRoot.Path, "src", "Components");
+        foreach (var dir in Directory.EnumerateDirectories(componentsRoot).Select(Path.GetFileName).Order(StringComparer.Ordinal))
+        {
+            var test = $"{dir}.Tests";
+            if (matrix.Contains(test))
+            {
+                return ($"src/Components/{dir}", test);
+            }
+        }
+
+        throw new InvalidOperationException("No src/Components/<dir> with a same-named test project was found.");
     }
 
     private static IReadOnlyCollection<string> EnumerateMatrixTestProjects()
     {
-        // tests/<Name>/<Name>.csproj — the matrix test projects the map's test: targets refer to.
         var testsDir = Path.Combine(RepoRoot.Path, "tests");
         return Directory.EnumerateDirectories(testsDir)
             .Select(Path.GetFileName)
             .Where(name => name is not null && File.Exists(Path.Combine(testsDir, name!, $"{name}.csproj")))
             .Select(name => name!)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static IReadOnlyCollection<string> LoadProjectDirectories()
+    {
+        var slnx = File.ReadAllText(Path.Combine(RepoRoot.Path, "Aspire.slnx"));
+        return System.Text.RegularExpressions.Regex.Matches(slnx, "Path=\"([^\"]+\\.csproj)\"")
+            .Select(m => m.Groups[1].Value.Replace('\\', '/'))
+            .Select(p => p.Contains('/', StringComparison.Ordinal) ? p[..p.LastIndexOf('/')] : p)
+            .Where(d => d.Length > 0)
             .ToHashSet(StringComparer.Ordinal);
     }
 }

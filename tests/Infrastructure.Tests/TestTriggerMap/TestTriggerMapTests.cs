@@ -28,94 +28,15 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
-    public void LinkCompiledFilesSelectTheirConsumingTests()
-    {
-        // A test project that <Compile Include>s a foreign src/ file depends on that file even
-        // though there is no ProjectReference edge. If the file changes, the map must still
-        // select that test — otherwise the test silently never runs for that change. This is the
-        // exact failure the shared_compiled_source section exists to prevent; assert the map
-        // covers every such (file -> test) edge discovered from the test .csproj files.
-        var gaps = new List<string>();
-
-        foreach (var testCsproj in s_trackedFiles.Where(IsTestProjectFile))
-        {
-            var projectName = Path.GetFileNameWithoutExtension(testCsproj);
-            var projectDir = testCsproj[..testCsproj.LastIndexOf('/')];
-
-            foreach (var compiledFile in ForeignSourceCompileIncludes(testCsproj, projectDir))
-            {
-                var selected = s_map.SelectTestProjects(compiledFile, out var selectsAll);
-                if (!selectsAll && !selected.Contains(projectName))
-                {
-                    gaps.Add($"{compiledFile} -> {projectName}");
-                }
-            }
-        }
-
-        gaps.Sort(StringComparer.Ordinal);
-        Assert.True(gaps.Count == 0,
-            $"test projects that <Compile Include> a src file the map does not select on change:{Environment.NewLine}{string.Join(Environment.NewLine, gaps)}");
-    }
-
-    private static bool IsTestProjectFile(string path) =>
-        path.StartsWith("tests/", StringComparison.Ordinal) &&
-        path.EndsWith(".csproj", StringComparison.Ordinal) &&
-        // tests/<Name>/<Name>.csproj — the matrix project, not nested helper csprojs.
-        path.Count(c => c == '/') == 2 &&
-        path[(path.LastIndexOf('/') + 1)..] == $"{path.Split('/')[1]}.csproj";
-
-    // Returns repo-relative '/'-separated src/ files that <projectDir> link-compiles from another
-    // project. Files under src/Shared (compiled everywhere) are excluded: run_all_globs covers them.
-    private static IEnumerable<string> ForeignSourceCompileIncludes(string csprojRelPath, string projectDir)
-    {
-        var xml = File.ReadAllText(Path.Combine(RepoRoot.Path, csprojRelPath));
-        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(xml, "<Compile\\s+Include=\"([^\"]+)\""))
-        {
-            var include = ExpandMSBuildVars(m.Groups[1].Value.Replace('\\', '/'), projectDir);
-            var resolved = NormalizeRepoRelative(projectDir, include);
-            if (resolved.StartsWith("src/", StringComparison.Ordinal) &&
-                !resolved.StartsWith("src/Shared/", StringComparison.Ordinal))
-            {
-                yield return resolved;
-            }
-        }
-    }
-
-    // MSBuild properties used in Compile Include paths across the repo's test projects.
-    private static string ExpandMSBuildVars(string path, string projectDir) => path
-        .Replace("$(RepoRoot)", "")
-        .Replace("$(SharedDir)", "src/Shared/")
-        .Replace("$(ComponentsDir)", "src/Components/")
-        .Replace("$(VendoringDir)", "src/Vendoring/")
-        .Replace("$(TestsSharedDir)", "tests/Shared/")
-        .Replace("$(MSBuildThisFileDirectory)", projectDir + "/");
-
-    private static string NormalizeRepoRelative(string projectDir, string include)
-    {
-        // Absolute repo-relative already (after var expansion), else relative to the project dir.
-        var combined = include.StartsWith("src/", StringComparison.Ordinal) || include.StartsWith("tests/", StringComparison.Ordinal)
-            ? include
-            : $"{projectDir}/{include}";
-
-        var parts = new List<string>();
-        foreach (var segment in combined.Split('/', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (segment == ".") { continue; }
-            if (segment == ".." && parts.Count > 0) { parts.RemoveAt(parts.Count - 1); }
-            else if (segment != "..") { parts.Add(segment); }
-        }
-        return string.Join('/', parts);
-    }
-
-    [Fact]
-    public void RulesHaveNoEmptyOrDuplicatePaths()
+    public void RulesAreWellFormed()
     {
         // Structural hygiene: a path rule with no globs, or globs but no targets, is dead weight
-        // that silently selects nothing; a duplicate leaf glob means a source project is mapped
-        // twice (a merge/edit slip). Catch all three before they rot the map.
+        // that silently selects nothing. (Overlapping globs ACROSS path_rules are expected and
+        // fine -- one path may map to several targets via several rules -- so there is no
+        // duplicate-glob check here.)
         var problems = new List<string>();
 
-        foreach (var rule in s_map.AllPathRules())
+        foreach (var rule in s_map.PathRules)
         {
             var label = rule.Paths.Count > 0 ? rule.Paths[0] : "(no paths)";
             if (rule.Paths.Count == 0 || rule.Paths.Any(string.IsNullOrWhiteSpace))
@@ -128,31 +49,45 @@ public sealed class TestTriggerMapTests
             }
         }
 
-        foreach (var job in s_map.CuratedJobs)
+        // conventions: each entry needs a pattern with a <name> placeholder and a target that also
+        // carries <name> (so the capture is actually substituted). Duplicate patterns are slips.
+        foreach (var convention in s_map.Conventions)
         {
-            if (string.IsNullOrWhiteSpace(job.Target))
+            if (string.IsNullOrWhiteSpace(convention.Pattern) || !convention.Pattern.Contains("<name>", StringComparison.Ordinal))
             {
-                problems.Add("a curated_jobs entry has no target");
+                problems.Add($"conventions entry '{convention.Pattern}' has no <name> placeholder");
             }
-            if (job.Paths.Count == 0 || job.Paths.Any(string.IsNullOrWhiteSpace))
+            if (string.IsNullOrWhiteSpace(convention.Target) || !convention.Target.Contains("<name>", StringComparison.Ordinal))
             {
-                problems.Add($"curated job '{job.Target}' has an empty path glob");
+                problems.Add($"conventions pattern '{convention.Pattern}' has a target that does not substitute <name>");
             }
         }
 
-        // shared_source intentionally repeats a glob across rules with different targets (e.g. the
-        // vendored OTel dir feeds both Redis and Kafka), so only the file-granular
-        // shared_compiled_source is checked for duplicate globs (a dupe there is a merge slip).
-        var dupeLeafGlobs = s_map.SharedCompiledSource
-            .SelectMany(r => r.Paths)
-            .GroupBy(p => p, StringComparer.Ordinal)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key)
-            .Order(StringComparer.Ordinal)
-            .ToList();
-        if (dupeLeafGlobs.Count > 0)
+        var dupeConventionPatterns = s_map.Conventions
+            .GroupBy(c => c.Pattern, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1).Select(g => g.Key).Order(StringComparer.Ordinal).ToList();
+        if (dupeConventionPatterns.Count > 0)
         {
-            problems.Add($"duplicate shared_compiled_source globs: {string.Join(", ", dupeLeafGlobs)}");
+            problems.Add($"duplicate conventions patterns: {string.Join(", ", dupeConventionPatterns)}");
+        }
+
+        // ignore globs must be non-empty.
+        if (s_map.Ignore.Any(string.IsNullOrWhiteSpace))
+        {
+            problems.Add("an ignore glob is empty");
+        }
+
+        // derived_targets: each entry needs at least one test: trigger and at least one target.
+        foreach (var derived in s_map.DerivedTargets)
+        {
+            if (derived.Tests.Count == 0 || derived.Tests.Any(t => string.IsNullOrWhiteSpace(t) || !t.StartsWith("test:", StringComparison.Ordinal)))
+            {
+                problems.Add($"derived_targets entry has an invalid/empty tests list: [{string.Join(", ", derived.Tests)}]");
+            }
+            if (derived.Targets.Count == 0 || derived.Targets.Any(string.IsNullOrWhiteSpace))
+            {
+                problems.Add($"derived_targets entry [{string.Join(", ", derived.Tests)}] has no targets");
+            }
         }
 
         Assert.True(problems.Count == 0, string.Join("; ", problems));
@@ -201,11 +136,10 @@ public sealed class TestTriggerMapTests
     [Fact]
     public void EveryGlobMatchesAtLeastOneTrackedFile()
     {
-        // Every rule glob (catch-all, rule paths, curated-job paths, and the known-gaps paths)
-        // must match a real, git-tracked file. A typo'd path or a renamed/removed source folder
-        // would otherwise sit in the map selecting nothing — a silent hole the selector can't see.
+        // Every rule glob (catch-all, path-rule paths, convention patterns, ignore globs) must match
+        // a real, git-tracked file. A typo'd path or a renamed/removed source folder would otherwise
+        // sit in the map selecting nothing — a silent hole the selector can't see.
         var globs = s_map.AllSelectingGlobs()
-            .Concat(s_map.Gaps.SelectMany(g => g.Paths))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToList();
@@ -244,11 +178,11 @@ public sealed class TestTriggerMapTests
     [Fact]
     public void GroupsResolveToValidTargets()
     {
-        // Named groups (e.g. ALL_COMPONENT_TESTS, CLI_BUNDLE) expand into concrete test:/job:
-        // targets by a consumer. Each member must be a well-formed test: or job: target (existence
-        // is covered by EveryTestTargetNamesAnExistingTestProject / EveryJobTargetMapsToAnExisting-
-        // WorkflowOrJob, which include group members), a group must not nest another group, and
-        // must be non-empty with no duplicates.
+        // Named groups (e.g. CLI_BUNDLE) expand into concrete test:/job: targets by a consumer.
+        // Each member must be a well-formed test: or job: target (existence is covered by
+        // EveryTestTargetNamesAnExistingTestProject / EveryJobTargetMapsToAnExistingWorkflowOrJob,
+        // which include group members). The real map keeps groups flat (no nesting); the selector
+        // engine supports recursive expansion, exercised by the synthetic acceptance tests.
         foreach (var (name, members) in s_map.Groups)
         {
             Assert.True(members.Count > 0, $"group {name} is empty");
@@ -293,6 +227,8 @@ public sealed class TestTriggerMapTests
             ["job:extension-unit"] = () => JobExists("extension_tests_win") && JobExists("extension_bootstrap_linux"),
             ["job:extension-e2e"] = () => WorkflowExists("extension-e2e-tests.yml"),
             ["job:cli-starter"] = () => JobExists("cli_starter_validation_windows"),
+            ["job:winget-installer"] = () => JobExists("prepare_winget_installer_artifacts"),
+            ["job:homebrew-installer"] = () => JobExists("prepare_homebrew_installer_artifacts"),
             ["job:api-diffs"] = () => WorkflowExists("generate-api-diffs.yml"),
             ["job:ats-diffs"] = () => WorkflowExists("generate-ats-diffs.yml"),
             ["job:deployment-e2e"] = () => WorkflowExists("deployment-tests.yml"),

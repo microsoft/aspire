@@ -141,7 +141,9 @@ internal static class Selection
             ? Array.Empty<string>()
             : RunLayer1(options, allTestProjects);
 
-        var selector = new TestSelector(options.MapPath, allTestProjects);
+        var projectDirectories = LoadProjectDirectories(options.RepoRoot);
+
+        var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories);
         var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll));
 
         WriteSummary(options, result, allTestProjects, changedFiles, layer1Affected);
@@ -184,6 +186,26 @@ internal static class Selection
         }
 
         return stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    // Repo-relative, '/'-separated directories of every project in Aspire.slnx -- the universe
+    // dotnet-affected walks. The selector treats a changed file under one of these dirs as
+    // "Layer-1-owned" (attributed by the graph tool), so it never triggers the run-all fallback.
+    private static IReadOnlyCollection<string> LoadProjectDirectories(string repoRoot)
+    {
+        var slnxPath = Path.Combine(repoRoot, "Aspire.slnx");
+        if (!File.Exists(slnxPath))
+        {
+            return Array.Empty<string>();
+        }
+
+        var slnx = File.ReadAllText(slnxPath);
+        // <Project Path="src/Foo/Foo.csproj" /> -- normalize separators and take the directory.
+        return System.Text.RegularExpressions.Regex.Matches(slnx, "Path=\"([^\"]+\\.csproj)\"")
+            .Select(m => m.Groups[1].Value.Replace('\\', '/'))
+            .Select(p => p.Contains('/', StringComparison.Ordinal) ? p[..p.LastIndexOf('/')] : p)
+            .Where(d => d.Length > 0)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     // Layer 1: dotnet-affected builds the MSBuild ProjectGraph and reports every project hit by the
@@ -408,16 +430,16 @@ internal static class Selection
         sb.AppendLine("</details>");
         sb.AppendLine();
 
-        // Files neither layer accounted for: matched no curated map rule, and (given the verifier
-        // keeps every src project rule-reachable) not a project file dotnet-affected would attribute
-        // either. A non-empty list here is the early warning that a new loose-file dependency needs
-        // a Layer 2 rule. Always shown, including under ALL.
+        // Files no layer accounted for: matched no curated rule (Layer 2), not ignored, and not a
+        // project-owned source file (Layer 1, via the Aspire.slnx project dirs). A src/** file here
+        // forced the run-all fallback; a non-src file here is only an audit signal that a loose,
+        // non-project dependency may need a curated rule. Always shown, including under ALL.
         var unmatched = result.UnmatchedFiles.OrderBy(f => f, StringComparer.Ordinal).ToList();
         sb.AppendLine(CultureInfo.InvariantCulture, $"### Unattributed changed files ({unmatched.Count})");
         sb.AppendLine();
         if (unmatched.Count == 0)
         {
-            sb.AppendLine("_none — every changed file was matched by Layer 1 or Layer 2._");
+            sb.AppendLine("_none — every changed file was matched by Layer 2, ignored, or Layer-1-owned._");
         }
         else
         {

@@ -50,13 +50,24 @@ public sealed class TestSelector
 {
     private readonly string _mapPath;
     private readonly IReadOnlyCollection<string> _allTestProjects;
+    private readonly IReadOnlyCollection<string> _projectDirectories;
 
     /// <param name="mapPath">Path to <c>docs/ci/test-trigger-map.yml</c>.</param>
     /// <param name="allTestProjects">All matrix test project names — the universe an <c>ALL</c> selection expands to.</param>
-    public TestSelector(string mapPath, IReadOnlyCollection<string> allTestProjects)
+    /// <param name="projectDirectories">
+    /// Repo-relative, '/'-separated directories of every project in <c>Aspire.slnx</c> (the universe
+    /// <c>dotnet-affected</c> walks). Used to decide whether a changed file is "Layer-1-owned": a file
+    /// under one of these dirs is attributed by the graph tool, so it never triggers the run-all
+    /// fallback. May be empty (then no file is treated as owned).
+    /// </param>
+    public TestSelector(
+        string mapPath,
+        IReadOnlyCollection<string> allTestProjects,
+        IReadOnlyCollection<string> projectDirectories)
     {
         _mapPath = mapPath;
         _allTestProjects = allTestProjects;
+        _projectDirectories = projectDirectories;
     }
 
     /// <param name="changedFiles">Repo-relative, '/'-separated paths changed in the PR.</param>
@@ -88,28 +99,29 @@ public sealed class TestSelector
 
         foreach (var file in changedFiles)
         {
-            // Tracks whether ANY rule claimed this file. A src/** file claimed by nothing fails
-            // open to ALL below: a missed test is a silent regression, an extra run is just slower.
+            // Tracks whether a Layer 2 rule added targets for this file. Combined below with
+            // "ignored" and "Layer-1-owned" to decide whether the file is a true leftover.
             var fileMatched = false;
 
-            // run_all catch-all (build infrastructure / broadly shared code) -> ALL.
-            if (map.RunAllGlobs.Any(g => TriggerMap.GlobMatches(g, file)))
+            // conventions: a <name>-capture pattern -> target template, emitted only when the
+            // derived test project exists in the matrix (existence guard). Additive. Covers a test
+            // project's own folder (tests/<name>/**) and the Hosting/Components integration dirs.
+            foreach (var convention in map.Conventions)
             {
-                selectsAll = true;
-                reason ??= $"run_all glob matched '{file}'";
-                fileMatched = true;
+                if (TriggerMap.TryExpandConvention(convention, file, out var target) &&
+                    target.StartsWith("test:", StringComparison.Ordinal))
+                {
+                    var project = StripTestPrefix(target);
+                    if (_allTestProjects.Contains(project))
+                    {
+                        testProjects.Add(project);
+                        fileMatched = true;
+                    }
+                }
             }
 
-            // test_self: a change under tests/<X>/** always runs test project <X>. The map's
-            // pattern is the literal placeholder "tests/<TestProject>/**", so match the shape
-            // (tests/<segment>/...) directly and take the second path segment as the project.
-            if (TryGetTestSelfProject(file, out var selfProject))
-            {
-                testProjects.Add(selfProject);
-                fileMatched = true;
-            }
-
-            foreach (var rule in map.AllPathRules())
+            // path_rules: a glob set -> a target set (test: / job: / group / ALL).
+            foreach (var rule in map.PathRules)
             {
                 if (rule.Paths.Any(g => TriggerMap.GlobMatches(g, file)))
                 {
@@ -118,22 +130,29 @@ public sealed class TestSelector
                 }
             }
 
-            foreach (var job in map.CuratedJobs)
+            // ignore: files Layer 2 deliberately accounts for with no target (Layer 1 covers them, or
+            // they are inert). They must not trigger the run-all fallback below.
+            var ignored = map.Ignore.Any(g => TriggerMap.GlobMatches(g, file));
+
+            // Layer-1-owned: the file sits under a project dir in Aspire.slnx, so dotnet-affected
+            // attributes it. Such files rely on Layer 1 and never force ALL.
+            var layer1Owned = IsLayer1Owned(file);
+
+            if (fileMatched || ignored || layer1Owned)
             {
-                if (job.Paths.Any(g => TriggerMap.GlobMatches(g, file)))
-                {
-                    ApplyTargets(new[] { job.Target }, map, testProjects, jobs, ref selectsAll, ref reason, file);
-                    fileMatched = true;
-                }
+                // Accounted for by some layer; nothing more to do for this file.
+                continue;
             }
 
-            // Fail-open is no longer applied per-src-file: after the trim, most src files match no
-            // Layer 2 rule on purpose (dotnet-affected owns the project closure), so escalating
-            // every unmapped src file to ALL would be wrong. Src safety is instead "Layer 1 must
-            // run" (enforced by the caller) plus the unmatched-files audit signal below.
-            if (!fileMatched)
+            // A true leftover: no Layer 2 rule, not ignored, not a graph-owned project file. Under
+            // src/** this is the run-all fallback (a missed test is a silent regression; an extra run
+            // is just slower) -- typically a new shared source dir nobody mapped. Outside src/** it is
+            // only an audit signal (a loose, non-project dependency that may need a curated rule).
+            unmatchedFiles.Add(file);
+            if (file.StartsWith("src/", StringComparison.Ordinal))
             {
-                unmatchedFiles.Add(file);
+                selectsAll = true;
+                reason ??= $"run-all fallback: src file '{file}' is neither Layer-1-owned nor matched by a Layer 2 rule";
             }
         }
 
@@ -155,12 +174,77 @@ public sealed class TestSelector
                 UnmatchedFiles: unmatchedFiles);
         }
 
+        // derived_targets: a selected test project (from Layer 1 or Layer 2) can pull in extra
+        // jobs/tests. Iterate to a fixpoint so a test->test edge whose target has its own derived
+        // rule is followed; a no-growth pass terminates (cycle-safe).
+        ApplyDerivedTargets(map, testProjects, jobs, ref selectsAll, ref reason);
+
+        if (selectsAll)
+        {
+            return new SelectionResult(
+                SelectsAll: true,
+                TestProjects: new HashSet<string>(_allTestProjects, StringComparer.Ordinal),
+                Jobs: new HashSet<string>(map.AllJobTokens(), StringComparer.Ordinal),
+                EscalationReason: reason ?? "full matrix selected",
+                UnmatchedFiles: unmatchedFiles);
+        }
+
         return new SelectionResult(
             SelectsAll: false,
             TestProjects: testProjects,
             Jobs: jobs,
             EscalationReason: null,
             UnmatchedFiles: unmatchedFiles);
+    }
+
+    // A changed file is "Layer-1-owned" when it lives under a project directory in Aspire.slnx --
+    // dotnet-affected then attributes it to that project, so it does not need the run-all fallback.
+    private bool IsLayer1Owned(string file)
+    {
+        foreach (var dir in _projectDirectories)
+        {
+            var prefix = dir.EndsWith('/') ? dir : dir + "/";
+            if (file.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Applies derived_targets to the selected test set until it stabilises. Each pass adds the
+    // targets of every derived rule whose keyed test is currently selected; a pass that adds nothing
+    // ends the loop (so cycles such as A->B, B->A terminate).
+    private static void ApplyDerivedTargets(
+        TriggerMap map,
+        HashSet<string> testProjects,
+        HashSet<string> jobs,
+        ref bool selectsAll,
+        ref string? reason)
+    {
+        if (map.DerivedTargets.Count == 0)
+        {
+            return;
+        }
+
+        var changed = true;
+        while (changed && !selectsAll)
+        {
+            var beforeTests = testProjects.Count;
+            var beforeJobs = jobs.Count;
+
+            foreach (var derived in map.DerivedTargets)
+            {
+                // If ANY of the rule's triggering tests is selected, add its targets.
+                if (derived.Tests.Any(t => testProjects.Contains(StripTestPrefix(t))))
+                {
+                    ApplyTargets(derived.Targets, map, testProjects, jobs, ref selectsAll, ref reason, derived.Tests.FirstOrDefault() ?? "");
+                }
+            }
+
+            changed = testProjects.Count != beforeTests || jobs.Count != beforeJobs;
+        }
     }
 
     private static void ApplyTargets(
@@ -172,57 +256,57 @@ public sealed class TestSelector
         ref string? reason,
         string file)
     {
+        var localSelectsAll = selectsAll;
+        string? localReason = reason;
+
         foreach (var target in targets)
         {
-            if (target == "ALL")
-            {
-                selectsAll = true;
-                reason ??= $"a rule matching '{file}' selects ALL";
-            }
-            else if (map.Groups.TryGetValue(target, out var members))
-            {
-                // A named group can hold both test: and job: members; route each by its prefix.
-                foreach (var member in members)
-                {
-                    if (member.StartsWith("job:", StringComparison.Ordinal))
-                    {
-                        jobs.Add(member);
-                    }
-                    else if (member.StartsWith("test:", StringComparison.Ordinal))
-                    {
-                        testProjects.Add(StripTestPrefix(member));
-                    }
-                }
-            }
-            else if (target.StartsWith("test:", StringComparison.Ordinal))
-            {
-                testProjects.Add(StripTestPrefix(target));
-            }
-            else if (target.StartsWith("job:", StringComparison.Ordinal))
-            {
-                jobs.Add(target);
-            }
+            AddTarget(target, map, testProjects, jobs, ref localSelectsAll, ref localReason, file, visitedGroups: null);
         }
+
+        selectsAll = localSelectsAll;
+        reason = localReason;
     }
 
-    // tests/<TestProject>/<more> -> <TestProject>. Returns false for paths outside tests/ or with
-    // no file under a project folder (e.g. a bare "tests/X" with no trailing segment).
-    private static bool TryGetTestSelfProject(string file, out string project)
+    // Routes a single target into the result sets. Group names expand recursively (a group member
+    // may itself be a group name), tracking visited groups so a cyclic group reference terminates.
+    private static void AddTarget(
+        string target,
+        TriggerMap map,
+        HashSet<string> testProjects,
+        HashSet<string> jobs,
+        ref bool selectsAll,
+        ref string? reason,
+        string file,
+        HashSet<string>? visitedGroups)
     {
-        project = "";
-        if (!file.StartsWith("tests/", StringComparison.Ordinal))
+        if (target == "ALL")
         {
-            return false;
+            selectsAll = true;
+            reason ??= $"a rule matching '{file}' selects ALL";
         }
-
-        var parts = file.Split('/');
-        if (parts.Length < 3 || parts[1].Length == 0)
+        else if (map.Groups.TryGetValue(target, out var members))
         {
-            return false;
-        }
+            visitedGroups ??= new HashSet<string>(StringComparer.Ordinal);
+            if (!visitedGroups.Add(target))
+            {
+                // Already expanding this group higher in the recursion: a cycle. Stop.
+                return;
+            }
 
-        project = parts[1];
-        return true;
+            foreach (var member in members)
+            {
+                AddTarget(member, map, testProjects, jobs, ref selectsAll, ref reason, file, visitedGroups);
+            }
+        }
+        else if (target.StartsWith("test:", StringComparison.Ordinal))
+        {
+            testProjects.Add(StripTestPrefix(target));
+        }
+        else if (target.StartsWith("job:", StringComparison.Ordinal))
+        {
+            jobs.Add(target);
+        }
     }
 
     private static string StripTestPrefix(string target) =>
