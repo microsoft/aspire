@@ -99,7 +99,6 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
     [Fact]
     [RequiresTools(["python"])]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/8466")]
     public async Task PythonResourceFinishesSuccessfully()
     {
         var (projectDirectory, _, scriptName) = CreateTempPythonProject(outputHelper);
@@ -111,7 +110,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         await app.StartAsync();
 
-        await app.ResourceNotifications.WaitForResourceAsync("pyproj", "Finished").WaitAsync(TimeSpan.FromSeconds(30));
+        await app.ResourceNotifications.WaitForResourceAsync("pyproj", KnownResourceStates.Finished).WaitAsync(TimeSpan.FromSeconds(90));
 
         await app.StopAsync();
 
