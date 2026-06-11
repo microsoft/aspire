@@ -702,7 +702,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var resourceEvent = await WaitForResourceEventAsync(
             notificationService,
             target,
-            re => re.Snapshot.State?.Text == KnownResourceStates.Running || KnownResourceStates.TerminalStates.Contains(re.Snapshot.State?.Text) || re.Snapshot.ExitCode is not null,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Running ||
+                KnownResourceStates.TerminalStates.Contains(re.Snapshot.State?.Text, StringComparers.ResourceState) ||
+                string.Equals(re.Snapshot.State?.Style, KnownResourceStateStyles.Error, StringComparisons.ResourceState) ||
+                re.Snapshot.ExitCode is not null,
             $"Resource '{target.DisplayName}' failed to reach the target state before the operation was cancelled.",
             cancellationToken).ConfigureAwait(false);
 
