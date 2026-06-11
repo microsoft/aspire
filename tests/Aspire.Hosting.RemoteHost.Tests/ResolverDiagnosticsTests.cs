@@ -23,7 +23,7 @@ public class ResolverDiagnosticsTests
     public void CodeGeneratorResolver_LogsWarning_WhenAssemblyTypeLoadFails()
     {
         var logger = new RecordingLogger<CodeGeneratorResolver>();
-        var stub = new TypeLoadFailingAssembly("Aspire.Hosting.CodeGeneration.Synthetic");
+        var stub = CreateTypeLoadFailingAssembly("Aspire.Hosting.CodeGeneration.Synthetic");
 
         using var services = new ServiceCollection().BuildServiceProvider();
         var resolver = new CodeGeneratorResolver(services, () => (IReadOnlyList<Assembly>)[stub], logger);
@@ -41,7 +41,7 @@ public class ResolverDiagnosticsTests
     public void LanguageSupportResolver_LogsWarning_WhenAssemblyTypeLoadFails()
     {
         var logger = new RecordingLogger<LanguageSupportResolver>();
-        var stub = new TypeLoadFailingAssembly("Aspire.Hosting.CodeGeneration.Synthetic");
+        var stub = CreateTypeLoadFailingAssembly("Aspire.Hosting.CodeGeneration.Synthetic");
 
         using var services = new ServiceCollection().BuildServiceProvider();
         var resolver = new LanguageSupportResolver(services, () => (IReadOnlyList<Assembly>)[stub], logger);
@@ -60,7 +60,7 @@ public class ResolverDiagnosticsTests
     {
         var logger = new RecordingLogger<CodeGeneratorResolver>();
         // The marker name is what triggers the "did not contribute any" diagnostic.
-        var empty = new EmptyNamedAssembly("Aspire.Hosting.CodeGeneration.Synthetic");
+        var empty = FakeAssembly.WithTypes("Aspire.Hosting.CodeGeneration.Synthetic", typeof(string));
 
         using var services = new ServiceCollection().BuildServiceProvider();
         var resolver = new CodeGeneratorResolver(services, () => (IReadOnlyList<Assembly>)[empty], logger);
@@ -76,7 +76,7 @@ public class ResolverDiagnosticsTests
     public void CodeGeneratorResolver_DoesNotLogContributionWarning_ForArbitraryAssembly()
     {
         var logger = new RecordingLogger<CodeGeneratorResolver>();
-        var arbitrary = new EmptyNamedAssembly("My.Custom.Integration");
+        var arbitrary = FakeAssembly.WithTypes("My.Custom.Integration", typeof(string));
 
         using var services = new ServiceCollection().BuildServiceProvider();
         _ = new CodeGeneratorResolver(services, () => (IReadOnlyList<Assembly>)[arbitrary], logger).GetCodeGenerator("anything");
@@ -88,7 +88,7 @@ public class ResolverDiagnosticsTests
     public void CodeGeneratorResolver_ExposesSwallowedLoadFailures()
     {
         var logger = new RecordingLogger<CodeGeneratorResolver>();
-        var stub = new TypeLoadFailingAssembly("Aspire.Hosting.CodeGeneration.TypeScript");
+        var stub = CreateTypeLoadFailingAssembly("Aspire.Hosting.CodeGeneration.TypeScript");
 
         using var services = new ServiceCollection().BuildServiceProvider();
         var resolver = new CodeGeneratorResolver(services, () => (IReadOnlyList<Assembly>)[stub], logger);
@@ -113,28 +113,12 @@ public class ResolverDiagnosticsTests
         Assert.Empty(resolver.Discovery.LoadFailures);
     }
 
-    private sealed class TypeLoadFailingAssembly : Assembly
-    {
-        private readonly AssemblyName _name;
-
-        public TypeLoadFailingAssembly(string name) => _name = new AssemblyName(name);
-
-        public override AssemblyName GetName() => _name;
-
-        public override Type[] GetTypes()
-            => throw new ReflectionTypeLoadException(
+    // Simulates a code-generation assembly that loads but whose type enumeration fails with a
+    // ReflectionTypeLoadException, mirroring a real Aspire.TypeSystem binary mismatch.
+    private static FakeAssembly CreateTypeLoadFailingAssembly(string name)
+        => FakeAssembly.ThrowingOnGetTypes(
+            name,
+            new ReflectionTypeLoadException(
                 [null, typeof(string)],
-                [new FileLoadException("synthetic loader exception: simulated Aspire.TypeSystem mismatch")]);
-    }
-
-    private sealed class EmptyNamedAssembly : Assembly
-    {
-        private readonly AssemblyName _name;
-
-        public EmptyNamedAssembly(string name) => _name = new AssemblyName(name);
-
-        public override AssemblyName GetName() => _name;
-
-        public override Type[] GetTypes() => [typeof(string)];
-    }
+                [new FileLoadException("synthetic loader exception: simulated Aspire.TypeSystem mismatch")]));
 }

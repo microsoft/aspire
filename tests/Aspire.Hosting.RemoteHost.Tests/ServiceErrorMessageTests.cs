@@ -160,7 +160,7 @@ public class ServiceErrorMessageTests
         var services = new ServiceCollection().BuildServiceProvider();
         var codeResolver = new CodeGeneratorResolver(
             services,
-            () => (IReadOnlyList<Assembly>)[new LoadFailingAssembly("Aspire.Hosting.CodeGeneration.TypeScript")],
+            () => (IReadOnlyList<Assembly>)[CreateLoadFailingAssembly("Aspire.Hosting.CodeGeneration.TypeScript")],
             NullLogger<CodeGeneratorResolver>.Instance);
 
         var auth = CreateAuthenticatedState();
@@ -177,19 +177,12 @@ public class ServiceErrorMessageTests
 
     // Simulates a code-generation assembly whose type discovery fails because a dependency
     // (Aspire.TypeSystem) cannot be loaded — the exact shape of the reported TypeScript failure.
-    private sealed class LoadFailingAssembly : Assembly
-    {
-        private readonly AssemblyName _name;
-
-        public LoadFailingAssembly(string name) => _name = new AssemblyName(name);
-
-        public override AssemblyName GetName() => _name;
-
-        public override Type[] GetTypes()
-            => throw new ReflectionTypeLoadException(
+    private static FakeAssembly CreateLoadFailingAssembly(string name)
+        => FakeAssembly.ThrowingOnGetTypes(
+            name,
+            new ReflectionTypeLoadException(
                 [null, typeof(string)],
                 [new FileNotFoundException(
                     "Could not load file or assembly 'Aspire.TypeSystem, Version=42.42.42.42'. The system cannot find the file specified.",
-                    "Aspire.TypeSystem, Version=42.42.42.42, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51")]);
-    }
+                    "Aspire.TypeSystem, Version=42.42.42.42, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51")]));
 }
