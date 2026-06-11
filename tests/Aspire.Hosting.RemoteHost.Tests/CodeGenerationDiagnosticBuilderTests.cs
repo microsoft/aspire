@@ -134,6 +134,39 @@ public class CodeGenerationDiagnosticBuilderTests
     }
 
     [Fact]
+    public void TryCreateRpcException_StandaloneFileNotFound_PlainFilePath_IsNotClassified()
+    {
+        // A code generator (or ATS context build) that fails to open a genuine data file raises a
+        // FileNotFoundException with a path-like FileName. This must NOT be reported as an
+        // incompatible SDK, otherwise the user gets a misleading "run aspire update" hint for an
+        // unrelated missing-file error.
+        var ioFailure = new FileNotFoundException(
+            "Could not find file '/tmp/codegen/template.json'.",
+            "/tmp/codegen/template.json");
+
+        var result = CodeGenerationDiagnosticBuilder.TryCreateRpcException(ioFailure, assemblyLoader: null);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void TryCreateRpcException_StandaloneFileNotFound_AssemblyDisplayName_IsClassified()
+    {
+        // A direct assembly-bind failure (for example a JIT-time bind during generation) surfaces a
+        // FileNotFoundException whose FileName is a full assembly display name. That IS an
+        // incompatible-SDK signal and should be classified even though it is not wrapped in a
+        // ReflectionTypeLoadException.
+        var bindFailure = new FileNotFoundException(
+            "Could not load file or assembly 'Aspire.TypeSystem, Version=42.42.42.42'. The system cannot find the file specified.",
+            "Aspire.TypeSystem, Version=42.42.42.42, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51");
+
+        var result = CodeGenerationDiagnosticBuilder.TryCreateRpcException(bindFailure, assemblyLoader: null);
+
+        var localRpc = Assert.IsType<LocalRpcException>(result);
+        Assert.Equal(CodeGenerationErrorCodes.IncompatibleAspireSdk, localRpc.ErrorCode);
+    }
+
+    [Fact]
     public void BuildDiagnostic_CapturesRuntimeAspireHostingVersion()
     {
         // BuildDiagnostic looks for the loaded Aspire.Hosting assembly via AppDomain. Calling
