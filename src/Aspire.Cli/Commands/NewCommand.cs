@@ -28,6 +28,7 @@ internal sealed class NewCommand : BaseCommand
     private readonly IEnumerable<ITemplate> _templates;
     private readonly AspireCliTelemetry _telemetry;
     private readonly IDotNetSdkInstaller _sdkInstaller;
+    private readonly IDotNetRuntimeSelector _runtimeSelector;
 
     public NewCommand(
         IDotNetCliRunner runner,
@@ -38,6 +39,7 @@ internal sealed class NewCommand : BaseCommand
         ITemplateProvider templateProvider,
         AspireCliTelemetry telemetry,
         IDotNetSdkInstaller sdkInstaller,
+        IDotNetRuntimeSelector runtimeSelector,
         IFeatures features,
         ICliUpdateNotifier updateNotifier)
         : base("new", NewCommandStrings.Description, features, updateNotifier)
@@ -50,6 +52,7 @@ internal sealed class NewCommand : BaseCommand
         ArgumentNullException.ThrowIfNull(templateProvider);
         ArgumentNullException.ThrowIfNull(telemetry);
         ArgumentNullException.ThrowIfNull(sdkInstaller);
+        ArgumentNullException.ThrowIfNull(runtimeSelector);
 
         _runner = runner;
         _nuGetPackageCache = nuGetPackageCache;
@@ -58,6 +61,7 @@ internal sealed class NewCommand : BaseCommand
         _interactionService = interactionService;
         _telemetry = telemetry;
         _sdkInstaller = sdkInstaller;
+        _runtimeSelector = runtimeSelector;
 
         var nameOption = new Option<string>("--name", "-n");
         nameOption.Description = NewCommandStrings.NameArgumentDescription;
@@ -107,7 +111,7 @@ internal sealed class NewCommand : BaseCommand
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Check if the .NET SDK is available
-        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, cancellationToken))
+        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, _runtimeSelector, cancellationToken))
         {
             return ExitCodeConstants.SdkNotInstalled;
         }

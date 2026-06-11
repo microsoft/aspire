@@ -82,6 +82,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.FeatureFlagsFactory);
         services.AddSingleton(options.CliUpdateNotifierFactory);
         services.AddSingleton(options.DotNetSdkInstallerFactory);
+        services.AddSingleton(options.DotNetRuntimeSelectorFactory);
         services.AddSingleton(options.PackagingServiceFactory);
         services.AddSingleton(options.CliExecutionContextFactory);
         services.AddTransient<RootCommand>();
@@ -228,6 +229,11 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IDotNetSdkInstaller> DotNetSdkInstallerFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         return new TestDotNetSdkInstaller();
+    };
+
+    public Func<IServiceProvider, IDotNetRuntimeSelector> DotNetRuntimeSelectorFactory { get; set; } = (IServiceProvider serviceProvider) =>
+    {
+        return new TestDotNetRuntimeSelector();
     };
 
     public Func<IServiceProvider, INuGetPackageCache> NuGetPackageCacheFactory { get; set; } = (IServiceProvider serviceProvider) =>

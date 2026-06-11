@@ -20,6 +20,10 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
             {
                 CheckAsyncCallback = _ => false // SDK not installed
             };
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
+            {
+                InitializeResult = false // SDK not available via runtime selector
+            };
         });
         var provider = services.BuildServiceProvider();
 
@@ -39,6 +43,10 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
                 CheckAsyncCallback = _ => false // SDK not installed
+            };
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
+            {
+                InitializeResult = false // SDK not available via runtime selector
             };
         });
         var provider = services.BuildServiceProvider();
@@ -60,6 +68,10 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
             {
                 CheckAsyncCallback = _ => false // SDK not installed
             };
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
+            {
+                InitializeResult = false // SDK not available via runtime selector
+            };
         });
         var provider = services.BuildServiceProvider();
 
@@ -79,6 +91,10 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
                 CheckAsyncCallback = _ => false // SDK not installed
+            };
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
+            {
+                InitializeResult = false // SDK not available via runtime selector
             };
         });
         var provider = services.BuildServiceProvider();
@@ -100,6 +116,10 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
             {
                 CheckAsyncCallback = _ => false // SDK not installed
             };
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
+            {
+                InitializeResult = false // SDK not available via runtime selector
+            };
         });
         var provider = services.BuildServiceProvider();
 
@@ -120,6 +140,10 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
                 CheckAsyncCallback = _ => false // SDK not installed
+            };
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
+            {
+                InitializeResult = false // SDK not available via runtime selector
             };
         });
         var provider = services.BuildServiceProvider();
