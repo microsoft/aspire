@@ -47,6 +47,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 {
     private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
     private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
+
+    // Safe fallback endpoint URLs used when the dashboard enters error mode. They use the well-known
+    // default dashboard ports so a user with invalid configuration can still reach the error page.
+    private const string ErrorModeFrontendUrl = "http://localhost:18888";
+    private const string ErrorModeOtlpGrpcUrl = "http://localhost:18889";
+    private const string ErrorModeMcpUrl = "http://localhost:18890";
     //private static readonly List<ConnectionType> s_allConnectionTypes = [ConnectionType.Frontend, ConnectionType.Otlp, ConnectionType.Mcp];
 
     private readonly WebApplication _app;
@@ -175,36 +181,74 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         if (hasValidationFailures)
         {
             _validationFailures = failureMessages?.ToList() ?? new List<string> { "Failed to validate dashboard options. Check configuration and try again." };
-            // Use default options to allow the app to build
+
+            // Start from safe defaults so the dashboard can still build and run in error mode. Error
+            // mode only serves the error page (every other request is blocked), so the endpoints just
+            // need to be valid and unsecured.
             dashboardOptions = new DashboardOptions();
-            // Set minimal required configuration
             dashboardOptions.Frontend.AuthMode = FrontendAuthMode.Unsecured;
-            dashboardOptions.Frontend.EndpointUrls = "http://localhost:18888";
+            dashboardOptions.Frontend.EndpointUrls = ErrorModeFrontendUrl;
             dashboardOptions.Otlp.AuthMode = OtlpAuthMode.Unsecured;
-            dashboardOptions.Otlp.GrpcEndpointUrl = "http://localhost:18889";
+            dashboardOptions.Otlp.GrpcEndpointUrl = ErrorModeOtlpGrpcUrl;
             dashboardOptions.Mcp.AuthMode = McpAuthMode.Unsecured;
-            dashboardOptions.Mcp.EndpointUrl = "http://localhost:18890";
-            
-            // Parse the default options to initialize internal state
-            // PostConfigure will call TryParseOptions internally
+            dashboardOptions.Mcp.EndpointUrl = ErrorModeMcpUrl;
+
+            // Layer the original configuration on top of the safe defaults. This preserves valid
+            // user-provided values (e.g. custom endpoint ports) so the error page is served from the
+            // address the user expects.
             new PostConfigureDashboardOptions(builder.Configuration).PostConfigure(string.Empty, dashboardOptions);
-            
-            // Ensure all options are parsed - PostConfigure should have done this, but verify
-            if (!dashboardOptions.Frontend.TryParseOptions(out _))
+
+            // PostConfigure copies the original endpoint URLs from configuration back onto the options.
+            // In error mode those values can be the malformed URLs that triggered the validation failure
+            // in the first place. Revert any endpoint URL that can't be parsed back to a safe default;
+            // otherwise the TryParseOptions calls below fail and crash startup instead of letting error
+            // mode start and display the configuration errors.
+            if (!CanParseFrontendEndpointUrls(dashboardOptions.Frontend.EndpointUrls))
             {
-                throw new InvalidOperationException("Failed to parse default frontend options in error mode");
+                dashboardOptions.Frontend.EndpointUrls = ErrorModeFrontendUrl;
             }
-            if (!dashboardOptions.Otlp.TryParseOptions(out _))
+            if (!CanParseEndpointUrl(dashboardOptions.Otlp.GrpcEndpointUrl))
             {
-                throw new InvalidOperationException("Failed to parse default OTLP options in error mode");
+                dashboardOptions.Otlp.GrpcEndpointUrl = null;
             }
-            if (!dashboardOptions.Mcp.TryParseOptions(out _))
+            if (!CanParseEndpointUrl(dashboardOptions.Otlp.HttpEndpointUrl))
             {
-                throw new InvalidOperationException("Failed to parse default MCP options in error mode");
+                dashboardOptions.Otlp.HttpEndpointUrl = null;
             }
-            
-            // Register the valid default options directly instead of using configuration binding
-            // This prevents validation errors from being thrown when options are accessed
+            // OTLP requires at least one endpoint URL. Restore a default gRPC endpoint if both the gRPC
+            // and HTTP URLs ended up missing or invalid.
+            if (string.IsNullOrEmpty(dashboardOptions.Otlp.GrpcEndpointUrl) && string.IsNullOrEmpty(dashboardOptions.Otlp.HttpEndpointUrl))
+            {
+                dashboardOptions.Otlp.GrpcEndpointUrl = ErrorModeOtlpGrpcUrl;
+            }
+            if (!CanParseEndpointUrl(dashboardOptions.Mcp.EndpointUrl))
+            {
+                dashboardOptions.Mcp.EndpointUrl = ErrorModeMcpUrl;
+            }
+
+            // Force unsecured auth regardless of the (possibly invalid) configuration so error mode never
+            // requires a browser token or client certificate to reach the error page.
+            dashboardOptions.Frontend.AuthMode = FrontendAuthMode.Unsecured;
+            dashboardOptions.Otlp.AuthMode = OtlpAuthMode.Unsecured;
+            dashboardOptions.Mcp.AuthMode = McpAuthMode.Unsecured;
+
+            // Parse the now-valid options to initialize internal state (e.g. endpoint addresses) that
+            // later startup steps such as ConfigureKestrelEndpoints rely on.
+            if (!dashboardOptions.Frontend.TryParseOptions(out var frontendParseError))
+            {
+                throw new InvalidOperationException($"Failed to parse frontend options in error mode: {frontendParseError}");
+            }
+            if (!dashboardOptions.Otlp.TryParseOptions(out var otlpParseError))
+            {
+                throw new InvalidOperationException($"Failed to parse OTLP options in error mode: {otlpParseError}");
+            }
+            if (!dashboardOptions.Mcp.TryParseOptions(out var mcpParseError))
+            {
+                throw new InvalidOperationException($"Failed to parse MCP options in error mode: {mcpParseError}");
+            }
+
+            // Register the valid options directly instead of using configuration binding. This prevents
+            // validation errors from being thrown when options are accessed.
             var optionsMonitor = new OptionsMonitorWrapper<DashboardOptions>(dashboardOptions);
             builder.Services.AddSingleton<IOptions<DashboardOptions>>(optionsMonitor);
             builder.Services.AddScoped<IOptionsSnapshot<DashboardOptions>>(sp => optionsMonitor);
@@ -1030,4 +1074,29 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     }
 
     private static bool IsHttpsOrNull(BindingAddress? address) => address == null || string.Equals(address.Scheme, "https", StringComparison.Ordinal);
+
+    // Returns true when the URL is empty (nothing to revert) or can be parsed as a binding address.
+    // Used in error mode to decide whether a configured endpoint URL should be reverted to a safe default.
+    private static bool CanParseEndpointUrl(string? url) =>
+        string.IsNullOrEmpty(url) || OptionsHelpers.TryParseBindingAddress(url, out _);
+
+    // The frontend supports multiple ';'-separated URLs and requires at least one. Returns true only when
+    // a URL is configured and every part parses as a binding address.
+    private static bool CanParseFrontendEndpointUrls(string? urls)
+    {
+        if (string.IsNullOrEmpty(urls))
+        {
+            return false;
+        }
+
+        foreach (var part in urls.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!OptionsHelpers.TryParseBindingAddress(part, out _))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

@@ -159,6 +159,80 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(HttpStatusCode.ServiceUnavailable, apiResponse.StatusCode);
     }
 
+    [Fact]
+    public async Task ErrorMode_MalformedFrontendUrl_EntersErrorModeWithoutThrowing()
+    {
+        // A malformed frontend URL must not crash startup. The dashboard should enter error mode
+        // and surface the parse failure instead of throwing while building the app.
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "not-a-valid-url";
+            });
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse frontend endpoint URLs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ErrorMode_MalformedOtlpGrpcUrl_EntersErrorModeWithoutThrowing()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "not-a-valid-url";
+            });
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse OTLP gRPC endpoint URL", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ErrorMode_MalformedOtlpHttpUrl_EntersErrorModeWithoutThrowing()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "not-a-valid-url";
+            });
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse OTLP HTTP endpoint URL", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ErrorMode_MalformedMcpUrl_EntersErrorModeWithoutThrowing()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardMcpUrlName.ConfigKey] = "not-a-valid-url";
+            });
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse MCP endpoint URL", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ErrorMode_MalformedOtlpGrpcUrl_StartsAndBlocksRequests()
+    {
+        // The frontend and OTLP HTTP URLs remain valid (dynamic ports) while the OTLP gRPC URL is
+        // malformed. Error mode reverts the gRPC URL to avoid binding it, so the app must still start
+        // and serve the error page from the (valid) frontend endpoint.
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "not-a-valid-url";
+            });
+        await app.StartAsync().DefaultTimeout();
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse OTLP gRPC endpoint URL", StringComparison.Ordinal));
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var apiRequest = new HttpRequestMessage(HttpMethod.Get, "/api/set-language");
+        apiRequest.Headers.Accept.ParseAdd("application/json");
+
+        var apiResponse = await httpClient.SendAsync(apiRequest).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, apiResponse.StatusCode);
+    }
+
     [Theory]
     [InlineData(KnownConfigNames.DashboardConfigFilePath)]
     [InlineData(KnownConfigNames.Legacy.DashboardConfigFilePath)]
