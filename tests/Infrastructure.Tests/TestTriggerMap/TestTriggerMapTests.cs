@@ -90,17 +90,17 @@ public sealed class TestTriggerMapTests
             }
         }
 
-        // project_rules: each entry needs at least one project name glob and at least one target.
-        foreach (var rule in s_map.ProjectRules)
+        // affected_project_rules: each entry needs at least one project name glob and at least one target.
+        foreach (var rule in s_map.AffectedProjectRules)
         {
             var label = rule.Projects.Count > 0 ? rule.Projects[0] : "(no projects)";
             if (rule.Projects.Count == 0 || rule.Projects.Any(string.IsNullOrWhiteSpace))
             {
-                problems.Add($"project_rules entry '{label}' has an empty project glob");
+                problems.Add($"affected_project_rules entry '{label}' has an empty project glob");
             }
             if (rule.Targets.Count == 0 || rule.Targets.Any(string.IsNullOrWhiteSpace))
             {
-                problems.Add($"project_rules entry '{label}' has no targets");
+                problems.Add($"affected_project_rules entry '{label}' has no targets");
             }
         }
 
@@ -179,17 +179,17 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
-    public void EveryProjectRuleGlobMatchesASolutionProject()
+    public void EveryAffectedProjectRuleGlobMatchesASolutionProject()
     {
-        // project_rules key off the affected PROJECT set (Layer 1), matched by project-name glob.
-        // dotnet-affected can only ever report a project that is in Aspire.slnx, so a project glob
+        // affected_project_rules key off the affected PROJECT set (Layer 1), matched by project-name
+        // glob. dotnet-affected can only ever report a project that is in Aspire.slnx, so a project glob
         // that matches no solution project name would silently select nothing — assert each matches
         // at least one. Project Name == the .csproj base name (what dotnet-affected emits).
         var solutionProjectNames = LoadSolutionProjectPaths()
             .Select(p => Path.GetFileNameWithoutExtension(p))
             .ToHashSet(StringComparer.Ordinal);
 
-        var dead = s_map.ProjectRules
+        var dead = s_map.AffectedProjectRules
             .SelectMany(r => r.Projects)
             .Distinct(StringComparer.Ordinal)
             .Where(pattern => !solutionProjectNames.Any(name =>
@@ -198,7 +198,7 @@ public sealed class TestTriggerMapTests
             .ToList();
 
         Assert.True(dead.Count == 0,
-            $"project_rules globs matching no project in Aspire.slnx: {string.Join(", ", dead)}");
+            $"affected_project_rules globs matching no project in Aspire.slnx: {string.Join(", ", dead)}");
     }
 
     [Fact]

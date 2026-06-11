@@ -25,7 +25,7 @@ public sealed class TestTriggerMap
 
     public List<PathRule> PathRules { get; set; } = new();
 
-    public List<ProjectRule> ProjectRules { get; set; } = new();
+    public List<AffectedProjectRule> AffectedProjectRules { get; set; } = new();
 
     public List<DerivedRule> DerivedTargets { get; set; } = new();
 
@@ -66,7 +66,7 @@ public sealed class TestTriggerMap
         {
             foreach (var t in r.Targets) { yield return t; }
         }
-        foreach (var r in ProjectRules)
+        foreach (var r in AffectedProjectRules)
         {
             foreach (var t in r.Targets) { yield return t; }
         }
@@ -163,9 +163,9 @@ public sealed class DerivedRule
     public string? Reason { get; set; }
 }
 
-/// <summary>A <c>project_rules</c> entry: an affected project (Layer 1) matching one of
+/// <summary>An <c>affected_project_rules</c> entry: an affected project (Layer 1) matching one of
 /// <see cref="Projects"/> by name glob adds <see cref="Targets"/>.</summary>
-public sealed class ProjectRule
+public sealed class AffectedProjectRule
 {
     public List<string> Projects { get; set; } = new();
 

@@ -9,7 +9,9 @@ Companion documents:
 - [`test-trigger-map.md`](./test-trigger-map.md) — the descriptive path → target map.
 - [`test-trigger-map.yml`](./test-trigger-map.yml) — its machine-readable form.
 
-**Status: proposed.** Nothing consumes this design yet. The numbers in the
+**Status: wired in audit mode.** `tests.yml`'s `setup_for_tests` runs `SelectTests`
+and emits the advisory summary, but `selection_enforced` defaults to `'false'`, so
+the full matrix and all jobs still run. The numbers in the
 [Selectivity](#measured-selectivity) section are measured against the live repo
 (see [Reproducing the measurements](#reproducing-the-measurements)).
 
@@ -62,7 +64,7 @@ Output is `[{ "Name": "...", "FilePath": "..." }]`, where `Name` is the project
 name (the `.csproj` base name; for a test project, exactly the matrix
 `projectName`). The tool keeps the **full** affected set: it intersects the test
 names with the enumerated matrix (the selected test projects) and matches the
-**production** names against `project_rules` (the job/test triggers that used to be
+**production** names against `affected_project_rules` (the job/test triggers that used to be
 hand-written `src/<Project>/**` path globs).
 
 What Layer 1 covers (each verified against the `dotnet-affected` source and a
@@ -115,11 +117,11 @@ five matchers — a section is a key only when the selector treats it differentl
   - **non-.NET job loose triggers** — only the paths the graph can't attribute
     (`tests/PolyglotAppHosts/**`, the `*.ats.txt` / `*.tscompat.suppression.txt`
     baselines, `tools/TypeScriptApiCompat/**`, `extension/**`); the jobs'
-    *production-project* triggers live in `project_rules`;
+    *production-project* triggers live in `affected_project_rules`;
   - the **linked-compiled** `src/Aspire/Cli/**` (no owning project);
   - **loose-file reads** (`eng/clipack/**`, `eng/winget/**`, `eng/homebrew/**`,
     `src/Aspire.ProjectTemplates/**`, `.github/workflows/**`, `playground/**`, …).
-- **`project_rules`**: an affected **production** project (matched by project-name
+- **`affected_project_rules`**: an affected **production** project (matched by project-name
   glob against Layer 1's affected set) → a target set. Replaces the duplicated
   `src/<Project>/**` job globs and follows the graph's transitive closure (a
   dependency change marks the project affected). Inert when Layer 1 is skipped.
@@ -138,13 +140,13 @@ matrix split:
    the curated YAML, and the `Aspire.slnx` project dirs (for attribution).
 2. **Layer 1:** invoke `dotnet-affected`; read the full affected project set
    (production + test). Test names ∩ matrix are selected; production names feed
-   `project_rules`.
+   `affected_project_rules`.
 3. **Layer 2:** per changed file — apply `conventions` (existence-guarded),
    `path_rules` (expanding groups recursively; a `targets: [ALL]` rule selects the
    whole matrix), and `ignore` (accounts for a file with no target).
-4. **`project_rules`:** for each affected production project, add the targets of
+4. **`affected_project_rules`:** for each affected production project, add the targets of
    every rule whose project-name glob it matches.
-5. **Derived pass:** for each selected test (Layer 1 ∪ Layer 2 ∪ project_rules),
+5. **Derived pass:** for each selected test (Layer 1 ∪ Layer 2 ∪ affected_project_rules),
    add its `derived_targets`, to a fixpoint (cycle-safe).
 6. **Run-all fallback:** a `src/**` file matched by no Layer 2 rule, not ignored,
    and *not* under a project in `Aspire.slnx` (so `dotnet-affected` didn't
@@ -162,18 +164,38 @@ the existing scripts.
 
 ## Pipeline integration
 
-The current flow:
+The flow in `tests.yml`'s `setup_for_tests` job:
 
 ```text
 enumerate-tests (action)  ->  all_tests JSON {"include":[...]}
+  ->  SelectTests  (--from base --to head; reads all_tests + the curated map; Layer 1 via
+                    dotnet-affected)  ->  selected_matrix.json + run_* outputs + audit summary
   ->  split-test-matrix-by-deps.ps1  (keys off entry.properties.requiresNugets / requiresCliArchive)
   ->  run-tests.yml (per-dependency matrices)
 ```
 
-`SelectTests` inserts one step: filter `all_tests` `include[]` by `projectName`
-**before** the split. The split, the per-OS/per-dependency bucketing, and
-`run-tests.yml` are unchanged. The per-job booleans feed the `if:` conditions
-that gate the non-.NET jobs in `tests.yml`.
+`SelectTests` runs as one step after `enumerate-tests` and before the split. The
+split, per-OS/per-dependency bucketing, and `run-tests.yml` are unchanged. The
+`run_*` step outputs become `setup_for_tests` job outputs that gate the non-.NET
+jobs (`extension_e2e_tests`, `typescript_sdk_tests`, `typescript_api_compat`) via
+their `if:` — replacing the old hand-rolled `extension_e2e_changes` regex job.
+
+**Audit vs. enforce is one `setup_for_tests` output, `selection_enforced`** (default
+`'false'`). While `'false'`: SelectTests runs in audit mode (emits the full matrix
+and `run_* = true`, writes the advisory summary), every gate reads
+`selection_enforced != 'true' || run_X == 'true'`, so the full matrix and all jobs
+run — behavior is unchanged. Flipping it to `'true'` (and adding `--enforce` to the
+SelectTests invocation) makes the emitted matrix and the gates selective. The
+SelectTests step falls back to the full enumerated matrix on any failure, so test
+coverage is never silently reduced.
+
+The kill switch is wired in the same step: a `[full ci]` token in the PR body or a
+`run-all-tests` label passes `--force-all`. Non-PR events (no reliable base SHA)
+also force the full set.
+
+dotnet-affected adds an MSBuild `ProjectGraph` evaluation to the critical-path
+`setup_for_tests` job; it is a local tool restored via `dotnet tool restore` and
+must be available on the CI NuGet feeds (dnceng), not nuget.org.
 
 ## Measured selectivity
 
@@ -230,8 +252,8 @@ A test under `Infrastructure.Tests` (which already asserts on workflow files)
 keeps the curated layer honest:
 
 - **Referential integrity:** every curated `test:` / `job:` target (including
-  `project_rules` and `derived_targets`) names a real test project / a known
-  `tests.yml` job; every path glob is valid; every `project_rules` project-name
+  `affected_project_rules` and `derived_targets`) names a real test project / a known
+  `tests.yml` job; every path glob is valid; every `affected_project_rules` project-name
   glob matches at least one project in `Aspire.slnx` (so a renamed project fails
   loudly); every `conventions` pattern carries a `<name>` placeholder that its
   target substitutes.

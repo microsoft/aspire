@@ -169,12 +169,12 @@ public sealed class TestSelector
             }
         }
 
-        // project_rules: an affected PRODUCTION project (matched by name glob) pulls in jobs/tests.
-        // This replaces the duplicated src/<Project>/** path globs the job rules used to carry, and
-        // follows the graph's transitive closure (a dependency change marks the project affected).
-        // Keyed on the affected-project set, so it contributes nothing when Layer 1 produced none
-        // (e.g. --skip-layer1) -- the path_rules still cover the loose-file triggers in that case.
-        foreach (var rule in map.ProjectRules)
+        // affected_project_rules: an affected PRODUCTION project (matched by name glob) pulls in
+        // jobs/tests. This replaces the duplicated src/<Project>/** path globs the job rules used to
+        // carry, and follows the graph's transitive closure (a dependency change marks the project
+        // affected). Keyed on the affected-project set, so it contributes nothing when Layer 1
+        // produced none (e.g. --skip-layer1) -- the path_rules still cover the loose-file triggers.
+        foreach (var rule in map.AffectedProjectRules)
         {
             if (layer1Affected.Any(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name))))
             {

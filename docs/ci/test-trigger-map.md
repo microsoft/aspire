@@ -36,7 +36,7 @@ non-.NET jobs and loose-file reads.
 
 Only five matchers exist — a section is its own key only when the selector treats
 it differently. Everything that is "a path glob set → a target set" lives in one
-section (`path_rules`); the groupings inside it are comments. `project_rules` is
+section (`path_rules`); the groupings inside it are comments. `affected_project_rules` is
 separate because it keys off the affected-**project** set (by name), not file paths.
 
 | Section | What it is |
@@ -44,7 +44,7 @@ separate because it keys off the affected-**project** set (by name), not file pa
 | `conventions` | `<name>`-capture pattern → target template, emitted only if the derived test exists (existence guard). Additive. Covers a test's own folder (`tests/<name>/**`) and the Hosting/Components integration dirs (a backstop for non-MSBuild files the graph can't attribute). |
 | `ignore` | globs Layer 2 accounts for with **no** target (Layer 1 covers them, or inert), so they don't trip the run-all fallback |
 | `path_rules` | a path glob set → a target set (`test:` / `job:` / a group / `ALL`). The single general path matcher: catch-all-to-`ALL`, convention misses, non-.NET job loose-file triggers, and loose-file reads all live here under comment headers |
-| `project_rules` | an affected **production** project (matched by project-name glob against Layer 1's affected set) → a target set. Replaces the `src/<Project>/**` globs the job rules used to repeat; follows the graph's transitive closure (a dependency change marks the project affected) |
+| `affected_project_rules` | an affected **production** project (matched by project-name glob against Layer 1's affected set) → a target set. Replaces the `src/<Project>/**` globs the job rules used to repeat; follows the graph's transitive closure (a dependency change marks the project affected) |
 | `derived_targets` | "if any of these tests is selected, also run these jobs/tests" — a *test-set* relationship, not a file edge |
 | `groups` | named, reusable bundles of `test:`/`job:` targets (expand recursively) |
 
@@ -159,7 +159,7 @@ selector treats them all identically. Highlights:
   `job:typescript-api-compat` / `job:ats-diffs` ← the checked-in `*.ats.txt` /
   `*.tscompat.suppression.txt` baselines (not compiled items) + `tools/TypeScriptApiCompat/**`;
   `job:extension-unit` / `job:extension-e2e` ← `extension/**`. The *production-project*
-  triggers for these jobs (e.g. `Aspire.Cli`, `Aspire.Hosting*`) moved to `project_rules`.
+  triggers for these jobs (e.g. `Aspire.Cli`, `Aspire.Hosting*`) moved to `affected_project_rules`.
 - **linked-compiled source** — `src/Aspire/Cli/**` is link-compiled only into
   `Aspire.Hosting.CodeGeneration.TypeScript` and is not its own project dir, so it carries an
   explicit `path_rules` entry with the targets its old per-job globs had.
@@ -168,7 +168,7 @@ selector treats them all identically. Highlights:
   `src/Aspire.ProjectTemplates/**` (template hive install), `playground/**`, `.github/workflows/**`
   (asserted by `Infrastructure.Tests`), `eng/Bundle.proj` → `CLI_BUNDLE`.
 
-### Project rules (`project_rules`)
+### Project rules (`affected_project_rules`)
 
 An affected **production** project → a target set, matched by project-**name** glob
 against Layer 1's affected set (production projects only; matrix test projects are

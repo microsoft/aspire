@@ -24,15 +24,15 @@ internal sealed class TriggerMap
 
     public List<PathRule> PathRules { get; set; } = new();
 
-    public List<ProjectRule> ProjectRules { get; set; } = new();
+    public List<AffectedProjectRule> AffectedProjectRules { get; set; } = new();
 
     public List<DerivedRule> DerivedTargets { get; set; } = new();
 
     // Five matchers exist; a section is a key only when the selector treats it differently.
     // The graph closure (ProjectReference, CPM, Directory.Build.*, foreign <Compile Include>) is
     // computed at runtime by dotnet-affected (Layer 1), so those edges are intentionally absent.
-    // project_rules are distinct from path_rules because they key off the affected PROJECT set
-    // (Layer 1) by project name, not off changed file paths.
+    // affected_project_rules are distinct from path_rules because they key off the affected PROJECT
+    // set (Layer 1) by project name, not off changed file paths.
 
     // Every job: token the map can ever emit -- the "all jobs" set an ALL selection expands to.
     // Collected from every section that can carry a job: target (path-rule targets, derived
@@ -57,7 +57,7 @@ internal sealed class TriggerMap
             }
         }
 
-        foreach (var rule in ProjectRules)
+        foreach (var rule in AffectedProjectRules)
         {
             foreach (var t in rule.Targets)
             {
@@ -174,11 +174,11 @@ internal sealed class PathRule
     public string? Reason { get; set; }
 }
 
-// project_rules entry: when ANY affected project (Layer 1) matches one of Projects by name glob,
-// add Targets. Replaces the duplicated src/<Project>/** path globs that previously drove the
+// affected_project_rules entry: when ANY affected project (Layer 1) matches one of Projects by name
+// glob, add Targets. Replaces the duplicated src/<Project>/** path globs that previously drove the
 // non-.NET jobs, and is more robust: it follows the graph's transitive closure rather than literal
 // file paths.
-internal sealed class ProjectRule
+internal sealed class AffectedProjectRule
 {
     public List<string> Projects { get; set; } = new();
 

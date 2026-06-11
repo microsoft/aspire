@@ -22,6 +22,17 @@ jobs:
       tests_matrix_requires_nugets_windows: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_windows }}
       tests_matrix_requires_nugets_macos: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_macos }}
       tests_matrix_requires_cli_archive: ${{ steps.split_matrix.outputs.tests_matrix_requires_cli_archive }}
+      # Selective CI (see docs/ci/test-trigger-selector-design.md). selection_enforced stays 'false'
+      # during the audit rollout: SelectTests writes the advisory "what enforcing would run" summary,
+      # but the full matrix + all jobs still run. Flip this ONE value to 'true' to enforce once audit
+      # data shows the selection is safe; the run_* gates below then take effect.
+      selection_enforced: 'false'
+      run_polyglot: ${{ steps.select_tests.outputs.run_polyglot }}
+      run_typescript_sdk: ${{ steps.select_tests.outputs.run_typescript_sdk }}
+      run_typescript_api_compat: ${{ steps.select_tests.outputs.run_typescript_api_compat }}
+      run_extension_unit: ${{ steps.select_tests.outputs.run_extension_unit }}
+      run_extension_e2e: ${{ steps.select_tests.outputs.run_extension_e2e }}
+      run_cli_starter: ${{ steps.select_tests.outputs.run_cli_starter }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -30,12 +41,57 @@ jobs:
         with:
           buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }}'
 
+      - name: Select relevant tests (audit)
+        id: select_tests
+        shell: bash
+        # Untrusted PR fields (body) are passed via env, never interpolated into the script body, to
+        # avoid shell injection from a malicious PR description.
+        env:
+          ALL_TESTS: ${{ steps.generate_tests_matrix.outputs.all_tests }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HAS_RUN_ALL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'run-all-tests') }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$ALL_TESTS" > all_tests.json
+
+          args=(--repo-root . --matrix all_tests.json --output selected_matrix.json)
+
+          # Kill switch: a [full ci] token in the PR body or the run-all-tests label forces everything.
+          if printf '%s' "$PR_BODY" | grep -qiF '[full ci]' || [ "$HAS_RUN_ALL_LABEL" = "true" ]; then
+            args+=(--force-all)
+          elif [ -n "$PR_BASE_SHA" ]; then
+            # Pull requests diff base..head. The enumerate-tests checkout is shallow, so fetch the base
+            # commit; if it is unavailable, force the full set rather than under-select.
+            git fetch --no-tags --depth=1 origin "$PR_BASE_SHA" || true
+            if git cat-file -e "${PR_BASE_SHA}^{commit}" 2>/dev/null; then
+              args+=(--from "$PR_BASE_SHA" --to "$HEAD_SHA")
+            else
+              args+=(--force-all)
+            fi
+          else
+            # Non-PR events (e.g. push to main) have no reliable base -> run everything.
+            args+=(--force-all)
+          fi
+
+          # dotnet-affected (Layer 1 graph closure) ships as a local tool.
+          ./dotnet.sh tool restore
+
+          # Audit mode (no --enforce): SelectTests emits the FULL matrix and writes run_* = true, plus
+          # the advisory summary. If anything fails, fall back to the full enumerated matrix so test
+          # coverage is never silently reduced. (To enforce, add --enforce here and flip
+          # selection_enforced above.)
+          ./dotnet.sh run --project tools/SelectTests/SelectTests.csproj -- "${args[@]}" \
+            || cp all_tests.json selected_matrix.json
+
       - name: Split matrix by dependency type
         id: split_matrix
         shell: pwsh
         run: |
+          $matrix = Get-Content -Raw "${{ github.workspace }}/selected_matrix.json"
           $splitScript = "${{ github.workspace }}/eng/scripts/split-test-matrix-by-deps.ps1"
-          & $splitScript -AllTestsMatrix '${{ steps.generate_tests_matrix.outputs.all_tests }}' -OutputToGitHubEnv
+          & $splitScript -AllTestsMatrix $matrix -OutputToGitHubEnv
 
   build_packages:
     name: Build packages
@@ -228,49 +284,6 @@ jobs:
     needs: [build_packages, build_cli_archive_linux]
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-
-  extension_e2e_changes:
-    name: Detect VS Code extension E2E changes
-    runs-on: ubuntu-latest
-    outputs:
-      run_extension_e2e: ${{ steps.changed.outputs.run_extension_e2e }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Check changed paths
-        id: changed
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          base='${{ github.event.pull_request.base.sha || github.event.before }}'
-          head='${{ github.sha }}'
-
-          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
-            echo "No usable base SHA is available; running extension E2E tests."
-            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            git fetch --no-tags --depth=1 origin "$base" || true
-          fi
-
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "Base SHA $base is not available after shallow fetch; running extension E2E tests."
-            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed_files="$(git diff --name-only "$base" "$head")"
-          echo "$changed_files"
-
-          if echo "$changed_files" | grep -E -q '^(extension/|src/Aspire\.Cli/|src/Aspire/Cli/|src/Aspire\.Hosting[^/]*/|src/Aspire\.Dashboard[^/]*/|tests/Aspire\.Cli\.Tests/|tests/Aspire\.Cli\.EndToEnd\.Tests/|tests/Aspire\.Hosting\.Tests/Cli/|eng/scripts/get-aspire-cli|\.github/workflows/(tests|extension-e2e-tests|build-packages|build-cli-native-archives)\.yml$)'; then
-            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run_extension_e2e=false" >> "$GITHUB_OUTPUT"
-          fi
 
   cli_starter_validation_windows:
     name: Aspire CLI Starter Validation (${{ matrix.os.name }})
@@ -489,16 +502,23 @@ jobs:
 
   extension_e2e_tests:
     name: Run VS Code extension E2E tests
-    if: ${{ needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' }}
+    # Audit: selection_enforced is 'false', so this always runs. Enforcing: gated by the selector's
+    # run_extension_e2e (the map's extension-e2e rule replaces the old extension_e2e_changes regex).
+    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     uses: ./.github/workflows/extension-e2e-tests.yml
-    needs: [extension_e2e_changes, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
 
   typescript_sdk_tests:
     name: TypeScript SDK Unit Tests
+    needs: [setup_for_tests]
+    # Audit: always runs (selection_enforced 'false'). Enforcing: gated by the selector.
+    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_typescript_sdk == 'true' }}
     uses: ./.github/workflows/typescript-sdk-tests.yml
 
   typescript_api_compat:
     name: TypeScript API Compatibility
+    needs: [setup_for_tests]
+    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_typescript_api_compat == 'true' }}
     uses: ./.github/workflows/typescript-api-compat.yml
 
   results:
@@ -517,7 +537,6 @@ jobs:
       prepare_winget_installer_artifacts,
       prepare_homebrew_installer_artifacts,
       build_cli_e2e_image,
-      extension_e2e_changes,
       extension_tests_win,
       extension_e2e_tests,
       extension_bootstrap_linux,
@@ -611,11 +630,15 @@ jobs:
                contains(needs.*.result, 'cancelled') ||
                (github.event_name == 'pull_request' &&
                 (needs.extension_tests_win.result == 'skipped' ||
-                 (needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' &&
+                 (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
                  needs.cli_starter_validation_windows.result == 'skipped' ||
-                 needs.typescript_sdk_tests.result == 'skipped' ||
-                 needs.typescript_api_compat.result == 'skipped' ||
+                 (needs.typescript_sdk_tests.result == 'skipped' &&
+                  (needs.setup_for_tests.outputs.selection_enforced != 'true' ||
+                   needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
+                 (needs.typescript_api_compat.result == 'skipped' &&
+                  (needs.setup_for_tests.outputs.selection_enforced != 'true' ||
+                   needs.setup_for_tests.outputs.run_typescript_api_compat == 'true')) ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  needs.prepare_winget_installer_artifacts.result == 'skipped' ||
                  needs.prepare_homebrew_installer_artifacts.result == 'skipped' ||
@@ -630,9 +653,11 @@ jobs:
                  needs.polyglot_validation.result == 'skipped')) ||
                (github.event_name != 'pull_request' &&
                 (needs.extension_tests_win.result == 'skipped' ||
-                 (needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' &&
+                 (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
-                 needs.typescript_sdk_tests.result == 'skipped' ||
+                 (needs.typescript_sdk_tests.result == 'skipped' &&
+                  (needs.setup_for_tests.outputs.selection_enforced != 'true' ||
+                   needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  needs.prepare_winget_installer_artifacts.result == 'skipped' ||
                  needs.prepare_homebrew_installer_artifacts.result == 'skipped' ||

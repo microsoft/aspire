@@ -78,7 +78,7 @@ public sealed class SelectTestsAcceptanceTests
             targets: [test:DerCycB]
           - tests: [test:DerCycB]
             targets: [test:DerCycA]
-        project_rules:
+        affected_project_rules:
           - projects: [Aspire.ProjCli, Aspire.Managed]
             targets: [job:projjob]
           - projects: [Aspire.Hosting.Proj*]
