@@ -41,13 +41,24 @@ jobs:
         with:
           buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }}'
 
+      # The expanded matrix can exceed 128KB. It MUST reach the bash step below via a file, not an
+      # environment variable: a single env string over Linux's MAX_ARG_STRLEN (~128KB) makes the
+      # step's execve("/usr/bin/bash") fail with E2BIG ("Argument list too long"). pwsh writes its
+      # run-script to a file, so interpolating the (trusted, build-generated) matrix into a literal
+      # here-string here keeps it out of the environment entirely.
+      - name: Write test matrix to file
+        shell: pwsh
+        run: |
+          @'
+          ${{ steps.generate_tests_matrix.outputs.all_tests }}
+          '@.Trim() | Set-Content -Path "${{ github.workspace }}/all_tests.json" -Encoding utf8 -NoNewline
+
       - name: Select relevant tests (audit)
         id: select_tests
         shell: bash
         # Untrusted PR fields (body) are passed via env, never interpolated into the script body, to
         # avoid shell injection from a malicious PR description.
         env:
-          ALL_TESTS: ${{ steps.generate_tests_matrix.outputs.all_tests }}
           PR_BODY: ${{ github.event.pull_request.body }}
           HAS_RUN_ALL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'run-all-tests') }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -58,7 +69,6 @@ jobs:
           ENFORCE_SELECTION: 'false'
         run: |
           set -euo pipefail
-          printf '%s' "$ALL_TESTS" > all_tests.json
 
           args=(--repo-root . --matrix all_tests.json --output selected_matrix.json)
           [ "$ENFORCE_SELECTION" = "true" ] && args+=(--enforce)
