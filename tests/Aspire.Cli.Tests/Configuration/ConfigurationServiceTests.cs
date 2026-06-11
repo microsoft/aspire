@@ -253,6 +253,129 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SetConfigurationAsync_MigratesLegacyPackagesToIntegrations_WhenWriting()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(
+            workspace,
+            """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.0"
+              }
+            }
+            """);
+
+        await service.SetConfigurationAsync("channel", "daily", isGlobal: false);
+
+        var root = JsonNode.Parse(File.ReadAllText(settingsFilePath))!.AsObject();
+        Assert.False(root.ContainsKey("packages"));
+        Assert.Equal("13.2.0", root["integrations"]!["Aspire.Hosting.Redis"]!.ToString());
+        Assert.Equal("daily", root["channel"]!.ToString());
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_DropsLegacyPackages_WhenIntegrationsAlsoPresent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(
+            workspace,
+            """
+            {
+              "integrations": {
+                "Aspire.Hosting.Redis": "14.0.0"
+              },
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.0",
+                "Aspire.Hosting.PostgreSQL": "13.2.0"
+              }
+            }
+            """);
+
+        await service.SetConfigurationAsync("channel", "daily", isGlobal: false);
+
+        var root = JsonNode.Parse(File.ReadAllText(settingsFilePath))!.AsObject();
+        Assert.False(root.ContainsKey("packages"));
+        var integrations = root["integrations"]!.AsObject();
+        Assert.Equal("14.0.0", integrations["Aspire.Hosting.Redis"]!.ToString());
+        Assert.False(integrations.ContainsKey("Aspire.Hosting.PostgreSQL"));
+    }
+
+    [Fact]
+    public async Task DeleteConfigurationAsync_RemovesIntegration_FromLegacyPackagesFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Dot-free integration keys are used here so the dot-notation delete navigation isolates the
+        // legacy "packages" -> "integrations" normalization rather than the unrelated behavior of
+        // package names that themselves contain '.' segments.
+        var (service, settingsFilePath) = CreateService(
+            workspace,
+            """
+            {
+              "packages": {
+                "RedisIntegration": "13.2.0",
+                "PostgresIntegration": "13.2.0"
+              }
+            }
+            """);
+
+        var deleted = await service.DeleteConfigurationAsync("integrations.RedisIntegration", isGlobal: false);
+
+        Assert.True(deleted);
+        var root = JsonNode.Parse(File.ReadAllText(settingsFilePath))!.AsObject();
+        Assert.False(root.ContainsKey("packages"));
+        var integrations = root["integrations"]!.AsObject();
+        Assert.False(integrations.ContainsKey("RedisIntegration"));
+        Assert.Equal("13.2.0", integrations["PostgresIntegration"]!.ToString());
+    }
+
+    [Fact]
+    public async Task DeleteConfigurationAsync_MigratesLegacyPackagesInPlace_EvenWhenKeyNotFound()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(
+            workspace,
+            """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.0"
+              }
+            }
+            """);
+
+        var deleted = await service.DeleteConfigurationAsync("channel", isGlobal: false);
+
+        Assert.False(deleted);
+        var root = JsonNode.Parse(File.ReadAllText(settingsFilePath))!.AsObject();
+        Assert.False(root.ContainsKey("packages"));
+        Assert.Equal("13.2.0", root["integrations"]!["Aspire.Hosting.Redis"]!.ToString());
+    }
+
+    [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_ResolvesIntegration_FromLegacyPackagesFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "packages": {
+                "RedisIntegration": "13.2.0"
+              }
+            }
+            """);
+
+        var value = await service.GetConfigurationFromDirectoryAsync("integrations.RedisIntegration", workspace.WorkspaceRoot);
+
+        Assert.Equal("13.2.0", value);
+    }
+
+    [Fact]
     public async Task GetConfigurationFromDirectoryAsync_WithContinueSearchWhenKeyMissing_WalksUpWhenNearestConfigDoesNotContainKey()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

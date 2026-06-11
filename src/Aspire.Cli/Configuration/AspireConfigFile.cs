@@ -197,27 +197,36 @@ internal sealed class AspireConfigFile
     /// <c>"integrations"</c> is already present (even as <c>null</c> or <c>{}</c>) the new key wins and
     /// the legacy <c>"packages"</c> entry is dropped, mirroring <see cref="MergeLegacyPackages"/>.
     /// </summary>
-    internal static void NormalizeLegacyIntegrationsKey(JsonObject root)
+    /// <returns>
+    /// <c>true</c> when the object was mutated (legacy <c>"packages"</c> was renamed or dropped);
+    /// <c>false</c> when no legacy key was present. Callers that persist the object (e.g.
+    /// <c>aspire config set</c>/<c>delete</c>) use this to migrate the file in place and avoid leaving
+    /// a dual-key (<c>"packages"</c> + <c>"integrations"</c>) file on disk.
+    /// </returns>
+    internal static bool NormalizeLegacyIntegrationsKey(JsonObject root)
     {
         // Match the case-insensitive property binding the serializer uses (PropertyNameCaseInsensitive
         // = true) so e.g. "Integrations" is still treated as the new key.
         var legacyKey = FindKeyIgnoreCase(root, LegacyPackagesKey);
         if (legacyKey is null)
         {
-            return;
+            return false;
         }
 
         var integrationsKey = FindKeyIgnoreCase(root, IntegrationsKey);
         if (integrationsKey is not null)
         {
+            // Both keys present: the new "integrations" key wins and the legacy "packages" entry is
+            // dropped, mirroring MergeLegacyPackages. Removing the legacy key is itself a mutation.
             root.Remove(legacyKey);
-            return;
+            return true;
         }
 
         // DeepClone detaches the node from its current parent so it can be re-parented under the new key.
         var node = root[legacyKey]?.DeepClone();
         root.Remove(legacyKey);
         root[IntegrationsKey] = node;
+        return true;
     }
 
     private static string? FindKeyIgnoreCase(JsonObject root, string name)

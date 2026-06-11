@@ -46,6 +46,10 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Set the configuration value using dot notation support
         SetNestedValue(settings, key, value);
 
+        // Migrate any legacy "packages" key to "integrations" before writing so a legacy-keyed file
+        // is updated in place and we never leave a dual-key ("packages" + "integrations") file on disk.
+        AspireConfigFile.NormalizeLegacyIntegrationsKey(settings);
+
         await ConfigurationHelper.WriteSettingsFileAsync(settingsFilePath, settings, cancellationToken);
     }
 
@@ -75,10 +79,16 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
                 return false;
             }
 
+            // Migrate any legacy "packages" key to "integrations" so a delete targeting
+            // "integrations.<name>" resolves against a legacy-keyed file, and so we never leave a
+            // dual-key ("packages" + "integrations") file on disk. The migration is itself a change
+            // worth persisting even when the requested key was not present.
+            var normalized = AspireConfigFile.NormalizeLegacyIntegrationsKey(settings);
+
             // Delete using dot notation support and return whether deletion occurred
             var deleted = DeleteNestedValue(settings, key);
 
-            if (deleted)
+            if (deleted || normalized)
             {
                 await ConfigurationHelper.WriteSettingsFileAsync(settingsFilePath, settings, cancellationToken);
             }
@@ -483,12 +493,18 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
                 ex);
         }
 
-        if (node is not JsonObject)
+        if (node is not JsonObject settingsObject)
         {
             return new ConfigurationBuilder().Build();
         }
 
-        var cleanJson = node.ToJsonString();
+        // Surface legacy "packages" entries under the new "integrations" key so directory-scoped
+        // reads (e.g. `aspire config get integrations.<name>`) and the global fallback resolve
+        // consistently regardless of the on-disk key. This is read-only; the file is migrated in
+        // place only on write paths (set/delete).
+        AspireConfigFile.NormalizeLegacyIntegrationsKey(settingsObject);
+
+        var cleanJson = settingsObject.ToJsonString();
         var bytes = System.Text.Encoding.UTF8.GetBytes(cleanJson);
         return new ConfigurationBuilder()
             .AddJsonStream(new MemoryStream(bytes))
