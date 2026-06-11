@@ -1,10 +1,9 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "oracle": {
       "type": "container.v0",
       "connectionString": "user id=system;password={oracle-password.value};data source={oracle.bindings.tcp.host}:{oracle.bindings.tcp.port}",
-      "image": "container-registry.oracle.com/database/free:23.26.0.0",
+      "image": "container-registry.oracle.com/database/free:23.26.1.0",
       "env": {
         "ORACLE_PWD": "{oracle-password.value}"
       },
@@ -25,8 +24,6 @@
       "type": "project.v0",
       "path": "../OracleEndToEnd.ApiService/OracleEndToEnd.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{api.bindings.http.targetPort}",
@@ -37,7 +34,7 @@
         "FREEPDB1_PASSWORD": "{oracle-password.value}",
         "FREEPDB1_URI": "oracle://system:{oracle-password-uri-encoded.value}@{oracle.bindings.tcp.host}:{oracle.bindings.tcp.port}/FREEPDB1",
         "FREEPDB1_JDBCCONNECTIONSTRING": "jdbc:oracle:thin:@//{oracle.bindings.tcp.host}:{oracle.bindings.tcp.port}/FREEPDB1",
-        "FREEPDB1_DATABASE": "FREEPDB1"
+        "FREEPDB1_DATABASENAME": "FREEPDB1"
       },
       "bindings": {
         "http": {

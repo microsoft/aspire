@@ -121,19 +121,25 @@
     <value>At least one template factory must be provided.</value>
   </data>
   <data name="AspireStarter_Description" xml:space="preserve">
-    <value>Blazor &amp; Minimal API starter</value>
+    <value>Starter App (ASP.NET Core/Blazor)</value>
+  </data>
+  <data name="AspireJsFrontendStarter_Description" xml:space="preserve">
+    <value>Starter App (ASP.NET Core/React, C# AppHost)</value>
+  </data>
+  <data name="AspireJavaStarter_Description" xml:space="preserve">
+    <value>Starter App (Java AppHost/Express/React)</value>
   </data>
   <data name="AspireEmpty_Description" xml:space="preserve">
     <value>AppHost and service defaults</value>
+  </data>
+  <data name="AspireEmptyDotNetTemplate_Description" xml:space="preserve">
+    <value>Empty (C# AppHost, dotnet template)</value>
   </data>
   <data name="AspireAppHost_Description" xml:space="preserve">
     <value>AppHost</value>
   </data>
   <data name="AspireServiceDefaults_Description" xml:space="preserve">
     <value>Service defaults</value>
-  </data>
-  <data name="AspirePyStarter_Description" xml:space="preserve">
-    <value>React (Vite) &amp; FastAPI starter</value>
   </data>
   <data name="AspireAppHostSingleFile_Description" xml:space="preserve">
     <value>Empty AppHost</value>
@@ -196,8 +202,8 @@
     <value>Getting templates...</value>
   </data>
   <data name="TemplateInstallationFailed" xml:space="preserve">
-    <value>The template installation failed with exit code {0}. For more information run with --debug switch.</value>
-    <comment>{0} is a number, --debug should not be localized</comment>
+    <value>The template installation failed with exit code {0}.</value>
+    <comment>{0} is a number</comment>
   </data>
   <data name="UsingProjectTemplatesVersion" xml:space="preserve">
     <value>Using project templates version: {0}</value>
@@ -206,8 +212,8 @@
     <value>Creating new Aspire project...</value>
   </data>
   <data name="ProjectCreationFailed" xml:space="preserve">
-    <value>Project creation failed with exit code {0}. For more information run with --debug switch.</value>
-    <comment>{0} is a number, --debug should not be localized</comment>
+    <value>Project creation failed with exit code {0}.</value>
+    <comment>{0} is a number</comment>
   </data>
   <data name="ProjectCreatedSuccessfully" xml:space="preserve">
     <value>Project created successfully in {0}.</value>
@@ -232,6 +238,15 @@
   <data name="NuGetConfigCreatedConfirmationMessage" xml:space="preserve">
     <value>Created NuGet.config for the selected package channel.</value>
   </data>
+  <data name="UpdateNuGetConfigConfirmation" xml:space="preserve">
+    <value>Update NuGet.config to add missing package sources for the selected channel?</value>
+  </data>
+  <data name="NuGetConfigUpdatedConfirmationMessage" xml:space="preserve">
+    <value>Updated NuGet.config with required package sources.</value>
+  </data>
+  <data name="NuGetConfigCreatedOrUpdatedConfirmationMessage" xml:space="preserve">
+    <value>Created or updated NuGet.config in the project directory with required package sources.</value>
+  </data>
   <data name="UseLocalhostTld_Prompt" xml:space="preserve">
     <value>Use *.dev.localhost URLs</value>
   </data>
@@ -243,5 +258,16 @@
   </data>
   <data name="UseLocalhostTld_Description" xml:space="preserve">
     <value>Configures whether to use *.dev.localhost URLs for local development.</value>
+  </data>
+  <data name="RunCdThenAspireRun" xml:space="preserve">
+    <value>Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</value>
+    <comment>{0} is the relative path to the project directory</comment>
+  </data>
+  <data name="RunAspireRun" xml:space="preserve">
+    <value>Run 'aspire run' to start your AppHost.</value>
+  </data>
+  <data name="SourceOverrideNotPersistedWarning" xml:space="preserve">
+    <value>[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</value>
+    <comment>Do not translate [yellow] or [/]. Displayed after 'aspire new' (aspire-empty or aspire-starter) when --source was supplied for a non-C# language.</comment>
   </data>
 </root>

@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class KestrelConfigTests
 {
     [Fact]
@@ -180,8 +181,6 @@ public class KestrelConfigTests
               "type": "project.v0",
               "path": "another-path",
               "env": {
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                 "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                 "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                 "Kestrel__Endpoints__http__Url": "http://*:{projectName.bindings.http.targetPort}"
@@ -225,8 +224,6 @@ public class KestrelConfigTests
               "type": "project.v0",
               "path": "another-path",
               "env": {
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                 "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                 "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                 "Kestrel__Endpoints__FirstHttpEndpoint__Url": "http://*:{projectName.bindings.FirstHttpEndpoint.targetPort}",
@@ -292,8 +289,6 @@ public class KestrelConfigTests
 
         var expectedEnv = """
             {
-              "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-              "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
               "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
               "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
               "Kestrel__Endpoints__SecondHttpEndpoint__Url": "http://*:{projectName.bindings.SecondHttpEndpoint.targetPort}",

@@ -1,6 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/template",
   "author": "Microsoft",
+  "generatorVersions": "1.0.0.0",
   "classifications": [
     "Common",
     "Aspire",
@@ -23,19 +24,13 @@
     "type": "project"
   },
   "precedence": "9000",
-  "identity": "Aspire.Tests.xUnit.CSharp.8.0",
-  "thirdPartyNotices": "https://aka.ms/dotnet/aspire/third-party-notices",
+  "identity": "Aspire.Tests.xUnit.CSharp.!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
+  "thirdPartyNotices": "https://aka.ms/aspire/third-party-notices",
   "groupIdentity": "Aspire.Tests.xUnit",
   "sources": [
     {
-      "source": "./9.5",
-      "target": "./",
-      "condition": "AspireVersionActual == 9.5"
-    },
-    {
-      "source": "./13.0",
-      "target": "./",
-      "condition": "AspireVersionActual == 13.0"
+      "source": "./",
+      "target": "./"
     }
   ],
   "symbols": {
@@ -59,42 +54,6 @@
       ],
       "replaces": "net8.0",
       "defaultValue": "net10.0"
-    },
-    "AspireVersion": {
-      "type": "parameter",
-      "description": "The version of Aspire to use.",
-      "displayName": "Aspire version",
-      "datatype": "choice",
-      "choices": [
-        {
-          "choice": "13.0",
-          "displayName": "13.0",
-          "description": "Chooses Aspire 13.0"
-        },
-        {
-          "choice": "9.5",
-          "displayName": "9.5",
-          "description": "Chooses Aspire 9.5"
-        }
-      ],
-      "defaultValue": "13.0"
-    },
-    "AspireVersionActual": {
-      "type": "generated",
-      "generator": "switch",
-      "replaces": "aspireVersion",
-      "parameters": {
-        "cases": [
-          {
-            "condition": "AspireVersion == 9.5",
-            "value": "9.5"
-          },
-          {
-            "condition": "",
-            "value": "13.0"
-          }
-        ]
-      }
     },
     "XUnitVersion": {
       "type": "parameter",

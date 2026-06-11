@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Maui.Utilities;
@@ -38,7 +41,8 @@ internal sealed class MauiAndroidEnvironmentProcessedAnnotation : IResourceAnnot
 internal sealed class MauiAndroidEnvironmentSubscriber(
     DistributedApplicationExecutionContext executionContext,
     ResourceLoggerService loggerService,
-    ResourceNotificationService notificationService) : IDistributedApplicationEventingSubscriber
+    ResourceNotificationService notificationService,
+    IFileSystemService fileSystemService) : IDistributedApplicationEventingSubscriber
 {
     public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext execContext, CancellationToken cancellationToken)
     {
@@ -83,6 +87,7 @@ internal sealed class MauiAndroidEnvironmentSubscriber(
                 if (generatedFilePath is null)
                 {
                     generatedFilePath = await MauiEnvironmentHelper.CreateAndroidEnvironmentTargetsFileAsync(
+                        fileSystemService,
                         resource,
                         executionContext,
                         logger,

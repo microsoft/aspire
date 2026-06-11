@@ -15,27 +15,18 @@ public static class EnvironmentVariableEvaluator
     {
         var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(applicationOperation)
         {
-            ServiceProvider = serviceProvider
+            Services = serviceProvider
         });
 
-        var environmentVariables = new Dictionary<string, string>();
-        await resource.ProcessEnvironmentVariableValuesAsync(
-            executionContext,
-            (key, unprocessed, value, ex) =>
-            {
-                if (ex is not null)
-                {
-                    ExceptionDispatchInfo.Throw(ex);
-                }
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(executionContext, NullLogger.Instance, CancellationToken.None);
 
-                if (value is string s)
-                {
-                    environmentVariables[key] = s;
-                }
-            },
-            NullLogger.Instance,
-            CancellationToken.None);
+        if (executionConfiguration.Exception is not null)
+        {
+            ExceptionDispatchInfo.Throw(executionConfiguration.Exception);
+        }
 
-        return environmentVariables;
+        return executionConfiguration.EnvironmentVariables.ToDictionary();
     }
 }

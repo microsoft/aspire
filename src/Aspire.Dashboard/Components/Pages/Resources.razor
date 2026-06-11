@@ -1,15 +1,11 @@
 ﻿@page "/"
 @using Aspire.Dashboard.Components.ResourcesGridColumns
 @using Aspire.Dashboard.Resources
-@using Aspire.Dashboard.Utils
-@using System.Globalization
 @using Aspire.Dashboard.Components.Controls.Grid
-@using Aspire.Dashboard.Model
 @using Humanizer
 @inject IStringLocalizer<Dashboard.Resources.Resources> Loc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
 @inject IStringLocalizer<Columns> ColumnsLoc
-@inject IStringLocalizer<Commands> CommandsLoc
 
 <PageTitle><ApplicationName ResourceName="@nameof(Dashboard.Resources.Resources.ResourcesPageTitle)" Loc="@Loc" /></PageTitle>
 
@@ -27,6 +23,7 @@
             <FluentSearch Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
+                          Name="resources-search"
                           @bind-Value="_filter"
                           slot="end"
                           Label="@(ViewportInformation.IsDesktop ? null : ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value)"
@@ -43,7 +40,7 @@
                               Title="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])"
                               aria-label="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])" />
 
-                @if (HasAnyChildResources())
+                @if (HasViewOptionsMenu())
                 {
                     <AspireMenuButton ButtonAppearance="Appearance.Stealth"
                                       Icon="@(new Icons.Regular.Size20.Options())"
@@ -110,6 +107,11 @@
                                                Icon="@(new Icons.Regular.Size24.Table())">
                                     </FluentTab>
                                     <FluentTab LabelClass="tab-label"
+                                               Id="@($"tab-{ResourceViewKind.Parameters}")"
+                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerParametersTab)]"
+                                               Icon="@(new Icons.Regular.Size24.Key())">
+                                    </FluentTab>
+                                    <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Graph}")"
                                                aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]"
                                                Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphTab)]"
@@ -117,7 +119,7 @@
                                     </FluentTab>
                                 </FluentTabs>
                             }
-                            <div class="resources-grid-container" hidden="@(PageViewModel.SelectedViewKind != ResourceViewKind.Table)">
+                            <div class="resources-grid-container" hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
                                 <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                                     <FluentDataGrid @ref="_dataGrid"
                                                     ColumnResizeLabels="@_resizeLabels"
@@ -156,7 +158,7 @@
                                                     <ResourceNameDisplay Resource="context.Resource" FilterText="@_filter" FormatName="GetResourceName" />
                                                 </span>
                                             </AspireTemplateColumn>
-                                            <AspireTemplateColumn ColumnId="@StateColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]" Sortable="true" SortBy="@_stateSort" Tooltip="true" TooltipText="@(c => ResourceStateViewModel.GetResourceStateTooltip(c.Resource, ColumnsLoc))">
+                                            <AspireTemplateColumn ColumnId="@StateColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]" Sortable="true" SortBy="@_stateSort" Tooltip="true" TooltipText="@(c => ResourceStateViewModel.GetResourceStateTooltip(c.Resource, ColumnsLoc, _resourceByName.Values))">
                                                 <StateColumnDisplay Resource="@context.Resource" UnviewedErrorCounts="@_resourceUnviewedErrorCounts" />
                                             </AspireTemplateColumn>
                                             <AspireTemplateColumn ColumnId="@StartTimeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]" Sortable="true" SortBy="@_startTimeSort" TooltipText="@(context => context.Resource.StartTimeStamp != null ? FormatHelpers.FormatDateTime(TimeProvider, context.Resource.StartTimeStamp.Value, MillisecondsDisplay.None, CultureInfo.CurrentCulture) : null)" Tooltip="true">
@@ -167,6 +169,30 @@
                                                 @if (ResourceSourceViewModel.GetSourceViewModel(context.Resource) is { } columnDisplay)
                                                 {
                                                     <SourceColumnDisplay FilterText="@_filter" Value="@columnDisplay.Value" ContentAfterValue="@columnDisplay.ContentAfterValue" ValueToVisualize="@columnDisplay.ValueToVisualize" Tooltip="@columnDisplay.Tooltip" />
+                                                }
+                                                else
+                                                {
+                                                    <span class="empty-data"></span>
+                                                }
+                                            </AspireTemplateColumn>
+                                            <AspireTemplateColumn ColumnId="@ValueColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.PropertyGridValueColumnHeader)]" Tooltip="true" TooltipText="@(ctx => GetParameterValue(ctx.Resource) is var pv && (pv.IsSensitive || pv.IsUnresolved) ? null : pv.Value)">
+                                                @{
+                                                    var paramValue = GetParameterValue(context.Resource);
+                                                }
+                                                @if (paramValue.Value is not null)
+                                                {
+                                                    <GridValue Value="@paramValue.Value"
+                                                               ValueDescription="@ControlsStringsLoc[nameof(ControlsStrings.PropertyGridValueColumnHeader)]"
+                                                               EnableMasking="@paramValue.IsSensitive"
+                                                               IsMasked="@paramValue.IsSensitive" />
+                                                }
+                                                else if (paramValue.IsUnresolved)
+                                                {
+                                                    <span class="cellText" @onclick:stopPropagation="true">
+                                                        <ParameterValueDisplay Resource="context.Resource"
+                                                                               OnExecuteCommandAsync="ExecuteResourceCommandAsync"
+                                                                               IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
+                                                    </span>
                                                 }
                                                 else
                                                 {
@@ -184,14 +210,13 @@
                                                                      IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))"
                                                                      OnViewDetails="@((buttonId) => ShowResourceDetailsAsync(context.Resource, buttonId))"
                                                                      Resource="context.Resource"
-                                                                     GetResourceName="GetResourceName"
                                                                      MaxHighlightedCount="_maxHighlightedCount"
                                                                      ResourceByName="@_resourceByName" />
                                                 </div>
                                             </AspireTemplateColumn>
                                         </ChildContent>
                                         <EmptyContent>
-                                            <FluentIcon Icon="Icons.Regular.Size24.AppGeneric" />&nbsp;@Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]
+                                            <FluentIcon Value="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? (Icon)new Icons.Regular.Size24.Key() : new Icons.Regular.Size24.AppGeneric())" />&nbsp;@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
                                         </EmptyContent>
                                     </FluentDataGrid>
                                 </GridColumnManager>
@@ -226,19 +251,24 @@
                         </div>
                     </div>
                     <FluentOverlay @bind-Visible="_contextMenuOpen" OnClose="ContextMenuClosed" Transparent="true" FullScreen="true" />
-                    <AspireMenu @bind-Open="_contextMenuOpen" @ref="_contextMenu" Anchor="resources-summary-layout-id" Anchored="false" Items="_contextMenuItems" VerticalThreshold="300" />
+                    <AspireMenu @bind-Open="_contextMenuOpen" @ref="_contextMenu" Anchor="resources-summary-layout-id" Anchored="false" Items="_contextMenuItems" />
                 </Summary>
                 <Details>
-                    <ResourceDetails Resource="context" ResourceByName="_resourceByName" ShowSpecOnlyToggle="true" ShowHiddenResources="@_showHiddenResources" />
+                    <ResourceDetails Resource="context"
+                                     ResourceByName="_resourceByName"
+                                     ShowSpecOnlyToggle="true"
+                                     ShowHiddenResources="@_showHiddenResources"
+                                     CommandSelected="@(command => ExecuteResourceCommandAsync(context!, command))"
+                                     IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
                 </Details>
             </SummaryDetailsView>
         </MainSection>
         <FooterSection>
             @* Don't display footer with the resource graph *@
-            <div hidden="@(PageViewModel.SelectedViewKind != ResourceViewKind.Table)">
+            <div hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
                 <TotalItemsFooter @ref="_totalItemsFooter"
-                                  SingularText="@Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterSingularText)]"
-                                  PluralText="@Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterPluralText)]"
+                                  SingularText="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterParametersSingularText)] : Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterSingularText)])"
+                                  PluralText="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterParametersPluralText)] : Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterPluralText)])"
                                   TotalItemCount="@_totalItemsCount"/>
             </div>
         </FooterSection>

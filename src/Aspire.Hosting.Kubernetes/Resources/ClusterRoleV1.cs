@@ -24,8 +24,8 @@ public sealed class ClusterRole() : BaseKubernetesResource("rbac.authorization.k
     /// a set of label selectors that identify the roles to be aggregated.
     /// Use this property to configure advanced RBAC mechanisms in Kubernetes clusters.
     /// </remarks>
-    [YamlMember(Alias = "aggregationRule")]
-    public AggregationRuleV1 AggregationRule { get; set; } = new();
+    [YamlMember(Alias = "aggregationRule", DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
+    public AggregationRuleV1? AggregationRule { get; set; }
 
     /// <summary>
     /// Represents a collection of policy rules applied to the Kubernetes ClusterRole.
@@ -38,6 +38,6 @@ public sealed class ClusterRole() : BaseKubernetesResource("rbac.authorization.k
     /// the precise components of a policy rule, including API groups, resources, verbs,
     /// and URLs.
     /// </remarks>
-    [YamlMember(Alias = "rules")]
+    [YamlMember(Alias = "rules", DefaultValuesHandling = DefaultValuesHandling.Preserve)]
     public List<PolicyRuleV1> Rules { get; } = [];
 }

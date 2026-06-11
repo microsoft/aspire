@@ -3,6 +3,7 @@
 
 using System.Net.Sockets;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -16,10 +17,13 @@ internal sealed class BackchannelService(
     IConfiguration configuration,
     AppHostRpcTarget appHostRpcTarget,
     IDistributedApplicationEventing eventing,
+    ProfilingTelemetry profilingTelemetry,
     IServiceProvider serviceProvider)
     : BackgroundService
 {
     private JsonRpc? _rpc;
+    private Socket? _serverSocket;
+    private string? _socketPath;
 
     public bool IsBackchannelExpected => configuration.GetValue<string>(KnownConfigNames.UnixSocketPath) is {};
 
@@ -39,21 +43,43 @@ internal sealed class BackchannelService(
                 return;
             }
 
+            _socketPath = unixSocketPath;
+
+            using var activity = profilingTelemetry.StartBackchannelStartup(unixSocketPath);
+
+            // Delete existing socket file if it exists (stale from previous run)
+            if (File.Exists(unixSocketPath))
+            {
+                logger.LogDebug("Deleting existing socket file: {SocketPath}", unixSocketPath);
+                File.Delete(unixSocketPath);
+                activity.AddBackchannelSocketDeleted();
+            }
+
             logger.LogDebug("Listening for backchannel connection on socket path: {SocketPath}", unixSocketPath);
             var serverSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            _serverSocket = serverSocket;
             var endpoint = new UnixDomainSocketEndPoint(unixSocketPath);
             serverSocket.Bind(endpoint);
             serverSocket.Listen();
+            activity.AddBackchannelListening();
 
             var backchannelReadyEvent = new BackchannelReadyEvent(serviceProvider, unixSocketPath);
             await eventing.PublishAsync(
                 backchannelReadyEvent,
                 EventDispatchBehavior.NonBlockingConcurrent,
                 stoppingToken).ConfigureAwait(false);
+            activity.AddBackchannelReadyPublished();
 
             var clientSocket = await serverSocket.AcceptAsync(stoppingToken).ConfigureAwait(false);
+            activity.AddBackchannelClientAccepted();
+
             var stream = new NetworkStream(clientSocket, true);
-            var rpc = JsonRpc.Attach(stream, appHostRpcTarget);
+            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream), appHostRpcTarget)
+            {
+                ActivityTracingStrategy = new ActivityTracingStrategy()
+            };
+            rpc.StartListening();
+            activity.AddBackchannelRpcListening();
             _rpc = rpc;
 
             // NOTE: The PipelineExecutor will await this TCS
@@ -67,13 +93,52 @@ internal sealed class BackchannelService(
                 backchannelConnectedEvent,
                 EventDispatchBehavior.NonBlockingConcurrent,
                 stoppingToken).ConfigureAwait(false);
+            activity.AddBackchannelConnectedPublished();
         }
-        catch (TaskCanceledException ex)
+        catch (OperationCanceledException ex)
         {
             // This exception is expected when the service is shut down whilst waiting for
             // a socket and just means that we don't need to wait anymore.
             logger.LogDebug("Backchannel service was cancelled: {Message}", ex.Message);
             return;
         }
+    }
+
+    public override void Dispose()
+    {
+        // Dispose the RPC connection
+        _rpc?.Dispose();
+        _rpc = null;
+
+        // Close and dispose the server socket
+        if (_serverSocket is not null)
+        {
+            try
+            {
+                _serverSocket.Close();
+                _serverSocket.Dispose();
+            }
+            catch
+            {
+                // Ignore errors during socket cleanup
+            }
+            _serverSocket = null;
+        }
+
+        // Delete the socket file to allow rebinding
+        if (_socketPath is not null && File.Exists(_socketPath))
+        {
+            try
+            {
+                File.Delete(_socketPath);
+                logger.LogDebug("Deleted backchannel socket file: {SocketPath}", _socketPath);
+            }
+            catch
+            {
+                // Ignore errors during file cleanup
+            }
+        }
+
+        base.Dispose();
     }
 }

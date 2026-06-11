@@ -46,14 +46,46 @@ internal sealed class ExecutableSpec
     public string? ExecutionType { get; set; }
 
     /// <summary>
+    /// Fallback execution types in case the primary execution type is not supported or startup fails.
+    /// </summary>
+    [JsonPropertyName("fallbackExecutionTypes")]
+    public List<string>? FallbackExecutionTypes { get; set; }
+
+    /// <summary>
     /// Health probes to be run for the Executable.
     /// </summary>
     [JsonPropertyName("healthProbes")]
     public List<HealthProbe>? HealthProbes { get; set; }
 
     /// <summary>
-    /// Setting Stop property to true will stop the Executable if it is running.
-    /// Once the Executable is stopped, it cannot be started again.
+    /// Should this Executable be created and persisted between DCP runs?
+    /// Persistent executables are only compatible with the Process execution type.
+    /// </summary>
+    [JsonPropertyName("persistent")]
+    public bool? Persistent { get; set; }
+
+    /// <summary>
+    /// Optional parent process PID used to scope persistent Executable cleanup to a process lifecycle.
+    /// When set, <see cref="MonitorTimestamp"/> must also be set and <see cref="Persistent"/> must be true.
+    /// </summary>
+    [JsonPropertyName("monitorPid")]
+    public int? MonitorPid { get; set; }
+
+    /// <summary>
+    /// Optional parent process identity timestamp used with <see cref="MonitorPid"/> to guard against PID reuse.
+    /// </summary>
+    [JsonPropertyName("monitorTimestamp")]
+    public DateTime? MonitorTimestamp { get; set; }
+
+    /// <summary>
+    /// Should this resource be started? If set to false, we will not attempt
+    /// to start the resource until Start is set to true (or null).
+    /// </summary>
+    [JsonPropertyName("start")]
+    public bool? Start { get; set; }
+
+    /// <summary>
+    /// Should this resource be stopped?
     /// </summary>
     [JsonPropertyName("stop")]
     public bool? Stop { get; set; }
@@ -69,6 +101,14 @@ internal sealed class ExecutableSpec
     /// </summary>
     [JsonPropertyName("pemCertificates")]
     public ExecutablePemCertificates? PemCertificates { get; set; }
+
+    /// <summary>
+    /// Terminal configuration for interactive PTY access.
+    /// When set, DCP allocates a pseudo-terminal for the process and forwards
+    /// I/O over a Unix domain socket using <see href="https://github.com/dotnet/hex1b">Hex1b</see>'s HMP v1 framing.
+    /// </summary>
+    [JsonPropertyName("terminal")]
+    public TerminalSpec? Terminal { get; set; }
 }
 
 internal sealed class AmbientEnvironment
@@ -237,7 +277,7 @@ internal static class ExecutableState
     public const string Stopping = "Stopping";
 }
 
-internal sealed class Executable : CustomResource<ExecutableSpec, ExecutableStatus>
+internal sealed class Executable : CustomResource<ExecutableSpec, ExecutableStatus>, IKubernetesStaticMetadata
 {
     public const string LaunchConfigurationsAnnotation = "executable.usvc-dev.developer.microsoft.com/launch-configurations";
 
@@ -258,8 +298,7 @@ internal sealed class Executable : CustomResource<ExecutableSpec, ExecutableStat
         return exe;
     }
 
-    public bool LogsAvailable =>
-        !string.IsNullOrEmpty(this.Status?.State);
+    public bool LogsAvailable => !string.IsNullOrEmpty(this.Status?.State);
 
     public void SetProjectLaunchConfiguration(ProjectLaunchConfiguration launchConfiguration)
     {
@@ -281,16 +320,6 @@ internal sealed class Executable : CustomResource<ExecutableSpec, ExecutableStat
 
         return launchConfiguration is not null;
     }
-}
 
-internal class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration("project")
-{
-    [JsonPropertyName("launch_profile")]
-    public string LaunchProfile { get; set; } = string.Empty;
-
-    [JsonPropertyName("disable_launch_profile")]
-    public bool DisableLaunchProfile { get; set; } = false;
-
-    [JsonPropertyName("project_path")]
-    public string ProjectPath { get; set; } = string.Empty;
+    public static string ObjectKind => Dcp.ExecutableKind;
 }

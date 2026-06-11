@@ -102,7 +102,7 @@ internal sealed record ContainerExecStatus : V1Status
 /// <summary>
 /// Represents a command to be executed in a given <see cref="Container"/> resource.
 /// </summary>
-internal sealed class ContainerExec : CustomResource<ContainerExecSpec, ContainerExecStatus>
+internal sealed class ContainerExec : CustomResource<ContainerExecSpec, ContainerExecStatus>, IKubernetesStaticMetadata
 {
     /// <summary>
     /// Create a new <see cref="ContainerExec"/> resource.
@@ -140,6 +140,7 @@ internal sealed class ContainerExec : CustomResource<ContainerExecSpec, Containe
         return containerExec;
     }
 
-    public bool LogsAvailable =>
-        !string.IsNullOrEmpty(this.Status?.State);
+    public bool LogsAvailable => !string.IsNullOrEmpty(this.Status?.State);
+
+    public static string ObjectKind => Dcp.ContainerExecKind;
 }

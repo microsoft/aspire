@@ -9,6 +9,7 @@
     "api_containerimage": "{api.containerImage}",
     "api_containerport": "{api.containerPort}",
     "mydb_kv_outputs_name": "{mydb-kv.outputs.name}",
+    "mydb_outputs_connectionstring": "{mydb.outputs.connectionString}",
     "kvName": "{kvName.value}",
     "sharedRg": "{sharedRg.value}",
     "api_identity_outputs_id": "{api-identity.outputs.id}",

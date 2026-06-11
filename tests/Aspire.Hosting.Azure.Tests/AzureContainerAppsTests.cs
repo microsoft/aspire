@@ -3,12 +3,15 @@
 
 #pragma warning disable ASPIREACADOMAINS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREAZURE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREACANAMING001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
+using Aspire.Hosting.Foundry;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
@@ -16,6 +19,7 @@ using Azure.Provisioning.KeyVault;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -115,6 +119,59 @@ public class AzureContainerAppsTests
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var acaEnv = builder.AddAzureContainerAppEnvironment("env");
+
+        var project = builder.AddFoundry("foundry")
+            .AddProject("project");
+
+        // The agent app is deployed to the Foundry project compute environment via AsHostedAgent.
+        var agent = builder.AddProject<Project>("agent", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+        agent.AsHostedAgent(project);
+
+        // The web app is deployed to Azure Container Apps and references the Foundry hosted agent.
+        // The ACA publisher must delegate endpoint resolution to the Foundry compute environment
+        // rather than looking the agent up in its own endpoint map. See issue #17749.
+        // WithReference(agent) exercises the bare EndpointReference branch; the explicit
+        // Property(Url) environment variable exercises the EndpointReferenceExpression branch.
+        var web = builder.AddProject<Project>("web", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(acaEnv)
+            .WithReference(agent)
+            .WithEnvironment("AGENT_URL", agent.GetEndpoint("http").Property(EndpointProperty.Url));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        SetFoundryProjectOutputs(project.Resource);
+
+        var target = web.Resource.GetDeploymentTargetAnnotation();
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
+    {
+        project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
+        project.ProvisioningTaskCompletionSource?.TrySetResult();
     }
 
     [Fact]
@@ -1066,7 +1123,7 @@ public class AzureContainerAppsTests
 
         builder.AddAzureContainerAppEnvironment("env");
 
-        var redis = builder.AddAzureRedisEnterprise("redis")
+        var redis = builder.AddAzureManagedRedis("redis")
             .PublishAsExisting("myredis", "myRG");
 
         builder.AddProject<Project>("api", launchProfileName: null)
@@ -1101,22 +1158,38 @@ public class AzureContainerAppsTests
     }
 
     [Fact]
-    public async Task NonTcpHttpOrUdpSchemeThrows()
+    public async Task NonHttpSchemeWithTcpTransportIsAllowed()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         builder.AddAzureContainerAppEnvironment("env");
 
         builder.AddContainer("api", "myimage")
-            .WithEndpoint(scheme: "foo");
+            .WithEndpoint(scheme: "redis", targetPort: 6379);
 
         using var app = builder.Build();
 
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        // Custom schemes that use TCP transport should not throw
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+    [Fact]
+    public async Task UnsupportedTransportThrows()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        Assert.Equal("The endpoint(s) 'foo' specify an unsupported scheme. The supported schemes are 'http', 'https', and 'tcp'.", ex.Message);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddContainer("api", "myimage")
+            .WithEndpoint(scheme: "foo", targetPort: 443, name: "foo")
+            .WithEndpoint("foo", e => e.Transport = "quic");
+
+        using var app = builder.Build();
+
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
+
+        Assert.Equal("The endpoint(s) 'foo' specify an unsupported transport. The supported transports are 'http', 'http2', and 'tcp'.", ex.Message);
     }
 
     [Fact]
@@ -1135,7 +1208,8 @@ public class AzureContainerAppsTests
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("Multiple external endpoints are not supported", ex.Message);
     }
@@ -1154,7 +1228,8 @@ public class AzureContainerAppsTests
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("External non-HTTP(s) endpoints are not supported", ex.Message);
     }
@@ -1174,47 +1249,139 @@ public class AzureContainerAppsTests
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("HTTP(s) and TCP endpoints cannot be mixed", ex.Message);
     }
 
     [Fact]
-    public async Task DefaultHttpIngressMustUsePort80()
+    public async Task DefaultHttpIngressUsesPort80EvenWithDifferentDevPort()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         builder.AddAzureContainerAppEnvironment("env");
 
+        // Dev port 8081 should be ignored in ACA, mapped to port 80
         builder.AddContainer("api", "myimage")
-            .WithHttpEndpoint(port: 8081);
+            .WithHttpEndpoint(port: 8081, targetPort: 8080);
 
         using var app = builder.Build();
 
+        await ExecuteBeforeStartHooksAsync(app, default);
+
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var container = Assert.Single(model.GetContainerResources());
 
-        Assert.Equal($"The endpoint 'http' is an http endpoint and must use port 80", ex.Message);
+        container.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
     }
 
     [Fact]
-    public async Task DefaultHttpsIngressMustUsePort443()
+    public async Task DefaultHttpsIngressUsesPort443EvenWithDifferentDevPort()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         builder.AddAzureContainerAppEnvironment("env");
 
+        // Dev port 8081 should be ignored in ACA, mapped to port 443
         builder.AddContainer("api", "myimage")
-            .WithHttpsEndpoint(port: 8081);
+            .WithHttpsEndpoint(port: 8081, targetPort: 8443);
 
         using var app = builder.Build();
 
+        await ExecuteBeforeStartHooksAsync(app, default);
+
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var container = Assert.Single(model.GetContainerResources());
 
-        Assert.Equal($"The endpoint 'https' is an https endpoint and must use port 443", ex.Message);
+        container.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ContainerWithTcpAndHttpEndpointsPublishesToAzureContainerApps()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/11841
+        // A container with both a TCP endpoint (e.g. AMQP on 5672) and an HTTP
+        // endpoint on a non-standard port (e.g. management UI on 15672) should
+        // publish successfully. The HTTP endpoint becomes the primary ingress and
+        // the TCP endpoint goes to additionalPortMappings.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddContainer("messaging", "rabbitmq:management")
+            .WithEndpoint(targetPort: 5672, name: "amqp")
+            .WithHttpEndpoint(port: 15672, targetPort: 15672, name: "management");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var container = Assert.Single(model.GetContainerResources());
+
+        container.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task CanPreserveHttpSchemeUsingWithHttpsUpgrade()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env")
+            .WithHttpsUpgrade(false);  // Preserve HTTP scheme, don't upgrade to HTTPS
+
+        builder.AddContainer("api", "myimage")
+            .WithHttpEndpoint(port: 8080, targetPort: 80);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var container = Assert.Single(model.GetContainerResources());
+
+        container.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
     }
 
     [Fact]
@@ -1269,7 +1436,64 @@ public class AzureContainerAppsTests
               .AppendContentAsFile(bicep, "bicep");
     }
 
-    // see https://github.com/dotnet/aspire/issues/8381 for more information on this scenario
+    [Fact]
+    public async Task AddContainerAppEnvironmentWithCompactNamingPreservesUniqueString()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Use a deliberately long name (15 chars) that would cause collisions without compact naming
+        var env = builder.AddAzureContainerAppEnvironment("my-long-env-name");
+        env.WithCompactResourceNaming();
+
+        var pg = builder.AddAzurePostgresFlexibleServer("pg")
+                        .WithPasswordAuthentication()
+                        .AddDatabase("db");
+
+        builder.AddContainer("cache", "redis")
+               .WithVolume("App.da-ta", "/data")
+               .WithReference(pg);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+
+        var manifest = await GetManifestWithBicep(environment);
+
+        await Verify(manifest.BicepText, "bicep");
+    }
+
+    [Fact]
+    public async Task CompactNamingMultipleVolumesHaveUniqueNames()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("my-ace");
+        env.WithCompactResourceNaming();
+
+        builder.AddContainer("druid", "apache/druid", "34.0.0")
+               .WithHttpEndpoint(targetPort: 8081)
+               .WithVolume("druid_shared", "/opt/shared")
+               .WithVolume("coordinator_var", "/opt/druid/var")
+               .WithBindMount("./config", "/opt/druid/conf");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+
+        var manifest = await GetManifestWithBicep(environment);
+
+        await Verify(manifest.BicepText, "bicep");
+    }
+
+    // see https://github.com/microsoft/aspire/issues/8381 for more information on this scenario
     // Azure SqlServer needs an admin when it is first provisioned. To supply this, we use the
     // principalId from the Azure Container App Environment.
     [Fact]
@@ -1560,11 +1784,11 @@ public class AzureContainerAppsTests
     {
         var containerApp = new ContainerApp("app");
 
-        // In order to set autoConfigureDataProtection and kind=functionapp, we need to use a preview API ContainerApp version.
-        // This test fails on new default versions for ContainerApp so we check if autoConfigureDataProtection/kind exists on the new Azure.Provisioning version.
-        // Also, we need to ensure the new default version isn't newer than the preview version used to set autoConfigureDataProtection/kind because
+        // In order to set autoConfigureDataProtection, we need to use a preview API ContainerApp version.
+        // This test fails on new default versions for ContainerApp so we check if autoConfigureDataProtection exists on the new Azure.Provisioning version.
+        // Also, we need to ensure the new default version isn't newer than the preview version used to set autoConfigureDataProtection because
         // callers will get new APIs that may not work with the preview version we are using.
-        Assert.True(containerApp.ResourceVersion == "2025-01-01", "When we get a new ResourceVersion for ContainerApps, ensure the version used by ContainerAppContext.CreateContainerApp() still works correctly.");
+        Assert.True(containerApp.ResourceVersion == "2025-07-01", "When we get a new ResourceVersion for ContainerApps, ensure the version used by ContainerAppContext.CreateContainerApp() still works correctly.");
     }
 
     [Fact]
@@ -1612,9 +1836,32 @@ public class AzureContainerAppsTests
     }
 
     [Fact]
+    public async Task ValidateAzureContainerApps_DoesNotThrowInRunMode()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/16940.
+        // In run mode, AddAzureContainerAppEnvironment does not add the env resource to the
+        // model. If a compute resource still ends up with an AzureContainerAppCustomizationAnnotation
+        // (e.g. via WithAnnotation), the validation step should not throw at 'aspire run' time —
+        // PublishAs* customizations are only meaningful at publish/deploy time.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddContainer("api", "myimage")
+            .WithAnnotation(new AzureContainerAppCustomizationAnnotation((_, _) => { }));
+
+        builder.AddContainer("worker", "myimage")
+            .WithAnnotation(new AzureContainerAppJobCustomizationAnnotation((_, _) => { }));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
     public async Task MultipleAzureContainerAppEnvironmentsSupported()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
 
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "publish-manifest");
 
@@ -2003,7 +2250,7 @@ public class AzureContainerAppsTests
 
         builder.AddAzureContainerAppEnvironment("env");
 
-        using var tempDirectory = new TempDirectory();
+        using var tempDirectory = new TestTempDirectory();
 
         // Contents of the Dockerfile are not important for this test
         File.WriteAllText(Path.Combine(tempDirectory.Path, "Dockerfile"), "FROM alpine");
@@ -2042,7 +2289,7 @@ public class AzureContainerAppsTests
             .AddProject<Project>("project1", launchProfileName: null)
             .WithHttpEndpoint();
 
-        var endpointReferenceEx = ((IComputeEnvironmentResource)env.Resource).GetHostAddressExpression(project.GetEndpoint("http"));
+        var endpointReferenceEx = env.Resource.GetHostAddressExpression(project.GetEndpoint("http"));
         Assert.NotNull(endpointReferenceEx);
 
         Assert.Equal("project1.internal.{0}", endpointReferenceEx.Format);
@@ -2050,5 +2297,448 @@ public class AzureContainerAppsTests
         var output = Assert.IsType<BicepOutputReference>(provider);
         Assert.Equal(env.Resource, output.Resource);
         Assert.Equal("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", output.Name);
+    }
+
+    [Theory]
+    [InlineData(EndpointProperty.Url, "https://project1.example.azurecontainerapps.io")]
+    [InlineData(EndpointProperty.Host, "project1.example.azurecontainerapps.io")]
+    [InlineData(EndpointProperty.IPV4Host, "project1.example.azurecontainerapps.io")]
+    [InlineData(EndpointProperty.Port, "443")]
+    [InlineData(EndpointProperty.TargetPort, "5000")]
+    [InlineData(EndpointProperty.Scheme, "https")]
+    [InlineData(EndpointProperty.HostAndPort, "project1.example.azurecontainerapps.io:443")]
+    [InlineData(EndpointProperty.TlsEnabled, "True")]
+    public async Task GetEndpointPropertyExpression_ReturnsContainerAppEndpointPropertyExpression(EndpointProperty property, string expected)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+        env.Resource.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
+        env.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        var project = builder
+            .AddProject<Project>("project1", launchProfileName: null)
+            .WithEndpoint(port: 8080, targetPort: 5000, scheme: "http", name: "http", isExternal: true);
+
+#pragma warning disable ASPIRECOMPUTE002
+        var expression = env.Resource.GetEndpointPropertyExpression(project.GetEndpoint("http").Property(property));
+#pragma warning restore ASPIRECOMPUTE002
+
+        Assert.Equal(expected, await expression.GetValueAsync(default));
+    }
+
+    [Fact]
+    public async Task ContainerAppProvisionDependsOnTargetPushStep()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint();
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var projectResource = Assert.Single(model.GetProjectResources());
+
+        projectResource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+        var containerAppResource = target?.DeploymentTarget as AzureContainerAppResource;
+        Assert.NotNull(containerAppResource);
+
+        var configAnnotations = containerAppResource.Annotations.OfType<PipelineConfigurationAnnotation>().ToList();
+        Assert.NotEmpty(configAnnotations);
+    }
+
+    [Fact]
+    public async Task EnvironmentCreatesDefaultAcrWhenNoExplicitRegistry()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint();
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var acrResources = model.Resources.OfType<AzureContainerRegistryResource>().ToList();
+        Assert.Single(acrResources);
+
+        var defaultAcr = acrResources[0];
+        Assert.Contains("acr", defaultAcr.Name);
+    }
+
+    [Fact]
+    public async Task DefaultAcrNotAddedToModelWhenExplicitRegistryExists()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var customRegistry = builder.AddAzureContainerRegistry("customregistry");
+        builder.AddAzureContainerAppEnvironment("env")
+            .WithAzureContainerRegistry(customRegistry);
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint();
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var acrResources = model.Resources.OfType<AzureContainerRegistryResource>().ToList();
+        Assert.Single(acrResources);
+        Assert.Equal("customregistry", acrResources[0].Name);
+    }
+
+    [Fact]
+    public async Task EnvironmentDelegatesToAssociatedRegistry()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var customRegistry = builder.AddAzureContainerRegistry("customregistry");
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .WithAzureContainerRegistry(customRegistry);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var containerRegistryInterface = env.Resource as IContainerRegistry;
+        Assert.NotNull(containerRegistryInterface);
+        Assert.NotNull(containerRegistryInterface.Endpoint);
+        Assert.NotNull(containerRegistryInterface.Name);
+    }
+
+    [Fact]
+    public async Task DefaultContainerRegistryUsesAzdNamingWhenEnvironmentDoes()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env")
+            .WithAzdResourceNaming();
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint();
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var acrResources = model.Resources.OfType<AzureContainerRegistryResource>().ToList();
+        Assert.Single(acrResources);
+
+        var defaultAcr = acrResources[0];
+        var (manifest, bicep) = await GetManifestWithBicep(defaultAcr);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task MultipleComputeEnvironmentsOnlyProcessTargetedResources()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var aca = builder.AddAzureContainerAppEnvironment("aca");
+        var appService = builder.AddAzureAppServiceEnvironment("appservice");
+
+        // Project targeted to ACA
+        var webappaca = builder.AddProject<Project>("webappaca", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(aca);
+
+        // Project targeted to App Service
+        var webappservice = builder.AddProject<Project>("webappservice", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(appService);
+
+        // Container targeted to ACA with port 80 - this works for ACA
+        var containerForAca = builder.AddContainer("containeraca", "redis")
+            .WithHttpEndpoint(port: 80, targetPort: 6379, name: "http")
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(aca);
+
+        // Container targeted to App Service with custom port 8123.
+        // Before the fix, ACA would try to process this and throw an error about port 80 requirement.
+        // After the fix, ACA skips it because it's targeted to a different environment.
+        // Note: We use AddContainer here to test the filtering, even though App Service doesn't support
+        // regular containers (only Dockerfiles). The key is that ACA should NOT try to validate it.
+        var containerForAppService = builder.AddContainer("containerappservice", "redis")
+            .WithHttpEndpoint(port: 8123, targetPort: 6379, name: "http")
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(appService);
+
+        using var app = builder.Build();
+
+        // This should not throw an exception about port 80 requirement from ACA
+        // because containerForAppService is targeted to AppService, and ACA should skip it
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Verify webappaca has a deployment target for ACA
+        var webappAcaResource = model.Resources.First(r => r.Name == "webappaca");
+        var webappAcaTarget = webappAcaResource.GetDeploymentTargetAnnotation(aca.Resource);
+        Assert.NotNull(webappAcaTarget);
+        Assert.Same(aca.Resource, webappAcaTarget.ComputeEnvironment);
+
+        // Verify webappservice has a deployment target for AppService
+        var webappServiceResource = model.Resources.First(r => r.Name == "webappservice");
+        var webappServiceTarget = webappServiceResource.GetDeploymentTargetAnnotation(appService.Resource);
+        Assert.NotNull(webappServiceTarget);
+        Assert.Same(appService.Resource, webappServiceTarget.ComputeEnvironment);
+
+        // Verify containerForAca has a deployment target for ACA
+        var containerAcaResource = model.Resources.First(r => r.Name == "containeraca");
+        var containerAcaTarget = containerAcaResource.GetDeploymentTargetAnnotation(aca.Resource);
+        Assert.NotNull(containerAcaTarget);
+        Assert.Same(aca.Resource, containerAcaTarget.ComputeEnvironment);
+
+        // Verify containerForAppService does NOT have a deployment target from ACA
+        // (It won't have one from AppService either because AppService doesn't support regular containers,
+        // but the important thing is that ACA didn't try to process it and throw an error)
+        var containerAppServiceResource = model.Resources.First(r => r.Name == "containerappservice");
+        var containerAppServiceAcaTarget = containerAppServiceResource.GetDeploymentTargetAnnotation(aca.Resource);
+        Assert.Null(containerAppServiceAcaTarget);
+
+        // Verify resources do NOT have deployment targets for other environments
+        Assert.Null(webappAcaResource.GetDeploymentTargetAnnotation(appService.Resource));
+        Assert.Null(webappServiceResource.GetDeploymentTargetAnnotation(aca.Resource));
+        Assert.Null(containerAcaResource.GetDeploymentTargetAnnotation(appService.Resource));
+    }
+
+    [Fact]
+    public async Task RedisWithConditionalConnectionString()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var redis = builder.AddRedis("cache");
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithReference(redis);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var proj = Assert.Single(model.GetProjectResources());
+        proj.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task RedisWithTlsEnabledConditionalConnectionString()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var redis = builder.AddRedis("cache");
+        redis.WithEndpoint("tcp", e => e.TlsEnabled = true);
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithReference(redis);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var proj = Assert.Single(model.GetProjectResources());
+        proj.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ConditionalExpressionWithParameterCondition()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var featureFlag = builder.AddParameter("enable-feature");
+
+        var project = builder.AddProject<Project>("api", launchProfileName: null);
+
+        project.WithEnvironment(context =>
+        {
+            var conditional = ReferenceExpression.CreateConditional(
+                featureFlag.Resource,
+                bool.TrueString,
+                ReferenceExpression.Create($"enabled"),
+                ReferenceExpression.Create($"disabled"));
+
+            context.EnvironmentVariables["FEATURE_MODE"] = conditional;
+        });
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var proj = Assert.Single(model.GetProjectResources());
+        proj.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ConditionalBranchWithParameterReference()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var featureFlag = builder.AddParameter("enable-feature");
+        var connectionPrefix = builder.AddParameter("connection-prefix");
+
+        var project = builder.AddProject<Project>("api", launchProfileName: null);
+
+        project.WithEnvironment(context =>
+        {
+            var conditional = ReferenceExpression.CreateConditional(
+                featureFlag.Resource,
+                bool.TrueString,
+                ReferenceExpression.Create($"prefix-{connectionPrefix.Resource}-enabled"),
+                ReferenceExpression.Create($"disabled"));
+
+            context.EnvironmentVariables["FEATURE_CONNECTION"] = conditional;
+        });
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var proj = Assert.Single(model.GetProjectResources());
+        proj.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task NestedConditionalExpressions()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var outerFlag = builder.AddParameter("outer-flag");
+        var innerFlag = builder.AddParameter("inner-flag");
+
+        var project = builder.AddProject<Project>("api", launchProfileName: null);
+
+        project.WithEnvironment(context =>
+        {
+            var innerConditional = ReferenceExpression.CreateConditional(
+                innerFlag.Resource,
+                bool.TrueString,
+                ReferenceExpression.Create($"inner-true"),
+                ReferenceExpression.Create($"inner-false"));
+
+            var outerConditional = ReferenceExpression.CreateConditional(
+                outerFlag.Resource,
+                bool.TrueString,
+                innerConditional,
+                ReferenceExpression.Create($"outer-false"));
+
+            context.EnvironmentVariables["NESTED_FEATURE"] = outerConditional;
+        });
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var proj = Assert.Single(model.GetProjectResources());
+        proj.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WithDashboardControlsDashboardUrlPrintStep(bool enableDashboard)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .WithDashboard(enableDashboard);
+
+        using var app = builder.Build();
+
+        var steps = await CreateStepsAsync(app, env.Resource);
+        var hasPrintDashboardUrlStep = steps.Any(s => s.Name == "print-dashboard-url-env");
+
+        Assert.Equal(enableDashboard, hasPrintDashboardUrlStep);
+    }
+
+    private static async Task<List<PipelineStep>> CreateStepsAsync(DistributedApplication app, AzureContainerAppEnvironmentResource resource)
+    {
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        var results = new List<PipelineStep>();
+        foreach (var annotation in resource.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            results.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = resource
+            }));
+        }
+
+        return results;
     }
 }

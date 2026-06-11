@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using Aspire.TestUtilities;
 
@@ -11,17 +12,27 @@ sealed class TestModuleInitializer
     [ModuleInitializer]
     internal static void Setup()
     {
-        // Set the directory for all Verify calls in test projects
-        var target = PlatformDetection.IsRunningOnHelix
-            ? Path.Combine(Environment.GetEnvironmentVariable("HELIX_CORRELATION_PAYLOAD")!, "Snapshots")
-            : "Snapshots";
+        // This file is compiled into multiple test assemblies. When test assemblies reference
+        // each other (e.g., Aspire.Cli.Tests references Aspire.Hosting.Tests), multiple module
+        // initializers may attempt to configure Verify. DerivePathInfo can only be called once
+        // before any Verify test runs. We use VerifyInitializer (in the shared Aspire.TestUtilities
+        // assembly) to ensure only the first caller configures it.
+        if (!VerifyInitializer.TryInitialize())
+        {
+            return;
+        }
 
-        // If target contains an absolute path it will use it as is.
-        // If it contains a relative path, it will be combined with the project directory.
         DerivePathInfo(
-            (sourceFile, projectDirectory, type, method) => new(
-                directory: Path.Combine(projectDirectory, target),
-                typeName: type.Name,
-                methodName: method.Name));
+                (sourceFile, projectDirectory, type, method) => new(
+                    directory: Path.Combine(
+                        PlatformDetection.IsRunningOnHelix
+                            ? Path.GetDirectoryName(Assembly.GetExecutingAssembly()!.Location) ?? string.Empty
+                            : projectDirectory,
+                        "Snapshots"),
+                    typeName: type.Name,
+                    methodName: method.Name));
+
+        // auto-accept baseline changes when running locally
+        VerifierSettings.AutoVerify(includeBuildServer: false, throwException: true);
     }
 }

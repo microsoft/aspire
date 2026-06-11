@@ -1,0 +1,144 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Net.Http.Json;
+using System.Text.Json;
+using Aspire.Cli.Backchannel;
+using Aspire.Cli.Commands;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Utils;
+using Aspire.Otlp.Serialization;
+using Aspire.Shared.ConsoleLogs;
+using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
+
+namespace Aspire.Cli.Mcp.Tools;
+
+/// <summary>
+/// MCP tool for listing distributed traces.
+/// Gets trace data directly from the Dashboard telemetry API.
+/// </summary>
+internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvider, IAuxiliaryBackchannelMonitor? auxiliaryBackchannelMonitor, IHttpClientFactory httpClientFactory, ILogger<ListTracesTool> logger) : CliMcpTool
+{
+    public override string Name => KnownMcpTools.ListTraces;
+
+    public override string Description => "List distributed traces for resources. A distributed trace is used to track operations. A distributed trace can span multiple resources across a distributed system. Includes a list of distributed traces with their IDs, resources in the trace, duration and whether an error occurred in the trace.";
+
+    public override JsonElement GetInputSchema()
+    {
+        return JsonDocument.Parse("""
+            {
+              "type": "object",
+              "properties": {
+                "resourceName": {
+                  "type": "string",
+                  "description": "The resource name. This limits traces returned to the specified resource. If no resource name is specified then distributed traces for all resources are returned."
+                },
+                "search": {
+                  "type": "string",
+                  "description": "Full-text search to filter traces. Searches across span names, attribute values, IDs, and other fields."
+                }
+              }
+            }
+            """).RootElement;
+    }
+
+    public override async ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
+    {
+        var arguments = context.Arguments;
+        var (apiToken, apiBaseUrl, dashboardBaseUrl) = await dashboardInfoProvider.GetDashboardInfoAsync(cancellationToken).ConfigureAwait(false);
+
+        // Extract resourceName from arguments
+        string? resourceName = null;
+        if (arguments?.TryGetValue("resourceName", out var resourceNameElement) == true &&
+            resourceNameElement.ValueKind == JsonValueKind.String)
+        {
+            resourceName = resourceNameElement.GetString();
+        }
+
+        string? search = null;
+        if (arguments?.TryGetValue("search", out var searchElement) == true &&
+            searchElement.ValueKind == JsonValueKind.String)
+        {
+            search = searchElement.GetString();
+        }
+
+        try
+        {
+            using var client = TelemetryCommandHelpers.CreateApiClient(httpClientFactory, apiToken);
+
+            // Resolve resource name to specific instances (handles replicas)
+            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, cancellationToken).ConfigureAwait(false);
+
+            // If a specific resource was requested, check if it's excluded from MCP.
+            if (!string.IsNullOrEmpty(resourceName) && auxiliaryBackchannelMonitor is not null)
+            {
+                var excludedResult = await McpToolHelpers.CheckResourceExcludedAsync(auxiliaryBackchannelMonitor, resourceName, cancellationToken).ConfigureAwait(false);
+                if (excludedResult is not null)
+                {
+                    return excludedResult;
+                }
+            }
+
+            // If a resource was specified but not found, return error
+            if (!TelemetryCommandHelpers.TryResolveResourceNames(resourceName, resources, out var resolvedResources))
+            {
+                return new CallToolResult
+                {
+                    Content = [new TextContentBlock { Text = $"Resource '{resourceName}' not found." }],
+                    IsError = true
+                };
+            }
+
+            // Fetch all traces from the API. Limiting of returned telemetry to the MCP caller happens later.
+            var url = DashboardUrls.TelemetryTracesApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit, search: search);
+
+            logger.LogDebug("Fetching traces from {Url}", url);
+
+            var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
+
+            var apiResponse = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse, cancellationToken).ConfigureAwait(false);
+            var resourceSpans = apiResponse?.Data?.ResourceSpans;
+
+            // Filter out spans from resources that are excluded from MCP.
+            if (resourceSpans is not null && string.IsNullOrEmpty(resourceName) && auxiliaryBackchannelMonitor is not null)
+            {
+                var excludedNames = await McpToolHelpers.GetExcludedResourceNamesAsync(auxiliaryBackchannelMonitor, cancellationToken).ConfigureAwait(false);
+                if (excludedNames.Count > 0)
+                {
+                    resourceSpans = resourceSpans
+                        .Where(rs => rs.Resource?.GetServiceName() is not { } name || !excludedNames.Contains(name))
+                        .ToArray();
+                }
+            }
+
+            var (tracesData, limitMessage) = SharedAIHelpers.GetTracesJson(
+                resourceSpans,
+                getResourceName: s => OtlpHelpers.GetResourceName(s, resources.Select(r => new SimpleOtlpResource(r.Name, r.InstanceId)).ToList()),
+                dashboardBaseUrl: dashboardBaseUrl);
+
+            var text = $"""
+                {limitMessage}
+
+                # TRACES DATA
+
+                {tracesData}
+                """;
+
+            return new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = text }]
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Failed to fetch traces from Dashboard API");
+            var errorMessage = dashboardInfoProvider.IsDirectConnection
+                ? await TelemetryCommandHelpers.GetDashboardApiErrorMessageAsync(ex, apiBaseUrl, httpClientFactory, logger, cancellationToken)
+                : $"Failed to fetch traces: {ex.Message}";
+            throw new McpProtocolException(errorMessage, McpErrorCode.InternalError);
+        }
+    }
+}

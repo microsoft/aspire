@@ -1,0 +1,15 @@
+﻿{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Aspire.Hosting.Dcp": "Warning"
+    }
+  },
+  "AtsAssemblies": [
+    "Aspire.Hosting",
+      "Aspire.Hosting.Redis",
+      "Aspire.Hosting.PostgreSQL",
+      "Aspire.Hosting.CodeGeneration.TypeScript"
+  ]
+}

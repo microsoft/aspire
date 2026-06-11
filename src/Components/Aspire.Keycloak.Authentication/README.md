@@ -100,8 +100,8 @@ builder.Services.AddAuthentication(oidcScheme)
 ## Additional documentation
 
 * https://www.keycloak.org/getting-started/getting-started-docker
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

@@ -34,10 +34,10 @@ message ResourceCommand {
     // before sending the request for this command to be executed.
     // The user will be presented with Ok/Cancel options.
     optional string confirmation_message = 3;
-    // Optional parameter that configures the command in some way.
+    // Deprecated. Optional parameter that configures the command in some way.
     // Clients must return any value provided by the server when invoking
     // the command.
-    optional google.protobuf.Value parameter = 4;
+    optional google.protobuf.Value parameter = 4 [deprecated = true];
     // A flag that indicates whether the command is highlighted in the UI.
     bool is_highlighted = 5;
     // Optional icon name. This name should be a valid FluentUI icon name.
@@ -51,6 +51,9 @@ message ResourceCommand {
     // The state of the command. Controls whether the command is enabled, disabled,
     // or hidden in the UI.
     ResourceCommandState state = 9;
+    // Static, ordered input metadata that describes the invocation arguments accepted by the command.
+    // Dashboard clients can render these inputs and send a map of Values in ResourceCommandRequest.arguments keyed by InteractionInput.name.
+    repeated InteractionInput argument_inputs = 10;
 }
 
 enum IconVariant {
@@ -71,9 +74,15 @@ message ResourceCommandRequest {
     // The unique name of the resource type. Matches ResourceType.unique_name and Resource.resource_type.
     // Copied from the ResourceCommand that this request object is initialized from.
     string resource_type = 3;
-    // An optional parameter to accompany the command.
+    // Deprecated. An optional parameter to accompany the command.
     // Copied from the ResourceCommand that this request object is initialized from.
-    optional google.protobuf.Value parameter = 4;
+    optional google.protobuf.Value parameter = 4 [deprecated = true];
+    // Invocation arguments to pass to the command.
+    // Unlike parameter, this value is supplied by the client for this execution.
+    // Keys are InteractionInput.name values; each value is a google.protobuf.Value (string, number, bool, or null).
+    map<string, google.protobuf.Value> arguments = 5;
+    // When true, command execution should fail instead of prompting for missing input.
+    bool non_interactive = 6;
 }
 
 enum ResourceCommandState {
@@ -87,11 +96,27 @@ enum ResourceCommandResponseKind {
     RESOURCE_COMMAND_RESPONSE_KIND_SUCCEEDED = 1;
     RESOURCE_COMMAND_RESPONSE_KIND_FAILED = 2;
     RESOURCE_COMMAND_RESPONSE_KIND_CANCELLED = 3;
+    RESOURCE_COMMAND_RESPONSE_KIND_INVALID_ARGUMENTS = 4;
 }
 
 message ResourceCommandResponse {
     ResourceCommandResponseKind kind = 1;
-    optional string error_message = 2;
+    optional string error_message = 2 [deprecated = true];
+    optional string message = 3;
+    optional ResourceCommandResult result = 4;
+}
+
+message ResourceCommandResult {
+    string value = 1;
+    CommandResultFormat format = 2;
+    bool display_immediately = 3;
+}
+
+enum CommandResultFormat {
+    COMMAND_RESULT_FORMAT_NONE = 0;
+    COMMAND_RESULT_FORMAT_TEXT = 1;
+    COMMAND_RESULT_FORMAT_JSON = 2;
+    COMMAND_RESULT_FORMAT_MARKDOWN = 3;
 }
 
 ////////////////////////////////////////////
@@ -186,12 +211,12 @@ message ResourceRelationship {
 message ResourceProperty {
     // Name of the data item, e.g. "container.id", "executable.pid", "project.path", ...
     string name = 1;
-    // TODO move display_name to reference data, sent once when the connection starts (https://github.com/dotnet/aspire/issues/1644)
+    // TODO move display_name to reference data, sent once when the connection starts (https://github.com/microsoft/aspire/issues/1644)
     // Optional display name, may be localized
     optional string display_name = 2;
     // The data value. May be null, a number, a string, a boolean, a dictionary of values (Struct), or a list of values (ValueList).
     google.protobuf.Value value = 3;
-    // TODO move is_sensitive to reference data, sent once when the connection starts (https://github.com/dotnet/aspire/issues/1644)
+    // TODO move is_sensitive to reference data, sent once when the connection starts (https://github.com/microsoft/aspire/issues/1644)
     // Whether the value is sensitive and should be masked in the UI by default.
     // Defaults to false. When true, the user must explicitly unmask the value to view it.
     optional bool is_sensitive = 4;

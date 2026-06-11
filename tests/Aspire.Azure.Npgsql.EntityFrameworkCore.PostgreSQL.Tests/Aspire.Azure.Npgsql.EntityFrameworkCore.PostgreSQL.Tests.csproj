@@ -21,16 +21,15 @@
     <PackageReference Include="Testcontainers.PostgreSQL" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <!-- Temporary until Npgsql.EntityFrameworkCore.PostgreSQL ships a stable version that depends on 10.0 -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" VersionOverride="10.0.0-rc.2.25502.107" />
-  </ItemGroup>
-
   <!-- Npgsql EF needs to match the same major version as the underlying Npgsql assemblies. -->
   <!-- This is to override CentralPackageTransitivePinningEnabled -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <PackageVersion Update="Npgsql.DependencyInjection" Version="$(Npgsql8Version)" />
     <PackageVersion Update="Npgsql.OpenTelemetry" Version="$(Npgsql8Version)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageVersion Update="Npgsql.DependencyInjection" Version="$(Npgsql9Version)" />
+    <PackageVersion Update="Npgsql.OpenTelemetry" Version="$(Npgsql9Version)" />
   </ItemGroup>
 
 </Project>

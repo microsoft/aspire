@@ -113,7 +113,20 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(DashboardUIHelpers.PlaintextFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(rawText, instance.TextVisualizerViewModel.FormattedText);
-        Assert.Equal([DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_WithPlaintextUrl_RendersClickableLinkAsync()
+    {
+        const string rawText = "See https://aka.ms/aspire/container-runtime-unhealthy for more information.";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var link = cut.Find("a[href='https://aka.ms/aspire/container-runtime-unhealthy']");
+        Assert.Equal("_blank", link.GetAttribute("target"));
     }
 
     [Fact]
@@ -191,6 +204,41 @@ public class TextVisualizerDialogTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.False(cut.FindComponent<TextVisualizerDialog>().Instance.ShowSecretsWarning));
         Assert.False(cut.HasComponent<FluentMessageBar>());
         Assert.True(cut.HasComponent<Virtualize<StringLogLine>>());
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_WithFixedFormat_UsesFixedFormatAndHidesDropdownAsync()
+    {
+        const string rawText = """export VAR=value""";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.PropertiesFormat), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
+
+        // Verify the fixed format is used
+        Assert.Equal(DashboardUIHelpers.PropertiesFormat, instance.TextVisualizerViewModel.FormatKind);
+        Assert.True(instance.HasFixedFormat);
+
+        // Verify the format dropdown is not rendered
+        Assert.Empty(cut.FindAll("#" + instance.GetType().GetField("_openSelectFormatButtonId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(instance)));
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_WithFixedJsonFormat_UsesJsonFormatAsync()
+    {
+        const string rawText = """{"key": "value"}""";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.JsonFormat), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
+
+        // Verify the fixed format is used
+        Assert.Equal(DashboardUIHelpers.JsonFormat, instance.TextVisualizerViewModel.FormatKind);
+        Assert.True(instance.HasFixedFormat);
     }
 
     private IRenderedFragment SetUpDialog(out IDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)

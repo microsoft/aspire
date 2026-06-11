@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECONTAINERRUNTIME001
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Docker.Resources;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
@@ -13,6 +15,7 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Docker;
 
@@ -22,12 +25,10 @@ namespace Aspire.Hosting.Docker;
 /// <remarks>
 /// Initializes a new instance of the <see cref="DockerComposeEnvironmentResource"/> class.
 /// </remarks>
+[AspireExport(ExposeProperties = true, ExposeMethods = true)]
 public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource
 {
-    /// <summary>
-    /// The container registry to use.
-    /// </summary>
-    public string? DefaultContainerRegistry { get; set; }
+    private const string DockerComposeUpTag = "docker-compose-up";
 
     /// <summary>
     /// The name of an existing network to be used.
@@ -41,17 +42,19 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
     internal Action<ComposeFile>? ConfigureComposeFile { get; set; }
 
+    internal Action<IDictionary<string, CapturedEnvironmentVariable>>? ConfigureEnvFile { get; set; }
+
     internal IResourceBuilder<DockerComposeAspireDashboardResource>? Dashboard { get; set; }
 
     /// <summary>
     /// Gets the collection of environment variables captured from the Docker Compose environment.
     /// These will be populated into a top-level .env file adjacent to the Docker Compose file.
     /// </summary>
-    internal Dictionary<string, (string? Description, string? DefaultValue, object? Source)> CapturedEnvironmentVariables { get; } = [];
+    internal Dictionary<string, CapturedEnvironmentVariable> CapturedEnvironmentVariables { get; } = [];
 
     internal Dictionary<IResource, DockerComposeServiceResource> ResourceMapping { get; } = new(new ResourceNameComparer());
 
-    internal PortAllocator PortAllocator { get; } = new();
+    internal IPortAllocator PortAllocator { get; } = new PortAllocator();
 
     /// <param name="name">The name of the Docker Compose environment.</param>
     public DockerComposeEnvironmentResource(string name) : base(name)
@@ -61,23 +64,36 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             var model = factoryContext.PipelineContext.Model;
             var steps = new List<PipelineStep>();
 
+            var prepareDeploymentTargetsStep = new PipelineStep
+            {
+                Name = $"prepare-deployment-targets-{Name}",
+                Description = $"Prepares Docker Compose deployment targets for {Name}.",
+                Action = ctx => PrepareDeploymentTargetsAsync(ctx),
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments],
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+            steps.Add(prepareDeploymentTargetsStep);
+
             var publishStep = new PipelineStep
             {
                 Name = $"publish-{Name}",
+                Description = $"Publishes the Docker Compose environment configuration for {Name}.",
                 Action = ctx => PublishAsync(ctx)
             };
             publishStep.RequiredBy(WellKnownPipelineSteps.Publish);
             steps.Add(publishStep);
 
-            // Expand deployment target steps for all compute resources
-            foreach (var computeResource in model.GetComputeResources())
+            // Expand deployment target steps for all compute resources (including dashboard if enabled)
+            var resources = DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource dashboard
+                ? [.. model.GetComputeResources(), dashboard]
+                : model.GetComputeResources();
+
+            foreach (var resource in resources)
             {
-                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget;
+                var deploymentTarget = resource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget;
 
                 if (deploymentTarget != null && deploymentTarget.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var annotations))
                 {
-                    // Resolve the deployment target's PipelineStepAnnotation and expand its steps
-                    // We do this because the deployment target is not in the model
                     foreach (var annotation in annotations)
                     {
                         var childFactoryContext = new PipelineStepFactoryContext
@@ -90,7 +106,6 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
                         foreach (var step in deploymentTargetSteps)
                         {
-                            // Ensure the step is associated with the deployment target resource
                             step.Resource ??= deploymentTarget;
                         }
 
@@ -102,7 +117,9 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             var prepareStep = new PipelineStep
             {
                 Name = $"prepare-{Name}",
-                Action = ctx => PrepareAsync(ctx)
+                Description = $"Prepares the Docker Compose environment {Name} for deployment.",
+                Action = ctx => PrepareAsync(ctx),
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments]
             };
             prepareStep.DependsOn(WellKnownPipelineSteps.Publish);
             prepareStep.DependsOn(WellKnownPipelineSteps.Build);
@@ -112,11 +129,69 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             {
                 Name = $"docker-compose-up-{Name}",
                 Action = ctx => DockerComposeUpAsync(ctx),
-                Tags = ["docker-compose-up"],
+                Tags = [DockerComposeUpTag],
                 DependsOnSteps = [$"prepare-{Name}"]
             };
             dockerComposeUpStep.RequiredBy(WellKnownPipelineSteps.Deploy);
             steps.Add(dockerComposeUpStep);
+
+            var dockerComposeDestroyStep = new PipelineStep
+            {
+                Name = $"destroy-compose-{Name}",
+                Description = $"Confirms and destroys the Docker Compose environment {Name}.",
+                Action = async ctx =>
+                {
+                    // Check deployment state to verify this environment was actually deployed
+                    var deploymentStateManager = ctx.Services.GetRequiredService<IDeploymentStateManager>();
+                    var stateSection = await deploymentStateManager.AcquireSectionAsync($"DockerCompose:{Name}", ctx.CancellationToken).ConfigureAwait(false);
+                    var savedComposeFilePath = stateSection.Data["ComposeFilePath"]?.ToString();
+
+                    if (string.IsNullOrEmpty(savedComposeFilePath))
+                    {
+                        await ctx.ReportingStep.CompleteAsync(
+                            $"No Docker Compose deployment state found for '{Name}'. Nothing to destroy.",
+                            CompletionState.Completed,
+                            ctx.CancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+
+                    await ConfirmDestroyAsync(ctx, Name).ConfigureAwait(false);
+
+                    // Use saved state to build the compose context — don't recompute from current model
+                    // Only use the project name for down — the compose file may not be valid for down
+                    // (e.g., services with build contexts that no longer exist)
+                    var savedOutputPath = stateSection.Data["OutputPath"]?.ToString() ?? Path.GetDirectoryName(savedComposeFilePath)!;
+                    var savedProjectName = stateSection.Data["ProjectName"]?.ToString() ?? GetDockerComposeProjectName(ctx, this);
+
+                    var runtime = await ctx.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(ctx.CancellationToken).ConfigureAwait(false);
+
+                    var composeContext = new ComposeOperationContext
+                    {
+                        ProjectName = savedProjectName,
+                        WorkingDirectory = savedOutputPath
+                    };
+
+                    var deployTask = await ctx.ReportingStep.CreateTaskAsync(
+                        new MarkdownString($"Running compose down for **{Name}** using **{runtime.Name}**"),
+                        ctx.CancellationToken).ConfigureAwait(false);
+                    await using (deployTask.ConfigureAwait(false))
+                    {
+                        await runtime.ComposeDownAsync(composeContext, ctx.CancellationToken).ConfigureAwait(false);
+                        await deployTask.CompleteAsync(
+                            new MarkdownString($"Compose shutdown complete for **{Name}** ({runtime.Name})"),
+                            CompletionState.Completed,
+                            ctx.CancellationToken).ConfigureAwait(false);
+                    }
+
+                    ctx.Summary.Add("🗑️ Compose", Name);
+
+                    // Clean up deployment state only after successful teardown
+                    await deploymentStateManager.DeleteSectionAsync(stateSection, ctx.CancellationToken).ConfigureAwait(false);
+                },
+                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+            };
+            dockerComposeDestroyStep.RequiredBy(WellKnownPipelineSteps.Destroy);
+            steps.Add(dockerComposeDestroyStep);
 
             var dockerComposeDownStep = new PipelineStep
             {
@@ -133,11 +208,14 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
         // This is where we wire up the build steps created by the resources
         Annotations.Add(new PipelineConfigurationAnnotation(context =>
         {
-            // Wire up build step dependencies
-            // Build steps are created by ProjectResource and ContainerResource
-            foreach (var computeResource in context.Model.GetComputeResources())
+            // Wire up build step dependencies for all compute resources (including dashboard if enabled)
+            var resources = DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource dashboard
+                ? [.. context.Model.GetComputeResources(), dashboard]
+                : context.Model.GetComputeResources();
+
+            foreach (var resource in resources)
             {
-                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget;
+                var deploymentTarget = resource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget;
 
                 if (deploymentTarget is null)
                 {
@@ -152,6 +230,11 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                         annotation.Callback(context);
                     }
                 }
+
+                // Ensure print-summary steps from deployment targets run after docker-compose-up
+                var printSummarySteps = context.GetSteps(deploymentTarget, "print-summary");
+                var dockerComposeUpSteps = context.GetSteps(this, "docker-compose-up");
+                printSummarySteps.DependsOn(dockerComposeUpSteps);
             }
 
             // This ensures that resources that have to be built before deployments are handled
@@ -163,15 +246,21 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                         .RequiredBy($"docker-compose-up-{Name}")
                         .DependsOn(WellKnownPipelineSteps.DeployPrereq);
             }
+
+            // This ensures that resources that have to be pushed before deployments are handled
+            foreach (var pushResource in context.Model.GetBuildAndPushResources())
+            {
+                var pushSteps = context.GetSteps(pushResource, WellKnownPipelineTags.PushContainerImage);
+                var dockerComposeUpSteps = context.GetSteps(this, DockerComposeUpTag);
+
+                dockerComposeUpSteps.DependsOn(pushSteps);
+            }
         }));
     }
 
-    /// <summary>
-    /// Computes the host URL <see cref="ReferenceExpression"/> for the given <see cref="EndpointReference"/>.
-    /// </summary>
-    /// <param name="endpointReference">The endpoint reference to compute the host address for.</param>
-    /// <returns>A <see cref="ReferenceExpression"/> representing the host address.</returns>
-    ReferenceExpression IComputeEnvironmentResource.GetHostAddressExpression(EndpointReference endpointReference)
+    /// <inheritdoc/>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
 
@@ -183,7 +272,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
     private Task PublishAsync(PipelineStepContext context)
     {
         var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, this);
-        var imageBuilder = context.Services.GetRequiredService<IResourceContainerImageBuilder>();
+        var imageBuilder = context.Services.GetRequiredService<IResourceContainerImageManager>();
 
         var dockerComposePublishingContext = new DockerComposePublishingContext(
             context.ExecutionContext,
@@ -196,71 +285,140 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
         return dockerComposePublishingContext.WriteModelAsync(context.Model, this);
     }
 
+    /// <summary>
+    /// Materializes Docker Compose deployment targets for compute resources targeted to this
+    /// environment. Invoked by the per-environment <c>prepare-deployment-targets-{name}</c>
+    /// pipeline step.
+    /// </summary>
+    private async Task PrepareDeploymentTargetsAsync(PipelineStepContext context)
+    {
+        var appModel = context.Model;
+        var services = context.Services;
+        var executionContext = context.ExecutionContext;
+
+        if (executionContext.IsRunMode)
+        {
+            return;
+        }
+
+        var logger = services.GetRequiredService<ILogger<DockerComposeEnvironmentResource>>();
+        var cancellationToken = context.CancellationToken;
+
+        var dockerComposeEnvironmentContext = new DockerComposeEnvironmentContext(this, logger);
+
+        if (DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource dashboard)
+        {
+            // Ensure the dashboard resource is created (even though it's not part of the main application model)
+            var dashboardService = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(dashboard, executionContext, cancellationToken).ConfigureAwait(false);
+
+            dashboard.Annotations.Add(new DeploymentTargetAnnotation(dashboardService)
+            {
+                ComputeEnvironment = this,
+                ContainerRegistry = GetContainerRegistry(this, appModel)
+            });
+        }
+
+        foreach (var r in appModel.GetComputeResources())
+        {
+            // Skip resources that are explicitly targeted to a different compute environment
+            var resourceComputeEnvironment = r.GetComputeEnvironment();
+            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            {
+                continue;
+            }
+
+            // Configure OTLP for resources if dashboard is enabled (before creating the service resource)
+            if (DashboardEnabled && Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
+            {
+                ConfigureOtlp(r, otlpGrpcEndpoint);
+            }
+
+            // Create a Docker Compose compute resource for the resource
+            var serviceResource = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
+
+            // Add deployment target annotation to the resource
+            r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
+            {
+                ComputeEnvironment = this,
+                ContainerRegistry = GetContainerRegistry(this, appModel)
+            });
+        }
+    }
+
+    private static IContainerRegistry GetContainerRegistry(DockerComposeEnvironmentResource environment, DistributedApplicationModel appModel)
+    {
+        // Check for explicit container registry reference annotation on the environment
+        if (environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation))
+        {
+            return annotation.Registry;
+        }
+
+        // Check if there's a single container registry in the app model
+        var registries = appModel.Resources.OfType<IContainerRegistry>().ToArray();
+        if (registries.Length == 1)
+        {
+            return registries[0];
+        }
+
+        // Fall back to local container registry for Docker Compose scenarios
+        return LocalContainerRegistry.Instance;
+    }
+
+    private static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
+    {
+        // Only configure OTLP for resources that have the OtlpExporterAnnotation and implement IResourceWithEnvironment
+        if (resource is IResourceWithEnvironment resourceWithEnv && resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        {
+            // Configure OTLP environment variables
+            resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+            {
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
+                return Task.CompletedTask;
+            }));
+        }
+    }
+
     private async Task DockerComposeUpAsync(PipelineStepContext context)
     {
         var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, this);
         var dockerComposeFilePath = Path.Combine(outputPath, "docker-compose.yaml");
-        var envFilePath = GetEnvFilePath(context);
 
         if (!File.Exists(dockerComposeFilePath))
         {
             throw new InvalidOperationException($"Docker Compose file not found at {dockerComposeFilePath}");
         }
 
-        var deployTask = await context.ReportingStep.CreateTaskAsync($"Running docker compose up for **{Name}**", context.CancellationToken).ConfigureAwait(false);
+        var runtime = await context.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(context.CancellationToken).ConfigureAwait(false);
+
+        var deployTask = await context.ReportingStep.CreateTaskAsync(
+            new MarkdownString($"Running compose up for **{Name}** using **{runtime.Name}**"),
+            context.CancellationToken).ConfigureAwait(false);
         await using (deployTask.ConfigureAwait(false))
         {
             try
             {
-                var projectName = GetDockerComposeProjectName(context);
-                var arguments = $"compose -f \"{dockerComposeFilePath}\" --project-name \"{projectName}\"";
+                var composeContext = CreateComposeOperationContext(context);
 
-                if (File.Exists(envFilePath))
-                {
-                    arguments += $" --env-file \"{envFilePath}\"";
-                }
+                await runtime.ComposeUpAsync(composeContext, context.CancellationToken).ConfigureAwait(false);
 
-                arguments += " up -d --remove-orphans";
+                // Persist deployment state so destroy can find the compose file and project name
+                var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+                var stateSection = await deploymentStateManager.AcquireSectionAsync($"DockerCompose:{Name}", context.CancellationToken).ConfigureAwait(false);
+                stateSection.Data["OutputPath"] = outputPath;
+                stateSection.Data["ProjectName"] = composeContext.ProjectName;
+                stateSection.Data["ComposeFilePath"] = composeContext.ComposeFilePath;
+                await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
 
-                context.Logger.LogDebug("Running docker compose up with project name: {ProjectName}, arguments: {Arguments}", projectName, arguments);
-
-                var spec = new ProcessSpec("docker")
-                {
-                    Arguments = arguments,
-                    WorkingDirectory = outputPath,
-                    ThrowOnNonZeroReturnCode = false,
-                    InheritEnv = true,
-                    OnOutputData = output =>
-                    {
-                        context.Logger.LogDebug("docker compose up (stdout): {Output}", output);
-                    },
-                    OnErrorData = error =>
-                    {
-                        context.Logger.LogDebug("docker compose up (stderr): {Error}", error);
-                    },
-                };
-
-                var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
-
-                await using (processDisposable)
-                {
-                    var processResult = await pendingProcessResult
-                        .WaitAsync(context.CancellationToken)
-                        .ConfigureAwait(false);
-
-                    if (processResult.ExitCode != 0)
-                    {
-                        await deployTask.FailAsync($"docker compose up failed with exit code {processResult.ExitCode}", cancellationToken: context.CancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await deployTask.CompleteAsync($"Service **{Name}** is now running with Docker Compose locally", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
-                    }
-                }
+                await deployTask.CompleteAsync(
+                    new MarkdownString($"Service **{Name}** is now running with Docker Compose locally (runtime: {runtime.Name})"),
+                    CompletionState.Completed,
+                    context.CancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                await deployTask.CompleteAsync($"Docker Compose deployment failed: {ex.Message}", CompletionState.CompletedWithError, context.CancellationToken).ConfigureAwait(false);
+                await deployTask.CompleteAsync($"Compose deployment failed ({runtime.Name}): {ex.Message}", CompletionState.CompletedWithError, context.CancellationToken).ConfigureAwait(false);
                 throw;
             }
         }
@@ -270,67 +428,78 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
     {
         var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, this);
         var dockerComposeFilePath = Path.Combine(outputPath, "docker-compose.yaml");
-        var envFilePath = GetEnvFilePath(context);
 
         if (!File.Exists(dockerComposeFilePath))
         {
-            throw new InvalidOperationException($"Docker Compose file not found at {dockerComposeFilePath}");
+            throw new InvalidOperationException(
+                $"Docker Compose file not found at '{dockerComposeFilePath}'. " +
+                $"If you deployed with a custom --output-path, pass the same path to the destroy command.");
         }
 
-        var deployTask = await context.ReportingStep.CreateTaskAsync($"Running docker compose down for **{Name}**", context.CancellationToken).ConfigureAwait(false);
+        var runtime = await context.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(context.CancellationToken).ConfigureAwait(false);
+
+        var deployTask = await context.ReportingStep.CreateTaskAsync(
+            new MarkdownString($"Running compose down for **{Name}** using **{runtime.Name}**"),
+            context.CancellationToken).ConfigureAwait(false);
         await using (deployTask.ConfigureAwait(false))
         {
             try
             {
-                var projectName = GetDockerComposeProjectName(context);
-                var arguments = $"compose -f \"{dockerComposeFilePath}\" --project-name \"{projectName}\"";
+                var composeContext = CreateComposeOperationContext(context);
 
-                if (File.Exists(envFilePath))
-                {
-                    arguments += $" --env-file \"{envFilePath}\"";
-                }
+                await runtime.ComposeDownAsync(composeContext, context.CancellationToken).ConfigureAwait(false);
 
-                arguments += " down";
-
-                context.Logger.LogDebug("Running docker compose down with project name: {ProjectName}, arguments: {Arguments}", projectName, arguments);
-
-                var spec = new ProcessSpec("docker")
-                {
-                    Arguments = arguments,
-                    WorkingDirectory = outputPath,
-                    ThrowOnNonZeroReturnCode = false,
-                    InheritEnv = true
-                };
-
-                var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
-
-                await using (processDisposable)
-                {
-                    var processResult = await pendingProcessResult
-                        .WaitAsync(context.CancellationToken)
-                        .ConfigureAwait(false);
-
-                    if (processResult.ExitCode != 0)
-                    {
-                        await deployTask.FailAsync($"docker compose down failed with exit code {processResult.ExitCode}", cancellationToken: context.CancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await deployTask.CompleteAsync($"Docker Compose shutdown complete for **{Name}**", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
-                    }
-                }
+                await deployTask.CompleteAsync(
+                    new MarkdownString($"Compose shutdown complete for **{Name}** ({runtime.Name})"),
+                    CompletionState.Completed,
+                    context.CancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                await deployTask.CompleteAsync($"Docker Compose shutdown failed: {ex.Message}", CompletionState.CompletedWithError, context.CancellationToken).ConfigureAwait(false);
+                await deployTask.CompleteAsync($"Compose shutdown failed ({runtime.Name}): {ex.Message}", CompletionState.CompletedWithError, context.CancellationToken).ConfigureAwait(false);
                 throw;
+            }
+        }
+    }
+
+    private static async Task ConfirmDestroyAsync(PipelineStepContext context, string environmentName)
+    {
+        var options = context.Services.GetRequiredService<IOptions<PipelineOptions>>();
+
+        if (!options.Value.SkipConfirmation)
+        {
+            var interactionService = context.Services.GetRequiredService<IInteractionService>();
+
+            if (!interactionService.IsAvailable)
+            {
+                throw new InvalidOperationException(
+                    "Cannot perform destructive operation without confirmation. Use --yes to skip the confirmation prompt in non-interactive mode.");
+            }
+
+            var result = await interactionService.PromptNotificationAsync(
+                "Destroy environment",
+                $"Shut down Docker Compose environment '{environmentName}'? This will stop and remove all containers, networks, and volumes.",
+                new NotificationInteractionOptions
+                {
+                    Intent = MessageIntent.Confirmation,
+                    ShowSecondaryButton = true,
+                    ShowDismiss = false,
+                    PrimaryButtonText = "Destroy",
+                    SecondaryButtonText = "Cancel"
+                },
+                context.CancellationToken).ConfigureAwait(false);
+
+            if (result.Canceled || !result.Data)
+            {
+                context.Logger.LogInformation("User canceled the destroy operation.");
+                throw new OperationCanceledException("Destroy operation canceled by user.");
             }
         }
     }
 
     private async Task PrepareAsync(PipelineStepContext context)
     {
-        var envFilePath = GetEnvFilePath(context);
+        var envFilePath = GetEnvFilePath(context, this);
 
         if (CapturedEnvironmentVariables.Count == 0)
         {
@@ -342,32 +511,63 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
         foreach (var entry in CapturedEnvironmentVariables)
         {
-            var (key, (description, defaultValue, source)) = entry;
+            var envVar = entry.Value;
+            var defaultValue = envVar.DefaultValue;
 
-            if (defaultValue is null && source is ParameterResource parameter)
+            // Only resolve from the parameter if no static default is already set;
+            // a caller that provides an explicit default intends to skip parameter resolution.
+            if (envVar.Source is ParameterResource parameter)
             {
-                defaultValue = await parameter.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+                defaultValue ??= await parameter.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+            }
+            else if (envVar.Source is IValueProvider vp)
+            {
+                // IValueProvider sources are always resolved dynamically — a static default is never used.
+                defaultValue = await vp.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
             }
 
-            if (source is ContainerImageReference cir && cir.Resource.TryGetContainerImageName(out var imageName))
-            {
-                defaultValue = imageName;
-            }
-
-            envFile.Add(key, defaultValue, description, onlyIfMissing: false);
+            envFile.Add(entry.Key, defaultValue, envVar.Description, onlyIfMissing: false);
         }
 
         envFile.Save(includeValues: true);
     }
 
-    internal string AddEnvironmentVariable(string name, string? description = null, string? defaultValue = null, object? source = null)
+    internal string AddEnvironmentVariable(string name, string? description = null, string? defaultValue = null, object? source = null, IResource? resource = null)
     {
-        CapturedEnvironmentVariables[name] = (description, defaultValue, source);
+        CapturedEnvironmentVariables[name] = new CapturedEnvironmentVariable
+        {
+            Name = name,
+            Description = description,
+            DefaultValue = defaultValue,
+            Source = source,
+            Resource = resource
+        };
 
         return $"${{{name}}}";
     }
 
-    private string GetDockerComposeProjectName(PipelineStepContext context)
+    internal static string GetEnvFilePath(PipelineStepContext context, DockerComposeEnvironmentResource environment)
+    {
+        var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, environment);
+        var hostEnvironment = context.Services.GetService<Microsoft.Extensions.Hosting.IHostEnvironment>();
+        var environmentName = hostEnvironment?.EnvironmentName ?? environment.Name;
+        var envFilePath = Path.Combine(outputPath, $".env.{environmentName}");
+        return envFilePath;
+    }
+
+    internal ComposeOperationContext CreateComposeOperationContext(PipelineStepContext context)
+    {
+        var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, this);
+        return new ComposeOperationContext
+        {
+            ComposeFilePath = Path.Combine(outputPath, "docker-compose.yaml"),
+            ProjectName = GetDockerComposeProjectName(context, this),
+            EnvFilePath = GetEnvFilePath(context, this),
+            WorkingDirectory = outputPath
+        };
+    }
+
+    internal static string GetDockerComposeProjectName(PipelineStepContext context, DockerComposeEnvironmentResource environment)
     {
         // Get the AppHost:PathSha256 from configuration to disambiguate projects
         var configuration = context.Services.GetService<IConfiguration>();
@@ -377,19 +577,10 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
         {
             // Use first 8 characters of the hash for readability
             // Format: aspire-{environmentName}-{sha8}
-            return $"aspire-{Name.ToLowerInvariant()}-{appHostSha[..8].ToLowerInvariant()}";
+            return $"aspire-{environment.Name.ToLowerInvariant()}-{appHostSha[..8].ToLowerInvariant()}";
         }
 
         // Fallback to just using the environment name if PathSha256 is not available
-        return $"aspire-{Name.ToLowerInvariant()}";
-    }
-
-    private string GetEnvFilePath(PipelineStepContext context)
-    {
-        var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, this);
-        var hostEnvironment = context.Services.GetService<Microsoft.Extensions.Hosting.IHostEnvironment>();
-        var environmentName = hostEnvironment?.EnvironmentName ?? Name;
-        var envFilePath = Path.Combine(outputPath, $".env.{environmentName}");
-        return envFilePath;
+        return $"aspire-{environment.Name.ToLowerInvariant()}";
     }
 }

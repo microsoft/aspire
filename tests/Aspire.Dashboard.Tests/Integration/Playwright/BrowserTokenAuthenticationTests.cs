@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TestUtilities;
@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
-[RequiresPlaywright]
+[RequiresFeature(TestFeature.Playwright)]
 public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenAuthenticationTests.BrowserTokenDashboardServerFixture>
 {
     public class BrowserTokenDashboardServerFixture : DashboardServerFixture
@@ -24,13 +24,22 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
         }
     }
 
+    public sealed class BrowserTokenDashboardServerWithHttpAndHttpsFixture : DashboardServerFixture
+    {
+        public BrowserTokenDashboardServerWithHttpAndHttpsFixture()
+        {
+            Configuration[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://localhost:0;http://localhost:0";
+            Configuration[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.BrowserToken);
+            Configuration[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = "VALID_TOKEN";
+        }
+    }
+
     public BrowserTokenAuthenticationTests(BrowserTokenDashboardServerFixture dashboardServerFixture)
         : base(dashboardServerFixture)
     {
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/7921")]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task BrowserToken_LoginPage_Success_RedirectToResources()
     {
@@ -48,6 +57,10 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
 
             var submitButton = page.GetByRole(AriaRole.Button);
             await submitButton.ClickAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+            // Wait for navigation to complete after successful login.
+            // The page redirects from /login to / (resources page).
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
             // Assert
             await Assertions
@@ -118,5 +131,94 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
             // Assert
             Assert.Equal("submit-token", name);
         });
+    }
+}
+
+[RequiresFeature(TestFeature.Playwright)]
+public class BrowserTokenAuthenticationHttpAndHttpsTests : PlaywrightTestsBase<BrowserTokenAuthenticationTests.BrowserTokenDashboardServerWithHttpAndHttpsFixture>
+{
+    public BrowserTokenAuthenticationHttpAndHttpsTests(BrowserTokenAuthenticationTests.BrowserTokenDashboardServerWithHttpAndHttpsFixture dashboardServerFixture)
+        : base(dashboardServerFixture)
+    {
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task BrowserToken_QueryStringToken_HttpsThenHttp_WebKit_Success()
+    {
+        using var playwright = await Microsoft.Playwright.Playwright.CreateAsync();
+        await using var browser = await LaunchWebKitAsync(playwright);
+
+        await RunHttpsThenHttpAsync(browser);
+    }
+
+    private static async Task<IBrowser> LaunchWebKitAsync(IPlaywright playwright)
+    {
+        try
+        {
+            return await playwright.Webkit.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
+        }
+        catch (PlaywrightException ex) when (IsWebKitBrowserUnavailable(ex))
+        {
+            Assert.Skip("Playwright WebKit is not available in this environment.");
+            throw;
+        }
+    }
+
+    private static bool IsWebKitBrowserUnavailable(PlaywrightException ex)
+    {
+        return ex.Message.Contains("Executable doesn't exist", StringComparison.Ordinal) ||
+            ex.Message.Contains("Host system is missing dependencies", StringComparison.Ordinal);
+    }
+
+    private async Task RunHttpsThenHttpAsync(IBrowser browser)
+    {
+        var endpoints = DashboardServerFixture.DashboardApp.FrontendEndPointsAccessor
+            .Select(accessor => accessor())
+            .ToList();
+        var httpsEndpoint = endpoints.Single(e => e.IsHttps);
+        var httpEndpoint = endpoints.Single(e => !e.IsHttps);
+
+        var httpsBaseUrl = httpsEndpoint.GetResolvedAddress(replaceIPAnyWithLocalhost: true);
+        var httpBaseUrl = httpEndpoint.GetResolvedAddress(replaceIPAnyWithLocalhost: true);
+
+        var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            IgnoreHTTPSErrors = true
+        });
+        try
+        {
+            var page = await context.NewPageAsync();
+            try
+            {
+                await page.GotoAsync($"{httpsBaseUrl}/login?t=VALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                await Assertions
+                    .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+                    .ToBeVisibleAsync()
+                    .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+                await page.GotoAsync($"{httpBaseUrl}/login?t=VALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                await Assertions
+                    .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+                    .ToBeVisibleAsync()
+                    .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+                await page.GotoAsync($"{httpBaseUrl}/structuredlogs").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                Assert.Equal("/structuredlogs", new Uri(page.Url).AbsolutePath);
+                await Assertions
+                    .Expect(page.GetByRole(AriaRole.Button, new() { Name = "submit-token" }))
+                    .Not
+                    .ToBeVisibleAsync()
+                    .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            }
+            finally
+            {
+                await page.CloseAsync();
+            }
+        }
+        finally
+        {
+            await context.DisposeAsync();
+        }
     }
 }

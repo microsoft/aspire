@@ -1,20 +1,30 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
-using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
+using Aspire.Shared.UserSecrets;
 using Aspire.Hosting.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class UserSecretsParameterDefaultTests
 {
     private static readonly ConstructorInfo s_userSecretsIdAttrCtor = typeof(UserSecretsIdAttribute).GetConstructor([typeof(string)])!;
+
+    private static UserSecretsManagerFactory CreateFactory()
+    {
+        return new UserSecretsManagerFactory(
+            new FileSystemService(
+                new ConfigurationBuilder().Build()));
+    }
 
     [Fact]
     public void UserSecretsParameterDefault_GetDefaultValue_SavesValueInAppHostUserSecrets()
@@ -24,8 +34,10 @@ public class UserSecretsParameterDefaultTests
 
         var testAssembly = AssemblyBuilder.DefineDynamicAssembly(
             new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
+        var factory = CreateFactory();
+        var manager = factory.GetOrCreate(testAssembly);
         var paramDefault = new TestParameterDefault();
-        var userSecretDefault = new UserSecretsParameterDefault(testAssembly, "TestApplication.AppHost", "param1", paramDefault);
+        var userSecretDefault = new UserSecretsParameterDefault("TestApplication.AppHost", "param1", paramDefault, manager);
         var initialValue = userSecretDefault.GetDefaultValue();
 
         var userSecrets = GetUserSecrets(userSecretsId);
@@ -39,8 +51,10 @@ public class UserSecretsParameterDefaultTests
     {
         // Do not set a user secrets id attribute on the assembly
         var testAssembly = AssemblyBuilder.DefineDynamicAssembly(new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, []);
+        var factory = CreateFactory();
+        var manager = factory.GetOrCreate(testAssembly);
         var paramDefault = new TestParameterDefault();
-        var userSecretDefault = new UserSecretsParameterDefault(testAssembly, "TestApplication.AppHost", "param1", paramDefault);
+        var userSecretDefault = new UserSecretsParameterDefault("TestApplication.AppHost", "param1", paramDefault, manager);
 
         var initialValue = userSecretDefault.GetDefaultValue();
         Assert.NotNull(initialValue);
@@ -67,8 +81,10 @@ public class UserSecretsParameterDefaultTests
 
         var testAssembly = AssemblyBuilder.DefineDynamicAssembly(
             new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
+        var factory = CreateFactory();
+        var manager = factory.GetOrCreate(testAssembly);
         var paramDefault = new TestParameterDefault();
-        var userSecretDefault = new UserSecretsParameterDefault(testAssembly, "TestApplication.AppHost", "param1", paramDefault);
+        var userSecretDefault = new UserSecretsParameterDefault("TestApplication.AppHost", "param1", paramDefault, manager);
 
         var _ = userSecretDefault.GetDefaultValue();
     }
@@ -83,7 +99,7 @@ public class UserSecretsParameterDefaultTests
             new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
 
         // Create an isolated factory instance for this test to avoid cross-contamination
-        var factory = new UserSecretsManagerFactory();
+        var factory = CreateFactory();
 
         // Simulate concurrent writes from multiple threads (like SQL Server and RabbitMQ generating passwords)
         var tasks = new List<Task<bool>>();
@@ -133,7 +149,7 @@ public class UserSecretsParameterDefaultTests
             new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
 
         // Create an isolated factory instance for this test to avoid cross-contamination
-        var factory = new UserSecretsManagerFactory();
+        var factory = CreateFactory();
 
         // Simulate SQL Server and RabbitMQ generating passwords concurrently
         var sqlTask = Task.Run(() =>
@@ -163,6 +179,28 @@ public class UserSecretsParameterDefaultTests
     }
 
     [Fact]
+    public void TryDeleteUserSecret_RemovesOnlyRequestedSecret()
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        ClearUsersSecrets(userSecretsId);
+
+        var testAssembly = AssemblyBuilder.DefineDynamicAssembly(
+            new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
+        var factory = CreateFactory();
+        var manager = factory.GetOrCreate(testAssembly);
+
+        Assert.True(manager.TrySetSecret("Parameters:sql-password", "SqlPassword123!"));
+        Assert.True(manager.TrySetSecret("Parameters:rabbit-password", "RabbitPassword456!"));
+        Assert.True(manager.TryDeleteSecret("Parameters:sql-password"));
+
+        var userSecrets = GetUserSecrets(userSecretsId);
+        Assert.False(userSecrets.ContainsKey("Parameters:sql-password"));
+        Assert.Equal("RabbitPassword456!", userSecrets["Parameters:rabbit-password"]);
+
+        DeleteUserSecretsFile(userSecretsId);
+    }
+
+    [Fact]
     public async Task TrySetUserSecret_ConcurrentWritesSameKey_LastWriteWins()
     {
         var userSecretsId = Guid.NewGuid().ToString("N");
@@ -172,7 +210,7 @@ public class UserSecretsParameterDefaultTests
             new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
 
         // Create an isolated factory instance for this test to avoid cross-contamination
-        var factory = new UserSecretsManagerFactory();
+        var factory = CreateFactory();
 
         // Simulate concurrent writes to the same key
         var tasks = new List<Task<bool>>();
@@ -202,8 +240,8 @@ public class UserSecretsParameterDefaultTests
     [Fact]
     public void UserSecretsParameterDefault_WithCustomFactory_UsesProvidedFactory()
     {
-        // This test verifies that the constructor overload taking a factory parameter
-        // uses the provided factory instead of the singleton instance
+        // This test verifies that the constructor overload taking a manager parameter
+        // uses the provided manager
         var userSecretsId = Guid.NewGuid().ToString("N");
         ClearUsersSecrets(userSecretsId);
 
@@ -211,9 +249,10 @@ public class UserSecretsParameterDefaultTests
             new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
 
         // Create a custom factory instance for test isolation
-        var customFactory = new UserSecretsManagerFactory();
+        var customFactory = CreateFactory();
+        var manager = customFactory.GetOrCreate(testAssembly);
         var paramDefault = new TestParameterDefault();
-        var userSecretDefault = new UserSecretsParameterDefault(testAssembly, "TestApplication.AppHost", "param1", paramDefault, customFactory);
+        var userSecretDefault = new UserSecretsParameterDefault("TestApplication.AppHost", "param1", paramDefault, manager);
 
         var initialValue = userSecretDefault.GetDefaultValue();
 
@@ -224,10 +263,10 @@ public class UserSecretsParameterDefaultTests
     }
 
     [Fact]
-    public void UserSecretsParameterDefault_WithCustomFactory_IsolatesFromGlobalInstance()
+    public void UserSecretsParameterDefault_WithCustomFactory_IsolatesFromOtherInstances()
     {
         // This test verifies that using a custom factory provides isolation
-        // between test runs and doesn't interfere with the singleton instance
+        // between test runs
         var userSecretsId1 = Guid.NewGuid().ToString("N");
         var userSecretsId2 = Guid.NewGuid().ToString("N");
         ClearUsersSecrets(userSecretsId1);
@@ -239,13 +278,16 @@ public class UserSecretsParameterDefaultTests
             new("TestAssembly2"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId2])]);
 
         // Use custom factory for first parameter default
-        var customFactory = new UserSecretsManagerFactory();
+        var customFactory1 = CreateFactory();
+        var manager1 = customFactory1.GetOrCreate(testAssembly1);
         var paramDefault1 = new TestParameterDefault();
-        var userSecretDefault1 = new UserSecretsParameterDefault(testAssembly1, "TestApp1.AppHost", "param1", paramDefault1, customFactory);
+        var userSecretDefault1 = new UserSecretsParameterDefault("TestApp1.AppHost", "param1", paramDefault1, manager1);
 
-        // Use default singleton factory for second parameter default
+        // Use different factory for second parameter default
+        var customFactory2 = CreateFactory();
+        var manager2 = customFactory2.GetOrCreate(testAssembly2);
         var paramDefault2 = new TestParameterDefault();
-        var userSecretDefault2 = new UserSecretsParameterDefault(testAssembly2, "TestApp2.AppHost", "param2", paramDefault2);
+        var userSecretDefault2 = new UserSecretsParameterDefault("TestApp2.AppHost", "param2", paramDefault2, manager2);
 
         var value1 = userSecretDefault1.GetDefaultValue();
         var value2 = userSecretDefault2.GetDefaultValue();
@@ -271,7 +313,8 @@ public class UserSecretsParameterDefaultTests
         var testAssembly = AssemblyBuilder.DefineDynamicAssembly(
             new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
 
-        var customFactory = new UserSecretsManagerFactory();
+        var customFactory = CreateFactory();
+        var manager = customFactory.GetOrCreate(testAssembly);
 
         // Create multiple UserSecretsParameterDefault instances with different parameter names
         var tasks = new List<Task<string>>();
@@ -281,7 +324,7 @@ public class UserSecretsParameterDefaultTests
             tasks.Add(Task.Run(() =>
             {
                 var paramDefault = new TestParameterDefault();
-                var userSecretDefault = new UserSecretsParameterDefault(testAssembly, "TestApp.AppHost", paramName, paramDefault, customFactory);
+                var userSecretDefault = new UserSecretsParameterDefault("TestApp.AppHost", paramName, paramDefault, manager);
                 return userSecretDefault.GetDefaultValue();
             }));
         }
@@ -311,8 +354,9 @@ public class UserSecretsParameterDefaultTests
 
     private static Dictionary<string, string?> GetUserSecrets(string userSecretsId)
     {
-        var manager = UserSecretsManagerFactory.Instance.GetOrCreateFromId(userSecretsId);
-        
+        var factory = CreateFactory();
+        var manager = factory.GetOrCreateFromId(userSecretsId);
+
         // Read the secrets file directly
         var secrets = new Dictionary<string, string?>();
         if (File.Exists(manager.FilePath))
@@ -323,7 +367,7 @@ public class UserSecretsParameterDefaultTests
                 var config = new ConfigurationBuilder()
                     .AddJsonFile(manager.FilePath, optional: true)
                     .Build();
-                    
+
                 foreach (var kvp in config.AsEnumerable())
                 {
                     if (kvp.Value != null)
@@ -367,4 +411,3 @@ public class UserSecretsParameterDefaultTests
         }
     }
 }
-

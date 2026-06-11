@@ -1,6 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/template",
   "author": "Microsoft",
+  "generatorVersions": "1.0.0.0",
   "classifications": [
     "Common",
     "Aspire",
@@ -20,12 +21,11 @@
     "language": "C#",
     "type": "solution",
     "editorTreatAs": "solution",
-    "aspire-9.5-tfms": "net8.0;net9.0;net10.0",
-    "aspire-13.0-tfms": "net8.0;net9.0;net10.0"
+    "aspire-!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!-tfms": "net8.0;net9.0;net10.0"
   },
   "precedence": "9000",
-  "identity": "Aspire.Empty.CSharp.8.0",
-  "thirdPartyNotices": "https://aka.ms/dotnet/aspire/third-party-notices",
+  "identity": "Aspire.Empty.CSharp.!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
+  "thirdPartyNotices": "https://aka.ms/aspire/third-party-notices",
   "groupIdentity": "Aspire.Empty",
   "guids": [
     "F98A6C4E-E01C-44BB-BCC9-4C23F1CD09CD",
@@ -35,23 +35,8 @@
   ],
   "sources": [
     {
-      "source": "./9.5",
+      "source": "./",
       "target": "./",
-      "condition": "AspireVersionActual == 9.5",
-      "modifiers": [
-        {
-          "condition": "(hostIdentifier != \"dotnetcli\" && hostIdentifier != \"dotnetcli-preview\")",
-          "exclude": [
-            "*.sln",
-            "*.slnx"
-          ]
-        }
-      ]
-    },
-    {
-      "source": "./13.0",
-      "target": "./",
-      "condition": "AspireVersionActual == 13.0",
       "modifiers": [
         {
           "condition": "(hostIdentifier != \"dotnetcli\" && hostIdentifier != \"dotnetcli-preview\")",
@@ -92,34 +77,12 @@
       "datatype": "choice",
       "choices": [
         {
-          "choice": "13.0",
-          "displayName": "13.0",
-          "description": "Chooses Aspire 13.0"
-        },
-        {
-          "choice": "9.5",
-          "displayName": "9.5",
-          "description": "Chooses Aspire 9.5"
+          "choice": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
+          "displayName": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
+          "description": "Chooses Aspire !!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!"
         }
       ],
-      "defaultValue": "13.0"
-    },
-    "AspireVersionActual": {
-      "type": "generated",
-      "generator": "switch",
-      "replaces": "aspireVersion",
-      "parameters": {
-        "cases": [
-          {
-            "condition": "AspireVersion == 9.5",
-            "value": "9.5"
-          },
-          {
-            "condition": "",
-            "value": "13.0"
-          }
-        ]
-      }
+      "defaultValue": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!"
     },
     "hostIdentifier": {
       "type": "bind",
@@ -168,28 +131,6 @@
         "fallbackVariableName": "appHostOtlpHttpPortGenerated"
       },
       "replaces": "19000"
-    },
-    "appHostMcpHttpPort": {
-      "type": "parameter",
-      "datatype": "integer",
-      "description": "Port number to use for the MCP HTTP endpoint in launchSettings.json of the AppHost project."
-    },
-    "appHostMcpHttpPortGenerated": {
-      "type": "generated",
-      "generator": "port",
-      "parameters": {
-        "low": 18000,
-        "high": 18300
-      }
-    },
-    "appHostMcpHttpPortReplacer": {
-      "type": "generated",
-      "generator": "coalesce",
-      "parameters": {
-        "sourceVariableName": "appHostMcpHttpPort",
-        "fallbackVariableName": "appHostMcpHttpPortGenerated"
-      },
-      "replaces": "18000"
     },
     "appHostResourceHttpPort": {
       "type": "parameter",
@@ -257,28 +198,6 @@
       },
       "replaces": "21000"
     },
-    "appHostMcpHttpsPort": {
-      "type": "parameter",
-      "datatype": "integer",
-      "description": "Port number to use for the MCP HTTPS endpoint in launchSettings.json of the AppHost project."
-    },
-    "appHostMcpHttpsPortGenerated": {
-      "type": "generated",
-      "generator": "port",
-      "parameters": {
-        "low": 23000,
-        "high": 23300
-      }
-    },
-    "appHostMcpHttpsPortReplacer": {
-      "type": "generated",
-      "generator": "coalesce",
-      "parameters": {
-        "sourceVariableName": "appHostMcpHttpsPort",
-        "fallbackVariableName": "appHostMcpHttpsPortGenerated"
-      },
-      "replaces": "23000"
-    },
     "appHostResourceHttpsPort": {
       "type": "parameter",
       "datatype": "integer",
@@ -320,10 +239,48 @@
     "LocalhostTld": {
       "type": "parameter",
       "datatype": "bool",
-      "isEnabled": "Framework == net10.0 && AspireVersion == 13.0",
+      "isEnabled": "Framework == net10.0",
       "defaultValue": "false",
       "displayName": "Use the .dev.localhost TLD in the application URL",
       "description": "Whether to combine the project name with the .dev.localhost TLD in the application URL for local development, e.g. https://myapp.dev.localhost:12345. Supported on .NET 10 and later."
+    },
+    "hostName": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "lowerCaseInvariantWithHyphens",
+      "replaces": "LocalhostTldHostNamePrefix"
+    }
+  },
+  "forms": {
+    "lowerCaseInvariantWithHyphens": {
+      "identifier": "chain",
+      "steps": [
+        "lowerCaseInvariant",
+        "replaceDnsInvalidCharsWithHyphens",
+        "replaceRepeatedHyphens",
+        "trimLeadingHyphens",
+        "trimTrailingHyphens"
+      ]
+    },
+    "replaceDnsInvalidCharsWithHyphens": {
+      "identifier": "replace",
+      "pattern": "[^a-z0-9-]",
+      "replacement": "-"
+    },
+    "replaceRepeatedHyphens": {
+      "identifier": "replace",
+      "pattern": "-{2,}",
+      "replacement": "-"
+    },
+    "trimLeadingHyphens": {
+      "identifier": "replace",
+      "pattern": "^-+",
+      "replacement": ""
+    },
+    "trimTrailingHyphens": {
+      "identifier": "replace",
+      "pattern": "-+$",
+      "replacement": ""
     }
   },
   "primaryOutputs": [
@@ -342,7 +299,7 @@
     {
       "id": "set-startup-project",
       "description": "Sets the startup project in the solution",
-      "manualInstructions": [],
+      "manualInstructions": [{ "text": "" }],
       "actionId": "5BECCC32-4D5A-4476-A0F9-BD2E81AF0689",
       "condition": "(hostIdentifier == \"vs\")",
       "args": {

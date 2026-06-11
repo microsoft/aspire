@@ -1,9 +1,11 @@
 ﻿services:
   swarm-env-dashboard:
     image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
-    expose:
+    ports:
       - "18888"
+    expose:
       - "18889"
+      - "18890"
     networks:
       - "aspire"
     restart: "always"

@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.MongoDB.Tests;
 
-public class MongoDBPublicApiTests
+public class MongoDBPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddMongoDBShouldThrowWhenBuilderIsNull()
@@ -26,7 +26,7 @@ public class MongoDBPublicApiTests
     [InlineData(false)]
     public void AddMongoDBShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
         int? port = null;
 
@@ -56,7 +56,7 @@ public class MongoDBPublicApiTests
     [InlineData(false)]
     public void AddMongoDBWithParametersShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
         IResourceBuilder<ParameterResource>? userName = null;
         IResourceBuilder<ParameterResource>? password = null;
@@ -86,7 +86,7 @@ public class MongoDBPublicApiTests
     [InlineData(false)]
     public void AddDatabaseShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMongoDB("MongoDB");
         var name = isNull ? null! : string.Empty;
 
@@ -151,7 +151,7 @@ public class MongoDBPublicApiTests
     [InlineData(false)]
     public void WithDataBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMongoDB("MongoDB");
         var source = isNull ? null! : string.Empty;
 
@@ -181,7 +181,7 @@ public class MongoDBPublicApiTests
     [InlineData(false)]
     public void WithInitBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMongoDB("MongoDB");
         var source = isNull ? null! : string.Empty;
 
@@ -211,7 +211,7 @@ public class MongoDBPublicApiTests
     [InlineData(false)]
     public void WithInitFilesShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMongoDB("MongoDB");
         var source = isNull ? null! : string.Empty;
 

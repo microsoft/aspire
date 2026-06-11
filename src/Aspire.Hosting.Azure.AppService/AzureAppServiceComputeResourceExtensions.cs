@@ -13,11 +13,12 @@ namespace Aspire.Hosting;
 public static class AzureAppServiceComputeResourceExtensions
 {
     /// <summary>
-    /// Publishes the specified compute resource as an Azure App Service.
+    /// Publishes the specified compute resource as an Azure App Service or Azure App Service Slot.
     /// </summary>
     /// <typeparam name="T">The type of the compute resource.</typeparam>
     /// <param name="builder">The compute resource builder.</param>
     /// <param name="configure">The configuration action for the App Service WebSite resource.</param>
+    /// <param name="configureSlot">The configuration action for the App Service WebSite Slot resource.</param>
     /// <returns>The updated compute resource builder.</returns>
     /// <remarks>
     /// <example>
@@ -29,11 +30,19 @@ public static class AzureAppServiceComputeResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    public static IResourceBuilder<T> PublishAsAzureAppServiceWebsite<T>(this IResourceBuilder<T> builder, Action<AzureResourceInfrastructure, WebSite> configure)
+    /// <ats-remarks />
+    [AspireExport]
+    public static IResourceBuilder<T> PublishAsAzureAppServiceWebsite<T>(this IResourceBuilder<T> builder,
+        Action<AzureResourceInfrastructure, WebSite>? configure = null,
+        Action<AzureResourceInfrastructure, WebSiteSlot>? configureSlot = null)
         where T : IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(configure);
+
+        if (configure == null && configureSlot == null)
+        {
+            throw new ArgumentException("configure or configureSlot must be provided.");
+        }
 
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
@@ -42,6 +51,48 @@ public static class AzureAppServiceComputeResourceExtensions
 
         builder.ApplicationBuilder.AddAzureAppServiceInfrastructureCore();
 
-        return builder.WithAnnotation(new AzureAppServiceWebsiteCustomizationAnnotation(configure));
+        if (configure != null)
+        {
+            builder = builder.WithAnnotation(new AzureAppServiceWebsiteCustomizationAnnotation(configure));
+        }
+
+        if (configureSlot != null)
+        {
+            builder = builder.WithAnnotation(new AzureAppServiceWebsiteSlotCustomizationAnnotation(configureSlot));
+        }
+        return builder;
+    }
+
+    /// <summary>
+    /// Skips validation for environment variable names that Azure App Service may not support.
+    /// </summary>
+    /// <remarks>
+    /// When running on Azure App Service, environment variable names can't contain hyphens.
+    /// This can cause Aspire client integrations that rely on the original environment variable names to fail.
+    /// By default, Aspire performs validation to ensure environment variable names are compatible with Azure App Service,
+    /// failing to publish if any invalid names are found.
+    /// </remarks>
+    /// <typeparam name="T">The type of the compute resource.</typeparam>
+    /// <param name="builder">The compute resource builder.</param>
+    /// <returns>The updated compute resource builder.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the resource is not configured for Azure App Service publishing.</exception>
+    [AspireExport]
+    public static IResourceBuilder<T> SkipEnvironmentVariableNameChecks<T>(this IResourceBuilder<T> builder)
+        where T : IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
+
+        if (!builder.Resource.HasAnnotationOfType<AzureAppServiceWebsiteCustomizationAnnotation>() &&
+            !builder.Resource.HasAnnotationOfType<AzureAppServiceWebsiteSlotCustomizationAnnotation>())
+        {
+            throw new InvalidOperationException($"{nameof(SkipEnvironmentVariableNameChecks)} can only be used after PublishAsAzureAppServiceWebsite.");
+        }
+
+        return builder.WithAnnotation(new AzureAppServiceIgnoreEnvironmentVariableChecksAnnotation());
     }
 }

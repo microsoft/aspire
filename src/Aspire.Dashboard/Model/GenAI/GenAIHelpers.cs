@@ -34,7 +34,7 @@ public static class GenAIHelpers
 
     public const string ErrorType = "error.type";
 
-    public static bool IsGenAISpan(KeyValuePair<string, string>[] attributes)
+    public static bool HasGenAIAttribute(KeyValuePair<string, string>[] attributes)
     {
         return attributes.GetValueWithFallback(GenAISystem, GenAIProviderName) is { Length: > 0 };
     }

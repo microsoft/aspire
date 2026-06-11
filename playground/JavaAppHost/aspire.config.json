@@ -1,0 +1,24 @@
+{
+  "appHost": {
+    "path": "AppHost.java",
+    "language": "java"
+  },
+  "features": {
+    "experimentalPolyglot:java": true
+  },
+  "packages": {
+    "Aspire.Hosting.JavaScript": ""
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://JavaAppHost.dev.localhost:17000;http://JavaAppHost.dev.localhost:15000",
+      "environmentVariables": {}
+    },
+    "http": {
+      "applicationUrl": "http://JavaAppHost.dev.localhost:15000",
+      "environmentVariables": {
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+      }
+    }
+  }
+}

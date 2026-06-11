@@ -78,7 +78,7 @@ export default class AspireRpcServer {
                 reject(err);
             });
 
-            extensionLogOutputChannel.info(`Setting up RPC server with token: ${token}`);
+            extensionLogOutputChannel.info('Setting up RPC server.');
             server.listen(0, () => {
                 const addressInfo = server?.address();
                 if (typeof addressInfo === 'object' && addressInfo?.port) {
@@ -108,12 +108,17 @@ export default class AspireRpcServer {
                             return 'pong';
                         }));
 
+                        // Create the RPC client with a null debug session ID initially.
+                        // Register all interaction service endpoints BEFORE calling listen()
+                        // to avoid a race condition where the CLI sends requests (e.g. displayEmptyLine)
+                        // before handlers are registered.
+                        const rpcClient = rpcClientFactory(connectionInfo, connection, token, null);
+                        addInteractionServiceEndpoints(connection, rpcClient.interactionService, rpcClient, withAuthentication);
+
                         connection.listen();
 
                         const clientDebugSessionId = await connection.sendRequest<string | null>('getDebugSessionId');
-
-                        const rpcClient = rpcClientFactory(connectionInfo, connection, token, clientDebugSessionId);
-                        addInteractionServiceEndpoints(connection, rpcClient.interactionService, rpcClient, withAuthentication);
+                        rpcClient.debugSessionId = clientDebugSessionId;
 
                         rpcServer.addConnection(rpcClient);
 
@@ -137,4 +142,3 @@ export default class AspireRpcServer {
         });
     }
 }
-

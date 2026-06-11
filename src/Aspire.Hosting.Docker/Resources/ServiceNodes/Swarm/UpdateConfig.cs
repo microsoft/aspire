@@ -16,12 +16,10 @@ namespace Aspire.Hosting.Docker.Resources.ServiceNodes.Swarm;
 public sealed class UpdateConfig
 {
     /// <summary>
-    /// Gets or sets the level of parallelism applied during the update process.
-    /// This property specifies the maximum number of service tasks that can
-    /// be updated simultaneously.
+    /// Gets or sets the maximum number of service tasks that can be updated simultaneously.
     /// </summary>
     [YamlMember(Alias = "parallelism")]
-    public string? Parallelism { get; set; }
+    public int? Parallelism { get; set; }
 
     /// <summary>
     /// Represents the delay between each update operation for a service node in a swarm configuration.
@@ -30,10 +28,11 @@ public sealed class UpdateConfig
     public string? Delay { get; set; }
 
     /// <summary>
-    /// Indicates whether the update process should stop and fail upon encountering an error.
+    /// Gets or sets the action to take when an update fails.
+    /// Valid values are <c>"continue"</c>, <c>"rollback"</c>, and <c>"pause"</c>.
     /// </summary>
     [YamlMember(Alias = "failure_action")]
-    public bool? FailOnError { get; set; }
+    public string? FailureAction { get; set; }
 
     /// <summary>
     /// Gets or sets the duration or interval for monitoring the progress of an update.

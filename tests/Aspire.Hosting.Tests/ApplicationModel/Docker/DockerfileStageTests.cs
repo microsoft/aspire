@@ -8,6 +8,7 @@ using Aspire.Hosting.ApplicationModel.Docker;
 
 namespace Aspire.Hosting.Tests.ApplicationModel.Docker;
 
+[Trait("Partition", "4")]
 public class DockerfileStageTests
 {
     [Fact]

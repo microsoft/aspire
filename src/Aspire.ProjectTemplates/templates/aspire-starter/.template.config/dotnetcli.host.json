@@ -4,10 +4,6 @@
       "Framework": {
         "longName": "framework"
       },
-      "AspireVersion": {
-        "shortName": "",
-        "longName": "aspire-version"
-      },
       "XUnitVersion": {
         "shortName": "",
         "longName": "xunit-version",
@@ -23,12 +19,6 @@
         "isHidden": true
       },
       "appHostOtlpHttpsPort": {
-        "isHidden": true
-      },
-      "appHostMcpHttpPort": {
-        "isHidden": true
-      },
-      "appHostMcpHttpsPort": {
         "isHidden": true
       },
       "appHostResourceHttpPort": {

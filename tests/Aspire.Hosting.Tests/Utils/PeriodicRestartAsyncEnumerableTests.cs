@@ -6,6 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests.Utils;
 
+[Trait("Partition", "4")]
 public class PeriodicRestartAsyncEnumerableTests
 {
     [Fact]

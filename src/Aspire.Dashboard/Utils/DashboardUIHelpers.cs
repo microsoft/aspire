@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 
@@ -20,6 +21,7 @@ internal static class DashboardUIHelpers
     public const string JavascriptFormat = "javascript";
     public const string PlaintextFormat = "plaintext";
     public const string MarkdownFormat = "markdown";
+    public const string PropertiesFormat = "properties";
 
     // The initial data fetch for a FluentDataGrid doesn't include a count of items to return.
     // The data grid doesn't specify a count because it doesn't know how many items fit in the UI.
@@ -101,6 +103,60 @@ internal static class DashboardUIHelpers
         const int TooltipLengthThreshold = 30;
 
         return value is { Length: > TooltipLengthThreshold } ? value : null;
+    }
+
+    /// <summary>
+    /// Safely converts a duration to milliseconds as an integer.
+    /// If the value exceeds int.MaxValue, returns int.MaxValue. A duration must be longer than 24 days to hit this limit. That should almost never happen and it's ok to truncate at this point.
+    /// </summary>
+    public static int SafeConvertToMilliseconds(TimeSpan duration)
+    {
+        var milliseconds = duration.TotalMilliseconds;
+        
+        if (milliseconds >= int.MaxValue)
+        {
+            return int.MaxValue;
+        }
+        
+        if (milliseconds <= int.MinValue)
+        {
+            return int.MinValue;
+        }
+        
+        return (int)milliseconds;
+    }
+
+    /// <summary>
+    /// Masks querystring parameter values in a URL for display purposes.
+    /// For example, "http://localhost:5000/login?t=token123" becomes "http://localhost:5000/login?t=●●●●●●●●"
+    /// </summary>
+    /// <param name="url">The URL to mask</param>
+    /// <returns>The URL with masked querystring values</returns>
+    public static string MaskQueryStringValues(string url)
+    {
+        var questionMarkIndex = url.IndexOf('?');
+        if (questionMarkIndex == -1)
+        {
+            // No query string, return as is
+            return url;
+        }
+
+        var baseUrl = url.Substring(0, questionMarkIndex);
+        var queryString = url.Substring(questionMarkIndex);
+        
+        // Parse the query string using QueryHelpers
+        var queryParams = QueryHelpers.ParseQuery(queryString);
+        var maskedParts = new List<string>();
+
+        foreach (var param in queryParams)
+        {
+            // Mask the value with 8 bullet points (unencoded for display)
+            var maskedValue = GetMaskingText(8).Text;
+            maskedParts.Add($"{param.Key}={maskedValue}");
+        }
+
+        // Rebuild the query string with masked values (unencoded for display)
+        return $"{baseUrl}?{string.Join("&", maskedParts)}";
     }
 }
 

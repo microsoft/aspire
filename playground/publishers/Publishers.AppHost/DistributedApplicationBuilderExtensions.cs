@@ -2,13 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
 
 internal static class IDistributedApplicationBuilderExtensions
 {
+    [AspireExportIgnore(Reason = "Publisher playground test resource; not part of the supported ATS surface.")]
     public static IResourceBuilder<IComputeEnvironmentResource>? AddPublishTestResource(this IDistributedApplicationBuilder builder, string name)
     {
         var resource = new PublishTestResource(name);

@@ -52,11 +52,6 @@
         <target state="translated">Zainstalowana wersja {0} interfejsu wiersza polecenia tunelu deweloperskiego nie jest obsługiwana. Wymagana jest wersja {1} lub nowsza.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InstallationInstructions">
-        <source>Installation instructions</source>
-        <target state="translated">Instrukcje instalacji</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LoginWithGitHub">
         <source>Login with GitHub</source>
         <target state="translated">Zaloguj się za pomocą usługi GitHub</target>
@@ -65,21 +60,6 @@
       <trans-unit id="LoginWithMicrosoft">
         <source>Login with Microsoft</source>
         <target state="translated">Zaloguj się za pomocą konta Microsoft</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotification">
-        <source>Required command '{0}' was not found on PATH or at a specified location.</source>
-        <target state="translated">Nie znaleziono wymaganego polecenia „{0}” w ścieżce PATH lub w określonej lokalizacji.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithLink">
-        <source>Required command '{0}' was not found. See installation instructions for more details.</source>
-        <target state="translated">Nie znaleziono wymaganego polecenia „{0}”. Zobacz instrukcje instalacji, aby uzyskać więcej szczegółów.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RequiredCommandNotificationWithValidation">
-        <source>{0} See installation instructions for more details.</source>
-        <target state="translated">{0} Zobacz instrukcje instalacji, aby uzyskać więcej szczegółów.</target>
         <note />
       </trans-unit>
     </body>

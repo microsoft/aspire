@@ -1,6 +1,5 @@
 ﻿@namespace Aspire.Dashboard.Components
 @using System.Collections.Immutable
-@using Aspire.Dashboard.Model
 @using Aspire.DashboardService.Proto.V1
 @inherits FluentComponentBase
 
@@ -10,12 +9,15 @@
         : null;
 }
 
-<FluentInputLabel ForId="@ForId" Label="@InputViewModel.Input.Label" AriaLabel="@InputViewModel.Input.Description" Required="@InputViewModel.Input.Required" />
-<div class="input-choice-container">
+@if (InputViewModel.Input.InputType != InputType.Boolean)
+{
+    <FluentInputLabel ForId="@ForId" Label="@InputViewModel.Input.Label" AriaLabel="@InputViewModel.Input.Label" Required="@InputViewModel.Input.Required" />
+}
+<div class="input-line-container">
     @ChildContent(new InteractionInputFieldContext { ViewModel = InputViewModel, DescriptionId = descriptionId })
     @if (InputViewModel.Input.Loading)
     {
-        <FluentProgressRing Width="20px" />
+        <FluentProgressRing Width="20px" Class="input-progress" />
     }
 </div>
 @GetDescriptionContent(InputViewModel.Input, descriptionId)

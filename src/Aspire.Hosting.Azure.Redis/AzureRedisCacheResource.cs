@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
-[Obsolete($"This class is obsolete and will be removed in a future version. Use {nameof(AzureRedisEnterpriseExtensions.AddAzureRedisEnterprise)} instead which provisions Azure Managed Redis.")]
+[Obsolete($"This class is obsolete and will be removed in a future version. Use {nameof(AzureManagedRedisExtensions.AddAzureManagedRedis)} instead which provisions Azure Managed Redis.")]
 public class AzureRedisCacheResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString
 {

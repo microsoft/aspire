@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "CosmosEndToEnd.AppHost/CosmosEndToEnd.AppHost.csproj"
+  }
+}

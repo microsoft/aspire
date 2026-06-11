@@ -1,6 +1,6 @@
 # AspireWithMaui Playground
 
-This playground demonstrates .NET Aspire integration with .NET MAUI applications.
+This playground demonstrates Aspire integration with .NET MAUI applications.
 
 ## Prerequisites
 
@@ -223,6 +223,6 @@ If you encounter build errors:
 
 ## Learn More
 
-- [.NET Aspire Documentation](https://learn.microsoft.com/dotnet/aspire/)
+- [Aspire Documentation](https://aspire.dev/)
 - [.NET MAUI Documentation](https://learn.microsoft.com/dotnet/maui/)
 - [OpenTelemetry in .NET](https://learn.microsoft.com/dotnet/core/diagnostics/observability-with-otel)

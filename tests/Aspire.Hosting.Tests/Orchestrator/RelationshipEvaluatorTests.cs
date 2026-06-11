@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests.Orchestrator;
 
+[Trait("Partition", "3")]
 public class RelationshipEvaluatorTests
 {
     [Fact]

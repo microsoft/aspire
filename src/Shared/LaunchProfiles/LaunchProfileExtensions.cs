@@ -3,7 +3,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Resources;
 
@@ -109,19 +108,7 @@ internal static class LaunchProfileExtensions
             }
         }
 
-        using var stream = File.OpenRead(launchSettingsFilePath);
-
-        try
-        {
-            var settings = JsonSerializer.Deserialize(stream, LaunchSettingsSerializerContext.Default.LaunchSettings);
-            return settings;
-        }
-        catch (JsonException ex)
-        {
-            var message = $"Failed to get effective launch profile for project resource '{resourceName}'. There is malformed JSON in the project's launch settings file at '{launchSettingsFilePath}'.";
-            throw new DistributedApplicationException(message, ex);
-        }
-
+        return LaunchSettingsReader.ReadLaunchSettingsFile(launchSettingsFilePath, $"project resource '{resourceName}'");
     }
 
     private static readonly LaunchProfileSelector[] s_launchProfileSelectors =

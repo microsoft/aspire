@@ -1,4 +1,4 @@
-﻿@description('The location for the resource(s) to be deployed.')
+@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param env_outputs_azure_container_registry_endpoint string
@@ -14,6 +14,8 @@ param api_containerimage string
 param api_containerport string
 
 param mydb_kv_outputs_name string
+
+param mydb_outputs_connectionstring string
 
 param kvName string
 
@@ -38,6 +40,11 @@ resource mydb_kv_connectionstrings__mydb 'Microsoft.KeyVault/vaults/secrets@2024
   parent: mydb_kv
 }
 
+resource mydb_kv_primaryaccesskey__mydb 'Microsoft.KeyVault/vaults/secrets@2024-11-01' existing = {
+  name: 'primaryaccesskey--mydb'
+  parent: mydb_kv
+}
+
 resource existingKv 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: kvName
   scope: resourceGroup(sharedRg)
@@ -48,7 +55,7 @@ resource existingKv_secret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' existi
   parent: existingKv
 }
 
-resource mainContainer 'Microsoft.Web/sites/sitecontainers@2024-11-01' = {
+resource mainContainer 'Microsoft.Web/sites/sitecontainers@2025-03-01' = {
   name: 'main'
   properties: {
     authType: 'UserAssigned'
@@ -60,7 +67,7 @@ resource mainContainer 'Microsoft.Web/sites/sitecontainers@2024-11-01' = {
   parent: webapp
 }
 
-resource webapp 'Microsoft.Web/sites@2024-11-01' = {
+resource webapp 'Microsoft.Web/sites@2025-03-01' = {
   name: take('${toLower('api')}-${uniqueString(resourceGroup().id)}', 60)
   location: location
   properties: {
@@ -77,19 +84,23 @@ resource webapp 'Microsoft.Web/sites@2024-11-01' = {
           value: api_containerport
         }
         {
-          name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-          value: 'true'
-        }
-        {
-          name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-          value: 'true'
-        }
-        {
           name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
           value: 'in_memory'
         }
         {
           name: 'ConnectionStrings__mydb'
+          value: '@Microsoft.KeyVault(SecretUri=${mydb_kv_connectionstrings__mydb.properties.secretUri})'
+        }
+        {
+          name: 'MYDB_URI'
+          value: mydb_outputs_connectionstring
+        }
+        {
+          name: 'MYDB_ACCOUNTKEY'
+          value: '@Microsoft.KeyVault(SecretUri=${mydb_kv_primaryaccesskey__mydb.properties.secretUri})'
+        }
+        {
+          name: 'MYDB_CONNECTIONSTRING'
           value: '@Microsoft.KeyVault(SecretUri=${mydb_kv_connectionstrings__mydb.properties.secretUri})'
         }
         {
@@ -152,4 +163,14 @@ resource api_website_ra 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     principalType: 'ServicePrincipal'
   }
   scope: webapp
+}
+
+resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
+  name: 'slotConfigNames'
+  properties: {
+    appSettingNames: [
+      'OTEL_SERVICE_NAME'
+    ]
+  }
+  parent: webapp
 }

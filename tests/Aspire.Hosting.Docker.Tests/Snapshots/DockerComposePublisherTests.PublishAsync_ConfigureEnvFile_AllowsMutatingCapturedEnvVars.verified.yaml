@@ -1,0 +1,13 @@
+﻿services:
+  my-container:
+    image: "my-image:latest"
+    volumes:
+      - type: "bind"
+        target: "/container/data"
+        source: "${MY_CONTAINER_BINDMOUNT_0}"
+        read_only: false
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"

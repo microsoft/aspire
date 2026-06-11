@@ -5,7 +5,7 @@ param ai_outputs_name string
 
 param principalId string
 
-resource ai 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
+resource ai 'Microsoft.CognitiveServices/accounts@2025-09-01' existing = {
   name: ai_outputs_name
 }
 

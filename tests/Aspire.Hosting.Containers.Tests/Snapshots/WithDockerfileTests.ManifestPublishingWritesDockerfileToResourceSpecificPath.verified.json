@@ -1,5 +1,4 @@
 ﻿{
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "testcontainer": {
       "type": "container.v1",

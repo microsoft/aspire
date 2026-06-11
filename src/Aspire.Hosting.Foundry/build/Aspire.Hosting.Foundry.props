@@ -1,0 +1,5 @@
+<Project>
+  <ItemGroup>
+    <Using Include="Aspire.Hosting.FoundryModel" Alias="FoundryModel" />
+  </ItemGroup>
+</Project>

@@ -6,12 +6,6 @@
   "symbols/Framework/choices/net8.0/description": "Целевая среда net8.0",
   "symbols/Framework/choices/net9.0/description": "Целевая среда net9.0",
   "symbols/Framework/choices/net10.0/description": "Целевая платформа .NET 10.0",
-  "symbols/AspireVersion/description": "Используемая версия Aspire.",
-  "symbols/AspireVersion/displayName": "Версия Aspire",
-  "symbols/AspireVersion/choices/13.0/displayName": "13.0",
-  "symbols/AspireVersion/choices/13.0/description": "Выбор Aspire 13.0",
-  "symbols/AspireVersion/choices/9.5/displayName": "9.5",
-  "symbols/AspireVersion/choices/9.5/description": "Выбор Aspire 9.5",
   "symbols/skipRestore/description": "Если установлено, автоматическое восстановление проекта при создании пропускается.",
   "postActions/restore/description": "Восстановление пакетов NuGet, необходимых для этого проекта.",
   "postActions/restore/manualInstructions/default/text": "Выполнить команду \"dotnet restore\""

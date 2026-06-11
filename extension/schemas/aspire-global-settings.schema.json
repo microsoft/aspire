@@ -1,0 +1,216 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://json.schemastore.org/aspire-global-settings.json",
+  "type": "object",
+  "title": "Aspire Global Settings",
+  "description": "Aspire CLI global configuration file (~/.aspire/settings.json)",
+  "properties": {
+    "channel": {
+      "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\"). Used by aspire add to determine which NuGet feed to use.",
+      "type": "string"
+    },
+    "features": {
+      "description": "Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).",
+      "type": "object",
+      "properties": {
+        "aspireSkillsRemoteFetchEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
+          "default": false
+        },
+        "defaultWatchEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
+          "default": false
+        },
+        "experimentalPolyglot:go": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable experimental Go language support for polyglot Aspire applications",
+          "default": false
+        },
+        "experimentalPolyglot:java": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable experimental Java language support for polyglot Aspire applications",
+          "default": false
+        },
+        "experimentalPolyglot:python": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable experimental Python language support for polyglot Aspire applications",
+          "default": false
+        },
+        "experimentalPolyglot:rust": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable experimental Rust language support for polyglot Aspire applications",
+          "default": false
+        },
+        "nugetSignatureVerificationEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
+          "default": true
+        },
+        "showAllTemplates": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Show all available templates including experimental ones in 'aspire new' and 'aspire init' commands",
+          "default": false
+        },
+        "showDeprecatedPackages": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Show or hide deprecated packages in 'aspire add' search results",
+          "default": false
+        },
+        "stagingChannelEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable access to the staging channel for early access to preview features and packages",
+          "default": false
+        },
+        "updateNotificationsEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Check if update notifications are disabled and set version check environment variable",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "language": {
+      "description": "The language identifier for this AppHost (e.g., \"typescript\", \"python\"). Used to determine which runtime to use for execution.",
+      "type": "string"
+    },
+    "packages": {
+      "description": "Package references as an object literal (like npm's package.json). Key is package name, value is version.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "sdkVersion": {
+      "description": "The Aspire SDK version used for this polyglot AppHost project. Determines the version of Aspire.Hosting packages to use.",
+      "type": "string"
+    },
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    }
+  },
+  "additionalProperties": false
+}

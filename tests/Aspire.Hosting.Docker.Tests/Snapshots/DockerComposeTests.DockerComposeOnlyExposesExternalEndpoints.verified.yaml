@@ -1,18 +1,20 @@
 ﻿services:
   docker-compose-dashboard:
     image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
-    expose:
+    ports:
       - "18888"
+    expose:
       - "18889"
+      - "18890"
     networks:
       - "aspire"
     restart: "always"
   service:
     image: "nginx:latest"
     ports:
-      - "8081:8001"
+      - "8081:8081"
     expose:
-      - "8000"
+      - "8080"
     networks:
       - "aspire"
 networks:

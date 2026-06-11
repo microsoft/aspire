@@ -1,0 +1,47 @@
+{
+    "$schema": "http://json.schemastore.org/dotnetcli.host",
+    "symbolInfo": {
+      "Framework": {
+        "longName": "framework"
+      },
+      "appHostHttpPort": {
+        "isHidden": true
+      },
+      "appHostHttpsPort": {
+        "isHidden": true
+      },
+      "appHostOtlpHttpPort": {
+        "isHidden": true
+      },
+      "appHostOtlpHttpsPort": {
+        "isHidden": true
+      },
+      "appHostResourceHttpPort": {
+        "isHidden": true
+      },
+      "appHostResourceHttpsPort": {
+        "isHidden": true
+      },
+      "serverHttpPort": {
+        "isHidden": true
+      },
+      "serverHttpsPort": {
+        "isHidden": true
+      },
+      "NoHttps": {
+        "longName": "no-https",
+        "shortName": ""
+      },
+      "UseRedisCache": {
+        "longName": "use-redis-cache",
+        "shortName": ""
+      },
+      "LocalhostTld": {
+        "longName": "localhost-tld",
+        "shortName": ""
+      }
+    },
+    "usageExamples": [
+      "--use-redis-cache"
+    ]
+  }

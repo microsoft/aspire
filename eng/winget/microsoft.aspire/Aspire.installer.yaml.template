@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+
+PackageIdentifier: Microsoft.Aspire
+PackageVersion: "${VERSION}"
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+- RelativeFilePath: aspire.exe
+  PortableCommandAlias: aspire
+Commands:
+- aspire
+InstallModes:
+- silent
+UpgradeBehavior: uninstallPrevious
+ReleaseDate: ${RELEASE_DATE}
+${INSTALLERS}
+ManifestType: installer
+ManifestVersion: 1.10.0

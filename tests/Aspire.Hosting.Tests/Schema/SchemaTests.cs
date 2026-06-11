@@ -4,7 +4,7 @@
 #pragma warning disable CS0618 // Type or member is obsolete
 #pragma warning disable ASPIREPIPELINES001
 
-using System.Text.Json.Nodes;
+using System.Text.Json;
 using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.KeyVault;
@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests.Schema;
 
+[Trait("Partition", "4")]
 public class SchemaTests
 {
     public static TheoryData<string, Action<IDistributedApplicationBuilder>> ApplicationSamples
@@ -617,8 +618,6 @@ public class SchemaTests
                     "ConnectionStrings__sb": "{sb.connectionString}",
                     "ConnectionStrings__signalr": "{signalr.connectionString}",
                     "ConnectionStrings__table": "{table.connectionString}",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                     "bicepValue0": "{test.outputs.val0}",
                     "bicepValue1": "{test.outputs.val1}",
@@ -794,22 +793,24 @@ public class SchemaTests
 
     private static void AssertValid(string manifestText)
     {
-        var manifestJson = JsonNode.Parse(manifestText);
+        // JsonSchema.Net 8.x switched JsonSchema.Evaluate from JsonNode to JsonElement input,
+        // so feed the parsed JsonDocument's root element rather than a JsonNode.
+        using var manifestJson = JsonDocument.Parse(manifestText);
         var schema = GetSchema();
-        var results = schema.Evaluate(manifestJson);
+        var results = schema.Evaluate(manifestJson.RootElement);
 
         if (!results.IsValid)
         {
-            var errorMessages = results.Details.Where(x => x.HasErrors).SelectMany(e => e.Errors!).Select(e => e.Value);
+            var errorMessages = results.Details?.Where(x => x.Errors is not null).SelectMany(e => e.Errors!).Select(e => e.Value);
             Assert.True(results.IsValid, string.Join(Environment.NewLine, errorMessages ?? ["Schema failed validation with no errors"]));
         }
     }
 
     private static void AssertInvalid(string manifestText)
     {
-        var manifestJson = JsonNode.Parse(manifestText);
+        using var manifestJson = JsonDocument.Parse(manifestText);
         var schema = GetSchema();
-        var results = schema.Evaluate(manifestJson);
+        var results = schema.Evaluate(manifestJson.RootElement);
 
         Assert.False(results.IsValid);
     }

@@ -18,6 +18,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Custom resources can subscribe to this event to perform initialization tasks, including starting background tasks
 /// that manage the resource's lifecycle.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 public class InitializeResourceEvent(
     IResource resource,
     IDistributedApplicationEventing distributedApplicationEventing,

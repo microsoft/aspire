@@ -63,4 +63,17 @@ internal static class CustomResourceSnapshotExtensions
 
         return [.. existingProperties, .. propertiesToAdd];
     }
+
+    internal static ImmutableArray<ResourcePropertySnapshot> RemoveResourceProperty(this ImmutableArray<ResourcePropertySnapshot> properties, string name)
+    {
+        for (var i = 0; i < properties.Length; i++)
+        {
+            if (string.Equals(properties[i].Name, name, StringComparisons.ResourcePropertyName))
+            {
+                return properties.RemoveAt(i);
+            }
+        }
+
+        return properties;
+    }
 }

@@ -18,7 +18,7 @@ public sealed class MySqlContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (RequiresDockerAttribute.IsSupported)
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
         {
             Container = new MySqlBuilder()
                 .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{MySqlContainerImageTags.Image}:{MySqlContainerImageTags.Tag}")

@@ -63,7 +63,11 @@ internal static class JsonFlattener
     {
         foreach (var kvp in source)
         {
-            var key = string.IsNullOrEmpty(prefix) ? kvp.Key : $"{prefix}:{kvp.Key}";
+            var key = string.IsNullOrEmpty(prefix)
+                ? kvp.Key
+                : string.IsNullOrEmpty(kvp.Key)
+                    ? prefix
+                    : $"{prefix}:{kvp.Key}";
 
             if (kvp.Value is JsonObject nestedObject)
             {

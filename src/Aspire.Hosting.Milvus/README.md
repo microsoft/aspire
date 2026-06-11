@@ -1,26 +1,37 @@
-# Aspire.Hosting.Milvus library
+# Milvus hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a Milvus vector database resource.
+Use this integration to model, configure, and orchestrate a Milvus vector database resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Milvus Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Milvus` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Milvus
+```bash
+aspire add Aspire.Hosting.Milvus
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Milvus resource and consume the connection using the following methods:
+In the AppHost, add a Milvus resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var milvus = builder.AddMilvus("milvus");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(milvus);
+```
+
+**TypeScript**
+
+```typescript
+const milvus = await builder.addMilvus("milvus");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(milvus);
 ```
 
 ## Connection Properties
@@ -44,16 +55,18 @@ The Milvus database resource combines the server properties above and adds the f
 
 | Property Name | Description |
 |---------------|-------------|
-| `Database` | The Milvus database name |
+| `DatabaseName` | The Milvus database name |
 
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/databases/milvus/milvus-host/
 * https://milvus.io/docs
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Milvus and the Milvus logo are used with permission from the Milvus project. All rights reserved by LF AI & Data foundation._

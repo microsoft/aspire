@@ -6,6 +6,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// A resource that represents a PostgreSQL container.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class PostgresServerResource : ContainerResource, IResourceWithConnectionString
 {
     internal const string PrimaryEndpointName = "tcp";
@@ -146,9 +147,7 @@ public class PostgresServerResource : ContainerResource, IResourceWithConnection
     {
         var builder = new ReferenceExpressionBuilder();
         builder.AppendLiteral("jdbc:postgresql://");
-        builder.Append($"{Host}");
-        builder.AppendLiteral(":");
-        builder.Append($"{Port}");
+        builder.Append($"{Host}:{Port}");
 
         if (databaseName is not null)
         {

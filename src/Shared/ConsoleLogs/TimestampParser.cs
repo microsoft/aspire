@@ -5,7 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace Aspire.Dashboard.ConsoleLogs;
+namespace Aspire.Shared.ConsoleLogs;
 
 internal static partial class TimestampParser
 {

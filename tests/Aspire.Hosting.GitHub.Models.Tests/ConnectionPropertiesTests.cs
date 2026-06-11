@@ -29,7 +29,7 @@ public class ConnectionPropertiesTests
             },
             property =>
             {
-                Assert.Equal("Model", property.Key);
+                Assert.Equal("ModelName", property.Key);
                 Assert.Equal("gpt", property.Value.ValueExpression);
             });
 
@@ -40,14 +40,14 @@ public class ConnectionPropertiesTests
     public void GitHubModelResourceGetConnectionPropertiesIncludesOrganizationWhenProvided()
     {
         var organization = new ParameterResource("org", _ => "dotnet");
-    var key = new ParameterResource("key", _ => "p@ssw0rd1", secret: true);
+        var key = new ParameterResource("key", _ => "p@ssw0rd1", secret: true);
         var resource = new GitHubModelResource("model", "gpt", organization, key);
 
         var properties = ((IResourceWithConnectionString)resource).GetConnectionProperties().ToArray();
 
         Assert.Contains(properties, property => property.Key == "Uri" && property.Value.ValueExpression == "https://models.github.ai/orgs/{org.value}/inference");
         Assert.Contains(properties, property => property.Key == "Key" && property.Value.ValueExpression == "{key.value}");
-        Assert.Contains(properties, property => property.Key == "Model" && property.Value.ValueExpression == "gpt");
+        Assert.Contains(properties, property => property.Key == "ModelName" && property.Value.ValueExpression == "gpt");
         Assert.Contains(properties, property => property.Key == "Organization" && property.Value.ValueExpression == "{org.value}");
     }
 }

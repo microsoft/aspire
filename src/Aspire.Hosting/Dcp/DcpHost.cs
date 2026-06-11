@@ -5,17 +5,22 @@ using System.Buffers;
 using System.Collections;
 using System.IO.Pipelines;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Resources;
+using Aspire.Shared;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Dcp;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 internal sealed class DcpHost
 {
@@ -29,17 +34,23 @@ internal sealed class DcpHost
     private readonly IInteractionService _interactionService;
     private readonly Locations _locations;
     private readonly TimeProvider _timeProvider;
+    private readonly IDeveloperCertificateService _developerCertificateService;
+    private readonly IConfiguration _configuration;
     private readonly CancellationTokenSource _shutdownCts = new();
+    private string? _dcpTlsCertThumbprint;
+    private string? _dcpTlsCertFile;
+    private string? _dcpTlsKeyFile;
     private Task? _logProcessorTask;
 
-    // These environment variables should never be inherited by DCP from app host.
+    // These environment variables should never be inherited by DCP from the app host.
     private static readonly string[] s_doNotInheritEnvironmentVars =
-    {
+    [
         "ASPNETCORE_URLS",
         "DOTNET_LAUNCH_PROFILE",
         "ASPNETCORE_ENVIRONMENT",
-        "DOTNET_ENVIRONMENT"
-    };
+        "DOTNET_ENVIRONMENT",
+        KnownConfigNames.AspireLogLevel,
+    ];
 
     public DcpHost(
         ILoggerFactory loggerFactory,
@@ -48,7 +59,9 @@ internal sealed class DcpHost
         IInteractionService interactionService,
         Locations locations,
         DistributedApplicationModel applicationModel,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IDeveloperCertificateService developerCertificateService,
+        IConfiguration configuration)
     {
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<DcpHost>();
@@ -58,11 +71,15 @@ internal sealed class DcpHost
         _locations = locations;
         _applicationModel = applicationModel;
         _timeProvider = timeProvider;
+        _developerCertificateService = developerCertificateService;
+        _configuration = configuration;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await EnsureDcpContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureDevelopmentCertificateTrustAsync(cancellationToken).ConfigureAwait(false);
+        await PrepareDcpTlsCertificateAsync(cancellationToken).ConfigureAwait(false);
         EnsureDcpHostRunning();
     }
 
@@ -83,43 +100,163 @@ internal sealed class DcpHost
             return;
         }
 
-        AspireEventSource.Instance.ContainerRuntimeHealthCheckStart();
-
-        try
+        bool requireContainerRuntimeInitialization = _dcpOptions.ContainerRuntimeInitializationTimeout > TimeSpan.Zero;
+        if (requireContainerRuntimeInitialization)
         {
-            bool requireContainerRuntimeInitialization = _dcpOptions.ContainerRuntimeInitializationTimeout > TimeSpan.Zero;
-            if (requireContainerRuntimeInitialization)
-            {
-                using var timeoutCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCancellation.CancelAfter(_dcpOptions.ContainerRuntimeInitializationTimeout);
+            using var timeoutCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCancellation.CancelAfter(_dcpOptions.ContainerRuntimeInitializationTimeout);
 
-                try
+            try
+            {
+                while (dcpInfo is not null && !IsContainerRuntimeHealthy(dcpInfo))
                 {
-                    while (dcpInfo is not null && !IsContainerRuntimeHealthy(dcpInfo))
+                    await Task.Delay(TimeSpan.FromSeconds(2), timeoutCancellation.Token).ConfigureAwait(false);
+                    dcpInfo = await _dependencyCheckService.GetDcpInfoAsync(force: true, cancellationToken: timeoutCancellation.Token).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (timeoutCancellation.IsCancellationRequested)
+            {
+                // Swallow the cancellation exception and let it bubble up as a more helpful error
+                // about the container runtime in CheckDcpInfoAndLogErrors.
+            }
+        }
+
+        if (dcpInfo is not null)
+        {
+            DcpDependencyCheck.CheckDcpInfoAndLogErrors(_logger, _dcpOptions, dcpInfo, throwIfUnhealthy: requireContainerRuntimeInitialization);
+
+            // Show UI notification if container runtime is unhealthy
+            TryShowContainerRuntimeNotification(dcpInfo, cancellationToken);
+        }
+    }
+
+    internal async Task EnsureDevelopmentCertificateTrustAsync(CancellationToken cancellationToken)
+    {
+        // If no resources use HTTPS/TLS, there's no need to warn about untrusted dev certificates.
+        if (!_applicationModel.Resources.Any(ResourceUsesTls))
+        {
+            return;
+        }
+
+            // Check and warn if no trusted dev certs exist, or if a newer untrusted cert was detected
+            var hasNewerUntrustedCert = _developerCertificateService.LatestCertificateIsUntrusted;
+            var hasNoTrustedCerts = _developerCertificateService.Certificates.Count == 0;
+
+            if (hasNoTrustedCerts || hasNewerUntrustedCert)
+            {
+                string title;
+                string message;
+
+                if (hasNoTrustedCerts)
+                {
+                    title = InteractionStrings.NoDeveloperCertificateTrustedTitle;
+                    message = InteractionStrings.NoDeveloperCertificateTrustedMessage;
+                    _logger.LogWarning("No trusted Aspire development certificate was found. See https://aka.ms/aspire/devcerts for more information.");
+                }
+                else
+                {
+                    title = InteractionStrings.DeveloperCertificateNotFullyTrustedTitle;
+                    message = InteractionStrings.DeveloperCertificateNotFullyTrustedMessage;
+                    _logger.LogWarning("The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.");
+                }
+
+                // Check if the interaction service is available (dashboard enabled)
+                if (!_interactionService.IsAvailable)
+                {
+                    return;
+                }
+
+                // Send notification to the dashboard
+                _ = _interactionService.PromptNotificationAsync(
+                    title: title,
+                    message: message,
+                    options: new NotificationInteractionOptions
                     {
-                        await Task.Delay(TimeSpan.FromSeconds(2), timeoutCancellation.Token).ConfigureAwait(false);
-                        dcpInfo = await _dependencyCheckService.GetDcpInfoAsync(force: true, cancellationToken: timeoutCancellation.Token).ConfigureAwait(false);
-                    }
-                }
-                catch (OperationCanceledException) when (timeoutCancellation.IsCancellationRequested)
-                {
-                    // Swallow the cancellation exception and let it bubble up as a more helpful error
-                    // about the container runtime in CheckDcpInfoAndLogErrors.
-                }
+                        Intent = MessageIntent.Error,
+                    },
+                    cancellationToken: cancellationToken);
             }
+    }
 
-            if (dcpInfo is not null)
+    internal async Task PrepareDcpTlsCertificateAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // DCP uses the ASP.NET dev cert for TLS by default. The environment variable remains
+        // available as an opt-out if users need DCP's ephemeral certificate behavior.
+        if (!_configuration.GetBool(KnownConfigNames.DcpDeveloperCertificate, defaultValue: true))
+        {
+            return;
+        }
+
+        using var activity = ProfilingTelemetry.StartDcpPrepareTlsCertificate(_configuration);
+
+        // Check if we have a trusted developer certificate with a private key available
+        var certificates = _developerCertificateService.Certificates;
+        if (certificates.Count == 0)
+        {
+            activity.SetDcpTlsCertificateResult(ProfilingTelemetry.Values.DcpTlsCertificateResultNoCertificate);
+            return;
+        }
+
+        // Use the first (latest/best) certificate that has a private key
+        X509Certificate2? certificate = null;
+        foreach (var cert in certificates)
+        {
+            if (cert.HasPrivateKey)
             {
-                DcpDependencyCheck.CheckDcpInfoAndLogErrors(_logger, _dcpOptions, dcpInfo, throwIfUnhealthy: requireContainerRuntimeInitialization);
-                
-                // Show UI notification if container runtime is unhealthy
-                TryShowContainerRuntimeNotification(dcpInfo, cancellationToken);
+                certificate = cert;
+                break;
             }
         }
-        finally
+
+        if (certificate is null)
         {
-            AspireEventSource.Instance?.ContainerRuntimeHealthCheckStop();
+            activity.SetDcpTlsCertificateResult(ProfilingTelemetry.Values.DcpTlsCertificateResultNoPrivateKeyCertificate);
+            return;
         }
+
+        var thumbprint = certificate.Thumbprint;
+        if (string.IsNullOrWhiteSpace(thumbprint))
+        {
+            _logger.LogWarning("Failed to read the developer certificate thumbprint. DCP will use its default certificate.");
+            activity.SetDcpTlsCertificateResult(ProfilingTelemetry.Values.DcpTlsCertificateResultMissingThumbprint);
+            return;
+        }
+
+        _dcpTlsCertThumbprint = thumbprint;
+
+        if (OperatingSystem.IsWindows())
+        {
+            activity.SetDcpTlsCertificateResult(
+                ProfilingTelemetry.Values.DcpTlsCertificateResultPrepared,
+                ProfilingTelemetry.Values.DcpTlsCertificateModeThumbprint,
+                prepared: true);
+            _logger.LogDebug("Prepared DCP TLS certificate thumbprint {Thumbprint}.", thumbprint);
+            return;
+        }
+
+        var (certificatePath, keyPath, cachedThumbprint) = await DeveloperCertificateService.GetCachedCertificateFilePathsAsync(
+            certificate,
+            password: null,
+            cancellationToken).ConfigureAwait(false);
+
+        if (certificatePath is null || keyPath is null || cachedThumbprint is null)
+        {
+            _logger.LogWarning("Failed to cache the developer certificate files. DCP will use its default certificate.");
+            _dcpTlsCertThumbprint = null;
+            activity.SetDcpTlsCertificateResult(ProfilingTelemetry.Values.DcpTlsCertificateResultNoCertificate);
+            return;
+        }
+
+        _dcpTlsCertThumbprint = cachedThumbprint;
+        _dcpTlsCertFile = certificatePath;
+        _dcpTlsKeyFile = keyPath;
+        activity.SetDcpTlsCertificateResult(
+            ProfilingTelemetry.Values.DcpTlsCertificateResultPrepared,
+            ProfilingTelemetry.Values.DcpTlsCertificateModeFiles,
+            prepared: true);
+        _logger.LogDebug("Prepared DCP TLS certificate files for thumbprint {Thumbprint}.", thumbprint);
     }
 
     public async Task StopAsync()
@@ -131,46 +268,31 @@ internal sealed class DcpHost
 
     private void EnsureDcpHostRunning()
     {
-        AspireEventSource.Instance.DcpApiServerLaunchStart();
+        var dcpProcessSpec = CreateDcpProcessSpec(_locations);
 
+        // Enable Unix Domain Socket based log streaming from DCP
         try
         {
-            var dcpProcessSpec = CreateDcpProcessSpec(_locations);
+            var loggingSocket = CreateLoggingSocket(_locations.DcpLogSocket);
+            loggingSocket.Listen(LoggingSocketConnectionBacklog);
 
-            // Enable Unix Domain Socket based log streaming from DCP
-            try
+            dcpProcessSpec.EnvironmentVariables.Add("DCP_LOG_SOCKET", _locations.DcpLogSocket);
+            if (!string.IsNullOrWhiteSpace(_dcpOptions.LogFileNameSuffix))
             {
-                AspireEventSource.Instance.DcpLogSocketCreateStart();
-                var loggingSocket = CreateLoggingSocket(_locations.DcpLogSocket);
-                loggingSocket.Listen(LoggingSocketConnectionBacklog);
-
-                dcpProcessSpec.EnvironmentVariables.Add("DCP_LOG_SOCKET", _locations.DcpLogSocket);
-                if (!string.IsNullOrWhiteSpace(_dcpOptions.LogFileNameSuffix))
-                {
-                    dcpProcessSpec.EnvironmentVariables.Add("DCP_LOG_FILE_NAME_SUFFIX", _dcpOptions.LogFileNameSuffix);
-                }
-
-                _logProcessorTask = Task.Run(() => StartLoggingSocketAsync(loggingSocket));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to enable orchestration logging.");
-            }
-            finally
-            {
-                AspireEventSource.Instance.DcpLogSocketCreateStop();
+                dcpProcessSpec.EnvironmentVariables.Add("DCP_LOG_FILE_NAME_SUFFIX", _dcpOptions.LogFileNameSuffix);
             }
 
-            _ = ProcessUtil.Run(dcpProcessSpec);
+            _logProcessorTask = Task.Run(() => StartLoggingSocketAsync(loggingSocket));
         }
-        finally
+        catch (Exception ex)
         {
-            AspireEventSource.Instance.DcpApiServerLaunchStop();
+            _logger.LogError(ex, "Failed to enable orchestration logging.");
         }
 
+        _ = ProcessUtil.Run(dcpProcessSpec);
     }
 
-    private ProcessSpec CreateDcpProcessSpec(Locations locations)
+    public ProcessSpec CreateDcpProcessSpec(Locations locations)
     {
         var dcpExePath = _dcpOptions.CliPath;
         if (!File.Exists(dcpExePath))
@@ -182,6 +304,16 @@ internal sealed class DcpHost
         if (!string.IsNullOrEmpty(_dcpOptions.ContainerRuntime))
         {
             arguments += $" --container-runtime \"{_dcpOptions.ContainerRuntime}\"";
+        }
+
+        if (!string.IsNullOrWhiteSpace(_dcpTlsCertThumbprint))
+        {
+            arguments += $" --tls-cert-thumbprint \"{_dcpTlsCertThumbprint}\"";
+        }
+
+        if (!string.IsNullOrWhiteSpace(_dcpTlsCertFile) && !string.IsNullOrWhiteSpace(_dcpTlsKeyFile))
+        {
+            arguments += $" --tls-cert-file \"{_dcpTlsCertFile}\" --tls-key-file \"{_dcpTlsKeyFile}\"";
         }
 
         var dcpProcessSpec = new ProcessSpec(dcpExePath)
@@ -200,11 +332,6 @@ internal sealed class DcpHost
             dcpProcessSpec.EnvironmentVariables.Add("DCP_EXTENSIONS_PATH", _dcpOptions.ExtensionsPath);
         }
 
-        if (!string.IsNullOrEmpty(_dcpOptions.BinPath))
-        {
-            dcpProcessSpec.EnvironmentVariables.Add("DCP_BIN_PATH", _dcpOptions.BinPath);
-        }
-
         // Set an environment variable to contain session info that should be deleted when DCP is done
         // Currently this contains the Unix socket for logging and the kubeconfig
         dcpProcessSpec.EnvironmentVariables.Add("DCP_SESSION_FOLDER", locations.DcpSessionDir);
@@ -213,12 +340,86 @@ internal sealed class DcpHost
         {
             var key = de.Key?.ToString();
             var val = de.Value?.ToString();
-            if (key is not null && val is not null && !s_doNotInheritEnvironmentVars.Contains(key))
+            if (key is not null && val is not null && !IsExcludedEnvironmentVariable(key))
             {
                 dcpProcessSpec.EnvironmentVariables[key] = val;
             }
         }
+
+        // DCP intentionally owns DCP_OTEL_* names instead of reading Aspire's ASPIRE_* profiling
+        // names. Apply the mapping after copying the AppHost environment so this capture's
+        // profiling settings win over any inherited DCP_OTEL_* values.
+        SetDcpProfilingEnvironment(dcpProcessSpec.EnvironmentVariables);
+
+        // Set diagnostic log folder if configured (takes precedence over environment variable)
+        if (!string.IsNullOrEmpty(_dcpOptions.DiagnosticsLogFolder))
+        {
+            dcpProcessSpec.EnvironmentVariables["DCP_DIAGNOSTICS_LOG_FOLDER"] = _dcpOptions.DiagnosticsLogFolder;
+        }
+
+        // Set diagnostic log level if configured (takes precedence over environment variable)
+        if (!string.IsNullOrEmpty(_dcpOptions.DiagnosticsLogLevel))
+        {
+            dcpProcessSpec.EnvironmentVariables["DCP_DIAGNOSTICS_LOG_LEVEL"] = _dcpOptions.DiagnosticsLogLevel;
+        }
+
+        // Set preserve executable logs if configured (takes precedence over environment variable)
+        if (_dcpOptions.PreserveExecutableLogs == true)
+        {
+            dcpProcessSpec.EnvironmentVariables["DCP_PRESERVE_EXECUTABLE_LOGS"] = "1";
+        }
+
         return dcpProcessSpec;
+    }
+
+    private void SetDcpProfilingEnvironment(IDictionary<string, string> environmentVariables)
+    {
+        if (_configuration.GetBool(KnownConfigNames.ProfilingEnabled, KnownConfigNames.Legacy.StartupProfilingEnabled) is { } profilingEnabled)
+        {
+            environmentVariables[KnownConfigNames.DcpOtelStartupProfilingEnabled] = profilingEnabled ? "true" : "false";
+        }
+
+        SetDcpProfilingEnvironmentValue(
+            environmentVariables,
+            KnownConfigNames.DcpOtelStartupTraceParent,
+            KnownConfigNames.ProfilingTraceParent,
+            KnownConfigNames.Legacy.StartupTraceParent);
+        SetDcpProfilingEnvironmentValue(
+            environmentVariables,
+            KnownConfigNames.DcpOtelStartupTraceState,
+            KnownConfigNames.ProfilingTraceState,
+            KnownConfigNames.Legacy.StartupTraceState);
+        SetDcpProfilingEnvironmentValue(
+            environmentVariables,
+            KnownConfigNames.DcpOtelProfilingSessionId,
+            KnownConfigNames.ProfilingSessionId,
+            KnownConfigNames.Legacy.StartupOperationId);
+    }
+
+    private void SetDcpProfilingEnvironmentValue(
+        IDictionary<string, string> environmentVariables,
+        string dcpKey,
+        string primaryKey,
+        string secondaryKey)
+    {
+        var value = _configuration.GetString(primaryKey, secondaryKey, fallbackOnEmpty: true);
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            environmentVariables[dcpKey] = value;
+        }
+    }
+
+    private static bool IsExcludedEnvironmentVariable(string key)
+    {
+        foreach (var entry in s_doNotInheritEnvironmentVars)
+        {
+            if (string.Equals(key, entry, StringComparisons.EnvironmentVariableName))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static Socket CreateLoggingSocket(string socketPath)
@@ -349,7 +550,7 @@ internal sealed class DcpHost
         if (string.IsNullOrEmpty(containerRuntime))
         {
             // Default runtime is Docker
-            containerRuntime = "docker";
+            containerRuntime = KnownContainerRuntimes.Docker;
         }
 
         var installed = dcpInfo.Containers?.Installed ?? false;
@@ -365,7 +566,7 @@ internal sealed class DcpHost
             {
                 Intent = MessageIntent.Error,
                 LinkText = InteractionStrings.ContainerRuntimeLinkText,
-                LinkUrl = "https://aka.ms/dotnet/aspire/containers"
+                LinkUrl = "https://aka.ms/aspire/containers"
             };
 
             // Show notification without polling (non-auto-dismiss)
@@ -389,7 +590,7 @@ internal sealed class DcpHost
 
             // Create a cancellation token source that can be cancelled when runtime becomes healthy
             var notificationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
-            
+
             // Single background task to show notification and poll for health updates
             _ = Task.Run(async () =>
             {
@@ -405,7 +606,7 @@ internal sealed class DcpHost
                         try
                         {
                             var dcpInfo = await _dependencyCheckService.GetDcpInfoAsync(force: true, cancellationToken: notificationCts.Token).ConfigureAwait(false);
-                            
+
                             if (dcpInfo is not null && IsContainerRuntimeHealthy(dcpInfo))
                             {
                                 // Container runtime is now healthy, exit the polling loop
@@ -423,10 +624,10 @@ internal sealed class DcpHost
                             _logger.LogDebug(ex, "Error while polling container runtime health for notification");
                         }
                     }
-                    
+
                     // Cancel the notification at the end of the loop
                     notificationCts.Cancel();
-                    
+
                     // Wait for notification task to complete
                     try
                     {
@@ -460,6 +661,37 @@ internal sealed class DcpHost
         var running = dcpInfo.Containers?.Running ?? false;
         return installed && running;
     }
+
+    /// <summary>
+    /// Determines whether a resource uses HTTPS/TLS by checking for HTTPS endpoint annotations
+    /// or active HTTPS certificate configuration callbacks that haven't been disabled.
+    /// </summary>
+    private static bool ResourceUsesTls(IResource resource)
+    {
+        // Check if the resource has any HTTPS endpoints
+        if (resource.Annotations.OfType<EndpointAnnotation>().Any(e => e.UriScheme is "https"))
+        {
+            return true;
+        }
+
+        // Check if the resource has an HTTPS certificate configuration callback that hasn't been
+        // disabled via WithoutHttpsCertificate(). HttpsCertificateAnnotation has no effect without
+        // HttpsCertificateConfigurationCallbackAnnotation, so it's only checked as a filter here.
+        if (resource.Annotations.OfType<HttpsCertificateConfigurationCallbackAnnotation>().Any())
+        {
+            // The callback is present. Check if it's been disabled by WithoutHttpsCertificate()
+            // which sets UseDeveloperCertificate = false and Certificate = null.
+            if (resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var certAnnotation)
+                && certAnnotation.UseDeveloperCertificate is false or null
+                && certAnnotation.Certificate is null)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

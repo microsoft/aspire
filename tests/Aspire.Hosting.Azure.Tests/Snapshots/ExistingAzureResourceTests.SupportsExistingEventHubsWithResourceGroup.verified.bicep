@@ -9,4 +9,8 @@ resource eventHubs 'Microsoft.EventHub/namespaces@2024-01-01' existing = {
 
 output eventHubsEndpoint string = eventHubs.properties.serviceBusEndpoint
 
-output name string = existingResourceName
+output eventHubsHostName string = split(replace(eventHubs.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
+output name string = eventHubs.name
+
+output id string = eventHubs.id

@@ -6,8 +6,8 @@ using Xunit;
 
 namespace Aspire.Templates.Tests;
 
-[RequiresDocker("Needs docker to start redis cache")]
-[RequiresSSLCertificate]
+[RequiresFeature(TestFeature.Docker)]
+[RequiresFeature(TestFeature.SSLCertificate)]
 public class StarterTemplateWithRedisCacheTests : StarterTemplateRunTestsBase<StarterTemplateWithRedisCacheFixture>
 {
     protected override int DashboardResourcesWaitTimeoutSecs => 300;

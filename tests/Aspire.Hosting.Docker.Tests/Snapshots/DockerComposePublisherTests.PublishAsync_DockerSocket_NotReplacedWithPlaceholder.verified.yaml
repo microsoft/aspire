@@ -1,0 +1,13 @@
+﻿services:
+  docker-proxy:
+    image: "my-image:latest"
+    volumes:
+      - type: "bind"
+        target: "/var/run/docker.sock"
+        source: "/var/run/docker.sock"
+        read_only: false
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"

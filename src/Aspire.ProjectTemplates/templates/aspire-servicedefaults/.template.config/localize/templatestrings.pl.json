@@ -6,12 +6,6 @@
   "symbols/Framework/choices/net8.0/description": "Docelowa platforma net8.0",
   "symbols/Framework/choices/net9.0/description": "Docelowa platforma net9.0",
   "symbols/Framework/choices/net10.0/description": "Docelowa platforma net10.0",
-  "symbols/AspireVersion/description": "Wersja platformy Aspire do użycia.",
-  "symbols/AspireVersion/displayName": "Wersja Aspire",
-  "symbols/AspireVersion/choices/13.0/displayName": "13.0",
-  "symbols/AspireVersion/choices/13.0/description": "Wybiera platformę Aspire 13.0",
-  "symbols/AspireVersion/choices/9.5/displayName": "9.5",
-  "symbols/AspireVersion/choices/9.5/description": "Wybiera platformę Aspire 9.5",
   "symbols/skipRestore/description": "Jeśli ta opcja jest określona, pomija automatyczne przywracanie projektu podczas tworzenia.",
   "postActions/restore/description": "Przywróć pakiety NuGet wymagane przez ten projekt.",
   "postActions/restore/manualInstructions/default/text": "Uruchom polecenie \"dotnet restore\""

@@ -216,7 +216,7 @@ public class OtlpHttpServiceTests
     }
 
     [Theory]
-    [InlineData("application/json")]
+    [InlineData("application/xml")]
     [InlineData(null)]
     public async Task CallService_OtlpHttpEndPoint_UnsupportedContentType_Failure(string? contentType)
     {
@@ -244,7 +244,7 @@ public class OtlpHttpServiceTests
     }
 
     [Theory]
-    [InlineData("application/json")]
+    [InlineData("application/xml")]
     [InlineData(null)]
     public async Task CallService_OtlpHttpEndPoint_UnsupportedContentType_Logs(string? contentType)
     {

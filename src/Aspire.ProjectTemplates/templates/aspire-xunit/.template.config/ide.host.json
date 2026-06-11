@@ -4,10 +4,6 @@
   "displayOverviewPage": "0",
   "symbolInfo": [
     {
-      "id": "AspireVersion",
-      "isVisible": true
-    },
-    {
       "id": "XUnitVersion",
       "isVisible": true,
       "persistenceScope": "shared",

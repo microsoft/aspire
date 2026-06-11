@@ -34,16 +34,21 @@ public class PackageInstallationTests
         var installerResources = appModel.Resources.OfType<JavaScriptInstallerResource>().ToList();
 
         Assert.Equal(2, nodeResources.Count);
-        Assert.Single(installerResources);
+        // Both should have installer resources now
+        Assert.Equal(2, installerResources.Count);
         Assert.All(nodeResources, resource => Assert.Equal("npm", resource.Command));
 
         // Verify the installer exists for nodeApp
         var nodeAppInstallResource = installerResources.Single(r => r.Name == "nodeApp-installer");
         Assert.NotNull(nodeAppInstallResource);
+        // Should NOT have explicit start annotation
+        Assert.False(nodeAppInstallResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
 
-        // Verify no installer for nodeApp2
-        var nodeApp2InstallResource = installerResources.SingleOrDefault(r => r.Name == "nodeApp2-installer");
-        Assert.Null(nodeApp2InstallResource);
+        // Verify installer exists for nodeApp2 but with explicit start
+        var nodeApp2InstallResource = installerResources.Single(r => r.Name == "nodeApp2-installer");
+        Assert.NotNull(nodeApp2InstallResource);
+        // Should have explicit start annotation
+        Assert.True(nodeApp2InstallResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
     }
 
     [Fact]
@@ -130,9 +135,12 @@ public class PackageInstallationTests
         Assert.True(nodeResource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var _));
         Assert.True(nodeResource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var _));
 
-        // Verify NO installer resource was created
-        var installerResources = appModel.Resources.OfType<JavaScriptInstallerResource>().ToList();
-        Assert.Empty(installerResources);
+        // Verify installer resource WAS created (new behavior)
+        var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+        Assert.Equal("test-app-installer", installerResource.Name);
+        
+        // Verify it has explicit start annotation
+        Assert.True(installerResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
     }
 
     [Fact]
@@ -196,9 +204,12 @@ public class PackageInstallationTests
         Assert.True(nodeResource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var _));
         Assert.True(nodeResource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var _));
 
-        // Verify NO installer resource was created
-        var installerResources = appModel.Resources.OfType<JavaScriptInstallerResource>().ToList();
-        Assert.Empty(installerResources);
+        // Verify installer resource WAS created (new behavior)
+        var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+        Assert.Equal("test-app-installer", installerResource.Name);
+        
+        // Verify it has explicit start annotation
+        Assert.True(installerResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
     }
 
     [Fact]
@@ -292,8 +303,11 @@ public class PackageInstallationTests
         Assert.True(nodeResource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installAnnotation));
         Assert.Equal(["install"], installAnnotation.Args);
 
-        // the installer resource should NOT be created
-        Assert.Empty(appModel.Resources.OfType<JavaScriptInstallerResource>());
+        // the installer resource SHOULD be created (new behavior)
+        var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+        
+        // Verify it has explicit start annotation
+        Assert.True(installerResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
     }
 
     [Fact]
@@ -440,7 +454,7 @@ public class PackageInstallationTests
     [Fact]
     public void WithNpm_DefaultsArgsInPublishMode()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         File.WriteAllText(Path.Combine(tempDir.Path, "package-lock.json"), "empty");
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -467,7 +481,7 @@ public class PackageInstallationTests
     [Fact]
     public void WithYarn_DefaultsArgsInPublishMode()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         File.WriteAllText(Path.Combine(tempDir.Path, "yarn.lock"), "empty");
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -488,7 +502,7 @@ public class PackageInstallationTests
     [Fact]
     public void WithYarn_ReturnsImmutable_WhenYarnRcYmlExists()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         File.WriteAllText(Path.Combine(tempDir.Path, "yarn.lock"), "empty");
         File.WriteAllText(Path.Combine(tempDir.Path, ".yarnrc.yml"), "empty");
 
@@ -504,7 +518,7 @@ public class PackageInstallationTests
     [Fact]
     public void WithYarn_ReturnsImmutable_WhenYarnReleasesDirExists()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         File.WriteAllText(Path.Combine(tempDir.Path, "yarn.lock"), "empty");
         Directory.CreateDirectory(Path.Combine(tempDir.Path, ".yarn", "releases"));
 
@@ -520,7 +534,7 @@ public class PackageInstallationTests
     [Fact]
     public void WithPnpm_DefaultsArgsInPublishMode()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         File.WriteAllText(Path.Combine(tempDir.Path, "pnpm-lock.yaml"), "empty");
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -530,6 +544,37 @@ public class PackageInstallationTests
 
         Assert.True(app.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand));
         Assert.Equal(["install", "--frozen-lockfile"], installCommand.Args);
+    }
+
+    [Fact]
+    public void WithBun_DefaultsArgsInPublishMode()
+    {
+        using var tempDir = new TestTempDirectory();
+        File.WriteAllText(Path.Combine(tempDir.Path, "bun.lock"), "empty");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var app = builder.AddViteApp("test-app", tempDir.Path)
+            .WithBun();
+
+        Assert.True(app.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand));
+        Assert.Equal(["install", "--frozen-lockfile"], installCommand.Args);
+    }
+
+    [Fact]
+    public void InstallerResourceHasNameValidationPolicyAnnotation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddJavaScriptApp("nodeApp", "./test-app")
+            .WithNpm(install: true);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+        Assert.True(installerResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]

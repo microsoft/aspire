@@ -27,7 +27,7 @@ On Windows, Linux, or Mac you can use VS Code with the DevContainers extension. 
 * [VS Code](https://code.visualstudio.com/Download)
 * [DevContainers Extension](https://marketplace.visualstudio.com/items?itemName=ms-VSCode-remote.remote-containers)
 
-Then choose "Open Folder In Container", choose the root of your cloned repo, then choose ".NET Aspire - Contribute".
+Then choose "Open Folder In Container", choose the root of your cloned repo, then choose "Aspire - Contribute".
 
 ## Using Visual Studio
 
@@ -63,4 +63,4 @@ With that, you can build and run the Aspire repo on Alpine Linux.
 
 > :warning: Aspire currently only directly supports the x64/amd64 architecture for Alpine/musl. If you want to build or run Aspire in Alpine on arm64, you may need to use an arm64/x64 compatibility layer like `qemu`.
 >
-> :warning: Alpine Linux support was added in [this commit](https://github.com/dotnet/aspire/commit/cc2706a90848deec90aa166054e1b2a4ecf94689) and isn't supported in earlier releases. Additionally, Alpine Linux is not currently part of our CI test suite.
+> :warning: Alpine Linux support was added in [this commit](https://github.com/microsoft/aspire/commit/cc2706a90848deec90aa166054e1b2a4ecf94689) and isn't supported in earlier releases. Additionally, Alpine Linux is not currently part of our CI test suite.

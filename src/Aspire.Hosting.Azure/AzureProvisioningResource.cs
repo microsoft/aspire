@@ -47,12 +47,16 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         var prefix = this.GetBicepIdentifier();
         var existingResource = AddAsExistingResource(infra);
 
-        var principalType = roleAssignmentContext.PrincipalType;
-        var principalId = roleAssignmentContext.PrincipalId;
-
         foreach (var role in roleAssignmentContext.Roles)
         {
-            infra.Add(CreateRoleAssignment(prefix, existingResource, role.Id, role.Name, principalType, principalId));
+            infra.Add(
+                CreateRoleAssignment(
+                    prefix,
+                    existingResource,
+                    role.Id,
+                    role.Name,
+                    roleAssignmentContext.PrincipalType,
+                    roleAssignmentContext.PrincipalId));
         }
     }
 
@@ -130,7 +134,9 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         {
             var existingResourceName = existingAnnotation.Name is ParameterResource nameParameter
                 ? nameParameter.AsProvisioningParameter(infrastructure)
-                : new BicepValue<string>((string)existingAnnotation.Name);
+                : existingAnnotation.Name is BicepOutputReference nameOutputReference
+                    ? nameOutputReference.AsProvisioningParameter(infrastructure)
+                    : new BicepValue<string>((string)existingAnnotation.Name);
             provisionedResource = createExisting(infrastructure.AspireResource.GetBicepIdentifier(), existingResourceName);
             if (existingAnnotation.ResourceGroup is not null)
             {
@@ -172,6 +178,7 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         var existingResourceName = existingAnnotation.Name switch
         {
             ParameterResource nameParameter => nameParameter.AsProvisioningParameter(infra),
+            BicepOutputReference nameOutputReference => nameOutputReference.AsProvisioningParameter(infra),
             string s => new BicepValue<string>(s),
             _ => throw new NotSupportedException($"Existing resource name type '{existingAnnotation.Name.GetType()}' is not supported.")
         };

@@ -8,13 +8,12 @@
     <NoWarn>$(NoWarn);SYSLIB1100;SYSLIB1101</NoWarn>
     <!-- In preview until the public API is validated and the Microsoft.Extensions.AI integration is designed. -->
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
-    <!-- MEAI has transitive dependencies that pull versions to 10.0 so we need pull our dependency versions for this package as well -->
-    <ForceLatestDotnetVersions>true</ForceLatestDotnetVersions>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\Common\AITelemetryHelpers.cs" Link="AITelemetryHelpers.cs" />
     <Compile Include="..\Common\ConfigurationSchemaAttributes.cs" Link="ConfigurationSchemaAttributes.cs" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="KnownOtelConfigNames.cs" />
   </ItemGroup>
 
   <ItemGroup>

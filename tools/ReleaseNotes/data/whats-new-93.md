@@ -1,22 +1,22 @@
 ---
-title: What's new in .NET Aspire 9.3
-description: Learn what's new in the official general availability release of .NET Aspire 9.3.
+title: What's new in Aspire 9.3
+description: Learn what's new in the official general availability release of Aspire 9.3.
 ms.date: 05/18/2025
 ---
 
-## What's new in .NET Aspire 9.3
+## What's new in Aspire 9.3
 
-📢 .NET Aspire 9.3 is the next minor version release of .NET Aspire. It supports:
+📢 Aspire 9.3 is the next minor version release of Aspire. It supports:
 
 - .NET 8.0 Long Term Support (LTS)
 - .NET 9.0 Standard Term Support (STS)
 
-If you have feedback, questions, or want to contribute to .NET Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/dotnet/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://aka.ms/dotnet-discord) to chat with team members.
+If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/microsoft/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://aka.ms/dotnet-discord) to chat with team members.
 
-It's important to note that .NET Aspire releases out-of-band from .NET releases. While major versions of .NET Aspire align with major .NET versions, minor versions are released more frequently. For more information on .NET and .NET Aspire version support, see:
+It's important to note that Aspire releases out-of-band from .NET releases. While major versions of Aspire align with major .NET versions, minor versions are released more frequently. For more information on .NET and Aspire version support, see:
 
 - [.NET support policy](https://dotnet.microsoft.com/platform/support/policy): Definitions for LTS and STS.
-- [.NET Aspire support policy](https://dotnet.microsoft.com/platform/support/policy/aspire): Important unique product life cycle details.
+- [Aspire support policy](https://dotnet.microsoft.com/platform/support/policy/aspire): Important unique product life cycle details.
 
 ## 🖥️ App model enhancements
 
@@ -79,7 +79,7 @@ This small change removes ambiguity in the model while giving you precise contro
 
 ### 🔔 New lifecycle events
 
-.NET Aspire 9.3 introduces two new lifecycle events that make it easier to build custom resources with predictable behavior—without relying on hacks like <xref:System.Threading.Tasks.Task.Run*?displayProperty=nameWithType> or polling:
+Aspire 9.3 introduces two new lifecycle events that make it easier to build custom resources with predictable behavior—without relying on hacks like <xref:System.Threading.Tasks.Task.Run*?displayProperty=nameWithType> or polling:
 
 #### `InitializeResourceEvent`
 
@@ -98,7 +98,7 @@ builder.Eventing.Subscribe<InitializeResourceEvent>(myCustom, async (e, ct) =>
 });
 ```
 
-This replaces awkward patterns like `Task.Run` inside constructors or `Configure()` methods. You can see a more complex version in the [TalkingClock sample](https://github.com/dotnet/aspire-samples/tree/3dee8cd7c7880fe421ea61ba167301eb1369000a/samples/CustomResources/CustomResources.AppHost) in the official Aspire samples repo.
+This replaces awkward patterns like `Task.Run` inside constructors or `Configure()` methods. You can see a more complex version in the [TalkingClock sample](https://github.com/microsoft/aspire-samples/tree/3dee8cd7c7880fe421ea61ba167301eb1369000a/samples/CustomResources/CustomResources.AppHost) in the official Aspire samples repo.
 
 #### `ResourceEndpointsAllocatedEvent`
 
@@ -122,7 +122,7 @@ These events make resource authoring smoother, safer, and more deterministic—n
 
 ### 🌐 YARP Integration (Preview)
 
-.NET Aspire 9.3 introduces **preview support for [YARP](https://aka.ms/yarp)** (Yet Another Reverse Proxy)—a long-requested addition that brings reverse proxying into the Aspire application model.
+Aspire 9.3 introduces **preview support for [YARP](https://aka.ms/yarp)** (Yet Another Reverse Proxy)—a long-requested addition that brings reverse proxying into the Aspire application model.
 
 This integration makes it easy to add a lightweight proxy container to your distributed app, powered by the official [YARP container image](https://yarp.dot.net). It currently supports **configuration-based routing only**, using a JSON file you supply.
 
@@ -190,7 +190,7 @@ The `.WithReference(...)` calls automatically ensure that the proxy container ca
 
 ### 🐬 MySQL `AddDatabase` now creates the database
 
-In .NET Aspire 9.3, the MySQL integration now supports **automatic database creation** via the `AddDatabase` API—matching the behavior already available for SQL Server and PostgreSQL.
+In Aspire 9.3, the MySQL integration now supports **automatic database creation** via the `AddDatabase` API—matching the behavior already available for SQL Server and PostgreSQL.
 
 Previously, calling `.AddDatabase("dbname")` on a MySQL resource only created a logical reference in Aspire's app model—it did **not** create the database on the server. This mismatch caused confusion, especially when users expected Aspire to provision the database like it does for other integrations.
 
@@ -220,7 +220,7 @@ No additional configuration is required—the same `AddDatabase` call you alread
 
 ### ✨ GitHub Copilot in the dashboard
 
-Introducing GitHub Copilot in the .NET Aspire dashboard! GitHub Copilot is your new AI debugging assistant.
+Introducing GitHub Copilot in the Aspire dashboard! GitHub Copilot is your new AI debugging assistant.
 
 GitHub Copilot supercharges the dashboard's OpenTelemetry debugging and diagnostics experience. With AI, you can:
 
@@ -233,11 +233,11 @@ You'll have access to Copilot in the dashboard when you launch your app from VS 
 
 :::image type="content" source="media/dashboard-copilot.png" lightbox="media/dashboard-copilot.png" alt-text="Screenshot of dashboard with GitHub Copilot chat open.":::
 
-For more details on requirements and how to get started, see [GitHub Copilot in the .NET Aspire dashboard](../fundamentals/dashboard/copilot.md).
+For more details on requirements and how to get started, see [GitHub Copilot in the Aspire dashboard](../fundamentals/dashboard/copilot.md).
 
 ### 🧠 Remembers your filter settings
 
-The .NET Aspire dashboard now **remembers your resource filter settings** between sessions. Previously, if you filtered the Resources view (for example, to hide support services or highlight only frontend apps), those filters were reset on page reload.
+The Aspire dashboard now **remembers your resource filter settings** between sessions. Previously, if you filtered the Resources view (for example, to hide support services or highlight only frontend apps), those filters were reset on page reload.
 
 As of 9.3, filter state is **persisted in local storage**, so your selections stick across refreshes and restarts. This small improvement makes it easier to focus on the parts of your app that matter most—especially in large graphs with many supporting services like Redis, SQL, or queues.
 
@@ -264,7 +264,7 @@ This helps you:
 
 ### 🖱️ Resource context menus & quick-launch actions
 
-.NET Aspire 9.3 makes the dashboard more interactive and easier to navigate by introducing new **context menus** and enhancing how **resource URLs** are surfaced across views.
+Aspire 9.3 makes the dashboard more interactive and easier to navigate by introducing new **context menus** and enhancing how **resource URLs** are surfaced across views.
 
 :::image type="content" source="media/dashboard-context-menu.png" lightbox="media/dashboard-context-menu.png" alt-text="Screenshot of dashboard resource graph view with a context menu.":::
 
@@ -309,7 +309,7 @@ This small change makes logs easier to read and reduces visual noise—especiall
 
 ### 🏗️ Improvements to in-preview publisher model & compute environment support
 
-In 9.2, we shipped our first iteration of "publishers", a flexible way to configure deployments to any cloud in the app host. To ensure more flexibility, .NET Aspire 9.3 includes a **new and improved** publisher model that distributes publishing behavior across your application graph instead of relying on a single top-level publisher.
+In 9.2, we shipped our first iteration of "publishers", a flexible way to configure deployments to any cloud in the app host. To ensure more flexibility, Aspire 9.3 includes a **new and improved** publisher model that distributes publishing behavior across your application graph instead of relying on a single top-level publisher.
 
 Rather than selecting a target environment (like Docker or Azure) by calling `AddDockerComposePublisher()` or similar, Aspire now includes a **built-in publisher** that looks for a `PublishingCallbackAnnotation` on each resource. This annotation describes how that resource should be published—for example, as a Docker Compose service, Kubernetes manifest, or Azure Bicep module.
 
@@ -352,7 +352,7 @@ This (contrived) example shows how you could explicitly map services to differen
 
 #### Supported compute environments
 
-.NET Aspire 9.3 has preview support for the following environment resources:
+Aspire 9.3 has preview support for the following environment resources:
 
 - `AddDockerComposeEnvironment(...)`
 - `AddKubernetesEnvironment(...)`
@@ -363,7 +363,7 @@ These represent deployment targets that can transform and emit infrastructure-sp
 
 ### 🐳 Docker Compose enhancements
 
-.NET Aspire 9.3 introduces powerful new capabilities for customizing Docker Compose output using strongly typed, C#-based configuration. You can now declaratively configure both the **global Compose file** and individual **services** directly from the Aspire app model—making your deployment output easy to reason about, customize, and automate.
+Aspire 9.3 introduces powerful new capabilities for customizing Docker Compose output using strongly typed, C#-based configuration. You can now declaratively configure both the **global Compose file** and individual **services** directly from the Aspire app model—making your deployment output easy to reason about, customize, and automate.
 
 #### 🛠️ Customize the Compose file and service definitions
 
@@ -398,7 +398,7 @@ These APIs give you a structured, strongly typed way to mutate the generated out
 
 #### 🔗 Map parameters and expressions into Docker Compose
 
-.NET Aspire now supports **binding values from the app model**—like parameters and references—into the Docker Compose definition via environment variable placeholders.
+Aspire now supports **binding values from the app model**—like parameters and references—into the Docker Compose definition via environment variable placeholders.
 
 This makes it easy to flow dynamic configuration (e.g., from the CI pipeline or secret store) directly into the final output.
 
@@ -424,7 +424,7 @@ These enhancements make Docker Compose a **fully programmable publishing target*
 
 ### ☸️ Kubernetes manifest customization
 
-.NET Aspire 9.3 adds support for **programmatically customizing generated Kubernetes manifests** as part of the publish process. This gives you fine-grained control over the YAML artifacts Aspire emits—without writing raw manifest overlays or patches.
+Aspire 9.3 adds support for **programmatically customizing generated Kubernetes manifests** as part of the publish process. This gives you fine-grained control over the YAML artifacts Aspire emits—without writing raw manifest overlays or patches.
 
 Like Docker Compose, Aspire now supports both **global environment-level settings** and **per-resource customization**.
 
@@ -497,7 +497,7 @@ These updates make the Aspire CLI more reliable, script-friendly, and aligned wi
 
 ### 🌐 Azure App Service (Preview support)
 
-.NET Aspire 9.3 introduces **preview support for deploying .NET projects to Azure App Service**—one of the most requested features from developers using Aspire with existing Azure environments.
+Aspire 9.3 introduces **preview support for deploying .NET projects to Azure App Service**—one of the most requested features from developers using Aspire with existing Azure environments.
 
 This integration lets you deploy your project as a **containerized Linux Web App**, modeled directly in your Aspire app host using a new `AddAzureAppServiceEnvironment(...)` API.
 
@@ -540,7 +540,7 @@ In this example:
 
 ### 📤 Use an existing Azure Container Registry (ACR)
 
-.NET Aspire 9.3 adds support for modeling an existing **Azure Container Registry (ACR)** using the new `AddAzureContainerRegistry(...)` API. This enables you to **push images to an ACR you already manage**—without Aspire provisioning a new one.
+Aspire 9.3 adds support for modeling an existing **Azure Container Registry (ACR)** using the new `AddAzureContainerRegistry(...)` API. This enables you to **push images to an ACR you already manage**—without Aspire provisioning a new one.
 
 This is ideal for teams that:
 
@@ -578,7 +578,7 @@ This gives you consistent control over where images are published, even across d
 
 ### 🖇️ Resource Deep Linking for Blob Containers
 
-.NET Aspire 9.3 expands **resource deep linking** to include **Azure Blob Storage containers**, building on the model already used for Cosmos DB, Event Hubs, Service Bus, and Azure OpenAI.
+Aspire 9.3 expands **resource deep linking** to include **Azure Blob Storage containers**, building on the model already used for Cosmos DB, Event Hubs, Service Bus, and Azure OpenAI.
 
 You can now model individual blob containers directly in your app host, then inject scoped `BlobContainerClient` instances into your services—making it easy to read or write blobs without manually configuring connection strings or access.
 
@@ -635,7 +635,7 @@ This pattern provides clean separation of concerns, secure container scoping, an
 
 ### 🔐 Expanded Azure Key Vault client integrations
 
-.NET Aspire 9.3 expands Azure Key Vault support with new client integration APIs for **keys** and **certificates**, allowing you to inject typed Azure SDK clients directly into your services:
+Aspire 9.3 expands Azure Key Vault support with new client integration APIs for **keys** and **certificates**, allowing you to inject typed Azure SDK clients directly into your services:
 
 - `AddAzureKeyVaultKeyClient(...)`
 - `AddAzureKeyVaultCertificateClient(...)`
@@ -661,7 +661,7 @@ The **keyed overloads** allow you to register multiple clients scoped to the sam
 
 ### 🔑 Use Key Vault secrets in environment variables
 
-.NET Aspire 9.3 adds support for wiring **Key Vault secrets directly into environment variables** using a new overload of `WithEnvironment(...)` that accepts an `IAzureKeyVaultSecretReference`.
+Aspire 9.3 adds support for wiring **Key Vault secrets directly into environment variables** using a new overload of `WithEnvironment(...)` that accepts an `IAzureKeyVaultSecretReference`.
 
 This makes it easy to securely reference secrets from a modeled Key Vault without hardcoding secret values—and ensures those references flow correctly into deployment outputs like Azure Bicep.
 
@@ -701,7 +701,7 @@ This pattern ensures Aspire:
 
 ### 🧠 Azure AI Inference client integration (Preview)
 
-.NET Aspire 9.3 adds **client-only support for Azure-hosted Chat Completions endpoints** using the <xref:Azure.AI.Inference> library and the <xref:Microsoft.Extensions.AI> abstractions.
+Aspire 9.3 adds **client-only support for Azure-hosted Chat Completions endpoints** using the <xref:Azure.AI.Inference> library and the <xref:Microsoft.Extensions.AI> abstractions.
 
 This integration simplifies calling Azure OpenAI or Azure AI Inference services from your application—whether you prefer working directly with the SDK or using abstraction-friendly interfaces.
 
@@ -743,7 +743,7 @@ This setup integrates seamlessly with frameworks like [Semantic Kernel](https://
 
 ### ⚙️ Azure App Configuration client integration
 
-.NET Aspire 9.3 adds support for **Azure App Configuration** via a new client integration, [📦 Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration](https://www.nuget.org/packages/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration) NuGet package.
+Aspire 9.3 adds support for **Azure App Configuration** via a new client integration, [📦 Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration](https://www.nuget.org/packages/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration) NuGet package.
 
 This makes it easy to connect to centralized configuration using the official Azure SDK and the `Microsoft.Extensions.Configuration.AzureAppConfiguration` provider—no manual setup required.
 
@@ -784,13 +784,13 @@ This enables:
 
 ### 🛡️ Secure multi-app access to Azure SQL (Breaking change)
 
-In .NET Aspire 9.2, using **multiple projects with the same Azure SQL Server** inside an **Azure Container Apps environment** could silently break your app's identity model.
+In Aspire 9.2, using **multiple projects with the same Azure SQL Server** inside an **Azure Container Apps environment** could silently break your app's identity model.
 
 Each app was assigned its own **managed identity**, but Aspire granted **admin access** to the last app deployed—overwriting access for any previously deployed apps. This led to confusing failures where only one app could talk to the database at a time.
 
 #### ✅ New behavior in 9.3
 
-.NET Aspire 9.3 fixes this by:
+Aspire 9.3 fixes this by:
 
 1. Assigning **one identity** as the **SQL Server administrator**
 2. Emitting a **SQL script** that:
@@ -811,11 +811,11 @@ This ensures every app that references the database gets **full access** without
 
 If your deployment relied on Aspire setting the managed identity as the SQL Server **admin**, you'll need to review your access model. Apps now receive **explicit role-based access (`db_owner`)** instead of broad admin rights.
 
-📖 Related: [dotnet/aspire#8381](https://github.com/dotnet/aspire/issues/8381) and [dotnet/aspire#8389](https://github.com/dotnet/aspire/issues/8389)
+📖 Related: [microsoft/aspire#8381](https://github.com/microsoft/aspire/issues/8381) and [microsoft/aspire#8389](https://github.com/microsoft/aspire/issues/8389)
 
 ### 💸 Default Azure SQL SKU now uses the Free Offer (Breaking change)
 
-.NET Aspire 9.3 changes the default SKU used when provisioning **Azure SQL databases** to the **GP_S_Gen5_2** (General Purpose Serverless) tier with the [**Free Offer**](/azure/azure-sql/database/free-offer?view=azuresql). This helps reduce unexpected costs during development and experimentation.
+Aspire 9.3 changes the default SKU used when provisioning **Azure SQL databases** to the **GP_S_Gen5_2** (General Purpose Serverless) tier with the [**Free Offer**](/azure/azure-sql/database/free-offer?view=azuresql). This helps reduce unexpected costs during development and experimentation.
 
 Previously, Aspire defaulted to the **General Purpose (GP)** tier *without* the Free Offer, which could incur charges even for small or test apps.
 
@@ -840,7 +840,7 @@ sql.AddDatabase("appdb")
    .WithDefaultAzureSku(); // Uses the previous (General Purpose) default
 ```
 
-If you want to specify what SKU to use, you the `ConfigureInfrastructure` method as explained here: [Setting a specific SKU](https://github.com/dotnet/aspire/tree/main/src/Aspire.Hosting.Azure.Sql#setting-a-specific-sku).
+If you want to specify what SKU to use, you the `ConfigureInfrastructure` method as explained here: [Setting a specific SKU](https://github.com/microsoft/aspire/tree/main/src/Aspire.Hosting.Azure.Sql#setting-a-specific-sku).
 
 #### ⚠️ Breaking change
 
@@ -954,6 +954,6 @@ These changes unlock a smoother, safer CI/CD experience for Aspire projects — 
 
 ## 💔 Breaking changes
 
-With every release, we strive to make .NET Aspire better. However, some changes may break existing functionality. The following breaking changes are introduced in .NET Aspire 9.3:
+With every release, we strive to make Aspire better. However, some changes may break existing functionality. The following breaking changes are introduced in Aspire 9.3:
 
-- [Breaking changes in .NET Aspire 9.3](../compatibility/9.3/index.md)
+- [Breaking changes in Aspire 9.3](../compatibility/9.3/index.md)

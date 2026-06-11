@@ -1,0 +1,3 @@
+﻿{
+  ConnectionStrings:mydb: Server=localhost;Database=mydb
+}

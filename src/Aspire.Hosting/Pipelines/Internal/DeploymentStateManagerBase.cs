@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
@@ -142,11 +143,75 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
         await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var sectionData = _state?.TryGetPropertyValue(sectionName, out var sectionNode) == true && sectionNode is JsonObject obj
-                ? obj.DeepClone().AsObject()
-                : null;
+            JsonObject? data = null;
+            string? value = null;
 
-            return new DeploymentStateSection(sectionName, sectionData, metadata.Version);
+            var sectionData = TryGetNestedPropertyValue(_state, sectionName);
+            if (sectionData is JsonObject o)
+            {
+                data = o.DeepClone().AsObject();
+            }
+            else if (sectionData is JsonValue jsonValue && jsonValue.GetValueKind() == JsonValueKind.String)
+            {
+                // This handles the situation where the section is just a string value.
+                value = jsonValue.GetValue<string>();
+            }
+
+            var section = new DeploymentStateSection(sectionName, data, metadata.Version);
+            if (value != null)
+            {
+                section.SetValue(value);
+            }
+
+            return section;
+        }
+        finally
+        {
+            _stateLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Recursively navigates a JSON object using a colon-separated path.
+    /// </summary>
+    /// <param name="node">The starting JSON object.</param>
+    /// <param name="path">The colon-separated path to navigate.</param>
+    /// <returns>The JSON node at the specified path, or null if not found.</returns>
+    private static JsonNode? TryGetNestedPropertyValue(JsonObject? node, string path)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        var segments = path.Split(':');
+        JsonNode? current = node;
+
+        foreach (var segment in segments)
+        {
+            if (current is not JsonObject currentObj || !currentObj.TryGetPropertyValue(segment, out var nextNode))
+            {
+                return null;
+            }
+            current = nextNode;
+        }
+
+        return current;
+    }
+
+    /// <inheritdoc/>
+    public async Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
+    {
+        await EnsureStateAndSectionAsync(section, cancellationToken).ConfigureAwait(false);
+        Debug.Assert(_state is not null);
+
+        // Serialize state modification and file write to prevent concurrent enumeration
+        await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // Store a deep clone to ensure immutability
+            SetNestedPropertyValue(_state, section.SectionName, section.Data.DeepClone().AsObject());
+            await SaveStateToStorageAsync(_state, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -155,7 +220,26 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     }
 
     /// <inheritdoc/>
-    public async Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
+    public async Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
+    {
+        await EnsureStateAndSectionAsync(section, cancellationToken).ConfigureAwait(false);
+        Debug.Assert(_state is not null);
+
+        // Serialize state modification and file write to prevent concurrent enumeration
+        await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // Remove the section from the state by passing null
+            SetNestedPropertyValue(_state, section.SectionName, null);
+            await SaveStateToStorageAsync(_state, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _stateLock.Release();
+        }
+    }
+
+    private async Task EnsureStateAndSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken)
     {
         await LoadStateAsync(cancellationToken).ConfigureAwait(false);
 
@@ -185,14 +269,63 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
 
         // Increment the section's version to allow multiple saves with the same instance
         section.Version++;
+    }
 
-        // Serialize state modification and file write to prevent concurrent enumeration
+    /// <summary>
+    /// Sets or removes a value in a JSON object using a colon-separated path, creating intermediate objects as needed.
+    /// </summary>
+    /// <param name="root">The root JSON object.</param>
+    /// <param name="path">The colon-separated path to set.</param>
+    /// <param name="value">The value to set at the specified path, or null to remove the property.</param>
+    private static void SetNestedPropertyValue(JsonObject root, string path, JsonObject? value)
+    {
+        var segments = path.Split(':');
+
+        var current = root;
+        for (var i = 0; i < segments.Length - 1; i++)
+        {
+            var segment = segments[i];
+            if (!current.TryGetPropertyValue(segment, out var nextNode) || nextNode is not JsonObject nextObj)
+            {
+                // If removing and the path doesn't exist, nothing to do
+                if (value is null)
+                {
+                    return;
+                }
+                nextObj = new JsonObject();
+                current[segment] = nextObj;
+            }
+            current = nextObj;
+        }
+
+        if (value is null)
+        {
+            current.Remove(segments[^1]);
+        }
+        else
+        {
+            current[segments[^1]] = value;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task ClearAllStateAsync(CancellationToken cancellationToken = default)
+    {
+        if (StateFilePath is string stateFilePath && File.Exists(stateFilePath))
+        {
+            File.Delete(stateFilePath);
+            logger.LogInformation("Deployment state cleared: {Path}", stateFilePath);
+        }
+
         await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // Store a deep clone to ensure immutability
-            _state[section.SectionName] = section.Data.DeepClone().AsObject();
-            await SaveStateToStorageAsync(_state, cancellationToken).ConfigureAwait(false);
+            lock (_sectionsLock)
+            {
+                _sections.Clear();
+            }
+            _state = null;
+            _isStateLoaded = false;
         }
         finally
         {

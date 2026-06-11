@@ -1,13 +1,15 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Http.Json;
 using System.Reflection;
-using Aspire.TestUtilities;
+using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestProject;
+using Aspire.TestUtilities;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -33,7 +35,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnAzdoBuildMachine))]
     public async Task CanLoadFromDirectoryOutsideOfAppContextBaseDirectory()
     {
@@ -80,7 +82,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task CreateAsyncWithOptions(bool genericEntryPoint)
@@ -127,7 +129,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task HasEndPoints(bool genericEntryPoint)
@@ -151,7 +153,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task CanGetResources(bool genericEntryPoint)
@@ -169,7 +171,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task HttpClientGetTest(bool genericEntryPoint)
@@ -181,8 +183,9 @@ public class TestingBuilderTests(ITestOutputHelper output)
         await using var app = await builder.BuildAsync();
         await app.StartAsync();
 
-        // Wait for the application to be ready
-        await app.WaitForTextAsync("Application started.").WaitAsync(TimeSpan.FromMinutes(1));
+        // Wait for the application to be ready - must specify "mywebapp1" to avoid race condition
+        // where myworker1 logs "Application started." first
+        await app.WaitForTextAsync("Application started.", "mywebapp1").WaitAsync(TimeSpan.FromMinutes(1));
 
         var httpClient = app.CreateHttpClientWithResilience("mywebapp1", null, opts =>
         {
@@ -194,7 +197,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task GetHttpClientBeforeStart(bool genericEntryPoint)
@@ -211,7 +214,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     /// Tests that arguments propagate into the application host.
     /// </summary>
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -240,8 +243,9 @@ public class TestingBuilderTests(ITestOutputHelper output)
         await using var app = await builder.BuildAsync();
         await app.StartAsync();
 
-        // Wait for the application to be ready
-        await app.WaitForTextAsync("Application started.").WaitAsync(TimeSpan.FromMinutes(1));
+        // Wait for the application to be ready - must specify "mywebapp1" to avoid race condition
+        // where myworker1 logs "Application started." first
+        await app.WaitForTextAsync("Application started.", "mywebapp1").WaitAsync(TimeSpan.FromMinutes(1));
 
         var httpClient = app.CreateHttpClientWithResilience("mywebapp1", null, opts =>
         {
@@ -256,7 +260,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     /// Tests that arguments propagate into the application host.
     /// </summary>
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(true)]
     [InlineData(false)]
     public async Task ArgsPropagateToAppHostConfigurationAdHocBuilder(bool directArgs)
@@ -278,8 +282,9 @@ public class TestingBuilderTests(ITestOutputHelper output)
         await using var app = await builder.BuildAsync();
         await app.StartAsync();
 
-        // Wait for the application to be ready
-        await app.WaitForTextAsync("Application started.").WaitAsync(TimeSpan.FromMinutes(1));
+        // Wait for the application to be ready - must specify "mywebapp1" to avoid race condition
+        // where myworker1 logs "Application started." first
+        await app.WaitForTextAsync("Application started.", "mywebapp1").WaitAsync(TimeSpan.FromMinutes(1));
 
         var httpClient = app.CreateHttpClientWithResilience("mywebapp1", null, opts =>
         {
@@ -295,7 +300,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     /// populating in configuration.
     /// </summary>
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData("http", false)]
     [InlineData("http", true)]
     [InlineData("https", false)]
@@ -321,8 +326,9 @@ public class TestingBuilderTests(ITestOutputHelper output)
         await using var app = await builder.BuildAsync();
         await app.StartAsync();
 
-        // Wait for the application to be ready
-        await app.WaitForTextAsync("Application started.").WaitAsync(TimeSpan.FromMinutes(1));
+        // Wait for the application to be ready - must specify "mywebapp1" to avoid race condition
+        // where myworker1 logs "Application started." first
+        await app.WaitForTextAsync("Application started.", "mywebapp1").WaitAsync(TimeSpan.FromMinutes(1));
 
         var httpClient = app.CreateHttpClientWithResilience("mywebapp1", null, opts =>
         {
@@ -343,8 +349,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     /// populating in configuration.
     /// </summary>
     [Theory]
-    [RequiresDocker]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9712")]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData("http", false)]
     [InlineData("http", true)]
     [InlineData("https", false)]
@@ -372,8 +377,9 @@ public class TestingBuilderTests(ITestOutputHelper output)
         await using var app = await builder.BuildAsync();
         await app.StartAsync();
 
-        // Wait for the application to be ready
-        await app.WaitForTextAsync("Application started.").WaitAsync(TimeSpan.FromMinutes(1));
+        // Wait for the application to be ready - must specify "mywebapp1" to avoid race condition
+        // where myworker1 logs "Application started." first
+        await app.WaitForTextAsync("Application started.", "mywebapp1").WaitAsync(TimeSpan.FromMinutes(1));
 
         var httpClient = app.CreateHttpClientWithResilience("mywebapp1", null, opts =>
         {
@@ -390,7 +396,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task SetsCorrectContentRoot(bool genericEntryPoint)
@@ -406,7 +412,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task SelectsFirstLaunchProfile(bool genericEntryPoint)
@@ -421,8 +427,9 @@ public class TestingBuilderTests(ITestOutputHelper output)
         var profileName = config["DOTNET_LAUNCH_PROFILE"];
         Assert.Equal("https", profileName);
 
-        // Wait for the application to be ready
-        await app.WaitForTextAsync("Application started.").WaitAsync(TimeSpan.FromMinutes(1));
+        // Wait for the application to be ready - must specify "mywebapp1" to avoid race condition
+        // where myworker1 logs "Application started." first
+        await app.WaitForTextAsync("Application started.", "mywebapp1").WaitAsync(TimeSpan.FromMinutes(1));
 
         // Explicitly get the HTTPS endpoint - this is only available on the "https" launch profile.
         var httpClient = app.CreateHttpClientWithResilience("mywebapp1", "https", opts =>
@@ -436,7 +443,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
 
     // Tests that DistributedApplicationTestingBuilder throws exceptions at the right times when the app crashes.
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(true, "before-build")]
     [InlineData(true, "after-build")]
     [InlineData(true, "after-start")]
@@ -489,7 +496,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     /// Checks that DisposeAsync does not throw an exception when the application is disposed with a still on-going StartAsync call.
     /// </summary>
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task StartAsyncAbandonedAfterCrash()
     {
         var timeout = TimeSpan.FromMinutes(5);
@@ -510,7 +517,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task StartAsyncAbandonedAfterHang()
     {
         var timeout = TimeSpan.FromMinutes(5);
@@ -561,6 +568,75 @@ public class TestingBuilderTests(ITestOutputHelper output)
             Assert.False(cts.IsCancellationRequested);
             Assert.IsType<TimeoutException>(ex);
         }
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task DashboardEnabledInTestingBuilderShouldWorkWithDynamicPorts()
+    {
+        var builder = DistributedApplicationTestingBuilder.Create([], (options, _) =>
+        {
+            options.DisableDashboard = false;
+        });
+        builder.WithTestAndResourceLogging(output);
+
+        await using var app = await builder.BuildAsync();
+
+        await app.StartAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        // Get the allocated dashboard service URI from the app host to confirm the final endpoint.
+        var dashboardServiceHost = app.Services.GetRequiredService<DashboardServiceHost>();
+        var resourceServiceUri = await dashboardServiceHost.GetResourceServiceUriAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        var uri = new Uri(resourceServiceUri);
+        Assert.Equal("127.0.0.1", uri.Host);
+        Assert.NotEqual(0, uri.Port);
+    }
+
+    [Theory]
+    [RequiresFeature(TestFeature.Docker)]
+    [InlineData("https://127.0.0.1:0", "127.0.0.1")]
+    [InlineData("https://[::1]:0", "[::1]")]
+    public async Task LoopbackWithDynamicPorts(string endpointUrl, string expectedHost)
+    {
+        var builder = DistributedApplicationTestingBuilder.Create([], (opt, _) =>
+        {
+            opt.DisableDashboard = false;
+        });
+        builder.WithTestAndResourceLogging(output);
+
+        builder.Configuration["ASPNETCORE_URLS"] = endpointUrl;
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = endpointUrl;
+        builder.Configuration["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = endpointUrl;
+
+        await using var app = await builder.BuildAsync();
+        await app.StartAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        // Get the allocated dashboard service URI from the app host to confirm the final endpoint.
+        var dashboardServiceHost = app.Services.GetRequiredService<DashboardServiceHost>();
+        var resourceServiceUri = await dashboardServiceHost.GetResourceServiceUriAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        var uri = new Uri(resourceServiceUri);
+        Assert.Equal(expectedHost, uri.Host);
+        Assert.NotEqual(0, uri.Port);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task NonLocalResourceServiceEndpointThrows()
+    {
+        var builder = DistributedApplicationTestingBuilder.Create([], (opt, _) =>
+        {
+            opt.DisableDashboard = false;
+        });
+        builder.WithTestAndResourceLogging(output);
+
+        builder.Configuration["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://example.com:5001";
+
+        await using var app = await builder.BuildAsync();
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => app.StartAsync());
+        Assert.Equal("ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL must contain a local loopback address.", ex.Message);
     }
 
     private sealed record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)

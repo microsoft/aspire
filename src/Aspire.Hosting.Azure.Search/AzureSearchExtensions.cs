@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Azure.Provisioning;
@@ -20,6 +22,7 @@ public static class AzureSearchExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the Azure AI Search resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSearchResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// By default references to the Azure AI Search service resource will be assigned the following roles:
     /// 
@@ -28,6 +31,8 @@ public static class AzureSearchExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureSearchResource}, SearchBuiltInRole[])"/>.
     /// </remarks>
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<AzureSearchResource> AddAzureSearch(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -43,6 +48,11 @@ public static class AzureSearchExtensions
 
         void ConfigureSearch(AzureResourceInfrastructure infrastructure)
         {
+            var azureResource = (AzureSearchResource)infrastructure.AspireResource;
+
+            // Check if this Search service has a private endpoint (via annotation)
+            var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
             var search = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
                 (identifier, name) =>
                 {
@@ -50,14 +60,25 @@ public static class AzureSearchExtensions
                     resource.Name = name;
                     return resource;
                 },
-                (infrastructure) => new SearchService(infrastructure.AspireResource.GetBicepIdentifier())
+                (infrastructure) =>
                 {
-                    SearchSkuName = SearchServiceSkuName.Basic,
-                    ReplicaCount = 1,
-                    PartitionCount = 1,
-                    HostingMode = SearchServiceHostingMode.Default,
-                    IsLocalAuthDisabled = true,
-                    Tags = { { "aspire-resource-name", name } }
+                    var svc = new SearchService(infrastructure.AspireResource.GetBicepIdentifier())
+                    {
+                        SearchSkuName = SearchServiceSkuName.Basic,
+                        ReplicaCount = 1,
+                        PartitionCount = 1,
+                        HostingMode = SearchServiceHostingMode.Default,
+                        IsLocalAuthDisabled = true,
+                        Tags = { { "aspire-resource-name", name } }
+                    };
+
+                    // When using private endpoints, disable public network access.
+                    if (hasPrivateEndpoint)
+                    {
+                        svc.PublicNetworkAccess = SearchServicePublicNetworkAccess.Disabled;
+                    }
+
+                    return svc;
                 });
 
             // TODO: The endpoint format should move into Azure.Provisioning so we can maintain this
@@ -68,8 +89,16 @@ public static class AzureSearchExtensions
                 Value = BicepFunction.Interpolate($"Endpoint=https://{search.Name}.search.windows.net")
             });
 
+            infrastructure.Add(new ProvisioningOutput("endpoint", typeof(string))
+            {
+                Value = BicepFunction.Interpolate($"https://{search.Name}.search.windows.net")
+            });
+
             // We need to output name to externalize role assignments.
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = search.Name });
+            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = search.Name.ToBicepExpression() });
+
+            // Output the resource id for private endpoint support.
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = search.Id.ToBicepExpression() });
         }
     }
 
@@ -95,6 +124,12 @@ public static class AzureSearchExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use
+    /// <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureSearchResource}, AzureSearchRole[])"/>
+    /// instead.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "SearchBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureSearchRole-based overload instead.")]
     public static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureSearchResource> target,
@@ -102,5 +137,42 @@ public static class AzureSearchExtensions
         where T : IResource
     {
         return builder.WithRoleAssignments(target, SearchBuiltInRole.GetBuiltInRoleName, roles);
+    }
+
+    /// <summary>
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure AI Search service resource. This replaces the default role assignments for the resource.
+    /// </summary>
+    /// <param name="builder">The resource to which the specified roles will be assigned.</param>
+    /// <param name="target">The target Azure AI Search service resource.</param>
+    /// <param name="roles">The Azure AI Search roles to be assigned.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureSearchRole"/> value.</exception>
+    [AspireExport("withSearchRoleAssignments")]
+    internal static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureSearchResource> target,
+        params AzureSearchRole[] roles)
+        where T : IResource
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(target, Array.Empty<SearchBuiltInRole>());
+        }
+
+        var builtInRoles = new SearchBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i] switch
+            {
+                AzureSearchRole.SearchIndexDataContributor => SearchBuiltInRole.SearchIndexDataContributor,
+                AzureSearchRole.SearchIndexDataReader => SearchBuiltInRole.SearchIndexDataReader,
+                AzureSearchRole.SearchServiceContributor => SearchBuiltInRole.SearchServiceContributor,
+                _ => throw new ArgumentException($"Invalid Azure AI Search role: {roles[i]}.", nameof(roles))
+            };
+        }
+
+        return builder.WithRoleAssignments(target, builtInRoles);
     }
 }

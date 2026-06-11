@@ -8,43 +8,84 @@
 //------------------------------------------------------------------------------
 namespace Aspire.Hosting
 {
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREREDIS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static partial class AzureRedisEnterpriseExtensions
+    public static partial class AzureManagedRedisExtensions
     {
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREREDIS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureRedisEnterpriseResource> AddAzureRedisEnterprise(this IDistributedApplicationBuilder builder, string name) { throw null; }
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> AddAzureManagedRedis(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREREDIS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureRedisEnterpriseResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzureRedisEnterpriseResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource>>? configureContainer = null) { throw null; }
+        [AspireExport(RunSyncOnBackgroundThread = true)]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource>>? configureContainer = null) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREREDIS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureRedisEnterpriseResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzureRedisEnterpriseResource> builder, ApplicationModel.IResourceBuilder<Azure.IAzureKeyVaultResource> keyVaultBuilder) { throw null; }
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> builder, ApplicationModel.IResourceBuilder<Azure.IAzureKeyVaultResource> keyVaultBuilder) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREREDIS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureRedisEnterpriseResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzureRedisEnterpriseResource> builder) { throw null; }
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> builder) { throw null; }
     }
 
     public static partial class AzureRedisExtensions
     {
+        [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureManagedRedis instead which provisions Azure Managed Redis.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureRedisCacheResource> AddAzureRedis(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureRedis instead to add an Azure Cache for Redis resource.")]
+        [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureManagedRedis instead which provisions Azure Managed Redis.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> AsAzureRedis(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder) { throw null; }
 
-        [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureRedis instead to add an Azure Cache for Redis resource.")]
+        [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureManagedRedis instead which provisions Azure Managed Redis.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> PublishAsAzureRedis(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder) { throw null; }
 
+        [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureManagedRedis instead which provisions Azure Managed Redis.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureRedisCacheResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzureRedisCacheResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource>>? configureContainer = null) { throw null; }
 
+        [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureManagedRedis instead which provisions Azure Managed Redis.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureRedisCacheResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzureRedisCacheResource> builder, ApplicationModel.IResourceBuilder<Azure.IAzureKeyVaultResource> keyVaultBuilder) { throw null; }
 
+        [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureManagedRedis instead which provisions Azure Managed Redis.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureRedisCacheResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzureRedisCacheResource> builder) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzureRedisCacheResource : AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class AzureManagedRedisResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, IAzurePrivateEndpointTarget
+    {
+        public AzureManagedRedisResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
+
+        [AspireExportIgnore]
+        public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression HostName { get { throw null; } }
+
+        public BicepOutputReference Id { get { throw null; } }
+
+        public BicepOutputReference NameOutputReference { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression? Password { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression Port { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
+
+        [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, "ConnectionStringSecretOutput")]
+        [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, "PrimaryAccessKeySecretOutput")]
+        public bool UseAccessKeyAuthentication { get { throw null; } }
+
+        public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
+
+        public override void AddRoleAssignments(IAddRoleAssignmentsContext roleAssignmentContext) { }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
+    }
+
+    [System.Obsolete("This class is obsolete and will be removed in a future version. Use AddAzureManagedRedis instead which provisions Azure Managed Redis.")]
+    public partial class AzureRedisCacheResource : AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public AzureRedisCacheResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -66,31 +107,8 @@ namespace Aspire.Hosting.Azure
         public override void AddRoleAssignments(IAddRoleAssignmentsContext roleAssignmentContext) { }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREREDIS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public partial class AzureRedisEnterpriseResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
-    {
-        public AzureRedisEnterpriseResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
-
-        public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
-
-        public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
-
-        public ApplicationModel.ReferenceExpression HostName { get { throw null; } }
-
-        public BicepOutputReference NameOutputReference { get { throw null; } }
-
-        public ApplicationModel.ReferenceExpression? Password { get { throw null; } }
-
-        [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, "ConnectionStringSecretOutput")]
-        public bool UseAccessKeyAuthentication { get { throw null; } }
-
-        public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
-
-        public override void AddRoleAssignments(IAddRoleAssignmentsContext roleAssignmentContext) { }
-    }
-
     [System.Obsolete("This class is obsolete and will be removed in a future version. Use AddAzureRedis instead to add an Azure Cache for Redis resource.")]
-    public partial class AzureRedisResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    public partial class AzureRedisResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public AzureRedisResource(ApplicationModel.RedisResource innerResource, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 

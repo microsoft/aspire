@@ -5,8 +5,23 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
     <Compile Include="..\..\src\Aspire.AppHost.Sdk\Aspire.RuntimeIdentifier.Tool\NuGetUtils.cs" Link="Product\NuGetUtils.cs" />
     <None Include="$(BundledRuntimeIdentifierGraphFile)" Link="RuntimeIdentifierGraph.json" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Build the runtime identifier tool so the fallback path test can invoke it via dotnet exec. -->
+    <ProjectReference Include="..\..\src\Aspire.AppHost.Sdk\Aspire.RuntimeIdentifier.Tool\Aspire.RuntimeIdentifier.Tool.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      Private="false"
+                      ExcludeAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Expose the built RID tool path to tests via assembly metadata so the older-SDK fallback can be exercised. -->
+    <AssemblyMetadata Include="AspireRuntimeIdentifierToolPath" Value="$(ArtifactsBinDir)Aspire.RuntimeIdentifier.Tool\$(Configuration)\$(DefaultTargetFramework)\Aspire.RuntimeIdentifier.Tool.dll" />
   </ItemGroup>
 
   <ItemGroup>

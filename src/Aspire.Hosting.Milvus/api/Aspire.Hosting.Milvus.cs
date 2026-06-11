@@ -10,27 +10,35 @@ namespace Aspire.Hosting
 {
     public static partial class MilvusBuilderExtensions
     {
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MilvusDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> builder, string name, string? databaseName = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> AddMilvus(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? apiKey = null, int? grpcPort = null) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithAttu<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<Milvus.AttuResource>>? configureContainer = null, string? containerName = null)
             where T : Milvus.MilvusServerResource { throw null; }
 
         [System.Obsolete("Use WithConfigurationFile instead.")]
         public static ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> WithConfigurationBindMount(this ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> builder, string configurationFilePath) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> WithConfigurationFile(this ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> builder, string configurationFilePath) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
-    public partial class MilvusDatabaseResource : Resource, IResourceWithParent<Milvus.MilvusServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+    [AspireExport(ExposeProperties = true)]
+    public partial class MilvusDatabaseResource : Resource, IResourceWithParent<Milvus.MilvusServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public MilvusDatabaseResource(string name, string databaseName, Milvus.MilvusServerResource parent) : base(default!) { }
 
@@ -39,6 +47,8 @@ namespace Aspire.Hosting.ApplicationModel
         public string DatabaseName { get { throw null; } }
 
         public Milvus.MilvusServerResource Parent { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 }
 
@@ -49,7 +59,8 @@ namespace Aspire.Hosting.Milvus
         public AttuResource(string name) : base(default!, default) { }
     }
 
-    public partial class MilvusServerResource : ApplicationModel.ContainerResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class MilvusServerResource : ApplicationModel.ContainerResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public MilvusServerResource(string name, ApplicationModel.ParameterResource apiKey) : base(default!, default) { }
 
@@ -59,6 +70,16 @@ namespace Aspire.Hosting.Milvus
 
         public System.Collections.Generic.IReadOnlyDictionary<string, string> Databases { get { throw null; } }
 
+        public ApplicationModel.EndpointReferenceExpression Host { get { throw null; } }
+
+        public ApplicationModel.EndpointReferenceExpression Port { get { throw null; } }
+
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression Token { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 }

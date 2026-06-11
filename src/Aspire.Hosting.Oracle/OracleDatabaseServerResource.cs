@@ -6,6 +6,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// A resource that represents an Oracle Database container.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class OracleDatabaseServerResource : ContainerResource, IResourceWithConnectionString
 {
     internal const string PrimaryEndpointName = "tcp";

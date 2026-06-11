@@ -6,12 +6,6 @@
   "symbols/Framework/choices/net8.0/description": "ターゲット net8.0",
   "symbols/Framework/choices/net9.0/description": "ターゲット net9.0",
   "symbols/Framework/choices/net10.0/description": "ターゲット net10.0",
-  "symbols/AspireVersion/description": "使用する Aspire のバージョン。",
-  "symbols/AspireVersion/displayName": "Aspire バージョン",
-  "symbols/AspireVersion/choices/13.0/displayName": "13.0",
-  "symbols/AspireVersion/choices/13.0/description": "Aspire 13.0 を選択します",
-  "symbols/AspireVersion/choices/9.5/displayName": "9.5",
-  "symbols/AspireVersion/choices/9.5/description": "Aspire 9.5 を選択する",
   "symbols/skipRestore/description": "指定した場合、作成時にプロジェクトの自動復元がスキップされます。",
   "postActions/restore/description": "このプロジェクトに必要な NuGet パッケージを復元します。",
   "postActions/restore/manualInstructions/default/text": "'dotnet restore' を実行する"

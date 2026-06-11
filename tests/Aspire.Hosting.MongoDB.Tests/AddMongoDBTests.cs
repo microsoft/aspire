@@ -9,8 +9,24 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.MongoDB.Tests;
 
-public class AddMongoDBTests
+public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public void AddMongoDBAddsHealthCheckAnnotationToResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb");
+        Assert.Single(mongo.Resource.Annotations, a => a is HealthCheckAnnotation hca && hca.Key == "mongodb_check");
+    }
+
+    [Fact]
+    public void AddDatabaseAddsHealthCheckAnnotationToResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var db = builder.AddMongoDB("mongodb").AddDatabase("mydb");
+        Assert.Single(db.Resource.Annotations, a => a is HealthCheckAnnotation hca && hca.Key == "mydb_check");
+    }
+
     [Fact]
     public void AddMongoDBContainerWithDefaultsAddsAnnotationMetadata()
     {
@@ -86,11 +102,11 @@ public class AddMongoDBTests
         var connectionStringResource = dbResource as IResourceWithConnectionString;
         Assert.NotNull(connectionStringResource);
         var connectionString = await connectionStringResource.GetConnectionStringAsync();
-        
+
 #pragma warning disable CS0618 // Type or member is obsolete
-        Assert.Equal($"mongodb://admin:{dbResource.Parent.PasswordParameter?.Value}@localhost:27017?authSource=admin&authMechanism=SCRAM-SHA-256", await serverResource.GetConnectionStringAsync());
+        Assert.Equal($"mongodb://admin:{dbResource.Parent.PasswordParameter?.Value}@localhost:27017/?authSource=admin&authMechanism=SCRAM-SHA-256", await serverResource.GetConnectionStringAsync());
 #pragma warning restore CS0618 // Type or member is obsolete
-        Assert.Equal("mongodb://admin:{mongodb-password.value}@{mongodb.bindings.tcp.host}:{mongodb.bindings.tcp.port}?authSource=admin&authMechanism=SCRAM-SHA-256", serverResource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal("mongodb://admin:{mongodb-password.value}@{mongodb.bindings.tcp.host}:{mongodb.bindings.tcp.port}/?authSource=admin&authMechanism=SCRAM-SHA-256", serverResource.ConnectionStringExpression.ValueExpression);
 #pragma warning disable CS0618 // Type or member is obsolete
         Assert.Equal($"mongodb://admin:{dbResource.Parent.PasswordParameter?.Value}@localhost:27017/mydatabase?authSource=admin&authMechanism=SCRAM-SHA-256", connectionString);
 #pragma warning restore CS0618 // Type or member is obsolete
@@ -100,7 +116,7 @@ public class AddMongoDBTests
     [Fact]
     public void WithMongoExpressAddsContainer()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.AddMongoDB("mongo")
             .WithMongoExpress();
 
@@ -142,7 +158,7 @@ public class AddMongoDBTests
     [Fact]
     public async Task WithMongoExpressUsesContainerHost()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.AddMongoDB("mongo")
             .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 3000))
             .WithMongoExpress();
@@ -182,7 +198,7 @@ public class AddMongoDBTests
     [Fact]
     public void WithMongoExpressOnMultipleResources()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.AddMongoDB("mongo").WithMongoExpress();
         builder.AddMongoDB("mongo2").WithMongoExpress();
 
@@ -202,7 +218,7 @@ public class AddMongoDBTests
         var expectedManifest = $$"""
             {
               "type": "container.v0",
-              "connectionString": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
+              "connectionString": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
               "image": "{{MongoDBContainerImageTags.Registry}}/{{MongoDBContainerImageTags.Image}}:{{MongoDBContainerImageTags.Tag}}",
               "env": {
                 "MONGO_INITDB_ROOT_USERNAME": "admin",
@@ -232,7 +248,7 @@ public class AddMongoDBTests
     [Fact]
     public void ThrowsWithIdenticalChildResourceNames()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var db = builder.AddMongoDB("mongo1");
         db.AddDatabase("db");
@@ -243,7 +259,7 @@ public class AddMongoDBTests
     [Fact]
     public void ThrowsWithIdenticalChildResourceNamesDifferentParents()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         builder.AddMongoDB("mongo1")
             .AddDatabase("db");
@@ -255,7 +271,7 @@ public class AddMongoDBTests
     [Fact]
     public void CanAddDatabasesWithDifferentNamesOnSingleServer()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var mongo1 = builder.AddMongoDB("mongo1");
 
@@ -272,7 +288,7 @@ public class AddMongoDBTests
     [Fact]
     public void CanAddDatabasesWithTheSameNameOnMultipleServers()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var db1 = builder.AddMongoDB("mongo1")
             .AddDatabase("db1", "imports");
@@ -290,7 +306,7 @@ public class AddMongoDBTests
     [Fact]
     public async Task MongoExpressEnvironmentCallbackIsIdempotent()
     {
-        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var mongo = appBuilder.AddMongoDB("mongo")
             .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017))
@@ -300,9 +316,9 @@ public class AddMongoDBTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var mongoExpressResource = Assert.Single(appModel.Resources.OfType<MongoExpressContainerResource>());
 
-        // Call GetEnvironmentVariableValuesAsync multiple times to ensure callbacks are idempotent
-        var config1 = await mongoExpressResource.GetEnvironmentVariableValuesAsync();
-        var config2 = await mongoExpressResource.GetEnvironmentVariableValuesAsync();
+        // Call GetEnvironmentVariablesAsync multiple times to ensure callbacks are idempotent
+        var config1 = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(mongoExpressResource);
+        var config2 = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(mongoExpressResource);
 
         // Both calls should succeed and return the same values
         Assert.Equal(config1.Count, config2.Count);

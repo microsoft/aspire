@@ -1,25 +1,37 @@
 /dogfood.sh                           @radical @eerhardt
-/src/Aspire.Hosting.Testing           @reubenbond
+/src/Aspire.Hosting.Testing           @sebastienros
 /src/Components                       @radical @eerhardt @sebastienros
-/src/Aspire.Hosting.Azure             @captainsafia @eerhardt
-/src/Aspire.Hosting.Azure.Functions   @captainsafia
-/src/Aspire.Hosting.Azure.AppContainers  @captainsafia @eerhardt
-/src/Aspire.Hosting.Azure.AppService  @captainsafia @eerhardt
-/src/Aspire.Hosting.Docker            @captainsafia
+/src/Aspire.Hosting.Azure             @eerhardt @mitchdenny 
+/src/Aspire.Hosting.Azure.Functions   @eerhardt
+/src/Aspire.Hosting.Azure.AppContainers  @eerhardt @mitchdenny 
+/src/Aspire.Hosting.Azure.AppService  @eerhardt @mitchdenny
+/src/Aspire.Hosting.Docker            @danegsta @mitchdenny
 /src/Aspire.Hosting.Maui              @jfversluis
+/src/Aspire.Hosting.Foundry           @sebastienros
+/src/Aspire.Hosting                   @JamesNK @karolz-ms @danegsta @mitchdenny @davidfowl
+/src/Aspire.Dashboard                 @JamesNK @adamint
+/src/Aspire.Cli                       @mitchdenny @JamesNK @davidfowl
+
+# polyglot
+
+/src/Aspire.Hosting.RemoteHost        @sebastienros
+/src/Aspire.Hosting/Ats               @sebastienros
 
 # tests
 
 /tests/Aspire.EndToEnd.Tests          @radical @eerhardt
 /tests/Aspire.Hosting.Maui.Tests      @jfversluis
-/tests/Aspire.Hosting.Testing.Tests   @reubenbond
+/tests/Aspire.Hosting.Testing.Tests   @sebastienros
 /tests/Aspire.Hosting.Tests           @mitchdenny
-/tests/Aspire.Templates.Tests          @radical @eerhardt
+/tests/Aspire.Templates.Tests         @radical @eerhardt
 /tests/Shared                         @radical @eerhardt
 /tests/helix                          @radical @eerhardt
 /tests/templates.proj                 @radical @eerhardt
 
 # playground apps
-/playground/deployers                @captainsafia
-/playground/publishers               @captainsafia
+/playground/deployers                @mitchdenny
+/playground/publishers               @mitchdenny
 /playground/AspireWithMaui           @jfversluis
+
+# vs code extension
+/extension                           @adamint

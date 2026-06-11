@@ -106,8 +106,6 @@ public class ContainerRegistryTests
         // Verify the container registry properties on the environment
         Assert.NotNull(publisher.EnvironmentRegistry.Name);
         Assert.NotNull(publisher.EnvironmentRegistry.Endpoint);
-        var azureRegistry = Assert.IsType<IAzureContainerRegistry>(publisher.EnvironmentRegistry, exactMatch: false);
-        Assert.NotNull(azureRegistry.ManagedIdentityId);
 
         // Verify container registry info was found in child compute resources
         Assert.True(publisher.ComputeResourceRegistryFound);
@@ -116,17 +114,18 @@ public class ContainerRegistryTests
         // Verify the container registry properties on the compute resource
         Assert.NotNull(publisher.ComputeResourceRegistry.Name);
         Assert.NotNull(publisher.ComputeResourceRegistry.Endpoint);
-        azureRegistry = Assert.IsType<IAzureContainerRegistry>(publisher.ComputeResourceRegistry, exactMatch: false);
-        Assert.NotNull(azureRegistry.ManagedIdentityId);
 
-        // Verify both registries are the same instance (or at least have the same values)
+        // Verify both registries have the same values
         Assert.Equal(publisher.EnvironmentRegistry.Name.ToString(),
                      publisher.ComputeResourceRegistry.Name.ToString());
         Assert.Equal(publisher.EnvironmentRegistry.Endpoint.ToString(),
                      publisher.ComputeResourceRegistry.Endpoint.ToString());
-        azureRegistry = Assert.IsType<IAzureContainerRegistry>(publisher.EnvironmentRegistry, exactMatch: false);
-        Assert.Equal(publisher.AzureContainerRegistry?.ManagedIdentityId.ToString(),
-                     azureRegistry.ManagedIdentityId.ToString());
+
+        // If the registry is an Azure container registry with managed identity, verify it
+        if (publisher.EnvironmentRegistry is IAzureContainerRegistry azureRegistry)
+        {
+            Assert.NotNull(azureRegistry.ManagedIdentityId);
+        }
     }
 
     /// <summary>

@@ -7,14 +7,20 @@
     background: transparent;
 }
 
-.text-visualizer-container ::deep.text-visualizer-unmask-content {
+.text-visualizer-container ::deep.button-container {
+    display: flex;
+    width: 100%;
     margin-top: auto;
-    align-self: start;
 }
 
-.text-visualizer-container ::deep.text-visualizer-copy {
-    margin-top: auto;
-    align-self: end;
+.text-visualizer-container ::deep.text-visualizer-unmask-content {
+    margin-left: 0;
+}
+
+.text-visualizer-container ::deep.button-container-right {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
 }
 
 .text-visualizer-container {
@@ -26,5 +32,11 @@
 
 .text-visualizer-container ::deep.log-overflow {
     max-height: 60vh;
+    margin-bottom: 16px;
+}
+
+.markdown-content {
+    max-height: 60vh;
+    overflow-y: auto;
     margin-bottom: 16px;
 }

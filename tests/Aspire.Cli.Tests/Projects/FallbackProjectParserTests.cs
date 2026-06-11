@@ -3,417 +3,364 @@
 
 using System.Text.Json;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class FallbackProjectParserTests
+public class FallbackProjectParserTests(ITestOutputHelper output)
 {
-    [Fact]
-    public void ParseProject_ExtractsAspireAppHostSdk()
+    private static readonly JsonSerializerOptions s_indentedOptions = new() { WriteIndented = true };
+
+    private static string FormatJson(JsonDocument document)
     {
-        // Arrange
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.csproj");
-            var projectContent = """
-                <Project Sdk="Microsoft.NET.Sdk">
-                    <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0-test" />
-                </Project>
-                """;
-
-            File.WriteAllText(projectFile, projectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
-
-            // Act
-            var result = parser.ParseProject(new FileInfo(projectFile));
-
-            // Assert
-            var properties = result.RootElement.GetProperty("Properties");
-            var sdkVersion = properties.GetProperty("AspireHostingSDKVersion").GetString();
-            Assert.Equal("9.5.0-test", sdkVersion);
-
-            // Should have fallback flag
-            Assert.True(result.RootElement.GetProperty("Fallback").GetBoolean());
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        return JsonSerializer.Serialize(document.RootElement, s_indentedOptions);
     }
 
     [Fact]
-    public void ParseProject_ExtractsPackageReferences()
+    public async Task ParseProject_ExtractsAspireAppHostSdk_OldFormat()
     {
         // Arrange
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.csproj");
-            var projectContent = """
-                <Project Sdk="Microsoft.NET.Sdk">
-                    <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0-test" />
-                    <ItemGroup>
-                        <PackageReference Include="Aspire.Hosting.AppHost" Version="9.5.0-test" />
-                        <PackageReference Include="Aspire.Hosting.Redis" Version="9.4.1" />
-                    </ItemGroup>
-                </Project>
-                """;
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
+        var projectContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0-test" />
+            </Project>
+            """;
 
-            File.WriteAllText(projectFile, projectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
 
-            // Act
-            var result = parser.ParseProject(new FileInfo(projectFile));
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
 
-            // Assert
-            var items = result.RootElement.GetProperty("Items");
-            var packageRefs = items.GetProperty("PackageReference").EnumerateArray().ToArray();
-            
-            Assert.Equal(2, packageRefs.Length);
-            
-            var appHostPkg = packageRefs.FirstOrDefault(p => 
-                p.GetProperty("Identity").GetString() == "Aspire.Hosting.AppHost");
-            Assert.NotEqual(default(JsonElement), appHostPkg);
-            Assert.Equal("9.5.0-test", appHostPkg.GetProperty("Version").GetString());
-            
-            var redisPkg = packageRefs.FirstOrDefault(p => 
-                p.GetProperty("Identity").GetString() == "Aspire.Hosting.Redis");
-            Assert.NotEqual(default(JsonElement), redisPkg);
-            Assert.Equal("9.4.1", redisPkg.GetProperty("Version").GetString());
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        // Assert
+        await Verify(FormatJson(result), extension: "json");
     }
 
     [Fact]
-    public void ParseProject_ExtractsProjectReferences()
+    public async Task ParseProject_ExtractsAspireAppHostSdk_NewFormat()
     {
-        // Arrange
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.csproj");
-            var projectContent = """
-                <Project Sdk="Microsoft.NET.Sdk">
-                    <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0-test" />
-                    <ItemGroup>
-                        <ProjectReference Include="../ServiceDefaults/ServiceDefaults.csproj" />
-                        <ProjectReference Include="../WebApp/WebApp.csproj" />
-                    </ItemGroup>
-                </Project>
-                """;
+        // Arrange - tests the new <Project Sdk="Aspire.AppHost.Sdk/version"> format
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
+        var projectContent = """
+            <Project Sdk="Aspire.AppHost.Sdk/13.0.1">
+                <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net10.0</TargetFramework>
+                </PropertyGroup>
+            </Project>
+            """;
 
-            File.WriteAllText(projectFile, projectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
 
-            // Act
-            var result = parser.ParseProject(new FileInfo(projectFile));
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
 
-            // Assert
-            var items = result.RootElement.GetProperty("Items");
-            var projectRefs = items.GetProperty("ProjectReference").EnumerateArray().ToArray();
-            
-            Assert.Equal(2, projectRefs.Length);
-            
-            var serviceDefaultsRef = projectRefs.FirstOrDefault(p => 
-                p.GetProperty("Identity").GetString()!.Contains("ServiceDefaults"));
-            Assert.NotEqual(default(JsonElement), serviceDefaultsRef);
-            
-            var webAppRef = projectRefs.FirstOrDefault(p => 
-                p.GetProperty("Identity").GetString()!.Contains("WebApp"));
-            Assert.NotEqual(default(JsonElement), webAppRef);
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        // Assert
+        await Verify(FormatJson(result), extension: "json");
     }
 
     [Fact]
-    public void ParseProject_InvalidXml_ThrowsProjectUpdaterException()
+    public async Task ParseProject_ExtractsAspireAppHostSdk_NewFormat_WithMultipleSdks()
     {
-        // Arrange
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.csproj");
-            var invalidProjectContent = """
-                <Project Sdk="Microsoft.NET.Sdk">
-                    <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0-test" />
-                    <!-- Missing closing tag -->
-                    <ItemGroup>
-                        <PackageReference Include="Test" Version="1.0.0" />
-                """;
+        // Arrange - tests parsing when multiple SDKs are in the attribute
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
+        var projectContent = """
+            <Project Sdk="Aspire.AppHost.Sdk/13.0.1;Microsoft.NET.Sdk">
+                <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>net10.0</TargetFramework>
+                </PropertyGroup>
+            </Project>
+            """;
 
-            File.WriteAllText(projectFile, invalidProjectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
 
-            // Act & Assert
-            Assert.Throws<ProjectUpdaterException>(() => 
-                parser.ParseProject(new FileInfo(projectFile)));
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
+
+        // Assert - should extract only the version, not the other SDK
+        await Verify(FormatJson(result), extension: "json");
     }
 
     [Fact]
-    public void ParseProject_SingleFileAppHost_ExtractsAspireAppHostSdk()
+    public async Task ParseProject_DoesNotMatchSimilarSdkName()
     {
-        // Arrange
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.cs");
-            var projectContent = """
-                #:sdk Aspire.AppHost.Sdk@13.0.0-preview.1.25519.5
-                #:package Aspire.Hosting.NodeJs@9.5.1
+        // Arrange - tests that Aspire.AppHost.SdkFoo doesn't match
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
+        var projectContent = """
+            <Project Sdk="Aspire.AppHost.SdkFoo/1.0.0">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+                <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                </PropertyGroup>
+            </Project>
+            """;
 
-                var builder = DistributedApplication.CreateBuilder(args);
-                builder.Build().Run();
-                """;
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
 
-            File.WriteAllText(projectFile, projectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
 
-            // Act
-            var result = parser.ParseProject(new FileInfo(projectFile));
-
-            // Assert
-            var properties = result.RootElement.GetProperty("Properties");
-            var sdkVersion = properties.GetProperty("AspireHostingSDKVersion").GetString();
-            Assert.Equal("13.0.0-preview.1.25519.5", sdkVersion);
-
-            // Should have fallback flag
-            Assert.True(result.RootElement.GetProperty("Fallback").GetBoolean());
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        // Assert - should fall back to old format and get 9.5.0
+        await Verify(FormatJson(result), extension: "json");
     }
 
     [Fact]
-    public void ParseProject_SingleFileAppHost_ExtractsPackageReferences()
+    public async Task ParseProject_ExtractsPackageReferences()
     {
         // Arrange
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.cs");
-            var projectContent = """
-                #:sdk Aspire.AppHost.Sdk@13.0.0-preview.1.25519.5
-                #:package Aspire.Hosting.NodeJs@9.5.1
-                #:package Aspire.Hosting.Python@9.5.1
-                #:package Aspire.Hosting.Redis@9.5.1
-                #:package CommunityToolkit.Aspire.Hosting.NodeJS.Extensions@9.8.0
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
+        var projectContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0-test" />
+                <ItemGroup>
+                    <PackageReference Include="Aspire.Hosting.AppHost" Version="9.5.0-test" />
+                    <PackageReference Include="Aspire.Hosting.Redis" Version="9.4.1" />
+                </ItemGroup>
+            </Project>
+            """;
 
-                #pragma warning disable ASPIREHOSTINGPYTHON001
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
 
-                var builder = DistributedApplication.CreateBuilder(args);
-                var cache = builder.AddRedis("cache");
-                builder.Build().Run();
-                """;
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
 
-            File.WriteAllText(projectFile, projectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
-
-            // Act
-            var result = parser.ParseProject(new FileInfo(projectFile));
-
-            // Assert
-            var items = result.RootElement.GetProperty("Items");
-            var packageRefs = items.GetProperty("PackageReference").EnumerateArray().ToArray();
-            
-            Assert.Equal(4, packageRefs.Length);
-            
-            var nodeJsPkg = packageRefs.FirstOrDefault(p => 
-                p.GetProperty("Identity").GetString() == "Aspire.Hosting.NodeJs");
-            Assert.NotEqual(default(JsonElement), nodeJsPkg);
-            Assert.Equal("9.5.1", nodeJsPkg.GetProperty("Version").GetString());
-            
-            var pythonPkg = packageRefs.FirstOrDefault(p => 
-                p.GetProperty("Identity").GetString() == "Aspire.Hosting.Python");
-            Assert.NotEqual(default(JsonElement), pythonPkg);
-            Assert.Equal("9.5.1", pythonPkg.GetProperty("Version").GetString());
-
-            var redisPkg = packageRefs.FirstOrDefault(p => 
-                p.GetProperty("Identity").GetString() == "Aspire.Hosting.Redis");
-            Assert.NotEqual(default(JsonElement), redisPkg);
-            Assert.Equal("9.5.1", redisPkg.GetProperty("Version").GetString());
-
-            var toolkitPkg = packageRefs.FirstOrDefault(p => 
-                p.GetProperty("Identity").GetString() == "CommunityToolkit.Aspire.Hosting.NodeJS.Extensions");
-            Assert.NotEqual(default(JsonElement), toolkitPkg);
-            Assert.Equal("9.8.0", toolkitPkg.GetProperty("Version").GetString());
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        // Assert
+        await Verify(FormatJson(result), extension: "json");
     }
 
     [Fact]
-    public void ParseProject_SingleFileAppHost_NoPackageReferences()
+    public async Task ParseProject_ExtractsProjectReferences()
     {
         // Arrange
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.cs");
-            var projectContent = """
-                #:sdk Aspire.AppHost.Sdk@9.5.0
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
+        var projectContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0-test" />
+                <ItemGroup>
+                    <ProjectReference Include="../ServiceDefaults/ServiceDefaults.csproj" />
+                    <ProjectReference Include="../WebApp/WebApp.csproj" />
+                </ItemGroup>
+            </Project>
+            """;
 
-                var builder = DistributedApplication.CreateBuilder(args);
-                builder.Build().Run();
-                """;
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
 
-            File.WriteAllText(projectFile, projectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
 
-            // Act
-            var result = parser.ParseProject(new FileInfo(projectFile));
-
-            // Assert
-            var items = result.RootElement.GetProperty("Items");
-            var packageRefs = items.GetProperty("PackageReference").EnumerateArray().ToArray();
-            
-            Assert.Empty(packageRefs);
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        // Assert - scrub the temp path and normalize path separators for cross-platform consistency
+        // Note: In JSON, backslashes are escaped as \\, so we need to replace \\\\ (which represents \\)
+        // with / to get a single forward slash
+        var tempPath = Path.GetTempPath().Replace("\\", "/");
+        await Verify(FormatJson(result), extension: "json")
+            .ScrubLinesWithReplace(line =>
+            {
+                // First normalize JSON-escaped backslashes (\\) to forward slashes
+                // In JSON, a single backslash is represented as \\, so we replace that with /
+                line = line.Replace("\\\\", "/");
+                // Then replace the temp path
+                line = line.Replace($"/private{tempPath}", "{TempPath}"); // Handle macOS temp symlinks
+                line = line.Replace(tempPath, "{TempPath}");
+                return line;
+            });
     }
 
     [Fact]
-    public void ParseProject_SingleFileAppHost_WithWildcardVersion()
+    public async Task ParseProject_InvalidXml_ThrowsProjectUpdaterException()
     {
         // Arrange
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.cs");
-            var projectContent = """
-                #:sdk Aspire.AppHost.Sdk@*
-                #:package Aspire.Hosting.Redis@*
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
+        var invalidProjectContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0-test" />
+                <!-- Missing closing tag -->
+                <ItemGroup>
+                    <PackageReference Include="Test" Version="1.0.0" />
+            """;
 
-                var builder = DistributedApplication.CreateBuilder(args);
-                builder.Build().Run();
-                """;
+        await File.WriteAllTextAsync(projectFile, invalidProjectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
 
-            File.WriteAllText(projectFile, projectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
-
-            // Act
-            var result = parser.ParseProject(new FileInfo(projectFile));
-
-            // Assert
-            var properties = result.RootElement.GetProperty("Properties");
-            var sdkVersion = properties.GetProperty("AspireHostingSDKVersion").GetString();
-            Assert.Equal("*", sdkVersion);
-
-            var items = result.RootElement.GetProperty("Items");
-            var packageRefs = items.GetProperty("PackageReference").EnumerateArray().ToArray();
-            Assert.Single(packageRefs);
-            Assert.Equal("*", packageRefs[0].GetProperty("Version").GetString());
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        // Act & Assert
+        Assert.Throws<ProjectUpdaterException>(() =>
+            parser.ParseProject(new FileInfo(projectFile)));
     }
 
     [Fact]
-    public void ParseProject_SingleFileAppHost_NoProjectReferences()
+    public async Task ParseProject_SingleFileAppHost_ExtractsAspireAppHostSdk()
+    {
+        // Arrange
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
+        var projectContent = """
+            #:sdk Aspire.AppHost.Sdk@13.0.0-preview.1.25519.5
+            #:package Aspire.Hosting.NodeJs@9.5.1
+
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.Build().Run();
+            """;
+
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
+
+        // Assert
+        await Verify(FormatJson(result), extension: "json");
+    }
+
+    [Fact]
+    public async Task ParseProject_SingleFileAppHost_ExtractsPackageReferences()
+    {
+        // Arrange
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
+        var projectContent = """
+            #:sdk Aspire.AppHost.Sdk@13.0.0-preview.1.25519.5
+            #:package Aspire.Hosting.NodeJs@9.5.1
+            #:package Aspire.Hosting.Python@9.5.1
+            #:package Aspire.Hosting.Redis@9.5.1
+            #:package CommunityToolkit.Aspire.Hosting.NodeJS.Extensions@9.8.0
+
+            #pragma warning disable ASPIREHOSTINGPYTHON001
+
+            var builder = DistributedApplication.CreateBuilder(args);
+            var cache = builder.AddRedis("cache");
+            builder.Build().Run();
+            """;
+
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
+
+        // Assert
+        await Verify(FormatJson(result), extension: "json");
+    }
+
+    [Fact]
+    public async Task ParseProject_SingleFileAppHost_NoPackageReferences()
+    {
+        // Arrange
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
+        var projectContent = """
+            #:sdk Aspire.AppHost.Sdk@9.5.0
+
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.Build().Run();
+            """;
+
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
+
+        // Assert
+        await Verify(FormatJson(result), extension: "json");
+    }
+
+    [Fact]
+    public async Task ParseProject_SingleFileAppHost_WithWildcardVersion()
+    {
+        // Arrange
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
+        var projectContent = """
+            #:sdk Aspire.AppHost.Sdk@*
+            #:package Aspire.Hosting.Redis@*
+
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.Build().Run();
+            """;
+
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
+
+        // Assert
+        await Verify(FormatJson(result), extension: "json");
+    }
+
+    [Fact]
+    public async Task ParseProject_SingleFileAppHost_NoProjectReferences()
     {
         // Arrange - single-file apphosts don't support project references
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.cs");
-            var projectContent = """
-                #:sdk Aspire.AppHost.Sdk@9.5.0
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
+        var projectContent = """
+            #:sdk Aspire.AppHost.Sdk@9.5.0
 
-                var builder = DistributedApplication.CreateBuilder(args);
-                builder.Build().Run();
-                """;
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.Build().Run();
+            """;
 
-            File.WriteAllText(projectFile, projectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
 
-            // Act
-            var result = parser.ParseProject(new FileInfo(projectFile));
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
 
-            // Assert
-            var items = result.RootElement.GetProperty("Items");
-            var projectRefs = items.GetProperty("ProjectReference").EnumerateArray().ToArray();
-            
-            Assert.Empty(projectRefs);
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        // Assert
+        await Verify(FormatJson(result), extension: "json");
     }
 
     [Fact]
-    public void ParseProject_SingleFileAppHost_NoSdkDirective()
+    public async Task ParseProject_SingleFileAppHost_NoSdkDirective()
     {
         // Arrange
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.cs");
-            var projectContent = """
-                // Missing SDK directive
-                var builder = DistributedApplication.CreateBuilder(args);
-                builder.Build().Run();
-                """;
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
+        var projectContent = """
+            // Missing SDK directive
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.Build().Run();
+            """;
 
-            File.WriteAllText(projectFile, projectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
 
-            // Act
-            var result = parser.ParseProject(new FileInfo(projectFile));
+        // Act
+        var result = parser.ParseProject(new FileInfo(projectFile));
 
-            // Assert - should return null SDK version
-            var properties = result.RootElement.GetProperty("Properties");
-            var sdkVersion = properties.GetProperty("AspireHostingSDKVersion");
-            Assert.Equal(JsonValueKind.Null, sdkVersion.ValueKind);
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        // Assert
+        await Verify(FormatJson(result), extension: "json");
     }
 
     [Fact]
-    public void ParseProject_UnsupportedFileType_ThrowsProjectUpdaterException()
+    public async Task ParseProject_UnsupportedFileType_ThrowsProjectUpdaterException()
     {
         // Arrange
-        var tempDir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectFile = Path.Combine(tempDir.FullName, $"Test{Guid.NewGuid()}.txt");
-            var projectContent = "Some random content";
+        using var workspace = TemporaryWorkspace.Create(output);
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.txt");
+        var projectContent = "Some random content";
 
-            File.WriteAllText(projectFile, projectContent);
-            var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+        await File.WriteAllTextAsync(projectFile, projectContent);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
 
-            // Act & Assert
-            var exception = Assert.Throws<ProjectUpdaterException>(() => 
-                parser.ParseProject(new FileInfo(projectFile)));
-            Assert.Contains("Unsupported project file type", exception.Message);
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
+        // Act & Assert
+        var exception = Assert.Throws<ProjectUpdaterException>(() =>
+            parser.ParseProject(new FileInfo(projectFile)));
+        Assert.Contains("Unsupported project file type", exception.Message);
     }
 }

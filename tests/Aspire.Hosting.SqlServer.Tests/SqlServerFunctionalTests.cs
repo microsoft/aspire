@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Data;
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
@@ -18,7 +20,7 @@ namespace Aspire.Hosting.SqlServer.Tests;
 public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWaitForOnSqlServerBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -56,7 +58,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifySqlServerResource()
     {
         const string databaseName = "newdb";
@@ -76,6 +78,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync(cts.Token);
 
         var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
 
         hb.Configuration[$"ConnectionStrings:{newDb.Resource.Name}"] = await newDb.Resource.ConnectionStringExpression.GetValueAsync(default);
 
@@ -118,7 +121,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         const string databaseName = "db";
@@ -153,9 +156,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-                Directory.CreateDirectory(bindMountPath);
+                bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
                 if (!OperatingSystem.IsWindows())
                 {
@@ -182,6 +183,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
             try
             {
                 var hb1 = Host.CreateApplicationBuilder();
+                hb1.AddTestLogging(testOutputHelper);
 
                 hb1.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
@@ -267,6 +269,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
                 try
                 {
                     var hb2 = Host.CreateApplicationBuilder();
+                    hb2.AddTestLogging(testOutputHelper);
 
                     hb2.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
@@ -331,7 +334,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task AddDatabaseCreatesDatabaseWithCustomScript()
     {
         const string databaseName = "newdb";
@@ -365,6 +368,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync(cts.Token);
 
         var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
 
         hb.Configuration[$"ConnectionStrings:{newDb.Resource.Name}"] = await newDb.Resource.ConnectionStringExpression.GetValueAsync(default);
 
@@ -396,7 +400,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task AddDatabaseCreatesDatabaseWithSpecialNames()
     {
         const string databaseName = "!'][\"";
@@ -418,6 +422,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync(cts.Token);
 
         var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
 
         hb.Configuration[$"ConnectionStrings:{newDb.Resource.Name}"] = await newDb.Resource.ConnectionStringExpression.GetValueAsync(default);
 
@@ -445,7 +450,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task AddDatabaseCreatesDatabaseResiliently()
     {
         // Creating the database multiple times should not fail
@@ -490,6 +495,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
                 await app.StartAsync(cts.Token);
 
                 var hb = Host.CreateApplicationBuilder();
+                hb.AddTestLogging(testOutputHelper);
 
                 hb.Configuration[$"ConnectionStrings:{newDb.Resource.Name}"] = await newDb.Resource.ConnectionStringExpression.GetValueAsync(default);
 
@@ -528,7 +534,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task AddDatabaseCreatesMultipleDatabases()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -548,6 +554,7 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync(cts.Token);
 
         var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
 
         foreach (var db in dbs)
         {
@@ -573,4 +580,14 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(ConnectionState.Open, conn.State);
         }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task SqlServer_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddSqlServer("resource").WithPersistentLifetime(),
+            "resource");
+    }
+
 }

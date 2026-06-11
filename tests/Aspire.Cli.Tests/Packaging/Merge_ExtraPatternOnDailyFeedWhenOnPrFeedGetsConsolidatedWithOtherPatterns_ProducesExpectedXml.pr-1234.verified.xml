@@ -1,10 +1,10 @@
-﻿<configuration>
+<configuration>
   <packageSources>
     <clear />
     <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
     <add key="mycompany" value="http://mycompany.com/feed" />
-    <add key="{PR_HIVE}" value="{PR_HIVE}" />
+    <add key="{PR_HIVE}/packages" value="{PR_HIVE}/packages" />
   </packageSources>
   <packageSourceMapping>
     <packageSource key="https://api.nuget.org/v3/index.json">
@@ -13,7 +13,7 @@
     <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
       <package pattern="Microsoft.Extensions.HelperStuff*" />
     </packageSource>
-    <packageSource key="{PR_HIVE}">
+    <packageSource key="{PR_HIVE}/packages">
       <package pattern="Aspire*" />
       <package pattern="*" />
     </packageSource>

@@ -28,7 +28,7 @@ public class BuildAndRunStarterTemplateBuiltInTest : TemplateTestsBase
 
     [Theory]
     [MemberData(nameof(TestFrameworkTypeWithConfig))]
-    [RequiresSSLCertificate]
+    [RequiresFeature(TestFeature.Docker | TestFeature.SSLCertificate)]
     [Trait("category", "basic-build")]
     public async Task BuildAndRunStarterTemplateBuiltInTest_Test(string config, string testType)
     {

@@ -33,7 +33,7 @@ internal sealed class UnsupportedPlatformEventSubscriber(ResourceNotificationSer
                     // Set the state to "Unsupported" with a warning style and the reason
                     await notificationService.PublishUpdateAsync(resource, s => s with
                     {
-                        State = new ResourceStateSnapshot($"Unsupported: {annotation.Reason}", "warning")
+                        State = new ResourceStateSnapshot($"Unsupported: {annotation.Reason}", KnownResourceStateStyles.Warn)
                     }).ConfigureAwait(false);
                 }
             }

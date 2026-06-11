@@ -2,12 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
-internal abstract class BaseConfigSubCommand(string name, string description, IFeatures features, ICliUpdateNotifier updateNotifier, IConfigurationService configurationService, CliExecutionContext executionContext, IInteractionService interactionService) : BaseCommand(name, description, features, updateNotifier, executionContext, interactionService)
+internal abstract class BaseConfigSubCommand(string name, string description, IConfigurationService configurationService, CommonCommandServices services) : BaseCommand(name, description, services)
 {
     protected IConfigurationService ConfigurationService { get; } = configurationService;
 

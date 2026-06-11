@@ -119,10 +119,10 @@ internal sealed partial class FallbackProjectParser
         ProjectReferenceInfo[] projectReferences)
     {
         var rootObject = new JsonObject();
-        
+
         // Items section
         var itemsObject = new JsonObject();
-        
+
         // PackageReference items
         var packageRefArray = new JsonArray();
         foreach (var pkg in packageReferences)
@@ -133,7 +133,7 @@ internal sealed partial class FallbackProjectParser
             packageRefArray.Add((JsonNode?)packageObj);
         }
         itemsObject["PackageReference"] = packageRefArray;
-        
+
         // ProjectReference items
         var projectRefArray = new JsonArray();
         foreach (var proj in projectReferences)
@@ -144,14 +144,14 @@ internal sealed partial class FallbackProjectParser
             projectRefArray.Add((JsonNode?)projectObj);
         }
         itemsObject["ProjectReference"] = projectRefArray;
-        
+
         rootObject["Items"] = itemsObject;
-        
+
         // Properties section
         var propertiesObject = new JsonObject();
         propertiesObject["AspireHostingSDKVersion"] = JsonValue.Create(aspireHostingSdkVersion);
         rootObject["Properties"] = propertiesObject;
-        
+
         // Fallback flag
         rootObject["Fallback"] = JsonValue.Create(true);
 
@@ -161,12 +161,55 @@ internal sealed partial class FallbackProjectParser
 
     private static string? ExtractAspireHostingSdkVersion(XElement projectRoot)
     {
-        // Look for <Sdk Name="Aspire.AppHost.Sdk" Version="..." />
+        // Check new format first: <Project Sdk="Aspire.AppHost.Sdk/version">
+        // The Sdk attribute may contain multiple SDKs separated by semicolons
+        var sdkAttribute = projectRoot.Attribute("Sdk")?.Value;
+        if (sdkAttribute is not null)
+        {
+            var version = ExtractVersionFromSdkAttribute(sdkAttribute);
+            if (version is not null)
+            {
+                return version;
+            }
+        }
+
+        // Fall back to old format: <Sdk Name="Aspire.AppHost.Sdk" Version="..." />
         var sdkElement = projectRoot
             .Elements("Sdk")
             .FirstOrDefault(e => e.Attribute("Name")?.Value == "Aspire.AppHost.Sdk");
 
         return sdkElement?.Attribute("Version")?.Value;
+    }
+
+    /// <summary>
+    /// Extracts the Aspire.AppHost.Sdk version from an Sdk attribute value.
+    /// Handles formats like "Aspire.AppHost.Sdk/13.0.1" or "Aspire.AppHost.Sdk/13.0.1;Microsoft.NET.Sdk".
+    /// </summary>
+    private static string? ExtractVersionFromSdkAttribute(string sdkAttribute)
+    {
+        const string sdkPrefix = "Aspire.AppHost.Sdk";
+
+        // Split by semicolon in case of multiple SDKs
+        var sdks = sdkAttribute.Split(';');
+        foreach (var sdk in sdks)
+        {
+            var trimmedSdk = sdk.Trim();
+
+            // Check for exact match "Aspire.AppHost.Sdk" (no version)
+            if (trimmedSdk.Equals(sdkPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return null; // SDK found but no version specified
+            }
+
+            // Check for "Aspire.AppHost.Sdk/version" format
+            if (trimmedSdk.StartsWith(sdkPrefix + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                var version = trimmedSdk.Substring(sdkPrefix.Length + 1);
+                return string.IsNullOrEmpty(version) ? null : version;
+            }
+        }
+
+        return null;
     }
 
     private static PackageReferenceInfo[] ExtractPackageReferences(XElement projectRoot)
@@ -187,7 +230,7 @@ internal sealed partial class FallbackProjectParser
             }
 
             // Try to get version from attribute first, then from child element
-            var version = element.Attribute("Version")?.Value ?? 
+            var version = element.Attribute("Version")?.Value ??
                          element.Element("Version")?.Value;
 
             var packageRef = new PackageReferenceInfo
@@ -220,8 +263,8 @@ internal sealed partial class FallbackProjectParser
             }
 
             // Convert relative path to absolute path
-            var fullPath = Path.IsPathRooted(include) 
-                ? include 
+            var fullPath = Path.IsPathRooted(include)
+                ? include
                 : Path.GetFullPath(Path.Combine(projectFile.DirectoryName!, include));
 
             var projectRef = new ProjectReferenceInfo
@@ -244,7 +287,7 @@ internal sealed partial class FallbackProjectParser
         // Match: #:sdk Aspire.AppHost.Sdk@<version>
         // Where version can be a semantic version or wildcard (*)
         var match = SdkDirectiveRegex().Match(fileContent);
-        
+
         if (match.Success)
         {
             return match.Groups[1].Value;

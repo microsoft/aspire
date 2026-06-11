@@ -1,9 +1,11 @@
-﻿services:
+services:
   docker-compose-dashboard:
     image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
-    expose:
+    ports:
       - "18888"
+    expose:
       - "18889"
+      - "18890"
     networks:
       - "aspire"
     restart: "always"
@@ -65,8 +67,6 @@
   project1:
     image: "${PROJECT1_IMAGE}"
     environment:
-      OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES: "true"
-      OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES: "true"
       OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
       MYAPP_HTTP: "http://myapp:8001"
       services__myapp__http__0: "http://myapp:8001"

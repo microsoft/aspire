@@ -29,3 +29,15 @@ internal class ExecutableLaunchConfiguration(string type)
     [JsonPropertyName("mode")]
     public string Mode { get; set; } = System.Diagnostics.Debugger.IsAttached ? ExecutableLaunchMode.Debug : ExecutableLaunchMode.NoDebug;
 }
+
+internal sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration("project")
+{
+    [JsonPropertyName("launch_profile")]
+    public string LaunchProfile { get; set; } = string.Empty;
+
+    [JsonPropertyName("disable_launch_profile")]
+    public bool DisableLaunchProfile { get; set; } = false;
+
+    [JsonPropertyName("project_path")]
+    public string ProjectPath { get; set; } = string.Empty;
+}

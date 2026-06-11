@@ -3,13 +3,18 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../DoCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Execute a specific pipeline step and its dependencies. (Preview)</source>
-        <target state="translated">執行特定管線步驟及其相依性。(預覽)</target>
+        <source>Execute a specific pipeline step and its dependencies</source>
+        <target state="needs-review-translation">執行特定管線步驟及其相依性。(預覽)</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
         <source>Executing pipeline...</source>
         <target state="translated">正在執行管線...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListStepsRequiresStep">
+        <source>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</source>
+        <target state="new">The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCanceled">
@@ -28,13 +33,18 @@
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
-        <source>The optional output path for artifacts.</source>
-        <target state="translated">成品的選用輸出路徑。</target>
+        <source>The optional output path for artifacts</source>
+        <target state="needs-review-translation">成品的選用輸出路徑。</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentDescription">
-        <source>The name of the step to execute.</source>
-        <target state="translated">要執行的步驟名稱。</target>
+        <source>The name of the step to execute</source>
+        <target state="needs-review-translation">要執行的步驟名稱。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StepArgumentRequired">
+        <source>The 'step' argument is required.</source>
+        <target state="new">The 'step' argument is required.</target>
         <note />
       </trans-unit>
     </body>

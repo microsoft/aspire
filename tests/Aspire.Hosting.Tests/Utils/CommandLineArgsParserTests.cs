@@ -5,6 +5,7 @@ using static Aspire.Hosting.Utils.CommandLineArgsParser;
 
 namespace Aspire.Hosting.Tests.Utils;
 
+[Trait("Partition", "4")]
 public class CommandLineArgsParserTests
 {
     [Theory]

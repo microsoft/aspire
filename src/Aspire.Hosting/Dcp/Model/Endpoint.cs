@@ -30,7 +30,7 @@ internal sealed record EndpointStatus : V1Status
     // Currently Endpoint has no status properties, but that may change in future.
 }
 
-internal sealed class Endpoint : CustomResource<EndpointSpec, EndpointStatus>
+internal sealed class Endpoint : CustomResource<EndpointSpec, EndpointStatus>, IKubernetesStaticMetadata
 {
     [JsonConstructor]
     public Endpoint(EndpointSpec spec) : base(spec) { }
@@ -50,5 +50,7 @@ internal sealed class Endpoint : CustomResource<EndpointSpec, EndpointStatus>
 
         return e;
     }
+
+    public static string ObjectKind => Dcp.EndpointKind;
 }
 

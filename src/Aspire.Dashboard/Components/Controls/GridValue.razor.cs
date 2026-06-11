@@ -3,9 +3,9 @@
 
 using System.Net;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.ConsoleLogs;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -96,14 +96,11 @@ public partial class GridValue
     [Parameter]
     public ComponentMetadata? ComponentMetadata { get; set; }
 
-    [CascadingParameter]
-    public required ViewportInformation ViewportInformation { get; set; }
-
     [Inject]
     public required IJSRuntime JS { get; init; }
 
     [Inject]
-    public required IDialogService DialogService { get; init; }
+    public required DashboardDialogService DialogService { get; init; }
 
     private readonly Icon _maskIcon = new Icons.Regular.Size16.EyeOff();
     private readonly Icon _unmaskIcon = new Icons.Regular.Size16.Eye();
@@ -160,7 +157,13 @@ public partial class GridValue
 
     private async Task OpenTextVisualizerAsync()
     {
-        await TextVisualizerDialog.OpenDialogAsync(ViewportInformation, DialogService, DialogsLoc, ValueDescription, ValueToVisualize ?? Value ?? string.Empty, IsMasked || ContainsSecret);
+        await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+        {
+            DialogService = DialogService,
+            ValueDescription = ValueDescription,
+            Value = ValueToVisualize ?? Value ?? string.Empty,
+            ContainsSecret = IsMasked || ContainsSecret
+        });
     }
 
     private Dictionary<string, object> BuildComponentParameters()

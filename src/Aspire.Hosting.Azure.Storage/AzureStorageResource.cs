@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Storage;
@@ -13,11 +15,12 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
 public class AzureStorageResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithAzureFunctionsConfig
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzureNspAssociationTarget
 {
     internal const string BlobsConnectionKeyPrefix = "Aspire__Azure__Storage__Blobs";
     internal const string QueuesConnectionKeyPrefix = "Aspire__Azure__Storage__Queues";
     internal const string TablesConnectionKeyPrefix = "Aspire__Azure__Data__Tables";
+    internal const string DataLakeConnectionKeyPrefix = "Aspire__Azure__Storage__Files__DataLake";
 
     private EndpointReference EmulatorBlobEndpoint => new(this, "blob");
     private EndpointReference EmulatorQueueEndpoint => new(this, "queue");
@@ -26,10 +29,15 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     internal IResourceBuilder<AzureBlobStorageResource>? BlobStorageBuilder { get; set; }
     internal IResourceBuilder<AzureQueueStorageResource>? QueueStorageBuilder { get; set; }
     internal IResourceBuilder<AzureTableStorageResource>? TableStorageBuilder { get; set; }
+    internal IResourceBuilder<AzureDataLakeStorageResource>? DataLakeStorageBuilder { get; set; }
 
     internal List<AzureBlobStorageContainerResource> BlobContainers { get; } = [];
 
+    internal List<AzureDataLakeStorageFileSystemResource> DataLakeFileSystems { get; } = [];
+
     internal List<AzureQueueStorageQueueResource> Queues { get; } = [];
+
+    internal bool IsHnsEnabled { get; set; }
 
     /// <summary>
     /// Gets the "blobEndpoint" output reference from the bicep template for the Azure Storage resource.
@@ -47,6 +55,16 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     public BicepOutputReference TableEndpoint => new("tableEndpoint", this);
 
     /// <summary>
+    /// Gets the "dataLakeEndpoint" output reference from the bicep template for the Azure Storage resource.
+    /// </summary>
+    public BicepOutputReference DataLakeEndpoint => new("dataLakeEndpoint", this);
+
+    /// <summary>
+    /// Gets the "id" output reference for the resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
+
+    /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>
     public BicepOutputReference NameOutputReference => new("name", this);
@@ -57,9 +75,49 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     public bool IsEmulator => this.IsContainer();
 
     /// <summary>
+    /// Gets the connection URI expression for the blob storage service.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>https://{host}:{port}</c> for emulator or <c>{blobEndpoint}</c> for Azure.
+    /// </remarks>
+    public ReferenceExpression BlobUriExpression => IsEmulator
+        ? ReferenceExpression.Create($"{EmulatorBlobEndpoint.Property(EndpointProperty.Url)}")
+        : ReferenceExpression.Create($"{BlobEndpoint}");
+
+    /// <summary>
+    /// Gets the connection URI expression for the data lake storage service.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>{blobEndpoint}</c> for Azure.
+    /// </remarks>
+    public ReferenceExpression DataLakeUriExpression => IsEmulator
+        ? throw new InvalidOperationException("Emulator currently does not support data lake.")
+        : ReferenceExpression.Create($"{DataLakeEndpoint}");
+
+    /// <summary>
+    /// Gets the connection URI expression for the queue storage service.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>https://{host}:{port}</c> for emulator or <c>{queueEndpoint}</c> for Azure.
+    /// </remarks>
+    public ReferenceExpression QueueUriExpression => IsEmulator
+        ? ReferenceExpression.Create($"{EmulatorQueueEndpoint.Property(EndpointProperty.Url)}")
+        : ReferenceExpression.Create($"{QueueEndpoint}");
+
+    /// <summary>
+    /// Gets the connection URI expression for the table storage service.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>https://{host}:{port}</c> for emulator or <c>{tableEndpoint}</c> for Azure.
+    /// </remarks>
+    public ReferenceExpression TableUriExpression => IsEmulator
+        ? ReferenceExpression.Create($"{EmulatorTableEndpoint.Property(EndpointProperty.Url)}")
+        : ReferenceExpression.Create($"{TableEndpoint}");
+
+    /// <summary>
     /// Gets the connection string for the Azure Storage emulator.
     /// </summary>
-    /// <returns></returns>
+    /// <returns>The connection string for the Azure Storage emulator.</returns>
     internal ReferenceExpression GetEmulatorConnectionString() => IsEmulator
        ? AzureStorageEmulatorConnectionString.Create(blobEndpoint: EmulatorBlobEndpoint, queueEndpoint: EmulatorQueueEndpoint, tableEndpoint: EmulatorTableEndpoint)
        : throw new InvalidOperationException("The Azure Storage resource is not running in the local emulator.");
@@ -75,6 +133,10 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     internal ReferenceExpression GetBlobConnectionString() => IsEmulator
         ? AzureStorageEmulatorConnectionString.Create(blobEndpoint: EmulatorBlobEndpoint)
         : ReferenceExpression.Create($"{BlobEndpoint}");
+
+    internal ReferenceExpression GetDataLakeConnectionString() => IsEmulator
+        ? throw new InvalidOperationException("Emulator currently does not support data lake.")
+        : ReferenceExpression.Create($"{DataLakeEndpoint}");
 
     void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
     {
@@ -94,10 +156,12 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
             target[$"{connectionName}__blobServiceUri"] = BlobEndpoint;
             target[$"{connectionName}__queueServiceUri"] = QueueEndpoint;
             target[$"{connectionName}__tableServiceUri"] = TableEndpoint;
+            target[$"{connectionName}__dataLakeServiceUri"] = DataLakeEndpoint;
             // Injected to support Aspire client integration for Azure Storage.
             target[$"{BlobsConnectionKeyPrefix}__{connectionName}__ServiceUri"] = BlobEndpoint;
             target[$"{QueuesConnectionKeyPrefix}__{connectionName}__ServiceUri"] = QueueEndpoint;
             target[$"{TablesConnectionKeyPrefix}__{connectionName}__ServiceUri"] = TableEndpoint;
+            target[$"{DataLakeConnectionKeyPrefix}__{connectionName}__ServiceUri"] = DataLakeEndpoint;
         }
     }
 
@@ -106,15 +170,15 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     {
         var bicepIdentifier = this.GetBicepIdentifier();
         var resources = infra.GetProvisionableResources();
-        
+
         // Check if a StorageAccount with the same identifier already exists
         var existingAccount = resources.OfType<StorageAccount>().SingleOrDefault(account => account.BicepIdentifier == bicepIdentifier);
-        
+
         if (existingAccount is not null)
         {
             return existingAccount;
         }
-        
+
         // Create and add new resource if it doesn't exist
         var account = StorageAccount.FromExisting(bicepIdentifier);
 

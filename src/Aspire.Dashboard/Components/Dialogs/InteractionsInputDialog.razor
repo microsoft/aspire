@@ -1,15 +1,10 @@
 ﻿@using Aspire.Dashboard.Components.Controls.Chart
-@using Aspire.Dashboard.Model
 @using Aspire.Dashboard.Model.Interaction
-@using Aspire.Dashboard.Model.Otlp
-@using Aspire.Dashboard.Otlp.Model
 @using Aspire.Dashboard.Resources
-@using Aspire.Dashboard.Utils
-@using Aspire.Dashboard.Extensions
-@using System.Globalization
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.DashboardService.Proto.V1
 @using Dialogs = Aspire.Dashboard.Resources.Dialogs
+@using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons
 @implements IDialogContentComponent<InteractionsInputsDialogViewModel>
 
 <FluentDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
@@ -49,6 +44,7 @@
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
                                                  Required="input.ViewModel.Input.Required"
                                                  Immediate="true"
+                                                 AutoComplete="off"
                                                  Disabled="input.ViewModel.InputDisabled"
                                                  aria-describedby="@input.DescriptionId"
                                                  Maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)" />
@@ -72,7 +68,15 @@
                                                  Immediate="true"
                                                  Disabled="input.ViewModel.InputDisabled"
                                                  aria-describedby="@input.DescriptionId"
-                                                 Maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)" />
+                                                 Maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)">
+                                    <FluentButton Appearance="Appearance.Stealth"
+                                                  Title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
+                                                  OnClick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
+                                                  class="secret-text-toggle-button"
+                                                  slot="end">
+                                        <FluentIcon Value="@GetSecretTextIcon(input.ViewModel)" />
+                                    </FluentButton>
+                                </FluentTextField>
                             </InteractionInputField>
                             break;
                         case InputType.Choice:
@@ -86,7 +90,8 @@
                                 *@
                                 @if (!localItem.Input.AllowCustomChoice)
                                 {
-                                    <FluentSelect TOption="SelectViewModel<string>"
+                                    <FluentSelect @key="input.ViewModel.InputKey"
+                                                  TOption="SelectViewModel<string>"
                                                   @ref="@_elementRefs[input.ViewModel]"
                                                   @bind-Value="input.ViewModel.Value"
                                                   Placeholder="@input.ViewModel.Input.Placeholder"
@@ -103,7 +108,8 @@
                                 }
                                 else
                                 {
-                                    <FluentCombobox TOption="SelectViewModel<string>"
+                                    <FluentCombobox @key="input.ViewModel.InputKey"
+                                                    TOption="SelectViewModel<string>"
                                                     @ref="@_elementRefs[input.ViewModel]"
                                                     @bind-Value="input.ViewModel.Value"
                                                     Placeholder="@input.ViewModel.Input.Placeholder"
@@ -134,7 +140,7 @@
                                                 @bind-Value="input.ViewModel.IsChecked"
                                                 Label="@input.ViewModel.Input.Label"
                                                 Placeholder="@input.ViewModel.Input.Placeholder"
-                                                AriaLabel="@input.ViewModel.Input.Description"
+                                                AriaLabel="@input.ViewModel.Input.Label"
                                                 Disabled="input.ViewModel.InputDisabled"
                                                 aria-describedby="@input.DescriptionId" />
                             </InteractionInputField>
@@ -179,24 +185,3 @@
         </FluentButton>
     }
 </FluentDialogFooter>
-
-@code {
-    private RenderFragment? GetDescriptionContent(InteractionInput vm, string? id)
-    {
-        @if (!string.IsNullOrEmpty(vm.Description))
-        {
-            return
-            @<div class="input-description" id="@id">
-            @if (vm.EnableDescriptionMarkdown)
-            {
-                    <MarkdownRenderer MarkdownProcessor="@_markdownProcessor" Markdown="@vm.Description" SuppressParagraphOnNewLines="true" />
-            }
-            else
-            {
-                    <span>@vm.Description</span>
-            }
-            </div>;
-        }
-        return null;
-    }
-}

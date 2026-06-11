@@ -7,4 +7,5 @@ public sealed class BrowserInfo
 {
     public string? TimeZone { get; set; }
     public string? UserAgent { get; set; }
+    public bool Is24HourTime { get; set; }
 }

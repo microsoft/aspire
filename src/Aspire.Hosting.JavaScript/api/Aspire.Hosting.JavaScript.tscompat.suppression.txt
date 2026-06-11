@@ -1,0 +1,1 @@
+BREAK capability-removed Aspire.Hosting.JavaScript Aspire.Hosting.JavaScript/publishAsNpmScript -- https://github.com/microsoft/aspire/pull/17382 -- Renamed package-script publish API to avoid npm-specific naming because the implementation supports multiple package managers.

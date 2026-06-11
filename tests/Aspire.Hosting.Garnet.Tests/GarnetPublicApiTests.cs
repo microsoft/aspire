@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Garnet.Tests;
 
-public class GarnetPublicApiTests
+public class GarnetPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddGarnetShouldThrowWhenBuilderIsNull()
@@ -25,7 +25,7 @@ public class GarnetPublicApiTests
     [InlineData(false)]
     public void AddGarnetShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddGarnet(name);
@@ -64,7 +64,7 @@ public class GarnetPublicApiTests
     [InlineData(false)]
     public void WithDataBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddGarnet("garnet");
         var source = isNull ? null! : string.Empty;
 

@@ -93,4 +93,47 @@ public class ResourceGraphMapperTests
         // Assert
         Assert.Contains("hidden-app", dto.ReferencedNames);
     }
+
+    [Fact]
+    public void MapResource_ParameterResource_NoEndpoint()
+    {
+        // Arrange
+        var resource = ModelTestHelpers.CreateResource(
+            "api-key",
+            displayName: "api-key",
+            resourceType: KnownResourceTypes.Parameter,
+            relationships: ImmutableArray<RelationshipViewModel>.Empty);
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            [resource.Name] = resource,
+        };
+
+        // Act
+        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+
+        // Assert
+        Assert.Null(dto.EndpointUrl);
+        Assert.Null(dto.EndpointText);
+    }
+
+    [Fact]
+    public void MapResource_NonParameterResource_HasEndpointText()
+    {
+        // Arrange
+        var resource = ModelTestHelpers.CreateResource(
+            "app1",
+            displayName: "app1",
+            resourceType: KnownResourceTypes.Container,
+            relationships: ImmutableArray<RelationshipViewModel>.Empty);
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            [resource.Name] = resource,
+        };
+
+        // Act
+        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+
+        // Assert - non-parameter resources should always have endpoint text (even if "No endpoints")
+        Assert.NotNull(dto.EndpointText);
+    }
 }

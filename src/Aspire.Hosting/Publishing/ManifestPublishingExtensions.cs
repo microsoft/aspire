@@ -21,11 +21,13 @@ internal static class ManifestPublishingExtensions
     /// </summary>
     /// <param name="pipeline">The pipeline to add the manifest publishing step to.</param>
     /// <returns>The pipeline for chaining.</returns>
+    [AspireExportIgnore(Reason = "Manifest publishing is an internal pipeline step and not part of the polyglot AppHost surface.")]
     public static IDistributedApplicationPipeline AddManifestPublishing(this IDistributedApplicationPipeline pipeline)
     {
         var step = new PipelineStep
         {
             Name = "publish-manifest",
+            Description = "Publishes the Aspire application model as a JSON manifest file.",
             Action = async context =>
             {
                 var loggerFactory = context.Services.GetRequiredService<ILoggerFactory>();

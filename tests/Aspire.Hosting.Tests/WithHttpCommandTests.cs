@@ -1,15 +1,101 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
+using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
-using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "6")]
 public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public void HttpCommandResultMode_HasExpectedOrdering()
+    {
+        Assert.Equal(0, (int)HttpCommandResultMode.None);
+        Assert.Equal(1, (int)HttpCommandResultMode.Auto);
+        Assert.Equal(2, (int)HttpCommandResultMode.Json);
+        Assert.Equal(3, (int)HttpCommandResultMode.Text);
+    }
+
+    [Theory]
+    [InlineData(null, false, null)]
+    [InlineData("application/octet-stream", false, null)]
+    [InlineData("application/json", true, CommandResultFormat.Json)]
+    [InlineData("application/problem+json", true, CommandResultFormat.Json)]
+    [InlineData("text/plain", true, CommandResultFormat.Text)]
+    [InlineData("application/xml", true, CommandResultFormat.Text)]
+    [InlineData("application/problem+xml", true, CommandResultFormat.Text)]
+    [InlineData("application/x-www-form-urlencoded", true, CommandResultFormat.Text)]
+    public void TryInferHttpCommandResultFormat_ReturnsExpectedResult(string? mediaType, bool expectedSuccess, CommandResultFormat? expectedFormat)
+    {
+        var contentType = mediaType is null ? null : MediaTypeHeaderValue.Parse(mediaType);
+
+        var success = ResourceBuilderExtensions.TryInferHttpCommandResultFormat(contentType, out var resultFormat);
+
+        Assert.Equal(expectedSuccess, success);
+        Assert.Equal(expectedFormat, success ? resultFormat : null);
+    }
+
+    [Fact]
+    public async Task GetDefaultHttpCommandResultAsync_WithoutOptIn_DoesNotReturnResponseBody()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"token":"abc123"}""", Encoding.UTF8, "application/json")
+        };
+
+        var result = await ResourceBuilderExtensions.GetDefaultHttpCommandResultAsync(response, new HttpCommandOptions(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Null(result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task GetDefaultHttpCommandResultAsync_WithResultModeJson_ReturnsResponseBody()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"token":"abc123"}""", Encoding.UTF8, "application/json")
+        };
+
+        var result = await ResourceBuilderExtensions.GetDefaultHttpCommandResultAsync(response, new HttpCommandOptions
+        {
+            ResultMode = HttpCommandResultMode.Json
+        }, CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Null(result.Message);
+        Assert.Equal("""{"token":"abc123"}""", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Data?.Format);
+    }
+
+    [Fact]
+    public async Task GetDefaultHttpCommandResultAsync_WithResultModeAuto_ReturnsErrorBodyUsingInferredFormat()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent("invalid request", Encoding.UTF8, "text/plain")
+        };
+
+        var result = await ResourceBuilderExtensions.GetDefaultHttpCommandResultAsync(response, new HttpCommandOptions
+        {
+            ResultMode = HttpCommandResultMode.Auto
+        }, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal("Request failed with status code BadRequest", result.Message);
+        Assert.Equal("invalid request", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Data?.Format);
+    }
+
     [Fact]
     public void WithHttpCommand_AddsHttpClientFactory()
     {
@@ -35,7 +121,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     public void WithHttpCommand_Throws_WhenEndpointByNameIsNotHttp()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateTestDistributedApplicationBuilder();
 
         var container = builder.AddContainer("name", "image")
                 .WithEndpoint(targetPort: 9999, scheme: "tcp", name: "nonhttp");
@@ -57,7 +143,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     public void WithHttpCommand_Throws_WhenEndpointIsNotHttp()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateTestDistributedApplicationBuilder();
 
         var container = builder.AddContainer("name", "image")
                 .WithEndpoint(targetPort: 9999, scheme: "tcp", name: "nonhttp");
@@ -79,7 +165,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     public void WithHttpCommand_AddsResourceCommandAnnotation_WithDefaultValues()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateTestDistributedApplicationBuilder();
         var resourceBuilder = builder.AddContainer("name", "image")
             .WithHttpEndpoint()
             .WithHttpCommand("/some-path", "Do The Thing");
@@ -103,7 +189,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     public void WithHttpCommand_AddsResourceCommandAnnotation_WithCustomValues()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateTestDistributedApplicationBuilder();
         var resourceBuilder = builder.AddContainer("name", "image")
             .WithHttpEndpoint()
             .WithHttpCommand("/some-path", "Do The Thing",
@@ -132,10 +218,156 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithHttpCommandExport_CopiesCommonCommandOptions()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+        var resourceBuilder = builder.AddResource(new CustomResource("name"))
+            .WithHttpEndpoint()
+            .WithHttpCommandExport("/some-path", "Do The Thing", new HttpCommandExportOptions
+            {
+                CommandOptions = new CommandOptions
+                {
+                    Description = "Command description",
+                    ConfirmationMessage = "Are you sure?",
+                    IconName = "DatabaseLightning",
+                    IconVariant = IconVariant.Filled,
+                    IsHighlighted = true,
+                    Visibility = ResourceCommandVisibility.Api,
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "message",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                }
+            });
+
+        var command = resourceBuilder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Single();
+        var argument = Assert.Single(command.Arguments);
+
+        Assert.Equal("Do The Thing", command.DisplayName);
+        Assert.Equal("Command description", command.DisplayDescription);
+        Assert.Equal("Are you sure?", command.ConfirmationMessage);
+        Assert.Equal("DatabaseLightning", command.IconName);
+        Assert.Equal(IconVariant.Filled, command.IconVariant);
+        Assert.True(command.IsHighlighted);
+        Assert.Equal(ResourceCommandVisibility.Api, command.Visibility);
+        Assert.Equal("message", argument.Name);
+        Assert.True(argument.Required);
+    }
+
+    [Fact]
+    public void WithHttpCommandExport_PrefersTopLevelOptionsOverCommonCommandOptions()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+        var resourceBuilder = builder.AddResource(new CustomResource("name"))
+            .WithHttpEndpoint()
+            .WithHttpCommandExport("/some-path", "Do The Thing", new HttpCommandExportOptions
+            {
+                Description = "Top-level description",
+                ConfirmationMessage = "Top-level confirmation",
+                IconName = "TopLevelIcon",
+                IconVariant = IconVariant.Filled,
+                IsHighlighted = true,
+                CommandOptions = new CommandOptions
+                {
+                    Description = "Common description",
+                    ConfirmationMessage = "Common confirmation",
+                    IconName = "CommonIcon",
+                    IconVariant = IconVariant.Regular
+                }
+            });
+
+        var command = resourceBuilder.Resource.Annotations.OfType<ResourceCommandAnnotation>().Single();
+
+        Assert.Equal("Top-level description", command.DisplayDescription);
+        Assert.Equal("Top-level confirmation", command.ConfirmationMessage);
+        Assert.Equal("TopLevelIcon", command.IconName);
+        Assert.Equal(IconVariant.Filled, command.IconVariant);
+        Assert.True(command.IsHighlighted);
+    }
+
+    [Fact]
+    public async Task WithHttpCommandExport_UsesPrepareRequestCallbackProperty()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, "ok", "text/plain");
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        InteractionInputCollection? prepareArguments = null;
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommandExport(
+            "/send",
+            "Send Message",
+            new HttpCommandExportOptions
+            {
+                MethodName = "POST",
+                CommandName = "mycommand",
+                PrepareRequest = context =>
+                {
+                    prepareArguments = context.Arguments;
+                    var message = context.Arguments.GetString("message")!;
+
+                    return Task.FromResult(new HttpCommandRequestExportData
+                    {
+                        MethodName = "PUT",
+                        Content = message,
+                        ContentType = "text/plain",
+                        Headers = new Dictionary<string, string>
+                        {
+                            ["X-Message"] = message
+                        }
+                    });
+                },
+                CommandOptions = new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "message",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                }
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "hello-from-ts-prepare-request"
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand", arguments).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal("hello-from-ts-prepare-request", prepareArguments?.GetString("message"));
+        Assert.Equal(HttpMethod.Put, fakeHandler.RequestMethod);
+        Assert.Equal("hello-from-ts-prepare-request", fakeHandler.RequestContent);
+        Assert.Equal("hello-from-ts-prepare-request", fakeHandler.RequestHeader);
+        Assert.Equal("text/plain", fakeHandler.RequestContentType);
+    }
+
+    [Fact]
     public void WithHttpCommand_AddsResourceCommandAnnotations_WithUniqueCommandNames()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateTestDistributedApplicationBuilder();
         var resourceBuilder = builder.AddContainer("name", "image")
             .WithHttpEndpoint()
             .WithHttpEndpoint(name: "custom-endpoint")
@@ -173,23 +405,28 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     [InlineData(403, false)]
     [InlineData(404, false)]
     [InlineData(500, false)]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9670")]
     [Theory]
     public async Task WithHttpCommand_ResultsInExpectedResultForStatusCode(int statusCode, bool expectSuccess)
     {
-        // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var resourceBuilder = builder.AddProject<Projects.ServiceA>("servicea")
-            .WithHttpCommand($"/status/{statusCode}", "Do The Thing", commandName: "mycommand");
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler((HttpStatusCode)statusCode);
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand($"/status/{statusCode}", "Do The Thing", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient" });
 
         // Act
-        var app = builder.Build();
-        await app.StartAsync();
-        await app.ResourceNotifications.WaitForResourceHealthyAsync("servicea").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
 
-        var result = await app.ResourceCommands.ExecuteCommandAsync(resourceBuilder.Resource, "mycommand");
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
 
         // Assert
+        Assert.True(fakeHandler.Called, "Expected the HTTP handler to be called");
         Assert.Equal(expectSuccess, result.Success);
     }
 
@@ -197,123 +434,171 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     [InlineData("get", true)]
     [InlineData("post", false)]
     [Theory]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/9725")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/9725")]
     public async Task WithHttpCommand_ResultsInExpectedResultForHttpMethod(string? httpMethod, bool expectSuccess)
     {
         // Arrange
         var method = httpMethod is not null ? new HttpMethod(httpMethod) : HttpCommandOptions.Default.Method;
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var resourceBuilder = builder.AddProject<Projects.ServiceA>("servicea")
-            .WithHttpCommand("/get-only", "Do The Thing", commandName: "mycommand", commandOptions: new() { Method = method });
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        // Return 405 Method Not Allowed for POST, 200 OK for GET
+        var fakeHandler = new FakeHttpMessageHandler(expectSuccess ? HttpStatusCode.OK : HttpStatusCode.MethodNotAllowed);
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/get-only", "Do The Thing", commandName: "mycommand", commandOptions: new() { Method = method, HttpClientName = "commandclient" });
 
         // Act
-        var app = builder.Build();
-        await app.StartAsync();
-        await app.ResourceNotifications.WaitForResourceHealthyAsync("servicea").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
 
-        var result = await app.ResourceCommands.ExecuteCommandAsync(resourceBuilder.Resource, "mycommand");
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
 
         // Assert
+        Assert.True(fakeHandler.Called, "Expected the HTTP handler to be called");
         Assert.Equal(expectSuccess, result.Success);
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9800")]
     public async Task WithHttpCommand_UsesNamedHttpClient()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var trackingMessageHandler = new TrackingHttpMessageHandler();
+        using var builder = CreateTestDistributedApplicationBuilder();
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK);
         builder.Services.AddHttpClient("commandclient")
-            .AddHttpMessageHandler((sp) => trackingMessageHandler);
-        var resourceBuilder = builder.AddProject<Projects.ServiceA>("servicea")
-            .WithHttpCommand("/get-only", "Do The Thing", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient" });
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/get-only", "Do The Thing", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient" });
 
         // Act
-        var app = builder.Build();
-        await app.StartAsync();
-        await app.ResourceNotifications.WaitForResourceHealthyAsync("servicea").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
 
-        var result = await app.ResourceCommands.ExecuteCommandAsync(resourceBuilder.Resource, "mycommand");
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
 
         // Assert
-        Assert.True(trackingMessageHandler.Called);
+        Assert.True(fakeHandler.Called);
     }
 
-    private sealed class TrackingHttpMessageHandler : DelegatingHandler
+    private sealed class FakeHttpMessageHandler(HttpStatusCode statusCode, string? responseBody = null, string? mediaType = null) : HttpMessageHandler
     {
         public bool Called { get; private set; }
+        public HttpMethod? RequestMethod { get; private set; }
+        public string? RequestContent { get; private set; }
+        public string? RequestContentType { get; private set; }
+        public string? RequestHeader { get; private set; }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Called = true;
-            return base.SendAsync(request, cancellationToken);
+            RequestMethod = request.Method;
+            RequestContent = request.Content is not null
+                ? await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)
+                : null;
+            RequestContentType = request.Content?.Headers.ContentType?.MediaType;
+            RequestHeader = request.Headers.TryGetValues("X-Message", out var values)
+                ? Assert.Single(values)
+                : null;
+
+            var response = new HttpResponseMessage(statusCode);
+            if (responseBody is not null)
+            {
+                response.Content = mediaType is not null
+                    ? new StringContent(responseBody, Encoding.UTF8, mediaType)
+                    : new StringContent(responseBody);
+            }
+
+            return response;
         }
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9818")]
     public async Task WithHttpCommand_UsesEndpointSelector()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateTestDistributedApplicationBuilder();
 
-        var serviceA = builder.AddProject<Projects.ServiceA>("servicea");
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK);
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var serviceA = CreateResourceWithAllocatedEndpoint(builder, "servicea");
         var callbackCalled = false;
-        var serviceB = builder.AddProject<Projects.ServiceA>("serviceb")
+        var serviceB = builder.AddResource(new CustomResource("serviceb"))
+            .WithHttpEndpoint(targetPort: 8081)
             .WithHttpCommand("/status/200", "Do The Thing", commandName: "mycommand",
                 endpointSelector: () =>
                 {
                     callbackCalled = true;
                     return serviceA.GetEndpoint("http");
-                });
+                },
+                commandOptions: new() { HttpClientName = "commandclient" });
 
         // Act
-        var app = builder.Build();
-        await app.StartAsync();
-        await app.ResourceNotifications.WaitForResourceHealthyAsync("servicea").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
 
-        var result = await app.ResourceCommands.ExecuteCommandAsync(serviceB.Resource, "mycommand");
+        // Move serviceA to running (which the command's endpoint selector points to)
+        await app.ResourceNotifications.PublishUpdateAsync(serviceA.Resource, s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+        await app.ResourceNotifications.WaitForResourceAsync(serviceA.Resource.Name, KnownResourceStates.Running).DefaultTimeout();
+
+        // Move serviceB to running and wait for command to become enabled
+        await MoveResourceToRunningStateAsync(app, serviceB.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(serviceB.Resource, "mycommand").DefaultTimeout();
 
         // Assert
         Assert.True(callbackCalled);
+        Assert.True(fakeHandler.Called);
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9789")]
     public async Task WithHttpCommand_CallsPrepareRequestCallback_BeforeSendingRequest()
     {
         // Arrange
         var callbackCalled = false;
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateTestDistributedApplicationBuilder();
 
-        string resolvedResourceName = null!;
-        var resourceBuilder = builder.AddProject<Projects.ServiceA>("servicea")
-            .WithHttpCommand("/status/200", "Do The Thing",
-                commandName: "mycommand",
-                commandOptions: new()
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK);
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/status/200", "Do The Thing",
+            commandName: "mycommand",
+            commandOptions: new()
+            {
+                HttpClientName = "commandclient",
+                PrepareRequest = requestContext =>
                 {
-                    PrepareRequest = requestContext =>
-                    {
-                        Assert.NotNull(requestContext);
-                        Assert.NotNull(requestContext.ServiceProvider);
-                        Assert.Equal(resolvedResourceName, requestContext.ResourceName);
-                        Assert.NotNull(requestContext.Endpoint);
-                        Assert.NotNull(requestContext.HttpClient);
-                        Assert.NotNull(requestContext.Request);
+                    Assert.NotNull(requestContext);
+                    Assert.NotNull(requestContext.Services);
+                    Assert.Equal(service.Resource.Name, requestContext.ResourceName);
+                    Assert.NotNull(requestContext.Endpoint);
+                    Assert.NotNull(requestContext.HttpClient);
+                    Assert.NotNull(requestContext.Request);
 
-                        callbackCalled = true;
-                        return Task.CompletedTask;
-                    }
-                });
+                    callbackCalled = true;
+                    return Task.CompletedTask;
+                }
+            });
 
         // Act
-        var app = builder.Build();
-        await app.StartAsync();
-        await app.ResourceNotifications.WaitForResourceHealthyAsync("servicea").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        resolvedResourceName = resourceBuilder.Resource.GetResolvedResourceNames().Single();
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
 
-        var result = await app.ResourceCommands.ExecuteCommandAsync(resourceBuilder.Resource, "mycommand");
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
 
         // Assert
         Assert.True(callbackCalled);
@@ -321,53 +606,257 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9772")]
     public async Task WithHttpCommand_CallsGetResponseCallback_AfterSendingRequest()
     {
         // Arrange
         var callbackCalled = false;
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateTestDistributedApplicationBuilder();
 
-        string resolvedResourceName = null!;
-        var resourceBuilder = builder.AddProject<Projects.ServiceA>("servicea")
-            .WithHttpCommand("/status/200", "Do The Thing",
-                commandName: "mycommand",
-                commandOptions: new()
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK);
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/status/200", "Do The Thing",
+            commandName: "mycommand",
+            commandOptions: new()
+            {
+                HttpClientName = "commandclient",
+                GetCommandResult = resultContext =>
                 {
-                    GetCommandResult = resultContext =>
-                    {
-                        Assert.NotNull(resultContext);
-                        Assert.NotNull(resultContext.ServiceProvider);
-                        Assert.Equal(resolvedResourceName, resultContext.ResourceName);
-                        Assert.NotNull(resultContext.Endpoint);
-                        Assert.NotNull(resultContext.HttpClient);
-                        Assert.NotNull(resultContext.Response);
+                    Assert.NotNull(resultContext);
+                    Assert.NotNull(resultContext.Services);
+                    Assert.Equal(service.Resource.Name, resultContext.ResourceName);
+                    Assert.NotNull(resultContext.Endpoint);
+                    Assert.NotNull(resultContext.HttpClient);
+                    Assert.NotNull(resultContext.Response);
 
-                        callbackCalled = true;
-                        return Task.FromResult(CommandResults.Failure("A test error message"));
-                    }
-                });
+                    callbackCalled = true;
+                    return Task.FromResult(CommandResults.Failure("A test error message"));
+                }
+            });
 
         // Act
-        var app = builder.Build();
-        await app.StartAsync();
-        await app.ResourceNotifications.WaitForResourceHealthyAsync("servicea").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        resolvedResourceName = resourceBuilder.Resource.GetResolvedResourceNames().Single();
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
 
-        var result = await app.ResourceCommands.ExecuteCommandAsync(resourceBuilder.Resource, "mycommand");
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
 
         // Assert
         Assert.True(callbackCalled);
         Assert.False(result.Success);
-        Assert.Equal("A test error message", result.ErrorMessage);
+        Assert.Equal("A test error message", result.Message);
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/8101")]
+    public async Task WithHttpCommand_PassesArgumentsToRequestAndResultCallbacks()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, "ok", "text/plain");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        InteractionInputCollection? prepareArguments = null;
+        InteractionInputCollection? resultArguments = null;
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/send", "Send Message",
+            commandName: "mycommand",
+            commandOptions: new()
+            {
+                HttpClientName = "commandclient",
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "message",
+                        InputType = InputType.Text,
+                        Required = true
+                    }
+                ],
+                PrepareRequest = requestContext =>
+                {
+                    prepareArguments = requestContext.Arguments;
+                    var message = requestContext.Arguments.GetString("message")!;
+                    requestContext.Request.Headers.Add("X-Message", message);
+                    requestContext.Request.Content = new StringContent(message, Encoding.UTF8, "text/plain");
+                    return Task.CompletedTask;
+                },
+                GetCommandResult = resultContext =>
+                {
+                    resultArguments = resultContext.Arguments;
+                    return Task.FromResult(CommandResults.Success(resultContext.Arguments.GetString("message")!));
+                }
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "hello-from-argument"
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand", arguments).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal("hello-from-argument", result.Message);
+        Assert.Equal("hello-from-argument", prepareArguments?.GetString("message"));
+        Assert.Equal("hello-from-argument", resultArguments?.GetString("message"));
+        Assert.Equal("hello-from-argument", fakeHandler.RequestContent);
+        Assert.Equal("hello-from-argument", fakeHandler.RequestHeader);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithoutOptIn_DoesNotReturnJsonResponseBody()
+    {
+        // Arrange
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"token":"abc123"}""", "application/json");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/token", "Generate Token", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient" });
+
+        // Act
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithResultModeJson_ReturnsJsonResponseBody()
+    {
+        // Arrange
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"token":"abc123"}""", "application/json");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/token", "Generate Token", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient", ResultMode = HttpCommandResultMode.Json });
+
+        // Act
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal("""{"token":"abc123"}""", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Data?.Format);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithResultModeText_ReturnsTextResponseBody()
+    {
+        // Arrange
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.BadRequest, "invalid request", "text/plain");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/text", "Get Text", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient", ResultMode = HttpCommandResultMode.Text });
+
+        // Act
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal("Request failed with status code BadRequest", result.Message);
+        Assert.Equal("invalid request", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Data?.Format);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithResultModeAuto_ReturnsJsonResponseBody()
+    {
+        // Arrange
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"token":"abc123"}""", "application/json");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/token", "Generate Token", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient", ResultMode = HttpCommandResultMode.Auto });
+
+        // Act
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal("""{"token":"abc123"}""", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Data?.Format);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithResultModeAuto_ReturnsTextResponseBody()
+    {
+        // Arrange
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.BadRequest, "invalid request", "text/plain");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/text", "Get Text", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient", ResultMode = HttpCommandResultMode.Auto });
+
+        // Act
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal("Request failed with status code BadRequest", result.Message);
+        Assert.Equal("invalid request", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Data?.Format);
+    }
+
+    [Fact]
     public async Task WithHttpCommand_EnablesCommandOnceResourceIsRunning()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateTestDistributedApplicationBuilder();
 
         builder.Configuration["CODESPACES"] = "false";
 
@@ -376,57 +865,42 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
             .WithHttpCommand("/dothing", "Do The Thing", commandName: "mycommand");
 
         using var app = builder.Build();
-        ResourceCommandState? commandState = null;
-        var watchTcs = new TaskCompletionSource();
-        var watchCts = new CancellationTokenSource();
-        var watchTask = Task.Run(async () =>
-        {
-            await foreach (var resourceEvent in app.ResourceNotifications.WatchAsync(watchCts.Token).WithCancellation(watchCts.Token))
-            {
-                var commandSnapshot = resourceEvent.Snapshot.Commands.First(c => c.Name == "mycommand");
-                commandState = commandSnapshot.State;
-                if (commandState == ResourceCommandState.Enabled)
-                {
-                    watchTcs.TrySetResult();
-                }
-            }
-        }, watchCts.Token);
+        await app.StartAsync().DefaultTimeout();
 
-        // Act/Assert
-        await app.StartAsync();
-
-        // Move the resource to the starting state
+        // Move the resource to the starting state and verify command is disabled
         await app.ResourceNotifications.PublishUpdateAsync(service.Resource, s => s with
         {
             State = KnownResourceStates.Starting
-        });
-        await app.ResourceNotifications.WaitForResourceAsync(service.Resource.Name, KnownResourceStates.Starting).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        }).DefaultTimeout();
 
-        // Veriy the command is disabled
-        Assert.Equal(ResourceCommandState.Disabled, commandState);
+        var startingEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            service.Resource.Name,
+            e => e.Snapshot.State?.Text == KnownResourceStates.Starting).DefaultTimeout();
+
+        Assert.Equal(ResourceCommandState.Disabled, startingEvent.Snapshot.Commands.First(c => c.Name == "mycommand").State);
 
         // Move the resource to the running state
         await app.ResourceNotifications.PublishUpdateAsync(service.Resource, s => s with
         {
             State = KnownResourceStates.Running
-        });
-        await app.ResourceNotifications.WaitForResourceAsync(service.Resource.Name, KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await watchTcs.Task.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        }).DefaultTimeout();
 
-        // Verify the command is enabled
-        Assert.Equal(ResourceCommandState.Enabled, commandState);
+        // Wait for the command to become enabled (this happens after resource becomes ready)
+        var runningEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            service.Resource.Name,
+            e => e.Snapshot.State?.Text == KnownResourceStates.Running &&
+                 e.Snapshot.Commands.First(c => c.Name == "mycommand").State == ResourceCommandState.Enabled).DefaultTimeout();
 
-        // Clean up
-        watchCts.Cancel();
-        await app.StopAsync();
+        Assert.Equal(ResourceCommandState.Enabled, runningEvent.Snapshot.Commands.First(c => c.Name == "mycommand").State);
+
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9811")]
     public async Task WithHttpCommand_EnablesCommandUsingCustomUpdateStateCallback()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateTestDistributedApplicationBuilder();
 
         builder.Configuration["CODESPACES"] = "false";
 
@@ -446,50 +920,90 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
                 });
 
         using var app = builder.Build();
-        ResourceCommandState? commandState = null;
-        var watchTcs = new TaskCompletionSource();
-        var watchCts = new CancellationTokenSource();
-        var watchTask = Task.Run(async () =>
-        {
-            await foreach (var resourceEvent in app.ResourceNotifications.WatchAsync(watchCts.Token).WithCancellation(watchCts.Token))
-            {
-                var commandSnapshot = resourceEvent.Snapshot.Commands.First(c => c.Name == "mycommand");
-                commandState = commandSnapshot.State;
-                if (commandState == ResourceCommandState.Enabled)
-                {
-                    watchTcs.TrySetResult();
-                }
-            }
-        }, watchCts.Token);
-
-        // Act/Assert
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         // Move the resource to the running state
         await app.ResourceNotifications.PublishUpdateAsync(service.Resource, s => s with
         {
             State = KnownResourceStates.Running
-        });
-        await app.ResourceNotifications.WaitForResourceAsync(service.Resource.Name, KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        }).DefaultTimeout();
 
-        // Veriy the command is hidden despite the resource being running
-        Assert.Equal(ResourceCommandState.Hidden, commandState);
+        // Wait for the resource to be running and verify command is hidden (custom UpdateState returns Hidden)
+        var runningEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            service.Resource.Name,
+            e => e.Snapshot.State?.Text == KnownResourceStates.Running &&
+                 e.Snapshot.Commands.First(c => c.Name == "mycommand").State == ResourceCommandState.Hidden).DefaultTimeout();
 
-        // Publish an update to force reevaluation of the command state
+        Assert.Equal(ResourceCommandState.Hidden, runningEvent.Snapshot.Commands.First(c => c.Name == "mycommand").State);
+
+        // Enable the command and publish an update to force reevaluation
         enableCommand = true;
         await app.ResourceNotifications.PublishUpdateAsync(service.Resource, s => s with
         {
             State = KnownResourceStates.Running
-        });
-        await watchTcs.Task.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        }).DefaultTimeout();
 
-        // Verify the callback was called and the command is enabled
+        // Wait for the command to become enabled
+        var enabledEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            service.Resource.Name,
+            e => e.Snapshot.Commands.First(c => c.Name == "mycommand").State == ResourceCommandState.Enabled).DefaultTimeout();
+
         Assert.True(callbackCalled);
-        Assert.Equal(ResourceCommandState.Enabled, commandState);
+        Assert.Equal(ResourceCommandState.Enabled, enabledEvent.Snapshot.Commands.First(c => c.Name == "mycommand").State);
 
-        // Clean up
-        watchCts.Cancel();
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    private IDistributedApplicationTestingBuilder CreateTestDistributedApplicationBuilder()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        // Disable retries for the commandclient HTTP client to make test faster and deterministic.
+        // TestDistributedApplicationBuilder adds a default resilience handler via ConfigureHttpClientDefaults.
+        // The handler pipeline is named "{clientName}-standard" so for "commandclient" it's "commandclient-standard".
+        builder.Services.Configure<HttpStandardResilienceOptions>("commandclient-standard", options =>
+        {
+            options.Retry.ShouldHandle = _ => ValueTask.FromResult(false);
+        });
+        builder.Services.Configure<HttpStandardResilienceOptions>("-standard", options =>
+        {
+            options.Retry.ShouldHandle = _ => ValueTask.FromResult(false);
+        });
+        return builder;
+    }
+
+    /// <summary>
+    /// Moves a resource to the running state and waits for the HTTP command to become enabled.
+    /// </summary>
+    private static async Task MoveResourceToRunningStateAsync(DistributedApplication app, IResource resource, string commandName = "mycommand")
+    {
+        await app.ResourceNotifications.PublishUpdateAsync(resource, s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        // Wait for resource to be running AND for the command to become enabled
+        // The command state is updated synchronously when PublishUpdateAsync is called, but we still need to wait
+        // for the notification to propagate through the ResourceNotificationService event system
+        await app.ResourceNotifications.WaitForResourceAsync(
+            resource.Name,
+            e => e.Snapshot.State?.Text == KnownResourceStates.Running &&
+                 e.Snapshot.Commands.FirstOrDefault(c => c.Name == commandName)?.State == ResourceCommandState.Enabled).DefaultTimeout();
+    }
+
+    /// <summary>
+    /// Creates a CustomResource with an HTTP endpoint and pre-allocates the endpoint
+    /// so HTTP commands can resolve the URL without requiring DCP allocation.
+    /// </summary>
+    private static IResourceBuilder<CustomResource> CreateResourceWithAllocatedEndpoint(IDistributedApplicationBuilder builder, string name, int port = 8080)
+    {
+        var service = builder.AddResource(new CustomResource(name))
+            .WithHttpEndpoint(targetPort: port);
+
+        var endpointAnnotation = service.Resource.Annotations.OfType<EndpointAnnotation>().Single();
+        endpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(endpointAnnotation, "localhost", port);
+
+        return service;
     }
 
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithWaitSupport
@@ -497,3 +1011,4 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 
     }
 }
+

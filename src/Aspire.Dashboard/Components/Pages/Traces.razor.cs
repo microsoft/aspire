@@ -10,6 +10,7 @@ using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Assistant.Prompts;
+using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -65,7 +66,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     public required TracesViewModel TracesViewModel { get; init; }
 
     [Inject]
-    public required IDialogService DialogService { get; init; }
+    public required DashboardDialogService DialogService { get; init; }
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -96,6 +97,9 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
+
+    [Inject]
+    public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
@@ -248,8 +252,8 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
 
-    private string GetResourceName(OtlpResource app) => OtlpResource.GetResourceName(app, _resources);
-    private string GetResourceName(OtlpResourceView app) => OtlpResource.GetResourceName(app, _resources);
+    private string GetResourceName(OtlpResource app) => OtlpHelpers.GetResourceName(app, _resources);
+    private string GetResourceName(OtlpResourceView app) => OtlpHelpers.GetResourceName(app.Resource, _resources);
 
     private static string GetRowClass(OtlpTrace entry)
     {
@@ -358,25 +362,14 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             await _contentLayout.CloseMobileToolbarAsync();
         }
 
-        var title = entry is not null ? FilterLoc[nameof(StructuredFiltering.DialogTitleEditFilter)] : FilterLoc[nameof(StructuredFiltering.DialogTitleAddFilter)];
-        var parameters = new DialogParameters
-        {
-            OnDialogResult = DialogService.CreateDialogCallback(this, HandleFilterDialog),
-            Title = title,
-            DismissTitle = DialogsLoc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],
-            Alignment = HorizontalAlignment.Right,
-            PrimaryAction = null,
-            SecondaryAction = null,
-            Width = "450px"
-        };
-        var data = new FilterDialogViewModel
-        {
-            Filter = entry,
-            PropertyKeys = TelemetryRepository.GetTracePropertyKeys(PageViewModel.SelectedResource.Id?.GetResourceKey()),
-            KnownKeys = KnownTraceFields.AllFields,
-            GetFieldValues = TelemetryRepository.GetTraceFieldValues
-        };
-        await DialogService.ShowPanelAsync<FilterDialog>(data, parameters);
+        await FilterHelpers.OpenFilterAsync(
+            entry,
+            DialogService,
+            DialogService.CreateDialogCallback(this, HandleFilterDialog),
+            propertyKeys: TelemetryRepository.GetTracePropertyKeys(PageViewModel.SelectedResource.Id?.GetResourceKey()),
+            knownKeys: KnownTraceFields.AllFields,
+            getFieldValues: TelemetryRepository.GetTraceFieldValues,
+            FilterLoc);
     }
 
     private async Task HandleFilterDialog(DialogResult result)
@@ -421,13 +414,52 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     private List<MenuButtonItem> GetFilterMenuItems()
     {
-        return this.GetFilterMenuItems(
+        return FilterHelpers.GetFilterMenuItems(
             TracesViewModel.Filters,
             clearFilters: TracesViewModel.ClearFilters,
             openFilterAsync: OpenFilterAsync,
+            afterChangeAsync: () => this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false),
             filterLoc: FilterLoc,
-            dialogsLoc: DialogsLoc,
-            contentLayout: _contentLayout);
+            dialogsLoc: DialogsLoc);
+    }
+
+    private static bool HasGenAISpans(OtlpTrace trace)
+    {
+        foreach (var span in trace.Spans)
+        {
+            if (GenAIHelpers.HasGenAIAttribute(span.Attributes))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task OnGenAIClickedAsync(OtlpTrace trace)
+    {
+        var firstSpan = trace.Spans.FirstOrDefault(s => GenAIHelpers.HasGenAIAttribute(s.Attributes));
+        if (firstSpan == null)
+        {
+            return;
+        }
+
+        await GenAIVisualizerDialog.OpenDialogAsync(
+            DialogService,
+            firstSpan,
+            selectedLogEntryId: null,
+            TelemetryRepository,
+            ErrorRecorder,
+            _resources,
+            () =>
+            {
+                var latestTrace = TelemetryRepository.GetTrace(trace.TraceId);
+                if (latestTrace is null)
+                {
+                    return [];
+                }
+                return latestTrace.Spans.Where(span => GenAIHelpers.HasGenAIAttribute(span.Attributes)).ToList();
+            });
     }
 
     private AIContext CreateAIContext()

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREUSERSECRETS001
+
 using System.Globalization;
 using Aspire.Hosting.UserSecrets;
 using Aspire.Hosting.VersionChecking;
@@ -12,8 +14,7 @@ using Semver;
 
 namespace Aspire.Hosting.Tests.VersionChecking;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
+[Trait("Partition", "4")]
 public class VersionCheckServiceTests
 {
     [Fact]
@@ -311,4 +312,3 @@ public class VersionCheckServiceTests
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

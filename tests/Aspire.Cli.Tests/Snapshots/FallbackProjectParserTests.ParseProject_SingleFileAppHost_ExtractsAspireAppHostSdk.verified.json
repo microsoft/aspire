@@ -1,0 +1,15 @@
+﻿{
+  "Items": {
+    "PackageReference": [
+      {
+        "Identity": "Aspire.Hosting.NodeJs",
+        "Version": "9.5.1"
+      }
+    ],
+    "ProjectReference": []
+  },
+  "Properties": {
+    "AspireHostingSDKVersion": "13.0.0-preview.1.25519.5"
+  },
+  "Fallback": true
+}

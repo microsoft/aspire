@@ -3,6 +3,8 @@
 
 using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Postgres;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
@@ -190,6 +192,12 @@ public class AzurePostgresExtensionsTests
         Assert.Equal("Host=localhost;Port=12455;Username=user1;Password=p@ssw0rd1", await postgres.Resource.ConnectionStringExpression.GetValueAsync(CancellationToken.None));
 
         // Test the new reference properties
+        Assert.NotNull(postgres.Resource.Host);
+        Assert.Equal("localhost", await postgres.Resource.Host.GetValueAsync(CancellationToken.None));
+
+        Assert.NotNull(postgres.Resource.Port);
+        Assert.Equal("12455", await postgres.Resource.Port.GetValueAsync(CancellationToken.None));
+
         Assert.NotNull(postgres.Resource.HostName);
         Assert.Equal("localhost:12455", await postgres.Resource.HostName.GetValueAsync(CancellationToken.None));
 
@@ -345,6 +353,67 @@ public class AzurePostgresExtensionsTests
         // HostName should still be available and resolve to bicep output
         Assert.NotNull(postgres.Resource.HostName);
         Assert.Equal("{postgres-data.outputs.hostName}", postgres.Resource.HostName.ValueExpression);
+    }
+
+    [Fact]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPOSTGRES001")]
+    public async Task WithPostgresMcpOnAzureDatabaseRunAsContainerAddsMcpResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var user = builder.AddParameter("user", "postgres");
+        var pass = builder.AddParameter("pass", "p@ssw0rd1");
+
+        var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
+            .WithPasswordAuthentication(userName: user, password: pass)
+            .RunAsContainer(c =>
+            {
+                c.WithEndpoint("tcp", e =>
+                {
+                    e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5432);
+                    e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "postgres.dev.internal", 5432, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                });
+            });
+
+        var db = postgres.AddDatabase("db")
+            .WithPostgresMcp();
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Verify the MCP container resource was added
+        var mcpContainer = Assert.Single(appModel.Resources.OfType<PostgresMcpContainerResource>());
+        Assert.Equal("db-mcp", mcpContainer.Name);
+
+        // Verify the MCP endpoint annotation exists
+        var mcpAnnotation = Assert.Single(mcpContainer.Annotations.OfType<McpServerEndpointAnnotation>());
+        Assert.NotNull(mcpAnnotation);
+
+        // Verify DATABASE_URI environment variable is set correctly
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(mcpContainer, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        var databaseUri = Assert.Single(env, e => e.Key == "DATABASE_URI");
+        Assert.Equal("postgresql://postgres:p%40ssw0rd1@postgres.dev.internal:5432/db", databaseUri.Value);
+    }
+
+    [Fact]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPOSTGRES001")]
+    public void WithPostgresMcpOnAzureDatabaseNotRunAsContainerHasNoEffect()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
+            .WithPasswordAuthentication();
+
+        var db = postgres.AddDatabase("db")
+            .WithPostgresMcp(); // Should have no effect when not running as container
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Verify no MCP container resource was added since we're not running as container
+        Assert.Empty(appModel.Resources.OfType<PostgresMcpContainerResource>());
     }
 
     private sealed class Dummy1Annotation : IResourceAnnotation

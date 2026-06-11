@@ -37,11 +37,17 @@ namespace Aspire.Hosting.Testing
 
     public static partial class DistributedApplicationHostingTestingExtensions
     {
+        [AspireExportIgnore(Reason = "HttpClient is not ATS-compatible.")]
         public static System.Net.Http.HttpClient CreateHttpClient(this DistributedApplication app, string resourceName, string? endpointName = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the exported getConnectionString overload without a cancellation token.")]
         public static System.Threading.Tasks.ValueTask<string?> GetConnectionStringAsync(this DistributedApplication app, string resourceName, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
+        [AspireExport]
         public static System.Uri GetEndpoint(this DistributedApplication app, string resourceName, string? endpointName = null) { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the ATS-friendly overload that accepts a network identifier string.")]
+        public static System.Uri GetEndpointForNetwork(this DistributedApplication app, string resourceName, ApplicationModel.NetworkIdentifier? networkIdentifier, string? endpointName = null) { throw null; }
     }
 
     public static partial class DistributedApplicationTestingBuilder
@@ -79,9 +85,15 @@ namespace Aspire.Hosting.Testing
 
         DistributedApplicationExecutionContext ExecutionContext { get; }
 
+        IFileSystemService FileSystemService { get; }
+
+        Pipelines.IDistributedApplicationPipeline Pipeline { get; }
+
         ApplicationModel.IResourceCollection Resources { get; }
 
         Microsoft.Extensions.DependencyInjection.IServiceCollection Services { get; }
+
+        IUserSecretsManager UserSecretsManager { get; }
 
         ApplicationModel.IResourceBuilder<T> AddResource<T>(T resource)
             where T : ApplicationModel.IResource;

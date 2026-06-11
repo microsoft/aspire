@@ -70,6 +70,14 @@ resource connectionString 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
   parent: keyVault
 }
 
+resource primaryAccessKey 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
+  name: 'primaryaccesskey--cosmos'
+  properties: {
+    value: '${cosmos.listKeys().primaryMasterKey}'
+  }
+  parent: keyVault
+}
+
 resource db_connectionString 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
   name: 'connectionstrings--db'
   properties: {
@@ -87,3 +95,5 @@ resource container_connectionString 'Microsoft.KeyVault/vaults/secrets@2024-11-0
 }
 
 output name string = cosmos.name
+
+output id string = cosmos.id

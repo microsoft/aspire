@@ -27,6 +27,8 @@ public static class NatsBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="port">The host port for NATS server.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use <see cref="AddNatsForPolyglot"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
     public static IResourceBuilder<NatsServerResource> AddNats(this IDistributedApplicationBuilder builder, [ResourceName] string name, int? port)
     {
         return AddNats(builder, name, port, null);
@@ -41,9 +43,11 @@ public static class NatsBuilderExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="port">The host port for NATS server.</param>
-    /// <param name="userName">The parameter used to provide the user name for the PostgreSQL resource. If <see langword="null"/> a default value will be used.</param>
-    /// <param name="password">The parameter used to provide the administrator password for the PostgreSQL resource. If <see langword="null"/> a random password will be generated.</param>
+    /// <param name="userName">The parameter used to provide the user name for the NATS resource. If <see langword="null"/> a default value will be used.</param>
+    /// <param name="password">The parameter used to provide the administrator password for the NATS resource. If <see langword="null"/> a random password will be generated.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use <see cref="AddNatsForPolyglot"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
     public static IResourceBuilder<NatsServerResource> AddNats(this IDistributedApplicationBuilder builder, [ResourceName] string name, int? port = null,
         IResourceBuilder<ParameterResource>? userName = null,
         IResourceBuilder<ParameterResource>? password = null)
@@ -104,6 +108,18 @@ public static class NatsBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a NATS server resource to the application model.
+    /// </summary>
+    [AspireExport("addNats")]
+    internal static IResourceBuilder<NatsServerResource> AddNatsForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        int? port = null,
+        IResourceBuilder<ParameterResource>? userName = null,
+        IResourceBuilder<ParameterResource>? password = null)
+        => AddNats(builder, name, port, userName, password);
+
+    /// <summary>
     /// Adds JetStream support to the NATS server resource.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
@@ -130,6 +146,8 @@ public static class NatsBuilderExtensions
     /// </summary>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<NatsServerResource> WithJetStream(this IResourceBuilder<NatsServerResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -144,6 +162,8 @@ public static class NatsBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<NatsServerResource> WithDataVolume(this IResourceBuilder<NatsServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -160,6 +180,8 @@ public static class NatsBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<NatsServerResource> WithDataBindMount(this IResourceBuilder<NatsServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);

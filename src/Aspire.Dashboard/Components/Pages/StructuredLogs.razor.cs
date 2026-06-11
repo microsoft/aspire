@@ -41,6 +41,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private List<OtlpResource> _resources = default!;
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
     private List<SelectViewModel<LogLevel?>> _logLevels = default!;
+    private readonly CancellationTokenSource _cts = new();
     private Subscription? _resourcesSubscription;
     private Subscription? _logsSubscription;
     private bool _resourceChanged;
@@ -66,7 +67,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public required StructuredLogsViewModel ViewModel { get; init; }
 
     [Inject]
-    public required IDialogService DialogService { get; init; }
+    public required DashboardDialogService DialogService { get; init; }
 
     [Inject]
     public required ISessionStorage SessionStorage { get; init; }
@@ -266,7 +267,9 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
                 await OnShowPropertiesAsync(logEntryId, buttonId: null);
             }
 
-            // Navigate to remove ?logEntryId=xxx in the URL.
+            // Navigate to remove ?logEntryId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
+            await Task.Delay(200, _cts.Token);
+
             NavigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
         }
     }
@@ -354,26 +357,14 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             await _contentLayout.CloseMobileToolbarAsync();
         }
 
-        var title = entry is not null ? FilterLoc[nameof(StructuredFiltering.DialogTitleEditFilter)] : FilterLoc[nameof(StructuredFiltering.DialogTitleAddFilter)];
-        var parameters = new DialogParameters
-        {
-            OnDialogResult = DialogService.CreateDialogCallback(this, HandleFilterDialog),
-            Title = title,
-            DismissTitle = DialogsLoc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],
-            Alignment = HorizontalAlignment.Right,
-            PrimaryAction = null,
-            SecondaryAction = null,
-            Width = ViewportInformation.IsDesktop ? "450px" : "100%"
-        };
-        var data = new FilterDialogViewModel
-        {
-            Filter = entry,
-            PropertyKeys = TelemetryRepository.GetLogPropertyKeys(PageViewModel.SelectedResource.Id?.GetResourceKey()),
-            KnownKeys = KnownStructuredLogFields.AllFields,
-            GetFieldValues = TelemetryRepository.GetLogsFieldValues
-        };
-
-        await DialogService.ShowPanelAsync<FilterDialog>(data, parameters);
+        await FilterHelpers.OpenFilterAsync(
+            entry,
+            DialogService,
+            DialogService.CreateDialogCallback(this, HandleFilterDialog),
+            propertyKeys: TelemetryRepository.GetLogPropertyKeys(PageViewModel.SelectedResource.Id?.GetResourceKey()),
+            knownKeys: KnownStructuredLogFields.AllFields,
+            getFieldValues: TelemetryRepository.GetLogsFieldValues,
+            FilterLoc);
     }
 
     private async Task HandleFilterDialog(DialogResult result)
@@ -415,7 +406,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         await ClearSelectedLogEntryAsync();
     }
 
-    private string GetResourceName(OtlpResourceView app) => OtlpResource.GetResourceName(app.Resource, _resources);
+    private string GetResourceName(OtlpResourceView app) => OtlpHelpers.GetResourceName(app.Resource, _resources);
 
     private string GetRowClass(OtlpLogEntry entry)
     {
@@ -431,13 +422,13 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private List<MenuButtonItem> GetFilterMenuItems()
     {
-        return this.GetFilterMenuItems(
+        return FilterHelpers.GetFilterMenuItems(
             ViewModel.Filters,
             ViewModel.ClearFilters,
             OpenFilterAsync,
+            afterChangeAsync: () => this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false),
             FilterLoc,
-            DialogsLoc,
-            _contentLayout);
+            DialogsLoc);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -479,6 +470,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     public void Dispose()
     {
+        _cts.Cancel();
         _aiContext?.Dispose();
         _resourcesSubscription?.Dispose();
         _logsSubscription?.Dispose();
@@ -541,6 +533,22 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
 
+    private bool IsGenAILogEntry(OtlpLogEntry logEntry)
+    {
+        if (string.IsNullOrEmpty(logEntry.SpanId) || string.IsNullOrEmpty(logEntry.TraceId))
+        {
+            return false;
+        }
+
+        if (GenAIHelpers.HasGenAIAttribute(logEntry.Attributes))
+        {
+            // GenAI telemetry is on the log entry.
+            return true;
+        }
+
+        return ViewModel.HasGenAISpan(logEntry.TraceId, logEntry.SpanId);
+    }
+
     private async Task LaunchGenAIVisualizerAsync(OtlpLogEntry logEntry)
     {
         var available = await TraceLinkHelpers.WaitForSpanToBeAvailableAsync(
@@ -557,9 +565,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             var span = TelemetryRepository.GetSpan(logEntry.TraceId, logEntry.SpanId)!;
 
             await GenAIVisualizerDialog.OpenDialogAsync(
-                ViewportInformation,
                 DialogService,
-                DialogsLoc,
                 span,
                 logEntry.InternalId,
                 TelemetryRepository,
@@ -567,27 +573,22 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
                 _resources,
                 () =>
                 {
-                    // Update the context with all visible log entries with a GenAI system property.
-                    var filters = ViewModel.GetFilters();
-                    filters.Add(new FieldTelemetryFilter
+                    var trace = TelemetryRepository.GetTrace(logEntry.TraceId);
+                    if (trace is null)
                     {
-                        Field = GenAIHelpers.GenAISystem,
-                        Condition = FilterCondition.NotEqual,
-                        Value = string.Empty
-                    });
+                        return [];
+                    }
 
-                    var logs = TelemetryRepository.GetLogs(new GetLogsContext
+                    var genAISpans = new List<OtlpSpan>();
+                    foreach (var s in trace.Spans)
                     {
-                        ResourceKey = ViewModel.ResourceKey,
-                        StartIndex = 0,
-                        Count = int.MaxValue,
-                        Filters = filters
-                    });
+                        if (GenAIHelpers.HasGenAIAttribute(s.Attributes))
+                        {
+                            genAISpans.Add(s);
+                        }
+                    }
 
-                    return logs.Items
-                        .DistinctBy(l => (l.SpanId, l.TraceId))
-                        .Select(l => TelemetryRepository.GetSpan(l.TraceId, l.SpanId)!)
-                        .ToList();
+                    return genAISpans;
                 });
         }
     }

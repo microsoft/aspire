@@ -13,8 +13,8 @@ namespace Aspire.Hosting.OpenAI.Tests;
 public class OpenAIFunctionalTests
 {
     [Fact]
-    [RequiresDocker]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/10977")]
+    [RequiresFeature(TestFeature.Docker)]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/10977")]
     public async Task DependentResourceWaitsForOpenAIModelResourceWithHealthCheckToBeHealthy()
     {
         using var cts = new CancellationTokenSource(TestConstants.LongTimeoutDuration);
@@ -56,7 +56,7 @@ public class OpenAIFunctionalTests
     }
     
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task DependentResourceWaitsForOpenAIResourceWithHealthCheckToBeHealthy()
     {
         using var cts = new CancellationTokenSource(TestConstants.LongTimeoutDuration);

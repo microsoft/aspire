@@ -14,4 +14,8 @@ resource queue 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {
 
 output serviceBusEndpoint string = messaging.properties.serviceBusEndpoint
 
-output name string = existingResourceName
+output serviceBusHostName string = split(replace(messaging.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
+output name string = messaging.name
+
+output id string = messaging.id

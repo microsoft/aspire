@@ -1,0 +1,10 @@
+﻿{
+  "$schema": "https://json.schemastore.org/aspire-settings.json",
+  "appHostPath": "apphost.ts",
+  "language": "typescript",
+  "sdkVersion": "13.1.0",
+  "packages": {
+    "Aspire.Hosting.Redis": "13.1.0",
+    "Aspire.Hosting.PostgreSQL": "13.1.0"
+  }
+}

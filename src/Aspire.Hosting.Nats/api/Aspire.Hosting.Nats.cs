@@ -10,24 +10,30 @@ namespace Aspire.Hosting
 {
     public static partial class NatsBuilderExtensions
     {
+        [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> AddNats(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> AddNats(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use the overload without the srcMountPath parameter and WithDataBindMount extension instead if you want to keep data locally.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithJetStream(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder, string? srcMountPath = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithJetStream(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
-    public partial class NatsServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class NatsServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public NatsServerResource(string name, ParameterResource? userName, ParameterResource? password) : base(default!, default) { }
 
@@ -35,10 +41,20 @@ namespace Aspire.Hosting.ApplicationModel
 
         public ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
+        public EndpointReferenceExpression Host { get { throw null; } }
+
         public ParameterResource? PasswordParameter { get { throw null; } set { } }
+
+        public EndpointReferenceExpression Port { get { throw null; } }
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
 
+        public ReferenceExpression UriExpression { get { throw null; } }
+
         public ParameterResource? UserNameParameter { get { throw null; } set { } }
+
+        public ReferenceExpression UserNameReference { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 }

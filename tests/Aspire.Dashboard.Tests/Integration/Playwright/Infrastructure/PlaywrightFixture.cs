@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Templates.Tests;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Playwright;
 using Xunit;
 
@@ -14,7 +15,7 @@ public class PlaywrightFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         // Default timeout of 5000 ms could time out on slow CI servers.
-        Assertions.SetDefaultExpectTimeout(30_000);
+        Assertions.SetDefaultExpectTimeout(TestConstants.LongTimeoutDuration);
 
         PlaywrightProvider.DetectAndSetInstalledPlaywrightDependenciesPath();
         Browser = await PlaywrightProvider.CreateBrowserAsync();

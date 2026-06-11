@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Testing.Tests;
 public class TestingFactoryCrashTests
 {
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData("before-build")]
     [InlineData("after-build")]
     [InlineData("after-start")]

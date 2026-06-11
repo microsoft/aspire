@@ -1,0 +1,19 @@
+﻿{
+  "Items": {
+    "PackageReference": [],
+    "ProjectReference": [
+      {
+        "Identity": "../ServiceDefaults/ServiceDefaults.csproj",
+        "FullPath": "{TempPath}Aspire.Cli.Tests/TemporaryWorkspaces/ServiceDefaults/ServiceDefaults.csproj"
+      },
+      {
+        "Identity": "../WebApp/WebApp.csproj",
+        "FullPath": "{TempPath}Aspire.Cli.Tests/TemporaryWorkspaces/WebApp/WebApp.csproj"
+      }
+    ]
+  },
+  "Properties": {
+    "AspireHostingSDKVersion": "9.5.0-test"
+  },
+  "Fallback": true
+}

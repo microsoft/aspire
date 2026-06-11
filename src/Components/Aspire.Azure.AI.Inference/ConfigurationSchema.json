@@ -106,7 +106,7 @@
                             "NetworkTimeout": {
                               "type": "string",
                               "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
-                              "description": "The timeout applied to an individual network operations."
+                              "description": "The timeout applied to individual network operations."
                             }
                           },
                           "description": "Gets the client retry options."

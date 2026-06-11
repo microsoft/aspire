@@ -1,0 +1,10 @@
+﻿{
+  "Items": {
+    "PackageReference": [],
+    "ProjectReference": []
+  },
+  "Properties": {
+    "AspireHostingSDKVersion": "9.5.0"
+  },
+  "Fallback": true
+}

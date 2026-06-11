@@ -10,26 +10,34 @@ namespace Aspire.Hosting
 {
     public static partial class OracleDatabaseBuilderExtensions
     {
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> builder, string name, string? databaseName = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> AddOracle(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null, int? port = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> builder, string source) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> builder, string? name = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> WithDbSetupBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> builder, string source) { throw null; }
 
         [System.Obsolete("Use WithInitFiles instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> WithInitBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> builder, string source) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> WithInitFiles(this ApplicationModel.IResourceBuilder<ApplicationModel.OracleDatabaseServerResource> builder, string source) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
-    public partial class OracleDatabaseResource : Resource, IResourceWithParent<OracleDatabaseServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+    [AspireExport(ExposeProperties = true)]
+    public partial class OracleDatabaseResource : Resource, IResourceWithParent<OracleDatabaseServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public OracleDatabaseResource(string name, string databaseName, OracleDatabaseServerResource parent) : base(default!) { }
 
@@ -37,10 +45,17 @@ namespace Aspire.Hosting.ApplicationModel
 
         public string DatabaseName { get { throw null; } }
 
+        public ReferenceExpression JdbcConnectionString { get { throw null; } }
+
         public OracleDatabaseServerResource Parent { get { throw null; } }
+
+        public ReferenceExpression UriExpression { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class OracleDatabaseServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class OracleDatabaseServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public OracleDatabaseServerResource(string name, ParameterResource password) : base(default!, default) { }
 
@@ -48,8 +63,20 @@ namespace Aspire.Hosting.ApplicationModel
 
         public System.Collections.Generic.IReadOnlyDictionary<string, string> Databases { get { throw null; } }
 
+        public EndpointReferenceExpression Host { get { throw null; } }
+
+        public ReferenceExpression JdbcConnectionString { get { throw null; } }
+
         public ParameterResource PasswordParameter { get { throw null; } }
 
+        public EndpointReferenceExpression Port { get { throw null; } }
+
         public EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public ReferenceExpression UriExpression { get { throw null; } }
+
+        public ReferenceExpression UserNameReference { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 }

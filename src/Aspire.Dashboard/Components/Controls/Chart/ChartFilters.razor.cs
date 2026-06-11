@@ -19,6 +19,9 @@ public partial class ChartFilters
     [Parameter, EditorRequired]
     public required ImmutableList<DimensionFilterViewModel> DimensionFilters { get; set; }
 
+    [Parameter]
+    public EventCallback<DimensionFilterViewModel> OnDimensionValuesChanged { get; set; }
+
     public bool ShowCounts { get; set; }
 
     protected override void OnInitialized()
@@ -33,5 +36,17 @@ public partial class ChartFilters
     private void ShowCountChanged()
     {
         InstrumentViewModel.ShowCount = ShowCounts;
+    }
+
+    private async Task OnTagSelectionChangedAsync(DimensionFilterViewModel context, DimensionValueViewModel tag, bool isChecked)
+    {
+        context.OnTagSelectionChanged(tag, isChecked);
+        await OnDimensionValuesChanged.InvokeAsync(context);
+    }
+
+    private async Task OnAllValuesSelectionChangedAsync(DimensionFilterViewModel context, bool? isChecked)
+    {
+        context.AreAllValuesSelected = isChecked;
+        await OnDimensionValuesChanged.InvokeAsync(context);
     }
 }

@@ -15,7 +15,7 @@ param myidentity_outputs_id string
 
 param myidentity_outputs_clientid string
 
-resource myapp2 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource myapp2 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'myapp2'
   location: location
   properties: {
@@ -40,14 +40,6 @@ resource myapp2 'Microsoft.App/containerApps@2025-02-02-preview' = {
           image: myapp2_containerimage
           name: 'myapp2'
           env: [
-            {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-              value: 'true'
-            }
             {
               name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
               value: 'in_memory'

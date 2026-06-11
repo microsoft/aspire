@@ -7,6 +7,11 @@
         <target state="translated">NuGet.config に基づきます</target>
         <note>Source details text shown for packages from implicit channel or channels without Aspire* package source mappings</note>
       </trans-unit>
+      <trans-unit id="StagingChannelUnavailableOnDailyCli">
+        <source>The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.</source>
+        <target state="new">The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.</target>
+        <note>{0} is the running CLI's baked identity channel (one of daily, local, or pr-N). Shown when --channel staging is requested on a CLI that cannot produce a real staging feed. Tracks https://github.com/microsoft/aspire/issues/16652.</note>
+      </trans-unit>
     </body>
   </file>
 </xliff>

@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-08-15' = {
@@ -59,3 +59,5 @@ resource mycontainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/contain
 output connectionString string = cosmos.properties.documentEndpoint
 
 output name string = cosmos.name
+
+output id string = cosmos.id

@@ -20,9 +20,9 @@ public abstract class StarterTemplateProjectNamesTests : TemplateTestsBase
 
     [Theory]
     [MemberData(nameof(ProjectNames_TestData))]
-    [RequiresSSLCertificate("Needs dashboard, web front end access")]
-    [RequiresPlaywright]
-    [OuterLoop("playwright test")]
+    [RequiresFeature(TestFeature.SSLCertificate)]
+    [RequiresFeature(TestFeature.Playwright)]
+    [OuterloopTest("playwright test")]
     public async Task StarterTemplateWithTest_ProjectNames(string prefix)
     {
         string id = $"{prefix}-{_testType}";

@@ -9,4 +9,6 @@ resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
 
 output vaultUri string = keyVault.properties.vaultUri
 
-output name string = existingResourceName
+output name string = keyVault.name
+
+output id string = keyVault.id

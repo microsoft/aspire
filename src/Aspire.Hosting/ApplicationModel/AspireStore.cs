@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using System.IO.Hashing;
 using Aspire.Hosting.Utils;
 
@@ -11,15 +13,18 @@ internal sealed class AspireStore : IAspireStore
     internal const string AspireStorePathKeyName = "Aspire:Store:Path";
 
     private readonly string _basePath;
+    private readonly IFileSystemService _directoryService;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AspireStore"/> class with the specified base path.
     /// </summary>
     /// <param name="basePath">The base path for the store.</param>
+    /// <param name="directoryService">The directory service for creating temp directories.</param>
     /// <returns>A new instance of <see cref="AspireStore"/>.</returns>
-    public AspireStore(string basePath)
+    public AspireStore(string basePath, IFileSystemService directoryService)
     {
         ArgumentNullException.ThrowIfNull(basePath);
+        ArgumentNullException.ThrowIfNull(directoryService);
 
         if (!Path.IsPathRooted(basePath))
         {
@@ -27,6 +32,7 @@ internal sealed class AspireStore : IAspireStore
         }
 
         _basePath = basePath;
+        _directoryService = directoryService;
         EnsureDirectory();
     }
 
@@ -43,7 +49,7 @@ internal sealed class AspireStore : IAspireStore
         filenameTemplate = Path.GetFileName(filenameTemplate);
 
         // Create a temporary file to write the content to.
-        var tempFileName = Path.GetTempFileName();
+        var tempFileName = _directoryService.TempDirectory.CreateTempFile().Path;
 
         // Fast, non-cryptographic hash.
         var hash = new XxHash3();

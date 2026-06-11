@@ -1,19 +1,15 @@
 ﻿@page "/traces"
 @page "/traces/resource/{resourceName}"
 
-@using Aspire.Dashboard.Model
-@using Aspire.Dashboard.Otlp.Model
 @using Aspire.Dashboard.Resources
-@using Aspire.Dashboard.Utils
-@using System.Globalization
 @using Aspire.Dashboard.Components.Controls.Grid
 
 @inject IJSRuntime JS
 @inject IStringLocalizer<Dashboard.Resources.Traces> Loc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
-@inject IStringLocalizer<Dialogs> DialogsLoc
 @inject IStringLocalizer<AIPrompts> AIPromptsLoc
+@inject IStringLocalizer<Dialogs> DialogsLoc
 
 @implements IDisposable
 
@@ -45,6 +41,7 @@
             <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@TracesViewModel.HasErrors()" />
             <FluentSearch @bind-Value="_filter"
                           @bind-Value:after="HandleAfterFilterBindAsync"
+                          Name="traces-search"
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
@@ -115,11 +112,26 @@
                             <AspireTemplateColumn ColumnId="@TimestampColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.TimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, context.FirstSpan.StartTime, MillisecondsDisplay.Full, CultureInfo.CurrentCulture))" Tooltip="true">
                                 @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, context.FirstSpan.StartTime, MillisecondsDisplay.Truncated)
                             </AspireTemplateColumn>
-                            <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Tooltip="true" TooltipText="@(trace => GetNameTooltip(trace))">
-                                <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName((context.RootOrFirstSpan).Source)));">
-                                    <FluentHighlighter HighlightedText="@(TracesViewModel.FilterText)" Text="@(context.FullName)" />
-                                </span>
-                                <span class="trace-id">@OtlpHelpers.ToShortenedId(context.TraceId)</span>
+                            <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Tooltip="true" TooltipText="@(trace => GetNameTooltip(trace))" Class="no-ellipsis">
+                                <div class="trace-name-container">
+                                    <span class="trace-name-content">
+                                        <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName((context.RootOrFirstSpan).Source)));">
+                                            <FluentHighlighter HighlightedText="@(TracesViewModel.FilterText)" Text="@(context.FullName)" />
+                                        </span>
+                                        <span class="trace-id">@OtlpHelpers.ToShortenedId(context.TraceId)</span>
+                                    </span>
+                                    <span @onclick:stopPropagation="true">
+                                        @if (HasGenAISpans(context))
+                                        {
+                                            <FluentButton Appearance="Appearance.Lightweight"
+                                                          Title="@ControlsStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
+                                                          OnClick="() => OnGenAIClickedAsync(context)">
+                                                <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
+                                                            Color="Color.Accent" />
+                                            </FluentButton>
+                                        }
+                                    </span>
+                                </div>
                             </AspireTemplateColumn>
                             <AspireTemplateColumn ColumnId="@SpansColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Traces.TracesSpansColumnHeader)]">
                                 <FluentOverflow>
@@ -167,16 +179,16 @@
                                     {
                                         <FluentProgressRing Class="duration-ring"
                                                             Min="0"
-                                                            Max="@Convert.ToInt32(TracesViewModel.MaxDuration.TotalMilliseconds)"
-                                                            Value="@Convert.ToInt32(context.Duration.TotalMilliseconds)"
+                                                            Max="@DashboardUIHelpers.SafeConvertToMilliseconds(TracesViewModel.MaxDuration)"
+                                                            Value="@DashboardUIHelpers.SafeConvertToMilliseconds(context.Duration)"
                                                             aria-label="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]" />
                                         <span class="trace-duration">
-                                            @DurationFormatter.FormatDuration(context.Duration)
+                                            @DurationFormatter.FormatDuration(context.Duration, CultureInfo.CurrentCulture)
                                         </span>
                                     }
                                     else
                                     {
-                                        @DurationFormatter.FormatDuration(context.Duration)
+                                        @DurationFormatter.FormatDuration(context.Duration, CultureInfo.CurrentCulture)
                                     }
                                 </div>
                             </AspireTemplateColumn>

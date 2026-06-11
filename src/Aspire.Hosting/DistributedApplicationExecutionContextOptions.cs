@@ -6,6 +6,8 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Configuration options and references that need to be exposed to the <see cref="DistributedApplicationExecutionContext"/>.
 /// </summary>
+/// <ats-summary>Configuration options and references that need to be exposed to the <ats-see cref="!:type:DistributedApplicationExecutionContext" />.</ats-summary>
+[AspireExport]
 public class DistributedApplicationExecutionContextOptions
 {
     /// <summary>
@@ -31,7 +33,17 @@ public class DistributedApplicationExecutionContextOptions
     /// <summary>
     /// The <see cref="IServiceProvider"/> for the AppHost.
     /// </summary>
-    public IServiceProvider? ServiceProvider { get; set; }
+    [Obsolete("Use Services instead.")]
+    public IServiceProvider? ServiceProvider
+    {
+        get => Services;
+        set => Services = value;
+    }
+
+    /// <summary>
+    /// The <see cref="IServiceProvider"/> for the AppHost.
+    /// </summary>
+    public IServiceProvider? Services { get; set; }
 
     /// <summary>
     /// The operation currently being performed by the AppHost.

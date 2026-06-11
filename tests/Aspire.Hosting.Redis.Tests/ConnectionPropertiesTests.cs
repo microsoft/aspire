@@ -14,7 +14,6 @@ public class ConnectionPropertiesTests
         var resource = new RedisResource("redis", password);
 
         var properties = ((IResourceWithConnectionString)resource).GetConnectionProperties().ToArray();
-
         Assert.Collection(
             properties,
             property =>
@@ -35,7 +34,7 @@ public class ConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("Uri", property.Key);
-                Assert.Equal("redis://:{password.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}", property.Value.ValueExpression);
+                Assert.Equal("{redis.bindings.tcp.scheme}://:{password.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}", property.Value.ValueExpression);
             });
     }
 }

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
@@ -13,7 +15,7 @@ using Polly;
 
 namespace Aspire.Hosting.Oracle.Tests;
 
-[ActiveIssue("https://github.com/dotnet/aspire/issues/5362", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnCI))]
+[ActiveIssue("https://github.com/microsoft/aspire/issues/5362", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnCI))]
 public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     // Folders created for mounted folders need to be granted specific permissions
@@ -26,7 +28,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
     private const string DatabaseReadyText = "Completed: ALTER DATABASE OPEN";
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyEfOracle()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
@@ -46,6 +48,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.WaitForTextAsync(DatabaseReadyText, cancellationToken: cts.Token);
 
         var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
 
         hb.Configuration[$"ConnectionStrings:{db.Resource.Name}"] = await db.Resource.ConnectionStringExpression.GetValueAsync(default);
 
@@ -68,8 +71,8 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData(true)]
-    [InlineData(false, Skip = "https://github.com/dotnet/aspire/issues/5191")]
-    [RequiresDocker]
+    [InlineData(false, Skip = "https://github.com/microsoft/aspire/issues/5191")]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         var oracleDbName = "freepdb1";
@@ -131,6 +134,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
                 try
                 {
                     var hb = Host.CreateApplicationBuilder();
+                    hb.AddTestLogging(testOutputHelper);
 
                     hb.Configuration[$"ConnectionStrings:{db1.Resource.Name}"] = await db1.Resource.ConnectionStringExpression.GetValueAsync(default);
 
@@ -191,6 +195,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
                 try
                 {
                     var hb = Host.CreateApplicationBuilder();
+                    hb.AddTestLogging(testOutputHelper);
 
                     hb.Configuration[$"ConnectionStrings:{db2.Resource.Name}"] = await db2.Resource.ConnectionStringExpression.GetValueAsync(default);
 
@@ -244,7 +249,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWithInitBindMount()
     {
         // Creates a script that should be executed when the container is initialized.
@@ -341,8 +346,8 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData(true)]
-    [InlineData(false, Skip = "https://github.com/dotnet/aspire/issues/5190")]
-    [RequiresDocker]
+    [InlineData(false, Skip = "https://github.com/microsoft/aspire/issues/5190")]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWithInitFiles(bool init)
     {
         // Creates a script that should be executed when the container is initialized.
@@ -437,7 +442,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWaitForOnOracleBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -473,4 +478,14 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 
         await app.StopAsync();
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Oracle_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddOracle("resource").WithPersistentLifetime(),
+            "resource");
+    }
+
 }

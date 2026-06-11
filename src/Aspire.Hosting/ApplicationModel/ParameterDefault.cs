@@ -76,12 +76,13 @@ public abstract class ParameterDefault
 /// log base 2 [67^x * 23^a * 23^b * 10^c * 11^d * (a + b + c + d)! / (a! * b! * c! * d!)]
 /// </code>
 /// </remarks>
+[AspireDto]
 public sealed class GenerateParameterDefault : ParameterDefault
 {
     /// <summary>
     /// Gets or sets the minimum length of the generated value.
     /// </summary>
-    public int MinLength { get; set; }
+    public int MinLength { get; set; } = 22;
 
     /// <summary>
     /// Gets or sets a value indicating whether to include lowercase alphabet characters in the result.

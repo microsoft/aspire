@@ -8,6 +8,7 @@ resource messaging 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
   location: location
   properties: {
     disableLocalAuth: true
+    publicNetworkAccess: 'Enabled'
   }
   sku: {
     name: sku
@@ -24,4 +25,8 @@ resource queue 'Microsoft.ServiceBus/namespaces/queues@2024-01-01' = {
 
 output serviceBusEndpoint string = messaging.properties.serviceBusEndpoint
 
+output serviceBusHostName string = split(replace(messaging.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
 output name string = messaging.name
+
+output id string = messaging.id

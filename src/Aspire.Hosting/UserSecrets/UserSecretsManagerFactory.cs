@@ -1,12 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREUSERSECRETS001
+
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Pipelines.Internal;
+using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
 
@@ -20,15 +24,14 @@ namespace Aspire.Hosting.UserSecrets;
 /// </remarks>
 internal sealed class UserSecretsManagerFactory
 {
-    // Singleton instance
-    public static readonly UserSecretsManagerFactory Instance = new();
-
     // Dictionary to cache instances by file path
     private readonly Dictionary<string, IUserSecretsManager> _managerCache = new();
     private readonly object _lock = new();
+    private readonly IFileSystemService _fileSystemService;
 
-    internal UserSecretsManagerFactory()
+    internal UserSecretsManagerFactory(IFileSystemService fileSystemService)
     {
+        _fileSystemService = fileSystemService;
     }
 
     /// <summary>
@@ -44,7 +47,7 @@ internal sealed class UserSecretsManagerFactory
         {
             if (!_managerCache.TryGetValue(normalizedPath, out var manager))
             {
-                manager = new UserSecretsManager(normalizedPath);
+                manager = new UserSecretsManager(normalizedPath, _fileSystemService);
                 _managerCache[normalizedPath] = manager;
             }
             return manager;
@@ -79,11 +82,15 @@ internal sealed class UserSecretsManagerFactory
         private static readonly JsonSerializerOptions s_jsonSerializerOptions = new() { WriteIndented = true };
 
         private readonly SemaphoreSlim _semaphore = new(1, 1);
+        private readonly IFileSystemService _fileSystemService;
 
-        public UserSecretsManager(string filePath)
+        public UserSecretsManager(string filePath, IFileSystemService fileSystemService)
         {
             FilePath = filePath;
+            _fileSystemService = fileSystemService;
         }
+
+        public bool IsAvailable => true;
 
         public string FilePath { get; }
 
@@ -95,6 +102,27 @@ internal sealed class UserSecretsManagerFactory
                 try
                 {
                     SetSecretCore(name, value);
+                    return true;
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public bool TryDeleteSecret(string name)
+        {
+            try
+            {
+                _semaphore.Wait();
+                try
+                {
+                    DeleteSecretCore(name);
                     return true;
                 }
                 finally
@@ -158,6 +186,16 @@ internal sealed class UserSecretsManagerFactory
             Save(secrets);
         }
 
+        private void DeleteSecretCore(string name)
+        {
+            var secrets = Load();
+            if (secrets.Remove(name))
+            {
+                EnsureUserSecretsDirectory();
+                Save(secrets);
+            }
+        }
+
         private Dictionary<string, string?> Load()
         {
             return new ConfigurationBuilder()
@@ -181,7 +219,7 @@ internal sealed class UserSecretsManagerFactory
             // Create a temp file with the correct Unix file mode before moving it to the expected path.
             if (!OperatingSystem.IsWindows())
             {
-                var tempFilename = Path.GetTempFileName();
+                var tempFilename = _fileSystemService.TempDirectory.CreateTempFile().Path;
                 File.WriteAllText(tempFilename, json, Encoding.UTF8);
                 File.Move(tempFilename, FilePath, overwrite: true);
             }

@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Nats.Tests;
 
-public class NatsPublicApiTests
+public class NatsPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [InlineData(true)]
@@ -29,7 +29,7 @@ public class NatsPublicApiTests
     [InlineData(false, false)]
     public void AddNatsShouldThrowWhenNameIsNullOrEmpty(bool isNull, bool includePort)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => includePort ? builder.AddNats(name, 4222) : builder.AddNats(name);
@@ -65,7 +65,7 @@ public class NatsPublicApiTests
     [InlineData(false, false)]
     public void AddNatsWithParametersShouldThrowWhenNameIsNullOrEmpty(bool isNull, bool includePort)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
         IResourceBuilder<ParameterResource>? userName = null;
         IResourceBuilder<ParameterResource>? password = null;
@@ -132,7 +132,7 @@ public class NatsPublicApiTests
     [InlineData(false)]
     public void WithDataBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddNats("Nats");
         var source = isNull ? null! : string.Empty;
 
@@ -171,7 +171,7 @@ public class NatsPublicApiTests
     public void CtorNatsServerResourceWithParametersShouldThrowWhenNameIsNullOrEmpty(bool isNull, bool isNullUser, bool isNullPassword)
     {
         var name = isNull ? null! : string.Empty;
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var user = isNullUser ? null : builder.AddParameter("user");
         var password = isNullPassword ? null : builder.AddParameter("password");
 

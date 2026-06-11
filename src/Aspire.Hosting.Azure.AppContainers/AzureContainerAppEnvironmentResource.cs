@@ -3,21 +3,32 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Primitives;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.AppContainers;
 
 /// <summary>
 /// Represents an Azure Container App Environment resource.
 /// </summary>
+#pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry, IAzureDelegatedSubnetResource
+#pragma warning restore CS0618 // Type or member is obsolete
 {
+    /// <inheritdoc />
+    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => "Microsoft.App/environments";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppEnvironmentResource"/> class.
     /// </summary>
@@ -32,25 +43,37 @@ public class AzureContainerAppEnvironmentResource :
             var model = factoryContext.PipelineContext.Model;
             var steps = new List<PipelineStep>();
 
-            var loginToAcrStep = new PipelineStep
+            // Add prepare-azure-container-apps-{name} step that materializes deployment targets
+            // for compute resources targeted to this environment. Runs during BeforeStart so that
+            // BeforeStartEvent subscribers (and downstream code) can observe the deployment targets.
+            var prepareStep = new PipelineStep
             {
-                Name = $"login-to-acr-{name}",
-                Action = context => AzureEnvironmentResourceHelpers.LoginToRegistryAsync(this, context),
-                Tags = ["acr-login"]
+                Name = $"prepare-azure-container-apps-{name}",
+                Description = $"Prepares Azure Container Apps deployment targets for {name}.",
+                Action = ctx => PrepareDeploymentTargetsAsync(ctx),
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
 
-            // Add print-dashboard-url step
-            var printDashboardUrlStep = new PipelineStep
-            {
-                Name = $"print-dashboard-url-{name}",
-                Action = ctx => PrintDashboardUrlAsync(ctx),
-                Tags = ["print-summary"],
-                DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
-            };
+            steps.Add(prepareStep);
 
-            steps.Add(loginToAcrStep);
-            steps.Add(printDashboardUrlStep);
+            if (EnableDashboard)
+            {
+                // The dashboard URL is only meaningful when the dashboard is provisioned.
+                // Avoid registering the summary step when WithDashboard(false) is used, otherwise
+                // we would emit a link to a dashboard that does not exist in the environment.
+                var printDashboardUrlStep = new PipelineStep
+                {
+                    Name = $"print-dashboard-url-{name}",
+                    Description = $"Prints the deployment summary and dashboard URL for {name}.",
+                    Action = ctx => PrintDashboardUrlAsync(ctx),
+                    Tags = ["print-summary"],
+                    DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
+                    RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                };
+
+                steps.Add(printDashboardUrlStep);
+            }
 
             // Expand deployment target steps for all compute resources
             // This ensures the push/provision steps from deployment targets are included in the pipeline
@@ -90,8 +113,6 @@ public class AzureContainerAppEnvironmentResource :
         // This is where we wire up the build steps created by the resources
         Annotations.Add(new PipelineConfigurationAnnotation(context =>
         {
-            var acrLoginSteps = context.GetSteps(this, "acr-login");
-
             // Wire up build step dependencies
             // Build steps are created by ProjectResource and ContainerResource
             foreach (var computeResource in context.Model.GetComputeResources())
@@ -111,9 +132,6 @@ public class AzureContainerAppEnvironmentResource :
                         annotation.Callback(context);
                     }
                 }
-
-                context.GetSteps(deploymentTarget, WellKnownPipelineTags.PushContainerImage)
-                       .DependsOn(acrLoginSteps);
             }
 
             // This ensures that resources that have to be built before deployments are handled
@@ -128,8 +146,6 @@ public class AzureContainerAppEnvironmentResource :
             var provisionSteps = context.GetSteps(this, WellKnownPipelineTags.ProvisionInfrastructure);
             var printDashboardUrlSteps = context.GetSteps(this, "print-summary");
             printDashboardUrlSteps.DependsOn(provisionSteps);
-
-            acrLoginSteps.DependsOn(provisionSteps);
         }));
     }
 
@@ -139,18 +155,90 @@ public class AzureContainerAppEnvironmentResource :
 
         var dashboardUrl = $"https://aspire-dashboard.ext.{domainValue}";
 
+        context.Summary.Add("📊 Dashboard", new MarkdownString($"[{dashboardUrl}]({dashboardUrl})"));
+
         await context.ReportingStep.CompleteAsync(
-            $"Dashboard available at [dashboard URL]({dashboardUrl})",
+            new MarkdownString($"Dashboard available at [{dashboardUrl}]({dashboardUrl})"),
             CompletionState.Completed,
             context.CancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Materializes Azure Container Apps deployment targets for compute resources targeted to this
+    /// environment. Invoked by the per-environment <c>prepare-azure-container-apps-{name}</c>
+    /// pipeline step, which runs after <c>azure-prepare-resources</c> so role-assignment resources
+    /// are present in the model and can be referenced by the generated
+    /// <see cref="DeploymentTargetAnnotation"/> instances.
+    /// </summary>
+    private async Task PrepareDeploymentTargetsAsync(PipelineStepContext context)
+    {
+        var appModel = context.Model;
+        var executionContext = context.ExecutionContext;
+        var services = context.Services;
+        var cancellationToken = context.CancellationToken;
+
+        if (!executionContext.IsPublishMode)
+        {
+            return;
+        }
+
+        // Remove the default container registry from the model if an explicit registry is configured
+        if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
+            DefaultContainerRegistry is not null)
+        {
+            appModel.Resources.Remove(DefaultContainerRegistry);
+            DefaultContainerRegistry = null;
+        }
+
+        var logger = services.GetRequiredService<ILogger<AzureContainerAppEnvironmentResource>>();
+        var options = services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
+
+        var containerAppEnvironmentContext = new ContainerAppEnvironmentContext(
+            logger,
+            executionContext,
+            this,
+            services);
+
+        foreach (var r in appModel.GetComputeResources())
+        {
+            // Skip resources that are explicitly targeted to a different compute environment
+            var resourceComputeEnvironment = r.GetComputeEnvironment();
+            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            {
+                continue;
+            }
+
+            var containerApp = await containerAppEnvironmentContext.CreateContainerAppAsync(r, options.Value, cancellationToken).ConfigureAwait(false);
+
+            // Capture information about the container registry used by the
+            // container app environment in the deployment target information
+            // associated with each compute resource that needs an image
+            r.Annotations.Add(new DeploymentTargetAnnotation(containerApp)
+            {
+                ContainerRegistry = this,
+                ComputeEnvironment = this
+            });
+        }
+
+        // Log once about all HTTP endpoints upgraded to HTTPS
+        containerAppEnvironmentContext.LogHttpsUpgradeIfNeeded();
+    }
+
     internal bool UseAzdNamingConvention { get; set; }
+
+    internal bool UseCompactResourceNaming { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
     /// Default is true.
     /// </summary>
     internal bool EnableDashboard { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether HTTP endpoints should be preserved as HTTP instead of being upgraded to HTTPS.
+    /// Default is false (HTTP endpoints are upgraded to HTTPS).
+    /// </summary>
+    internal bool PreserveHttpEndpoints { get; set; }
 
     /// <summary>
     /// Gets the unique identifier of the Container App Environment.
@@ -161,6 +249,11 @@ public class AzureContainerAppEnvironmentResource :
     /// Gets the default domain associated with the Container App Environment.
     /// </summary>
     internal BicepOutputReference ContainerAppDomain => new("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", this);
+
+    /// <summary>
+    /// Gets the name of the associated Azure Container Registry.
+    /// </summary>
+    internal BicepOutputReference ContainerRegistryName => new("AZURE_CONTAINER_REGISTRY_NAME", this);
 
     /// <summary>
     /// Gets the URL endpoint of the associated Azure Container Registry.
@@ -177,21 +270,64 @@ public class AzureContainerAppEnvironmentResource :
     /// </summary>
     public BicepOutputReference NameOutputReference => new("AZURE_CONTAINER_APPS_ENVIRONMENT_NAME", this);
 
-    /// <summary>
-    /// Gets the container registry name.
-    /// </summary>
-    private BicepOutputReference ContainerRegistryName => new("AZURE_CONTAINER_REGISTRY_NAME", this);
-
     internal Dictionary<string, (IResource resource, ContainerMountAnnotation volume, int index, BicepOutputReference outputReference)> VolumeNames { get; } = [];
 
-    // Implement IAzureContainerRegistry interface
-    ReferenceExpression IContainerRegistry.Name => ReferenceExpression.Create($"{ContainerRegistryName}");
+    /// <summary>
+    /// Gets the default container registry for this environment.
+    /// </summary>
+    internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
 
-    ReferenceExpression IContainerRegistry.Endpoint => ReferenceExpression.Create($"{ContainerRegistryUrl}");
+    ReferenceExpression IContainerRegistry.Name => GetContainerRegistry()?.Name ?? ReferenceExpression.Create($"{ContainerRegistryName}");
 
+    ReferenceExpression IContainerRegistry.Endpoint => GetContainerRegistry()?.Endpoint ?? ReferenceExpression.Create($"{ContainerRegistryUrl}");
+
+    IAzureContainerRegistryResource? IAzureComputeEnvironmentResource.ContainerRegistry => ContainerRegistry;
+
+    private IContainerRegistry? GetContainerRegistry()
+    {
+        // Check for explicit container registry reference annotation
+        if (this.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation))
+        {
+            return annotation.Registry;
+        }
+
+        // Fall back to default container registry
+        return DefaultContainerRegistry;
+    }
+
+    /// <summary>
+    /// Gets the Azure Container Registry resource used by this Azure Container App Environment resource.
+    /// </summary>
+    public AzureContainerRegistryResource? ContainerRegistry
+    {
+        get
+        {
+            var registry = GetContainerRegistry();
+
+            if (registry is null)
+            {
+                return null;
+            }
+
+            if (registry is not AzureContainerRegistryResource azureRegistry)
+            {
+                throw new InvalidOperationException(
+                    $"The container registry configured for the Azure Container App Environment '{Name}' is not an Azure Container Registry. " +
+                    $"Only Azure Container Registry resources are supported. Use '.WithAzureContainerRegistry()' to configure an Azure Container Registry.");
+
+            }
+
+            return azureRegistry;
+        }
+    }
+
+#pragma warning disable CS0618 // Type or member is obsolete
     ReferenceExpression IAzureContainerRegistry.ManagedIdentityId => ReferenceExpression.Create($"{ContainerRegistryManagedIdentityId}");
+#pragma warning restore CS0618 // Type or member is obsolete
 
-    ReferenceExpression IComputeEnvironmentResource.GetHostAddressExpression(EndpointReference endpointReference)
+    /// <inheritdoc/>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
 
@@ -204,6 +340,35 @@ public class AzureContainerAppEnvironmentResource :
         builder.Append($".{ContainerAppDomain}");
 
         return builder.Build();
+    }
+
+    /// <inheritdoc/>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
+
+        var endpointReference = endpointReferenceExpression.Endpoint;
+        var property = endpointReferenceExpression.Property;
+        var endpoint = endpointReference.EndpointAnnotation;
+        var scheme = PreserveHttpEndpoints ? endpoint.UriScheme : "https";
+        var port = string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? 80 : 443;
+        var tlsEnabled = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || endpoint.TlsEnabled;
+        var host = GetHostAddressExpression(endpointReference);
+
+        return property switch
+        {
+            EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
+            EndpointProperty.Host or EndpointProperty.IPV4Host => host,
+            EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),
+            EndpointProperty.TargetPort => endpoint.TargetPort is int targetPort
+                ? ReferenceExpression.Create($"{targetPort.ToString(CultureInfo.InvariantCulture)}")
+                : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
+            EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
+            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host}:{port.ToString(CultureInfo.InvariantCulture)}"),
+            EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(tlsEnabled ? bool.TrueString : bool.FalseString)}"),
+            _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
+        };
     }
 
     internal BicepOutputReference GetVolumeStorage(IResource resource, ContainerMountAnnotation volume, int volumeIndex)

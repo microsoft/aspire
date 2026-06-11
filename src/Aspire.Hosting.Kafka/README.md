@@ -1,26 +1,37 @@
-# Aspire.Hosting.Kafka library
+# Apache Kafka hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a Kafka resource.
+Use this integration to model, configure, and orchestrate a Kafka resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Kafka Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Kafka` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Kafka
+```bash
+aspire add Aspire.Hosting.Kafka
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Kafka resource and consume the connection using the following methods:
+In the AppHost, add a Kafka resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var kafka = builder.AddKafka("messaging");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(kafka);
+```
+
+**TypeScript**
+
+```typescript
+const kafka = await builder.addKafka("messaging");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(kafka);
 ```
 
 ## Connection Properties
@@ -36,12 +47,13 @@ The Kafka server resource exposes the following connection properties:
 | `Host` | The host-facing Kafka listener hostname or IP address |
 | `Port` | The host-facing Kafka listener port |
 
-Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `messaging` becomes `MESSAGING_URI`.
 
 ## Additional documentation
 
-* https://learn.microsoft.com/dotnet/aspire/messaging/kafka-component
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/messaging/apache-kafka/apache-kafka-host/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

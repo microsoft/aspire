@@ -6,7 +6,7 @@
   "symbolInfo": [
     {
       "id": "AspireVersion",
-      "isVisible": true
+      "isVisible": false
     },
     {
       "id": "LocalhostTld",

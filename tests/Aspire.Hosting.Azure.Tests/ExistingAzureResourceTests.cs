@@ -365,7 +365,7 @@ public class ExistingAzureResourceTests
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
-        var redis = builder.AddAzureRedisEnterprise("redis")
+        var redis = builder.AddAzureManagedRedis("redis")
             .PublishAsExisting(existingResourceName, existingResourceGroupName);
 
         var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(redis.Resource);
@@ -379,7 +379,7 @@ public class ExistingAzureResourceTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var redis = builder.AddAzureRedisEnterprise("redis")
+        var redis = builder.AddAzureManagedRedis("redis")
             .PublishAsExisting("existingResourceName", "existingResourceGroupName")
             .WithAccessKeyAuthentication();
 

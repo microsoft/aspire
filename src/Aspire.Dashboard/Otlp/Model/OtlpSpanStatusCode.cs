@@ -3,6 +3,12 @@
 
 namespace Aspire.Dashboard.Otlp.Model;
 
+/// <summary>
+/// Indicates the status of a span.
+/// </summary>
+/// <remarks>
+/// Values map to <c>OpenTelemetry.Proto.Trace.V1.Status.Types.StatusCode</c>.
+/// </remarks>
 public enum OtlpSpanStatusCode
 {
     /// <summary>

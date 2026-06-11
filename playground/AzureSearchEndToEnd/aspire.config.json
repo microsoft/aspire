@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "AzureSearch.AppHost/AzureSearch.AppHost.csproj"
+  }
+}

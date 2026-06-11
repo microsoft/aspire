@@ -13,6 +13,8 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents an Azure Kusto read-write database resource, which is a child resource of a <see cref="AzureKustoClusterResource"/>.
 /// </summary>
+/// <ats-summary>Represents an Azure Kusto read-write database resource, which is a child resource of a <ats-see cref="!:type:AzureKustoClusterResource" />.</ats-summary>
+[AspireExport(ExposeProperties = true)]
 public class AzureKustoReadWriteDatabaseResource : Resource, IResourceWithParent<AzureKustoClusterResource>, IResourceWithConnectionString
 {
     /// <summary>
@@ -67,5 +69,14 @@ public class AzureKustoReadWriteDatabaseResource : Resource, IResourceWithParent
         database.Name = DatabaseName;
         return database;
     }
-}
 
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        {
+            yield return property;
+        }
+
+        yield return new("DatabaseName", ReferenceExpression.Create($"{DatabaseName}"));
+    }
+}

@@ -10,19 +10,23 @@ namespace Aspire.Hosting
 {
     public static partial class AzureApplicationInsightsExtensions
     {
+        [AspireExportIgnore(Reason = "logAnalyticsWorkspace parameter cannot be made optional in ATS. Use the single-parameter overload with WithLogAnalyticsWorkspace instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> AddAzureApplicationInsights(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<Azure.AzureLogAnalyticsWorkspaceResource>? logAnalyticsWorkspace) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> AddAzureApplicationInsights(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> WithLogAnalyticsWorkspace(this ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureLogAnalyticsWorkspaceResource> logAnalyticsWorkspace) { throw null; }
 
+        [AspireExportIgnore(Reason = "BicepOutputReference is not ATS-compatible. Use the IResourceBuilder<AzureLogAnalyticsWorkspaceResource> overload instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> WithLogAnalyticsWorkspace(this ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> builder, Azure.BicepOutputReference workspaceId) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzureApplicationInsightsResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    public partial class AzureApplicationInsightsResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public AzureApplicationInsightsResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -33,5 +37,7 @@ namespace Aspire.Hosting.Azure
         public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
+
+        public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
     }
 }

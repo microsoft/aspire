@@ -5,19 +5,16 @@ param userPrincipalId string = ''
 
 param tags object = { }
 
+param infra_acr_outputs_name string
+
 resource infra_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: take('infra_mi-${uniqueString(resourceGroup().id)}', 128)
   location: location
   tags: tags
 }
 
-resource infra_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
-  name: take('infraacr${uniqueString(resourceGroup().id)}', 50)
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  tags: tags
+resource infra_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
+  name: infra_acr_outputs_name
 }
 
 resource infra_acr_infra_mi_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {

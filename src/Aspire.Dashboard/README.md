@@ -1,6 +1,6 @@
-# .NET Aspire Dashboard
+# Aspire Dashboard
 
-The .NET Aspire Dashboard is a browser-based app to view run-time information about your distributed application.
+The Aspire Dashboard is a browser-based app to view run-time information about your distributed application.
 
 The dashboard shows:
 
@@ -73,7 +73,7 @@ The OTLP endpoint can be secured with [client certificate](https://learn.microso
 
 It may also be run unsecured. Set `Dashboard:Otlp:AuthMode` to `Unsecured`. The OTLP endpoint will allow anonymous access. This setting is used during local development, but is not recommended if you attempt to host the dashboard in other settings.
 
-For more information, see the official .NET Aspire docs—[Dashboard configuration: OTLP authentication](https://learn.microsoft.com/dotnet/aspire/fundamentals/dashboard/configuration#otlp-authentication).
+For more information, see the official Aspire docs—[Dashboard configuration: OTLP authentication](https://aspire.dev/dashboard/configuration#otlp-authentication).
 
 #### OTLP client certification authentication
 
@@ -86,7 +86,7 @@ For API key authentication, set `Dashboard:Otlp:AuthMode` to `ApiKey`, then add 
 - `Dashboard:Otlp:PrimaryApiKey` specifies the primary API key. (required, string)
 - `Dashboard:Otlp:SecondaryApiKey` specifies the secondary API key. (optional, string)
 
-For more information, see [Security considerations for running the .NET Aspire dashboard: Secure telemetry endpoint](https://learn.microsoft.com/dotnet/aspire/fundamentals/dashboard/security-considerations#secure-telemetry-endpoint).
+For more information, see [Security considerations for running the Aspire dashboard: Secure telemetry endpoint](https://aspire.dev/dashboard/security-considerations#secure-telemetry-endpoint).
 
 ### Resources
 
@@ -130,4 +130,4 @@ The software may collect information about you and your use of the software and 
 
 ### Opting out of data collection
 
-The .NET Aspire dashboard collects usage telemetry. Learn [what's collected and why](https://aka.ms/dotnet/aspire/microsoft-collected-telemetry).  To opt out of dashboard telemetry, set the environment variable `ASPIRE_DASHBOARD_TELEMETRY_OPTOUT` to `true` or disable telemetry in Visual Studio or Visual Studio Code.
+The Aspire dashboard collects usage telemetry. Learn [what's collected and why](https://aka.ms/aspire/microsoft-collected-telemetry).  To opt out of dashboard telemetry, set the environment variable `ASPIRE_DASHBOARD_TELEMETRY_OPTOUT` to `true` or disable telemetry in Visual Studio or Visual Studio Code.

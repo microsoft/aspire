@@ -5,6 +5,8 @@ param userPrincipalId string = ''
 
 param tags object = { }
 
+param app_host_acr_outputs_name string
+
 param log_env_shared_name string
 
 param log_env_shared_rg string
@@ -15,13 +17,8 @@ resource app_host_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-3
   tags: tags
 }
 
-resource app_host_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
-  name: take('apphostacr${uniqueString(resourceGroup().id)}', 50)
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  tags: tags
+resource app_host_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
+  name: app_host_acr_outputs_name
 }
 
 resource app_host_acr_app_host_mi_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -39,7 +36,7 @@ resource log_env_shared 'Microsoft.OperationalInsights/workspaces@2025-02-01' ex
   scope: resourceGroup(log_env_shared_rg)
 }
 
-resource app_host 'Microsoft.App/managedEnvironments@2025-01-01' = {
+resource app_host 'Microsoft.App/managedEnvironments@2025-07-01' = {
   name: take('apphost${uniqueString(resourceGroup().id)}', 24)
   location: location
   properties: {
@@ -60,7 +57,7 @@ resource app_host 'Microsoft.App/managedEnvironments@2025-01-01' = {
   tags: tags
 }
 
-resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2024-10-02-preview' = {
+resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
   name: 'aspire-dashboard'
   properties: {
     componentType: 'AspireDashboard'

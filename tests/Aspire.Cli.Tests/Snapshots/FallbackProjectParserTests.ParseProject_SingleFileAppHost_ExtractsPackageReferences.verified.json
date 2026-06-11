@@ -1,0 +1,27 @@
+﻿{
+  "Items": {
+    "PackageReference": [
+      {
+        "Identity": "Aspire.Hosting.NodeJs",
+        "Version": "9.5.1"
+      },
+      {
+        "Identity": "Aspire.Hosting.Python",
+        "Version": "9.5.1"
+      },
+      {
+        "Identity": "Aspire.Hosting.Redis",
+        "Version": "9.5.1"
+      },
+      {
+        "Identity": "CommunityToolkit.Aspire.Hosting.NodeJS.Extensions",
+        "Version": "9.8.0"
+      }
+    ],
+    "ProjectReference": []
+  },
+  "Properties": {
+    "AspireHostingSDKVersion": "13.0.0-preview.1.25519.5"
+  },
+  "Fallback": true
+}

@@ -1,6 +1,3 @@
 <FileList>
   <File Path="tools/dcp" Permission="755"/>
-  <File Path="tools/ext/dcpctrl" Permission="755"/>
-  <File Path="tools/ext/bin/dcpproc" Permission="755"/>
-  <File Path="tools/ext/bin/dcptun" Permission="755"/>
 </FileList>

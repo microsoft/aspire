@@ -2,129 +2,121 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.CommandLine.Help;
 using System.Globalization;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class CacheCommand : BaseCommand
+internal sealed class CacheCommand : ParentCommand
 {
-    public CacheCommand(IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext)
-        : base("cache", CacheCommandStrings.Description, features, updateNotifier, executionContext, interactionService)
-    {
-        ArgumentNullException.ThrowIfNull(interactionService);
+    internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
-        var clearCommand = new ClearCommand(InteractionService, features, updateNotifier, executionContext);
+    public CacheCommand(
+        CommonCommandServices services)
+        : base("cache", CacheCommandStrings.Description, services)
+    {
+        var clearCommand = new ClearCommand(services);
 
         Subcommands.Add(clearCommand);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    internal sealed class ClearCommand : BaseCommand
     {
-        new HelpAction().Invoke(parseResult);
-        return Task.FromResult(ExitCodeConstants.InvalidCommand);
-    }
-
-    private sealed class ClearCommand : BaseCommand
-    {
-        public ClearCommand(IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext)
-            : base("clear", CacheCommandStrings.ClearCommand_Description, features, updateNotifier, executionContext, interactionService)
+        public ClearCommand(CommonCommandServices services)
+            : base("clear", CacheCommandStrings.ClearCommand_Description, services)
         {
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             try
             {
-                var cacheDirectory = ExecutionContext.CacheDirectory;
                 var filesDeleted = 0;
-                
-                // Delete cache files and subdirectories
-                if (cacheDirectory.Exists)
-                {
-                    // Delete all cache files and subdirectories
-                    foreach (var file in cacheDirectory.GetFiles("*", SearchOption.AllDirectories))
-                    {
-                        try
-                        {
-                            file.Delete();
-                            filesDeleted++;
-                        }
-                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-                        {
-                            // Continue deleting other files even if some fail
-                        }
-                    }
+                var currentLogFilePath = ExecutionContext.LogFilePath;
 
-                    // Delete subdirectories
-                    foreach (var directory in cacheDirectory.GetDirectories())
-                    {
-                        try
-                        {
-                            directory.Delete(recursive: true);
-                        }
-                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-                        {
-                            // Continue deleting other directories even if some fail
-                        }
-                    }
-                }
-
-                // Also clear the sdks directory
-                var sdksDirectory = ExecutionContext.SdksDirectory;
-                if (sdksDirectory.Exists)
-                {
-                    foreach (var file in sdksDirectory.GetFiles("*", SearchOption.AllDirectories))
-                    {
-                        try
-                        {
-                            file.Delete();
-                            filesDeleted++;
-                        }
-                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-                        {
-                            // Continue deleting other files even if some fail
-                        }
-                    }
-
-                    // Delete subdirectories
-                    foreach (var directory in sdksDirectory.GetDirectories())
-                    {
-                        try
-                        {
-                            directory.Delete(recursive: true);
-                        }
-                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-                        {
-                            // Continue deleting other directories even if some fail
-                        }
-                    }
-                }
+                filesDeleted += ClearDirectoryContents(ExecutionContext.CacheDirectory);
+                filesDeleted += ClearDirectoryContents(ExecutionContext.SdksDirectory);
+                filesDeleted += ClearDirectoryContents(ExecutionContext.PackagesDirectory);
+                // Wipe the staging NuGet package cache too. Producers (PrebuiltAppHostServer's
+                // temporary nuget.config for the staging channel) deposit SHA-keyed package
+                // caches under <ASPIRE_HOME>/.nugetpackages/<sha>; clearing them lets users
+                // recover wedged staging restores without filesystem surgery. We hand the parent
+                // directory to ClearDirectoryContents so each SHA subdirectory is wiped while
+                // the parent itself stays in place for the next staging restore.
+                filesDeleted += ClearDirectoryContents(
+                    new DirectoryInfo(CliPathHelper.GetStagingNuGetPackagesDirectory(ExecutionContext.AspireHomeDirectory)));
+                filesDeleted += ClearDirectoryContents(
+                    ExecutionContext.LogsDirectory,
+                    skipFile: f => f.FullName.Equals(currentLogFilePath, StringComparison.OrdinalIgnoreCase));
 
                 if (filesDeleted == 0)
                 {
-                    InteractionService.DisplayMessage("information", CacheCommandStrings.CacheAlreadyEmpty);
+                    InteractionService.DisplayMessage(KnownEmojis.Information, CacheCommandStrings.CacheAlreadyEmpty);
                 }
                 else
                 {
                     InteractionService.DisplaySuccess(CacheCommandStrings.CacheCleared);
                 }
 
-                return Task.FromResult(ExitCodeConstants.Success);
+                return Task.FromResult(CommandResult.Success());
             }
             catch (Exception ex)
             {
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, CacheCommandStrings.CacheClearFailed, ex.Message));
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                var errorMessage = string.Format(CultureInfo.CurrentCulture, CacheCommandStrings.CacheClearFailed, ex.Message);
+                Telemetry.RecordError(errorMessage, ex);
+                InteractionService.DisplayError(errorMessage);
+                return Task.FromResult(CommandResult.Failure(CliExitCodes.InvalidCommand));
             }
+        }
+
+        private static readonly EnumerationOptions s_enumerationOptions = new()
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true
+        };
+
+        internal static int ClearDirectoryContents(DirectoryInfo? directory, Func<FileInfo, bool>? skipFile = null)
+        {
+            if (directory is null || !directory.Exists)
+            {
+                return 0;
+            }
+
+            var filesDeleted = 0;
+
+            foreach (var file in directory.EnumerateFiles("*", s_enumerationOptions))
+            {
+                if (skipFile?.Invoke(file) == true)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    file.Delete();
+                    filesDeleted++;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+                {
+                    // Continue deleting other files even if some fail (e.g. locked by a running process)
+                }
+            }
+
+            foreach (var subdirectory in directory.EnumerateDirectories())
+            {
+                try
+                {
+                    subdirectory.Delete(recursive: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+                {
+                    // Continue deleting other directories even if some fail
+                }
+            }
+
+            return filesDeleted;
         }
     }
 }

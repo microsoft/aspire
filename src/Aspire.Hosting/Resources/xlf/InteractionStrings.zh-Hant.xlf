@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledMessage">
-        <source>Container runtime could not be found. See https://aka.ms/dotnet/aspire/containers for more details on supported container runtimes.</source>
-        <target state="translated">找不到容器執行階段。如需支援之容器執行階段的詳細資訊，請參閱 https://aka.ms/dotnet/aspire/containers。</target>
+        <source>Container runtime could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.</source>
+        <target state="translated">找不到容器執行階段。如需支援之容器執行階段的詳細資訊，請參閱 https://aka.ms/aspire/containers。</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledTitle">
@@ -42,6 +42,41 @@
         <target state="translated">容器執行階段狀況不良</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeleteParameterMessage">
+        <source>Are you sure you want to delete the value for parameter `{0}`?</source>
+        <target state="needs-review-translation">確定要刪除參數 `{0}` 的值?</target>
+        <note>Contains markdown. {0} is the parameter name.</note>
+      </trans-unit>
+      <trans-unit id="DeleteParameterPrimaryButtonText">
+        <source>Delete</source>
+        <target state="translated">刪除</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeleteParameterTitle">
+        <source>Delete parameter value</source>
+        <target state="translated">刪除參數值</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeveloperCertificateNotFullyTrustedMessage">
+        <source>The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.</source>
+        <target state="new">The most recent development certificate isn't fully trusted. See https://aka.ms/aspire/devcerts for more information.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeveloperCertificateNotFullyTrustedTitle">
+        <source>Development certificate not fully trusted</source>
+        <target state="new">Development certificate not fully trusted</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoDeveloperCertificateTrustedMessage">
+        <source>No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information.</source>
+        <target state="new">No trusted development certificate was found. See https://aka.ms/aspire/devcerts for more information.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoDeveloperCertificateTrustedTitle">
+        <source>No trusted development certificate</source>
+        <target state="new">No trusted development certificate</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParametersBarMessage">
         <source>There are unresolved parameters that need to be set. Please provide values for them.</source>
         <target state="translated">有些未解析的參數需要設定。請提供它們的值。</target>
@@ -57,9 +92,19 @@
         <target state="translated">未解析的參數</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParametersInputsDeleteDescription">
+        <source>Delete a value that is saved in [user secrets](https://aka.ms/aspire/user-secrets).</source>
+        <target state="new">Delete a value that is saved in [user secrets](https://aka.ms/aspire/user-secrets).</target>
+        <note>Contains markdown</note>
+      </trans-unit>
+      <trans-unit id="ParametersInputsDeleteLabel">
+        <source>Delete from user secrets</source>
+        <target state="translated">從使用者祕密刪除</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParametersInputsMessage">
-        <source>Please provide values for the unresolved parameters. Parameters can be saved to [user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets) for future use.</source>
-        <target state="translated">請提供未解析參數的值。參數可以儲存到 [使用者秘密](https://learn.microsoft.com/aspnet/core/security/app-secrets) 以供未來使用。</target>
+        <source>Please provide values for the unresolved parameters. Parameters can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</source>
+        <target state="translated">請提供未解析參數的值。參數可以儲存到 [使用者祕密](https://aka.ms/aspire/user-secrets) 供未來使用。</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsMessagePublishMode">
@@ -76,6 +121,16 @@
         <source>Save</source>
         <target state="translated">儲存</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ParametersInputsRememberDescriptionConfigured">
+        <source>Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</source>
+        <target state="new">Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</target>
+        <note>Contains markdown</note>
+      </trans-unit>
+      <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
+        <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
+        <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
+        <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
         <source>Save to user secrets</source>
@@ -105,6 +160,18 @@
       <trans-unit id="VersionCheckTitle">
         <source>Update now</source>
         <target state="translated">立即更新</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SetParameterMessage">
+        <source>Please provide a value for the parameter. New parameter values may not be used until dependent resources are restarted.</source>
+        <target state="needs-review-translation">請提供參數的值。參數可以儲存到 [使用者祕密](https://learn.microsoft.com/aspnet/core/security/app-secrets) 供未來使用。
+
+除非重新啟動相依資源，否則無法使用新的參數值。</target>
+        <note>Contains markdown</note>
+      </trans-unit>
+      <trans-unit id="SetParameterTitle">
+        <source>Set parameter</source>
+        <target state="translated">設定參數</target>
         <note />
       </trans-unit>
     </body>

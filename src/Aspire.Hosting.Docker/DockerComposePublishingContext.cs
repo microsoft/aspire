@@ -25,7 +25,7 @@ namespace Aspire.Hosting.Docker;
 /// </remarks>
 internal sealed class DockerComposePublishingContext(
     DistributedApplicationExecutionContext executionContext,
-    IResourceContainerImageBuilder imageBuilder,
+    IResourceContainerImageManager imageBuilder,
     string outputPath,
     ILogger logger,
     IReportingStep reportingStep,
@@ -36,7 +36,7 @@ internal sealed class DockerComposePublishingContext(
         UnixFileMode.GroupRead | UnixFileMode.GroupWrite |
         UnixFileMode.OtherRead | UnixFileMode.OtherWrite;
 
-    public readonly IResourceContainerImageBuilder ImageBuilder = imageBuilder;
+    public readonly IResourceContainerImageManager ImageBuilder = imageBuilder;
     public readonly string OutputPath = outputPath;
 
     internal async Task WriteModelAsync(DistributedApplicationModel model, DockerComposeEnvironmentResource environment)
@@ -88,22 +88,17 @@ internal sealed class DockerComposePublishingContext(
                 {
                     var dockerfileContext = new DockerfileFactoryContext
                     {
-                        Services = executionContext.ServiceProvider,
+                        Services = executionContext.Services,
                         Resource = serviceResource.TargetResource,
                         CancellationToken = cancellationToken
                     };
-                    var dockerfileContent = await dockerfileBuildAnnotation.DockerfileFactory(dockerfileContext).ConfigureAwait(false);
-
-                    // Always write to the original DockerfilePath so code looking at that path still works
-                    await File.WriteAllTextAsync(dockerfileBuildAnnotation.DockerfilePath, dockerfileContent, cancellationToken).ConfigureAwait(false);
 
                     // Copy to a resource-specific path in the output folder for publishing
                     var resourceDockerfilePath = Path.Combine(OutputPath, $"{serviceResource.TargetResource.Name}.Dockerfile");
-                    Directory.CreateDirectory(OutputPath);
-                    File.Copy(dockerfileBuildAnnotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
+                    await dockerfileBuildAnnotation.EmitDockerfileArtifactsAsync(dockerfileContext, resourceDockerfilePath).ConfigureAwait(false);
                 }
 
-                var composeService = serviceResource.BuildComposeService();
+                var composeService = await serviceResource.BuildComposeServiceAsync().ConfigureAwait(false);
 
                 HandleComposeFileVolumes(serviceResource, composeFile);
 
@@ -116,7 +111,7 @@ internal sealed class DockerComposePublishingContext(
                 {
                     foreach (var a in fsAnnotations)
                     {
-                        var files = await a.Callback(new() { Model = serviceResource.TargetResource, ServiceProvider = executionContext.ServiceProvider }, CancellationToken.None).ConfigureAwait(false);
+                        var files = await a.Callback(new() { Model = serviceResource.TargetResource, Services = executionContext.Services }, CancellationToken.None).ConfigureAwait(false);
                         foreach (var file in files)
                         {
                             HandleComposeFileConfig(composeFile, composeService, file, a.DefaultOwner, a.DefaultGroup, a.Umask ?? DefaultUmask, a.DestinationPath);
@@ -145,6 +140,9 @@ internal sealed class DockerComposePublishingContext(
             // Call the environment's ConfigureComposeFile method to allow for custom modifications
             environment.ConfigureComposeFile?.Invoke(composeFile);
 
+            // Allow mutation of the captured environment variables before writing
+            environment.ConfigureEnvFile?.Invoke(environment.CapturedEnvironmentVariables);
+
             var composeOutput = composeFile.ToYaml();
             var outputFile = Path.Combine(OutputPath, "docker-compose.yaml");
             Directory.CreateDirectory(OutputPath);
@@ -155,11 +153,11 @@ internal sealed class DockerComposePublishingContext(
                 var envFilePath = Path.Combine(OutputPath, ".env");
                 var envFile = EnvFile.Load(envFilePath, logger);
 
-                foreach (var entry in environment.CapturedEnvironmentVariables ?? [])
+                foreach (var entry in environment.CapturedEnvironmentVariables)
                 {
-                    var (key, (description, _, _)) = entry;
+                    var envVar = entry.Value;
 
-                    envFile.Add(key, value: null, description, onlyIfMissing: true);
+                    envFile.Add(entry.Key, value: null, envVar.Description, onlyIfMissing: true);
                 }
 
                 envFile.Save(includeValues: false);

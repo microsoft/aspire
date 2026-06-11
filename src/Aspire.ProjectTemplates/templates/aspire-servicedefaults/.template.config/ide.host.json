@@ -2,12 +2,7 @@
   "$schema": "https://json.schemastore.org/ide.host",
   "icon": "ide/AspireServiceDefaults.ico",
   "displayOverviewPage": "0",
-  "symbolInfo": [
-    {
-      "id": "AspireVersion",
-      "isVisible": true
-    }
-  ],
+  "symbolInfo": [],
   "unsupportedHosts": [
     {
       "id": "vs",

@@ -10,15 +10,20 @@ namespace Aspire.Hosting
 {
     public static partial class AzureOpenAIExtensions
     {
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIResource> AddAzureOpenAI(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExportIgnore(Reason = "Obsolete API that accepts AzureOpenAIDeployment which is not ATS-compatible.")]
         [System.Obsolete("AddDeployment taking an AzureOpenAIDeployment is deprecated. Please the AddDeployment overload that returns an AzureOpenAIDeploymentResource instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIResource> AddDeployment(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIResource> builder, ApplicationModel.AzureOpenAIDeployment deployment) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIDeploymentResource> AddDeployment(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIResource> builder, string name, string modelName, string modelVersion) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIDeploymentResource> WithProperties(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIDeploymentResource> builder, System.Action<ApplicationModel.AzureOpenAIDeploymentResource> configure) { throw null; }
 
+        [AspireExportIgnore(Reason = "CognitiveServicesBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the enum-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithRoleAssignments<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.AzureOpenAIResource> target, params global::Azure.Provisioning.CognitiveServices.CognitiveServicesBuiltInRole[] roles)
             where T : ApplicationModel.IResource { throw null; }
     }
@@ -42,7 +47,8 @@ namespace Aspire.Hosting.ApplicationModel
         public string SkuName { get { throw null; } set { } }
     }
 
-    public partial class AzureOpenAIDeploymentResource : Resource, IResourceWithParent<AzureOpenAIResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class AzureOpenAIDeploymentResource : Resource, IResourceWithParent<AzureOpenAIResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public AzureOpenAIDeploymentResource(string name, string modelName, string modelVersion, AzureOpenAIResource parent) : base(default!) { }
 
@@ -59,9 +65,12 @@ namespace Aspire.Hosting.ApplicationModel
         public int SkuCapacity { get { throw null; } set { } }
 
         public string SkuName { get { throw null; } set { } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class AzureOpenAIResource : Azure.AzureProvisioningResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [AspireExport]
+    public partial class AzureOpenAIResource : Azure.AzureProvisioningResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences, Azure.IAzurePrivateEndpointTarget, Azure.IAzureNspAssociationTarget
     {
         public AzureOpenAIResource(string name, System.Action<Azure.AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -72,8 +81,20 @@ namespace Aspire.Hosting.ApplicationModel
         [System.Obsolete("AzureOpenAIDeployment is deprecated.")]
         public System.Collections.Generic.IReadOnlyList<AzureOpenAIDeployment> Deployments { get { throw null; } }
 
+        public Azure.BicepOutputReference Endpoint { get { throw null; } }
+
+        public Azure.BicepOutputReference Id { get { throw null; } }
+
         public Azure.BicepOutputReference NameOutputReference { get { throw null; } }
 
+        public ReferenceExpression UriExpression { get { throw null; } }
+
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(Azure.AzureResourceInfrastructure infra) { throw null; }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
     }
 }

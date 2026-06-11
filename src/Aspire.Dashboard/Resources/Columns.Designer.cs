@@ -100,7 +100,7 @@ namespace Aspire.Dashboard.Resources {
         
         /// <summary>
         ///   Looks up a localized string similar to Container runtime was found but appears to be unhealthy. Ensure that it is running.
-        ///For more information, see https://aka.ms/dotnet/aspire/container-runtime-unhealthy.
+        ///For more information, see https://aka.ms/aspire/container-runtime-unhealthy..
         /// </summary>
         public static string StateColumnResourceContainerRuntimeUnhealthy {
             get {
@@ -109,7 +109,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to {0} is no longer running.
+        ///   Looks up a localized string similar to {0} is no longer running..
         /// </summary>
         public static string StateColumnResourceExited {
             get {
@@ -118,7 +118,16 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to {0} exited unexpectedly with exit code {1}.
+        ///   Looks up a localized string similar to {0} failed to start..
+        /// </summary>
+        public static string StateColumnResourceFailedToStart {
+            get {
+                return ResourceManager.GetString("StateColumnResourceFailedToStart", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} exited unexpectedly with exit code {1}..
         /// </summary>
         public static string StateColumnResourceExitedUnexpectedly {
             get {
@@ -127,7 +136,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Resource has not started because it&apos;s configured to not automatically start..
+        ///   Looks up a localized string similar to Resource is not configured to start automatically..
         /// </summary>
         public static string StateColumnResourceNotStarted {
             get {
@@ -136,11 +145,20 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Resource is waiting for other resources to be in a running and healthy state..
+        ///   Looks up a localized string similar to Resource is waiting for dependencies..
         /// </summary>
         public static string StateColumnResourceWaiting {
             get {
                 return ResourceManager.GetString("StateColumnResourceWaiting", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for dependencies: {0}..
+        /// </summary>
+        public static string StateColumnResourceWaitingFor {
+            get {
+                return ResourceManager.GetString("StateColumnResourceWaitingFor", resourceCulture);
             }
         }
         

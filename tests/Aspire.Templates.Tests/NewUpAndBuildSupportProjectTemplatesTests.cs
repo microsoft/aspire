@@ -7,8 +7,6 @@ namespace Aspire.Templates.Tests;
 
 public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper testOutput) : TemplateTestsBase(testOutput)
 {
-    public const string AspireVersionNext = "13.0";
-
     [Trait("category", "basic-build")]
     protected async Task CanNewAndBuildActual(string templateName, string extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
     {
@@ -21,8 +19,7 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
             TestSdk.Current => BuildEnvironment.ForCurrentSdkOnly,
             TestSdk.Previous => BuildEnvironment.ForPreviousSdkOnly,
             TestSdk.Next => BuildEnvironment.ForNextSdkOnly,
-            TestSdk.CurrentSdkAndPreviousRuntime => BuildEnvironment.ForCurrentSdkAndPreviousRuntime,
-            TestSdk.NextSdkAndCurrentRuntime => BuildEnvironment.ForNextSdkAndCurrentRuntime,
+            TestSdk.NextSdkWithCurrentAndPreviousRuntime => BuildEnvironment.ForNextSdkWithCurrentAndPreviousRuntimes,
             _ => throw new ArgumentOutOfRangeException(nameof(sdk))
         };
 
@@ -63,20 +60,10 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
     }
 }
 
-public class NUnit_AspireVersionCurrent_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
+public class NUnit_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
 {
     [Theory]
     [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-nunit", ""])]
-    public Task CanNewAndBuild(string templateName, string extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
-    {
-        return CanNewAndBuildActual(templateName, extraTestCreationArgs, sdk, tfm, error);
-    }
-}
-
-public class NUnit_AspireVersionNext_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
-{
-    [Theory]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-nunit", $"--aspire-version {AspireVersionNext}"])]
     public Task CanNewAndBuild(string templateName, string extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
     {
         return CanNewAndBuildActual(templateName, extraTestCreationArgs, sdk, tfm, error);
@@ -123,7 +110,7 @@ public class XUnit_V3MTP_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHe
     }
 }
 
-public class XUnit_AspireVersion_Current_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
+public class XUnit_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
 {
     [Theory]
     [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-xunit", ""])]
@@ -133,30 +120,10 @@ public class XUnit_AspireVersion_Current_NewUpAndBuildSupportProjectTemplatesTes
     }
 }
 
-public class XUnit_AspireVersion_Next_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
-{
-    [Theory]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-xunit", $"--aspire-version {AspireVersionNext}"])]
-    public Task CanNewAndBuild(string templateName, string extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
-    {
-        return CanNewAndBuildActual(templateName, extraTestCreationArgs, sdk, tfm, error);
-    }
-}
-
-public class MSTest_AspireVersionCurrent_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
+public class MSTest_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
 {
     [Theory]
     [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-mstest", ""])]
-    public Task CanNewAndBuild(string templateName, string extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
-    {
-        return CanNewAndBuildActual(templateName, extraTestCreationArgs, sdk, tfm, error);
-    }
-}
-
-public class MSTest_AspireVersionNext_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
-{
-    [Theory]
-    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-mstest", $"--aspire-version {AspireVersionNext}"])]
     public Task CanNewAndBuild(string templateName, string extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
     {
         return CanNewAndBuildActual(templateName, extraTestCreationArgs, sdk, tfm, error);

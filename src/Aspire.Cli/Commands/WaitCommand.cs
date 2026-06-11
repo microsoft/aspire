@@ -1,0 +1,167 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.CommandLine;
+using System.Globalization;
+using Aspire.Cli.Backchannel;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
+using Microsoft.Extensions.Logging;
+
+namespace Aspire.Cli.Commands;
+
+internal sealed class WaitCommand : BaseCommand
+{
+    internal override HelpGroup HelpGroup => HelpGroup.ResourceManagement;
+
+    private readonly AppHostConnectionResolver _connectionResolver;
+    private readonly ILogger<WaitCommand> _logger;
+    private readonly TimeProvider _timeProvider;
+
+    private static readonly Argument<string> s_resourceArgument = new("resource")
+    {
+        Description = WaitCommandStrings.ResourceArgumentDescription
+    };
+
+    private static readonly Option<string> s_statusOption = new("--status")
+    {
+        Description = WaitCommandStrings.StatusOptionDescription,
+        DefaultValueFactory = _ => "healthy"
+    };
+
+    internal const int DefaultTimeoutSeconds = 120;
+
+    private static readonly Option<int> s_timeoutOption = new("--timeout")
+    {
+        Description = WaitCommandStrings.TimeoutOptionDescription,
+        DefaultValueFactory = _ => DefaultTimeoutSeconds
+    };
+
+    private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
+
+    public WaitCommand(
+        IAuxiliaryBackchannelMonitor backchannelMonitor,
+        IProjectLocator projectLocator,
+        ILogger<WaitCommand> logger,
+        CommonCommandServices services,
+        TimeProvider? timeProvider = null)
+        : base("wait", WaitCommandStrings.Description, services)
+    {
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, ExecutionContext, logger);
+        _logger = logger;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+
+        Arguments.Add(s_resourceArgument);
+        Options.Add(s_statusOption);
+        Options.Add(s_timeoutOption);
+        Options.Add(s_appHostOption);
+    }
+
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        using var activity = Telemetry.StartDiagnosticActivity(Name);
+
+        var resourceName = parseResult.GetValue(s_resourceArgument)!;
+        var status = parseResult.GetValue(s_statusOption)!.ToLowerInvariant();
+        var timeoutSeconds = parseResult.GetValue(s_timeoutOption);
+        var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
+
+        // Validate status value
+        if (!IsValidStatus(status))
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.InvalidStatusValue, status));
+        }
+
+        // Validate timeout
+        if (timeoutSeconds <= 0)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, WaitCommandStrings.TimeoutMustBePositive);
+        }
+
+        // Resolve connection to a running AppHost
+        var result = await _connectionResolver.ResolveConnectionAsync(
+            passedAppHostProjectFile,
+            SharedCommandStrings.ScanningForRunningAppHosts,
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, WaitCommandStrings.SelectAppHostAction),
+            SharedCommandStrings.AppHostNotRunning,
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, InteractionService, CliExitCodes.FailedToFindProject));
+        }
+
+        var connection = result.Connection!;
+
+        return CommandResult.FromExitCode(await WaitForResourceAsync(connection, resourceName, status, timeoutSeconds, cancellationToken));
+    }
+
+    private async Task<int> WaitForResourceAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        string resourceName,
+        string status,
+        int timeoutSeconds,
+        CancellationToken cancellationToken)
+    {
+        var statusLabel = GetStatusLabel(status);
+
+        _logger.LogDebug("Waiting for resource '{ResourceName}' to reach status '{Status}' with timeout {Timeout}s", resourceName, status, timeoutSeconds);
+
+        var startTimestamp = _timeProvider.GetTimestamp();
+
+        var exitCode = await InteractionService.ShowStatusAsync(
+            string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitingForResource, resourceName, statusLabel),
+            (Func<Task<int>>)(async () =>
+            {
+                var response = await connection.WaitForResourceAsync(resourceName, status, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+
+                if (response.Success)
+                {
+                    return CliExitCodes.Success;
+                }
+
+                if (response.ResourceNotFound)
+                {
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceNotFound, resourceName));
+                    return CliExitCodes.WaitResourceFailed;
+                }
+
+                if (response.TimedOut)
+                {
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitTimedOut, resourceName, statusLabel, timeoutSeconds));
+                    return CliExitCodes.WaitTimeout;
+                }
+
+                // Resource entered a failed state
+                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceEnteredFailedState, resourceName, response.State ?? response.ErrorMessage));
+                return CliExitCodes.WaitResourceFailed;
+            }));
+
+        // Reset cursor position after spinner
+        InteractionService.DisplayPlainText("");
+
+        if (exitCode == CliExitCodes.Success)
+        {
+            var elapsed = _timeProvider.GetElapsedTime(startTimestamp);
+            InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceReachedTargetStatus, resourceName, statusLabel, elapsed.TotalSeconds));
+        }
+
+        return exitCode;
+    }
+
+    private static bool IsValidStatus(string status)
+    {
+        return status is "healthy" or "up" or "down";
+    }
+
+    private static string GetStatusLabel(string status)
+    {
+        return status switch
+        {
+            "up" => "up (running)",
+            "healthy" => "healthy",
+            "down" => "down",
+            _ => status
+        };
+    }
+}

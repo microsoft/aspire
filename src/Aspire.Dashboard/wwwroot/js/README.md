@@ -1,6 +1,6 @@
 # JavaScript Libraries
 
-The .NET Aspire Dashboard bundles a few JavaScript libraries.
+The Aspire Dashboard bundles a few JavaScript libraries.
 
 ## Plotly
 

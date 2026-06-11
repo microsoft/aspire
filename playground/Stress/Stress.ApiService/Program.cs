@@ -161,6 +161,36 @@ app.MapGet("/http-client-requests", async (HttpClient client) =>
     return $"Sent requests to {string.Join(';', urls)}";
 });
 
+app.MapGet("/http-command-json-result", () =>
+{
+    return Results.Json(new
+    {
+        token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+        issuedAt = DateTimeOffset.UtcNow,
+        expiresIn = 3600
+    });
+});
+
+app.MapGet("/http-command-auto-result", () =>
+{
+    if (Random.Shared.Next(2) == 0)
+    {
+        return Results.Json(new
+        {
+            token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+            issuedAt = DateTimeOffset.UtcNow,
+            expiresIn = 3600
+        });
+    }
+
+    return Results.Text($"Generated text token: {Convert.ToBase64String(Guid.NewGuid().ToByteArray())}");
+});
+
+app.MapGet("/http-command-text-result", () =>
+{
+    return Results.Text($"Generated text token: {Convert.ToBase64String(Guid.NewGuid().ToByteArray())}");
+});
+
 app.MapGet("/log-message-limit", async ([FromServices] ILogger<Program> logger) =>
 {
     const int LogCount = 10_000;
@@ -433,6 +463,20 @@ app.MapGet("/genai-trace", async () =>
     if (activity != null)
     {
         activity.SetTag("gen_ai.system", "gpt");
+        activity.SetTag("gen_ai.operation.name", "chat");
+        activity.SetTag("gen_ai.provider.name", "openai");
+        activity.SetTag("gen_ai.response.model", "gpt-4o");
+        activity.SetTag("gen_ai.usage.input_tokens", 350);
+        activity.SetTag("gen_ai.usage.output_tokens", 120);
+        activity.SetTag("gen_ai.response.id", "chatcmpl-test-12345");
+        activity.SetTag("gen_ai.system_instructions", """
+            [
+              {
+                "type": "text",
+                "content": "You are a helpful assistant that provides accurate and concise information. Always respond in a friendly and professional tone."
+              }
+            ]
+            """);
         activity.SetTag("gen_ai.input.messages", """
             [
               {
@@ -490,6 +534,48 @@ app.MapGet("/genai-trace", async () =>
                   {
                     "type": "text",
                     "content": "Assistant content"
+                  },
+                  {
+                    "type": "tool_call",
+                    "name": "get_weather",
+                    "id": "call_abc123",
+                    "arguments": "{\"location\": \"東京\", \"unit\": \"celsius\"}"
+                  },
+                  {
+                    "type": "reasoning",
+                    "content": "The user is asking about something that requires weather data. I should call the get_weather tool to retrieve current conditions for Tokyo before formulating my response."
+                  }
+                ]
+              },
+              {
+                "role": "tool",
+                "parts": [
+                  {
+                    "type": "tool_call_response",
+                    "id": "call_abc123",
+                    "response": "- First (最初)\r\n- Second (二番目)\r\n- 天気予報: 東京は晴れ、気温25度です。"
+                  }
+                ]
+              },
+              {
+                "role": "assistant",
+                "parts": [
+                  {
+                    "type": "refusal",
+                    "content": "I'm sorry, but I cannot provide medical advice. Please consult a licensed healthcare professional for medical concerns."
+                  }
+                ]
+              },
+              {
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "custom_sensor_data",
+                    "sensor_id": "temp-sensor-42",
+                    "readings": [22.5, 23.1, 22.8],
+                    "unit": "celsius",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "payload": {"description": "温度センサーからのリアルタイム測定データ"}
                   }
                 ]
               },
@@ -505,6 +591,153 @@ app.MapGet("/genai-trace", async () =>
                     "content": "# 📝 Markdown Feature Showcase\n\nWelcome to a **comprehensive example** of markdown in action.  \nThis document demonstrates *all* the main features.\n\n---\n\n## 1. Headings\n\n# H1 Heading  \n## H2 Heading  \n### H3 Heading  \n#### H4 Heading  \n##### H5 Heading  \n###### H6 Heading  \n\n---\n\n## 2. Emphasis\n\n- *Italic text*  \n- **Bold text**  \n- ***Bold and italic***  \n- ~~Strikethrough~~  \n- <u>Underlined (via HTML)</u>  \n\n---\n\n## 3. Lists\n\n### Unordered list:\n- Item A\n  - Sub-item A1\n  - Sub-item A2\n- Item B  \n- Item C  \n\n### Ordered list:\n1. First\n2. Second\n   1. Sub-second\n   2. Sub-second again\n3. Third  \n\n### Task list:\n- [x] Done item  \n- [ ] Pending item  \n- [ ] Another pending item  \n\n---\n\n## 4. Links\n\n- Inline link: [OpenAI](https://openai.com)  \n- Reference link: [Search Engine][google]  \n- Autolink: <https://example.com>  \n\n[google]: https://google.com \"Google Search\"\n\n---\n\n## 5. Images\n\nInline image:  \n![Example](/img/TokenExample.png)  \n\nLinked image:  \n[![Example](/img/TokenExample.png)](https://openai.com)\n\n---\n\n## 6. Blockquotes\n\n> This is a blockquote.  \n>  \n> > Nested blockquote inside.  \n\n---\n\n## 7. Horizontal Rules\n\n---  \n***  \n___  \n\n---\n\n## 8. Tables\n\n| Feature        | Supported | Notes                          |\n|----------------|-----------|--------------------------------|\n| **Bold**       | ✅        | Works inside tables too        |\n| *Italics*      | ✅        | Styling works fine             |\n| Links          | ✅        | [Example](https://openai.com)  |\n| Images         | ✅        | ![Img](/img/TokenExample.png) |\n| Task List      | ❌        | Not supported in table cells   |\n\n---\n\n## 9. Inline Formatting\n\nSuperscript: X²  \nSubscript: H₂O  \nEmoji: 🎉 🚀 🌍  \nHTML inside markdown: <mark>highlighted text</mark>  \n\n---\n\n## 10. Footnotes\n\nHere’s a statement with a footnote.[^1]  \n\n[^1]: This is the footnote explanation.  \n\n---\n\n## 11. Definition Lists\n\nTerm 1  \n: Definition of term 1  \n\nTerm 2  \n: Definition of term 2 with *emphasis*  \n\n---\n\n## 12. Escaping Characters\n\n\\*Not italic\\* but literal asterisks  \nUse a backslash for: \\# \\* \\[ \\] \\( \\)  \n\n---\n\n## 13. Code Blocks\n\n```csharp\n\nConsole.WriteLine(\"test\");\n\n```\n\n---\n\nThat’s the **full tour** of markdown features."
                   }
                 ]
+              }
+            ]
+            """);
+
+        activity.SetTag("gen_ai.output.messages", """
+            [
+              {
+                "role": "assistant",
+                "finish_reason": "stop",
+                "parts": [
+                  {
+                    "type": "reasoning",
+                    "content": "The user asked about the weather in Tokyo. I used the get_weather tool and received the current conditions. I'll summarize the results in a friendly response."
+                  },
+                  {
+                    "type": "text",
+                    "content": "The weather in Tokyo is currently sunny with a temperature of 25°C. It's a beautiful day!"
+                  },
+                  {
+                    "type": "tool_call",
+                    "name": "get_weather",
+                    "id": "call_def456",
+                    "arguments": "{\"location\": \"Osaka\", \"unit\": \"celsius\"}"
+                  },
+                  {
+                    "type": "refusal",
+                    "content": "I cannot provide a long-term climate forecast as that requires specialized meteorological models beyond my capabilities."
+                  },
+                  {
+                    "type": "custom_analysis_result",
+                    "confidence": 0.95,
+                    "category": "weather_inquiry",
+                    "metadata": {"processed": true, "version": "2.1"}
+                  }
+                ]
+              }
+            ]
+            """);
+
+        activity.SetTag("gen_ai.tool.definitions", """
+            [
+              { "type": "function", "name": "analyze_sentiment" },
+              { "type": "function", "name": "calculate_distance" },
+              { "type": "function", "name": "compress_image" },
+              { "type": "function", "name": "convert_currency" },
+              { "type": "function", "name": "create_thumbnail" },
+              { "type": "function", "name": "detect_language" },
+              { "type": "function", "name": "encrypt_data" },
+              { "type": "function", "name": "extract_keywords" },
+              { "type": "function", "name": "format_date" },
+              { "type": "function", "name": "generate_hash" },
+              { "type": "function", "name": "evaluate_expression" },
+              { "type": "function", "name": "fetch_resource" },
+              { "type": "function", "name": "filter_records" },
+              { "type": "function", "name": "flatten_json" },
+              { "type": "function", "name": "gauge_performance" },
+              { "type": "function", "name": "generate_report" },
+              { "type": "function", "name": "geocode_address" },
+              { "type": "function", "name": "get_diagnostics" },
+              { "type": "function", "name": "get_schema" },
+              {
+                "type": "function",
+                "name": "get_weather",
+                "description": "Retrieves the current weather conditions for a specified location. This tool provides real-time meteorological data including temperature, humidity, wind speed, and general conditions such as sunny, cloudy, or rainy.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "The geographic location for which to retrieve weather data, specified as a city and state or country. For example, 'San Francisco, CA' or 'London, UK'. The location should be specific enough to avoid ambiguity between similarly named places."
+                    },
+                    "unit": {
+                    },
+                    "include_forecast": {
+                      "type": ["string", "boolean"],
+                      "description": "Determines whether to include extended forecast data alongside current conditions. When enabled, the response will contain predictions for upcoming days including expected temperatures and precipitation chances."
+                    }
+                  },
+                  "required": ["location"]
+                }
+              },
+              {
+                "type": "function",
+                "name": "search_database",
+                "description": "Performs a comprehensive search across the database to find items matching the specified criteria. This tool supports full-text search with relevance scoring and allows filtering results based on various attributes to narrow down the results.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "query": {
+                      "type": "string",
+                      "description": "The search query string used to find matching items in the database. This supports natural language queries and will be matched against item titles, descriptions, and metadata fields using semantic search techniques."
+                    },
+                    "max_results": {
+                      "type": "integer",
+                      "description": "The maximum number of results to return from the search operation. Setting this value helps control response size and processing time. If not specified, a default limit will be applied by the system."
+                    },
+                    "score_threshold": {
+                      "type": "number",
+                      "description": "The minimum relevance score required for items to be included in results, expressed as a decimal value between 0.0 and 1.0. Higher values return only highly relevant matches, while lower values include more loosely related items."
+                    },
+                    "filters": {
+                      "type": "object",
+                      "description": "A collection of optional filter criteria to apply to the search results. These filters can narrow results by attributes such as category, date range, author, or any other indexed field in the database schema."
+                    }
+                  },
+                  "required": ["query"]
+                }
+              },
+              {
+                "type": "function",
+                "name": "process_items",
+                "description": "Processes a collection of items through a configurable pipeline with support for batch operations. This tool is designed for bulk data processing tasks and includes options for handling nullable values and various data types.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": ["array", "string"],
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The items to be processed by the pipeline, provided either as an array of strings or as a single comma-separated string. When provided as a string, values will be split on commas and each segment processed individually. Each item will be individually processed and the results aggregated."
+                    },
+                    "numbers": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      },
+                      "description": "An array of integer values that can be used for numerical processing operations. These numbers may be used for calculations, sorting, or as indices depending on the processing mode selected."
+                    },
+                    "optional_value": {
+                      "type": ["string", "null"],
+                      "description": "An optional string value that can be null when not applicable. This parameter is useful for providing additional context or configuration that may not be required for all processing scenarios."
+                    },
+                    "optional_count": {
+                      "type": ["number", "null"],
+                      "description": "An optional numeric count value that can be null if not needed. This can be used to specify batch sizes, iteration limits, or other numerical configuration options for the processing pipeline."
+                    },
+                    "nullable_array": {
+                      "type": ["array", "null"],
+                      "items": {
+                        "type": "number"
+                      },
+                      "description": "An array of numbers that can be entirely null when no numeric data is available. When provided, these values are used for supplementary calculations or weighting factors during processing."
+                    }
+                  },
+                  "required": ["items"]
+                }
               }
             ]
             """);

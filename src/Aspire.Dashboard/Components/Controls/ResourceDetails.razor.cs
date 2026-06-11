@@ -5,12 +5,13 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Dashboard.Components.Controls.PropertyValues;
 using Aspire.Dashboard.Components.Pages;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared;
 using Google.Protobuf.WellKnownTypes;
 using Humanizer;
 using Microsoft.AspNetCore.Components;
@@ -34,6 +35,12 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     [Parameter]
     public bool ShowHiddenResources { get; set; }
 
+    [Parameter]
+    public required EventCallback<CommandViewModel> CommandSelected { get; set; }
+
+    [Parameter]
+    public required Func<ResourceViewModel, CommandViewModel, bool> IsCommandExecuting { get; set; }
+
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
@@ -52,6 +59,15 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     [Inject]
     public required ILogger<ResourceDetails> Logger { get; init; }
 
+    [Inject]
+    public required DashboardDialogService DialogService { get; init; }
+
+    [Inject]
+    public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
+
+    [CascadingParameter]
+    public required ViewportInformation ViewportInformation { get; set; }
+
     private bool IsSpecOnlyToggleDisabled => !Resource.Environment.All(i => !i.FromSpec) && !GetResourceProperties(ordered: false).Any(static vm => vm.KnownProperty is null);
 
     // NOTE Excludes URLs as they don't expose sensitive items (and enumerating URLs is non-trivial)
@@ -61,6 +77,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private ResourceViewModel? _resource;
     private readonly List<DisplayedResourcePropertyViewModel> _displayedResourcePropertyViewModels = new();
     private readonly HashSet<string> _unmaskedItemNames = new();
+    private const string StateDescriptionPropertyKey = "resource-state-description";
 
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
@@ -142,7 +159,22 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
             _resource = Resource;
             _displayedResourcePropertyViewModels.Clear();
-            _displayedResourcePropertyViewModels.AddRange(_resource.Properties.Select(p => new DisplayedResourcePropertyViewModel(p.Value, Loc, TimeProvider)));
+            foreach (var property in _resource.Properties.Values)
+            {
+                var displayedProperty = property;
+
+                // An unresolved secret parameter has no value to hide, so keep the placeholder visible
+                // in the details grid instead of routing it through masking behavior.
+                if (_resource.HasMissingParameterValueState() &&
+                    property.KnownProperty?.Key == KnownProperties.Parameter.Value &&
+                    property.IsValueSensitive)
+                {
+                    displayedProperty = new ResourcePropertyViewModel(property.Name, property.Value, isValueSensitive: false, property.KnownProperty, property.Priority);
+                }
+
+                _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
+            }
+            AddStateDescriptionProperty(_resource);
 
             // Collapse details sections when they have no data.
             _isUrlsExpanded = GetUrls().Count > 0;
@@ -180,8 +212,24 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 {
                     Type = typeof(ResourceHealthStateValue),
                     Parameters = { ["Resource"] = _resource }
-                },
+                }
             };
+
+            // For parameter resources whose value is unset, render the same "Value not set" affordance
+            // as the parameters grid so the details panel stays consistent with the grid.
+            if (_resource.HasMissingParameterValueState())
+            {
+                _valueComponents[KnownProperties.Parameter.Value] = new ComponentMetadata
+                {
+                    Type = typeof(ParameterValueDisplayCell),
+                    Parameters =
+                    {
+                        ["Resource"] = _resource,
+                        ["OnExecuteCommandAsync"] = (Func<ResourceViewModel, CommandViewModel, Task>)ExecuteResourceCommandAsync,
+                        ["IsCommandExecuting"] = IsCommandExecuting,
+                    }
+                };
+            }
 
             UpdateResourceActionsMenu();
         }
@@ -212,17 +260,6 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private void UpdateResourceActionsMenu()
     {
         _resourceActionsMenuItems.Clear();
-
-        _resourceActionsMenuItems.Add(new MenuButtonItem
-        {
-            Text = Loc[nameof(Resources.Resources.ResourceDetailsViewConsoleLogs)],
-            Icon = new Icons.Regular.Size16.SlideText(),
-            OnClick = () =>
-            {
-                NavigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(ResourceViewModel.GetResourceName(Resource, ResourceByName)));
-                return Task.CompletedTask;
-            }
-        });
 
         if (ShowSpecOnlyToggle)
         {
@@ -257,6 +294,25 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             Class = "mask-all-switch",
             IsDisabled = IsSpecOnlyToggleDisabled
         });
+
+        // Add a divider and then menu items from ResourceMenuBuilder
+        _resourceActionsMenuItems.Add(new MenuButtonItem { IsDivider = true });
+
+        ResourceMenuBuilder.AddMenuItems(
+            _resourceActionsMenuItems,
+            Resource,
+            ResourceByName,
+            EventCallback.Empty, // View details not shown since we're already in the details view
+            CommandSelected,
+            IsCommandExecuting,
+            showViewDetails: false,
+            showConsoleLogsItem: true,
+            showUrls: true);
+    }
+
+    private async Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
+    {
+        await CommandSelected.InvokeAsync(command);
     }
 
     private IEnumerable<ResourceDetailRelationshipViewModel> GetRelationships()
@@ -316,10 +372,34 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         return ResourceUrlHelpers.GetUrls(Resource, includeInternalUrls: true, includeNonEndpointUrls: true);
     }
 
+    private void AddStateDescriptionProperty(ResourceViewModel resource)
+    {
+        var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
+        var stateDescription = ResourceStateViewModel.GetResourceStateTooltip(resource, ColumnsLoc, ResourceByName.Values);
+
+        if (string.IsNullOrWhiteSpace(stateDescription) || string.Equals(stateDescription, stateViewModel.Text, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(
+            new ResourcePropertyViewModel(
+                name: StateDescriptionPropertyKey,
+                value: Value.ForString(stateDescription),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(StateDescriptionPropertyKey, _ => ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)]),
+                priority: 1),
+            Loc,
+            TimeProvider));
+    }
+
     private IEnumerable<DisplayedResourcePropertyViewModel> GetResourceProperties(bool ordered)
     {
         var vms = _displayedResourcePropertyViewModels
-            .Where(vm => vm.Value is { HasNullValue: false } and not { KindCase: Value.KindOneofCase.ListValue, ListValue.Values.Count: 0 });
+            .Where(vm => vm.Value is { HasNullValue: false } and not { KindCase: Value.KindOneofCase.ListValue, ListValue.Values.Count: 0 }
+                // State has a custom component (ResourceStateValue) that renders "Unknown" when the value is null,
+                // so always include it in the property list.
+                || string.Equals(vm.KnownProperty?.Key, KnownProperties.Resource.State, StringComparisons.ResourcePropertyName));
 
         return ordered
             ? vms.OrderBy(vm => vm.Priority).ThenBy(vm => vm.DisplayName)
@@ -386,38 +466,38 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private string GetHealthStatusWithTime(HealthReportViewModel context)
     {
         var statusText = context.HealthStatus?.Humanize() ?? Loc[nameof(Aspire.Dashboard.Resources.Resources.WaitingHealthDataStatusMessage)];
-        
+
         // Show timestamp for all resources when available per @davidfowl feedback
         if (context.LastRunAtTimeStamp.HasValue)
         {
             var duration = DateTime.UtcNow.Subtract(context.LastRunAtTimeStamp.Value);
-            
+
             // Round duration to seconds to avoid sub-second precision issues
             var roundedDuration = TimeSpan.FromSeconds(Math.Round(duration.TotalSeconds));
-            
+
             // Display "just now" for health checks that ran in the last 10 seconds
             if (roundedDuration.TotalSeconds < 10)
             {
                 return Loc[nameof(Aspire.Dashboard.Resources.Resources.HealthCheckStatusJustNowFormat), statusText];
             }
-            
-            var formattedDuration = DurationFormatter.FormatDuration(roundedDuration);
+
+            var formattedDuration = DurationFormatter.FormatDuration(roundedDuration, System.Globalization.CultureInfo.CurrentCulture);
             return Loc[nameof(Aspire.Dashboard.Resources.Resources.HealthCheckStatusWithTimeFormat), statusText, formattedDuration];
         }
-        
+
         return statusText;
     }
 
     private string? GetHealthStatusTooltip(HealthReportViewModel context)
     {
         var statusText = context.HealthStatus?.Humanize() ?? Loc[nameof(Aspire.Dashboard.Resources.Resources.WaitingHealthDataStatusMessage)];
-        
+
         if (context.LastRunAtTimeStamp.HasValue)
         {
             var localTime = FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, context.LastRunAtTimeStamp.Value);
             return Loc[nameof(Aspire.Dashboard.Resources.Resources.HealthCheckStatusWithTimeTooltipFormat), statusText, localTime];
         }
-        
+
         return null;
     }
 

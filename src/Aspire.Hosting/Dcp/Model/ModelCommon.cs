@@ -16,6 +16,11 @@ internal interface IAnnotationHolder
     void AnnotateAsObjectList<TValue>(string annotationName, TValue value);
 }
 
+internal interface IKubernetesStaticMetadata
+{
+    static abstract string ObjectKind { get; }
+}
+
 internal abstract class CustomResource : KubernetesObject, IMetadata<V1ObjectMeta>, IAnnotationHolder
 {
     public const string ServiceProducerAnnotation = "service-producer";

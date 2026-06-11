@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
@@ -13,6 +14,9 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource.</param>
 /// <param name="databaseName">The database name.</param>
 /// <param name="parent">The Azure SQL Database (server) parent resource associated with this database.</param>
+/// <ats-summary>A resource that represents an Azure SQL database. This is a child resource of an <ats-see cref="!:type:AzureSqlServerResource" />.</ats-summary>
+[DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+[AspireExport(ExposeProperties = true)]
 public class AzureSqlDatabaseResource(string name, string databaseName, AzureSqlServerResource parent)
     : Resource(name), IResourceWithParent<AzureSqlServerResource>, IResourceWithConnectionString
 {
@@ -49,7 +53,38 @@ public class AzureSqlDatabaseResource(string name, string databaseName, AzureSql
     /// </summary>
     internal SqlServerDatabaseResource? InnerResource { get; private set; }
 
+    /// <summary>
+    /// Gets a value indicating whether the current resource represents a container. If so the actual resource is not running in Azure.
+    /// </summary>
+    [MemberNotNullWhen(true, nameof(InnerResource))]
+    public bool IsContainer => InnerResource is not null;
+
+    /// <summary>
+    /// Gets the connection URI expression for the Azure SQL database.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>mssql://{host}:{port}/{database}</c>.
+    /// </remarks>
+    public ReferenceExpression UriExpression =>
+        IsContainer ?
+            InnerResource.UriExpression :
+            ReferenceExpression.Create($"{Parent.UriExpression}/{DatabaseName:uri}");
+
+    /// <summary>
+    /// Gets the JDBC connection string for the Azure SQL database.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>jdbc:sqlserver://{host}:{port};database={database};encrypt=true;trustServerCertificate=false</c>.
+    /// When running in a container, inherits the container JDBC format including username and password.
+    /// </remarks>
+    public ReferenceExpression JdbcConnectionString =>
+        IsContainer ?
+            InnerResource.JdbcConnectionString :
+            Parent.BuildJdbcConnectionString(DatabaseName);
+
     /// <inheritdoc />
+    /// <remarks>This property is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore]
     public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
 
     private static string ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)
@@ -68,4 +103,12 @@ public class AzureSqlDatabaseResource(string name, string databaseName, AzureSql
 
         InnerResource = innerResource;
     }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
+        Parent.CombineProperties(
+            [
+                new ("DatabaseName", ReferenceExpression.Create($"{DatabaseName}")),
+                new ("Uri", UriExpression),
+                new ("JdbcConnectionString", JdbcConnectionString),
+            ]);
 }

@@ -2,11 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
-using Azure.Identity;
 using Azure.Provisioning;
 using Azure.Provisioning.Kusto;
 using Kusto.Data;
@@ -29,6 +27,7 @@ public static class AzureKustoBuilderExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// When adding an <see cref="AzureKustoClusterResource"/> to your application model the resource can then
@@ -42,6 +41,8 @@ public static class AzureKustoBuilderExtensions
     /// - <see cref="KustoDatabasePrincipalRole.User"/>
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<AzureKustoClusterResource> AddAzureKustoCluster(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -71,10 +72,10 @@ public static class AzureKustoBuilderExtensions
                 });
 
             // Add cluster URI output for connection strings
-            infrastructure.Add(new ProvisioningOutput("clusterUri", typeof(string)) { Value = cluster.ClusterUri });
+            infrastructure.Add(new ProvisioningOutput("clusterUri", typeof(string)) { Value = cluster.ClusterUri.ToBicepExpression() });
 
             // We need to output name to externalize role assignments.
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = cluster.Name });
+            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = cluster.Name.ToBicepExpression() });
 
             var azureResource = (AzureKustoClusterResource)infrastructure.AspireResource;
 
@@ -103,6 +104,8 @@ public static class AzureKustoBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureKustoReadWriteDatabaseResource> AddReadWriteDatabase(this IResourceBuilder<AzureKustoClusterResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -148,6 +151,7 @@ public static class AzureKustoBuilderExtensions
     /// Optional action to configure the Kusto emulator container.
     /// </param>
     /// <returns>The resource builder.</returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureKustoClusterResource> RunAsEmulator(
         this IResourceBuilder<AzureKustoClusterResource> builder,
         Action<IResourceBuilder<AzureKustoEmulatorResource>>? configureContainer = null)
@@ -192,6 +196,7 @@ public static class AzureKustoBuilderExtensions
     /// <param name="builder">The resource builder to configure.</param>
     /// <param name="script">KQL script to create databases, tables, or data.</param>
     /// <returns>The resource builder.</returns>
+    [AspireExport]
     public static IResourceBuilder<AzureKustoReadWriteDatabaseResource> WithCreationScript(this IResourceBuilder<AzureKustoReadWriteDatabaseResource> builder, string script)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -209,6 +214,8 @@ public static class AzureKustoBuilderExtensions
     /// <param name="builder">Kusto emulator resource builder.</param>
     /// <param name="port">Host port to use.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureKustoEmulatorResource"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureKustoEmulatorResource> WithHostPort(this IResourceBuilder<AzureKustoEmulatorResource> builder, int port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -305,7 +312,7 @@ public static class AzureKustoBuilderExtensions
         {
             // When running against Azure, we use the DefaultAzureCredential to authenticate
             // with the Kusto server.
-            builder = builder.WithAadAzureTokenCredentialsAuthentication(new DefaultAzureCredential());
+            builder = builder.WithAadAzureTokenCredentialsAuthentication(AzureCredentialHelper.CreateDefaultAzureCredential());
         }
 
         return builder;
@@ -386,7 +393,7 @@ public static class AzureKustoBuilderExtensions
             {
                 // If the launcher fails (which may mean we're in a remote session or can't detect a browser),
                 // show a notification with a clickable link to the Kusto Web Explorer
-                var interactionService = context.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = context.Services.GetRequiredService<IInteractionService>();
                 if (interactionService.IsAvailable)
                 {
                     _ = await interactionService.PromptMessageBoxAsync(

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -15,7 +17,7 @@ namespace Aspire.Hosting.Garnet.Tests;
 public class GarnetFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWaitForOnGarnetBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -53,7 +55,7 @@ public class GarnetFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyGarnetResource()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -70,6 +72,7 @@ public class GarnetFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync();
 
         var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
 
         hb.Configuration[$"ConnectionStrings:{garnet.Resource.Name}"] = await garnet.Resource.ConnectionStringExpression.GetValueAsync(default);
 
@@ -97,7 +100,7 @@ public class GarnetFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -123,9 +126,7 @@ public class GarnetFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-                Directory.CreateDirectory(bindMountPath);
+                bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
                 if (!OperatingSystem.IsWindows())
                 {
@@ -149,6 +150,7 @@ public class GarnetFunctionalTests(ITestOutputHelper testOutputHelper)
                 try
                 {
                     var hb = Host.CreateApplicationBuilder();
+                    hb.AddTestLogging(testOutputHelper);
 
                     hb.Configuration[$"ConnectionStrings:{garnet1.Resource.Name}"] = $"{await garnet1.Resource.ConnectionStringExpression.GetValueAsync(default)}";
 
@@ -200,6 +202,7 @@ public class GarnetFunctionalTests(ITestOutputHelper testOutputHelper)
                 try
                 {
                     var hb = Host.CreateApplicationBuilder();
+                    hb.AddTestLogging(testOutputHelper);
 
                     hb.Configuration[$"ConnectionStrings:{garnet2.Resource.Name}"] = $"{await garnet2.Resource.ConnectionStringExpression.GetValueAsync(default)}";
 
@@ -248,4 +251,14 @@ public class GarnetFunctionalTests(ITestOutputHelper testOutputHelper)
             }
         }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Garnet_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddGarnet("resource").WithPersistentLifetime(),
+            "resource");
+    }
+
 }

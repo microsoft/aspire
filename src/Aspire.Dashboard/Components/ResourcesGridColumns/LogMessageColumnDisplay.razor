@@ -1,10 +1,7 @@
 ﻿@namespace Aspire.Dashboard.Components
 
-@using Aspire.Dashboard.Extensions
 @using Aspire.Dashboard.Model.GenAI
-@using Aspire.Dashboard.Otlp.Model
 @using Aspire.Dashboard.Resources
-@using Aspire.Dashboard.Utils
 
 @inject IStringLocalizer<StructuredLogs> Loc
 @inject IStringLocalizer<ControlsStrings> ControlStringsLoc
@@ -17,9 +14,7 @@
            HighlightText="@FilterText"
            StopClickPropagation="true">
     <ContentInButtonArea>
-        @if (!string.IsNullOrEmpty(LogEntry.TraceId) &&
-            !string.IsNullOrEmpty(LogEntry.SpanId) &&
-            GenAIHelpers.IsGenAISpan(LogEntry.Attributes))
+        @if (IsGenAILogCallback(LogEntry))
         {
             <FluentButton Appearance="Appearance.Lightweight"
                           Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"

@@ -3,12 +3,18 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
+using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
@@ -367,6 +373,115 @@ public class ResourceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_StateDescription_ShowsAsResourceDetailEntry()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "app1",
+            state: KnownResourceState.Waiting);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
+        Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
+        Assert.Contains(Columns.StateColumnResourceWaiting, resourcePropertyGrid.TextContent);
+    }
+
+    [Fact]
+    public void Render_NotStartedStateDescription_ShowsDescription()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "app1",
+            state: KnownResourceState.NotStarted);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
+        Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
+        Assert.Contains(Columns.StateColumnResourceNotStarted, resourcePropertyGrid.TextContent);
+    }
+
+    [Fact]
+    public void Render_StateDescription_ShowsWaitingForDependenciesAsResourceDetailEntry()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var nginx = ModelTestHelpers.CreateResource(resourceName: "nginx-abcxyz", displayName: "nginx");
+        var redis = ModelTestHelpers.CreateResource(resourceName: "redis");
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "app1",
+            state: KnownResourceState.Waiting,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.WaitingFor] = new(
+                    KnownProperties.Resource.WaitingFor,
+                    Value.ForList(Value.ForString("nginx-abcxyz"), Value.ForString("redis")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    priority: 0)
+            });
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([
+                new KeyValuePair<string, ResourceViewModel>(resource.Name, resource),
+                new KeyValuePair<string, ResourceViewModel>(nginx.Name, nginx),
+                new KeyValuePair<string, ResourceViewModel>(redis.Name, redis)
+            ]));
+        });
+
+        var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
+        Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
+        Assert.Contains(string.Format(CultureInfo.InvariantCulture, Columns.StateColumnResourceWaitingFor, "nginx, redis"), resourcePropertyGrid.TextContent);
+
+        Assert.Empty(resourcePropertyGrid.QuerySelectorAll("fluent-anchor"));
+    }
+
+    [Fact]
+    public void Render_NullState_ShowsUnknownStateInResourceDetails()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Resource.State] = new ResourcePropertyViewModel(
+                KnownProperties.Resource.State,
+                Value.ForNull(),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(KnownProperties.Resource.State, _ => Aspire.Dashboard.Resources.Resources.ResourcesDetailsStateProperty),
+                priority: 0)
+        };
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "app1",
+            properties: properties);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
+        Assert.Contains(Aspire.Dashboard.Resources.Resources.ResourcesDetailsStateProperty, resourcePropertyGrid.TextContent);
+        Assert.Contains(Columns.UnknownStateLabel, resourcePropertyGrid.TextContent);
+    }
+
+    [Fact]
     public void FilteredEnvironmentVariables_SortedByName()
     {
         // Arrange
@@ -472,5 +587,246 @@ public class ResourceDetailsTests : DashboardTestContext
             h => Assert.Equal("delta-check", h.Name),
             h => Assert.Equal("GAMMA-Check", h.Name),
             h => Assert.Equal("zebra-check", h.Name));
+    }
+
+    [Fact]
+    public async Task UnsetParameterResource_RendersValueNotSetButton_AndInvokesSetCommand()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var setCommand = new CommandViewModel(
+            CommandViewModel.SetParameterCommand,
+            CommandViewModelState.Enabled,
+            displayName: "Set value",
+            displayDescription: "Set the parameter value",
+            confirmationMessage: string.Empty,
+            argumentInputs: [],
+            isHighlighted: false,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                Value.ForString("Parameter 'p' not found in configuration."),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
+                priority: 0)
+        };
+
+        var resource = CreateParameterResource(
+            resourceName: "myparameter",
+            state: nameof(KnownResourceState.ValueMissing),
+            stateStyle: "warning",
+            properties: properties,
+            commands: ImmutableArray.Create(setCommand));
+
+        CommandViewModel? capturedCommand = null;
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+            builder.Add(p => p.CommandSelected, EventCallback.Factory.Create<CommandViewModel>(this, c => capturedCommand = c));
+            builder.Add(p => p.IsCommandExecuting, (_, _) => false);
+        });
+
+        var button = cut.Find("button.value-not-set-link");
+        Assert.Equal("Value not set", button.TextContent.Trim());
+
+        await button.ClickAsync(new MouseEventArgs());
+
+        Assert.NotNull(capturedCommand);
+        Assert.Equal(CommandViewModel.SetParameterCommand, capturedCommand!.Name);
+    }
+
+    [Fact]
+    public async Task UnsetParameterResource_WhenSetCommandIsExecuting_DisablesValueNotSetButton()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var setCommand = new CommandViewModel(
+            CommandViewModel.SetParameterCommand,
+            CommandViewModelState.Enabled,
+            displayName: "Set value",
+            displayDescription: "Set the parameter value",
+            confirmationMessage: string.Empty,
+            argumentInputs: [],
+            isHighlighted: false,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                Value.ForString("Parameter 'p' not found in configuration."),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
+                priority: 0)
+        };
+
+        var resource = CreateParameterResource(
+            resourceName: "myparameter",
+            state: nameof(KnownResourceState.ValueMissing),
+            stateStyle: "warning",
+            properties: properties,
+            commands: ImmutableArray.Create(setCommand));
+
+        CommandViewModel? capturedCommand = null;
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+            builder.Add(p => p.CommandSelected, EventCallback.Factory.Create<CommandViewModel>(this, c => capturedCommand = c));
+            builder.Add(p => p.IsCommandExecuting, (currentResource, command) =>
+                currentResource.Name == resource.Name && command.Name == CommandViewModel.SetParameterCommand);
+        });
+
+        var button = cut.Find("button.value-not-set-link");
+        Assert.True(button.HasAttribute("disabled"));
+
+        await button.ClickAsync(new MouseEventArgs());
+
+        Assert.Null(capturedCommand);
+    }
+
+    [Fact]
+    public void UnsetSecretParameterResource_RendersValueNotSetButton()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var setCommand = new CommandViewModel(
+            CommandViewModel.SetParameterCommand,
+            CommandViewModelState.Enabled,
+            displayName: "Set value",
+            displayDescription: "Set the parameter value",
+            confirmationMessage: string.Empty,
+            argumentInputs: [],
+            isHighlighted: false,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                Value.ForString("Parameter 'p' not found in configuration."),
+                isValueSensitive: true,
+                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
+                priority: 0)
+        };
+
+        var resource = CreateParameterResource(
+            resourceName: "mysecretparameter",
+            state: nameof(KnownResourceState.ValueMissing),
+            stateStyle: "warning",
+            properties: properties,
+            commands: ImmutableArray.Create(setCommand));
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+            builder.Add(p => p.CommandSelected, EventCallback.Factory.Create<CommandViewModel>(this, _ => Task.CompletedTask));
+            builder.Add(p => p.IsCommandExecuting, (_, _) => false);
+        });
+
+        Assert.NotNull(cut.Find("button.value-not-set-link"));
+        Assert.Empty(cut.FindAll(".grid-value-mask-button"));
+    }
+
+    [Fact]
+    public void ErrorParameterResource_DisplaysErrorMessage_InsteadOfValueNotSetButton()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        const string errorMessage = "Failed to initialize parameter from external provider.";
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                Value.ForString(errorMessage),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
+                priority: 0)
+        };
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "myparameter",
+            resourceType: KnownResourceTypes.Parameter,
+            stateStyle: "error",
+            properties: properties);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+            builder.Add(p => p.IsCommandExecuting, (_, _) => false);
+        });
+
+        Assert.Empty(cut.FindAll("button.value-not-set-link"));
+        Assert.Contains(errorMessage, cut.FindAll(".grid-value").Select(e => e.TextContent.Trim()));
+    }
+
+    [Fact]
+    public void RunningParameterResource_DoesNotRenderValueNotSetButton()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                Value.ForString("resolved-value"),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
+                priority: 0)
+        };
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "myparameter",
+            resourceType: KnownResourceTypes.Parameter,
+            state: KnownResourceState.Running,
+            properties: properties);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+            builder.Add(p => p.IsCommandExecuting, (_, _) => false);
+        });
+
+        Assert.Empty(cut.FindAll("button.value-not-set-link"));
+    }
+
+    private static ResourceViewModel CreateParameterResource(
+        string resourceName,
+        string? state,
+        string? stateStyle,
+        Dictionary<string, ResourcePropertyViewModel> properties,
+        ImmutableArray<CommandViewModel>? commands = null)
+    {
+        return new ResourceViewModel
+        {
+            Name = resourceName,
+            ResourceType = KnownResourceTypes.Parameter,
+            DisplayName = resourceName,
+            Uid = resourceName,
+            ReplicaIndex = 0,
+            State = state,
+            KnownState = state is not null && System.Enum.TryParse<KnownResourceState>(state, out var knownState) ? knownState : null,
+            StateStyle = stateStyle,
+            CreationTimeStamp = DateTime.UtcNow,
+            StartTimeStamp = DateTime.UtcNow,
+            StopTimeStamp = DateTime.UtcNow,
+            Environment = [],
+            Urls = [],
+            Volumes = [],
+            Relationships = [],
+            Properties = properties.ToImmutableDictionary(),
+            Commands = commands ?? [],
+            HealthReports = [],
+        };
     }
 }

@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "OracleEndToEnd.AppHost/OracleEndToEnd.AppHost.csproj"
+  }
+}

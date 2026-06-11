@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.MySql.Tests;
 
-public class MySqlPublicApiTests
+public class MySqlPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddMySqlShouldThrowWhenBuilderIsNull()
@@ -25,7 +25,7 @@ public class MySqlPublicApiTests
     [InlineData(false)]
     public void AddMySqlShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddMySql(name);
@@ -53,7 +53,7 @@ public class MySqlPublicApiTests
     [InlineData(false)]
     public void AddDatabaseShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMySql("MySql");
         var name = isNull ? null! : string.Empty;
 
@@ -118,7 +118,7 @@ public class MySqlPublicApiTests
     [InlineData(false)]
     public void WithDataBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMySql("MySql");
         var source = isNull ? null! : string.Empty;
 
@@ -149,7 +149,7 @@ public class MySqlPublicApiTests
     [InlineData(false)]
     public void WithInitBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMySql("MySql");
         var source = isNull ? null! : string.Empty;
 
@@ -180,7 +180,7 @@ public class MySqlPublicApiTests
     [InlineData(false)]
     public void WithInitFilesShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMySql("MySql");
         var source = isNull ? null! : string.Empty;
 
@@ -197,7 +197,7 @@ public class MySqlPublicApiTests
     [InlineData(false)]
     public void CtorMySqlDatabaseResourceShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
         const string databaseName = "db";
         const string passwordName = "password";
@@ -218,7 +218,7 @@ public class MySqlPublicApiTests
     [InlineData(false)]
     public void CtorMySqlDatabaseResourceShouldThrowWhenDatabaseNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         const string name = "MySql";
         var databaseName = isNull ? null! : string.Empty;
         const string passwordName = "password";
@@ -237,7 +237,7 @@ public class MySqlPublicApiTests
     [Fact]
     public void CtorMySqlDatabaseResourceShouldThrowWhenParentIsNull()
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         const string name = "MySql";
         const string databaseName = "db";
         MySqlServerResource parent = null!;
@@ -253,7 +253,7 @@ public class MySqlPublicApiTests
     [InlineData(false)]
     public void CtorMySqlServerResourceShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
         const string passwordName = "password";
         var password = ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, passwordName, special: false);
@@ -297,7 +297,7 @@ public class MySqlPublicApiTests
     public void WithPasswordShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<MySqlServerResource> builder = null!;
-        var password = TestDistributedApplicationBuilder.Create().AddParameter("password");
+        var password = TestDistributedApplicationBuilder.Create(testOutputHelper).AddParameter("password");
 
         var action = () => builder.WithPassword(password);
 
@@ -308,7 +308,7 @@ public class MySqlPublicApiTests
     [Fact]
     public void WithPasswordShouldThrowWhenPasswordIsNull()
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMySql("MySql");
         IResourceBuilder<ParameterResource> password = null!;
 

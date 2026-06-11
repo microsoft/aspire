@@ -1,19 +1,20 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/dotnet
 {
-	"name": ".NET Aspire - Contribute",
-	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/dotnet:dev-10.0-preview-noble",
+	"name": "Aspire - Contribute",
+	// Use Dockerfile to work around Yarn GPG key expiration issue
+	// See: https://github.com/yarnpkg/yarn/issues/9218
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
 	"features": {
 		"ghcr.io/devcontainers/features/azure-cli:1": {},
 		"ghcr.io/azure/azure-dev/azd:0": {},
 		"ghcr.io/devcontainers/features/docker-in-docker": {},
 		"ghcr.io/devcontainers/features/github-cli:1": {},
-		"ghcr.io/devcontainers/features/dotnet": {
-			"additionalVersions": [
-				"8.0.403",
-				"9.0"
-			]
+		"ghcr.io/devcontainers/features/dotnet:2": {
+			"version": "none", // SDK is provided by base image
+			"aspNetCoreRuntimeVersions": "8.0, 9.0"
 		},
 		"ghcr.io/devcontainers/features/node:1": {},
 		"ghcr.io/devcontainers/features/python:1": {},
@@ -21,7 +22,9 @@
 			"version": "latest",
 			"helm": "latest",
 			"minikube": "latest"
-		}
+		},
+		"ghcr.io/devcontainers/features/sshd:1": {},
+		"ghcr.io/devcontainers/features/copilot-cli:1": {}
 	},
 
 	"hostRequirements": {
@@ -48,7 +51,7 @@
 				"ms-azuretools.azure-dev",
 				"GitHub.copilot",
 				"ms-kubernetes-tools.vscode-kubernetes-tools",
-        		"microsoft-aspire.aspire-vscode"
+				"microsoft-aspire.aspire-vscode"
 			],
 			"settings": {
 				"remote.autoForwardPorts": true,
@@ -66,7 +69,7 @@
 	"remoteEnv": {
 		// When the project is built the Aspire.Cli project produces an executable which can be useful to
 		// have on the path for local testing within the devcontainer environment.
-		"PATH": "${containerEnv:PATH}:/workspaces/aspire/artifacts/bin/Aspire.Cli/Debug/net8.0/"
+		"PATH": "${containerEnv:PATH}:/workspaces/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/"
 	}
 
 	// Configure tool-specific properties.

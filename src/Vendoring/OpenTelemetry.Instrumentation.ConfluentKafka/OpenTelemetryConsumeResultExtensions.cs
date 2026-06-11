@@ -131,7 +131,7 @@ internal static class OpenTelemetryConsumeResultExtensions
         }
         catch (Exception ex)
         {
-            processActivity?.SetStatus(Status.Error);
+            processActivity?.SetStatus(ActivityStatusCode.Error);
             processActivity?.SetTag(SemanticConventions.AttributeErrorType, ex.GetType().FullName);
         }
         finally

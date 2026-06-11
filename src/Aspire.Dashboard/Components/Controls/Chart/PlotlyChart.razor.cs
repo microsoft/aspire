@@ -12,7 +12,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
@@ -28,7 +28,10 @@ public partial class PlotlyChart : ChartBase
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required IDialogService DialogService { get; init; }
+    public required DashboardDialogService DialogService { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Resources.Dialogs> DialogsLoc { get; init; }
 
     public string ChartDivId { get; } = $"plotly-chart-container-{Interlocked.Increment(ref s_nextChartId)}";
 

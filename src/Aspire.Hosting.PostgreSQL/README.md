@@ -1,26 +1,37 @@
-# Aspire.Hosting.PostgreSQL library
+# PostgreSQL hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a PostgreSQL resource.
+Use this integration to model, configure, and orchestrate a PostgreSQL resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire PostgreSQL Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.PostgreSQL` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.PostgreSQL
+```bash
+aspire add Aspire.Hosting.PostgreSQL
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a PostgreSQL resource and consume the connection using the following methods:
+In the AppHost, add a PostgreSQL resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var db = builder.AddPostgres("pgsql").AddDatabase("mydb");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(db);
+```
+
+**TypeScript**
+
+```typescript
+const db = await builder.addPostgres("pgsql").addDatabase("mydb");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(db);
 ```
 
 ## Connection Properties
@@ -52,13 +63,26 @@ The PostgreSQL database resource inherits all properties from its parent `Postgr
 
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
 
+## MCP (Model Context Protocol) Support
+
+The PostgreSQL hosting integration provides support for adding an MCP sidecar container that enables AI agents to interact with PostgreSQL databases. This is enabled by calling `WithPostgresMcp()` on a PostgreSQL database resource.
+
+```csharp
+var db = builder.AddPostgres("pg")
+                .AddDatabase("mydb")
+                .WithPostgresMcp();
+```
+
+The PostgreSQL MCP server is currently powered by [Postgres MCP Pro](https://github.com/crystaldba/postgres-mcp)) and provides tools
+for database exploration, query execution, index tuning, and health checks.
+
 ## Additional documentation
 
-https://learn.microsoft.com/dotnet/aspire/database/postgresql-component
-https://learn.microsoft.com/dotnet/aspire/database/postgresql-entity-framework-component
+https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/databases/postgres/postgres-host/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Postgres, PostgreSQL and the Slonik Logo are trademarks or registered trademarks of the PostgreSQL Community Association of Canada, and used with their permission._

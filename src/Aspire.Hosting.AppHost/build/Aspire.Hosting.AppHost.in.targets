@@ -6,7 +6,18 @@
     <AspireGeneratedClassesVisibility Condition="'$(AspireGeneratedClassesVisibility)' == ''">public</AspireGeneratedClassesVisibility>
     <_AspireIntermediatePath>$(IntermediateOutputPath)Aspire\</_AspireIntermediatePath>
     <_GeneratedClassNameFixupRegex>(((?&lt;=\.)|^)(?=\d)|\W)</_GeneratedClassNameFixupRegex>
+
+    <!-- Use net8.0 when running on .NET Core, net472 when running on .NET Framework -->
+    <_AspireTasksTfm Condition="'$(MSBuildRuntimeType)' == 'Core'">net8.0</_AspireTasksTfm>
+    <_AspireTasksTfm Condition="'$(MSBuildRuntimeType)' != 'Core'">net472</_AspireTasksTfm>
+    <_AspireTasksAssembly Condition="'$(_AspireTasksAssembly)' == ''">$(MSBuildThisFileDirectory)..\tools\$(_AspireTasksTfm)\Aspire.Hosting.Tasks.dll</_AspireTasksAssembly>
   </PropertyGroup>
+
+  <!-- Use TaskHostFactory when running in the repo so the Aspire.Hosting.Tasks.dll assembly is not locked. -->
+  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' != 'true'" TaskName="GetNonExecutableReferences" AssemblyFile="$(_AspireTasksAssembly)" />
+  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="GetNonExecutableReferences" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
+  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' != 'true'" TaskName="ResolveAspireCliBundle" AssemblyFile="$(_AspireTasksAssembly)" />
+  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="ResolveAspireCliBundle" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
 
   <ItemGroup>
     <ProjectCapability Include="Aspire" Condition=" '$(IsAspireHost)' == 'true' " />
@@ -139,48 +150,6 @@ namespace Projects%3B
   </Target>
 
   <!--
-  Gets the references in 'AppProjectTargetFramework' that aren't executable projects.
-  -->
-  <UsingTask TaskName="GetNonExecutableReferences"
-             TaskFactory="RoslynCodeTaskFactory"
-             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
-    <ParameterGroup>
-      <AppProjectTargetFramework ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
-      <NonExecutableReferences ParameterType="Microsoft.Build.Framework.ITaskItem[]" Output="true" />
-    </ParameterGroup>
-    <Task>
-      <Using Namespace="System.Xml.Linq" />
-      <Code Type="Fragment" Language="cs">
-        <![CDATA[
-          HashSet<ITaskItem> nonExecutableReferences = new HashSet<ITaskItem>();
-
-          foreach (var appProject in AppProjectTargetFramework)
-          {
-            var additionalProperties = appProject.GetMetadata("AdditionalPropertiesFromProject");
-            if (string.IsNullOrEmpty(additionalProperties))
-            {
-              // Skip any projects that don't contain the right metadata
-              continue;
-            }
-
-            var additionalPropertiesXml = XElement.Parse(additionalProperties);
-            foreach (var targetFrameworkElement in additionalPropertiesXml.Elements())
-            {
-              var isExe = targetFrameworkElement.Element("_IsExecutable");
-              if (isExe != null && !string.Equals(isExe.Value, "true", StringComparison.OrdinalIgnoreCase))
-              {
-                nonExecutableReferences.Add(appProject);
-              }
-            }
-          }
-
-          NonExecutableReferences = nonExecutableReferences.ToArray();
-        ]]>
-      </Code>
-    </Task>
-  </UsingTask>
-
-  <!--
   Validates that all the ProjectReferences of an Aspire AppHost project are executables and
   informs the developer to set 'IsAspireProjectResource=false' if they really intended on ProjectReferencing a library.
   -->
@@ -217,14 +186,79 @@ namespace Projects%3B
      and reference them for compilation. There will be a ClassName.ProjectMetadata.g.cs file for each referenced project. -->
   <Target Name="WriteAspireProjectMetadataSources" DependsOnTargets="$(WriteAspireProjectMetadataSourcesDependsOn)" BeforeTargets="CoreCompile" />
 
+  <Target Name="ResolveAspireCliBundlePaths"
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
+    <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
+                             AspireCliPath="$(AspireCliPath)">
+      <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
+      <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
+      <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
+      <Output TaskParameter="AspireTerminalHostDir" PropertyName="_AspireCliBundleTerminalHostDir" />
+      <Output TaskParameter="AspireTerminalHostPath" PropertyName="_AspireCliBundleTerminalHostPath" />
+      <Output TaskParameter="AspireTerminalHostInvocationArgs" PropertyName="_AspireCliBundleTerminalHostInvocationArgs" />
+    </ResolveAspireCliBundle>
+
+    <PropertyGroup>
+      <DcpDir Condition="'$(DcpDir)' == ''">$(_AspireCliBundleDcpDir)</DcpDir>
+      <AspireDashboardDir Condition="'$(AspireDashboardDir)' == ''">$(_AspireCliBundleDashboardDir)</AspireDashboardDir>
+      <AspireDashboardPath Condition="'$(AspireDashboardPath)' == ''">$(_AspireCliBundleDashboardPath)</AspireDashboardPath>
+      <AspireTerminalHostDir Condition="'$(AspireTerminalHostDir)' == ''">$(_AspireCliBundleTerminalHostDir)</AspireTerminalHostDir>
+      <AspireTerminalHostPath Condition="'$(AspireTerminalHostPath)' == ''">$(_AspireCliBundleTerminalHostPath)</AspireTerminalHostPath>
+      <AspireTerminalHostInvocationArgs Condition="'$(AspireTerminalHostInvocationArgs)' == ''">$(_AspireCliBundleTerminalHostInvocationArgs)</AspireTerminalHostInvocationArgs>
+    </PropertyGroup>
+
+    <PropertyGroup>
+      <_AspireCliBundleNotFoundError>$(MSBuildProjectName) is configured with AspireUseCliBundle=true, but the Aspire CLI bundle could not be resolved. Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.</_AspireCliBundleNotFoundError>
+    </PropertyGroup>
+
+    <Error Code="ASPIRE009"
+           Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')"
+           Text="$(_AspireCliBundleNotFoundError)" />
+  </Target>
+
+  <PropertyGroup>
+    <_AspireCliRunHookSuppressed Condition="'$(_AspireSuppressCliRunHook)' == 'true' or '$(_AspireSuppressCliRunHook)' == '1'">true</_AspireCliRunHookSuppressed>
+    <_AspireCliRunHookSuppressed Condition="'$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == 'true' or '$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == '1'">true</_AspireCliRunHookSuppressed>
+  </PropertyGroup>
+
+  <Target Name="_AspireComputeRunArguments"
+          BeforeTargets="ComputeRunArguments"
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
+    <ItemGroup Condition="'$(FileBasedProgram)' == 'true'">
+      <_AspireFileBasedAppHostPath Include="%(RuntimeHostConfigurationOption.Value)"
+                                   Condition="'%(RuntimeHostConfigurationOption.Identity)' == 'EntryPointFilePath'" />
+      <_AspireFileBasedAppHostDirectory Include="%(RuntimeHostConfigurationOption.Value)"
+                                        Condition="'%(RuntimeHostConfigurationOption.Identity)' == 'EntryPointFileDirectoryPath'" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_AspireOriginalRunArguments>$(RunArguments)</_AspireOriginalRunArguments>
+      <_AspireRunProject>$(MSBuildProjectFullPath)</_AspireRunProject>
+      <!-- File-based dotnet run uses a synthetic apphost.csproj for MSBuild, but the Aspire CLI needs the original .cs file. -->
+      <_AspireRunProject Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostPath)' != ''">@(_AspireFileBasedAppHostPath)</_AspireRunProject>
+      <_AspireRunWorkingDirectory>$(MSBuildProjectDirectory)</_AspireRunWorkingDirectory>
+      <_AspireRunWorkingDirectory Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostDirectory)' != ''">@(_AspireFileBasedAppHostDirectory)</_AspireRunWorkingDirectory>
+      <RunCommand Condition="'$(AspireCliPath)' != ''">$(AspireCliPath)</RunCommand>
+      <!-- On Windows, Aspire can be installed as a command shim such as aspire.cmd.
+           dotnet run starts RunCommand directly, so use cmd /C for the default PATH
+           lookup to get the same PATHEXT resolution as an interactive shell. -->
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' != 'Windows_NT'">aspire</RunCommand>
+      <!-- dotnet run appends application arguments after ComputeRunArguments, so the double-dash separator
+           must be present even when RunArguments is initially empty. -->
+      <RunArguments>run --project "$(_AspireRunProject)" --no-build --</RunArguments>
+      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">/C aspire $(RunArguments)</RunArguments>
+      <RunArguments Condition="'$(_AspireOriginalRunArguments)' != ''">$(RunArguments) $(_AspireOriginalRunArguments)</RunArguments>
+      <RunWorkingDirectory>$(_AspireRunWorkingDirectory)</RunWorkingDirectory>
+    </PropertyGroup>
+  </Target>
+
   <!-- This target registers the location of the Aspire orchestration dependencies -->
-  <Target Name="SetOrchestrationDiscoveryAttributes" BeforeTargets="GetAssemblyAttributes" Condition=" '$(DcpDir)' != '' ">
+  <Target Name="SetOrchestrationDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(DcpDir)' != '' or '$(AspireUseCliBundle)' == 'true' ">
     <PropertyGroup>
       <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(DcpDir)'))</DcpDir>
       <DcpExtensionsDir Condition=" '$(DcpExtensionsDir)' == '' ">$([MSBuild]::NormalizePath($(DcpDir), 'ext'))</DcpExtensionsDir>
       <DcpExtensionsDir>$([MSBuild]::EnsureTrailingSlash('$(DcpExtensionsDir)'))</DcpExtensionsDir>
-      <DcpBinDir Condition=" '$(DcpBinDir)' == '' ">$([MSBuild]::NormalizePath($(DcpExtensionsDir), 'bin'))</DcpBinDir>
-      <DcpBinDir>$([MSBuild]::EnsureTrailingSlash('$(DcpBinDir)'))</DcpBinDir>
       <DcpCliPath Condition=" '$(DcpCliPath)'  == '' ">$([MSBuild]::NormalizePath($(DcpDir), 'dcp'))</DcpCliPath>
       <DcpCliPath Condition=" '$(OS)' == 'Windows_NT' and !$(DcpCliPath.EndsWith('.exe')) ">$(DcpCliPath).exe</DcpCliPath>
     </PropertyGroup>
@@ -239,10 +273,6 @@ namespace Projects%3B
         <_Parameter2>$(DcpExtensionsDir)</_Parameter2>
       </AssemblyAttribute>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
-        <_Parameter1>dcpbinpath</_Parameter1>
-        <_Parameter2>$(DcpBinDir)</_Parameter2>
-      </AssemblyAttribute>
-      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
         <_Parameter1>apphostprojectpath</_Parameter1>
         <_Parameter2>$(MSBuildProjectDirectory)</_Parameter2>
       </AssemblyAttribute>
@@ -253,18 +283,41 @@ namespace Projects%3B
     </ItemGroup>
   </Target>
 
-  <Target Name="SetDashboardDiscoveryAttributes" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireDashboardDir)' != '' ">
+  <Target Name="SetDashboardDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireDashboardDir)' != '' or '$(AspireDashboardPath)' != '' or '$(AspireUseCliBundle)' == 'true' ">
     <PropertyGroup>
-      <AspireDashboardDir>$([MSBuild]::EnsureTrailingSlash('$(AspireDashboardDir)'))</AspireDashboardDir>
+      <AspireDashboardDir Condition=" '$(AspireDashboardDir)' != '' ">$([MSBuild]::EnsureTrailingSlash('$(AspireDashboardDir)'))</AspireDashboardDir>
+      <_AspireDashboardPathInferredFromDir Condition=" '$(AspireDashboardPath)' == '' and '$(AspireDashboardDir)' != '' ">true</_AspireDashboardPathInferredFromDir>
       <AspireDashboardPath Condition=" '$(AspireDashboardPath)' == '' ">$([MSBuild]::NormalizePath($(AspireDashboardDir), 'Aspire.Dashboard'))</AspireDashboardPath>
-      <AspireDashboardPath Condition=" '$(OS)' == 'Windows_NT' and !$(AspireDashboardPath.EndsWith('.exe')) ">$(AspireDashboardPath).exe</AspireDashboardPath>
-      <AspireDashboardPath Condition="$([MSBuild]::IsOsPlatform('OSX')) and !$(AspireDashboardPath.EndsWith('.dll'))">$(AspireDashboardPath).dll</AspireDashboardPath>
+      <AspireDashboardPath Condition=" '$(_AspireDashboardPathInferredFromDir)' == 'true' and '$(OS)' == 'Windows_NT' and !$(AspireDashboardPath.EndsWith('.exe')) ">$(AspireDashboardPath).exe</AspireDashboardPath>
+      <AspireDashboardPath Condition=" '$(_AspireDashboardPathInferredFromDir)' == 'true' and $([MSBuild]::IsOsPlatform('OSX')) and !$(AspireDashboardPath.EndsWith('.dll'))">$(AspireDashboardPath).dll</AspireDashboardPath>
     </PropertyGroup>
 
     <ItemGroup>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
         <_Parameter1>aspiredashboardpath</_Parameter1>
         <_Parameter2>$(AspireDashboardPath)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="SetTerminalHostDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireTerminalHostDir)' != '' or '$(AspireTerminalHostPath)' != '' ">
+    <PropertyGroup>
+      <AspireTerminalHostDir Condition=" '$(AspireTerminalHostDir)' != '' ">$([MSBuild]::EnsureTrailingSlash('$(AspireTerminalHostDir)'))</AspireTerminalHostDir>
+      <_AspireTerminalHostPathInferredFromDir Condition=" '$(AspireTerminalHostPath)' == '' and '$(AspireTerminalHostDir)' != '' ">true</_AspireTerminalHostPathInferredFromDir>
+      <AspireTerminalHostPath Condition=" '$(AspireTerminalHostPath)' == '' ">$([MSBuild]::NormalizePath($(AspireTerminalHostDir), 'Aspire.TerminalHost'))</AspireTerminalHostPath>
+      <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and '$(OS)' == 'Windows_NT' and !$(AspireTerminalHostPath.EndsWith('.exe')) ">$(AspireTerminalHostPath).exe</AspireTerminalHostPath>
+      <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and $([MSBuild]::IsOsPlatform('OSX')) and !$(AspireTerminalHostPath.EndsWith('.dll'))">$(AspireTerminalHostPath).dll</AspireTerminalHostPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
+        <_Parameter1>aspireterminalhostpath</_Parameter1>
+        <_Parameter2>$(AspireTerminalHostPath)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata"
+                         Condition=" '$(AspireTerminalHostInvocationArgs)' != '' ">
+        <_Parameter1>aspireterminalhostinvocationargs</_Parameter1>
+        <_Parameter2>$(AspireTerminalHostInvocationArgs)</_Parameter2>
       </AssemblyAttribute>
     </ItemGroup>
   </Target>
@@ -299,6 +352,14 @@ namespace Projects%3B
       Text="$(MSBuildProjectName) project requires a reference to &quot;Aspire.AppHost.Sdk&quot; with version &quot;9.0.0&quot; or greater to work correctly. Please add the following line after the Project declaration `&lt;Sdk Name=&quot;Aspire.AppHost.Sdk&quot; Version=&quot;9.0.0&quot; /&gt;`."
       File="$(MSBuildProjectFullPath)"
       HelpLink="https://aka.ms/aspire/diagnostics/aspire007" />
+  </Target>
+
+  <Target Name="__ErrorOnGenerateAssemblyInfoDisabled" BeforeTargets="PrepareForBuild"
+  Condition="'$(IsAspireHost)' == 'true' and '$(GenerateAssemblyInfo)' == 'false'">
+    <Error Code="ASPIRE008"
+      Text="$(MSBuildProjectName) project requires GenerateAssemblyInfo to be enabled. The Aspire AppHost relies on assembly metadata attributes to locate required dependencies. Please remove &lt;GenerateAssemblyInfo&gt;false&lt;/GenerateAssemblyInfo&gt; from your project file or set it to true."
+      File="$(MSBuildProjectFullPath)"
+      HelpLink="https://aka.ms/aspire/diagnostics/aspire008" />
   </Target>
 
   <!-- Entrypoint to allow for generation of an aspire manifest to a given location -->

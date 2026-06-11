@@ -8,13 +8,13 @@
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
-        <source>Analyze App Host</source>
-        <target state="translated">Uygulama Ana İşlemi</target>
+        <source>Analyze AppHost</source>
+        <target state="needs-review-translation">Uygulama Ana İşlemi</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHostSdk">
-        <source>Analyze App Host SDK</source>
-        <target state="translated">Uygulama Ana İşlemi SDK’sini Analiz Etme</target>
+        <source>Analyze AppHost SDK</source>
+        <target state="needs-review-translation">Uygulama Ana İşlemi SDK’sini Analiz Etme</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeProjectFormat">
@@ -32,19 +32,34 @@
         <target state="translated">Bu değişiklikler NuGet.config dosyasına uygulansın mı?</target>
         <note />
       </trans-unit>
+      <trans-unit id="ApplyingUpdates">
+        <source>Applying updates...</source>
+        <target state="translated">Güncelleştirmeler uygulanıyor...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CentralPackageManagementNotSupported">
         <source>Central package management is currently not supported by 'aspire update'.</source>
         <target state="translated">Merkezi paket yönetimi şu anda 'aspire update' tarafından desteklenmiyor.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChannelNonePlaceholder">
+        <source>(none)</source>
+        <target state="new">(none)</target>
+        <note>Displayed in place of the current channel value when aspire.config.json has no channel pinned.</note>
+      </trans-unit>
       <trans-unit id="ChannelOptionDescription">
         <source>Channel to update to (stable, daily)</source>
-        <target state="new">Channel to update to (stable, daily)</target>
+        <target state="translated">Güncelleştirme yapılacak kanal (kararlı, günlük)</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelOptionDescriptionWithStaging">
         <source>Channel to update to (stable, staging, daily)</source>
-        <target state="new">Channel to update to (stable, staging, daily)</target>
+        <target state="translated">Güncelleştirme yapılacak kanal (kararlı, hazırlama, günlük)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CheckingForUpdates">
+        <source>Checking for updates...</source>
+        <target state="translated">Güncelleştirmeler denetleniyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -63,13 +78,28 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project. (Preview)</source>
-        <target state="translated">Aspire projesindeki tümleştirme güncelleştirmelerini yapın. (Önizleme)</target>
+        <source>Update integrations in the Aspire project</source>
+        <target state="needs-review-translation">Aspire projesindeki tümleştirme güncelleştirmelerini yapın. (Önizleme)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DotNetToolSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed as a .NET tool, run:</source>
+        <target state="translated">.NET aracı olarak yüklenen Aspire CLI’yı güncelleştirmek için şu komutu çalıştırın:</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
         <source>Executing: {0}</source>
         <target state="translated">Yürütülüyor: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtractedNewCli">
+        <source>Extracted new CLI</source>
+        <target state="translated">Yeni CLI ayıklandı</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtractingNewCli">
+        <source>Extracting new CLI...</source>
+        <target state="translated">Yeni CLI ayıklanıyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedDiscoverNuGetConfig">
@@ -82,6 +112,11 @@
         <target state="translated">Proje için öğeler ve özellikler getirilemedi: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="FailedToRestoreAfterUpdateFormat">
+        <source>Failed to restore packages for project {0} after update.</source>
+        <target state="new">Failed to restore packages for project {0} after update.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
         <source>Failed to update package reference for {0} in project {1}.</source>
         <target state="translated">{1} projesinde {0} için paket başvurusu güncellenemedi.</target>
@@ -89,7 +124,7 @@
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
         <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">Not: Çözülemeyen AppHost SDK nedeniyle geri dönüş ayrıştırması kullanılarak oluşturulan güncelleştirme planı. Bağımlılık analizi doğruluğu azaltmış olabilir.</target>
+        <target state="needs-review-translation">Not: Çözülemeyen AppHost SDK nedeniyle geri dönüş ayrıştırması kullanılarak oluşturulan güncelleştirme planı. Bağımlılık analizi doğruluğu azaltmış olabilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
@@ -107,9 +142,14 @@
         <target state="translated">   Eşleme: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="MigratedToNewSdkFormat">
+        <source>Migrated to new project format: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</source>
+        <target state="translated">Yeni proje biçimine geçirildi: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
         <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
-        <target state="translated">Aspire AppHost projesi bulunamadı. Bunun yerine Aspire CLI'yı güncelleştirmek ister misiniz?</target>
+        <target state="needs-review-translation">Aspire AppHost projesi bulunamadı. Bunun yerine Aspire CLI'yı güncelleştirmek ister misiniz?</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChangesDetectedInNuGetConfig">
@@ -117,9 +157,34 @@
         <target state="translated">NuGet.config dosyasında değişiklik algılanmadı</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoChannelFoundMatching">
+        <source>No channel found matching '{0}'. Valid options are: {1}.</source>
+        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoPackageFoundFormat">
         <source>No package found with ID '{0}' in channel '{1}'.</source>
         <target state="translated">'{1}' kanalında '{0}' kimliğine sahip paket bulunamadı.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoWritePermissionToInstallDirectory">
+        <source>Cannot write to installation directory '{0}'. Please run the update with elevated permissions (e.g., using sudo on Linux/macOS).</source>
+        <target state="translated">'{0}' yükleme dizinine yazılamıyor. Lütfen güncellemeyi yükseltilmiş izinlerle (örneğin Linux/macOS'ta sudo kullanarak) çalıştırın.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NpmSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from npm, run:</source>
+        <target state="new">To update the Aspire CLI when installed from npm, run:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NuGetConfigDirOptionDescription">
+        <source>Directory to create or update the NuGet.config file in</source>
+        <target state="new">Directory to create or update the NuGet.config file in</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PackageNotFoundInChannelWarningFormat">
+        <source>No package found with ID '{0}' in channel '{1}'. Skipping.</source>
+        <target state="new">No package found with ID '{0}' in channel '{1}'. Skipping.</target>
         <note />
       </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
@@ -138,8 +203,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Aspire AppHost proje dosyasının yolu.</target>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
+        <target state="needs-review-translation">Aspire AppHost proje dosyasının yolu.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectReferenceNoFullPath">
@@ -152,19 +217,44 @@
         <target state="translated">Proje güncel! (güncelleştirme gerekmiyor)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectUpdateSkippedAfterCliUpdateMessage">
+        <source>Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</source>
+        <target state="new">Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="QualityOptionDescription">
         <source>Quality level to update to (stable, daily)</source>
-        <target state="new">Quality level to update to (stable, daily)</target>
+        <target state="translated">Güncelleştirilecek kalite seviyesi (kararlı, günlük)</target>
         <note />
       </trans-unit>
       <trans-unit id="QualityOptionDescriptionWithStaging">
         <source>Quality level to update to (stable, staging, daily)</source>
-        <target state="new">Quality level to update to (stable, staging, daily)</target>
+        <target state="translated">Güncelleştirilecek kalite seviyesi (kararlı, hazırlama, günlük)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RegeneratedSdkCode">
+        <source>Regenerated SDK code with updated packages.</source>
+        <target state="translated">SDK kodu güncelleştirilmiş paketlerle yeniden oluşturuldu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RegeneratingSdkCode">
+        <source>Regenerating SDK code with updated packages...</source>
+        <target state="translated">SDK kodu güncelleştirilmiş paketlerle yeniden oluşturuluyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="RemovedFeedFormat">
         <source>Removed: {0}</source>
         <target state="translated">Kaldırıldı: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RemovedObsoleteAppHostPackage">
+        <source>Removed obsolete Aspire.Hosting.AppHost package reference</source>
+        <target state="translated">Kullanımdan kaldırılan Aspire.Hosting.AppHost paket başvurusu kaldırıldı</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoringPackagesAfterUpdate">
+        <source>Restoring packages...</source>
+        <target state="new">Restoring packages...</target>
         <note />
       </trans-unit>
       <trans-unit id="RetainedFeedFormat">
@@ -177,14 +267,29 @@
         <target state="translated">Kanal seçin:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SelfOptionDescription">
+        <source>Update the Aspire CLI itself to the latest version</source>
+        <target state="new">Update the Aspire CLI itself to the latest version</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnxpectedCodePath">
         <source>Unexpected code path.</source>
         <target state="translated">Beklenmeyen kod yolu.</target>
         <note />
       </trans-unit>
+      <trans-unit id="UpdateChannelStepDescriptionFormat">
+        <source>Update aspire.config.json channel from '{0}' to '{1}'</source>
+        <target state="new">Update aspire.config.json channel from '{0}' to '{1}'</target>
+        <note>{0} = current channel name (or '(none)' if absent). {1} = new channel name.</note>
+      </trans-unit>
       <trans-unit id="UpdateCliAfterProjectUpdatePrompt">
         <source>An update is available for the Aspire CLI. Would you like to update it now?</source>
         <target state="translated">Aspire CLI için bir güncelleştirme var. Şimdi güncelleştirmek istiyor musunuz?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateCliBeforeGuestProjectUpdatePrompt">
+        <source>The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</source>
+        <target state="new">The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdatePackageFormat">
@@ -200,6 +305,11 @@
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
         <source>Which directory for NuGet.config file?</source>
         <target state="translated">NuGet.config dosyası için hangi dizin kullanılsın?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="YesOptionDescription">
+        <source>Automatically confirm all update prompts without asking</source>
+        <target state="new">Automatically confirm all update prompts without asking</target>
         <note />
       </trans-unit>
     </body>

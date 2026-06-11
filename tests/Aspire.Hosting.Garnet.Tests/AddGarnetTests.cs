@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Garnet.Tests;
 
-public class AddGarnetTests
+public class AddGarnetTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddGarnetContainerWithDefaultsAddsAnnotationMetadata()
@@ -87,7 +87,7 @@ public class AddGarnetTests
     [Fact]
     public async Task VerifyWithoutPasswordManifest()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var garnet = builder.AddGarnet("myGarnet");
 
         var manifest = await ManifestUtils.GetManifest(garnet.Resource);
@@ -121,7 +121,7 @@ public class AddGarnetTests
     [Fact]
     public async Task VerifyWithPasswordManifest()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var password = "p@ssw0rd1";
         builder.Configuration["Parameters:pass"] = password;
@@ -161,7 +161,7 @@ public class AddGarnetTests
     [Fact]
     public async Task VerifyManifestWithPersistence()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var garnet = builder.AddGarnet("myGarnet")
             .WithPersistence();
@@ -200,7 +200,7 @@ public class AddGarnetTests
     [InlineData(false)]
     public void WithDataVolumeAddsVolumeAnnotation(bool? isReadOnly)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var garnet = builder.AddGarnet("myGarnet");
         if (isReadOnly.HasValue)
         {
@@ -225,7 +225,7 @@ public class AddGarnetTests
     [InlineData(false)]
     public void WithDataBindMountAddsMountAnnotation(bool? isReadOnly)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var garnet = builder.AddGarnet("myGarnet");
         if (isReadOnly.HasValue)
         {
@@ -247,7 +247,7 @@ public class AddGarnetTests
     [Fact]
     public async Task WithDataVolumeAddsPersistenceAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var garnet = builder.AddGarnet("myGarnet")
                               .WithDataVolume();
 
@@ -260,7 +260,7 @@ public class AddGarnetTests
     [Fact]
     public async Task WithDataVolumeDoesNotAddPersistenceAnnotationIfIsReadOnly()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var garnet = builder.AddGarnet("myGarnet")
                            .WithDataVolume(isReadOnly: true);
 
@@ -271,7 +271,7 @@ public class AddGarnetTests
     [Fact]
     public async Task WithDataBindMountAddsPersistenceAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var garnet = builder.AddGarnet("myGarnet")
                            .WithDataBindMount("mygarnetdata");
 
@@ -290,7 +290,7 @@ public class AddGarnetTests
     [Fact]
     public async Task WithDataBindMountDoesNotAddPersistenceAnnotationIfIsReadOnly()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var garnet = builder.AddGarnet("myGarnet")
                            .WithDataBindMount("mygarnetdata", isReadOnly: true);
 
@@ -301,7 +301,7 @@ public class AddGarnetTests
     [Fact]
     public async Task WithPersistenceReplacesPreviousAnnotationInstances()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var garnet = builder.AddGarnet("myGarnet")
                            .WithDataVolume()
                            .WithPersistence(TimeSpan.FromSeconds(10));
@@ -319,7 +319,7 @@ public class AddGarnetTests
     [Fact]
     public void WithPersistenceAddsCommandLineArgsAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var garnet = builder.AddGarnet("myGarnet")
                            .WithPersistence(TimeSpan.FromSeconds(60));
 
@@ -330,7 +330,7 @@ public class AddGarnetTests
     [Fact]
     public async Task AddGarnetContainerWithPasswordAnnotationMetadata()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var password = "p@ssw0rd1";
         var pass = builder.AddParameter("pass", password);

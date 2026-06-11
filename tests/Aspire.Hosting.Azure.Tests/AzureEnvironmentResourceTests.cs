@@ -7,6 +7,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Storage;
+using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -184,7 +185,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
     public async Task AzurePublishingContext_IgnoresAzureBicepResourcesWithIgnoreAnnotation()
     {
         // Arrange
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish,
             tempDir.Path);
 
@@ -218,7 +219,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
     [Fact]
     public async Task PublishAsync_WithDockerfileFactory_WritesDockerfileToOutputFolder()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
         var containerAppEnv = builder.AddAzureContainerAppEnvironment("env");
@@ -236,6 +237,75 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         var actualContent = await File.ReadAllTextAsync(dockerfilePath);
 
         await Verify(actualContent);
+    }
+
+    [Fact]
+    public void AzurePublishingContext_WithBicepTemplateFile_WorksWithRelativePath()
+    {
+        using var testTempDir = new TestTempDirectory();
+
+        var remoteInvokeOptions = new RemoteInvokeOptions();
+        remoteInvokeOptions.StartInfo.WorkingDirectory = testTempDir.Path;
+        RemoteExecutor.Invoke(RunTest, testTempDir.Path, remoteInvokeOptions).Dispose();
+
+        static async Task RunTest(string tempDir)
+        {
+            // This test verifies the fix for https://github.com/microsoft/aspire/issues/13967
+            // When using AzureBicepResource with a relative templateFile and AzurePublishingContext,
+            // the bicep file should be correctly copied to the output directory.
+
+            // Create a source bicep file (simulating a user's custom bicep template)
+            var bicepFileName = "custom-resource.bicep";
+            var bicepFilePath = Path.Combine(tempDir, bicepFileName);
+            var bicepContent = """
+            param location string = resourceGroup().location
+            param customName string
+
+            resource storageAccount 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+              name: customName
+              location: location
+              kind: 'StorageV2'
+              sku: {
+                name: 'Standard_LRS'
+              }
+            }
+
+            output endpoint string = storageAccount.properties.primaryEndpoints.blob
+            """;
+            await File.WriteAllTextAsync(bicepFilePath, bicepContent);
+
+            // Create output directory for publishing
+            var outputDir = Path.Combine(tempDir, "output");
+            Directory.CreateDirectory(outputDir);
+
+            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: outputDir);
+
+            // Add a container app environment (required for publishing)
+            builder.AddAzureContainerAppEnvironment("env");
+
+            // Add the custom AzureBicepResource with a relative template file path
+            var customResource = new AzureBicepResource("custom-resource", bicepFileName);
+            builder.AddResource(customResource)
+                .WithParameter("customName", "mystorageaccount");
+
+            var app = builder.Build();
+            app.Run();
+
+            // Verify the bicep file was copied to the output directory
+            var mainBicepPath = Path.Combine(outputDir, "main.bicep");
+            Assert.True(File.Exists(mainBicepPath), "main.bicep should be generated");
+
+            var resourceBicepPath = Path.Combine(outputDir, "custom-resource", "custom-resource.bicep");
+            Assert.True(File.Exists(resourceBicepPath), "custom-resource/custom-resource.bicep should be generated");
+
+            // Verify the content of the copied file matches the original
+            var copiedContent = await File.ReadAllTextAsync(resourceBicepPath);
+            Assert.Equal(bicepContent, copiedContent);
+
+            // Verify the main.bicep references the resource
+            var mainBicepContent = await File.ReadAllTextAsync(mainBicepPath);
+            Assert.Contains("module custom_resource 'custom-resource/custom-resource.bicep'", mainBicepContent);
+        }
     }
 
     private sealed class ExternalResourceWithParameters(string name) : Resource(name), IResourceWithParameters

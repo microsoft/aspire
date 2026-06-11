@@ -52,7 +52,7 @@ public class ConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("Uri", property.Key);
-                Assert.Equal("mongodb://{user.value}:{password.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}?authSource=admin&authMechanism=SCRAM-SHA-256", property.Value.ValueExpression);
+                Assert.Equal("mongodb://{user.value}:{password.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/?authSource=admin&authMechanism=SCRAM-SHA-256", property.Value.ValueExpression);
             });
     }
 
@@ -72,7 +72,7 @@ public class ConnectionPropertiesTests
         Assert.Contains(properties, property => property.Key == "Password" && property.Value.ValueExpression == "{password.value}");
         Assert.Contains(properties, property => property.Key == "AuthenticationDatabase" && property.Value.ValueExpression == "admin");
         Assert.Contains(properties, property => property.Key == "AuthenticationMechanism" && property.Value.ValueExpression == "SCRAM-SHA-256");
-        Assert.Contains(properties, property => property.Key == "Database" && property.Value.ValueExpression == "Products");
+        Assert.Contains(properties, property => property.Key == "DatabaseName" && property.Value.ValueExpression == "Products");
         Assert.Contains(
             properties,
             property => property.Key == "Uri" &&

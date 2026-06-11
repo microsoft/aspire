@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -145,7 +146,7 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(storage.Resource);
 
-        Assert.All(["azurite", "-l", "/data", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0"], x => args.Contains(x));
+        Assert.All(["azurite", "-l", "/data", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--disableProductStyleUrl"], x => args.Contains(x));
 
         if (enableApiVersionCheck)
         {
@@ -166,6 +167,7 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
         var args = await ArgumentEvaluator.GetArgumentListAsync(storage.Resource);
 
         Assert.Contains("--skipApiVersionCheck", args);
+        Assert.Contains("--disableProductStyleUrl", args);
     }
 
     [Fact]
@@ -924,5 +926,60 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
 
         await Verify(manifest.ToString(), "json")
              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EmptyRoles_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var storage = builder.AddAzureStorage("storage");
+        var container = builder.AddContainer("myContainer", "nginx");
+
+        var exception = Record.Exception(() =>
+            container.WithRoleAssignments(storage, Array.Empty<StorageBuiltInRole>()));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_NullRoles_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var storage = builder.AddAzureStorage("storage");
+        var container = builder.AddContainer("myContainer", "nginx");
+
+        var exception = Record.Exception(() =>
+            container.WithRoleAssignments(storage, (StorageBuiltInRole[]?)null!));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_EnumOverload_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var storage = builder.AddAzureStorage("storage");
+        var container = builder.AddContainer("myContainer", "nginx");
+        var method = typeof(AzureStorageExtensions)
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(m =>
+                m.Name == nameof(AzureStorageExtensions.WithRoleAssignments) &&
+                m.IsGenericMethodDefinition &&
+                m.GetParameters().Length == 3 &&
+                m.GetParameters()[2].ParameterType.IsArray &&
+                m.GetParameters()[2].ParameterType.GetElementType()?.Name == "AzureStorageRole")
+            .MakeGenericMethod(typeof(ContainerResource));
+
+        var roleType = method.GetParameters()[2].ParameterType.GetElementType()!;
+        var roles = Array.CreateInstance(roleType, 1);
+        roles.SetValue(Enum.Parse(roleType, "StorageBlobDataContributor"), 0);
+
+        var exception = Record.Exception(() =>
+            method.Invoke(null, [container, storage, roles]));
+
+        Assert.Null(exception);
     }
 }

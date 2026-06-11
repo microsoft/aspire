@@ -35,7 +35,7 @@ internal sealed class TestKubernetesService : IKubernetesService
         _ignoreDeletes = ignoreDeletes;
     }
 
-    public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken _ = default) where T : CustomResource
+    public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken _ = default) where T : CustomResource, IKubernetesStaticMetadata
     {
         if (DeletedResources.Contains(name))
         {
@@ -56,7 +56,7 @@ internal sealed class TestKubernetesService : IKubernetesService
         return Task.FromResult(res);
     }
 
-    public Task<T> CreateAsync<T>(T obj, CancellationToken cancellationToken = default) where T : CustomResource
+    public Task<T> CreateAsync<T>(T obj, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
         static T Clone(T r)
         {
@@ -70,20 +70,44 @@ internal sealed class TestKubernetesService : IKubernetesService
         // "Allocate" port for a service.
         if (res is Service svc)
         {
-            if (svc.Status is null)
+            // Container tunnel client services are proxyless, but unlike dynamic
+            // container endpoints they must be ready before the dependent container starts.
+            if (svc.Spec.AddressAllocationMode != AddressAllocationModes.Proxyless ||
+                svc.Spec.Port is not null ||
+                svc.Metadata.Annotations?.ContainsKey(CustomResource.ContainerTunnelInstanceName) is true)
             {
-                svc.Status = new ServiceStatus();
+                if (svc.Status is null)
+                {
+                    svc.Status = new ServiceStatus();
+                }
+                svc.Status.EffectiveAddress = svc.Spec.Address ?? "localhost";
+                svc.Status.EffectivePort = svc.Spec.Port ?? Interlocked.Increment(ref _nextPort);
             }
-            svc.Status.EffectiveAddress = svc.Spec.Address ?? "localhost";
-            svc.Status.EffectivePort = svc.Spec.Port ?? Interlocked.Increment(ref _nextPort);
+        }
+
+        // Simulate proxy startup by marking it as running immediately.
+        if (res is ContainerNetworkTunnelProxy proxy)
+        {
+            if (proxy.Status is null)
+            {
+                proxy.Status = new ContainerNetworkTunnelProxyStatus();
+            }
+            proxy.Status.State = ContainerNetworkTunnelProxyState.Running;
+            proxy.Status.TunnelConfigurationVersion = 1;
+            proxy.Status.TunnelStatuses = CreateReadyTunnelStatuses(proxy.Spec.Tunnels);
         }
 
         lock (CreatedResources)
         {
+            var modifiedResources = AllocateProxylessContainerServicePorts(res);
             CreatedResources.Enqueue(res);
             foreach (var c in _watchChannels)
             {
                 c.Writer.TryWrite((WatchEventType.Added, res));
+                foreach (var modifiedResource in modifiedResources)
+                {
+                    c.Writer.TryWrite((WatchEventType.Modified, modifiedResource));
+                }
             }
         }
 
@@ -101,7 +125,35 @@ internal sealed class TestKubernetesService : IKubernetesService
         }
     }
 
-    public async Task<T> DeleteAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource
+    private List<CustomResource> AllocateProxylessContainerServicePorts(CustomResource resource)
+    {
+        if (resource is not Container container ||
+            container.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(CustomResource.ServiceProducerAnnotation, out var servicesProduced) is not true)
+        {
+            return [];
+        }
+
+        var modifiedResources = new List<CustomResource>();
+        foreach (var serviceProduced in servicesProduced)
+        {
+            var service = CreatedResources.OfType<Service>().FirstOrDefault(s => s.Metadata.Name == serviceProduced.ServiceName);
+            if (service?.Spec.AddressAllocationMode != AddressAllocationModes.Proxyless || service.Spec.Port is not null || service.Status?.EffectivePort is not null)
+            {
+                continue;
+            }
+
+            var hostPort = container.Spec.Ports?.FirstOrDefault(port => port.ContainerPort == serviceProduced.Port)?.HostPort;
+
+            service.Status ??= new ServiceStatus();
+            service.Status.EffectiveAddress = service.Spec.Address ?? "localhost";
+            service.Status.EffectivePort = hostPort ?? Interlocked.Increment(ref _nextPort);
+            modifiedResources.Add(service);
+        }
+
+        return modifiedResources;
+    }
+
+    public async Task<T> DeleteAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
         try
         {
@@ -121,7 +173,7 @@ internal sealed class TestKubernetesService : IKubernetesService
         }
     }
 
-    public Task<List<T>> ListAsync<T>(string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource
+    public Task<List<T>> ListAsync<T>(string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
         var res = CreatedResources.OfType<T>().Where(r =>
             string.Equals(r.Metadata.NamespaceProperty ?? string.Empty, namespaceParameter ?? string.Empty)
@@ -129,7 +181,7 @@ internal sealed class TestKubernetesService : IKubernetesService
         return Task.FromResult(res.ToList());
     }
 
-    public async IAsyncEnumerable<(WatchEventType, T)> WatchAsync<T>(string? namespaceParameter = null, [EnumeratorCancellation] CancellationToken cancellationToken = default) where T : CustomResource
+    public async IAsyncEnumerable<(WatchEventType, T)> WatchAsync<T>(string? namespaceParameter = null, [EnumeratorCancellation] CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
         var chan = Channel.CreateUnbounded<(WatchEventType, CustomResource)>();
 
@@ -172,15 +224,15 @@ internal sealed class TestKubernetesService : IKubernetesService
         long? limit = null,
         long? tail = null,
         long? skip = null
-    ) where T : CustomResource
+    ) where T : CustomResource, IKubernetesStaticMetadata
     {
         return Task.FromResult(_startStream(obj, logStreamType));
     }
 
-    public Task<T> PatchAsync<T>(T obj, V1Patch patch, CancellationToken cancellationToken = default) where T : CustomResource
+    public Task<T> PatchAsync<T>(T obj, V1Patch patch, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
-        // Not a complete implementation, but Aspire is using patching only to stop resources,
-        // so this is good enough.
+        // Not a complete implementation; tests currently use patching to stop resources
+        // and to update container tunnel proxy configuration.
 
         if (patch.Type == V1Patch.PatchType.JsonPatch)
         {
@@ -199,6 +251,11 @@ internal sealed class TestKubernetesService : IKubernetesService
 
             if (res is Executable exe && result is Executable eu)
             {
+                if (eu.Spec.Start is not null)
+                {
+                    exe.Spec.Start = eu.Spec.Start;
+                }
+
                 if (eu.Spec.Stop == true)
                 {
                     exe.Spec.Stop = true;
@@ -212,6 +269,11 @@ internal sealed class TestKubernetesService : IKubernetesService
 
             if (res is Container ctr && result is Container cu)
             {
+                if (cu.Spec.Start is not null)
+                {
+                    ctr.Spec.Start = cu.Spec.Start;
+                }
+
                 if (cu.Spec.Stop == true)
                 {
                     ctr.Spec.Stop = true;
@@ -221,6 +283,16 @@ internal sealed class TestKubernetesService : IKubernetesService
                     }
                     ctr.Status.State = ContainerState.Exited;
                 }
+            }
+
+            if (res is ContainerNetworkTunnelProxy proxy && result is ContainerNetworkTunnelProxy updatedProxy)
+            {
+                proxy.Spec = updatedProxy.Spec;
+                proxy.Status ??= new ContainerNetworkTunnelProxyStatus();
+                proxy.Status.State = ContainerNetworkTunnelProxyState.Running;
+                proxy.Status.TunnelConfigurationVersion++;
+                proxy.Status.TunnelStatuses = CreateReadyTunnelStatuses(proxy.Spec.Tunnels);
+                PushResourceModified(proxy);
             }
 
             return Task.FromResult(res);
@@ -248,5 +320,15 @@ internal sealed class TestKubernetesService : IKubernetesService
     public Task CleanupResourcesAsync(CancellationToken cancellationToken = default)
     {
         return StopServerAsync("Full", cancellationToken);
+    }
+
+    private static List<TunnelStatus>? CreateReadyTunnelStatuses(List<TunnelConfiguration>? tunnels)
+    {
+        return tunnels?.Select(t => new TunnelStatus
+        {
+            Name = t.Name,
+            State = TunnelState.Ready,
+            Timestamp = DateTime.UtcNow
+        }).ToList();
     }
 }

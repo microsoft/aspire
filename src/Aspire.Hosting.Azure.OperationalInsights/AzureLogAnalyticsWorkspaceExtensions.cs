@@ -19,6 +19,8 @@ public static class AzureLogAnalyticsWorkspaceExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureLogAnalyticsWorkspaceResource> AddAzureLogAnalyticsWorkspace(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -46,13 +48,13 @@ public static class AzureLogAnalyticsWorkspaceExtensions
 
             infrastructure.Add(new ProvisioningOutput("logAnalyticsWorkspaceId", typeof(string))
             {
-                Value = workspace.Id
+                Value = workspace.Id.ToBicepExpression()
             });
             
             // Add name output for the resource to externalize role assignments
             infrastructure.Add(new ProvisioningOutput("name", typeof(string))
             {
-                Value = workspace.Name
+                Value = workspace.Name.ToBicepExpression()
             });
         };
 

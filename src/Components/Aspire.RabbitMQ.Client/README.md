@@ -18,7 +18,7 @@ dotnet add package Aspire.RabbitMQ.Client
 
 ## Usage example
 
-In the _AppHost.cs_ file of your project, call the `AddRabbitMQClient` extension method to register an `IConnection` for use via the dependency injection container. The method takes a connection name parameter.
+In the _Program.cs_ file of your project, call the `AddRabbitMQClient` extension method to register an `IConnection` for use via the dependency injection container. The method takes a connection name parameter.
 
 ```csharp
 builder.AddRabbitMQClient("messaging");
@@ -115,8 +115,8 @@ builder.AddRabbitMQClient("messaging");
 ## Additional documentation
 
 * https://rabbitmq.github.io/rabbitmq-dotnet-client/
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

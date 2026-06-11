@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using Aspire.Dashboard.Model.Otlp;
 using OpenTelemetry.Proto.Logs.V1;
+using SeverityNumberProto = OpenTelemetry.Proto.Logs.V1.SeverityNumber;
 
 namespace Aspire.Dashboard.Otlp.Model;
 
@@ -16,6 +18,7 @@ public class OtlpLogEntry
     public DateTime TimeStamp { get; }
     public uint Flags { get; }
     public LogLevel Severity { get; }
+    public int SeverityNumber { get; }
     public string Message { get; }
     public string SpanId { get; }
     public string TraceId { get; }
@@ -24,6 +27,7 @@ public class OtlpLogEntry
     public OtlpResourceView ResourceView { get; }
     public OtlpScope Scope { get; }
     public long InternalId { get; }
+    public string? EventName { get; }
     public bool IsError => Severity is LogLevel.Error or LogLevel.Critical;
     public bool IsWarning => Severity is LogLevel.Warning;
 
@@ -34,6 +38,7 @@ public class OtlpLogEntry
 
         string? originalFormat = null;
         string? parentId = null;
+        string? eventNameFromAttribute = null;
         Attributes = record.Attributes.ToKeyValuePairs(context, filter: attribute =>
         {
             switch (attribute.Key)
@@ -46,7 +51,13 @@ public class OtlpLogEntry
                     return false;
                 case "SpanId":
                 case "TraceId":
+                case OtlpHelpers.AspireLogIdAttribute:
                     // Explicitly ignore these
+                    return false;
+                case "logrecord.event.name":
+                case "event.name":
+                    // Capture the attribute value for fallback, but filter it out
+                    eventNameFromAttribute ??= attribute.Value.GetString();
                     return false;
                 default:
                     return true;
@@ -54,6 +65,7 @@ public class OtlpLogEntry
         });
 
         Flags = record.Flags;
+        SeverityNumber = (int)record.SeverityNumber;
         Severity = MapSeverity(record.SeverityNumber);
 
         Message = record.Body is { } body
@@ -65,6 +77,9 @@ public class OtlpLogEntry
         ParentId = parentId ?? string.Empty;
         ResourceView = resourceView;
         Scope = scope;
+
+        // EventName from the LogRecord field takes precedence over the legacy attribute
+        EventName = !string.IsNullOrEmpty(record.EventName) ? record.EventName : eventNameFromAttribute;
     }
 
     private static DateTime ResolveTimeStamp(LogRecord record)
@@ -80,32 +95,32 @@ public class OtlpLogEntry
         return OtlpHelpers.UnixNanoSecondsToDateTime(resolvedTimeUnixNano);
     }
 
-    private static LogLevel MapSeverity(SeverityNumber severityNumber) => severityNumber switch
+    private static LogLevel MapSeverity(SeverityNumberProto severityNumber) => severityNumber switch
     {
-        SeverityNumber.Trace => LogLevel.Trace,
-        SeverityNumber.Trace2 => LogLevel.Trace,
-        SeverityNumber.Trace3 => LogLevel.Trace,
-        SeverityNumber.Trace4 => LogLevel.Trace,
-        SeverityNumber.Debug => LogLevel.Debug,
-        SeverityNumber.Debug2 => LogLevel.Debug,
-        SeverityNumber.Debug3 => LogLevel.Debug,
-        SeverityNumber.Debug4 => LogLevel.Debug,
-        SeverityNumber.Info => LogLevel.Information,
-        SeverityNumber.Info2 => LogLevel.Information,
-        SeverityNumber.Info3 => LogLevel.Information,
-        SeverityNumber.Info4 => LogLevel.Information,
-        SeverityNumber.Warn => LogLevel.Warning,
-        SeverityNumber.Warn2 => LogLevel.Warning,
-        SeverityNumber.Warn3 => LogLevel.Warning,
-        SeverityNumber.Warn4 => LogLevel.Warning,
-        SeverityNumber.Error => LogLevel.Error,
-        SeverityNumber.Error2 => LogLevel.Error,
-        SeverityNumber.Error3 => LogLevel.Error,
-        SeverityNumber.Error4 => LogLevel.Error,
-        SeverityNumber.Fatal => LogLevel.Critical,
-        SeverityNumber.Fatal2 => LogLevel.Critical,
-        SeverityNumber.Fatal3 => LogLevel.Critical,
-        SeverityNumber.Fatal4 => LogLevel.Critical,
+        SeverityNumberProto.Trace => LogLevel.Trace,
+        SeverityNumberProto.Trace2 => LogLevel.Trace,
+        SeverityNumberProto.Trace3 => LogLevel.Trace,
+        SeverityNumberProto.Trace4 => LogLevel.Trace,
+        SeverityNumberProto.Debug => LogLevel.Debug,
+        SeverityNumberProto.Debug2 => LogLevel.Debug,
+        SeverityNumberProto.Debug3 => LogLevel.Debug,
+        SeverityNumberProto.Debug4 => LogLevel.Debug,
+        SeverityNumberProto.Info => LogLevel.Information,
+        SeverityNumberProto.Info2 => LogLevel.Information,
+        SeverityNumberProto.Info3 => LogLevel.Information,
+        SeverityNumberProto.Info4 => LogLevel.Information,
+        SeverityNumberProto.Warn => LogLevel.Warning,
+        SeverityNumberProto.Warn2 => LogLevel.Warning,
+        SeverityNumberProto.Warn3 => LogLevel.Warning,
+        SeverityNumberProto.Warn4 => LogLevel.Warning,
+        SeverityNumberProto.Error => LogLevel.Error,
+        SeverityNumberProto.Error2 => LogLevel.Error,
+        SeverityNumberProto.Error3 => LogLevel.Error,
+        SeverityNumberProto.Error4 => LogLevel.Error,
+        SeverityNumberProto.Fatal => LogLevel.Critical,
+        SeverityNumberProto.Fatal2 => LogLevel.Critical,
+        SeverityNumberProto.Fatal3 => LogLevel.Critical,
+        SeverityNumberProto.Fatal4 => LogLevel.Critical,
         _ => LogLevel.None
     };
 
@@ -118,6 +133,9 @@ public class OtlpLogEntry
             KnownStructuredLogFields.SpanIdField => log.SpanId,
             KnownStructuredLogFields.OriginalFormatField => log.OriginalFormat,
             KnownStructuredLogFields.CategoryField => log.Scope.Name,
+            KnownStructuredLogFields.EventNameField => log.EventName,
+            KnownStructuredLogFields.LevelField => log.Severity.ToString(),
+            KnownStructuredLogFields.TimestampField => (log.TimeStamp.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond).ToString(CultureInfo.InvariantCulture),
             KnownResourceFields.ServiceNameField => log.ResourceView.Resource.ResourceName,
             _ => log.Attributes.GetValue(field)
         };

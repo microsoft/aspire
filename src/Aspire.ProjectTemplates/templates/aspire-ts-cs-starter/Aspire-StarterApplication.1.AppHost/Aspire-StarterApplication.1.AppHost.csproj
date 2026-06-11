@@ -1,0 +1,21 @@
+<Project Sdk="Aspire.AppHost.Sdk/!!REPLACE_WITH_LATEST_VERSION!!">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>98048c9c-bf28-46ba-a98e-63767ee5e3a8</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XmlEncodedProjectName.Server\XmlEncodedProjectName.Server.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.JavaScript" Version="!!REPLACE_WITH_LATEST_VERSION!!" />
+  <!--#if (UseRedisCache) -->
+    <PackageReference Include="Aspire.Hosting.Redis" Version="!!REPLACE_WITH_LATEST_VERSION!!" />
+  <!--#endif -->
+  </ItemGroup>
+</Project>

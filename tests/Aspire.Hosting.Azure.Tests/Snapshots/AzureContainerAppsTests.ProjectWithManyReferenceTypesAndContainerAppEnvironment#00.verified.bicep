@@ -21,6 +21,13 @@ param storage_outputs_blobendpoint string
 
 param pg_kv_outputs_name string
 
+param pg_outputs_hostname string
+
+param pg_username_value string
+
+@secure()
+param pg_password_value string
+
 @secure()
 param value0_value string
 
@@ -40,7 +47,7 @@ resource pg_kv_connectionstrings__db 'Microsoft.KeyVault/vaults/secrets@2024-11-
   parent: pg_kv
 }
 
-resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'api'
   location: location
   properties: {
@@ -50,6 +57,14 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
           name: 'connectionstrings--db'
           identity: api_identity_outputs_id
           keyVaultUrl: pg_kv_connectionstrings__db.properties.secretUri
+        }
+        {
+          name: 'db-uri'
+          value: 'postgresql://${uriComponent(pg_username_value)}:${uriComponent(pg_password_value)}@${pg_outputs_hostname}/db'
+        }
+        {
+          name: 'db-password'
+          value: pg_password_value
         }
         {
           name: 'secretval'
@@ -96,14 +111,6 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
           name: 'api'
           env: [
             {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
               name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
               value: 'in_memory'
             }
@@ -124,12 +131,48 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
               value: mydb_outputs_connectionstring
             }
             {
+              name: 'MYDB_URI'
+              value: mydb_outputs_connectionstring
+            }
+            {
               name: 'ConnectionStrings__blobs'
+              value: storage_outputs_blobendpoint
+            }
+            {
+              name: 'BLOBS_URI'
               value: storage_outputs_blobendpoint
             }
             {
               name: 'ConnectionStrings__db'
               secretRef: 'connectionstrings--db'
+            }
+            {
+              name: 'DB_HOST'
+              value: pg_outputs_hostname
+            }
+            {
+              name: 'DB_PORT'
+              value: '5432'
+            }
+            {
+              name: 'DB_URI'
+              secretRef: 'db-uri'
+            }
+            {
+              name: 'DB_JDBCCONNECTIONSTRING'
+              value: 'jdbc:postgresql://${pg_outputs_hostname}/db?sslmode=require&authenticationPluginClassName=com.azure.identity.extensions.jdbc.postgresql.AzurePostgresqlAuthenticationPlugin'
+            }
+            {
+              name: 'DB_USERNAME'
+              value: pg_username_value
+            }
+            {
+              name: 'DB_PASSWORD'
+              secretRef: 'db-password'
+            }
+            {
+              name: 'DB_DATABASENAME'
+              value: 'db'
             }
             {
               name: 'SecretVal'
@@ -149,7 +192,7 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
             }
             {
               name: 'HTTP_EP'
-              value: 'http://api.internal.${cae_outputs_azure_container_apps_environment_default_domain}'
+              value: 'https://api.internal.${cae_outputs_azure_container_apps_environment_default_domain}'
             }
             {
               name: 'HTTPS_EP'
@@ -165,7 +208,7 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
             }
             {
               name: 'PORT'
-              value: '80'
+              value: '443'
             }
             {
               name: 'HOST'
@@ -173,11 +216,11 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
             }
             {
               name: 'HOSTANDPORT'
-              value: 'api.internal.${cae_outputs_azure_container_apps_environment_default_domain}:80'
+              value: 'api.internal.${cae_outputs_azure_container_apps_environment_default_domain}:443'
             }
             {
               name: 'SCHEME'
-              value: 'http'
+              value: 'https'
             }
             {
               name: 'INTERNAL_HOSTANDPORT'

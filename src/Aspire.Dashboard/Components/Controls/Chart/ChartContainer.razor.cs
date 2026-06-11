@@ -183,7 +183,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     private OtlpInstrumentData? GetInstrument()
     {
-        var endDate = DateTime.UtcNow;
+        // When paused, use the paused time to keep the data window stable.
+        // This ensures filter changes while paused still show the same data.
+        var endDate = PauseManager.AreMetricsPaused(out var pausedAt) ? pausedAt.Value : DateTime.UtcNow;
         // Get more data than is being displayed. Histogram graph uses some historical data to calculate bucket counts.
         // It's ok to get more data than is needed here. An additional date filter is applied when building chart values.
         var startDate = endDate.Subtract(Duration + TimeSpan.FromSeconds(30));

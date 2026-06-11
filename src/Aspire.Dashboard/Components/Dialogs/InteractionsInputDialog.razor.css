@@ -15,6 +15,10 @@
     max-width: 500px;
 }
 
+.interaction-input-dialog .interaction-input ::deep .input-description {
+    margin-top: 2px;
+}
+
 .interaction-input-dialog .interaction-input ::deep .input-description,
 .interaction-input-dialog .interaction-input ::deep .input-description p {
     color: var(--foreground-settings-text);
@@ -27,8 +31,20 @@
     margin-bottom: 0.2em;
 }
 
-.interaction-input-dialog .interaction-input ::deep .input-choice-container {
+.interaction-input-dialog .interaction-input ::deep .input-line-container {
     display: flex;
     column-gap: 12px;
     align-items: center;
+}
+
+.interaction-input-dialog .interaction-input ::deep .secret-text-toggle-button::part(control) {
+    background-color: transparent;
+}
+
+.interaction-input-dialog .interaction-input ::deep fluent-checkbox {
+    margin-top: 4px;
+}
+
+.interaction-input-dialog .interaction-input ::deep fluent-text-field::part(end) {
+    margin-inline-end: 0;
 }

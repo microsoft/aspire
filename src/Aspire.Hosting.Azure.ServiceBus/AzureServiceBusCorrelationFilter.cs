@@ -6,6 +6,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents the correlation filter expression.
 /// </summary>
+[AspireDto]
 public class AzureServiceBusCorrelationFilter
 {
     /// <summary>

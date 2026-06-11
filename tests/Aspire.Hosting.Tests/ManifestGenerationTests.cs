@@ -15,7 +15,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
-public class ManifestGenerationTests
+[Trait("Partition", "5")]
+public class ManifestGenerationTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void EnsureAddParameterWithSecretFalseDoesntEmitSecretField()
@@ -91,7 +92,7 @@ public class ManifestGenerationTests
     [Fact]
     public async Task WithContainerRegistryUpdatesContainerImageAnnotationsDuringPublish()
     {
-        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        var builder = CreateBuilder(new DistributedApplicationOptions
         {
             Args = GetManifestArgs(),
             ContainerRegistryOverride = "myprivateregistry.company.com"
@@ -113,7 +114,7 @@ public class ManifestGenerationTests
     [Fact]
     public void ExcludeLaunchProfileOmitsBindings()
     {
-        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        var appBuilder = CreateBuilder(new DistributedApplicationOptions
         { Args = GetJsonManifestArgs(), DisableDashboard = true, AssemblyName = typeof(ManifestGenerationTests).Assembly.FullName });
         var manifestStore = new JsonDocumentManifestStore();
         appBuilder.AddProject<Projects.ServiceA>("servicea", launchProfileName: null);
@@ -229,7 +230,8 @@ public class ManifestGenerationTests
 
         var container = resources.GetProperty("rediscontainer");
         Assert.Equal("container.v0", container.GetProperty("type").GetString());
-        Assert.Equal("{rediscontainer.bindings.tcp.host}:{rediscontainer.bindings.tcp.port},password={rediscontainer-password.value}", container.GetProperty("connectionString").GetString());
+        var connectionString = container.GetProperty("connectionString").GetString();
+        Assert.Equal("{rediscontainer.bindings.tcp.host}:{rediscontainer.bindings.tcp.port},password={rediscontainer-password.value}{cond-rediscontainer-bindings-tcp-tlsenabled-c16dc063.connectionString}", connectionString);
     }
 
     [Fact]
@@ -295,14 +297,11 @@ public class ManifestGenerationTests
 
         var expectedManifest = $$"""
             {
-              "$schema": "{{SchemaUtils.SchemaVersion}}",
               "resources": {
                 "servicea": {
                   "type": "project.v0",
                   "path": "testproject/TestProject.ServiceA/TestProject.ServiceA.csproj",
                   "env": {
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                     "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                     "HTTP_PORTS": "{servicea.bindings.http.targetPort}"
@@ -324,8 +323,6 @@ public class ManifestGenerationTests
                   "type": "project.v0",
                   "path": "testproject/TestProject.ServiceB/TestProject.ServiceB.csproj",
                   "env": {
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                     "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                     "HTTP_PORTS": "{serviceb.bindings.http.targetPort}"
@@ -347,8 +344,6 @@ public class ManifestGenerationTests
                   "type": "project.v0",
                   "path": "testproject/TestProject.ServiceC/TestProject.ServiceC.csproj",
                   "env": {
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                     "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                     "Kestrel__Endpoints__http__Url": "http://*:{servicec.bindings.http.targetPort}"
@@ -372,8 +367,6 @@ public class ManifestGenerationTests
                   "type": "project.v0",
                   "path": "testproject/TestProject.WorkerA/TestProject.WorkerA.csproj",
                   "env": {
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory"
                   }
                 },
@@ -381,8 +374,6 @@ public class ManifestGenerationTests
                   "type": "project.v0",
                   "path": "testproject/TestProject.IntegrationServiceA/TestProject.IntegrationServiceA.csproj",
                   "env": {
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                    "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                     "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                     "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                     "HTTP_PORTS": "{integrationservicea.bindings.http.targetPort}",
@@ -391,7 +382,7 @@ public class ManifestGenerationTests
                     "REDIS_HOST": "{redis.bindings.tcp.host}",
                     "REDIS_PORT": "{redis.bindings.tcp.port}",
                     "REDIS_PASSWORD": "{redis-password.value}",
-                    "REDIS_URI": "redis://:{redis-password-uri-encoded.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}",
+                    "REDIS_URI": "{redis.bindings.tcp.scheme}://:{redis-password-uri-encoded.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}",
                     "ConnectionStrings__postgresdb": "{postgresdb.connectionString}",
                     "POSTGRESDB_HOST": "{postgres.bindings.tcp.host}",
                     "POSTGRESDB_PORT": "{postgres.bindings.tcp.port}",
@@ -399,7 +390,7 @@ public class ManifestGenerationTests
                     "POSTGRESDB_PASSWORD": "{postgres-password.value}",
                     "POSTGRESDB_URI": "postgresql://postgres:{postgres-password-uri-encoded.value}@{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/postgresdb",
                     "POSTGRESDB_JDBCCONNECTIONSTRING": "jdbc:postgresql://{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/postgresdb",
-                    "POSTGRESDB_DATABASE": "postgresdb"
+                    "POSTGRESDB_DATABASENAME": "postgresdb"
                   },
                   "bindings": {
                     "http": {
@@ -416,7 +407,7 @@ public class ManifestGenerationTests
                 },
                 "redis": {
                   "type": "container.v0",
-                  "connectionString": "{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={redis-password.value}",
+                  "connectionString": "{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={redis-password.value}{cond-redis-bindings-tcp-tlsenabled-d148d83a.connectionString}",
                   "image": "{{ComponentTestConstants.AspireTestContainerRegistry}}/{{RedisContainerImageTags.Image}}:{{RedisContainerImageTags.Tag}}",
                   "entrypoint": "/bin/sh",
                   "args": [
@@ -428,7 +419,7 @@ public class ManifestGenerationTests
                   },
                   "bindings": {
                     "tcp": {
-                      "scheme": "tcp",
+                      "scheme": "redis",
                       "protocol": "tcp",
                       "transport": "tcp",
                       "targetPort": 6379
@@ -441,7 +432,7 @@ public class ManifestGenerationTests
                   "image": "{{ComponentTestConstants.AspireTestContainerRegistry}}/{{PostgresContainerImageTags.Image}}:{{PostgresContainerImageTags.Tag}}",
                   "env": {
                     "POSTGRES_HOST_AUTH_METHOD": "scram-sha-256",
-                    "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256 --auth-local=scram-sha-256 --no-data-checksums",
+                    "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256 --auth-local=scram-sha-256",
                     "POSTGRES_USER": "postgres",
                     "POSTGRES_PASSWORD": "{postgres-password.value}",
                     "POSTGRES_DB": "postgresdb"
@@ -499,6 +490,10 @@ public class ManifestGenerationTests
                   "type": "annotated.string",
                   "value": "{postgres-password.value}",
                   "filter": "uri"
+                },
+                "cond-redis-bindings-tcp-tlsenabled-d148d83a": {
+                  "type": "value.v0",
+                  "connectionString": ""
                 }
               }
             }
@@ -509,7 +504,7 @@ public class ManifestGenerationTests
     [Fact]
     public async Task ParameterInputDefaultValuesGenerateCorrectly()
     {
-        var appBuilder = DistributedApplication.CreateBuilder();
+        var appBuilder = CreateBuilder();
         var param = appBuilder.AddParameter("param");
         param.Resource.Default = new GenerateParameterDefault()
         {
@@ -556,7 +551,7 @@ public class ManifestGenerationTests
     [Fact]
     public async Task ContainerFilesAreWrittenToManifest()
     {
-        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        var builder = CreateBuilder(new DistributedApplicationOptions
         {
             Args = GetManifestArgs()
         });
@@ -567,10 +562,10 @@ public class ManifestGenerationTests
 
         // Create a destination container with ContainerFilesDestinationAnnotation
         var destContainer = builder.AddContainer("dest", "nginx:alpine")
-            .WithAnnotation(new ContainerFilesDestinationAnnotation 
-            { 
-                Source = sourceContainer.Resource, 
-                DestinationPath = "/usr/share/nginx/html" 
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = sourceContainer.Resource,
+                DestinationPath = "/usr/share/nginx/html"
             });
 
         builder.Build().Run();
@@ -598,7 +593,7 @@ public class ManifestGenerationTests
     [Fact]
     public async Task ContainerFilesWithMultipleSourcesAreWrittenToManifest()
     {
-        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        var builder = CreateBuilder(new DistributedApplicationOptions
         {
             Args = GetManifestArgs()
         });
@@ -610,10 +605,10 @@ public class ManifestGenerationTests
 
         // Create a destination container with ContainerFilesDestinationAnnotation
         var destContainer = builder.AddContainer("dest", "nginx:alpine")
-            .WithAnnotation(new ContainerFilesDestinationAnnotation 
-            { 
-                Source = sourceContainer.Resource, 
-                DestinationPath = "/usr/share/nginx/html" 
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = sourceContainer.Resource,
+                DestinationPath = "/usr/share/nginx/html"
             });
 
         builder.Build().Run();
@@ -642,7 +637,7 @@ public class ManifestGenerationTests
     [Fact]
     public async Task ContainerFilesWithMultipleDestinationsAreWrittenToManifest()
     {
-        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        var builder = CreateBuilder(new DistributedApplicationOptions
         {
             Args = GetManifestArgs()
         });
@@ -656,15 +651,15 @@ public class ManifestGenerationTests
 
         // Create a destination container with multiple ContainerFilesDestinationAnnotations
         var destContainer = builder.AddContainer("dest", "nginx:alpine")
-            .WithAnnotation(new ContainerFilesDestinationAnnotation 
-            { 
-                Source = source1.Resource, 
-                DestinationPath = "/usr/share/nginx/html" 
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source1.Resource,
+                DestinationPath = "/usr/share/nginx/html"
             })
-            .WithAnnotation(new ContainerFilesDestinationAnnotation 
-            { 
-                Source = source2.Resource, 
-                DestinationPath = "/usr/share/nginx/assets" 
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source2.Resource,
+                DestinationPath = "/usr/share/nginx/assets"
             });
 
         builder.Build().Run();
@@ -695,9 +690,10 @@ public class ManifestGenerationTests
         Assert.Equal(expectedManifest, destManifest.ToString());
     }
 
-    private static TestProgram CreateTestProgramJsonDocumentManifestPublisher(bool includeIntegrationServices = false, bool includeNodeApp = false)
+    private TestProgram CreateTestProgramJsonDocumentManifestPublisher(bool includeIntegrationServices = false, bool includeNodeApp = false)
     {
         var program = TestProgram.Create<ManifestGenerationTests>(GetJsonManifestArgs(), includeIntegrationServices, includeNodeApp);
+        program.AppBuilder.WithTestAndResourceLogging(testOutputHelper);
         program.AppBuilder.Pipeline.AddJsonDocumentManifestPublishing();
         return program;
     }
@@ -712,5 +708,19 @@ public class ManifestGenerationTests
     {
         var manifestPath = Path.Combine(Path.GetTempPath(), "tempmanifests", Guid.NewGuid().ToString(), "manifest.json");
         return ["--operation", "publish", "--step", "publish-manifest", "--output-path", manifestPath];
+    }
+
+    private IDistributedApplicationBuilder CreateBuilder(DistributedApplicationOptions options)
+    {
+        var builder = DistributedApplication.CreateBuilder(options);
+        builder.WithTestAndResourceLogging(testOutputHelper);
+        return builder;
+    }
+
+    private IDistributedApplicationBuilder CreateBuilder()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+        return builder;
     }
 }

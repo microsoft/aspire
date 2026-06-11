@@ -22,7 +22,7 @@ public class ActiveIssueTests
         }
         """,
         "N1.N2.C.M",
-        "https://github.com/dotnet/aspire/issues/1")]
+        "https://github.com/microsoft/aspire/issues/1")]
     [InlineData(
         """
         namespace N1.N2
@@ -37,7 +37,7 @@ public class ActiveIssueTests
         }
         """,
         "N1.N2.Outer+Inner.M",
-        "https://github.com/dotnet/aspire/issues/2")]
+        "https://github.com/microsoft/aspire/issues/2")]
     public void ActiveIssue_AddsAttribute_WhenMissing(string code, string fullName, string issue)
     {
         var updated = AddActiveIssue(fullName, issue, code);
@@ -50,14 +50,14 @@ public class ActiveIssueTests
     [Fact]
     public void ActiveIssue_IsIdempotent_DoesNotDuplicateOrChangeReason()
     {
-        const string originalUrl = "https://github.com/dotnet/aspire/issues/100";
-        const string newUrl = "https://github.com/dotnet/aspire/issues/200";
+        const string originalUrl = "https://github.com/microsoft/aspire/issues/100";
+        const string newUrl = "https://github.com/microsoft/aspire/issues/200";
         const string code = """
         namespace N;
         using Xunit;
         public class C {
             [Fact]
-            [ActiveIssue("https://github.com/dotnet/aspire/issues/100")]
+            [ActiveIssue("https://github.com/microsoft/aspire/issues/100")]
             public void M() { }
         }
         """;
@@ -77,7 +77,7 @@ public class ActiveIssueTests
         using Xunit;
         public class C {
             [Fact]
-            [ActiveIssue("https://github.com/dotnet/aspire/issues/3")]
+            [ActiveIssue("https://github.com/microsoft/aspire/issues/3")]
             public void M() { }
         }
         """;
@@ -101,9 +101,9 @@ public class ActiveIssueTests
         public class C { public void M() { } }
         """;
 
-        var updated = AddActiveIssue("N.C.M", "https://github.com/dotnet/aspire/issues/500", code);
+        var updated = AddActiveIssue("N.C.M", "https://github.com/microsoft/aspire/issues/500", code);
         Assert.Contains("using Xunit;", updated);
-        Assert.Contains("[ActiveIssue(\"https://github.com/dotnet/aspire/issues/500\")]", updated);
+        Assert.Contains("[ActiveIssue(\"https://github.com/microsoft/aspire/issues/500\")]", updated);
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class ActiveIssueTests
         }
         """;
 
-        var updated = AddActiveIssue("N.C.M", "https://github.com/dotnet/aspire/issues/501", code);
+        var updated = AddActiveIssue("N.C.M", "https://github.com/microsoft/aspire/issues/501", code);
         var norm = NormalizeNewlines(updated);
         var count = Regex.Matches(norm, "using Xunit;").Count;
         Assert.Equal(1, count);
@@ -138,8 +138,8 @@ public class ActiveIssueTests
 
         // ActiveIssue can have conditional arguments like typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo)
         // For simplicity, the tool adds just the URL, but the attribute should support additional arguments
-        var updated = AddActiveIssue("N.C.M", "https://github.com/dotnet/aspire/issues/11820", code);
-        Assert.Contains("[ActiveIssue(\"https://github.com/dotnet/aspire/issues/11820\")]", updated);
+        var updated = AddActiveIssue("N.C.M", "https://github.com/microsoft/aspire/issues/11820", code);
+        Assert.Contains("[ActiveIssue(\"https://github.com/microsoft/aspire/issues/11820\")]", updated);
     }
 
     [Fact]
@@ -153,8 +153,8 @@ public class ActiveIssueTests
         }
         """;
 
-        var updated1 = AddActiveIssue("N.C.M1", "https://github.com/dotnet/aspire/issues/11", code);
-        var updated2 = AddActiveIssue("N.C.M2", "https://github.com/dotnet/aspire/issues/12", updated1);
+        var updated1 = AddActiveIssue("N.C.M1", "https://github.com/microsoft/aspire/issues/11", code);
+        var updated2 = AddActiveIssue("N.C.M2", "https://github.com/microsoft/aspire/issues/12", updated1);
         var norm = NormalizeNewlines(updated2);
         // Only one using should be present
         var count = Regex.Matches(norm, "using Xunit;").Count;
@@ -178,12 +178,12 @@ public class ActiveIssueTests
         }
         """;
 
-        var updated = AddActiveIssue("N.C.M", "https://github.com/dotnet/aspire/issues/99", code);
+        var updated = AddActiveIssue("N.C.M", "https://github.com/microsoft/aspire/issues/99", code);
         var norm = NormalizeNewlines(updated);
         // Ensure there is no blank line between [Fact] and [ActiveIssue]
         Assert.DoesNotMatch(new Regex(@"\[Fact\]\n\s*\n\s*\[ActiveIssue", RegexOptions.Multiline), norm);
         // But [Fact] followed by [ActiveIssue(...)] on the next line should exist (ignore indentation)
-        Assert.Matches(new Regex(@"\[Fact\]\n\s+\[ActiveIssue\(""https://github.com/dotnet/aspire/issues/99""\)\]", RegexOptions.Multiline), norm);
+        Assert.Matches(new Regex(@"\[Fact\]\n\s+\[ActiveIssue\(""https://github.com/microsoft/aspire/issues/99""\)\]", RegexOptions.Multiline), norm);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public class ActiveIssueTests
         using Xunit;
         public class C {
             [Fact]
-            [ActiveIssueAttribute("https://github.com/dotnet/aspire/issues/123")]
+            [ActiveIssueAttribute("https://github.com/microsoft/aspire/issues/123")]
             public void M() { }
         }
         """;
@@ -204,14 +204,14 @@ public class ActiveIssueTests
         using Xunit;
         public class C {
             [Fact]
-            [ActiveIssue("https://github.com/dotnet/aspire/issues/124")]
+            [ActiveIssue("https://github.com/microsoft/aspire/issues/124")]
             public void M() { }
         }
         """;
 
         // Both should be recognized as already having the attribute
-        var updatedWithSuffix = AddActiveIssue("N.C.M", "https://github.com/dotnet/aspire/issues/999", codeWithSuffix);
-        var updatedWithoutSuffix = AddActiveIssue("N.C.M", "https://github.com/dotnet/aspire/issues/999", codeWithoutSuffix);
+        var updatedWithSuffix = AddActiveIssue("N.C.M", "https://github.com/microsoft/aspire/issues/999", codeWithSuffix);
+        var updatedWithoutSuffix = AddActiveIssue("N.C.M", "https://github.com/microsoft/aspire/issues/999", codeWithoutSuffix);
 
         // Should not add another attribute (idempotent)
         var countWithSuffix = Regex.Matches(updatedWithSuffix, @"ActiveIssue").Count;
@@ -229,7 +229,7 @@ public class ActiveIssueTests
         using Xunit;
         public class C {
             [Fact]
-            [ActiveIssue("https://github.com/dotnet/aspire/issues/3")]
+            [ActiveIssue("https://github.com/microsoft/aspire/issues/3")]
             [Trait("Category", "Integration")]
             public void M() { }
         }
@@ -258,7 +258,7 @@ public class ActiveIssueTests
         using Aspire.TestUtilities;
         public class C {
             [Fact]
-            [QuarantinedTest("https://github.com/dotnet/aspire/issues/1")]
+            [QuarantinedTest("https://github.com/microsoft/aspire/issues/1")]
             public void M1() { }
             
             [Fact]
@@ -266,7 +266,7 @@ public class ActiveIssueTests
         }
         """;
 
-        var updated = AddActiveIssue("N.C.M2", "https://github.com/dotnet/aspire/issues/2", code);
+        var updated = AddActiveIssue("N.C.M2", "https://github.com/microsoft/aspire/issues/2", code);
         
         // Should have both attributes for different methods
         Assert.Contains("QuarantinedTest", updated);

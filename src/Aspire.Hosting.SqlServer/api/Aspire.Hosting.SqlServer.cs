@@ -10,25 +10,34 @@ namespace Aspire.Hosting
 {
     public static partial class SqlServerBuilderExtensions
     {
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, string name, string? databaseName = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> AddSqlServer(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null, int? port = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerDatabaseResource> WithCreationScript(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerDatabaseResource> builder, string script) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithHostPort(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, int? port) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithPassword(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> password) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
-    public partial class SqlServerDatabaseResource : Resource, IResourceWithParent<SqlServerServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+    [AspireExport(ExposeProperties = true)]
+    public partial class SqlServerDatabaseResource : Resource, IResourceWithParent<SqlServerServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public SqlServerDatabaseResource(string name, string databaseName, SqlServerServerResource parent) : base(default!) { }
 
@@ -36,10 +45,17 @@ namespace Aspire.Hosting.ApplicationModel
 
         public string DatabaseName { get { throw null; } }
 
+        public ReferenceExpression JdbcConnectionString { get { throw null; } }
+
         public SqlServerServerResource Parent { get { throw null; } }
+
+        public ReferenceExpression UriExpression { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class SqlServerServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class SqlServerServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public SqlServerServerResource(string name, ParameterResource password) : base(default!, default) { }
 
@@ -47,9 +63,21 @@ namespace Aspire.Hosting.ApplicationModel
 
         public System.Collections.Generic.IReadOnlyDictionary<string, string> Databases { get { throw null; } }
 
+        public EndpointReferenceExpression Host { get { throw null; } }
+
+        public ReferenceExpression JdbcConnectionString { get { throw null; } }
+
         public ParameterResource PasswordParameter { get { throw null; } }
 
+        public EndpointReferenceExpression Port { get { throw null; } }
+
         public EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public ReferenceExpression UriExpression { get { throw null; } }
+
+        public ReferenceExpression UserNameReference { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
         public System.Threading.Tasks.ValueTask<string?> GetConnectionStringAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }

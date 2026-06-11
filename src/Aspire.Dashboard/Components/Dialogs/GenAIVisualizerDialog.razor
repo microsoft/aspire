@@ -1,11 +1,6 @@
 ﻿@using Aspire.Dashboard.Extensions
-@using Aspire.Dashboard.Model
 @using Aspire.Dashboard.Model.GenAI
-@using Aspire.Dashboard.Otlp.Model
 @using Aspire.Dashboard.Resources
-@using Aspire.Dashboard.Utils
-@using System.Globalization
-@using Microsoft.OpenApi.Any
 
 @implements IDialogContentComponent<GenAIVisualizerDialogViewModel>
 
@@ -14,6 +9,7 @@
         <FluentIcon Value="@(new Icons.Regular.Size24.Sparkle())" Style="grid-area: dialog-icon; align-self: center;" />
         <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
             @Content.Title
+            <span class="trace-id">@OtlpHelpers.ToShortenedId(Content.Span.SpanId)</span>
         </FluentLabel>
 
         @if (_contextSpans.Count > 1)
@@ -57,6 +53,11 @@
                         <div>
                             <div class="message-header">
                                 <GenAIItemTitle Item="@selectedItem" ResourceName="@selectedItem.ResourceName" />
+                                <FluentButton Class="back-button"
+                                              Appearance="Appearance.Stealth"
+                                              OnClick="@GoBackAsync">
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowHookUpLeft())" />
+                                </FluentButton>
                             </div>
                             @*
                                 Tab content isn't nested inside FluentTab elements. The tab control is just used to display the tabs.
@@ -93,6 +94,11 @@
                             <div class="tab-container">
                                 @foreach (var itemPart in selectedItem.ItemParts)
                                 {
+                                    if (itemPart.ErrorMessage is not null)
+                                    {
+                                        <span class="error-message-text">@itemPart.ErrorMessage</span>
+                                    }
+
                                     if (TryGetDataPart(itemPart, MimeTypeHelpers.SupportedImageTypes, out var imageData))
                                     {
                                         <img src="@imageData.Url" />
@@ -119,11 +125,26 @@
                                     }
                                     else if (itemPart.AdditionalProperties is { } additionalProperties && additionalProperties.Count > 0)
                                     {
-                                        <PropertyGrid TItem="GenAIPartPropertyViewModel"
-                                                      Items="additionalProperties.AsQueryable()"
-                                                      IsNameSortable="false"
-                                                      IsValueSortable="false"
-                                                      GridTemplateColumns="1fr 1.5fr" />
+                                        <div class="property-grid-container">
+                                            <FluentAccordion>
+                                                <FluentAccordionItem Heading="@(itemPart.MessagePart?.Type ?? "unknown")" Expanded="true">
+                                                    <div slot="end">
+                                                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                                                            @additionalProperties.Count
+                                                        </FluentBadge>
+                                                    </div>
+                                                    <PropertyGrid TItem="GenAIPartPropertyViewModel"
+                                                                  Items="additionalProperties.AsQueryable()"
+                                                                  IsNameSortable="false"
+                                                                  IsValueSortable="false"
+                                                                  GridTemplateColumns="1fr 2fr" />
+                                                </FluentAccordionItem>
+                                            </FluentAccordion>
+                                        </div>
+                                    }
+                                    else if (itemPart.ErrorMessage == itemPart.TextVisualizerViewModel.Text)
+                                    {
+                                        // Don't display text if it is the same as error message.
                                     }
                                     else
                                     {
@@ -145,9 +166,21 @@
                                             if (Content.ToolDefinitions.FirstOrDefault(d => d.ToolDefinition.Name == toolCallPart.Name) is { } toolVM)
                                             {
                                                 <div class="tool-button-container">
-                                                    <FluentButton OnClick="@(() => ViewToolDefinition(toolVM))">
+                                                    <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
                                                         <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
-                                                        Tool definition
+                                                        @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
+                                                    </FluentButton>
+                                                </div>
+                                            }
+                                        }
+                                        else if (itemPart.MessagePart is ServerToolCallPart serverToolCallPart && !string.IsNullOrEmpty(serverToolCallPart.Name))
+                                        {
+                                            if (Content.ToolDefinitions.FirstOrDefault(d => d.ToolDefinition.Name == serverToolCallPart.Name) is { } toolVM)
+                                            {
+                                                <div class="tool-button-container">
+                                                    <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
+                                                        <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
+                                                        @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
                                                     </FluentButton>
                                                 </div>
                                             }
@@ -159,14 +192,14 @@
                                                 <div class="tool-button-container">
                                                     <FluentButton OnClick="@(() => OnViewItem(itemVM))">
                                                         <FluentIcon Value="@s_toolIcon" Style="vertical-align: sub;" slot="start" />
-                                                        Tool call
+                                                        @Loc[nameof(Dialogs.GenAIToolCallButtonText)]
                                                     </FluentButton>
 
                                                     @if (Content.ToolDefinitions.FirstOrDefault(d => d.ToolDefinition.Name == toolCallRequestPart.Name) is { } toolVM)
                                                     {
-                                                        <FluentButton OnClick="@(() => ViewToolDefinition(toolVM))">
+                                                        <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
                                                             <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
-                                                            Tool definition
+                                                            @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
                                                         </FluentButton>
                                                     }
                                                 </div>
@@ -200,7 +233,7 @@
                     {
                         <div>
                             <div class="message-header">
-                                <span class="llm-badge">LLM</span>
+                                <span class="llm-badge">@Loc[nameof(Dialogs.GenAILLMBadgeText)]</span>
                                 <div class="message-header-title">
                                     <span>@Content.Span.Name</span>
                                     <span class="message-header-date">@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, Content.Span.StartTime, MillisecondsDisplay.Truncated)</span>
@@ -221,7 +254,7 @@
                                     }
                                 }
                                 <div class="message-header-details">
-                                    <span>@Loc[nameof(Dialogs.GenAIDurationLabel)] <strong>@DurationFormatter.FormatDuration(Content.Span.Duration)</strong></span>
+                                    <span>@Loc[nameof(Dialogs.GenAIDurationLabel)] <strong>@DurationFormatter.FormatDuration(Content.Span.Duration, CultureInfo.CurrentCulture)</strong></span>
                                     <span title="@tokenTooltip">@Loc[nameof(Dialogs.GenAITokensLabel)] <strong>@tokenText</strong></span>
                                 </div>
                             </div>
@@ -235,19 +268,17 @@
                                            Label="@Loc[nameof(Dialogs.GenAIInputOutputTabText)]"
                                            Icon="@(new Icons.Regular.Size24.Chat())">
                                 </FluentTab>
-                                <FluentTab LabelClass="tab-label"
-                                           Id="@($"tab-overview-{OverviewViewKind.Details}")"
-                                           Label="@Loc[nameof(Dialogs.GenAIDetailsTabText)]"
-                                           Icon="@(new Icons.Regular.Size24.Info())">
-                                </FluentTab>
-                                <FluentTab LabelClass="tab-label"
-                                           Id="@($"tab-overview-{OverviewViewKind.Tools}")"
-                                           Icon="@(new Icons.Regular.Size24.Wrench())">
-                                    <Header>
-                                        <span class="tab-text">@Loc[nameof(Dialogs.GenAIToolsTabText)]</span>
-                                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">@Content.ToolDefinitions.Count</FluentBadge>
-                                    </Header>
-                                </FluentTab>
+                                @if (Content.ToolDefinitions.Count > 0)
+                                {
+                                    <FluentTab LabelClass="tab-label"
+                                               Id="@($"tab-overview-{OverviewViewKind.Tools}")"
+                                               Icon="@(new Icons.Regular.Size24.Wrench())">
+                                        <Header>
+                                            <span class="tab-text">@Loc[nameof(Dialogs.GenAIToolsTabText)]</span>
+                                            <FluentBadge Appearance="Appearance.Neutral" Circular="true">@Content.ToolDefinitions.Count</FluentBadge>
+                                        </Header>
+                                    </FluentTab>
+                                }
                                 @if (Content.Evaluations.Count > 0)
                                 {
                                     <FluentTab LabelClass="tab-label"
@@ -259,6 +290,11 @@
                                         </Header>
                                     </FluentTab>
                                 }
+                                <FluentTab LabelClass="tab-label"
+                                           Id="@($"tab-overview-{OverviewViewKind.Details}")"
+                                           Label="@Loc[nameof(Dialogs.GenAIDetailsTabText)]"
+                                           Icon="@(new Icons.Regular.Size24.Info())">
+                                </FluentTab>
                             </FluentTabs>
                         </div>
                         @if (OverviewActiveView == OverviewViewKind.InputOutput)
@@ -302,23 +338,26 @@
                                 @if (Content.ToolDefinitions.Count > 0)
                                 {
                                     <FluentAccordion Class="tools-list">
-                                        @foreach (var toolVM in Content.ToolDefinitions.Where(t => t.ToolDefinition.Type == "function"))
+                                        @foreach (var toolVM in Content.ToolDefinitions.Where(t => t.ToolDefinition.Type == "function").OrderBy(t => t.ToolDefinition.Name, StringComparer.OrdinalIgnoreCase))
                                         {
-                                            <FluentAccordionItem @bind-Expanded="toolVM.Expanded">
+                                            <FluentAccordionItem Id="@toolVM.ElementId" Class="@(toolVM.Highlighted ? "tool-highlighted" : null)" @bind-Expanded="toolVM.Expanded" HeadingTooltip="@GetToolHeadingTooltip(toolVM)">
                                                 <HeadingTemplate>
                                                     <div class="tool-heading">
                                                         <FluentBadge Appearance="Appearance.Accent" Style="min-width: 80px; text-align: center;">
                                                             @toolVM.ToolDefinition.Type
                                                         </FluentBadge>
-                                                        <strong>@toolVM.ToolDefinition.Name</strong>
-                                                        @if (!string.IsNullOrEmpty(toolVM.ToolDefinition.Description))
-                                                        {
-                                                            <span>@FormatHelpers.TruncateText(toolVM.ToolDefinition.Description, maxLength: 100)</span>
-                                                        }
+                                                        <span class="tool-name">@toolVM.ToolDefinition.Name</span>
                                                     </div>
                                                 </HeadingTemplate>
                                                 <ChildContent>
-                                                    @if (toolVM.ToolDefinition.Parameters?.Properties.Count > 0)
+                                                    @if (!string.IsNullOrEmpty(toolVM.ToolDefinition.Description))
+                                                    {
+                                                        <div class="tool-description">
+                                                            <MarkdownRenderer MarkdownProcessor="@_markdownProcess" Markdown="@toolVM.ToolDefinition.Description" />
+                                                        </div>
+                                                        <hr />
+                                                    }
+                                                    @if (toolVM.ToolDefinition.Parameters is { Properties: { Count: > 0 } properties })
                                                     {
                                                         <table class="tool-parameters-table">
                                                             <thead>
@@ -329,7 +368,7 @@
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
-                                                                @foreach (var prop in toolVM.ToolDefinition.Parameters.Properties)
+                                                                @foreach (var prop in properties)
                                                                 {
                                                                     <tr>
                                                                         <td class="tool-cell tool-cell-nowrap">
@@ -339,11 +378,34 @@
                                                                                 <span style="color: var(--error);"> *</span>
                                                                             }
                                                                         </td>
-                                                                        <td class="tool-cell tool-cell-nowrap">
-                                                                            <code>@prop.Value.Type</code>
+                                                                        <td class="tool-cell">
+                                                                            @if (GenAISchemaHelpers.ConvertTypeToNames(prop.Value) is { Count: > 0 } types)
+                                                                            {
+                                                                                @* Put each type in its own nowrap element *@
+                                                                                for (var i = 0; i < types.Count; i++)
+                                                                                {
+                                                                                    var typeName = types[i];
+                                                                                    if (i < types.Count - 1)
+                                                                                    {
+                                                                                        typeName += ",";
+                                                                                    }
+                                                                                    <code class="type-name">@typeName</code>
+                                                                                }
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <span class="empty-data"></span>
+                                                                            }
                                                                         </td>
                                                                         <td class="tool-cell">
-                                                                            @prop.Value.Description
+                                                                            @if (prop.Value.Description is { Length: > 0 } description)
+                                                                            {
+                                                                                @description
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <span class="empty-data"></span>
+                                                                            }
                                                                         </td>
                                                                     </tr>
                                                                 }
@@ -421,11 +483,11 @@
                 {
                     var itemParts = item.ItemParts.Where(p => !string.IsNullOrEmpty(p.TextVisualizerViewModel.Text)).ToList();
 
-                    <div class="message-container">
+                    <div class="message-container" id="@($"genai-message-{item.Index}")">
                         @if (item.Type != GenAIItemType.Error)
                         {
                             <div class="message-title">
-                                @GetItemTitle(item)
+                                <GenAIItemTitle Item="@item" ResourceName="@item.ResourceName" ShowIcon="false" />
                             </div>
                         }
                         <span class="defaultHidden">
@@ -437,7 +499,16 @@
                         {
                             foreach (var itemPart in itemParts)
                             {
-                                <TextVisualizer ViewModel="@itemPart.TextVisualizerViewModel" HideLineNumbers="true" Virtualize="false" />
+                                if (itemPart.ErrorMessage is not null)
+                                {
+                                    <div class="error-message-text">@itemPart.ErrorMessage</div>
+                                }
+
+                                // Don't display text if it is a copy of the error message
+                                if (itemPart.ErrorMessage != itemPart.TextVisualizerViewModel.Text)
+                                {
+                                    <TextVisualizer ViewModel="@itemPart.TextVisualizerViewModel" HideLineNumbers="true" Virtualize="false" />
+                                }
                             }
                         }
                         else

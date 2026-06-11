@@ -20,3 +20,5 @@ resource postgres2_kv 'Microsoft.KeyVault/vaults@2024-11-01' = {
 output vaultUri string = postgres2_kv.properties.vaultUri
 
 output name string = postgres2_kv.name
+
+output id string = postgres2_kv.id

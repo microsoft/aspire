@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# This command launches a Visual Studio Code with environment variables required to use a local version of the .NET Core SDK.
+# Set VSCODE_CMD environment variable to use a different VS Code variant (e.g., code-insiders).
+
 set -euo pipefail
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -24,5 +27,29 @@ then
     set -- '.';
 fi
 
-code "$@"
+if [ -n "${VSCODE_CMD:-}" ]; then
+    if ! command -v "$VSCODE_CMD" &> /dev/null; then
+        echo "[ERROR] The specified VS Code command '$VSCODE_CMD' is not installed or cannot be found in PATH."
+        exit 1
+    fi
+elif command -v code &> /dev/null && command -v code-insiders &> /dev/null; then
+    echo "Both 'code' and 'code-insiders' are installed."
+    echo "  1) code"
+    echo "  2) code-insiders"
+    read -rp "Select [1]: " choice
+    case "${choice:-1}" in
+        1) VSCODE_CMD="code" ;;
+        2) VSCODE_CMD="code-insiders" ;;
+        *) echo "[ERROR] Invalid selection."; exit 1 ;;
+    esac
+elif command -v code &> /dev/null; then
+    VSCODE_CMD="code"
+elif command -v code-insiders &> /dev/null; then
+    VSCODE_CMD="code-insiders"
+else
+    echo "[ERROR] Neither 'code' nor 'code-insiders' is installed or can be found."
+    exit 1
+fi
+
+"$VSCODE_CMD" "$@"
 

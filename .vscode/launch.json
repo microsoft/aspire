@@ -12,8 +12,22 @@
 			"outFiles": [
 				"${workspaceFolder}/extension/dist/**/*.js"
 			],
-			"preLaunchTask": "npm: watch extension",
-      "cwd": "${workspaceFolder}/extension"
+			"preLaunchTask": "tasks: watch extension",
+			"cwd": "${workspaceFolder}/extension"
+		},
+		{
+			"name": "Run Extension (Go debugging playground)",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/extension",
+				"${workspaceFolder}/playground/GoDebugging"
+			],
+			"outFiles": [
+				"${workspaceFolder}/extension/dist/**/*.js"
+			],
+			"preLaunchTask": "tasks: watch extension",
+			"cwd": "${workspaceFolder}/extension"
 		},
 		{
 			"name": "Run Extension (cli stop on entry)",
@@ -25,11 +39,11 @@
 			"outFiles": [
 				"${workspaceFolder}/extension/dist/**/*.js"
 			],
-			"preLaunchTask": "npm: watch extension",
+			"preLaunchTask": "tasks: watch extension",
 			"env": {
 				"ASPIRE_CLI_STOP_ON_ENTRY": "true"
 			},
-      "cwd": "${workspaceFolder}/extension"
+			"cwd": "${workspaceFolder}/extension"
 		},
 		{
 			"name": "Run Extension (apphost stop on entry)",
@@ -41,11 +55,11 @@
 			"outFiles": [
 				"${workspaceFolder}/extension/dist/**/*.js"
 			],
-			"preLaunchTask": "npm: watch extension",
+			"preLaunchTask": "tasks: watch extension",
 			"env": {
 				"ASPIRE_APPHOST_STOP_ON_ENTRY": "true"
 			},
-      "cwd": "${workspaceFolder}/extension"
+			"cwd": "${workspaceFolder}/extension"
 		},
 		{
 			"name": "Run Extension (apphost AND cli stop on entry)",
@@ -57,12 +71,25 @@
 			"outFiles": [
 				"${workspaceFolder}/extension/dist/**/*.js"
 			],
-			"preLaunchTask": "npm: watch extension",
+			"preLaunchTask": "tasks: watch extension",
 			"env": {
-        "ASPIRE_CLI_STOP_ON_ENTRY": "true",
+				"ASPIRE_CLI_STOP_ON_ENTRY": "true",
 				"ASPIRE_APPHOST_STOP_ON_ENTRY": "true"
 			},
-      "cwd": "${workspaceFolder}/extension"
+			"cwd": "${workspaceFolder}/extension"
+		},
+		{
+			"name": ".NET Core Attach",
+			"type": "coreclr",
+			"request": "attach",
+			"processId": "${command:pickProcess}"
+		},
+		{
+			"name": "Attach to Aspire MCP server",
+			"type": "coreclr",
+			"request": "attach",
+			"processId": "${command:pickProcess}",
+			"justMyCode": false
 		}
 	]
 }

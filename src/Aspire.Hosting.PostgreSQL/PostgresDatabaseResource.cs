@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Data.Common;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
@@ -13,6 +14,9 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="name">The name of the resource.</param>
 /// <param name="databaseName">The database name.</param>
 /// <param name="postgresParentResource">The PostgreSQL parent resource associated with this database.</param>
+/// <ats-summary>A resource that represents a PostgreSQL database. This is a child resource of a <ats-see cref="!:type:PostgresServerResource" />.</ats-summary>
+[DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+[AspireExport(ExposeProperties = true)]
 public class PostgresDatabaseResource(string name, string databaseName, PostgresServerResource postgresParentResource)
     : Resource(name), IResourceWithParent<PostgresServerResource>, IResourceWithConnectionString
 {
@@ -66,7 +70,7 @@ public class PostgresDatabaseResource(string name, string databaseName, Postgres
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
         Parent.CombineProperties([
-            new("Database", ReferenceExpression.Create($"{DatabaseName}")),
+            new("DatabaseName", ReferenceExpression.Create($"{DatabaseName}")),
             new("Uri", UriExpression),
             new("JdbcConnectionString", JdbcConnectionString),
         ]);

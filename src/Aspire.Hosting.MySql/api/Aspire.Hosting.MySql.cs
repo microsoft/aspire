@@ -10,25 +10,34 @@ namespace Aspire.Hosting
 {
     public static partial class MySqlBuilderExtensions
     {
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MySqlDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> builder, string name, string? databaseName = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> AddMySql(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null, int? port = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MySqlDatabaseResource> WithCreationScript(this ApplicationModel.IResourceBuilder<ApplicationModel.MySqlDatabaseResource> builder, string script) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<MySql.PhpMyAdminContainerResource> WithHostPort(this ApplicationModel.IResourceBuilder<MySql.PhpMyAdminContainerResource> builder, int? port) { throw null; }
 
         [System.Obsolete("Use WithInitFiles instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> WithInitBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> builder, string source, bool isReadOnly = true) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> WithInitFiles(this ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> builder, string source) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> WithPassword(this ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> password) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithPhpMyAdmin<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<MySql.PhpMyAdminContainerResource>>? configureContainer = null, string? containerName = null)
             where T : ApplicationModel.MySqlServerResource { throw null; }
     }
@@ -36,7 +45,9 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.ApplicationModel
 {
-    public partial class MySqlDatabaseResource : Resource, IResourceWithParent<MySqlServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+    [AspireExport(ExposeProperties = true)]
+    public partial class MySqlDatabaseResource : Resource, IResourceWithParent<MySqlServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public MySqlDatabaseResource(string name, string databaseName, MySqlServerResource parent) : base(default!) { }
 
@@ -44,10 +55,17 @@ namespace Aspire.Hosting.ApplicationModel
 
         public string DatabaseName { get { throw null; } }
 
+        public ReferenceExpression JdbcConnectionString { get { throw null; } }
+
         public MySqlServerResource Parent { get { throw null; } }
+
+        public ReferenceExpression UriExpression { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class MySqlServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class MySqlServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public MySqlServerResource(string name, ParameterResource password) : base(default!, default) { }
 
@@ -55,9 +73,19 @@ namespace Aspire.Hosting.ApplicationModel
 
         public System.Collections.Generic.IReadOnlyDictionary<string, string> Databases { get { throw null; } }
 
+        public EndpointReferenceExpression Host { get { throw null; } }
+
+        public ReferenceExpression JdbcConnectionString { get { throw null; } }
+
         public ParameterResource PasswordParameter { get { throw null; } set { } }
 
+        public EndpointReferenceExpression Port { get { throw null; } }
+
         public EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public ReferenceExpression UriExpression { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 }
 

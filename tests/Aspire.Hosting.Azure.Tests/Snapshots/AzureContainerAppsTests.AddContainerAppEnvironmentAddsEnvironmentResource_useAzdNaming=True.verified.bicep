@@ -5,6 +5,8 @@ param userPrincipalId string = ''
 
 param tags object = { }
 
+param env_acr_outputs_name string
+
 var resourceToken = uniqueString(resourceGroup().id)
 
 resource env_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
@@ -13,13 +15,8 @@ resource env_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = 
   tags: tags
 }
 
-resource env_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
+resource env_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
   name: replace('acr-${resourceToken}', '-', '')
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  tags: tags
 }
 
 resource env_acr_env_mi_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -43,7 +40,7 @@ resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource env 'Microsoft.App/managedEnvironments@2025-01-01' = {
+resource env 'Microsoft.App/managedEnvironments@2025-07-01' = {
   name: 'cae-${resourceToken}'
   location: location
   properties: {
@@ -64,7 +61,7 @@ resource env 'Microsoft.App/managedEnvironments@2025-01-01' = {
   tags: tags
 }
 
-resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2024-10-02-preview' = {
+resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
   name: 'aspire-dashboard'
   properties: {
     componentType: 'AspireDashboard'
@@ -100,7 +97,7 @@ resource shares_volumes_cache_0 'Microsoft.Storage/storageAccounts/fileServices/
   parent: storageVolumeFileService
 }
 
-resource managedStorage_volumes_cache_0 'Microsoft.App/managedEnvironments/storages@2025-01-01' = {
+resource managedStorage_volumes_cache_0 'Microsoft.App/managedEnvironments/storages@2025-07-01' = {
   name: take('${toLower('cache')}-${toLower('Appdata')}', 32)
   properties: {
     azureFile: {
@@ -115,17 +112,17 @@ resource managedStorage_volumes_cache_0 'Microsoft.App/managedEnvironments/stora
 
 output volumes_cache_0 string = managedStorage_volumes_cache_0.name
 
-output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = 'law-${resourceToken}'
+output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = env_law.name
 
 output AZURE_LOG_ANALYTICS_WORKSPACE_ID string = env_law.id
 
-output AZURE_CONTAINER_REGISTRY_NAME string = replace('acr-${resourceToken}', '-', '')
+output AZURE_CONTAINER_REGISTRY_NAME string = env_acr.name
 
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = env_acr.properties.loginServer
 
 output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = env_mi.id
 
-output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = 'cae-${resourceToken}'
+output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = env.name
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = env.id
 

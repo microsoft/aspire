@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.Data.SqlClient;
@@ -13,6 +14,8 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="name">The name of the resource.</param>
 /// <param name="databaseName">The database name.</param>
 /// <param name="parent">The parent SQL Server server resource.</param>
+[DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+[AspireExport(ExposeProperties = true)]
 public class SqlServerDatabaseResource(string name, string databaseName, SqlServerServerResource parent)
     : Resource(name), IResourceWithParent<SqlServerServerResource>, IResourceWithConnectionString
 {
@@ -41,7 +44,7 @@ public class SqlServerDatabaseResource(string name, string databaseName, SqlServ
     /// Gets the connection URI expression for the SQL Server database.
     /// </summary>
     /// <remarks>
-    /// Format: <c>mssql://{host}:{port}/{database}</c>.
+    /// Format: <c>mssql://{Username}:{Password}@{Host}:{Port}</c>.
     /// </remarks>
     public ReferenceExpression UriExpression =>
         ReferenceExpression.Create($"{Parent.UriExpression}/{DatabaseName:uri}");
@@ -68,7 +71,7 @@ public class SqlServerDatabaseResource(string name, string databaseName, SqlServ
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
         Parent.CombineProperties([
-            new("Database", ReferenceExpression.Create($"{DatabaseName}")),
+            new("DatabaseName", ReferenceExpression.Create($"{DatabaseName}")),
             new("Uri", UriExpression),
             new("JdbcConnectionString", JdbcConnectionString),
         ]);

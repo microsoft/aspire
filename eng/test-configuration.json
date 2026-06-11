@@ -1,10 +1,9 @@
 {
-  "version": 1,
+  "version": 2,
   "defaultOnFailure": "fail",
-  "localRerunCount": 1,
+  "localRerunCount": 0,
+  "remoteRerunCount": 3,
   "retryOnRules": [
-    { "testName": { "contains": "Aspire.Elastic.Clients.Elasticsearch.Tests.ConformanceTests.HealthCheckReportsExpectedStatus" } },
-    { "testAssembly": { "contains": "Aspire.Elastic.Clients.Elasticsearch.Tests" }, "failureMessage": { "contains": "RemoteExecutionException : Half-way through waiting for remote process." } },
-    { "failureMessage" : { "contains" : "MSBUILD : error MSB4166: Child node" } }
+    { "failureMessage" : { "regex" : "No such image: .*testcontainers/ryuk:.*" } }
   ]
 }

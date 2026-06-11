@@ -36,7 +36,7 @@ public class AzureSignalREmulatorFunctionalTest(ITestOutputHelper testOutputHelp
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWaitForOnAzureSignalREmulatorBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -72,7 +72,7 @@ public class AzureSignalREmulatorFunctionalTest(ITestOutputHelper testOutputHelp
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyAzureSignalREmulatorResource()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));

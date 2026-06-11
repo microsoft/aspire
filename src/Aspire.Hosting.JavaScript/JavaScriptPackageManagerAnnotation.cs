@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.ApplicationModel.Docker;
 
 namespace Aspire.Hosting.JavaScript;
 
@@ -38,4 +40,21 @@ public sealed class JavaScriptPackageManagerAnnotation(string executableName, st
     /// Gets the file patterns for package dependency files.
     /// </summary>
     public List<CopyFilePattern> PackageFilesPatterns { get; } = [];
+
+    /// <summary>
+    /// Gets or sets a callback to initialize the Docker build stage before installing packages.
+    /// </summary>
+    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public Action<DockerfileStage>? InitializeDockerBuildStage { get; init; }
+
+    /// <summary>
+    /// Gets or sets a callback to initialize the Docker runtime stage before configuring the entrypoint.
+    /// </summary>
+    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    internal Action<DockerfileStage>? InitializeDockerRuntimeStage { get; init; }
+
+    /// <summary>
+    /// Gets or sets a callback to resolve the default <c>PublishAsPackageScript</c> runtime image from the build image.
+    /// </summary>
+    internal Func<string, string>? ResolvePackageScriptRuntimeImage { get; init; }
 }

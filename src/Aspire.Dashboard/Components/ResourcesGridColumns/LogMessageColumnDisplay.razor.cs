@@ -17,6 +17,9 @@ public partial class LogMessageColumnDisplay
     [Parameter, EditorRequired]
     public required EventCallback<OtlpLogEntry> LaunchGenAIVisualizerCallback { get; set; }
 
+    [Parameter, EditorRequired]
+    public required Func<OtlpLogEntry, bool> IsGenAILogCallback { get; set; }
+
     private string? _exceptionText;
 
     protected override void OnInitialized()

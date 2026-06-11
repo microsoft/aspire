@@ -19,7 +19,7 @@ if (args.Contains("--add-redis"))
 {
     builder.AddRedis("redis1")
         // Disable certificate features to avoid extra arguments
-        .WithoutServerAuthenticationCertificate()
+        .WithoutHttpsCertificate()
         .WithCertificateTrustScope(CertificateTrustScope.None);
 }
 

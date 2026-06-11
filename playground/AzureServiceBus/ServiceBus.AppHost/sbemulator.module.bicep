@@ -8,6 +8,7 @@ resource sbemulator 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
   location: location
   properties: {
     disableLocalAuth: true
+    publicNetworkAccess: 'Enabled'
   }
   sku: {
     name: sku
@@ -58,4 +59,8 @@ resource app_prop_filter_1 'Microsoft.ServiceBus/namespaces/topics/subscriptions
 
 output serviceBusEndpoint string = sbemulator.properties.serviceBusEndpoint
 
+output serviceBusHostName string = split(replace(sbemulator.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
 output name string = sbemulator.name
+
+output id string = sbemulator.id

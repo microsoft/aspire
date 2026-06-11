@@ -1,26 +1,37 @@
-# Aspire.Hosting.Redis library
+# Redis hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a Redis resource.
+Use this integration to model, configure, and orchestrate a Redis resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Redis Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Redis` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Redis
+```bash
+aspire add Aspire.Hosting.Redis
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Redis resource and consume the connection using the following methods:
+In the AppHost, add a Redis resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var redis = builder.AddRedis("redis");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(redis);
+```
+
+**TypeScript**
+
+```typescript
+const redis = await builder.addRedis("redis");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(redis);
 ```
 
 ## Connection Properties
@@ -38,16 +49,15 @@ The Redis resource exposes the following connection properties:
 | `Password` | The password for authentication |
 | `Uri` | The connection URI, with the format `redis://:{Password}@{Host}:{Port}` |
 
-Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
+Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `cache` becomes `CACHE_URI`.
 
 ## Additional documentation
 
-* https://learn.microsoft.com/dotnet/aspire/caching/stackexchange-redis-component
-* https://learn.microsoft.com/dotnet/aspire/caching/stackexchange-redis-output-caching-component
-* https://learn.microsoft.com/dotnet/aspire/caching/stackexchange-redis-distributed-caching-component
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/caching/redis/redis-host/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Redis is a registered trademark of Redis Ltd. Any rights therein are reserved to Redis Ltd._

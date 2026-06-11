@@ -1,7 +1,8 @@
-{
+﻿{
   "type": "azure.bicep.v0",
   "path": "env.module.bicep",
   "params": {
+    "env_acr_outputs_name": "{env-acr.outputs.name}",
     "existingappinsights_outputs_name": "{existingAppInsights.outputs.name}",
     "userPrincipalId": ""
   }

@@ -9,21 +9,26 @@ internal static class DashboardConfigNames
 
     public static readonly ConfigName DashboardOtlpGrpcUrlName = new(KnownConfigNames.DashboardOtlpGrpcEndpointUrl);
     public static readonly ConfigName DashboardOtlpHttpUrlName = new(KnownConfigNames.DashboardOtlpHttpEndpointUrl);
-    public static readonly ConfigName DashboardMcpUrlName = new(KnownConfigNames.DashboardMcpEndpointUrl);
     public static readonly ConfigName DashboardUnsecuredAllowAnonymousName = new(KnownConfigNames.DashboardUnsecuredAllowAnonymous);
     public static readonly ConfigName DashboardConfigFilePathName = new(KnownConfigNames.DashboardConfigFilePath);
     public static readonly ConfigName DashboardFileConfigDirectoryName = new(KnownConfigNames.DashboardFileConfigDirectory);
     public static readonly ConfigName DashboardAIDisabledName = new(KnownConfigNames.DashboardAIDisabled);
+    public static readonly ConfigName DashboardAspireApiEnabledName = new(KnownConfigNames.DashboardApiEnabled);
+    public static readonly ConfigName DashboardAspireApiDisabledName = new(KnownConfigNames.DashboardApiDisabled);
     public static readonly ConfigName ResourceServiceUrlName = new(KnownConfigNames.ResourceServiceEndpointUrl);
     public static readonly ConfigName ForwardedHeaders = new(KnownConfigNames.DashboardForwardedHeadersEnabled);
 
     public static readonly ConfigName DashboardOtlpAuthModeName = new("Dashboard:Otlp:AuthMode", "DASHBOARD__OTLP__AUTHMODE");
     public static readonly ConfigName DashboardOtlpPrimaryApiKeyName = new("Dashboard:Otlp:PrimaryApiKey", "DASHBOARD__OTLP__PRIMARYAPIKEY");
     public static readonly ConfigName DashboardOtlpSecondaryApiKeyName = new("Dashboard:Otlp:SecondaryApiKey", "DASHBOARD__OTLP__SECONDARYAPIKEY");
-    public static readonly ConfigName DashboardMcpPublicUrlName = new("Dashboard:Mcp:PublicUrl", "DASHBOARD__MCP__PUBLICURL");
-    public static readonly ConfigName DashboardMcpAuthModeName = new("Dashboard:Mcp:AuthMode", "DASHBOARD__MCP__AUTHMODE");
-    public static readonly ConfigName DashboardMcpPrimaryApiKeyName = new("Dashboard:Mcp:PrimaryApiKey", "DASHBOARD__MCP__PRIMARYAPIKEY");
-    public static readonly ConfigName DashboardMcpDisableName = new("Dashboard:Mcp:Disabled", "DASHBOARD__MCP__DISABLED");
+
+    // Dashboard API Authentication - used for Telemetry API
+    public static readonly ConfigName DashboardApiEnabledName = new("Dashboard:Api:Enabled", "DASHBOARD__API__ENABLED");
+    public static readonly ConfigName DashboardApiDisabledName = new("Dashboard:Api:Disabled", "DASHBOARD__API__DISABLED");
+    public static readonly ConfigName DashboardApiAuthModeName = new("Dashboard:Api:AuthMode", "DASHBOARD__API__AUTHMODE");
+    public static readonly ConfigName DashboardApiPrimaryApiKeyName = new("Dashboard:Api:PrimaryApiKey", "DASHBOARD__API__PRIMARYAPIKEY");
+    public static readonly ConfigName DashboardApiSecondaryApiKeyName = new("Dashboard:Api:SecondaryApiKey", "DASHBOARD__API__SECONDARYAPIKEY");
+
     public static readonly ConfigName DashboardOtlpSuppressUnsecuredTelemetryMessageName = new("Dashboard:Otlp:SuppressUnsecuredTelemetryMessage", "DASHBOARD__OTLP__SUPPRESSUNSECUREDTELEMETRYMESSAGE");
     public static readonly ConfigName DashboardOtlpCorsAllowedOriginsKeyName = new("Dashboard:Otlp:Cors:AllowedOrigins", "DASHBOARD__OTLP__CORS__ALLOWEDORIGINS");
     public static readonly ConfigName DashboardOtlpCorsAllowedHeadersKeyName = new("Dashboard:Otlp:Cors:AllowedHeaders", "DASHBOARD__OTLP__CORS__ALLOWEDHEADERS");
@@ -40,8 +45,11 @@ internal static class DashboardConfigNames
     public static readonly ConfigName DebugSessionPortName = new("Dashboard:DebugSession:Port", "DASHBOARD__DEBUGSESSION__PORT");
     public static readonly ConfigName DebugSessionServerCertificateName = new("Dashboard:DebugSession:ServerCertificate", "DASHBOARD__DEBUGSESSION__SERVERCERTIFICATE");
     public static readonly ConfigName DebugSessionTokenName = new("Dashboard:DebugSession:Token", "DASHBOARD__DEBUGSESSION__TOKEN");
+    public static readonly ConfigName DebugSessionDcpInstanceIdName = new("Dashboard:DebugSession:DcpInstanceId", "DASHBOARD__DEBUGSESSION__DCPINSTANCEID");
     public static readonly ConfigName DebugSessionTelemetryOptOutName = new("Dashboard:DebugSession:TelemetryOptOut", "DASHBOARD__DEBUGSESSION__TELEMETRYOPTOUT");
     public static readonly ConfigName UIDisableResourceGraphName = new("Dashboard:UI:DisableResourceGraph", "DASHBOARD__UI__DISABLERESOURCEGRAPH");
+    public static readonly ConfigName UIDisableImportName = new("Dashboard:UI:DisableImport", "DASHBOARD__UI__DISABLEIMPORT");
+    public static readonly ConfigName UIDisableAgentHelpName = new("Dashboard:UI:DisableAgentHelp", "DASHBOARD__UI__DISABLEAGENTHELP");
 
     public static class Legacy
     {
@@ -51,7 +59,7 @@ internal static class DashboardConfigNames
         public static readonly ConfigName DashboardConfigFilePathName = new(KnownConfigNames.Legacy.DashboardConfigFilePath);
         public static readonly ConfigName DashboardFileConfigDirectoryName = new(KnownConfigNames.Legacy.DashboardFileConfigDirectory);
         public static readonly ConfigName ResourceServiceUrlName = new(KnownConfigNames.Legacy.ResourceServiceEndpointUrl);
-        public static readonly ConfigName DashboardOtlpSuppressUnsecuredTelemetryMessage = new("Dashboard:Otlp:SuppressUnsecuredTelemetryMessage", "Dashboard__Otlp__SuppressUnsecuredTelemetryMessage");
+        public static readonly ConfigName DashboardOtlpSuppressUnsecuredTelemetryMessageName = new("Dashboard:Otlp:SuppressUnsecuredTelemetryMessage", "DASHBOARD__OTLP__SUPPRESSUNSECUREDTELEMETRYMESSAGE");
     }
 }
 

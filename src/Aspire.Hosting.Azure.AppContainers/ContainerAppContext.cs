@@ -22,7 +22,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
     {
         _infrastructure = infra;
         // Write a fake parameter for the container app environment
-        // so azd knows the Dashboard URL - see https://github.com/dotnet/aspire/issues/8449.
+        // so azd knows the Dashboard URL - see https://github.com/microsoft/aspire/issues/8449.
         // This is temporary until a real fix can be made in azd.
         AllocateParameter(_containerAppEnvironmentContext.Environment.ContainerAppDomain);
 
@@ -110,11 +110,10 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         };
         containerApp.Configuration = configuration;
 
-        const string latestPreview = "2025-02-02-preview"; // these properties are currently only available in preview
-
         // default autoConfigureDataProtection to true for .NET projects
         if (Resource is ProjectResource)
         {
+            const string latestPreview = "2025-10-02-preview"; // this property is currently only available in preview
             containerApp.ResourceVersion = latestPreview;
 
             var value = new BicepValue<bool>(true);
@@ -125,11 +124,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         // default kind to functionapp for Azure Functions
         if (Resource.HasAnnotationOfType<AzureFunctionsAnnotation>())
         {
-            containerApp.ResourceVersion = latestPreview;
-
-            var value = new BicepValue<string>("functionapp");
-            ((IBicepValue)value).Self = new BicepValueReference(containerApp, "Kind", ["kind"]);
-            containerApp.ProvisionableProperties["Kind"] = value;
+            containerApp.Kind = ContainerAppKind.Functionapp;
         }
 
         return containerApp;
@@ -137,108 +132,38 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
 
     protected override void ProcessEndpoints()
     {
-        if (!Resource.TryGetEndpoints(out var endpoints) || !endpoints.Any())
+        // Resolve endpoint ports using the centralized helper
+        var resolvedEndpoints = Resource.ResolveEndpoints();
+
+        if (resolvedEndpoints.Count == 0)
         {
             return;
         }
 
-        // Only http, https, and tcp are supported
-        var unsupportedEndpoints = endpoints.Where(e => e.UriScheme is not ("tcp" or "http" or "https")).ToArray();
+        // Validate transport layer: only http-based and tcp transports are supported by Container Apps.
+        // The URI scheme (e.g. "redis", "rediss", "foo") is independent of transport.
+        var unsupportedEndpoints = resolvedEndpoints.Where(r => r.Endpoint.Transport is not ("http" or "http2" or "tcp")).ToArray();
 
         if (unsupportedEndpoints.Length > 0)
         {
-            throw new NotSupportedException($"The endpoint(s) {string.Join(", ", unsupportedEndpoints.Select(e => $"'{e.Name}'"))} specify an unsupported scheme. The supported schemes are 'http', 'https', and 'tcp'.");
+            throw new NotSupportedException($"The endpoint(s) {string.Join(", ", unsupportedEndpoints.Select(r => $"'{r.Endpoint.Name}'"))} specify an unsupported transport. The supported transports are 'http', 'http2', and 'tcp'.");
         }
 
-        // We can allocate ports per endpoint
-        var portAllocator = new PortAllocator();
-
-        var endpointIndexMap = new Dictionary<string, int>();
-
-        // This is used to determine if an endpoint should be treated as the Default endpoint.
-        // Endpoints can come from 3 different sources (in this order):
-        // 1. Kestrel configuration
-        // 2. Default endpoints added by the framework
-        // 3. Explicitly added endpoints
-        // But wherever they come from, we treat the first one as Default, for each scheme.
-        var httpSchemesEncountered = new HashSet<string>();
-
-        static bool IsHttpScheme(string scheme) => scheme is "http" or "https";
-
-        // Allocate ports for the endpoints
-        foreach (var endpoint in endpoints)
-        {
-            endpointIndexMap[endpoint.Name] = endpointIndexMap.Count;
-
-            int? targetPort = (Resource, endpoint.UriScheme, endpoint.TargetPort, endpoint.Port) switch
+        // Group resolved endpoints by target port (aka destinations), this gives us the logical bindings or destinations
+        var endpointsByTargetPort = resolvedEndpoints
+            .Select((resolved, index) => (resolved, index))
+            .GroupBy(x => x.resolved.TargetPort.Value)
+            .Select(g => new
             {
-                // The port was specified so use it
-                (_, _, int target, _) => target,
-
-                // Container resources get their default listening port from the exposed port.
-                (ContainerResource, _, null, int port) => port,
-
-                // Check whether the project view this endpoint as Default (for its scheme).
-                // If so, we don't specify the target port, as it will get one from the deployment tool.
-                (ProjectResource project, string uriScheme, null, _) when IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme) => null,
-
-                // Allocate a dynamic port
-                _ => portAllocator.AllocatePort()
-            };
-
-            // We only keep track of schemes for project resources, since we don't want
-            // a non-project scheme to affect what project endpoints are considered default.
-            if (Resource is ProjectResource && IsHttpScheme(endpoint.UriScheme))
-            {
-                httpSchemesEncountered.Add(endpoint.UriScheme);
-            }
-
-            int? exposedPort = (endpoint.UriScheme, endpoint.Port, targetPort) switch
-            {
-                // Exposed port and target port are the same, we don't need to mention the exposed port
-                (_, int p0, int p1) when p0 == p1 => null,
-
-                // Port was specified, so use it
-                (_, int port, _) => port,
-
-                // We have a target port, not need to specify an exposedPort
-                // it will default to the targetPort
-                (_, null, int port) => null,
-
-                // Let the tool infer the default http and https ports
-                ("http", null, null) => null,
-                ("https", null, null) => null,
-
-                // Other schemes just allocate a port
-                _ => portAllocator.AllocatePort()
-            };
-
-            if (exposedPort is int ep)
-            {
-                portAllocator.AddUsedPort(ep);
-                endpoint.Port = ep;
-            }
-
-            if (targetPort is int tp)
-            {
-                portAllocator.AddUsedPort(tp);
-                endpoint.TargetPort = tp;
-            }
-        }
-
-        // First we group the endpoints by container port (aka destinations), this gives us the logical bindings or destinations
-        var endpointsByTargetPort = endpoints.GroupBy(e => e.TargetPort)
-                                             .Select(g => new
-                                             {
-                                                 Port = g.Key,
-                                                 Endpoints = g.ToArray(),
-                                                 External = g.Any(e => e.IsExternal),
-                                                 IsHttpOnly = g.All(e => e.UriScheme is "http" or "https"),
-                                                 AnyH2 = g.Any(e => e.Transport is "http2"),
-                                                 UniqueSchemes = g.Select(e => e.UriScheme).Distinct().ToArray(),
-                                                 Index = g.Min(e => endpointIndexMap[e.Name])
-                                             })
-                                             .ToList();
+                Port = g.Key,
+                ResolvedEndpoints = g.Select(x => x.resolved).ToArray(),
+                External = g.Any(x => x.resolved.Endpoint.IsExternal),
+                IsHttpOnly = g.All(x => x.resolved.Endpoint.Transport is "http" or "http2"),
+                AnyH2 = g.Any(x => x.resolved.Endpoint.Transport is "http2"),
+                UniqueTransports = g.Select(x => x.resolved.Endpoint.Transport).Distinct().ToArray(),
+                Index = g.Min(x => x.index)
+            })
+            .ToList();
 
         // Failure cases
 
@@ -254,12 +179,11 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
             throw new NotSupportedException("External non-HTTP(s) endpoints are not supported");
         }
 
-        // Don't allow mixing http and tcp endpoints
-        // This means we want to fail if we see a group with http/https and tcp endpoints
-        static bool Compatible(string[] schemes) =>
-            schemes.All(s => s is "http" or "https") || schemes.All(s => s is "tcp");
+        // Don't allow mixing http and tcp transports on the same target port
+        static bool Compatible(string[] transports) =>
+            transports.All(t => t is "http" or "http2") || transports.All(t => t is "tcp");
 
-        if (endpointsByTargetPort.Any(g => !Compatible(g.UniqueSchemes)))
+        if (endpointsByTargetPort.Any(g => !Compatible(g.UniqueTransports)))
         {
             throw new NotSupportedException("HTTP(s) and TCP endpoints cannot be mixed");
         }
@@ -294,22 +218,28 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
 
             _httpIngress = (targetPort, httpIngress.AnyH2, httpIngress.External);
 
-            foreach (var e in httpIngress.Endpoints)
+            foreach (var resolved in httpIngress.ResolvedEndpoints)
             {
-                if (e.UriScheme is "http" && e.Port is not null and not 80)
-                {
-                    throw new NotSupportedException($"The endpoint '{e.Name}' is an http endpoint and must use port 80");
-                }
+                var endpoint = resolved.Endpoint;
+                var preserveHttp = _containerAppEnvironmentContext.Environment.PreserveHttpEndpoints;
 
-                if (e.UriScheme is "https" && e.Port is not null and not 443)
-                {
-                    throw new NotSupportedException($"The endpoint '{e.Name}' is an https endpoint and must use port 443");
-                }
+                // By default, HTTP ingress uses HTTPS in ACA (HTTP→HTTPS redirect breaks WebSocket upgrades)
+                // If PreserveHttpEndpoints is true, keep the original scheme
+                var scheme = preserveHttp ? endpoint.UriScheme : "https";
+                var port = scheme is "http" ? 80 : 443;
 
-                // For the http ingress port is always 80 or 443
-                var port = e.UriScheme is "http" ? 80 : 443;
+                _endpointMapping[endpoint.Name] = new(scheme, NormalizedContainerAppName, port, targetPort, true, httpIngress.External, endpoint.TlsEnabled);
+            }
 
-                _endpointMapping[e.Name] = new(e.UriScheme, NormalizedContainerAppName, port, targetPort, true, httpIngress.External);
+            // Record HTTP endpoints being upgraded (logged once at environment level)
+            if (!_containerAppEnvironmentContext.Environment.PreserveHttpEndpoints)
+            {
+                var upgradedEndpoints = httpIngress.ResolvedEndpoints
+                    .Where(r => r.Endpoint.UriScheme is "http")
+                    .Select(r => r.Endpoint.Name)
+                    .ToArray();
+
+                _containerAppEnvironmentContext.RecordHttpsUpgrade(Resource.Name, upgradedEndpoints);
             }
         }
 
@@ -327,9 +257,10 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
 
             _additionalPorts.Add(g.Port.Value);
 
-            foreach (var e in g.Endpoints)
+            foreach (var resolved in g.ResolvedEndpoints)
             {
-                _endpointMapping[e.Name] = new(e.UriScheme, NormalizedContainerAppName, e.Port ?? g.Port.Value, g.Port.Value, false, g.External);
+                var endpoint = resolved.Endpoint;
+                _endpointMapping[endpoint.Name] = new(endpoint.UriScheme, NormalizedContainerAppName, resolved.ExposedPort.Value ?? g.Port.Value, g.Port.Value, false, g.External, endpoint.TlsEnabled);
             }
         }
     }
@@ -380,26 +311,5 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         }
 
         config.Ingress = caIngress;
-    }
-
-    private sealed class PortAllocator(int startPort = 8000)
-    {
-        private int _allocatedPortStart = startPort;
-        private readonly HashSet<int> _usedPorts = [];
-
-        public int AllocatePort()
-        {
-            while (_usedPorts.Contains(_allocatedPortStart))
-            {
-                _allocatedPortStart++;
-            }
-
-            return _allocatedPortStart;
-        }
-
-        public void AddUsedPort(int port)
-        {
-            _usedPorts.Add(port);
-        }
     }
 }

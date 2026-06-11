@@ -10,12 +10,16 @@ namespace Aspire.Hosting
 {
     public static partial class GitHubModelsExtensions
     {
+        [AspireExportIgnore(Reason = "GitHubModel is a .NET-specific descriptor type not compatible with ATS. Use the GitHubModelName enum-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, string name, GitHub.GitHubModel model, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? organization = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "The polyglot overload uses the GitHubModelName enum instead. See the internal AddGitHubModel(GitHubModelName) overload.")]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, string name, string model, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? organization = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> WithApiKey(this ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> apiKey) { throw null; }
 
+        [AspireExport("enableHealthCheck")]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> WithHealthCheck(this ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> builder) { throw null; }
     }
 }
@@ -29,6 +33,8 @@ namespace Aspire.Hosting.GitHub
         public static partial class AI21Labs
         {
             public static readonly GitHubModel AI21Jamba15Large;
+            [System.Obsolete("This model has been removed from GitHub Models.")]
+            [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
             public static readonly GitHubModel AI21Jamba15Mini;
         }
 
@@ -37,13 +43,19 @@ namespace Aspire.Hosting.GitHub
             public static readonly GitHubModel CohereCommandA;
             public static readonly GitHubModel CohereCommandR082024;
             public static readonly GitHubModel CohereCommandRPlus082024;
+            [System.Obsolete("This model has been removed from GitHub Models.")]
+            [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
             public static readonly GitHubModel CohereEmbedV3English;
+            [System.Obsolete("This model has been removed from GitHub Models.")]
+            [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
             public static readonly GitHubModel CohereEmbedV3Multilingual;
         }
 
         public static partial class Core42
         {
-            public static readonly GitHubModel JAIS30bChat;
+            [System.Obsolete("This model has been removed from GitHub Models.")]
+            [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+            public static readonly GitHubModel Jais30bChat;
         }
 
         public static partial class DeepSeek
@@ -66,7 +78,7 @@ namespace Aspire.Hosting.GitHub
 
         public static partial class Microsoft
         {
-            public static readonly GitHubModel MAIDSR1;
+            public static readonly GitHubModel MaiDSR1;
             public static readonly GitHubModel Phi4;
             public static readonly GitHubModel Phi4MiniInstruct;
             public static readonly GitHubModel Phi4MiniReasoning;
@@ -78,19 +90,23 @@ namespace Aspire.Hosting.GitHub
         {
             public static readonly GitHubModel Codestral2501;
             public static readonly GitHubModel Ministral3B;
+            [System.Obsolete("This model has been removed from GitHub Models.")]
+            [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
             public static readonly GitHubModel MistralLarge2411;
             public static readonly GitHubModel MistralMedium32505;
+            [System.Obsolete("This model has been removed from GitHub Models.")]
+            [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
             public static readonly GitHubModel MistralNemo;
             public static readonly GitHubModel MistralSmall31;
         }
 
         public static partial class OpenAI
         {
-            public static readonly GitHubModel OpenAIGPT41;
-            public static readonly GitHubModel OpenAIGPT41Mini;
-            public static readonly GitHubModel OpenAIGPT41Nano;
-            public static readonly GitHubModel OpenAIGPT4o;
-            public static readonly GitHubModel OpenAIGPT4oMini;
+            public static readonly GitHubModel OpenAIGpt41;
+            public static readonly GitHubModel OpenAIGpt41Mini;
+            public static readonly GitHubModel OpenAIGpt41Nano;
+            public static readonly GitHubModel OpenAIGpt4o;
+            public static readonly GitHubModel OpenAIGpt4oMini;
             public static readonly GitHubModel OpenAIGpt5;
             public static readonly GitHubModel OpenAIGpt5ChatPreview;
             public static readonly GitHubModel OpenAIGpt5Mini;
@@ -115,7 +131,8 @@ namespace Aspire.Hosting.GitHub
 
 namespace Aspire.Hosting.GitHub.Models
 {
-    public partial class GitHubModelResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Model = {Model}")]
+    public partial class GitHubModelResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public GitHubModelResource(string name, string model, ApplicationModel.ParameterResource? organization, ApplicationModel.ParameterResource key) : base(default!) { }
 
@@ -126,5 +143,9 @@ namespace Aspire.Hosting.GitHub.Models
         public string Model { get { throw null; } set { } }
 
         public ApplicationModel.ParameterResource? Organization { get { throw null; } set { } }
+
+        public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 }

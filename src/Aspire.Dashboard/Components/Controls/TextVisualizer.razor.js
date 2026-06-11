@@ -1,4 +1,4 @@
-import hljs from '/js/highlight-11.10.0.min.js'
+import hljs from '/js/highlight-11.11.1.min.js'
 
 function createObserver() {
     let highlightObserver = new MutationObserver((mutations) => {

@@ -11,7 +11,7 @@ param env_outputs_azure_container_registry_managed_identity_id string
 
 param job_containerimage string
 
-resource job 'Microsoft.App/jobs@2025-01-01' = {
+resource job 'Microsoft.App/jobs@2025-07-01' = {
   name: 'job'
   location: location
   properties: {
@@ -32,14 +32,6 @@ resource job 'Microsoft.App/jobs@2025-01-01' = {
           image: job_containerimage
           name: 'job'
           env: [
-            {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-              value: 'true'
-            }
-            {
-              name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-              value: 'true'
-            }
             {
               name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
               value: 'in_memory'

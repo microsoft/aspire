@@ -1,6 +1,6 @@
 # Flask App Example for Aspire
 
-This is a simple Flask application that demonstrates integration with .NET Aspire.
+This is a simple Flask application that demonstrates integration with Aspire.
 
 ## Features
 

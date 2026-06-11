@@ -1,9 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECOMPUTE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics;
+using Aspire.Hosting.Publishing;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -31,34 +32,40 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
     public string ValueExpression => $"{{{Resource.Name}.containerImage}}";
 
     /// <inheritdoc/>
+    [global::Aspire.Hosting.AspireExportIgnore(Reason = "Reference enumeration is not needed in the ATS surface for container image provenance.")]
     public IEnumerable<object> References => [Resource];
 
     /// <inheritdoc/>
-    async ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken)
+    ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken)
     {
-        var deploymentTarget = Resource.GetDeploymentTargetAnnotation() ?? throw new InvalidOperationException($"Resource '{Resource.Name}' does not have a deployment target.");
-        var containerRegistry = deploymentTarget.ContainerRegistry ?? throw new InvalidOperationException($"Resource '{Resource.Name}' does not have a container registry.");
-        var registryEndpoint = await containerRegistry.Endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        return ((IValueProvider)this).GetValueAsync(new ValueProviderContext(), cancellationToken);
+    }
 
-        string tag;
-        if (Resource.TryGetLastAnnotation<DeploymentImageTagCallbackAnnotation>(out var deploymentTag))
+    /// <inheritdoc/>
+    async ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
+    {
+        // Check if this resource is configured to save as an archive instead of pushing to a registry
+        if (context.ExecutionContext?.Services is { } serviceProvider)
         {
-            var context = new DeploymentImageTagCallbackAnnotationContext
+            var logger = Resource.GetLogger(serviceProvider);
+            var buildOptionsContext = await Resource.ProcessContainerBuildOptionsCallbackAsync(
+                serviceProvider,
+                logger,
+                context.ExecutionContext,
+                cancellationToken).ConfigureAwait(false);
+
+            // For Archive destination, return the local file path
+            if (buildOptionsContext.Destination == ContainerImageDestination.Archive)
             {
-                Resource = Resource,
-                CancellationToken = cancellationToken,
-            };
-            tag = await deploymentTag.Callback(context).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(buildOptionsContext.OutputPath))
+                {
+                    var imageName = buildOptionsContext.LocalImageName ?? Resource.Name.ToLowerInvariant();
+                    var imageTag = buildOptionsContext.LocalImageTag;
+                    return ResourceExtensions.GetContainerImageArchivePath(buildOptionsContext.OutputPath, imageName, imageTag);
+                }
+            }
         }
-        else if (Resource.TryGetLastAnnotation<ContainerImageAnnotation>(out var annotation))
-        {
-            tag = annotation.Tag ?? "latest";
-        }
-        else
-        {
-            tag = "latest";
-        }
-        
-        return $"{registryEndpoint}/{Resource.Name.ToLowerInvariant()}:{tag}";
+
+        return await Resource.GetFullRemoteImageNameAsync(cancellationToken).ConfigureAwait(false);
     }
 }

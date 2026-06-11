@@ -11,8 +11,9 @@ This document provides comprehensive guidelines for writing high-quality XML doc
 ## Purpose
 
 XML documentation comments serve multiple purposes:
+
 - Generate IntelliSense tooltips in IDEs for developers using Aspire APIs
-- Create public API documentation published to Microsoft Learn
+- Create public API documentation published to aspire.dev
 - Improve code maintainability and understanding
 - Support automated documentation generation tools
 
@@ -21,12 +22,14 @@ XML documentation comments serve multiple purposes:
 ### Scope: Public vs Internal APIs
 
 **Public APIs require comprehensive documentation:**
+
 - All public classes, interfaces, methods, properties, and events must be well-documented
 - Include detailed `<summary>`, `<remarks>`, `<example>`, and other appropriate tags
 - Focus on explaining purpose, usage patterns, and providing practical examples
-- This documentation will be published to Microsoft Learn and shown in IntelliSense
+- This documentation will be published to aspire.dev and shown in IntelliSense
 
 **Internal APIs require minimal documentation:**
+
 - Internal classes and members should have brief `<summary>` tags only
 - Avoid verbose `<remarks>`, `<example>`, or detailed parameter descriptions for internal APIs
 - Keep internal documentation concise and focused on what the code does
@@ -47,6 +50,7 @@ High-quality XML documentation should:
 ### What Makes Good Documentation
 
 **Good documentation:**
+
 - Explains the purpose and use case
 - Describes behavior, not implementation
 - Includes examples for complex scenarios
@@ -55,6 +59,7 @@ High-quality XML documentation should:
 - Uses appropriate tags (`<remarks>`, `<example>`, `<param>`, `<returns>`)
 
 **Poor documentation:**
+
 - Simply restates the member name ("Gets or sets the name")
 - Lacks context about when/why to use the API
 - Missing parameter descriptions
@@ -66,6 +71,7 @@ High-quality XML documentation should:
 ### Required Tags
 
 #### `<summary>`
+
 Brief description of the type or member. Should be a single sentence or short paragraph.
 
 ```csharp
@@ -75,6 +81,7 @@ Brief description of the type or member. Should be a single sentence or short pa
 ```
 
 #### `<param>`
+
 Describes each parameter. Required for all public method/constructor parameters.
 
 ```csharp
@@ -83,6 +90,7 @@ Describes each parameter. Required for all public method/constructor parameters.
 ```
 
 #### `<returns>`
+
 Describes the return value. Required for all public methods that return a value (except `void`).
 
 ```csharp
@@ -92,16 +100,18 @@ Describes the return value. Required for all public methods that return a value 
 ### Recommended Tags
 
 #### `<remarks>`
+
 Additional details, usage notes, or important information that doesn't fit in the summary.
 
 ```csharp
 /// <remarks>
-/// This method is typically used when testing .NET Aspire applications where the original resource builder cannot be
+/// This method is typically used when testing Aspire applications where the original resource builder cannot be
 /// referenced directly. Using this method allows for easier mutation of resources within the test scenario.
 /// </remarks>
 ```
 
 #### `<example>`
+
 Code examples showing how to use the API. Include for complex or frequently-used APIs.
 
 ```csharp
@@ -115,6 +125,7 @@ Code examples showing how to use the API. Include for complex or frequently-used
 ```
 
 #### `<exception>`
+
 Documents exceptions that can be thrown. Include for all public methods that throw exceptions.
 
 ```csharp
@@ -123,6 +134,7 @@ Documents exceptions that can be thrown. Include for all public methods that thr
 ```
 
 #### `<value>`
+
 Describes the meaning of a property value. Use for properties where the summary isn't sufficient.
 
 ```csharp
@@ -133,6 +145,7 @@ Describes the meaning of a property value. Use for properties where the summary 
 ```
 
 #### `<seealso>`
+
 Links to related APIs or documentation.
 
 ```csharp
@@ -141,9 +154,11 @@ Links to related APIs or documentation.
 ```
 
 #### `<list>`
+
 Creates lists in XML documentation. Use `type="bullet"` for bulleted lists, `type="number"` for numbered lists, or `type="table"` for tables.
 
 **Bulleted list:**
+
 ```csharp
 /// <summary>
 /// Supports multiple environments:
@@ -156,6 +171,7 @@ Creates lists in XML documentation. Use `type="bullet"` for bulleted lists, `typ
 ```
 
 **Numbered list:**
+
 ```csharp
 /// <summary>
 /// Follow these steps:
@@ -168,6 +184,7 @@ Creates lists in XML documentation. Use `type="bullet"` for bulleted lists, `typ
 ```
 
 **List with descriptions:**
+
 ```csharp
 /// <summary>
 /// Configuration options:
@@ -291,7 +308,7 @@ public ReturnType MethodName(Type paramName)
 /// </code>
 /// </example>
 public static IResourceBuilder<AzureCosmosDBResource> AddAzureCosmosDB(
-    this IDistributedApplicationBuilder builder, 
+    this IDistributedApplicationBuilder builder,
     string name)
 {
 }
@@ -366,7 +383,7 @@ public enum EnumName
     /// [Description of this enum value and when to use it].
     /// </summary>
     Value1,
-    
+
     /// <summary>
     /// [Description of this enum value and when to use it].
     /// </summary>
@@ -391,16 +408,19 @@ public event EventHandler? EventName;
 ### DO
 
 ✅ **Use consistent terminology** throughout the codebase
+
 - "distributed application" not "app model"
 - "resource" not "service" (unless specifically referring to a service)
 - "endpoint" not "URL" or "address"
 
 ✅ **Start with a verb for methods**
+
 - "Adds an Azure Cosmos DB resource..."
 - "Configures the emulator..."
 - "Gets the connection string..."
 
 ✅ **Use present tense for properties**
+
 - "Gets the endpoint..." not "Will get the endpoint..."
 - "Represents the configuration..." not "Will represent..."
 
@@ -559,11 +579,13 @@ internal class VirtualEnvironment
 Internal classes, methods, and properties should have minimal documentation:
 
 **DO:**
+
 - ✅ Provide brief `<summary>` tags that explain what the code does
 - ✅ Document parameters and return values concisely
 - ✅ Keep it short and to the point
 
 **DON'T:**
+
 - ❌ Add verbose `<remarks>` sections
 - ❌ Include `<example>` sections
 - ❌ Write detailed explanations of usage patterns
@@ -663,7 +685,7 @@ public class ResourceName(string name) : BaseResourceType(name)
 }
 ```
 
-### Extension Methods - Add* Pattern
+### Extension Methods - Add\* Pattern
 
 ```csharp
 /// <summary>
@@ -679,7 +701,7 @@ public static IResourceBuilder<ResourceType> AddResource(
 }
 ```
 
-### Extension Methods - With* Pattern (Configuration)
+### Extension Methods - With\* Pattern (Configuration)
 
 ```csharp
 /// <summary>
@@ -697,7 +719,7 @@ public static IResourceBuilder<ResourceType> WithFeature(
 }
 ```
 
-### Extension Methods - RunAs* Pattern (Emulators)
+### Extension Methods - RunAs\* Pattern (Emulators)
 
 ```csharp
 /// <summary>

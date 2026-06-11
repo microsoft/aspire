@@ -1,0 +1,1093 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Collections.Immutable;
+using System.Net.Sockets;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol.Protocol;
+using StreamJsonRpc;
+
+namespace Aspire.Cli.Backchannel;
+
+/// <summary>
+/// Represents a connection to an AppHost instance via the auxiliary backchannel.
+/// Encapsulates connection management and RPC method calls.
+/// </summary>
+internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
+{
+    private static readonly string[] s_clientCapabilities =
+    [
+        AuxiliaryBackchannelCapabilities.V1,
+        AuxiliaryBackchannelCapabilities.V2,
+        AuxiliaryBackchannelCapabilities.V3
+    ];
+
+    private readonly ILogger _logger;
+    private JsonRpc? _rpc;
+    private bool _disposed;
+    private readonly ImmutableHashSet<string> _capabilities;
+    private readonly ProfilingTelemetry? _profilingTelemetry;
+
+    /// <summary>
+    /// Private constructor - use factory methods to create instances.
+    /// </summary>
+    private AppHostAuxiliaryBackchannel(
+        string hash,
+        string socketPath,
+        JsonRpc rpc,
+        AppHostInformation? appHostInfo,
+        bool isInScope,
+        ImmutableHashSet<string> capabilities,
+        ILogger logger,
+        ProfilingTelemetry? profilingTelemetry)
+    {
+        Hash = hash;
+        SocketPath = socketPath;
+        _rpc = rpc;
+        AppHostInfo = appHostInfo;
+        IsInScope = isInScope;
+        _capabilities = capabilities;
+        ConnectedAt = DateTimeOffset.UtcNow;
+        _logger = logger;
+        _profilingTelemetry = profilingTelemetry;
+    }
+
+    /// <summary>
+    /// Internal constructor for testing purposes.
+    /// </summary>
+    internal AppHostAuxiliaryBackchannel(
+        string hash,
+        string socketPath,
+        JsonRpc rpc,
+        AppHostInformation? appHostInfo,
+        bool isInScope)
+        : this(hash, socketPath, rpc, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, NullLogger.Instance, null)
+    {
+    }
+
+    /// <inheritdoc />
+    public string Hash { get; private set; }
+
+    /// <inheritdoc />
+    public string SocketPath { get; }
+
+    /// <inheritdoc />
+    public AppHostInformation? AppHostInfo { get; private set; }
+
+    /// <inheritdoc />
+    public bool IsInScope { get; internal set; }
+
+    /// <inheritdoc />
+    public DateTimeOffset ConnectedAt { get; }
+
+    /// <inheritdoc />
+    public bool SupportsV2 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V2);
+
+    /// <inheritdoc />
+    // Per-feature capability strings (e.g. Terminals_V1) are deliberately preferred over a
+    // monolithic "rev the whole aux backchannel version" approach. See
+    // docs/specs/cli-backchannel.md §3 ("Capability Negotiation Over Version Numbers"). When
+    // the CLI starts using a new RPC, add a new capability constant in
+    // src/Aspire.Hosting/Backchannel/BackchannelDataTypes.cs (advertised by the AppHost RPC
+    // target) and surface a SupportsXxx property here for the call site to gate on. This way
+    // a single new method never requires every consumer to upgrade an opaque version field.
+    public bool SupportsTerminalsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.Terminals_V1);
+    public bool SupportsV3 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V3);
+
+    /// <summary>
+    /// Gets the JSON-RPC proxy for communicating with the AppHost.
+    /// </summary>
+    internal JsonRpc? Rpc => _rpc;
+
+    /// <summary>
+    /// Ensures the connection is valid and returns the RPC proxy.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">Thrown if the object has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if not connected to the backchannel.</exception>
+    private JsonRpc EnsureConnected()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_rpc is null)
+        {
+            throw new InvalidOperationException("Not connected to auxiliary backchannel.");
+        }
+        return _rpc;
+    }
+
+    /// <summary>
+    /// Creates and connects a new auxiliary backchannel to the specified socket path.
+    /// </summary>
+    /// <param name="socketPath">The path to the Unix domain socket.</param>
+    /// <param name="logger">Optional logger for diagnostic messages.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="profilingTelemetry">Optional profiling service.</param>
+    /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
+    public static Task<AppHostAuxiliaryBackchannel> ConnectAsync(
+        string socketPath,
+        ILogger logger,
+        CancellationToken cancellationToken = default,
+        ProfilingTelemetry? profilingTelemetry = null)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+
+        var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath) ?? string.Empty;
+        return CreateFromSocketAsync(hash, socketPath, isInScope: true, logger, socket: null, cancellationToken, profilingTelemetry);
+    }
+
+    /// <summary>
+    /// Creates an AppHostAuxiliaryBackchannel by connecting to the specified socket path,
+    /// or using an already-connected socket if provided.
+    /// This is the single path for all connection creation, ensuring capabilities are always fetched.
+    /// </summary>
+    /// <param name="hash">The AppHost hash identifier.</param>
+    /// <param name="socketPath">The socket path.</param>
+    /// <param name="isInScope">Whether this AppHost is within the scope of the working directory.</param>
+    /// <param name="socket">Optional already-connected socket. If null, a new connection will be established.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="cancellationToken">Cancellation token (only used when socket is null).</param>
+    /// <param name="profilingTelemetry">Optional profiling service.</param>
+    /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
+    internal static async Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
+        string hash,
+        string socketPath,
+        bool isInScope,
+        ILogger logger,
+        Socket? socket = null,
+        CancellationToken cancellationToken = default,
+        ProfilingTelemetry? profilingTelemetry = null)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+
+        // Connect if no socket provided
+        if (socket is null)
+        {
+            logger.LogDebug("Connecting to auxiliary backchannel at {SocketPath}", socketPath);
+
+            socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            var endpoint = new UnixDomainSocketEndPoint(socketPath);
+            await socket.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Create JSON-RPC connection with proper formatter
+        var stream = new NetworkStream(socket, ownsSocket: true);
+        var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()))
+        {
+            ActivityTracingStrategy = new ActivityTracingStrategy()
+        };
+        rpc.StartListening();
+
+        logger.LogDebug("Connected to auxiliary backchannel at {SocketPath}", socketPath);
+
+        // Fetch all connection info
+        var appHostInfo = await rpc.InvokeWithProfilingAsync<AppHostInformation?>(
+            profilingTelemetry,
+            "auxiliary",
+            "GetAppHostInformationAsync",
+            [],
+            cancellationToken).ConfigureAwait(false);
+        var capabilities = await FetchCapabilitiesAsync(rpc, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
+
+        var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
+
+        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope, capabilitiesSet, logger, profilingTelemetry);
+    }
+
+    /// <summary>
+    /// Fetches capabilities from an AppHost via RPC.
+    /// </summary>
+    /// <param name="rpc">The JSON-RPC connection.</param>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="profilingTelemetry">Optional profiling service.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The capabilities array, or null if not supported.</returns>
+    private static async Task<string[]?> FetchCapabilitiesAsync(JsonRpc rpc, ILogger logger, ProfilingTelemetry? profilingTelemetry, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+
+        try
+        {
+            var response = await rpc.InvokeWithProfilingAsync<GetCapabilitiesResponse?>(
+                profilingTelemetry,
+                "auxiliary",
+                "GetCapabilitiesAsync",
+                [new GetCapabilitiesRequest()],
+                cancellationToken).ConfigureAwait(false);
+            var capabilities = response?.Capabilities;
+            logger.LogDebug("AppHost capabilities: {Capabilities}", capabilities is not null ? string.Join(", ", capabilities) : "null");
+            return capabilities;
+        }
+        catch (RemoteMethodNotFoundException)
+        {
+            // Older AppHost without GetCapabilitiesAsync - assume v1 only
+            logger.LogDebug("AppHost does not support GetCapabilitiesAsync, assuming v1 only");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            // Log any other exception
+            logger.LogWarning(ex, "Failed to fetch capabilities from AppHost");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets the AppHost information including process IDs and path.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The AppHost information, or null if unavailable.</returns>
+    public async Task<AppHostInformation?> GetAppHostInformationAsync(CancellationToken cancellationToken = default)
+    {
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Requesting AppHost information");
+
+        var appHostInfo = await rpc.InvokeWithProfilingAsync<AppHostInformation?>(
+            _profilingTelemetry,
+            "auxiliary",
+            "GetAppHostInformationAsync",
+            [],
+            cancellationToken).ConfigureAwait(false);
+
+        return appHostInfo;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> StopAppHostAsync(CancellationToken cancellationToken = default)
+    {
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Requesting AppHost to stop");
+
+        try
+        {
+            await rpc.InvokeWithProfilingAsync(
+                _profilingTelemetry,
+                "auxiliary",
+                "StopAppHostAsync",
+                [],
+                cancellationToken).ConfigureAwait(false);
+
+            _logger.LogDebug("Stop request sent to AppHost");
+            return true;
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            // The RPC method may not be available on older AppHost versions.
+            _logger.LogDebug(ex, "StopAppHostAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
+    {
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Requesting Dashboard URLs");
+        // This method runs inside whichever activity is current, so avoid adding
+        // profiling-only events to reported telemetry unless profiling is on.
+        var activity = _profilingTelemetry?.StartAuxiliaryBackchannelGetDashboardUrls() ?? default;
+
+        try
+        {
+            var dashboardUrls = await rpc.InvokeWithProfilingAsync<DashboardUrlsState?>(
+                _profilingTelemetry,
+                "auxiliary",
+                "GetDashboardUrlsAsync",
+                [],
+                cancellationToken).ConfigureAwait(false);
+
+            activity.SetAppHostDashboardUrls(dashboardUrls);
+            activity.AddAuxBackchannelGetDashboardUrlsResponseEvent();
+
+            return dashboardUrls;
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            // The RPC method may not be available on older AppHost versions.
+            _logger.LogDebug(ex, "GetDashboardUrlsAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+            activity.AddAuxBackchannelGetDashboardUrlsNotFoundEvent();
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV3)
+        {
+            return null;
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Waiting for AppHost startup readiness");
+
+        try
+        {
+            return await rpc.InvokeWithProfilingAsync<WaitForAppHostReadyResponse>(
+                _profilingTelemetry,
+                "auxiliary",
+                "WaitForAppHostReadyAsync",
+                [new WaitForAppHostReadyRequest()],
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            _logger.LogDebug(ex, "WaitForAppHostReadyAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
+    {
+        if (SupportsV2)
+        {
+            var response = await GetResourcesV2Async(new GetResourcesRequest
+            {
+                ClientCapabilities = s_clientCapabilities
+            }, cancellationToken).ConfigureAwait(false);
+            var snapshots = response.Resources.ToList();
+
+            if (!includeHidden)
+            {
+                snapshots = snapshots.Where(s => !ResourceSnapshotMapper.IsHiddenResource(s)).ToList();
+            }
+
+            return snapshots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Getting resource snapshots");
+
+        try
+        {
+            var snapshots = await rpc.InvokeWithProfilingAsync<List<ResourceSnapshot>>(
+                _profilingTelemetry,
+                "auxiliary",
+                "GetResourceSnapshotsAsync",
+                [],
+                cancellationToken).ConfigureAwait(false) ?? [];
+
+            if (!includeHidden)
+            {
+                snapshots = snapshots.Where(s => !ResourceSnapshotMapper.IsHiddenResource(s)).ToList();
+            }
+
+            // Sort resources by name for consistent ordering.
+            return snapshots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            _logger.LogDebug(ex, "GetResourceSnapshotsAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+            return [];
+        }
+    }
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (SupportsV2)
+        {
+            await foreach (var snapshot in WatchResourcesV2Async(new WatchResourcesRequest
+            {
+                ClientCapabilities = s_clientCapabilities
+            }, cancellationToken).ConfigureAwait(false))
+            {
+                if (!includeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
+                {
+                    continue;
+                }
+
+                yield return snapshot;
+            }
+
+            yield break;
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Starting resource snapshots watch");
+
+        IAsyncEnumerable<ResourceSnapshot>? snapshots;
+        try
+        {
+            snapshots = await rpc.InvokeStreamingWithProfilingAsync<ResourceSnapshot>(
+                _profilingTelemetry,
+                "auxiliary",
+                "WatchResourceSnapshotsAsync",
+                [],
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            _logger.LogDebug(ex, "WatchResourceSnapshotsAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+            yield break;
+        }
+
+        if (snapshots is null)
+        {
+            yield break;
+        }
+
+        await foreach (var snapshot in snapshots.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            if (!includeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
+            {
+                continue;
+            }
+
+            yield return snapshot;
+        }
+    }
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<ResourceLogLine> GetResourceLogsAsync(
+        string? resourceName = null,
+        bool follow = false,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Getting resource logs for {ResourceName} (follow={Follow})", resourceName ?? "all resources", follow);
+
+        IAsyncEnumerable<ResourceLogLine>? logLines;
+        try
+        {
+            logLines = await rpc.InvokeStreamingWithProfilingAsync<ResourceLogLine>(
+                _profilingTelemetry,
+                "auxiliary",
+                "GetResourceLogsAsync",
+                [resourceName, follow],
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            _logger.LogDebug(ex, "GetResourceLogsAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+            yield break;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Error calling GetResourceLogsAsync RPC method. The AppHost may be running an incompatible version.");
+            yield break;
+        }
+
+        if (logLines is null)
+        {
+            yield break;
+        }
+
+        await foreach (var logLine in logLines.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            yield return logLine;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<CallToolResult> CallResourceMcpToolAsync(
+        string resourceName,
+        string toolName,
+        IReadOnlyDictionary<string, JsonElement>? arguments,
+        CancellationToken cancellationToken = default)
+    {
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Requesting AppHost to call MCP tool {ToolName} on resource {ResourceName}", toolName, resourceName);
+
+        return await rpc.InvokeWithProfilingAsync<CallToolResult>(
+            _profilingTelemetry,
+            "auxiliary",
+            "CallResourceMcpToolAsync",
+            [resourceName, toolName, arguments],
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    #region V2 API Methods
+
+    /// <summary>
+    /// Gets AppHost information using the v2 API.
+    /// Falls back to v1 if not supported.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The AppHost information response.</returns>
+    public async Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV2)
+        {
+            // Fall back to v1 and convert
+            var legacyInfo = await GetAppHostInformationAsync(cancellationToken).ConfigureAwait(false);
+            if (legacyInfo is null)
+            {
+                return null;
+            }
+
+            return new GetAppHostInfoResponse
+            {
+                Pid = legacyInfo.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                AspireHostVersion = "unknown",
+                AppHostPath = legacyInfo.AppHostPath,
+                CliProcessId = legacyInfo.CliProcessId,
+                StartedAt = legacyInfo.StartedAt,
+                CliLogFilePath = legacyInfo.CliLogFilePath
+            };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Getting AppHost info (v2)");
+
+        return await rpc.InvokeWithProfilingAsync<GetAppHostInfoResponse>(
+            _profilingTelemetry,
+            "auxiliary",
+            "GetAppHostInfoAsync",
+            [new GetAppHostInfoRequest()],
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets Dashboard information using the v2 API.
+    /// Falls back to v1 if not supported.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The Dashboard information response.</returns>
+    public async Task<GetDashboardInfoResponse?> GetDashboardInfoV2Async(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV2)
+        {
+            // Fall back to v1 - ApiBaseUrl and ApiToken are only available in v2
+            var urlsState = await GetDashboardUrlsAsync(cancellationToken).ConfigureAwait(false);
+
+            var urls = new List<string>();
+            if (!string.IsNullOrEmpty(urlsState?.BaseUrlWithLoginToken))
+            {
+                urls.Add(urlsState.BaseUrlWithLoginToken);
+            }
+            if (!string.IsNullOrEmpty(urlsState?.CodespacesUrlWithLoginToken))
+            {
+                urls.Add(urlsState.CodespacesUrlWithLoginToken);
+            }
+
+            return new GetDashboardInfoResponse
+            {
+                ApiBaseUrl = null, // Not available in v1
+                ApiToken = null,   // Not available in v1
+                DashboardUrls = urls.ToArray(),
+                IsHealthy = urlsState?.DashboardHealthy ?? false
+            };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Getting Dashboard info (v2)");
+
+        return await rpc.InvokeWithProfilingAsync<GetDashboardInfoResponse>(
+            _profilingTelemetry,
+            "auxiliary",
+            "GetDashboardInfoAsync",
+            [new GetDashboardInfoRequest()],
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets resource snapshots using the v2 API.
+    /// Falls back to v1 if not supported.
+    /// </summary>
+    /// <param name="request">The request with optional filtering.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The resources response.</returns>
+    public async Task<GetResourcesResponse> GetResourcesV2Async(GetResourcesRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        request = AddClientCapabilities(request);
+
+        if (!SupportsV2)
+        {
+            // Fall back to v1
+            var snapshots = await GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
+
+            // Apply filter if specified
+            if (!string.IsNullOrEmpty(request?.Filter))
+            {
+                var filter = request.Filter;
+                snapshots = snapshots.Where(s => s.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            return new GetResourcesResponse
+            {
+                Resources = snapshots.ToArray()
+            };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Getting resources (v2)");
+
+        return await rpc.InvokeWithProfilingAsync<GetResourcesResponse>(
+            _profilingTelemetry,
+            "auxiliary",
+            "GetResourcesAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false) ?? new GetResourcesResponse { Resources = [] };
+    }
+
+    /// <summary>
+    /// Watches for resource changes using the v2 API.
+    /// Falls back to v1 if not supported.
+    /// </summary>
+    /// <param name="request">The request with optional filtering.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of resource snapshots.</returns>
+    public async IAsyncEnumerable<ResourceSnapshot> WatchResourcesV2Async(
+        WatchResourcesRequest? request = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        request = AddClientCapabilities(request);
+
+        if (!SupportsV2)
+        {
+            // Fall back to v1
+            var filter = request?.Filter;
+            await foreach (var snapshot in WatchResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false))
+            {
+                if (!string.IsNullOrEmpty(filter) && !snapshot.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                yield return snapshot;
+            }
+            yield break;
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Watching resources (v2)");
+
+        IAsyncEnumerable<ResourceSnapshot>? snapshots;
+        try
+        {
+            snapshots = await rpc.InvokeStreamingWithProfilingAsync<ResourceSnapshot>(
+                _profilingTelemetry,
+                "auxiliary",
+                "WatchResourcesAsync",
+                [request],
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteMethodNotFoundException)
+        {
+            yield break;
+        }
+
+        if (snapshots is null)
+        {
+            yield break;
+        }
+
+        await foreach (var snapshot in snapshots.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            yield return snapshot;
+        }
+    }
+
+    private static GetResourcesRequest AddClientCapabilities(GetResourcesRequest? request)
+    {
+        return request is null
+            ? new GetResourcesRequest { ClientCapabilities = s_clientCapabilities }
+            : new GetResourcesRequest
+            {
+                TraceContext = request.TraceContext,
+                Filter = request.Filter,
+                ClientCapabilities = s_clientCapabilities
+            };
+    }
+
+    private static WatchResourcesRequest AddClientCapabilities(WatchResourcesRequest? request)
+    {
+        return request is null
+            ? new WatchResourcesRequest { ClientCapabilities = s_clientCapabilities }
+            : new WatchResourcesRequest
+            {
+                TraceContext = request.TraceContext,
+                Filter = request.Filter,
+                ClientCapabilities = s_clientCapabilities
+            };
+    }
+
+    /// <summary>
+    /// Gets console logs using the v2 API.
+    /// Falls back to v1 if not supported.
+    /// </summary>
+    /// <param name="request">The request specifying resource and options.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of log lines.</returns>
+    public IAsyncEnumerable<ResourceLogLine> GetConsoleLogsAsync(
+        GetConsoleLogsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (!SupportsV2)
+        {
+            // Fall back to v1
+            return GetResourceLogsAsync(request.ResourceName, request.Follow, cancellationToken);
+        }
+
+        return GetConsoleLogsV2InternalAsync(request, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesAsync(
+        GetConsoleLogsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (SupportsV3)
+        {
+            return GetConsoleLogBatchesV3InternalAsync(request, cancellationToken);
+        }
+
+        // Older aux.v2 AppHosts required ResourceName on GetConsoleLogsRequest. Keep all-resource
+        // fallback on the legacy RPC; LogsCommand still applies client-side search/tail/hidden
+        // filters so output remains correct even when the AppHost cannot filter server-side.
+        var logLines = request.ResourceName is null
+            ? GetResourceLogsAsync(resourceName: null, follow: request.Follow, cancellationToken: cancellationToken)
+            : GetConsoleLogsAsync(request, cancellationToken);
+
+        return BatchLogLinesAsync(logLines, request.Follow, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesV3InternalAsync(
+        GetConsoleLogsRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Getting console log batches (v3) for {ResourceName}", request.ResourceName);
+
+        IAsyncEnumerable<ResourceLogBatch>? logBatches;
+        try
+        {
+            logBatches = await rpc.InvokeStreamingWithProfilingAsync<ResourceLogBatch>(
+                _profilingTelemetry,
+                "auxiliary",
+                "GetConsoleLogBatchesAsync",
+                [request],
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            _logger.LogDebug(ex, "GetConsoleLogBatchesAsync RPC method not available on the remote AppHost. Falling back to log-line streaming.");
+            var logLines = request.ResourceName is null
+                ? GetResourceLogsAsync(resourceName: null, follow: request.Follow, cancellationToken: cancellationToken)
+                : GetConsoleLogsAsync(request, cancellationToken);
+            logBatches = BatchLogLinesAsync(logLines, request.Follow, cancellationToken);
+        }
+
+        if (logBatches is null)
+        {
+            yield break;
+        }
+
+        await foreach (var logBatch in logBatches.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            yield return logBatch;
+        }
+    }
+
+    private static async IAsyncEnumerable<ResourceLogBatch> BatchLogLinesAsync(
+        IAsyncEnumerable<ResourceLogLine> logLines,
+        bool follow,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var maxBatchSize = follow ? 1 : 256;
+
+        await foreach (var batch in logLines.GetBatchesAsync(maxBatchSize, cancellationToken).ConfigureAwait(false))
+        {
+            yield return new ResourceLogBatch { Lines = batch };
+        }
+    }
+
+    private async IAsyncEnumerable<ResourceLogLine> GetConsoleLogsV2InternalAsync(
+        GetConsoleLogsRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Getting console logs (v2) for {ResourceName}", request.ResourceName);
+
+        IAsyncEnumerable<ResourceLogLine>? logLines;
+        try
+        {
+            logLines = await rpc.InvokeStreamingWithProfilingAsync<ResourceLogLine>(
+                _profilingTelemetry,
+                "auxiliary",
+                "GetConsoleLogsAsync",
+                [request],
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            _logger.LogDebug(ex, "GetConsoleLogsAsync RPC method not available on the remote AppHost. Falling back to GetResourceLogsAsync.");
+            // Older AppHosts only expose the legacy stream and cannot apply server-side
+            // search/tail. The LogsCommand keeps its client-side filters so output stays
+            // correct even though this fallback has to transfer the full log stream.
+            logLines = GetResourceLogsAsync(request.ResourceName, request.Follow, cancellationToken);
+        }
+
+        if (logLines is null)
+        {
+            yield break;
+        }
+
+        await foreach (var logLine in logLines.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            yield return logLine;
+        }
+    }
+
+    /// <summary>
+    /// Calls an MCP tool using the v2 API.
+    /// Falls back to v1 if not supported.
+    /// </summary>
+    /// <param name="request">The request specifying resource, tool, and arguments.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The tool call response.</returns>
+    public async Task<CallMcpToolResponse> CallMcpToolV2Async(
+        CallMcpToolRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (!SupportsV2)
+        {
+            // Fall back to v1 - convert request arguments
+            Dictionary<string, JsonElement>? arguments = null;
+            if (request.Arguments is JsonElement argsElement && argsElement.ValueKind == JsonValueKind.Object)
+            {
+                arguments = new Dictionary<string, JsonElement>();
+                foreach (var prop in argsElement.EnumerateObject())
+                {
+                    arguments[prop.Name] = prop.Value;
+                }
+            }
+
+            var result = await CallResourceMcpToolAsync(request.ResourceName, request.ToolName, arguments, cancellationToken).ConfigureAwait(false);
+
+            return new CallMcpToolResponse
+            {
+                IsError = result.IsError ?? false,
+                Content = result.Content.Select(c => new McpToolContentItem
+                {
+                    Type = c.Type,
+                    Text = (c as ModelContextProtocol.Protocol.TextContentBlock)?.Text
+                }).ToArray()
+            };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Calling MCP tool (v2) {ToolName} on {ResourceName}", request.ToolName, request.ResourceName);
+
+        return await rpc.InvokeWithProfilingAsync<CallMcpToolResponse>(
+            _profilingTelemetry,
+            "auxiliary",
+            "CallMcpToolAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Stops the AppHost using the v2 API.
+    /// Falls back to v1 if not supported.
+    /// </summary>
+    /// <param name="request">The request with optional exit code.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if the stop was initiated, false if the method wasn't available.</returns>
+    public async Task<bool> StopAppHostV2Async(StopAppHostRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV2)
+        {
+            // Fall back to v1
+            return await StopAppHostAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Stopping AppHost (v2)");
+
+        try
+        {
+            await rpc.InvokeWithProfilingAsync<StopAppHostResponse>(
+                _profilingTelemetry,
+                "auxiliary",
+                "StopAsync",
+                [request ?? new StopAppHostRequest()],
+                cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (RemoteMethodNotFoundException)
+        {
+            // Fall back to v1
+            return await StopAppHostAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Executes a command on a resource.
+    /// </summary>
+    public async Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
+        string resourceName,
+        string commandName,
+        ExecuteResourceCommandOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        options ??= new ExecuteResourceCommandOptions();
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
+
+        var request = new ExecuteResourceCommandRequest
+        {
+            ResourceName = resourceName,
+            CommandName = commandName,
+            Arguments = options.Arguments,
+            ValidateOnly = options.ValidateOnly,
+            NonInteractive = options.NonInteractive,
+            ReturnArgumentInputs = options.ReturnArgumentInputs
+        };
+
+        var response = await rpc.InvokeWithProfilingAsync<ExecuteResourceCommandResponse>(
+            _profilingTelemetry,
+            "auxiliary",
+            "ExecuteResourceCommandAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger.LogDebug("Command '{CommandName}' on resource '{ResourceName}' completed with success={Success} and message='{Message}'", commandName, resourceName, response.Success, response.Message);
+
+        return response;
+    }
+
+    /// <inheritdoc />
+    public async Task<WaitForResourceResponse> WaitForResourceAsync(
+        string resourceName,
+        string status,
+        int timeoutSeconds,
+        CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV2)
+        {
+            return new WaitForResourceResponse
+            {
+                Success = false,
+                ErrorMessage = "Wait command is not supported by the AppHost version. Update the AppHost to use this command."
+            };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Waiting for resource '{ResourceName}' to reach status '{Status}' with timeout {Timeout}s", resourceName, status, timeoutSeconds);
+
+        var request = new WaitForResourceRequest
+        {
+            ResourceName = resourceName,
+            Status = status,
+            TimeoutSeconds = timeoutSeconds
+        };
+
+        var response = await rpc.InvokeWithProfilingAsync<WaitForResourceResponse>(
+            _profilingTelemetry,
+            "auxiliary",
+            "WaitForResourceAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger.LogDebug("Wait for resource '{ResourceName}' completed: success={Success}, state={State}", resourceName, response.Success, response.State);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Gets terminal information for a resource.
+    /// </summary>
+    public async Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
+    {
+        // Gate on the per-feature Terminals_V1 capability rather than the v2 envelope:
+        // an AppHost can speak aux.v2 without having terminal support compiled in. We
+        // must not call GetTerminalInfoAsync against such an AppHost or the RPC will
+        // surface as an unknown-method error to the caller.
+        if (!SupportsTerminalsV1)
+        {
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Getting terminal info for resource '{ResourceName}'", resourceName);
+
+        var request = new GetTerminalInfoRequest { ResourceName = resourceName };
+
+        var response = await rpc.InvokeWithCancellationAsync<GetTerminalInfoResponse>(
+            "GetTerminalInfoAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("Terminal info for '{ResourceName}': available={Available}, replicas={ReplicaCount}",
+            resourceName, response.IsAvailable, response.Replicas?.Length ?? 0);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost. Older AppHosts without
+    /// the <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability are
+    /// short-circuited to an empty response so the CLI can render a clean "nothing to show"
+    /// message rather than a mysterious RPC error.
+    /// </summary>
+    public async Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsTerminalsV1)
+        {
+            return new ListTerminalsResponse { Terminals = Array.Empty<TerminalSummary>() };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Listing all terminal-enabled resources.");
+
+        var request = new ListTerminalsRequest();
+
+        var response = await rpc.InvokeWithCancellationAsync<ListTerminalsResponse>(
+            "ListTerminalsAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("ListTerminals returned {Count} terminal-enabled resource(s).", response.Terminals.Length);
+
+        return response;
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Disposes the auxiliary backchannel connection.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _rpc?.Dispose();
+        _rpc = null;
+    }
+}

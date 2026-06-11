@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Kafka.Tests;
 
-public class KafkaPublicApiTests
+public class KafkaPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddKafkaShouldThrowWhenBuilderIsNull()
@@ -25,7 +25,7 @@ public class KafkaPublicApiTests
     [InlineData(false)]
     public void AddKafkaShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddKafka(name);
@@ -87,7 +87,7 @@ public class KafkaPublicApiTests
     [InlineData(false)]
     public void WithDataBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddKafka("kafka");
         var source = isNull ? null! : string.Empty;
 

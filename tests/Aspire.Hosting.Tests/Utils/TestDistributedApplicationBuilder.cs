@@ -46,8 +46,16 @@ public static class TestDistributedApplicationBuilder
         return CreateCore([], configureOptions, testOutputHelper);
     }
 
-    public static IDistributedApplicationTestingBuilder CreateWithTestContainerRegistry(ITestOutputHelper testOutputHelper) =>
-        Create(o => o.ContainerRegistryOverride = ComponentTestConstants.AspireTestContainerRegistry, testOutputHelper);
+    public static IDistributedApplicationTestingBuilder Create(Action<DistributedApplicationOptions>? configureOptions, ITestOutputHelper testOutputHelper, params string[] args)
+    {
+        return CreateCore(args, configureOptions, testOutputHelper);
+    }
+
+    public static IDistributedApplicationTestingBuilder CreateWithTestContainerRegistry(ITestOutputHelper testOutputHelper, params string[] args) =>
+        Create(
+            options => options.ContainerRegistryOverride = ComponentTestConstants.AspireTestContainerRegistry,
+            testOutputHelper,
+            args);
 
     private static IDistributedApplicationTestingBuilder CreateCore(string[] args, Action<DistributedApplicationOptions>? configureOptions, ITestOutputHelper? testOutputHelper = null)
     {
@@ -55,7 +63,7 @@ public static class TestDistributedApplicationBuilder
 
         // TODO: consider centralizing this to DistributedApplicationFactory by default once consumers have a way to opt-out
         // E.g., once https://github.com/dotnet/extensions/pull/5801 is released.
-        // Discussion: https://github.com/dotnet/aspire/pull/7335/files#r1936799460
+        // Discussion: https://github.com/microsoft/aspire/pull/7335/files#r1936799460
         builder.Services.ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler());
 
         builder.Services.AddSingleton<ApplicationOrchestratorProxy>(sp => new ApplicationOrchestratorProxy(sp.GetRequiredService<ApplicationOrchestrator>()));

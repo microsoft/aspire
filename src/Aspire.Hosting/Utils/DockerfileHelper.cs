@@ -32,8 +32,7 @@ internal static class DockerfileHelper
                 CancellationToken = cancellationToken
             };
 
-            var dockerfileContent = await annotation.DockerfileFactory(context).ConfigureAwait(false);
-            await File.WriteAllTextAsync(annotation.DockerfilePath, dockerfileContent, cancellationToken).ConfigureAwait(false);
+            await annotation.EmitDockerfileArtifactsAsync(context).ConfigureAwait(false);
 
             var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
 
@@ -41,6 +40,9 @@ internal static class DockerfileHelper
             {
                 var rls = serviceProvider.GetRequiredService<ResourceLoggerService>();
                 var logger = rls.GetLogger(resource);
+
+                // Read the materialized Dockerfile content for logging
+                var dockerfileContent = await File.ReadAllTextAsync(annotation.DockerfilePath, cancellationToken).ConfigureAwait(false);
                 logger.LogInformation(
                     "Wrote generated Dockerfile at {DockerfilePath} using factory for resource {ResourceName}:\n{DockerfileContent}",
                     annotation.DockerfilePath,

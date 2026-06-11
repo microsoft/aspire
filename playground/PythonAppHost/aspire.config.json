@@ -1,0 +1,11 @@
+{
+  "appHost": {
+    "path": "apphost.py",
+    "language": "python"
+  },
+  "packages": {
+    "Aspire.Hosting.JavaScript": "",
+    "Aspire.Hosting.Python": "",
+    "Aspire.Hosting.Redis": ""
+  }
+}

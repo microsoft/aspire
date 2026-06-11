@@ -1,18 +1,28 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using System.Reflection;
 using System.Reflection.Emit;
-using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.UserSecrets;
+using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "3")]
 public class SecretsStoreTests
 {
     private static readonly ConstructorInfo s_userSecretsIdAttrCtor = typeof(UserSecretsIdAttribute).GetConstructor([typeof(string)])!;
+
+    private static UserSecretsManagerFactory CreateFactory()
+    {
+        return new UserSecretsManagerFactory(
+            new FileSystemService(
+                new ConfigurationBuilder().Build()));
+    }
 
     [Fact]
     public void GetOrSetUserSecret_SavesValueToUserSecrets()
@@ -27,7 +37,7 @@ public class SecretsStoreTests
         var configuration = new ConfigurationManager();
         var value = TokenGenerator.GenerateToken();
 
-        var factory = new UserSecretsManagerFactory();
+        var factory = CreateFactory();
         var manager = factory.GetOrCreate(testAssembly);
         manager?.GetOrSetSecret(configuration, key, () => value);
         var userSecrets = GetUserSecrets(userSecretsId);
@@ -53,7 +63,7 @@ public class SecretsStoreTests
         var valueInConfig = TokenGenerator.GenerateToken();
         configuration[key] = valueInConfig;
 
-        var factory = new UserSecretsManagerFactory();
+        var factory = CreateFactory();
         var manager = factory.GetOrCreate(testAssembly);
         manager?.GetOrSetSecret(configuration, key, TokenGenerator.GenerateToken);
         var userSecrets = GetUserSecrets(userSecretsId);
@@ -65,7 +75,8 @@ public class SecretsStoreTests
 
     private static Dictionary<string, string?> GetUserSecrets(string userSecretsId)
     {
-        var manager = UserSecretsManagerFactory.Instance.GetOrCreateFromId(userSecretsId);
+        var factory = CreateFactory();
+        var manager = factory.GetOrCreateFromId(userSecretsId);
         if (!File.Exists(manager.FilePath))
         {
             return new Dictionary<string, string?>();

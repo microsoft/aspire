@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
 
@@ -14,18 +13,22 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Orchestrator;
 
-public class ApplicationOrchestratorTests
+[Trait("Partition", "3")]
+public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task ParentPropertySetOnChildResource()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var parentResource = builder.AddContainer("database", "image");
         var childResource = builder.AddResource(new CustomChildResource("child", parentResource.Resource));
@@ -72,6 +75,7 @@ public class ApplicationOrchestratorTests
     public async Task ParentAnnotationOnChildResource()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var parentResource = builder.AddResource(new CustomResource("parent"));
         var childResource = builder.AddResource(new CustomResource("child"))
@@ -119,6 +123,7 @@ public class ApplicationOrchestratorTests
     public async Task InitializeResourceEventPublished()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var resource = builder.AddResource(new CustomResource("resource"));
 
@@ -165,6 +170,7 @@ public class ApplicationOrchestratorTests
     public async Task WithParentRelationshipSetsParentPropertyCorrectly()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var parent = builder.AddContainer("parent", "image");
         var child = builder.AddContainer("child", "image").WithParentRelationship(parent);
@@ -230,6 +236,7 @@ public class ApplicationOrchestratorTests
     public async Task LastWithParentRelationshipWins()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var firstParent = builder.AddContainer("firstParent", "image");
         var secondParent = builder.AddContainer("secondParent", "image");
@@ -287,6 +294,7 @@ public class ApplicationOrchestratorTests
     public async Task WithParentRelationshipWorksWithProjects()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var projectA = builder.AddProject<ProjectA>("projecta");
         var projectB = builder.AddProject<ProjectB>("projectb").WithParentRelationship(projectA);
@@ -332,7 +340,7 @@ public class ApplicationOrchestratorTests
     [Fact]
     public void DetectsCircularDependency()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var container1 = builder.AddContainer("container1", "image");
         var container2 = builder.AddContainer("container2", "image2");
@@ -352,6 +360,7 @@ public class ApplicationOrchestratorTests
     public async Task GrandChildResourceWithConnectionString()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var parentResource = builder.AddResource(new ParentResourceWithConnectionString("parent"));
         var childResource = builder.AddResource(
@@ -391,7 +400,7 @@ public class ApplicationOrchestratorTests
             return Task.CompletedTask;
         });
 
-        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, parentResource.Resource, parentResource.Resource.Name));
+        await events.PublishAsync(new OnConnectionStringAvailableContext(CancellationToken.None, parentResource.Resource));
 
         Assert.True(parentConnectionStringAvailable);
         Assert.True(childConnectionStringAvailable);
@@ -399,9 +408,49 @@ public class ApplicationOrchestratorTests
     }
 
     [Fact]
+    public async Task ConnectionStringAvailableEventPublishesBeforeBeforeResourceStartedEvent()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb"));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var applicationEventing = new DistributedApplicationEventing();
+        var observedEvents = new List<string>();
+
+        applicationEventing.Subscribe<ConnectionStringAvailableEvent>(resource.Resource, (_, _) =>
+        {
+            observedEvents.Add(nameof(ConnectionStringAvailableEvent));
+            return Task.CompletedTask;
+        });
+        applicationEventing.Subscribe<BeforeResourceStartedEvent>(resource.Resource, (_, _) =>
+        {
+            observedEvents.Add(nameof(BeforeResourceStartedEvent));
+            return Task.CompletedTask;
+        });
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: applicationEventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnConnectionStringAvailableContext(CancellationToken.None, resource.Resource));
+        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Executable, resource.Resource, "test-resource-dcp"));
+
+        Assert.Collection(
+            observedEvents,
+            eventName => Assert.Equal(nameof(ConnectionStringAvailableEvent), eventName),
+            eventName => Assert.Equal(nameof(BeforeResourceStartedEvent), eventName));
+    }
+
+    [Fact]
     public async Task ConnectionStringAvailableEventPublishesUpdateWithConnectionStringValue()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb"));
 
@@ -443,7 +492,64 @@ public class ApplicationOrchestratorTests
         Assert.True(isSensitive);
     }
 
-    private static ApplicationOrchestrator CreateOrchestrator(
+    [Fact]
+    public async Task OnResourceFailedToStart_WithErrorMessage_SetsErrorStyleOnState()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var container = builder.AddContainer("api", "test-image");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourceFailedToStartContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            container.Resource,
+            "api-dcp",
+            ErrorMessage: "The endpoint `https` is not defined for the resource `api`. Available endpoints: `http`."));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var snapshotEvent));
+        Assert.Equal(KnownResourceStates.FailedToStart, snapshotEvent.Snapshot.State?.Text);
+        Assert.Equal(KnownResourceStateStyles.Error, snapshotEvent.Snapshot.State?.Style);
+    }
+
+    [Fact]
+    public async Task OnResourceFailedToStart_WithoutErrorMessage_DoesNotSetErrorStyle()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var container = builder.AddContainer("api", "test-image");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourceFailedToStartContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            container.Resource,
+            "api-dcp"));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var snapshotEvent));
+        Assert.Equal(KnownResourceStates.FailedToStart, snapshotEvent.Snapshot.State?.Text);
+        Assert.Null(snapshotEvent.Snapshot.State?.Style);
+    }
+
+    private ApplicationOrchestrator CreateOrchestrator(
         DistributedApplicationModel distributedAppModel,
         ResourceNotificationService notificationService,
         DcpExecutorEvents? dcpEvents = null,
@@ -451,11 +557,14 @@ public class ApplicationOrchestratorTests
         ResourceLoggerService? resourceLoggerService = null,
         DashboardOptions? dashboardOptions = null)
     {
-        var serviceProvider = new ServiceCollection().BuildServiceProvider();
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationManager();
+        services.AddTestAndResourceLogging(testOutputHelper, configuration);
+        var serviceProvider = services.BuildServiceProvider();
         resourceLoggerService ??= new ResourceLoggerService();
 
         var executionContext = new DistributedApplicationExecutionContext(
-            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { ServiceProvider = serviceProvider });
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = serviceProvider });
 
         return new ApplicationOrchestrator(
             distributedAppModel,
@@ -471,10 +580,12 @@ public class ApplicationOrchestratorTests
                 notificationService,
                 resourceLoggerService,
                 CreateInteractionService(),
-                NullLogger<ParameterProcessor>.Instance,
+                serviceProvider.GetRequiredService<ILogger<ParameterProcessor>>(),
                 executionContext,
-                deploymentStateManager: new MockDeploymentStateManager()),
-            Options.Create(dashboardOptions ?? new())
+                deploymentStateManager: new MockDeploymentStateManager(),
+                userSecretsManager: UserSecrets.NoopUserSecretsManager.Instance),
+            Options.Create(dashboardOptions ?? new()),
+            serviceProvider.GetRequiredService<ILogger<ApplicationOrchestrator>>()
         );
     }
 
@@ -497,6 +608,13 @@ public class ApplicationOrchestratorTests
         }
 
         public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
@@ -578,6 +696,7 @@ public class ApplicationOrchestratorTests
     public async Task ContainerChildResourcesWithOwnLifetimeDoNotReceiveParentStateChanges()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var parentContainer = builder.AddContainer("parent-container", "parent-image");
         var childContainer = builder.AddContainer("child-container", "child-image")
@@ -624,6 +743,7 @@ public class ApplicationOrchestratorTests
     public async Task ProjectChildResourcesWithOwnLifetimeDoNotReceiveParentStateChanges()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var parentContainer = builder.AddContainer("parent-container", "parent-image");
         var childProject = builder.AddProject<ProjectA>("child-project")
@@ -670,6 +790,7 @@ public class ApplicationOrchestratorTests
     public async Task WithChildRelationshipUsingResourceBuilderSetsParentPropertyCorrectly()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var parent = builder.AddContainer("parent", "image");
         var child = builder.AddContainer("child", "image");
@@ -726,6 +847,7 @@ public class ApplicationOrchestratorTests
     public async Task WithChildRelationshipUsingResourceSetsParentPropertyCorrectly()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var parent = builder.AddContainer("parent", "image");
         var child = builder.AddContainer("child", "image");
@@ -782,6 +904,7 @@ public class ApplicationOrchestratorTests
     public async Task WithChildRelationshipWorksWithProjects()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
 
         var parentProject = builder.AddProject<ProjectA>("parent-project");
         var childProject = builder.AddProject<ProjectB>("child-project");

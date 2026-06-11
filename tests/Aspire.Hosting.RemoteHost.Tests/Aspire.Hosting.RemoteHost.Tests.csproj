@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Must match Aspire.Hosting.RemoteHost which only targets net10.0 -->
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(TestsSharedDir)TestInteractionService.cs" LinkBase="shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Managed\Aspire.Managed.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Go\Aspire.Hosting.CodeGeneration.Go.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Java\Aspire.Hosting.CodeGeneration.Java.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Python\Aspire.Hosting.CodeGeneration.Python.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Rust\Aspire.Hosting.CodeGeneration.Rust.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.TypeScript\Aspire.Hosting.CodeGeneration.TypeScript.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.RemoteHost\Aspire.Hosting.RemoteHost.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Yarp\Aspire.Hosting.Yarp.csproj" />
+    <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -10,8 +10,10 @@ namespace Aspire.Hosting
 {
     public static partial class AzurePostgresExtensions
     {
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> AddAzurePostgresFlexibleServer(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> builder, string name, string? databaseName = null) { throw null; }
 
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzurePostgresFlexibleServer instead to add an Azure PostgreSQL Flexible Server resource.")]
@@ -20,17 +22,25 @@ namespace Aspire.Hosting
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzurePostgresFlexibleServer instead to add an Azure PostgreSQL Flexible Server resource.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> PublishAsAzurePostgresFlexibleServer(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource>>? configureContainer = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withPasswordAuthentication dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> WithPasswordAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withPasswordAuthentication dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> WithPasswordAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> builder, ApplicationModel.IResourceBuilder<Azure.IAzureKeyVaultResource> keyVaultBuilder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
+
+        [AspireExport(RunSyncOnBackgroundThread = true)]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPOSTGRES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerDatabaseResource> WithPostgresMcp(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerDatabaseResource> builder, System.Action<ApplicationModel.IResourceBuilder<Postgres.PostgresMcpContainerResource>>? configureContainer = null, string? containerName = null) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzurePostgresFlexibleServerDatabaseResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzurePostgresFlexibleServerResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+    public partial class AzurePostgresFlexibleServerDatabaseResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzurePostgresFlexibleServerResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public AzurePostgresFlexibleServerDatabaseResource(string name, string databaseName, AzurePostgresFlexibleServerResource postgresParentResource) : base(default!) { }
 
@@ -40,10 +50,19 @@ namespace Aspire.Hosting.Azure
 
         public string DatabaseName { get { throw null; } }
 
+        [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, "InnerResource")]
+        public bool IsContainer { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression JdbcConnectionString { get { throw null; } }
+
         public AzurePostgresFlexibleServerResource Parent { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class AzurePostgresFlexibleServerResource : AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    public partial class AzurePostgresFlexibleServerResource : AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, IAzurePrivateEndpointTarget
     {
         public AzurePostgresFlexibleServerResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -53,11 +72,24 @@ namespace Aspire.Hosting.Azure
 
         public System.Collections.Generic.IReadOnlyDictionary<string, string> Databases { get { throw null; } }
 
+        public ApplicationModel.ReferenceExpression Host { get { throw null; } }
+
         public ApplicationModel.ReferenceExpression HostName { get { throw null; } }
+
+        public BicepOutputReference Id { get { throw null; } }
+
+        [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, "InnerResource")]
+        public bool IsContainer { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression JdbcConnectionString { get { throw null; } }
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression? Password { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression Port { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 
         [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, "ConnectionStringSecretOutput")]
         public bool UsePasswordAuthentication { get { throw null; } }
@@ -67,10 +99,16 @@ namespace Aspire.Hosting.Azure
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
 
         public override void AddRoleAssignments(IAddRoleAssignmentsContext roleAssignmentContext) { }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
     }
 
     [System.Obsolete("This class is obsolete and will be removed in a future version. Use AddAzurePostgresFlexibleServer instead to add an Azure Postgres Flexible Server resource.")]
-    public partial class AzurePostgresResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    public partial class AzurePostgresResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public AzurePostgresResource(ApplicationModel.PostgresServerResource innerResource, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 

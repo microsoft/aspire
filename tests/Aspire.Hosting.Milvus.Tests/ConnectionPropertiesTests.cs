@@ -52,6 +52,6 @@ public class ConnectionPropertiesTests
         Assert.Contains(properties, property => property.Key == "Port" && property.Value.ValueExpression == "{milvus.bindings.grpc.port}");
         Assert.Contains(properties, property => property.Key == "Token" && property.Value.ValueExpression == "root:{apiKey.value}");
         Assert.Contains(properties, property => property.Key == "Uri" && property.Value.ValueExpression == "{milvus.bindings.grpc.url}");
-        Assert.Contains(properties, property => property.Key == "Database" && property.Value.ValueExpression == "Vectors");
+        Assert.Contains(properties, property => property.Key == "DatabaseName" && property.Value.ValueExpression == "Vectors");
     }
 }

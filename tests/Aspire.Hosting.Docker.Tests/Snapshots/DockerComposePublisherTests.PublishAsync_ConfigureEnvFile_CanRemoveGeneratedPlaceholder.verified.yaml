@@ -1,0 +1,13 @@
+﻿services:
+  yarp:
+    image: "my-image:latest"
+    volumes:
+      - type: "bind"
+        target: "/app/certs"
+        source: "${CERTDIR}"
+        read_only: true
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"

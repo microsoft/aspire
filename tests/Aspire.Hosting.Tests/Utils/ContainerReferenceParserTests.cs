@@ -6,6 +6,7 @@ using Aspire.Hosting.Utils;
 namespace Aspire.Hosting.Tests.Utils;
 
 // Based on tests at https://github.com/distribution/reference/blob/main/reference_test.go
+[Trait("Partition", "4")]
 public class ContainerReferenceParserTests
 {
     [Fact]

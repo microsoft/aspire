@@ -1,0 +1,31 @@
+{
+  "name": "{{projectNameLower}}",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "aspire:lint": "eslint apphost.mts",
+    "aspire:start": "aspire run",
+    "aspire:build": "tsc -p tsconfig.apphost.json",
+    "aspire:dev": "tsc --watch -p tsconfig.apphost.json",
+    "lint": "npm run aspire:lint",
+    "predev": "npm run aspire:lint",
+    "dev": "npm run aspire:start",
+    "prebuild": "npm run aspire:lint",
+    "build": "npm run aspire:build",
+    "watch": "npm run aspire:dev"
+  },
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.0"
+  },
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "eslint": "^10.0.3",
+    "nodemon": "^3.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1"
+  }
+}

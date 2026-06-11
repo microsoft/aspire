@@ -18,7 +18,7 @@ public static class TraceLinkHelpers
         string traceId,
         string spanId,
         Func<string, string, OtlpSpan?> getSpan,
-        IDialogService dialogService,
+        DashboardDialogService dialogService,
         Func<Func<Task>, Task> dispatcher,
         IStringLocalizer<Dialogs> loc,
         CancellationToken cancellationToken)
@@ -35,7 +35,7 @@ public static class TraceLinkHelpers
     public static async Task<bool> WaitForDataToBeAvailableAsync(
         Func<CancellationToken, Task<bool>> isAvailableCallback,
         string unavailableText,
-        IDialogService dialogService,
+        DashboardDialogService dialogService,
         Func<Func<Task>, Task> dispatcher,
         IStringLocalizer<Dialogs> loc,
         CancellationToken cancellationToken)

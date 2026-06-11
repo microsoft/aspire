@@ -18,6 +18,8 @@ resource postgreSqlFirewallRule_AllowAllAzureIps 'Microsoft.DBforPostgreSQL/flex
 
 output connectionString string = 'Host=${postgresSql.properties.fullyQualifiedDomainName}'
 
-output name string = existingResourceName
+output name string = postgresSql.name
+
+output id string = postgresSql.id
 
 output hostName string = postgresSql.properties.fullyQualifiedDomainName

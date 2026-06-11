@@ -145,7 +145,7 @@ public sealed class SpanWaterfallViewModelTests
             new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
 
         // Act
-        var result = vm.MatchesFilter(filter, typeFilter: null, a => a.Resource.ResourceName, out _);
+        var result = vm.MatchesFilter(filter, typeFilter: null, structuredFilters: null, a => a.Resource.ResourceName, out _);
 
         // Assert
         Assert.Equal(expected, result);
@@ -205,7 +205,7 @@ public sealed class SpanWaterfallViewModelTests
             new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
 
         // Act 1
-        var result1 = vm.MatchesFilter(string.Empty, typeFilter: spanType.Id?.Filter, a => a.Resource.ResourceName, out _);
+        var result1 = vm.MatchesFilter(string.Empty, typeFilter: spanType.Id?.Filter, structuredFilters: null, a => a.Resource.ResourceName, out _);
 
         // Assert 1
         Assert.Equal(expected, result1);
@@ -214,7 +214,7 @@ public sealed class SpanWaterfallViewModelTests
         if (result1)
         {
             // Act 2
-            var result2 = vm.MatchesFilter(string.Empty, typeFilter: otherSpanType.Id?.Filter, a => a.Resource.ResourceName, out _);
+            var result2 = vm.MatchesFilter(string.Empty, typeFilter: otherSpanType.Id?.Filter, structuredFilters: null, a => a.Resource.ResourceName, out _);
 
             // Assert 2
             Assert.False(result2);
@@ -239,8 +239,8 @@ public sealed class SpanWaterfallViewModelTests
         var child = vms[1];
 
         // Act and assert
-        Assert.True(parent.MatchesFilter("child", typeFilter: null, a => a.Resource.ResourceName, out _));
-        Assert.True(child.MatchesFilter("child", typeFilter: null, a => a.Resource.ResourceName, out _));
+        Assert.True(parent.MatchesFilter("child", typeFilter: null, structuredFilters: null, a => a.Resource.ResourceName, out _));
+        Assert.True(child.MatchesFilter("child", typeFilter: null, structuredFilters: null, a => a.Resource.ResourceName, out _));
     }
 
     [Fact]
@@ -261,9 +261,171 @@ public sealed class SpanWaterfallViewModelTests
         var child = vms[1];
 
         // Act and assert
-        Assert.True(parent.MatchesFilter("parent", typeFilter: null, a => a.Resource.ResourceName, out var descendents));
+        Assert.True(parent.MatchesFilter("parent", typeFilter: null, structuredFilters: null, a => a.Resource.ResourceName, out var descendents));
         Assert.Equal("child", Assert.Single(descendents).Span.SpanId);
-        Assert.False(child.MatchesFilter("parent", typeFilter: null, a => a.Resource.ResourceName, out _));
+        Assert.False(child.MatchesFilter("parent", typeFilter: null, structuredFilters: null, a => a.Resource.ResourceName, out _));
+    }
+
+    [Theory]
+    [InlineData("http.method", FilterCondition.Equals, "GET", true)]  // Exact match
+    [InlineData("http.method", FilterCondition.Equals, "POST", false)]  // Wrong value
+    [InlineData("http.method", FilterCondition.Contains, "GE", true)]  // Partial match
+    [InlineData("http.method", FilterCondition.Contains, "DELETE", false)]  // Partial no match
+    [InlineData("http.method", FilterCondition.NotEqual, "POST", true)]  // Not equal passes
+    [InlineData("http.method", FilterCondition.NotEqual, "GET", false)]  // Not equal fails
+    [InlineData("http.method", FilterCondition.NotContains, "POS", true)]  // Not contains passes
+    [InlineData("http.method", FilterCondition.NotContains, "GE", false)]  // Not contains fails
+    [InlineData("nonexistent.attr", FilterCondition.Equals, "GET", false)]  // Field not present
+    public void MatchesFilter_StructuredFilter_SingleFilter_ReturnsExpected(string field, FilterCondition condition, string value, bool expected)
+    {
+        // Arrange
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var app = new OtlpResource("app1", "instance", uninstrumentedPeer: false, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
+        var scope = TelemetryTestHelpers.CreateOtlpScope(context);
+
+        var attributes = new[]
+        {
+            new KeyValuePair<string, string>("http.method", "GET"),
+            new KeyValuePair<string, string>("http.status_code", "200")
+        };
+
+        var span = TelemetryTestHelpers.CreateOtlpSpan(
+            app, trace, scope, spanId: "1", parentSpanId: null,
+            startDate: new DateTime(2001, 1, 1, 1, 1, 2, DateTimeKind.Utc),
+            attributes: attributes,
+            statusCode: OtlpSpanStatusCode.Unset, statusMessage: null, kind: OtlpSpanKind.Client);
+        trace.AddSpan(span);
+
+        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
+
+        var filters = new List<FieldTelemetryFilter>
+        {
+            new() { Field = field, Condition = condition, Value = value }
+        };
+
+        // Act
+        var result = vm.MatchesFilter(string.Empty, typeFilter: null, structuredFilters: filters, a => a.Resource.ResourceName, out _);
+
+        // Assert
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void MatchesFilter_StructuredFilter_MultipleFilters_AllMustMatch()
+    {
+        // Arrange
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var app = new OtlpResource("app1", "instance", uninstrumentedPeer: false, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
+        var scope = TelemetryTestHelpers.CreateOtlpScope(context);
+
+        var attributes = new[]
+        {
+            new KeyValuePair<string, string>("http.method", "GET"),
+            new KeyValuePair<string, string>("http.status_code", "200")
+        };
+
+        var span = TelemetryTestHelpers.CreateOtlpSpan(
+            app, trace, scope, spanId: "1", parentSpanId: null,
+            startDate: new DateTime(2001, 1, 1, 1, 1, 2, DateTimeKind.Utc),
+            attributes: attributes,
+            statusCode: OtlpSpanStatusCode.Unset, statusMessage: null, kind: OtlpSpanKind.Client);
+        trace.AddSpan(span);
+
+        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
+
+        // One filter matches, one doesn't — AND logic means the span shouldn't match.
+        var filters = new List<FieldTelemetryFilter>
+        {
+            new() { Field = "http.method", Condition = FilterCondition.Equals, Value = "GET" },
+            new() { Field = "http.status_code", Condition = FilterCondition.Equals, Value = "500" }
+        };
+
+        // Act
+        var result = vm.MatchesFilter(string.Empty, typeFilter: null, structuredFilters: filters, a => a.Resource.ResourceName, out _);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void MatchesFilter_StructuredFilter_DisabledFilterIsIgnored()
+    {
+        // Arrange
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var app = new OtlpResource("app1", "instance", uninstrumentedPeer: false, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
+        var scope = TelemetryTestHelpers.CreateOtlpScope(context);
+
+        var attributes = new[]
+        {
+            new KeyValuePair<string, string>("http.method", "GET")
+        };
+
+        var span = TelemetryTestHelpers.CreateOtlpSpan(
+            app, trace, scope, spanId: "1", parentSpanId: null,
+            startDate: new DateTime(2001, 1, 1, 1, 1, 2, DateTimeKind.Utc),
+            attributes: attributes,
+            statusCode: OtlpSpanStatusCode.Unset, statusMessage: null, kind: OtlpSpanKind.Client);
+        trace.AddSpan(span);
+
+        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
+
+        // Filter would exclude the span, but it's disabled.
+        var filters = new List<FieldTelemetryFilter>
+        {
+            new() { Field = "http.method", Condition = FilterCondition.Equals, Value = "POST", Enabled = false }
+        };
+
+        // Act
+        var result = vm.MatchesFilter(string.Empty, typeFilter: null, structuredFilters: filters, a => a.Resource.ResourceName, out _);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void MatchesFilter_StructuredFilter_ParentMatchesWhenChildHasMatchingFilter()
+    {
+        // Arrange
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var app = new OtlpResource("app1", "instance", uninstrumentedPeer: false, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
+        var scope = TelemetryTestHelpers.CreateOtlpScope(context);
+
+        var parentSpan = TelemetryTestHelpers.CreateOtlpSpan(
+            app, trace, scope, spanId: "parent", parentSpanId: null,
+            startDate: new DateTime(2001, 1, 1, 1, 1, 2, DateTimeKind.Utc),
+            attributes: [new KeyValuePair<string, string>("http.method", "GET")],
+            statusCode: OtlpSpanStatusCode.Unset, statusMessage: null, kind: OtlpSpanKind.Server);
+
+        var childSpan = TelemetryTestHelpers.CreateOtlpSpan(
+            app, trace, scope, spanId: "child", parentSpanId: "parent",
+            startDate: new DateTime(2001, 1, 1, 1, 1, 3, DateTimeKind.Utc),
+            attributes: [new KeyValuePair<string, string>("db.system", "postgresql")],
+            statusCode: OtlpSpanStatusCode.Unset, statusMessage: null, kind: OtlpSpanKind.Client);
+
+        trace.AddSpan(parentSpan);
+        trace.AddSpan(childSpan);
+
+        var vms = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], []));
+        var parent = vms[0];
+        var child = vms[1];
+
+        // Filter matches child but not parent — parent should still match via descendant logic.
+        var filters = new List<FieldTelemetryFilter>
+        {
+            new() { Field = "db.system", Condition = FilterCondition.Equals, Value = "postgresql" }
+        };
+
+        // Act
+        var parentResult = parent.MatchesFilter(string.Empty, typeFilter: null, structuredFilters: filters, a => a.Resource.ResourceName, out _);
+        var childResult = child.MatchesFilter(string.Empty, typeFilter: null, structuredFilters: filters, a => a.Resource.ResourceName, out _);
+
+        // Assert
+        Assert.True(parentResult);
+        Assert.True(childResult);
     }
 
     private sealed class EmptyDisposable : IDisposable

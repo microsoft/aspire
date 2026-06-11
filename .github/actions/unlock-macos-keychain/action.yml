@@ -1,0 +1,59 @@
+name: 'Unlock macOS Keychain'
+description: 'Unlocks the macOS login keychain for CI tests that require keychain access'
+inputs:
+  keychain-password:
+    description: 'Password for the keychain (typically empty string for CI runners)'
+    required: false
+    default: ''
+  keychain-name:
+    description: 'Name of the keychain to unlock'
+    required: false
+    default: 'login.keychain-db'
+  timeout:
+    description: 'Timeout in seconds before keychain locks again (0 = no timeout)'
+    required: false
+    default: '7200'  # 2 hours
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check if running on macOS
+      if: runner.os != 'macOS'
+      shell: bash
+      run: |
+        echo "::warning::This action is designed for macOS runners but is running on ${{ runner.os }}. Skipping keychain unlock."
+
+    - name: Unlock keychain
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        KEYCHAIN_PATH="$HOME/Library/Keychains/${{ inputs.keychain-name }}"
+
+        echo "Unlocking keychain: $KEYCHAIN_PATH"
+        security unlock-keychain -p "${{ inputs.keychain-password }}" "$KEYCHAIN_PATH"
+
+        if [ "${{ inputs.timeout }}" != "0" ]; then
+          echo "Setting keychain timeout to ${{ inputs.timeout }} seconds"
+          security set-keychain-settings -lut ${{ inputs.timeout }} "$KEYCHAIN_PATH"
+        else
+          echo "Disabling keychain timeout"
+          security set-keychain-settings "$KEYCHAIN_PATH"
+        fi
+
+        # Add to search list to ensure it's used
+        security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+        echo "Keychain unlocked successfully"
+
+    - name: Verify keychain is unlocked
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        KEYCHAIN_PATH="$HOME/Library/Keychains/${{ inputs.keychain-name }}"
+
+        # Try to access the keychain without password prompt
+        if security show-keychain-info "$KEYCHAIN_PATH" 2>&1 | grep -q "no-timeout"; then
+          echo "✓ Keychain is unlocked with no timeout"
+        else
+          echo "✓ Keychain is unlocked with timeout"
+        fi

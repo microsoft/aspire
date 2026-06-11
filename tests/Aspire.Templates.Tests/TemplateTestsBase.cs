@@ -362,11 +362,11 @@ public partial class TemplateTestsBase
             { templateName, extraArgs, TestSdk.Next, TestTargetFramework.Next, null },
 
             // Current SDK + previous runtime, Previous TFM
-            { templateName, extraArgs, TestSdk.CurrentSdkAndPreviousRuntime, TestTargetFramework.Previous, null },
+            { templateName, extraArgs, TestSdk.NextSdkWithCurrentAndPreviousRuntime, TestTargetFramework.Previous, null },
             // Current SDK + previous runtime, Current TFM
-            { templateName, extraArgs, TestSdk.CurrentSdkAndPreviousRuntime, TestTargetFramework.Current, null },
-            // Next SDK + current runtime, Current TFM
-            { templateName, extraArgs, TestSdk.NextSdkAndCurrentRuntime, TestTargetFramework.Current, null },
+            { templateName, extraArgs, TestSdk.NextSdkWithCurrentAndPreviousRuntime, TestTargetFramework.Current, null },
+            // Next SDK + current runtime, Next TFM
+            { templateName, extraArgs, TestSdk.NextSdkWithCurrentAndPreviousRuntime, TestTargetFramework.Next, null },
         };
 
     // Taken from dotnet/runtime src/tasks/Common/Utils.cs

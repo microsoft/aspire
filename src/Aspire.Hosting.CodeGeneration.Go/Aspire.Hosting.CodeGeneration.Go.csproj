@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Aspire.Hosting.CodeGeneration.Go</RootNamespace>
+    <!-- Required for Go AppHost support -->
+    <IsPackable>true</IsPackable>
+    <!-- No baseline exists since this package was previously not published -->
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="aspire" />
+    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Go.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\transport.go" LogicalName="Aspire.Hosting.CodeGeneration.Go.Resources.transport.go" />
+    <EmbeddedResource Include="Resources\base.go" LogicalName="Aspire.Hosting.CodeGeneration.Go.Resources.base.go" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="AtsJsonCodeWriter.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -30,7 +30,8 @@ public sealed class DefaultInstrumentUnitResolverTests
             Name = name,
             Parent = TelemetryTestHelpers.CreateOtlpScope(TelemetryTestHelpers.CreateContext(), name: "meter_name"),
             Type = OtlpInstrumentType.Gauge,
-            Unit = unit
+            Unit = unit,
+            AggregationTemporality = OtlpAggregationTemporality.Cumulative
         };
 
         // Act

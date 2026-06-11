@@ -1,9 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES003
-
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Publishing;
 
@@ -17,27 +16,26 @@ public interface IContainerRuntime
     /// Gets the name of the container runtime.
     /// </summary>
     string Name { get; }
-    
+
     /// <summary>
     /// Checks if the container runtime is running and available.
     /// </summary>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>True if the container runtime is running; otherwise, false.</returns>
     Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken);
-    
+
     /// <summary>
     /// Builds a container image from a Dockerfile.
     /// </summary>
     /// <param name="contextPath">The build context path.</param>
     /// <param name="dockerfilePath">The path to the Dockerfile.</param>
-    /// <param name="imageName">The name to assign to the built image.</param>
-    /// <param name="options">Optional build options.</param>
+    /// <param name="options">Build options including image name and tag.</param>
     /// <param name="buildArguments">Build arguments to pass to the build process.</param>
     /// <param name="buildSecrets">Build secrets to pass to the build process.</param>
     /// <param name="stage">The target build stage.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
-    Task BuildImageAsync(string contextPath, string dockerfilePath, string imageName, ContainerBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, string?> buildSecrets, string? stage, CancellationToken cancellationToken);
-    
+    Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken);
+
     /// <summary>
     /// Tags a container image with a new name.
     /// </summary>
@@ -45,21 +43,21 @@ public interface IContainerRuntime
     /// <param name="targetImageName">The new name to assign to the image.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     Task TagImageAsync(string localImageName, string targetImageName, CancellationToken cancellationToken);
-    
+
     /// <summary>
     /// Removes a container image.
     /// </summary>
     /// <param name="imageName">The name of the image to remove.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     Task RemoveImageAsync(string imageName, CancellationToken cancellationToken);
-    
+
     /// <summary>
     /// Pushes a container image to a registry.
     /// </summary>
-    /// <param name="imageName">The name of the image to push.</param>
+    /// <param name="resource">The resource containing push configuration.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
-    Task PushImageAsync(string imageName, CancellationToken cancellationToken);
-    
+    Task PushImageAsync(IResource resource, CancellationToken cancellationToken);
+
     /// <summary>
     /// Logs in to a container registry.
     /// </summary>
@@ -68,4 +66,28 @@ public interface IContainerRuntime
     /// <param name="password">The password for authentication.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     Task LoginToRegistryAsync(string registryServer, string username, string password, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Starts compose services in detached mode.
+    /// </summary>
+    /// <param name="context">The compose operation parameters.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <exception cref="DistributedApplicationException">Thrown when the compose up command fails.</exception>
+    Task ComposeUpAsync(ComposeOperationContext context, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Stops and removes compose services.
+    /// </summary>
+    /// <param name="context">The compose operation parameters.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <exception cref="DistributedApplicationException">Thrown when the compose down command fails.</exception>
+    Task ComposeDownAsync(ComposeOperationContext context, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists the running services in a compose environment with their port mappings.
+    /// </summary>
+    /// <param name="context">The compose operation parameters.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>A list of running services, or <c>null</c> if the query could not be completed.</returns>
+    Task<IReadOnlyList<ComposeServiceInfo>?> ComposeListServicesAsync(ComposeOperationContext context, CancellationToken cancellationToken);
 }

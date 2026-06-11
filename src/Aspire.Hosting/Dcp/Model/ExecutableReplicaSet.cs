@@ -89,7 +89,7 @@ internal sealed record ExecutableReplicaSetStatus : V1Status
     public string? HealthStatus { get; set; }
 }
 
-internal sealed class ExecutableReplicaSet : CustomResource<ExecutableReplicaSetSpec, ExecutableReplicaSetStatus>
+internal sealed class ExecutableReplicaSet : CustomResource<ExecutableReplicaSetSpec, ExecutableReplicaSetStatus>, IKubernetesStaticMetadata
 {
     [JsonConstructor]
     public ExecutableReplicaSet(ExecutableReplicaSetSpec spec) : base(spec) { }
@@ -110,4 +110,6 @@ internal sealed class ExecutableReplicaSet : CustomResource<ExecutableReplicaSet
 
         return ers;
     }
+
+    public static string ObjectKind => Dcp.ExecutableReplicaSetKind;
 }

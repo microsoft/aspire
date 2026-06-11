@@ -1,11 +1,10 @@
-#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES002
+#pragma warning disable ASPIREUSERSECRETS001
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-using System.Text.Json.Nodes;
+using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -17,16 +16,23 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Handles processing of parameter resources during application orchestration.
 /// </summary>
-[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ParameterProcessor(
     ResourceNotificationService notificationService,
     ResourceLoggerService loggerService,
     IInteractionService interactionService,
     ILogger<ParameterProcessor> logger,
     DistributedApplicationExecutionContext executionContext,
-    IDeploymentStateManager deploymentStateManager)
+    IDeploymentStateManager deploymentStateManager,
+    IUserSecretsManager userSecretsManager)
 {
+    internal const string SaveToUserSecretsName = "SaveToUserSecrets";
+    internal const string DeleteFromUserSecretsName = "DeleteFromUserSecrets";
+    internal const string SetParameterValueName = "Value";
+
     private readonly List<ParameterResource> _unresolvedParameters = [];
+    private readonly object _resolutionTaskLock = new();
+    private CancellationTokenSource? _allParametersResolvedCts;
+    private Task? _parameterResolutionTask;
 
     /// <summary>
     /// Initializes parameter resources and handles unresolved parameters if interaction service is available.
@@ -50,23 +56,38 @@ public sealed class ParameterProcessor(
         if (interactionService.IsAvailable && _unresolvedParameters.Count > 0)
         {
             // Start the loop that will allow the user to specify values for unresolved parameters.
-            var parameterResolutionTask = Task.Run(async () =>
-            {
-                try
-                {
-                    await HandleUnresolvedParametersAsync().ConfigureAwait(false);
-                    logger.LogDebug("All unresolved parameters have been handled successfully.");
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to handle unresolved parameters.");
-                }
-            });
+            var task = EnsureParameterResolutionTaskRunningAsync();
 
             if (waitForResolution)
             {
-                await parameterResolutionTask.ConfigureAwait(false);
+                await task.ConfigureAwait(false);
             }
+        }
+    }
+
+    private Task EnsureParameterResolutionTaskRunningAsync()
+    {
+        lock (_resolutionTaskLock)
+        {
+            if (_parameterResolutionTask is null || _parameterResolutionTask.IsCompleted)
+            {
+                var cts = new CancellationTokenSource();
+                _allParametersResolvedCts = cts;
+                _parameterResolutionTask = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await HandleUnresolvedParametersAsync(_unresolvedParameters, cts.Token).ConfigureAwait(false);
+                        logger.LogDebug("All unresolved parameters have been handled successfully.");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Failed to handle unresolved parameters.");
+                    }
+                });
+            }
+
+            return _parameterResolutionTask;
         }
     }
 
@@ -81,9 +102,8 @@ public sealed class ParameterProcessor(
     public async Task InitializeParametersAsync(DistributedApplicationModel model, bool waitForResolution = false, CancellationToken cancellationToken = default)
     {
         var referencedParameters = new Dictionary<string, ParameterResource>();
-        var currentDependencySet = new HashSet<object?>();
 
-        await CollectDependentParameterResourcesAsync(model, referencedParameters, currentDependencySet, cancellationToken).ConfigureAwait(false);
+        await CollectDependentParameterResourcesAsync(model, referencedParameters, cancellationToken).ConfigureAwait(false);
 
         // Combine explicit parameters with dependent parameters
         var explicitParameters = model.Resources.OfType<ParameterResource>();
@@ -102,7 +122,7 @@ public sealed class ParameterProcessor(
         }
     }
 
-    private async Task CollectDependentParameterResourcesAsync(DistributedApplicationModel model, Dictionary<string, ParameterResource> referencedParameters, HashSet<object?> currentDependencySet, CancellationToken cancellationToken)
+    private async Task CollectDependentParameterResourcesAsync(DistributedApplicationModel model, Dictionary<string, ParameterResource> referencedParameters, CancellationToken cancellationToken)
     {
         foreach (var resource in model.Resources)
         {
@@ -111,75 +131,28 @@ public sealed class ParameterProcessor(
                 continue;
             }
 
-            await ProcessResourceDependenciesAsync(resource, executionContext, referencedParameters, currentDependencySet, cancellationToken).ConfigureAwait(false);
-        }
-
-    }
-
-    private async Task ProcessResourceDependenciesAsync(IResource resource, DistributedApplicationExecutionContext executionContext, Dictionary<string, ParameterResource> referencedParameters, HashSet<object?> currentDependencySet, CancellationToken cancellationToken)
-    {
-        // Process environment variables
-        await resource.ProcessEnvironmentVariableValuesAsync(
-            executionContext,
-            (key, unprocessed, processed, ex) =>
+            var dependencies = await resource.GetResourceDependenciesAsync(executionContext, ResourceDependencyDiscoveryMode.Recursive, cancellationToken).ConfigureAwait(false);
+            foreach (var parameter in dependencies.OfType<ParameterResource>())
             {
-                if (unprocessed is not null)
-                {
-                    TryAddDependentParameters(unprocessed, referencedParameters, currentDependencySet);
-                }
-            },
-            logger,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        // Process command line arguments
-        await resource.ProcessArgumentValuesAsync(
-            executionContext,
-            (unprocessed, expression, ex, _) =>
-            {
-                if (unprocessed is not null)
-                {
-                    TryAddDependentParameters(unprocessed, referencedParameters, currentDependencySet);
-                }
-            },
-            logger,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-
-    private static void TryAddDependentParameters(object? value, Dictionary<string, ParameterResource> referencedParameters, HashSet<object?> currentDependencySet)
-    {
-        if (value is ParameterResource parameter)
-        {
-            referencedParameters.TryAdd(parameter.Name, parameter);
-        }
-        else if (value is IValueWithReferences objectWithReferences)
-        {
-            currentDependencySet.Add(value);
-            foreach (var dependency in objectWithReferences.References)
-            {
-                if (!currentDependencySet.Contains(dependency))
-                {
-                    TryAddDependentParameters(dependency, referencedParameters, currentDependencySet);
-                }
+                referencedParameters.TryAdd(parameter.Name, parameter);
             }
-            currentDependencySet.Remove(value);
         }
     }
 
     private async Task ProcessParameterAsync(ParameterResource parameterResource)
     {
+        // Add the "Set parameter" command if the app is running and the interaction service is available.
+        // This command allows the user to set the parameter value at runtime.
+        if (executionContext.IsRunMode && interactionService.IsAvailable && !parameterResource.Annotations.OfType<ResourceCommandAnnotation>().Any(a => a.Name.Equals(KnownResourceCommands.SetParameterCommand, StringComparisons.CommandName)))
+        {
+            AddSetParameterCommand(parameterResource);
+        }
+
         try
         {
             var value = parameterResource.ValueInternal ?? "";
 
-            await notificationService.PublishUpdateAsync(parameterResource, s =>
-            {
-                return s with
-                {
-                    Properties = s.Properties.SetResourceProperty(KnownProperties.Parameter.Value, value, parameterResource.Secret),
-                    State = KnownResourceStates.Running
-                };
-            })
-            .ConfigureAwait(false);
+            await UpdateParameterStateAsync(parameterResource, value, KnownResourceStates.Running).ConfigureAwait(false);
 
             parameterResource.WaitForValueTcs?.TrySetResult(value);
         }
@@ -205,200 +178,497 @@ public sealed class ParameterProcessor(
             }
 
             var stateText = ex is MissingParameterValueException ?
-                "Value missing" :
+                KnownResourceStates.ValueMissing :
                 "Error initializing parameter";
 
-            await notificationService.PublishUpdateAsync(parameterResource, s =>
-            {
-                return s with
-                {
-                    State = new(stateText, KnownResourceStateStyles.Error),
-                    Properties = s.Properties.SetResourceProperty(KnownProperties.Parameter.Value, ex.Message)
-                };
-            })
-            .ConfigureAwait(false);
+            // Use warning style for missing parameters to match the notification banner,
+            // and error style for actual initialization errors.
+            var stateStyle = ex is MissingParameterValueException ?
+                KnownResourceStateStyles.Warn :
+                KnownResourceStateStyles.Error;
+
+            await UpdateParameterStateAsync(parameterResource, ex.Message, new(stateText, stateStyle)).ConfigureAwait(false);
         }
     }
 
-    // Internal for testing purposes.
-    private async Task HandleUnresolvedParametersAsync()
+    private void AddSetParameterCommand(ParameterResource parameterResource)
     {
-        await HandleUnresolvedParametersAsync(_unresolvedParameters).ConfigureAwait(false);
-    }
-
-    // Internal for testing purposes - allows passing specific parameters to test.
-    internal async Task HandleUnresolvedParametersAsync(IList<ParameterResource> unresolvedParameters)
-    {
-        DeploymentStateSection? parametersStateSection = null;
-
-        if (executionContext.IsRunMode)
-        {
-            try
+        var valueInput = parameterResource.CreateInput(
+            SetParameterValueName,
+            required: true,
+            dynamicLoading: new InputLoadOptions
             {
-                parametersStateSection = await deploymentStateManager.AcquireSectionAsync("Parameters").ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to load deployment state. Continuing without saved parameter values.");
-            }
-        }
-
-        {
-            var stateModified = false;
-
-            // This method will continue in a loop until all unresolved parameters are resolved.
-            while (unresolvedParameters.Count > 0)
-            {
-                var showNotification = executionContext.IsRunMode;
-                var showSaveToSecrets = executionContext.IsRunMode;
-
-                var proceedToInputs = true;
-
-                if (showNotification)
+                AlwaysLoadOnStart = true,
+                LoadCallback = context =>
                 {
-                    // First we show a notification that there are unresolved parameters.
-                    var result = await interactionService.PromptNotificationAsync(
-                        InteractionStrings.ParametersBarTitle,
-                        InteractionStrings.ParametersBarMessage,
-                         new NotificationInteractionOptions
-                         {
-                             Intent = MessageIntent.Warning,
-                             PrimaryButtonText = InteractionStrings.ParametersBarPrimaryButtonText
-                         })
-                        .ConfigureAwait(false);
+                    if (context.Input.Value is not null)
+                    {
+                        return Task.CompletedTask;
+                    }
 
-                    proceedToInputs = result.Data;
+                    try
+                    {
+                        var existingValue = parameterResource.ValueInternal;
+                        if (!string.IsNullOrEmpty(existingValue))
+                        {
+                            context.Input.Value = existingValue;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // ValueInternal can throw when the parameter is unresolved; leave the input empty.
+                    }
+
+                    return Task.CompletedTask;
                 }
+            });
 
-                if (proceedToInputs)
+        var saveInput = new InteractionInput
+        {
+            Name = SaveToUserSecretsName,
+            InputType = InputType.Boolean,
+            Label = InteractionStrings.ParametersInputsRememberLabel,
+            Description = !userSecretsManager.IsAvailable
+                ? InteractionStrings.ParametersInputsRememberDescriptionNotConfigured
+                : InteractionStrings.ParametersInputsRememberDescriptionConfigured,
+            EnableDescriptionMarkdown = true,
+            Disabled = !userSecretsManager.IsAvailable,
+            DynamicLoading = new InputLoadOptions
+            {
+                AlwaysLoadOnStart = true,
+                DependsOnInputs = [SetParameterValueName],
+                LoadCallback = async context =>
                 {
-                    // Now we build up a new form base on the unresolved parameters.
-                    var resourceInputs = new List<(ParameterResource ParameterResource, InteractionInput Input)>();
-
-                    foreach (var parameter in unresolvedParameters)
+                    if (context.Input.Value is null)
                     {
-                        // Create an input for each unresolved parameter.
-                        var input = parameter.CreateInput();
-                        resourceInputs.Add((parameter, input));
-                    }
-
-                    var inputs = resourceInputs.Select(i => i.Input).ToList();
-                    InteractionInput? saveParameters = null;
-
-                    if (showSaveToSecrets)
-                    {
-                        saveParameters = new InteractionInput
+                        var parameterSection = await deploymentStateManager.AcquireSectionAsync(parameterResource.ConfigurationKey, context.CancellationToken).ConfigureAwait(false);
+                        if (parameterSection.Data.Count > 0)
                         {
-                            Name = "RememberParameters",
-                            InputType = InputType.Boolean,
-                            Label = InteractionStrings.ParametersInputsRememberLabel
-                        };
-                        inputs.Add(saveParameters);
-                    }
-
-                    var message = executionContext.IsPublishMode
-                        ? InteractionStrings.ParametersInputsMessagePublishMode
-                        : InteractionStrings.ParametersInputsMessage;
-
-                    var valuesPrompt = await interactionService.PromptInputsAsync(
-                        InteractionStrings.ParametersInputsTitle,
-                        message,
-                        [.. inputs],
-                        new InputsDialogInteractionOptions
-                        {
-                            PrimaryButtonText = InteractionStrings.ParametersInputsPrimaryButtonText,
-                            ShowDismiss = true,
-                            EnableMessageMarkdown = true,
-                        })
-                        .ConfigureAwait(false);
-
-                    if (!valuesPrompt.Canceled)
-                    {
-                        // Iterate through the unresolved parameters and set their values based on user input.
-                        for (var i = resourceInputs.Count - 1; i >= 0; i--)
-                        {
-                            var (parameter, input) = (resourceInputs[i].ParameterResource, resourceInputs[i].Input);
-                            var inputValue = input.Value;
-
-                            if (string.IsNullOrEmpty(inputValue))
-                            {
-                                // If the input value is null, we skip this parameter.
-                                continue;
-                            }
-
-                            parameter.WaitForValueTcs?.TrySetResult(inputValue);
-
-                            // Update the parameter resource state to active with the provided value.
-                            await notificationService.PublishUpdateAsync(parameter, s =>
-                            {
-                                return s with
-                                {
-                                    Properties = s.Properties.SetResourceProperty(KnownProperties.Parameter.Value, inputValue, parameter.Secret),
-                                    State = KnownResourceStates.Running
-                                };
-                            })
-                            .ConfigureAwait(false);
-
-                            // Log that the parameter has been resolved
-                            loggerService.GetLogger(parameter)
-                                .LogInformation("Parameter resource {ResourceName} has been resolved via user interaction.", parameter.Name);
-
-                            if (executionContext.IsRunMode && showSaveToSecrets && saveParameters?.Value is not null)
-                            {
-                                var shouldSave = bool.TryParse(saveParameters.Value, out var saveToDeploymentState) && saveToDeploymentState;
-                                if (shouldSave && parametersStateSection is not null)
-                                {
-                                    parametersStateSection.Data[parameter.Name] = JsonValue.Create(inputValue);
-                                    stateModified = true;
-                                }
-                            }
-
-                            // Remove the parameter from unresolved parameters list.
-                            unresolvedParameters.RemoveAt(i);
+                            context.Input.Value = "true";
                         }
                     }
                 }
             }
+        };
 
-            if (stateModified && parametersStateSection is not null)
+        parameterResource.Annotations.Add(new ResourceCommandAnnotation(
+            name: KnownResourceCommands.SetParameterCommand,
+            displayName: CommandStrings.SetParameterName,
+            executeCommand: context => SetParameterCoreAsync(parameterResource, context.Arguments, context.CancellationToken),
+            updateState: _ => ResourceCommandState.Enabled,
+            displayDescription: CommandStrings.SetParameterDescription,
+            arguments: [valueInput, saveInput],
+            confirmationMessage: null,
+            iconName: "Key",
+            iconVariant: IconVariant.Regular,
+            isHighlighted: true));
+
+        var deleteFromSecretsInput = new InteractionInput
+        {
+            Name = DeleteFromUserSecretsName,
+            InputType = InputType.Boolean,
+            Label = InteractionStrings.ParametersInputsDeleteLabel,
+            Description = InteractionStrings.ParametersInputsDeleteDescription,
+            EnableDescriptionMarkdown = true,
+            Disabled = !userSecretsManager.IsAvailable,
+            DynamicLoading = new InputLoadOptions
             {
-                try
+                AlwaysLoadOnStart = true,
+                LoadCallback = async context =>
                 {
-                    await deploymentStateManager.SaveSectionAsync(parametersStateSection).ConfigureAwait(false);
-                    logger.LogInformation("Parameter values saved to deployment state.");
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to save parameter values to deployment state.");
+                    if (!userSecretsManager.IsAvailable)
+                    {
+                        context.Input.Disabled = true;
+                        return;
+                    }
+                    var parameterSection = await deploymentStateManager.AcquireSectionAsync(parameterResource.ConfigurationKey, context.CancellationToken).ConfigureAwait(false);
+                    context.Input.Disabled = parameterSection.Data.Count == 0;
                 }
             }
+        };
+
+        parameterResource.Annotations.Add(new ResourceCommandAnnotation(
+            name: KnownResourceCommands.DeleteParameterCommand,
+            displayName: CommandStrings.DeleteParameterName,
+            executeCommand: context => DeleteParameterCoreAsync(parameterResource, context.Arguments, context.CancellationToken),
+            updateState: _ => HasParameterValue(parameterResource) ? ResourceCommandState.Enabled : ResourceCommandState.Hidden,
+            displayDescription: CommandStrings.DeleteParameterDescription,
+            arguments: [deleteFromSecretsInput],
+            confirmationMessage: null,
+            iconName: "Delete",
+            iconVariant: IconVariant.Regular,
+            isHighlighted: true));
+    }
+
+    private static bool HasParameterValue(ParameterResource parameterResource)
+    {
+        try
+        {
+            var value = parameterResource.ValueInternal;
+            return !string.IsNullOrEmpty(value);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Prompts the user to set a value for a single parameter.
+    /// </summary>
+    /// <param name="parameterResource">The parameter resource to set the value for.</param>
+    /// <param name="cancellationToken">The cancellation token to observe while waiting for the interaction to complete.</param>
+    /// <returns>A task that completes when the user has set the value or canceled the interaction.</returns>
+    public async Task SetParameterAsync(ParameterResource parameterResource, CancellationToken cancellationToken = default)
+    {
+        var input = parameterResource.CreateInput(SetParameterValueName);
+
+        try
+        {
+            var existingValue = parameterResource.ValueInternal;
+            if (!string.IsNullOrEmpty(existingValue))
+            {
+                input.Value = existingValue;
+            }
+        }
+        catch (Exception)
+        {
+            // ValueInternal can throw when the parameter is unresolved; leave the input empty.
+        }
+
+        var parameterSection = await deploymentStateManager.AcquireSectionAsync(parameterResource.ConfigurationKey, cancellationToken).ConfigureAwait(false);
+        var hasSavedState = parameterSection.Data.Count > 0 && input.Value is not null;
+        var saveParameterInput = CreateSaveParameterInput(hasSavedState);
+
+        var result = await interactionService.PromptInputsAsync(
+            InteractionStrings.SetParameterTitle,
+            InteractionStrings.SetParameterMessage,
+            [input, saveParameterInput],
+            new InputsDialogInteractionOptions
+            {
+                PrimaryButtonText = InteractionStrings.ParametersInputsPrimaryButtonText,
+                ShowDismiss = true,
+                EnableMessageMarkdown = true,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        if (!result.Canceled)
+        {
+            await SetParameterCoreAsync(parameterResource, result.Data, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Prompts the user to delete a parameter value.
+    /// </summary>
+    /// <param name="parameterResource">The parameter resource to delete the value for.</param>
+    /// <param name="cancellationToken">The cancellation token to observe while waiting for the interaction to complete.</param>
+    /// <returns>A task that completes when the user has deleted the value or canceled the interaction.</returns>
+    public async Task DeleteParameterAsync(ParameterResource parameterResource, CancellationToken cancellationToken = default)
+    {
+        var parameterSection = await deploymentStateManager.AcquireSectionAsync(parameterResource.ConfigurationKey, cancellationToken).ConfigureAwait(false);
+        var hasSavedState = parameterSection.Data.Count > 0;
+        var message = string.Format(CultureInfo.CurrentCulture, InteractionStrings.DeleteParameterMessage, parameterResource.Name);
+        var deleteFromUserSecretsInput = new InteractionInput
+        {
+            Name = DeleteFromUserSecretsName,
+            InputType = InputType.Boolean,
+            Label = InteractionStrings.ParametersInputsDeleteLabel,
+            Description = InteractionStrings.ParametersInputsDeleteDescription,
+            EnableDescriptionMarkdown = true
+        };
+        var inputs = hasSavedState ? [deleteFromUserSecretsInput] : Array.Empty<InteractionInput>();
+
+        var result = await interactionService.PromptInputsAsync(
+            InteractionStrings.DeleteParameterTitle,
+            message,
+            inputs,
+            new InputsDialogInteractionOptions
+            {
+                PrimaryButtonText = InteractionStrings.DeleteParameterPrimaryButtonText,
+                ShowDismiss = true,
+                EnableMessageMarkdown = true,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        if (result.Canceled)
+        {
+            return;
+        }
+
+        await DeleteParameterCoreAsync(parameterResource, result.Data, cancellationToken).ConfigureAwait(false);
+    }
+
+    private InteractionInput CreateSaveParameterInput(bool hasExistingValue)
+    {
+        return new InteractionInput
+        {
+            Name = SaveToUserSecretsName,
+            InputType = InputType.Boolean,
+            Label = InteractionStrings.ParametersInputsRememberLabel,
+            // Default to true if value already exists (was read from user secrets)
+            Value = hasExistingValue ? "true" : null,
+            Description = !userSecretsManager.IsAvailable
+                ? InteractionStrings.ParametersInputsRememberDescriptionNotConfigured
+                : InteractionStrings.ParametersInputsRememberDescriptionConfigured,
+            EnableDescriptionMarkdown = true,
+            Disabled = !userSecretsManager.IsAvailable
+        };
+    }
+
+    internal async Task<ExecuteCommandResult> SetParameterCoreAsync(ParameterResource parameterResource, InteractionInputCollection arguments, CancellationToken cancellationToken)
+    {
+        var value = arguments.GetString(SetParameterValueName);
+        if (string.IsNullOrEmpty(value))
+        {
+            return CommandResults.Success();
+        }
+
+        var shouldSave = arguments[SaveToUserSecretsName].Value is { Length: > 0 } sv &&
+            bool.TryParse(sv, out var s) && s;
+
+        await ApplyParameterValueAsync(parameterResource, value, shouldSave, cancellationToken).ConfigureAwait(false);
+        OnParameterResolved(_unresolvedParameters, parameterResource);
+
+        return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceSetParameter, parameterResource.Name) };
+    }
+
+    internal async Task<ExecuteCommandResult> DeleteParameterCoreAsync(ParameterResource parameterResource, InteractionInputCollection arguments, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var deleteFromUserSecrets = arguments.TryGetByName(DeleteFromUserSecretsName, out var deleteFromUserSecretsInput) &&
+                deleteFromUserSecretsInput.Value is { Length: > 0 } deleteInputValue &&
+                bool.TryParse(deleteInputValue, out var shouldDelete) && shouldDelete;
+
+            if (deleteFromUserSecrets)
+            {
+                var parameterSection = await deploymentStateManager.AcquireSectionAsync(parameterResource.ConfigurationKey, cancellationToken).ConfigureAwait(false);
+                parameterSection.Data.Clear();
+                await deploymentStateManager.DeleteSectionAsync(parameterSection, cancellationToken).ConfigureAwait(false);
+                logger.LogInformation("Parameter value deleted from deployment state for {ParameterName}.", parameterResource.Name);
+
+                loggerService.GetLogger(parameterResource)
+                    .LogInformation("Parameter resource {ResourceName} value has been deleted from user secrets.", parameterResource.Name);
+            }
+            else
+            {
+                logger.LogInformation("Parameter value cleared for {ParameterName} (not deleted from user secrets).", parameterResource.Name);
+
+                loggerService.GetLogger(parameterResource)
+                    .LogInformation("Parameter resource {ResourceName} value has been cleared.", parameterResource.Name);
+            }
+
+            // Add the parameter back to unresolved parameters
+            if (!_unresolvedParameters.Contains(parameterResource))
+            {
+                _unresolvedParameters.Add(parameterResource);
+
+                // Reset the WaitForValueTcs so the parameter can be resolved again
+                var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+                tcs.SetException(new MissingParameterValueException("Parameter value has been deleted."));
+                parameterResource.WaitForValueTcs = tcs;
+
+                // Update the parameter's state to show it's missing a value
+                await UpdateParameterStateAsync(parameterResource, "Parameter value has been deleted", new(KnownResourceStates.ValueMissing, KnownResourceStateStyles.Warn)).ConfigureAwait(false);
+
+                // Start the resolution task if it's not running
+                _ = EnsureParameterResolutionTaskRunningAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to delete parameter {ParameterName} from deployment state.", parameterResource.Name);
+            return CommandResults.Failure($"Failed to delete parameter '{parameterResource.Name}'.");
+        }
+
+        return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceDeletedParameter, parameterResource.Name) };
+    }
+
+    private async Task ApplyParameterValueAsync(ParameterResource parameterResource, string inputValue, bool saveToDeploymentState, CancellationToken cancellationToken = default)
+    {
+        // Update the parameter resource with the new value.
+        // The parameter could already have a value set so recreate TCS in that situation.
+        if (parameterResource.WaitForValueTcs?.Task.IsCompleted ?? false)
+        {
+            parameterResource.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        parameterResource.WaitForValueTcs?.TrySetResult(inputValue);
+
+        await UpdateParameterStateAsync(parameterResource, inputValue, KnownResourceStates.Running).ConfigureAwait(false);
+
+        // Log that the parameter has been resolved
+        loggerService.GetLogger(parameterResource)
+            .LogInformation("Parameter resource {ResourceName} has been resolved via user interaction.", parameterResource.Name);
+
+        // Save to deployment state if requested and in run mode
+        if (executionContext.IsRunMode && saveToDeploymentState)
+        {
+            try
+            {
+                var slot = await deploymentStateManager.AcquireSectionAsync(parameterResource.ConfigurationKey, cancellationToken).ConfigureAwait(false);
+                slot.SetValue(inputValue);
+                await deploymentStateManager.SaveSectionAsync(slot, cancellationToken).ConfigureAwait(false);
+                logger.LogInformation("Parameter value saved to deployment state for {ParameterName}.", parameterResource.Name);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to save parameter {ParameterName} to deployment state.", parameterResource.Name);
+            }
+        }
+    }
+
+    // Internal for testing purposes - allows passing specific parameters to test.
+    internal async Task HandleUnresolvedParametersAsync(IList<ParameterResource> unresolvedParameters, CancellationToken cancellationToken)
+    {
+        var stateModified = false;
+
+        // This method will continue in a loop until all unresolved parameters are resolved.
+        while (unresolvedParameters.Count > 0)
+        {
+            var showNotification = executionContext.IsRunMode;
+            var showSaveToSecrets = executionContext.IsRunMode;
+
+            var proceedToInputs = true;
+
+            if (showNotification)
+            {
+                // First we show a notification that there are unresolved parameters.
+                var result = await interactionService.PromptNotificationAsync(
+                    InteractionStrings.ParametersBarTitle,
+                    InteractionStrings.ParametersBarMessage,
+                    new NotificationInteractionOptions
+                    {
+                        Intent = MessageIntent.Warning,
+                        PrimaryButtonText = InteractionStrings.ParametersBarPrimaryButtonText
+                    },
+                    cancellationToken).ConfigureAwait(false);
+
+                proceedToInputs = result.Data;
+            }
+
+            if (proceedToInputs)
+            {
+                // Now we build up a new form base on the unresolved parameters.
+                var resourceInputs = new List<(ParameterResource ParameterResource, InteractionInput Input)>();
+
+                foreach (var parameter in unresolvedParameters)
+                {
+                    // Create an input for each unresolved parameter.
+                    var input = parameter.CreateInput();
+                    resourceInputs.Add((parameter, input));
+                }
+
+                var inputs = resourceInputs.Select(i => i.Input).ToList();
+                InteractionInput? saveParameters = null;
+
+                if (showSaveToSecrets)
+                {
+                    saveParameters = CreateSaveParameterInput(hasExistingValue: false);
+                    inputs.Add(saveParameters);
+                }
+
+                var message = executionContext.IsPublishMode
+                    ? InteractionStrings.ParametersInputsMessagePublishMode
+                    : InteractionStrings.ParametersInputsMessage;
+
+                var valuesPrompt = await interactionService.PromptInputsAsync(
+                    InteractionStrings.ParametersInputsTitle,
+                    message,
+                    [.. inputs],
+                    new InputsDialogInteractionOptions
+                    {
+                        PrimaryButtonText = InteractionStrings.ParametersInputsPrimaryButtonText,
+                        ShowDismiss = true,
+                        EnableMessageMarkdown = true,
+                    },
+                    cancellationToken).ConfigureAwait(false);
+
+                if (!valuesPrompt.Canceled)
+                {
+                    var shouldSave = saveParameters?.Value is not null &&
+                        bool.TryParse(saveParameters.Value, out var saveToDeploymentState) && saveToDeploymentState;
+
+                    // Iterate through the unresolved parameters and set their values based on user input.
+                    for (var i = resourceInputs.Count - 1; i >= 0; i--)
+                    {
+                        var (parameter, input) = (resourceInputs[i].ParameterResource, resourceInputs[i].Input);
+                        var inputValue = input.Value;
+
+                        if (string.IsNullOrEmpty(inputValue))
+                        {
+                            // If the input value is null, we skip this parameter.
+                            continue;
+                        }
+
+                        await ApplyParameterValueAsync(parameter, inputValue, shouldSave, cancellationToken).ConfigureAwait(false);
+
+                        if (shouldSave)
+                        {
+                            stateModified = true;
+                        }
+
+                        // Remove the parameter from unresolved parameters list.
+                        OnParameterResolved(unresolvedParameters, parameter);
+                    }
+                }
+            }
+        }
+
+        if (stateModified)
+        {
+            logger.LogInformation("Parameter values saved to deployment state.");
+        }
+    }
+
+    private void OnParameterResolved(IList<ParameterResource> unresolvedParameters, ParameterResource parameter)
+    {
+        unresolvedParameters.Remove(parameter);
+
+        if (unresolvedParameters.Count == 0)
+        {
+            _allParametersResolvedCts?.Cancel();
         }
     }
 
     private async Task SaveParametersToDeploymentStateAsync(IEnumerable<ParameterResource> parameters, CancellationToken cancellationToken)
     {
-        try
+        var savedCount = 0;
+        foreach (var parameter in parameters)
         {
-            var parametersSection = await deploymentStateManager.AcquireSectionAsync("Parameters", cancellationToken).ConfigureAwait(false);
-
-            foreach (var parameter in parameters)
+            try
             {
                 var value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(value))
                 {
-                    parametersSection.Data[parameter.Name] = JsonValue.Create(value);
+                    var slot = await deploymentStateManager.AcquireSectionAsync(parameter.ConfigurationKey, cancellationToken).ConfigureAwait(false);
+                    slot.SetValue(value);
+                    await deploymentStateManager.SaveSectionAsync(slot, cancellationToken).ConfigureAwait(false);
+                    savedCount++;
                 }
             }
-
-            if (parametersSection.Data.Count > 0)
+            catch (Exception ex)
             {
-                await deploymentStateManager.SaveSectionAsync(parametersSection, cancellationToken).ConfigureAwait(false);
-                logger.LogInformation("Parameter values saved to deployment state.");
+                logger.LogWarning(ex, "Failed to save parameter {ParameterName} to deployment state.", parameter.Name);
             }
         }
-        catch (Exception ex)
+
+        if (savedCount > 0)
         {
-            logger.LogWarning(ex, "Failed to save parameter values to deployment state.");
+            logger.LogInformation("{SavedCount} parameter values saved to deployment state.", savedCount);
         }
+    }
+
+    private async Task UpdateParameterStateAsync(ParameterResource parameterResource, string value, ResourceStateSnapshot? state)
+    {
+        await notificationService.PublishUpdateAsync(parameterResource, s =>
+        {
+            return s with
+            {
+                Properties = s.Properties.SetResourceProperty(KnownProperties.Parameter.Value, value, parameterResource.Secret),
+                State = state
+            };
+        }).ConfigureAwait(false);
     }
 }

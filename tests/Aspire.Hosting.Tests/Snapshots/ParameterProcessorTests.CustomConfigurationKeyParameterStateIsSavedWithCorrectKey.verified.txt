@@ -1,0 +1,3 @@
+﻿{
+  MyCustomSection:MyCustomKey: customvalue
+}

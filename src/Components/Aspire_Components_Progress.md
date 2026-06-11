@@ -1,8 +1,8 @@
-# .NET Aspire Client Integrations Progress
+# Aspire Client Integrations Progress
 
-These integrations should follow the [.NET Aspire Client Integration Requirements](#net-aspire-client-integration-requirements). Below is a chart that shows the progress of each of the client integrations we ship, and their current stance against each of the requirements.
+These integrations should follow the [Aspire Client Integration Requirements](#aspire-client-integration-requirements). Below is a chart that shows the progress of each of the client integrations we ship, and their current stance against each of the requirements.
 
-| .NET Aspire Client Integration Name              | [Contains README](#contains-readme) | [Public API](#public-api) | [Configuration Schema](#json-schemaconfiguration) | [DI Services](#di-services) | [Logging](#logging) | [Tracing](#tracing) | [Metrics](#metrics) | [Health Checks](#health-checks) |
+| Aspire Client Integration Name              | [Contains README](#contains-readme) | [Public API](#public-api) | [Configuration Schema](#json-schemaconfiguration) | [DI Services](#di-services) | [Logging](#logging) | [Tracing](#tracing) | [Metrics](#metrics) | [Health Checks](#health-checks) |
 | --------------------------------------- | :---------------------------------: | :-----------------------: | :----------------------------------------------------: | :-------------------------: | :-----------------: | :-----------------: | :-----------------: | :-----------------------------: |
 | Npgsql                                  |                  ✅                  |             ✅             |                           ✅                            |              ✅              |          ✅          |        ✅            |         ✅           |              ✅                  |
 | Npgsql.EntityFrameworkCore.PostgreSQL   |                  ✅                  |             ✅             |                           ✅                            |              ✅              |          ✅          |        ✅            |         ✅           |              ✅                  |
@@ -12,6 +12,7 @@ These integrations should follow the [.NET Aspire Client Integration Requirement
 | Microsoft.EntityFrameworkCore.SqlServer |                  ✅                  |             ✅             |                           ✅                            |              ✅              |          ✅          |        ✅            |         ❌           |              ✅                  |
 | Microsoft.Extensions.Configuration.AzureAppConfiguration | ✅                  |             ✅             |                           ✅                            |              ✅              |          ✅          |        ✅            |         ❌           |                                  |
 | MongoDB.Driver                          |                  ✅                  |             ✅             |                           ✅                            |              ✅              |          ✅          |        ✅            |         ❌           |              ✅                  |
+| MongoDB.EntityFrameworkCore             |                  ✅                  |             ✅             |                           ✅                            |              ✅              |          ✅          |        ✅            |         ❌           |              ✅                  |
 | Azure.AI.Inference                      |                  ✅                  |             ✅             |                           ✅                            |              ✅              |          ✅          |        ✅            |         ❌           |              ❌                  |
 | Azure.AI.OpenAI                         |                  ✅                  |             ✅             |                           ✅                            |              ✅              |          ✅          |        ✅            |         ✅           |              ❌                  |
 | Azure.Data.Tables                       |                  ✅                  |             ✅             |                           ✅                            |              ✅              |          ✅          |        ✅            |         ❌           |              ✅                  |
@@ -46,11 +47,11 @@ Nomenclature used in the table above:
 - ❌ - Requirement can't be met
 - N/A - Requirement not applicable
 
-## .NET Aspire Client Integration Requirements
+## Aspire Client Integration Requirements
 
 ### Contains README
 
-Each .NET Aspire client integration must contain a README.md file which is included in the package. This README should contain the client integration's main description, usage examples, and basic getting started documentation. The goal of this file is to contain everything a developer will need in the first 5 minutes. Finally, README should have a link pointed back to the full documentation of the client integration, which will include a list of logging categories used, tracing activity names, and Metric names. [Here's a concrete example of a README file](./Aspire.StackExchange.Redis/README.md).
+Each Aspire client integration must contain a README.md file which is included in the package. This README should contain the client integration's main description, usage examples, and basic getting started documentation. The goal of this file is to contain everything a developer will need in the first 5 minutes. Finally, README should have a link pointed back to the full documentation of the client integration, which will include a list of logging categories used, tracing activity names, and Metric names. [Here's a concrete example of a README file](./Aspire.StackExchange.Redis/README.md).
 
 ### Public API
 

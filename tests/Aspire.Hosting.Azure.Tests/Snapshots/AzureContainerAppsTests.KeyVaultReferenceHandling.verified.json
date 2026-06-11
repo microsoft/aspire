@@ -6,6 +6,7 @@
     "env_outputs_azure_container_apps_environment_id": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
     "api_identity_outputs_id": "{api-identity.outputs.id}",
     "mydb_kv_outputs_name": "{mydb-kv.outputs.name}",
+    "mydb_outputs_connectionstring": "{mydb.outputs.connectionString}",
     "kvName": "{kvName.value}",
     "sharedRg": "{sharedRg.value}",
     "api_identity_outputs_clientid": "{api-identity.outputs.clientId}"

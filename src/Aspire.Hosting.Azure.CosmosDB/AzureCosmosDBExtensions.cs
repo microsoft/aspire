@@ -1,13 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECERTIFICATES001 // HTTPS certificate APIs are experimental
+
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.CosmosDB;
-using Azure.Identity;
 using Azure.Provisioning;
 using Azure.Provisioning.CosmosDB;
 using Azure.Provisioning.Expressions;
@@ -22,12 +24,16 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureCosmosExtensions
 {
+    private const string EmulatorHealthEndpointName = "emulatorhealth";
+
     /// <summary>
     /// Adds an Azure Cosmos DB connection to the application model.
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureCosmosDBResource> AddAzureCosmosDB(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -44,14 +50,17 @@ public static class AzureCosmosExtensions
     /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
     /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator#authentication"></a>.
     /// </summary>
+    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the local emulator</ats-summary>
     /// <param name="builder">The Azure Cosmos DB resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// When using the Azure Cosmos DB emulator, the container requires a TLS/SSL certificate.
     /// For more information, see <a href="https://learn.microsoft.com/azure/cosmos-db/how-to-develop-emulator?tabs=docker-linux#export-the-emulators-tlsssl-certificate"></a>.
     /// This version of the package defaults to the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Tag"/> tag of the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="CosmosDBEmulatorContainerImageTags.Image"/> container image.
     /// </remarks>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
         => RunAsEmulator(builder, configureContainer, useVNextPreview: false);
 
@@ -59,12 +68,15 @@ public static class AzureCosmosExtensions
     /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB Linux-based emulator (preview) with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
     /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator-linux"></a>.
     /// </summary>
+    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the preview emulator</ats-summary>
     /// <param name="builder">The Azure Cosmos DB resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This version of the package defaults to the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.TagVNextPreview"/> tag of the <inheritdoc cref="CosmosDBEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="CosmosDBEmulatorContainerImageTags.Image"/> container image.
     /// </remarks>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureCosmosDBResource> RunAsPreviewEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
         => RunAsEmulator(builder, configureContainer, useVNextPreview: true);
@@ -77,6 +89,8 @@ public static class AzureCosmosExtensions
         {
             return builder;
         }
+
+        builder.Resource.IsPreviewEmulator = useVNextPreview;
 
         // Mark this resource as an emulator for consistent resource identification and tooling support
         builder.WithAnnotation(new EmulatorResourceAnnotation());
@@ -124,13 +138,69 @@ public static class AzureCosmosExtensions
             }
         });
 
-        var healthCheckKey = $"{builder.Resource.Name}_check";
-        builder.ApplicationBuilder.Services.AddHealthChecks().AddAzureCosmosDB(
-            sp => cosmosClient ?? throw new InvalidOperationException("CosmosClient is not initialized."),
-            name: healthCheckKey
+        if (useVNextPreview)
+        {
+            builder.WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 8080)
+                .WithEndpoint(EmulatorHealthEndpointName, e => e.ExcludeReferenceEndpoint = true)
+                .WithHttpHealthCheck(endpointName: EmulatorHealthEndpointName, path: "/ready")
+                .WithUrlForEndpoint(EmulatorHealthEndpointName, u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly);
+
+            // Configure the preview emulator to use an Aspire-managed HTTPS certificate.
+            // Use a surrogate builder since AzureCosmosDBResource doesn't implement IResourceWithEnvironment/IResourceWithArgs
+            // but AzureCosmosDBEmulatorResource (which extends ContainerResource) does. The surrogate's Annotations
+            // delegate to the inner resource, so the annotation ends up on the correct resource.
+            var emulatorSurrogate = new AzureCosmosDBEmulatorResource(builder.Resource);
+            var emulatorSurrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(emulatorSurrogate);
+
+            // VNext cosmosdb sets a default CERT_SECRET environment variable for the default emulator certificate and we can't
+            // remove it, so we need to provide "some" secret value to avoid issues with our provided certificate. This simply sets the
+            // dev cert used by cosmos to have a stable passphrase. Users can override by calling `WithHttpsDeveloperCertificate` again
+            // with a custom passphrase (or with a passphrase omitted).
+            var password = ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder.ApplicationBuilder, $"{builder.Resource.Name}-certificate-passphrase");
+            emulatorSurrogateBuilder.WithHttpsDeveloperCertificate(password: builder.ApplicationBuilder.CreateResourceBuilder(password));
+
+            emulatorSurrogateBuilder.WithHttpsCertificateConfiguration(ctx =>
+            {
+                // Enable HTTPS for both the emulator endpoint and the data explorer endpoint (if enabled) by setting environment variables used by the emulator to configure its certificate.
+                ctx.EnvironmentVariables["PROTOCOL"] = "https";
+                ctx.EnvironmentVariables["EXPLORER_PROTOCOL"] = "https";
+                ctx.EnvironmentVariables["CERT_PATH"] = ctx.PfxPath;
+                if (ctx.Password is not null)
+                {
+                    ctx.EnvironmentVariables["CERT_SECRET"] = ctx.Password;
+                }
+
+                return Task.CompletedTask;
+            });
+
+            emulatorSurrogateBuilder.WithCertificateTrustConfiguration(ctx =>
+            {
+                ctx.EnvironmentVariables["NODE_EXTRA_CA_CERTS"] = ctx.CertificateBundlePath;
+
+                return Task.CompletedTask;
+            });
+
+            // Switch the emulator endpoint from HTTP to HTTPS when a certificate is available.
+            // The connection string and URI expressions use EndpointProperty.Url which will
+            // automatically reflect the updated scheme.
+            builder.SubscribeHttpsEndpointsUpdate(ctx =>
+            {
+                builder.WithEndpoint("emulator", ep =>
+                {
+                    ep.UriScheme = "https";
+                });
+            });
+        }
+        else
+        {
+            var healthCheckKey = $"{builder.Resource.Name}_check";
+            builder.ApplicationBuilder.Services.AddHealthChecks().AddAzureCosmosDB(
+                sp => cosmosClient ?? throw new InvalidOperationException("CosmosClient is not initialized."),
+                name: healthCheckKey
             );
 
-        builder.WithHealthCheck(healthCheckKey);
+            builder.WithHealthCheck(healthCheckKey);
+        }
 
         if (configureContainer != null)
         {
@@ -148,7 +218,7 @@ public static class AzureCosmosExtensions
 
             if (Uri.TryCreate(connectionString, UriKind.Absolute, out var uri))
             {
-                return new CosmosClient(uri.OriginalString, new DefaultAzureCredential(), clientOptions);
+                return new CosmosClient(uri.OriginalString, AzureCredentialHelper.CreateDefaultAzureCredential(), clientOptions);
             }
             else
             {
@@ -169,6 +239,7 @@ public static class AzureCosmosExtensions
     /// <param name="builder">The builder for the <see cref="AzureCosmosDBEmulatorResource"/>.</param>
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <returns>A builder for the <see cref="AzureCosmosDBEmulatorResource"/>.</returns>
+    [AspireExport]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithDataVolume(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -185,6 +256,7 @@ public static class AzureCosmosExtensions
     /// <param name="builder">Builder for the Cosmos emulator container</param>
     /// <param name="port">Host port to bind to the emulator gateway port.</param>
     /// <returns>Cosmos emulator resource builder.</returns>
+    [AspireExport]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithGatewayPort(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -204,6 +276,7 @@ public static class AzureCosmosExtensions
     /// <remarks>Not calling this method will result in the default of 10 partitions. The actual started partitions is always one more than specified.
     /// See <a href="https://learn.microsoft.com/azure/cosmos-db/emulator-windows-arguments#change-the-number-of-default-containers">this documentation</a> about setting the partition count.
     /// </remarks>
+    [AspireExport]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithPartitionCount(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, int count)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -227,6 +300,8 @@ public static class AzureCosmosExtensions
     /// <param name="builder">AzureCosmosDB resource builder.</param>
     /// <param name="databaseName">Name of database.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddCosmosDatabase"/> instead.</remarks>
+    [AspireExportIgnore(Reason = "Obsolete API with incorrect return type. Use AddCosmosDatabase instead.")]
     [Obsolete($"This method is obsolete because it has the wrong return type and will be removed in a future version. Use {nameof(AddCosmosDatabase)} instead to add a Cosmos DB database.")]
     public static IResourceBuilder<AzureCosmosDBResource> AddDatabase(this IResourceBuilder<AzureCosmosDBResource> builder, string databaseName)
     {
@@ -245,6 +320,8 @@ public static class AzureCosmosExtensions
     /// <param name="name">The name of the database resource.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureCosmosDBDatabaseResource> AddCosmosDatabase(this IResourceBuilder<AzureCosmosDBResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -267,6 +344,7 @@ public static class AzureCosmosExtensions
     /// <param name="partitionKeyPath">Partition key path for the container.</param>
     /// <param name="containerName">The name of the container. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainer dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBContainerResource> AddContainer(this IResourceBuilder<AzureCosmosDBDatabaseResource> builder, [ResourceName] string name, string partitionKeyPath, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -283,6 +361,28 @@ public static class AzureCosmosExtensions
     }
 
     /// <summary>
+    /// Adds an Azure Cosmos DB container resource
+    /// </summary>
+    [AspireExport("addContainer")]
+    internal static IResourceBuilder<AzureCosmosDBContainerResource> AddContainerForPolyglot(
+        this IResourceBuilder<AzureCosmosDBDatabaseResource> builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(IEnumerable<string>))] object partitionKeyPaths,
+        string? containerName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(partitionKeyPaths);
+
+        return partitionKeyPaths switch
+        {
+            string partitionKeyPath => builder.AddContainer(name, partitionKeyPath, containerName),
+            IEnumerable<string> partitionKeyPathCollection => builder.AddContainer(name, partitionKeyPathCollection, containerName),
+            _ => throw new ArgumentException("Partition key paths must be a string or a string collection.", nameof(partitionKeyPaths))
+        };
+    }
+
+    /// <summary>
     /// Adds a container to the associated Cosmos DB database resource with hierarchical partition keys.
     /// </summary>
     /// <param name="builder">CosmosDBDatabase resource builder.</param>
@@ -290,6 +390,7 @@ public static class AzureCosmosExtensions
     /// <param name="partitionKeyPaths">Hierarchical partition key paths for the container.</param>
     /// <param name="containerName">The name of the container. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainer dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBContainerResource> AddContainer(this IResourceBuilder<AzureCosmosDBDatabaseResource> builder, [ResourceName] string name, IEnumerable<string> partitionKeyPaths, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -321,6 +422,8 @@ public static class AzureCosmosExtensions
     /// </summary>
     /// <param name="builder">The builder for the Azure Cosmos DB resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureCosmosDBResource> WithDefaultAzureSku(this IResourceBuilder<AzureCosmosDBResource> builder)
     {
         builder.Resource.UseDefaultAzureSku = true;
@@ -336,6 +439,7 @@ public static class AzureCosmosExtensions
     /// <remarks>
     /// The Data Explorer is only available with <see cref="RunAsPreviewEmulator"/>.
     /// </remarks>
+    [AspireExport]
     [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithDataExplorer(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, int? port = null)
     {
@@ -346,8 +450,7 @@ public static class AzureCosmosExtensions
             throw new NotSupportedException($"The Data Explorer endpoint is only available when using the preview version of the Azure Cosmos DB emulator. Call '{nameof(RunAsPreviewEmulator)}' instead.");
         }
 
-        return
-            builder.WithEndpoint(endpointName: KnownUrls.DataExplorer.EndpointName, endpoint =>
+        var result = builder.WithEndpoint(endpointName: KnownUrls.DataExplorer.EndpointName, endpoint =>
             {
                 endpoint.UriScheme = "http";
                 endpoint.TargetPort = 1234;
@@ -363,6 +466,19 @@ public static class AzureCosmosExtensions
                     url.DisplayText = KnownUrls.DataExplorer.DisplayText;
                 }
             });
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            builder.SubscribeHttpsEndpointsUpdate(ctx =>
+            {
+                builder.WithEndpoint(KnownUrls.DataExplorer.EndpointName, ep =>
+                {
+                    ep.UriScheme = "https";
+                });
+            });
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -386,6 +502,7 @@ public static class AzureCosmosExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthentication(this IResourceBuilder<AzureCosmosDBResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -397,7 +514,7 @@ public static class AzureCosmosExtensions
         // need to do this later in case builder becomes an emulator after this method is called.
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((data, _) =>
+            builder.ApplicationBuilder.OnBeforeStart((data, _) =>
             {
                 if (builder.Resource.IsEmulator)
                 {
@@ -411,19 +528,38 @@ public static class AzureCosmosExtensions
     }
 
     /// <summary>
+    /// Configures Azure Cosmos DB to use access key authentication
+    /// </summary>
+    [AspireExport("withAccessKeyAuthentication")]
+    internal static IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthenticationForPolyglot(
+        this IResourceBuilder<AzureCosmosDBResource> builder,
+        IResourceBuilder<IAzureKeyVaultResource>? keyVaultBuilder = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return keyVaultBuilder is null
+            ? builder.WithAccessKeyAuthentication()
+            : builder.WithAccessKeyAuthentication(keyVaultBuilder);
+    }
+
+    /// <summary>
     /// Configures the resource to use access key authentication with Azure Cosmos DB.
     /// </summary>
     /// <param name="builder">The Azure Cosmos DB resource builder.</param>
     /// <param name="keyVaultBuilder">The Azure Key Vault resource builder where the connection string used to connect to this AzureCosmosDBResource will be stored.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> builder.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthentication(this IResourceBuilder<AzureCosmosDBResource> builder, IResourceBuilder<IAzureKeyVaultResource> keyVaultBuilder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
         var azureResource = builder.Resource;
         azureResource.ConnectionStringSecretOutput = keyVaultBuilder.Resource.GetSecret($"connectionstrings--{azureResource.Name}");
+        azureResource.PrimaryAccessKeySecretOutput = keyVaultBuilder.Resource.GetSecret($"primaryaccesskey--{azureResource.Name}");
+
         // Set the secret owner to this resource
         azureResource.ConnectionStringSecretOutput.SecretOwner = azureResource;
+        azureResource.PrimaryAccessKeySecretOutput.SecretOwner = azureResource;
 
         // remove role assignment annotations when using access key authentication so an empty roles bicep module isn't generated
         var roleAssignmentAnnotations = azureResource.Annotations.OfType<DefaultRoleAssignmentsAnnotation>().ToArray();
@@ -440,6 +576,9 @@ public static class AzureCosmosExtensions
         var azureResource = (AzureCosmosDBResource)infrastructure.AspireResource;
         bool disableLocalAuth = !azureResource.UseAccessKeyAuthentication;
 
+        // Check if this CosmosDB has a private endpoint (via annotation)
+        var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
         var cosmosAccount = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
             (identifier, name) =>
             {
@@ -447,28 +586,39 @@ public static class AzureCosmosExtensions
                 resource.Name = name;
                 return resource;
             },
-            (infrastructure) => new CosmosDBAccount(infrastructure.AspireResource.GetBicepIdentifier())
+            (infrastructure) =>
             {
-                Kind = CosmosDBAccountKind.GlobalDocumentDB,
-                Capabilities = azureResource.UseDefaultAzureSku ? [] : new BicepList<CosmosDBAccountCapability>
+                var account = new CosmosDBAccount(infrastructure.AspireResource.GetBicepIdentifier())
                 {
-                    new CosmosDBAccountCapability { Name = CosmosConstants.EnableServerlessCapability }
-                },
-                ConsistencyPolicy = new ConsistencyPolicy()
-                {
-                    DefaultConsistencyLevel = DefaultConsistencyLevel.Session
-                },
-                DatabaseAccountOfferType = CosmosDBAccountOfferType.Standard,
-                Locations =
-                {
-                    new CosmosDBAccountLocation
+                    Kind = CosmosDBAccountKind.GlobalDocumentDB,
+                    Capabilities = azureResource.UseDefaultAzureSku ? [] : new BicepList<CosmosDBAccountCapability>
                     {
-                        LocationName = new IdentifierExpression("location"),
-                        FailoverPriority = 0
-                    }
-                },
-                DisableLocalAuth = disableLocalAuth,
-                Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                        new CosmosDBAccountCapability { Name = CosmosConstants.EnableServerlessCapability }
+                    },
+                    ConsistencyPolicy = new ConsistencyPolicy()
+                    {
+                        DefaultConsistencyLevel = DefaultConsistencyLevel.Session
+                    },
+                    DatabaseAccountOfferType = CosmosDBAccountOfferType.Standard,
+                    Locations =
+                    {
+                        new CosmosDBAccountLocation
+                        {
+                            LocationName = new IdentifierExpression("location"),
+                            FailoverPriority = 0
+                        }
+                    },
+                    DisableLocalAuth = disableLocalAuth,
+                    Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                };
+
+                // When using private endpoints, disable public network access.
+                if (hasPrivateEndpoint)
+                {
+                    account.PublicNetworkAccess = CosmosDBPublicNetworkAccess.Disabled;
+                }
+
+                return account;
             });
 
         foreach (var database in azureResource.Databases)
@@ -529,6 +679,17 @@ public static class AzureCosmosExtensions
             };
             infrastructure.Add(secret);
 
+            var primaryAccessKey = new KeyVaultSecret("primaryAccessKey")
+            {
+                Parent = keyVault,
+                Name = $"primaryaccesskey--{azureResource.Name}",
+                Properties = new SecretProperties
+                {
+                    Value = BicepFunction.Interpolate($"{cosmosAccount.GetKeys().PrimaryMasterKey}")
+                }
+            };
+            infrastructure.Add(primaryAccessKey);
+
             foreach (var database in azureResource.Databases)
             {
                 var dbSecret = new KeyVaultSecret(Infrastructure.NormalizeBicepIdentifier(database.Name + "_connectionString"))
@@ -563,12 +724,15 @@ public static class AzureCosmosExtensions
 
             infrastructure.Add(new ProvisioningOutput("connectionString", typeof(string))
             {
-                Value = cosmosAccount.DocumentEndpoint
+                Value = cosmosAccount.DocumentEndpoint.ToBicepExpression()
             });
         }
 
         // We need to output name to externalize role assignments.
-        infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = cosmosAccount.Name });
+        infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = cosmosAccount.Name.ToBicepExpression() });
+
+        // Output the resource id for private endpoint support.
+        infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = cosmosAccount.Id.ToBicepExpression() });
     }
 
     internal static void AddContributorRoleAssignment(AzureResourceInfrastructure infra, CosmosDBAccount cosmosAccount, BicepValue<Guid> principalId)

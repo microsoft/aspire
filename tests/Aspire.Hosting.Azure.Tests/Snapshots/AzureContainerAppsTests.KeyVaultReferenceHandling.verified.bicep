@@ -9,6 +9,8 @@ param api_identity_outputs_id string
 
 param mydb_kv_outputs_name string
 
+param mydb_outputs_connectionstring string
+
 param kvName string
 
 param sharedRg string
@@ -24,6 +26,11 @@ resource mydb_kv_connectionstrings__mydb 'Microsoft.KeyVault/vaults/secrets@2024
   parent: mydb_kv
 }
 
+resource mydb_kv_primaryaccesskey__mydb 'Microsoft.KeyVault/vaults/secrets@2024-11-01' existing = {
+  name: 'primaryaccesskey--mydb'
+  parent: mydb_kv
+}
+
 resource existingKv 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: kvName
   scope: resourceGroup(sharedRg)
@@ -34,7 +41,7 @@ resource existingKv_secret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' existi
   parent: existingKv
 }
 
-resource api 'Microsoft.App/containerApps@2025-01-01' = {
+resource api 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'api'
   location: location
   properties: {
@@ -42,6 +49,16 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
       secrets: [
         {
           name: 'connectionstrings--mydb'
+          identity: api_identity_outputs_id
+          keyVaultUrl: mydb_kv_connectionstrings__mydb.properties.secretUri
+        }
+        {
+          name: 'mydb-accountkey'
+          identity: api_identity_outputs_id
+          keyVaultUrl: mydb_kv_primaryaccesskey__mydb.properties.secretUri
+        }
+        {
+          name: 'mydb-connectionstring'
           identity: api_identity_outputs_id
           keyVaultUrl: mydb_kv_connectionstrings__mydb.properties.secretUri
         }
@@ -63,6 +80,18 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'ConnectionStrings__mydb'
               secretRef: 'connectionstrings--mydb'
+            }
+            {
+              name: 'MYDB_URI'
+              value: mydb_outputs_connectionstring
+            }
+            {
+              name: 'MYDB_ACCOUNTKEY'
+              secretRef: 'mydb-accountkey'
+            }
+            {
+              name: 'MYDB_CONNECTIONSTRING'
+              secretRef: 'mydb-connectionstring'
             }
             {
               name: 'SECRET_VALUE'

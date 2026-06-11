@@ -1,5 +1,4 @@
 ﻿@namespace Aspire.Dashboard.Components
-@using Aspire.Dashboard.Model
 @using Aspire.Dashboard.Resources
 
 @if (ViewportInformation.IsDesktop)
@@ -12,14 +11,14 @@
         {
             var highlightedCommand = _highlightedCommands[i];
 
-            <FluentButton Appearance="Appearance.Lightweight" Title="@(!string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription(CommandsLoc)) ? highlightedCommand.GetDisplayDescription(CommandsLoc) : highlightedCommand.GetDisplayName(CommandsLoc))" OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))" Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
+            <FluentButton Appearance="Appearance.Lightweight" Title="@(!string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription()) ? highlightedCommand.GetDisplayDescription() : highlightedCommand.GetDisplayName())" OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))" Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
                 @if (!string.IsNullOrEmpty(highlightedCommand.IconName) && IconResolver.ResolveIconName(highlightedCommand.IconName, IconSize.Size16, highlightedCommand.IconVariant) is { } icon)
                 {
                     <FluentIcon Value="@icon" Width="16px" />
                 }
                 else
                 {
-                    @highlightedCommand.GetDisplayName(CommandsLoc)
+                    @highlightedCommand.GetDisplayName()
                 }
             </FluentButton>
         }

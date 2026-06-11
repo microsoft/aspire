@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Primitives;
@@ -118,6 +121,9 @@ public sealed class AzurePublishingContext(
             outputDirectory.Create();
         }
 
+        var fileSystemService = ServiceProvider.GetRequiredService<IFileSystemService>();
+        var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-bicep").Path;
+
         var bicepResourcesToPublish = model.Resources.OfType<AzureBicepResource>()
             .Where(r => !r.IsExcludedFromPublish())
             .ToList();
@@ -145,7 +151,7 @@ public sealed class AzurePublishingContext(
 
         foreach (var resource in bicepResourcesToPublish)
         {
-            var file = resource.GetBicepTemplateFile();
+            var file = resource.GetBicepTemplateFile(tempDirectory);
 
             var moduleDirectory = outputDirectory.CreateSubdirectory(resource.Name);
 
@@ -194,12 +200,38 @@ public sealed class AzurePublishingContext(
             return FormattableStringFactory.Create(expr.Format, args);
         }
 
+        object EvalConditionalExpr(ReferenceExpression expr)
+        {
+            var conditionVal = Eval(expr.Condition!);
+
+            // If the condition resolves to a static string, evaluate at publish time
+            if (conditionVal is string staticCondition)
+            {
+                var branch = string.Equals(staticCondition, expr.MatchValue, StringComparison.OrdinalIgnoreCase)
+                    ? expr.WhenTrue!
+                    : expr.WhenFalse!;
+                return Eval(branch);
+            }
+
+            // Condition is a Bicep parameter/output — emit a ternary expression
+            var whenTrueVal = ResolveValue(Eval(expr.WhenTrue!));
+            var whenFalseVal = ResolveValue(Eval(expr.WhenFalse!));
+
+            var conditional = new ConditionalExpression(
+                new BinaryExpression(ResolveValue(conditionVal).Compile(), BinaryBicepOperator.Equal, new StringLiteralExpression(expr.MatchValue!)),
+                whenTrueVal.Compile(),
+                whenFalseVal.Compile());
+
+            return new BicepValue<string>(conditional);
+        }
+
         object Eval(object? value) => value switch
         {
             BicepOutputReference b => GetOutputs(moduleMap[b.Resource], b.Name),
             ParameterResource p => ParameterLookup[p],
             ConnectionStringReference r => Eval(r.Resource.ConnectionStringExpression),
             IResourceWithConnectionString cs => Eval(cs.ConnectionStringExpression),
+            ReferenceExpression { IsConditional: true } re => EvalConditionalExpr(re),
             ReferenceExpression re => EvalExpr(re),
             string s => s,
             _ => ""
@@ -315,15 +347,10 @@ public sealed class AzurePublishingContext(
                         Resource = resource,
                         CancellationToken = cancellationToken
                     };
-                    var dockerfileContent = await dockerfileBuildAnnotation.DockerfileFactory(context).ConfigureAwait(false);
-
-                    // Always write to the original DockerfilePath so code looking at that path still works
-                    await File.WriteAllTextAsync(dockerfileBuildAnnotation.DockerfilePath, dockerfileContent, cancellationToken).ConfigureAwait(false);
 
                     // Copy to a resource-specific path in the output folder for publishing
                     var resourceDockerfilePath = Path.Combine(outputPath, $"{resource.Name}.Dockerfile");
-                    Directory.CreateDirectory(outputPath);
-                    File.Copy(dockerfileBuildAnnotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
+                    await dockerfileBuildAnnotation.EmitDockerfileArtifactsAsync(context, resourceDockerfilePath).ConfigureAwait(false);
                 }
 
                 var task = await step.CreateTaskAsync(
@@ -336,18 +363,9 @@ public sealed class AzurePublishingContext(
 
                 var modulePath = Path.Combine(moduleDirectory.FullName, $"{resource.Name}.bicep");
 
-                var file = br.GetBicepTemplateFile();
+                var file = br.GetBicepTemplateFile(tempDirectory);
 
                 File.Copy(file.Path, modulePath, true);
-
-                // Capture any bicep outputs from the registry info as it may be needed
-                Visit(annotation.ContainerRegistry?.Name, CaptureBicepOutputs);
-                Visit(annotation.ContainerRegistry?.Endpoint, CaptureBicepOutputs);
-
-                if (annotation.ContainerRegistry is IAzureContainerRegistry acr)
-                {
-                    Visit(acr.ManagedIdentityId, CaptureBicepOutputs);
-                }
 
                 CaptureBicepOutputsFromParameters(br);
 

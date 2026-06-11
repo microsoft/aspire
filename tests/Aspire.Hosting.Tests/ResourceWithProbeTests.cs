@@ -5,6 +5,7 @@
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "3")]
 public class ResourceWithProbeTests
 {
     [Fact]

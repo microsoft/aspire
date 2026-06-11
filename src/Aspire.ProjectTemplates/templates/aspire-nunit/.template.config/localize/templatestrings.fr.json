@@ -6,11 +6,6 @@
   "symbols/Framework/choices/net8.0/description": "Cible net8.0",
   "symbols/Framework/choices/net9.0/description": "Cible net9.0",
   "symbols/Framework/choices/net10.0/description": "Net10.0 cible",
-  "symbols/AspireVersion/description": "Version Aspire",
-  "symbols/AspireVersion/choices/13.0/displayName": "13.0",
-  "symbols/AspireVersion/choices/13.0/description": "Aspire 13.0",
-  "symbols/AspireVersion/choices/9.5/displayName": "9.5",
-  "symbols/AspireVersion/choices/9.5/description": "Aspire 9.5",
   "symbols/skipRestore/description": "S’il est spécifié, ignore la restauration automatique du projet lors de la création.",
   "postActions/restore/description": "Restaurez les packages NuGet requis par ce projet.",
   "postActions/restore/manualInstructions/default/text": "Exécutez 'dotnet restore'"

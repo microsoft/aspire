@@ -10,19 +10,25 @@ namespace Aspire.Hosting
 {
     public static partial class AzureEventHubsExtensions
     {
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> AddAzureEventHubs(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubConsumerGroupResource> AddConsumerGroup(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubResource> builder, string name, string? groupName = null) { throw null; }
 
         [System.Obsolete("This method is obsolete because it has the wrong return type and will be removed in a future version. Use AddHub instead to add an Azure Event Hub.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> AddEventHub(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> builder, string name) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubResource> AddHub(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> builder, string name, string? hubName = null) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource>>? configureContainer = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Action<JsonNode> callbacks are not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> WithConfiguration(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> builder, System.Action<System.Text.Json.Nodes.JsonNode> configJson) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> WithConfigurationFile(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> builder, string path) { throw null; }
 
         [System.Obsolete("This method is obsolete because it doesn't work as intended and will be removed in a future version.")]
@@ -34,10 +40,13 @@ namespace Aspire.Hosting
         [System.Obsolete("Use WithHostPort instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> WithGatewayPort(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> builder, int? port) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> WithHostPort(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubsEmulatorResource> builder, int? port) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureEventHubResource> WithProperties(this ApplicationModel.IResourceBuilder<Azure.AzureEventHubResource> builder, System.Action<Azure.AzureEventHubResource> configure) { throw null; }
 
+        [AspireExportIgnore(Reason = "EventHubsBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureEventHubsRole-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithRoleAssignments<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureEventHubsResource> target, params global::Azure.Provisioning.EventHubs.EventHubsBuiltInRole[] roles)
             where T : ApplicationModel.IResource { throw null; }
     }
@@ -45,7 +54,8 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzureEventHubConsumerGroupResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureEventHubResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, ConsumerGroup = {ConsumerGroupName}")]
+    public partial class AzureEventHubConsumerGroupResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureEventHubResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig
     {
         public AzureEventHubConsumerGroupResource(string name, string consumerGroupName, AzureEventHubResource parent) : base(default!) { }
 
@@ -55,10 +65,14 @@ namespace Aspire.Hosting.Azure
 
         public AzureEventHubResource Parent { get { throw null; } }
 
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
+
         void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
     }
 
-    public partial class AzureEventHubResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureEventHubsResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Hub = {HubName}")]
+    [AspireExport(ExposeProperties = true)]
+    public partial class AzureEventHubResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureEventHubsResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig
     {
         public AzureEventHubResource(string name, string hubName, AzureEventHubsResource parent) : base(default!) { }
 
@@ -69,6 +83,8 @@ namespace Aspire.Hosting.Azure
         public AzureEventHubsResource Parent { get { throw null; } }
 
         public long? PartitionCount { get { throw null; } set { } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
         void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
     }
@@ -82,7 +98,8 @@ namespace Aspire.Hosting.Azure
         public override string Name { get { throw null; } }
     }
 
-    public partial class AzureEventHubsResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithEndpoints, IResourceWithAzureFunctionsConfig
+    [AspireExport]
+    public partial class AzureEventHubsResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
     {
         public AzureEventHubsResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -90,11 +107,25 @@ namespace Aspire.Hosting.Azure
 
         public BicepOutputReference EventHubsEndpoint { get { throw null; } }
 
+        public ApplicationModel.ReferenceExpression HostName { get { throw null; } }
+
+        public BicepOutputReference Id { get { throw null; } }
+
         public bool IsEmulator { get { throw null; } }
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
+        public ApplicationModel.ReferenceExpression? Port { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
+
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
 
         void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
     }

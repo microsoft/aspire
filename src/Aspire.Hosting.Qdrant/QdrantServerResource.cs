@@ -6,7 +6,8 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// A resource that represents a Qdrant database.
 /// </summary>
-public class QdrantServerResource : ContainerResource, IResourceWithConnectionString
+[AspireExport(ExposeProperties = true)]
+public class QdrantServerResource : ContainerResource, IResourceWithConnectionString, IResourceWithCustomWithReference<QdrantServerResource>
 {
     internal const string PrimaryEndpointName = "grpc";
     internal const string HttpEndpointName = "http";
@@ -99,5 +100,30 @@ public class QdrantServerResource : ContainerResource, IResourceWithConnectionSt
         yield return new("ApiKey", ReferenceExpression.Create($"{ApiKeyParameter}"));
         yield return new("Uri", UriExpression);
         yield return new("HttpUri", HttpUriExpression);
+    }
+
+    static IResourceBuilder<TDestination>? IResourceWithCustomWithReference<QdrantServerResource>.TryWithReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name)
+    {
+        if (source is not IResourceBuilder<QdrantServerResource> qdrantSource)
+        {
+            return null;
+        }
+
+        if (optional)
+        {
+            throw new InvalidOperationException("Optional references are not supported for Qdrant resources.");
+        }
+
+        if (name is not null)
+        {
+            throw new InvalidOperationException("Named service references are not supported for Qdrant resources.");
+        }
+
+        return QdrantBuilderExtensions.WithReference(builder, qdrantSource, connectionName);
     }
 }

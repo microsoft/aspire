@@ -19,15 +19,15 @@ namespace Aspire.Hosting.Containers.Tests;
 public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresDocker]
-    [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     public async Task WithBuildSecretPopulatesSecretFilesCorrectly()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync(includeSecrets: true);
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(includeSecrets: true);
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         builder.Configuration["Parameters:secret"] = "open sesame from env";
         var parameter = builder.AddParameter("secret", secret: true);
 
@@ -50,8 +50,7 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
-    [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     public async Task ContainerBuildLogsAreStreamedToAppHost()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -61,8 +60,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
             logging.AddXunit(testOutputHelper);
         });
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         builder.AddContainer("testcontainer", "testimage")
                .WithHttpEndpoint(targetPort: 80)
                .WithDockerfile(tempContextPath, tempDockerfilePath);
@@ -97,8 +97,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var dockerFile = builder.AddDockerfile(resourceName, tempContextPath, tempDockerfilePath);
 
         // The effective image name (from TryGetContainerImageName) should be the lowercase resource name
@@ -120,8 +121,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var dockerFile = builder.AddContainer(resourceName, "someimagename")
             .WithDockerfile(tempContextPath, tempDockerfilePath);
 
@@ -144,8 +146,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var dockerFile = builder.AddContainer("testcontainer", "someimagename")
             .WithDockerfile(tempContextPath, tempDockerfilePath);
         Assert.True(dockerFile.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var buildAnnotation1));
@@ -164,8 +167,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var dockerFile = builder.AddContainer("testcontainer", "someimagename")
             .WithDockerfile(tempContextPath, tempDockerfilePath);
 
@@ -185,15 +189,15 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
-    [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     public async Task WithDockerfileLaunchesContainerSuccessfully()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         builder.AddContainer("testcontainer", "testimage")
                .WithHttpEndpoint(targetPort: 80)
                .WithDockerfile(tempContextPath, tempDockerfilePath);
@@ -220,15 +224,15 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
-    [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     public async Task AddDockerfileLaunchesContainerSuccessfully()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         builder.AddDockerfile("testcontainer", tempContextPath, tempDockerfilePath)
                .WithHttpEndpoint(targetPort: 80);
 
@@ -255,7 +259,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task WithDockerfileResultsInBuildAttributeBeingAddedToManifest()
     {
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var manifestOutputPath = Path.Combine(tempContextPath, "aspire-manifest.json");
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
@@ -303,7 +309,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task AddDockerfileResultsInBuildAttributeBeingAddedToManifest()
     {
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var manifestOutputPath = Path.Combine(tempContextPath, "aspire-manifest.json");
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
@@ -350,7 +358,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task WithDockerfileWithBuildSecretResultsInManifestReferencingSecretParameter()
     {
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var manifestOutputPath = Path.Combine(tempContextPath, "aspire-manifest.json");
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
@@ -396,7 +406,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task AddDockerfileWithBuildSecretResultsInManifestReferencingSecretParameter()
     {
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var manifestOutputPath = Path.Combine(tempContextPath, "aspire-manifest.json");
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
@@ -439,15 +451,15 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
-    [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     public async Task WithDockerfileWithParameterLaunchesContainerSuccessfully()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         builder.Configuration["Parameters:message"] = "hello";
         var parameter = builder.AddParameter("message");
 
@@ -511,15 +523,15 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresDocker]
-    [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
+    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     public async Task AddDockerfileWithParameterLaunchesContainerSuccessfully()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         builder.Configuration["Parameters:message"] = "hello";
         var parameter = builder.AddParameter("message");
 
@@ -624,7 +636,7 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         });
 
         Assert.Equal(
-            "The resource does not have a Dockerfile build annotation. Call WithDockerfile before calling WithBuildArg.",
+            "The resource 'mycontainer' does not have a Dockerfile build annotation. Call WithDockerfile before calling WithBuildArg.",
             ex.Message
             );
     }
@@ -635,8 +647,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddContainer("mycontainer", "myimage")
                                .WithDockerfile(tempContextPath);
 
@@ -651,8 +664,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddDockerfile("mycontainer", tempContextPath);
 
         var annotation = Assert.Single(container.Resource.Annotations.OfType<DockerfileBuildAnnotation>());
@@ -666,8 +680,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddContainer("mycontainer", "myimage")
                                .WithDockerfile(tempContextPath, "Dockerfile");
 
@@ -682,8 +697,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddDockerfile("mycontainer", tempContextPath, "Dockerfile");
 
         var annotation = Assert.Single(container.Resource.Annotations.OfType<DockerfileBuildAnnotation>());
@@ -697,8 +713,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync("Otherdockerfile");
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync("Otherdockerfile");
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddContainer("mycontainer", "myimage")
                                .WithDockerfile(tempContextPath, "Otherdockerfile");
 
@@ -713,8 +730,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync("Otherdockerfile");
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync("Otherdockerfile");
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddDockerfile("mycontainer", tempContextPath, "Otherdockerfile");
 
         var annotation = Assert.Single(container.Resource.Annotations.OfType<DockerfileBuildAnnotation>());
@@ -728,8 +746,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddContainer("mycontainer", "myimage")
                                .WithDockerfile(tempContextPath, tempDockerfilePath);
 
@@ -744,8 +763,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddDockerfile("mycontainer", tempContextPath, tempDockerfilePath);
 
         var annotation = Assert.Single(container.Resource.Annotations.OfType<DockerfileBuildAnnotation>());
@@ -766,7 +786,8 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, _) = await DockerfileUtils.CreateTemporaryDockerfileAsync(createDockerfile: false);
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(createDockerfile: false);
+        var tempContextPath = tempDockerfileContext.ContextPath;
 
         var dockerfileContent = "FROM alpine:latest\nRUN echo 'Hello from factory'";
         var container = builder.AddContainer("mycontainer", "myimage")
@@ -784,11 +805,16 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
             Resource = container.Resource
         };
         var steps = (await stepsAnnotation.CreateStepsAsync(factoryContext)).ToList();
-        var buildStep = Assert.Single(steps);
+        Assert.Equal(2, steps.Count);
+
+        var buildStep = steps.Single(s => s.Tags.Contains(WellKnownPipelineTags.BuildCompute));
         Assert.Equal("build-mycontainer", buildStep.Name);
-        Assert.Contains(WellKnownPipelineTags.BuildCompute, buildStep.Tags);
         Assert.Contains(WellKnownPipelineSteps.Build, buildStep.RequiredBySteps);
         Assert.Contains(WellKnownPipelineSteps.BuildPrereq, buildStep.DependsOnSteps);
+
+        var pushStep = steps.Single(s => s.Tags.Contains(WellKnownPipelineTags.PushContainerImage));
+        Assert.Equal("push-mycontainer", pushStep.Name);
+        Assert.Contains(WellKnownPipelineSteps.Push, pushStep.RequiredBySteps);
 
         // Verify the factory produces the expected content
         var context = new DockerfileFactoryContext
@@ -808,7 +834,8 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, _) = await DockerfileUtils.CreateTemporaryDockerfileAsync(createDockerfile: false);
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(createDockerfile: false);
+        var tempContextPath = tempDockerfileContext.ContextPath;
 
         var dockerfileContent = "FROM alpine:latest\nRUN echo 'Hello from async factory'";
         var container = builder.AddContainer("mycontainer", "myimage")
@@ -837,7 +864,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task WithDockerfileFactoryGeneratesFileAtBuildTime()
     {
-        var (tempContextPath, _) = await DockerfileUtils.CreateTemporaryDockerfileAsync(createDockerfile: false);
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(createDockerfile: false);
+
+        var tempContextPath = tempDockerfileContext.ContextPath;
         var manifestOutputPath = Path.Combine(tempContextPath, "aspire-manifest.json");
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
@@ -861,7 +890,8 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.Services.AddLogging(b => b.AddXunit(testOutputHelper));
 
-        var (tempContextPath, _) = await DockerfileUtils.CreateTemporaryDockerfileAsync(createDockerfile: false);
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(createDockerfile: false);
+        var tempContextPath = tempDockerfileContext.ContextPath;
 
         var dockerfileContent = "FROM alpine:latest AS builder\nFROM alpine:latest AS runner";
         var container = builder.AddContainer("mycontainer", "myimage")
@@ -918,8 +948,9 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         builder.AddContainer("test-container", "test-image")
                .WithDockerfile(tempContextPath, tempDockerfilePath);
 
@@ -941,12 +972,16 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         };
 
         var steps = (await pipelineStepAnnotation.CreateStepsAsync(factoryContext)).ToList();
+        Assert.Equal(2, steps.Count);
 
-        var buildStep = Assert.Single(steps);
+        var buildStep = steps.Single(s => s.Tags.Contains(WellKnownPipelineTags.BuildCompute));
         Assert.Equal("build-test-container", buildStep.Name);
-        Assert.Contains(WellKnownPipelineTags.BuildCompute, buildStep.Tags);
         Assert.Contains(WellKnownPipelineSteps.Build, buildStep.RequiredBySteps);
         Assert.Contains(WellKnownPipelineSteps.BuildPrereq, buildStep.DependsOnSteps);
+
+        var pushStep = steps.Single(s => s.Tags.Contains(WellKnownPipelineTags.PushContainerImage));
+        Assert.Equal("push-test-container", pushStep.Name);
+        Assert.Contains(WellKnownPipelineSteps.Push, pushStep.RequiredBySteps);
     }
 
     [Fact]
@@ -954,9 +989,14 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var (tempContextPath1, tempDockerfilePath1) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-        var (tempContextPath2, tempDockerfilePath2) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext1 = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath1 = tempDockerfileContext1.ContextPath;
+        var tempDockerfilePath1 = tempDockerfileContext1.DockerfilePath;
+        using var tempDockerfileContext2 = await DockerfileUtils.CreateTemporaryDockerfileAsync();
 
+        var tempContextPath2 = tempDockerfileContext2.ContextPath;
+
+        var tempDockerfilePath2 = tempDockerfileContext2.DockerfilePath;
         var containerBuilder = builder.AddContainer("test-container", "test-image")
                                      .WithDockerfile(tempContextPath1, tempDockerfilePath1)
                                      .WithDockerfile(tempContextPath1, tempDockerfilePath1); // Call twice to start
@@ -977,10 +1017,15 @@ public class WithDockerfileTests(ITestOutputHelper testOutputHelper)
         };
 
         var steps = (await pipelineStepAnnotation1.CreateStepsAsync(factoryContext)).ToList();
-        var buildStep = Assert.Single(steps);
+        Assert.Equal(2, steps.Count);
+
+        var buildStep = steps.Single(s => s.Tags.Contains(WellKnownPipelineTags.BuildCompute));
         Assert.Equal("build-test-container", buildStep.Name);
-        Assert.Contains(WellKnownPipelineTags.BuildCompute, buildStep.Tags);
         Assert.Contains(WellKnownPipelineSteps.Build, buildStep.RequiredBySteps);
         Assert.Contains(WellKnownPipelineSteps.BuildPrereq, buildStep.DependsOnSteps);
+
+        var pushStep = steps.Single(s => s.Tags.Contains(WellKnownPipelineTags.PushContainerImage));
+        Assert.Equal("push-test-container", pushStep.Name);
+        Assert.Contains(WellKnownPipelineSteps.Push, pushStep.RequiredBySteps);
     }
 }

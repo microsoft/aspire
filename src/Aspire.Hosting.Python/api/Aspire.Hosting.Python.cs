@@ -10,32 +10,64 @@ namespace Aspire.Hosting
 {
     public static partial class PythonAppResourceBuilderExtensions
     {
+        [System.Obsolete("Use AddPythonScript, AddPythonModule, or AddPythonExecutable and chain with .WithVirtualEnvironment(...).WithArgs(...) instead.")]
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath, string virtualEnvironmentPath, params string[] scriptArgs) { throw null; }
 
+        [System.Obsolete("Use AddPythonScript, AddPythonModule, or AddPythonExecutable and chain with .WithArgs(...) instead.")]
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath, params string[] scriptArgs) { throw null; }
-    }
 
-    [System.Obsolete("PythonProjectResource is deprecated. Please use PythonAppResource instead.")]
-    public static partial class PythonProjectResourceBuilderExtensions
-    {
-        [System.Obsolete("AddPythonProject is deprecated. Please use AddPythonApp instead.")]
-        public static ApplicationModel.IResourceBuilder<Python.PythonProjectResource> AddPythonProject(this IDistributedApplicationBuilder builder, string name, string projectDirectory, string scriptPath, string virtualEnvironmentPath, params string[] scriptArgs) { throw null; }
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath) { throw null; }
 
-        [System.Obsolete("AddPythonProject is deprecated. Please use AddPythonApp instead.")]
-        public static ApplicationModel.IResourceBuilder<Python.PythonProjectResource> AddPythonProject(this IDistributedApplicationBuilder builder, string name, string projectDirectory, string scriptPath, params string[] scriptArgs) { throw null; }
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonExecutable(this IDistributedApplicationBuilder builder, string name, string appDirectory, string executableName) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonModule(this IDistributedApplicationBuilder builder, string name, string appDirectory, string moduleName) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Python.UvicornAppResource> AddUvicornApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string app) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithDebugging<T>(this ApplicationModel.IResourceBuilder<T> builder)
+            where T : Python.PythonAppResource { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithEntrypoint<T>(this ApplicationModel.IResourceBuilder<T> builder, Python.EntrypointType entrypointType, string entrypoint)
+            where T : Python.PythonAppResource { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithPip<T>(this ApplicationModel.IResourceBuilder<T> builder, bool install = true, string[]? installArgs = null)
+            where T : Python.PythonAppResource { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithUv<T>(this ApplicationModel.IResourceBuilder<T> builder, bool install = true, string[]? args = null)
+            where T : Python.PythonAppResource { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithVirtualEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string virtualEnvironmentPath, bool createIfNotExists = true)
+            where T : Python.PythonAppResource { throw null; }
     }
 }
 
 namespace Aspire.Hosting.Python
 {
-    public partial class PythonAppResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource
+    public enum EntrypointType
+    {
+        Executable = 0,
+        Script = 1,
+        Module = 2
+    }
+
+    public partial class PythonAppResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
     {
         public PythonAppResource(string name, string executablePath, string appDirectory) : base(default!, default!, default!) { }
     }
 
-    [System.Obsolete("PythonProjectResource is deprecated. Please use PythonAppResource instead.")]
-    public partial class PythonProjectResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource
+    public partial class UvicornAppResource : PythonAppResource
     {
-        public PythonProjectResource(string name, string executablePath, string projectDirectory) : base(default!, default!, default!) { }
+        public UvicornAppResource(string name, string executablePath, string appDirectory) : base(default!, default!, default!) { }
     }
 }

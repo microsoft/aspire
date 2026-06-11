@@ -27,6 +27,8 @@ resource sqlFirewallRule_AllowAllIps 'Microsoft.Sql/servers/firewallRules@2023-0
 
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 
-output name string = existingResourceName
+output name string = sqlServer.name
+
+output id string = sqlServer.id
 
 output sqlServerAdminName string = sqlServer.properties.administrators.login

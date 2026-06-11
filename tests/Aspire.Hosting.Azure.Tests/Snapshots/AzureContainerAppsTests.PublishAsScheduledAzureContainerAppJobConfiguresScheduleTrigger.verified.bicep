@@ -5,7 +5,7 @@ param env_outputs_azure_container_apps_environment_default_domain string
 
 param env_outputs_azure_container_apps_environment_id string
 
-resource scheduled_job 'Microsoft.App/jobs@2025-01-01' = {
+resource scheduled_job 'Microsoft.App/jobs@2025-07-01' = {
   name: 'scheduled-job'
   location: location
   properties: {

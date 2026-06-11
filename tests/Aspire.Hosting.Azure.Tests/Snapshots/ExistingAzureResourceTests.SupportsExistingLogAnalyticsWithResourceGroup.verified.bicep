@@ -9,4 +9,4 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2025-02-01' exis
 
 output logAnalyticsWorkspaceId string = logAnalytics.id
 
-output name string = existingResourceName
+output name string = logAnalytics.name

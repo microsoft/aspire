@@ -10,6 +10,7 @@ public class NewUpAndBuildStandaloneTemplateTests(ITestOutputHelper testOutput) 
     [Theory]
     [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire", ""])]
     [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-starter", ""])]
+    [MemberData(nameof(TestDataForNewAndBuildTemplateTests), arguments: ["aspire-ts-cs-starter", ""])]
     [Trait("category", "basic-build")]
     public async Task CanNewAndBuild(string templateName, string extraArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
     {
@@ -20,8 +21,7 @@ public class NewUpAndBuildStandaloneTemplateTests(ITestOutputHelper testOutput) 
             TestSdk.Current => BuildEnvironment.ForCurrentSdkOnly,
             TestSdk.Previous => BuildEnvironment.ForPreviousSdkOnly,
             TestSdk.Next => BuildEnvironment.ForNextSdkOnly,
-            TestSdk.CurrentSdkAndPreviousRuntime => BuildEnvironment.ForCurrentSdkAndPreviousRuntime,
-            TestSdk.NextSdkAndCurrentRuntime => BuildEnvironment.ForNextSdkAndCurrentRuntime,
+            TestSdk.NextSdkWithCurrentAndPreviousRuntime => BuildEnvironment.ForNextSdkWithCurrentAndPreviousRuntimes,
             _ => throw new ArgumentOutOfRangeException(nameof(sdk))
         };
 

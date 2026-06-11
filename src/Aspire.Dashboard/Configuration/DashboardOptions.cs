@@ -13,7 +13,7 @@ public sealed class DashboardOptions
 {
     public string? ApplicationName { get; set; }
     public OtlpOptions Otlp { get; set; } = new();
-    public McpOptions Mcp { get; set; } = new();
+    public ApiOptions Api { get; set; } = new();
     public FrontendOptions Frontend { get; set; } = new();
     public ResourceServiceClientOptions ResourceServiceClient { get; set; } = new();
     public TelemetryLimitOptions TelemetryLimits { get; set; } = new();
@@ -111,12 +111,7 @@ public sealed class OtlpOptions
 
     internal bool TryParseOptions([NotNullWhen(false)] out string? errorMessage)
     {
-        if (string.IsNullOrEmpty(GrpcEndpointUrl) && string.IsNullOrEmpty(HttpEndpointUrl))
-        {
-            errorMessage = $"Neither OTLP/gRPC or OTLP/HTTP endpoint URLs are configured. Specify either a {DashboardConfigNames.DashboardOtlpGrpcUrlName.EnvVarName} or {DashboardConfigNames.DashboardOtlpHttpUrlName.EnvVarName} value.";
-            return false;
-        }
-
+        // OTLP endpoints are optional - telemetry can be imported via the UI
         if (!string.IsNullOrEmpty(GrpcEndpointUrl) && !OptionsHelpers.TryParseBindingAddress(GrpcEndpointUrl, out _parsedGrpcEndpointAddress))
         {
             errorMessage = $"Failed to parse OTLP gRPC endpoint URL '{GrpcEndpointUrl}'.";
@@ -143,27 +138,52 @@ public sealed class OtlpOptions
     }
 }
 
-public class McpOptions
+/// <summary>
+/// Options for Dashboard API authentication.
+/// </summary>
+public sealed class ApiOptions
 {
-    private BindingAddress? _parsedEndpointAddress;
     private byte[]? _primaryApiKeyBytes;
     private byte[]? _secondaryApiKeyBytes;
+    private bool? _disabled;
 
-    public bool? Disabled { get; set; }
-    public McpAuthMode? AuthMode { get; set; }
-    public string? PrimaryApiKey { get; set; }
-    public string? SecondaryApiKey { get; set; }
-    public string? EndpointUrl { get; set; }
-
-    // Public URL could be different from the endpoint URL (e.g., when behind a proxy).
-    public string? PublicUrl { get; set; }
-
-    public bool SuppressUnsecuredMessage { get; set; }
-
-    public BindingAddress? GetEndpointAddress()
+    /// <summary>
+    /// Gets or sets whether the Telemetry HTTP API is enabled.
+    /// When false, the /api/telemetry/* endpoints are not registered.
+    /// Defaults to true.
+    /// </summary>
+    [Obsolete("Use Disabled instead.")]
+    public bool? Enabled
     {
-        return _parsedEndpointAddress;
+        get => _disabled is null ? null : !_disabled;
+        set => _disabled = value is null ? null : !value;
     }
+
+    /// <summary>
+    /// Gets or sets whether the Telemetry HTTP API is disabled.
+    /// When true, the /api/telemetry/* endpoints are not registered.
+    /// Defaults to false.
+    /// </summary>
+    public bool? Disabled
+    {
+        get => _disabled;
+        set => _disabled = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the authentication mode for API endpoints.
+    /// </summary>
+    public ApiAuthMode? AuthMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets the primary API key for authentication.
+    /// </summary>
+    public string? PrimaryApiKey { get; set; }
+
+    /// <summary>
+    /// Gets or sets the secondary API key for authentication (for key rotation).
+    /// </summary>
+    public string? SecondaryApiKey { get; set; }
 
     public byte[] GetPrimaryApiKeyBytes()
     {
@@ -171,19 +191,14 @@ public class McpOptions
         return _primaryApiKeyBytes;
     }
 
+    public byte[]? GetPrimaryApiKeyBytesOrNull() => _primaryApiKeyBytes;
+
     public byte[]? GetSecondaryApiKeyBytes() => _secondaryApiKeyBytes;
 
     internal bool TryParseOptions([NotNullWhen(false)] out string? errorMessage)
     {
-        if (!string.IsNullOrEmpty(EndpointUrl) && !OptionsHelpers.TryParseBindingAddress(EndpointUrl, out _parsedEndpointAddress))
-        {
-            errorMessage = $"Failed to parse MCP endpoint URL '{EndpointUrl}'.";
-            return false;
-        }
-
         _primaryApiKeyBytes = PrimaryApiKey != null ? Encoding.UTF8.GetBytes(PrimaryApiKey) : null;
         _secondaryApiKeyBytes = SecondaryApiKey != null ? Encoding.UTF8.GetBytes(SecondaryApiKey) : null;
-
         errorMessage = null;
         return true;
     }
@@ -288,11 +303,14 @@ public sealed class TelemetryLimitOptions
     public int MaxAttributeCount { get; set; } = 128;
     public int MaxAttributeLength { get; set; } = int.MaxValue;
     public int MaxSpanEventCount { get; set; } = int.MaxValue;
+    public int MaxResourceCount { get; set; } = 10_000;
 }
 
 public sealed class UIOptions
 {
     public bool? DisableResourceGraph { get; set; }
+    public bool? DisableImport { get; set; }
+    public bool? DisableAgentHelp { get; set; }
 }
 
 // Don't set values after validating/parsing options.
@@ -385,6 +403,7 @@ public sealed class DebugSessionOptions
 
     public int? Port { get; set; }
     public string? Token { get; set; }
+    public string? DcpInstanceId { get; set; }
     public string? ServerCertificate { get; set; }
     public bool? TelemetryOptOut { get; set; }
 

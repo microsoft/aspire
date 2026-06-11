@@ -1,5 +1,0 @@
-<Project>
-  <ItemGroup>
-    <Using Include="Aspire.Hosting.Azure.AIFoundryModel" Alias="AIFoundryModel" />
-  </ItemGroup>
-</Project>

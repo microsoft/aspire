@@ -28,8 +28,8 @@ public class AddUvicornAppTests
     [Fact]
     public async Task WithUv_GeneratesDockerfileInPublishMode()
     {
-        using var sourceDir = new TempDirectory();
-        using var outputDir = new TempDirectory();
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
         var projectDirectory = sourceDir.Path;
 
         // Create a UV-based Python project with pyproject.toml and uv.lock

@@ -125,10 +125,10 @@ builder.AddRedisOutputCache("cache");
 ## Additional documentation
 
 * https://learn.microsoft.com/aspnet/core/performance/caching/output
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Redis is a registered trademark of Redis Ltd. Any rights therein are reserved to Redis Ltd._

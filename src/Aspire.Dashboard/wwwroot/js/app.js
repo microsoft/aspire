@@ -194,6 +194,10 @@ window.copyTextToClipboard = function (id, text, precopy, postcopy) {
     }, 1500);
 };
 
+window.copyText = function (text) {
+    return navigator.clipboard.writeText(text);
+};
+
 function isActiveElementInput() {
     const currentElement = document.activeElement;
     const tagName = currentElement.tagName.toLowerCase();
@@ -310,11 +314,12 @@ window.unregisterGlobalKeydownListener = function (obj) {
 };
 
 window.getBrowserInfo = function () {
-    const options = Intl.DateTimeFormat().resolvedOptions();
+    const options = Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions();
 
     return {
         timeZone: options.timeZone,
-        userAgent: navigator.userAgent
+        userAgent: navigator.userAgent,
+        is24HourTime: options.hourCycle === "h23" || options.hourCycle === "h24"
     };
 };
 
@@ -378,6 +383,13 @@ window.scrollToTop = function (selector) {
     var element = document.querySelector(selector);
     if (element) {
         element.scrollTop = 0;
+    }
+};
+
+window.scrollToElement = function (elementId) {
+    var element = document.getElementById(elementId);
+    if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
     }
 };
 

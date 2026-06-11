@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREUSERSECRETS001
+#pragma warning disable ASPIREFILESYSTEM001
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -244,6 +246,8 @@ public static class DistributedApplicationTestingBuilder
 
             public IDistributedApplicationPipeline Pipeline => innerBuilder.Pipeline;
 
+            public IUserSecretsManager UserSecretsManager => innerBuilder.UserSecretsManager;
+
             public IResourceBuilder<T> AddResource<T>(T resource) where T : IResource => innerBuilder.AddResource(resource);
 
             public DistributedApplication Build() => BuildAsync(CancellationToken.None).Result;
@@ -396,6 +400,8 @@ public static class DistributedApplicationTestingBuilder
 
         public IDistributedApplicationPipeline Pipeline => _innerBuilder.Pipeline;
 
+        public IUserSecretsManager UserSecretsManager => _innerBuilder.UserSecretsManager;
+
         public IResourceBuilder<T> AddResource<T>(T resource) where T : IResource => _innerBuilder.AddResource(resource);
 
         [MemberNotNull(nameof(_app))]
@@ -485,6 +491,12 @@ public interface IDistributedApplicationTestingBuilder : IDistributedApplication
 
     /// <inheritdoc cref="IDistributedApplicationBuilder.Resources" />
     new IResourceCollection Resources => ((IDistributedApplicationBuilder)this).Resources;
+
+    /// <inheritdoc cref="IDistributedApplicationBuilder.FileSystemService" />
+    new IFileSystemService FileSystemService => ((IDistributedApplicationBuilder)this).FileSystemService;
+
+    /// <inheritdoc cref="IDistributedApplicationBuilder.UserSecretsManager" />
+    new IUserSecretsManager UserSecretsManager => ((IDistributedApplicationBuilder)this).UserSecretsManager;
 
     /// <inheritdoc cref="IDistributedApplicationBuilder.AddResource{T}(T)" />
     new IResourceBuilder<T> AddResource<T>(T resource) where T : IResource => ((IDistributedApplicationBuilder)this).AddResource(resource);

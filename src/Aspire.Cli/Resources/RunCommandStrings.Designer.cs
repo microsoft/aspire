@@ -51,6 +51,12 @@ namespace Aspire.Cli.Resources {
             }
         }
         
+        public static string ForceArgumentDescription {
+            get {
+                return ResourceManager.GetString("ForceArgumentDescription", resourceCulture);
+            }
+        }
+        
         public static string ProjectArgumentDescription {
             get {
                 return ResourceManager.GetString("ProjectArgumentDescription", resourceCulture);
@@ -162,6 +168,168 @@ namespace Aspire.Cli.Resources {
         public static string StartingDebugSessionInExtension {
             get {
                 return ResourceManager.GetString("StartingDebugSessionInExtension", resourceCulture);
+            }
+        }
+
+        public static string StartingRunSessionInExtension {
+            get {
+                return ResourceManager.GetString("StartingRunSessionInExtension", resourceCulture);
+            }
+        }
+        
+        public static string AgentConfigurationPrompt {
+            get {
+                return ResourceManager.GetString("AgentConfigurationPrompt", resourceCulture);
+            }
+        }
+        
+        public static string AgentConfigurationYes {
+            get {
+                return ResourceManager.GetString("AgentConfigurationYes", resourceCulture);
+            }
+        }
+        
+        public static string AgentConfigurationNo {
+            get {
+                return ResourceManager.GetString("AgentConfigurationNo", resourceCulture);
+            }
+        }
+        
+        public static string AgentConfigurationMaybeLater {
+            get {
+                return ResourceManager.GetString("AgentConfigurationMaybeLater", resourceCulture);
+            }
+        }
+        
+        public static string AgentConfigurationSelectPrompt {
+            get {
+                return ResourceManager.GetString("AgentConfigurationSelectPrompt", resourceCulture);
+            }
+        }
+        
+        public static string RunningInstanceStopped {
+            get {
+                return ResourceManager.GetString("RunningInstanceStopped", resourceCulture);
+            }
+        }
+        
+        public static string DetachArgumentDescription {
+            get {
+                return ResourceManager.GetString("DetachArgumentDescription", resourceCulture);
+            }
+        }
+        
+        public static string JsonArgumentDescription {
+            get {
+                return ResourceManager.GetString("JsonArgumentDescription", resourceCulture);
+            }
+        }
+        
+        public static string StartingAppHostInBackground {
+            get {
+                return ResourceManager.GetString("StartingAppHostInBackground", resourceCulture);
+            }
+        }
+        
+        public static string AppHostStartedSuccessfully {
+            get {
+                return ResourceManager.GetString("AppHostStartedSuccessfully", resourceCulture);
+            }
+        }
+        
+        public static string FailedToStartAppHost {
+            get {
+                return ResourceManager.GetString("FailedToStartAppHost", resourceCulture);
+            }
+        }
+        
+        public static string WaitingForAppHostToStart {
+            get {
+                return ResourceManager.GetString("WaitingForAppHostToStart", resourceCulture);
+            }
+        }
+        
+        public static string AppHostExitedWithCode {
+            get {
+                return ResourceManager.GetString("AppHostExitedWithCode", resourceCulture);
+            }
+        }
+        
+        public static string AppHostFailedToBuild {
+            get {
+                return ResourceManager.GetString("AppHostFailedToBuild", resourceCulture);
+            }
+        }
+        
+        public static string TimeoutWaitingForAppHost {
+            get {
+                return ResourceManager.GetString("TimeoutWaitingForAppHost", resourceCulture);
+            }
+        }
+
+        public static string InvalidAppHostStartupTimeoutEnvironmentVariable {
+            get {
+                return ResourceManager.GetString("InvalidAppHostStartupTimeoutEnvironmentVariable", resourceCulture);
+            }
+        }
+        
+        public static string CheckLogsForDetails {
+            get {
+                return ResourceManager.GetString("CheckLogsForDetails", resourceCulture);
+            }
+        }
+
+        public static string RecentAppHostStartupOutput {
+            get {
+                return ResourceManager.GetString("RecentAppHostStartupOutput", resourceCulture);
+            }
+        }
+
+        public static string AppHostConnectionLostWaitingForExit {
+            get {
+                return ResourceManager.GetString("AppHostConnectionLostWaitingForExit", resourceCulture);
+            }
+        }
+
+        public static string ProcessId {
+            get {
+                return ResourceManager.GetString("ProcessId", resourceCulture);
+            }
+        }
+
+        public static string FormatRequiresDetach {
+            get {
+                return ResourceManager.GetString("FormatRequiresDetach", resourceCulture);
+            }
+        }
+        
+        public static string IsolatedArgumentDescription {
+            get {
+                return ResourceManager.GetString("IsolatedArgumentDescription", resourceCulture);
+            }
+        }
+        
+        public static string CopyingUserSecrets {
+            get {
+                return ResourceManager.GetString("CopyingUserSecrets", resourceCulture);
+            }
+        }
+        
+        public static string IsolatedModeRunningInstanceWarning {
+            get {
+                return ResourceManager.GetString("IsolatedModeRunningInstanceWarning", resourceCulture);
+            }
+        }
+
+        public static string NoBuildArgumentDescription {
+            get {
+                return ResourceManager.GetString("NoBuildArgumentDescription", resourceCulture);
+            }
+        }
+
+        public static string NoBuildNotSupportedWithWatchMode {
+            get {
+                return ResourceManager.GetString("NoBuildNotSupportedWithWatchMode", resourceCulture);
             }
         }
     }

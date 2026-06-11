@@ -46,17 +46,13 @@ public class BuildEnvironment
     private static readonly Lazy<BuildEnvironment> s_instance_100 = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-10"));
 
-    private static readonly Lazy<BuildEnvironment> s_instance_90_80 = new(() =>
-        new BuildEnvironment(sdkDirName: "dotnet-tests"));
-
-    private static readonly Lazy<BuildEnvironment> s_instance_100_90 = new(() =>
+    private static readonly Lazy<BuildEnvironment> s_instance_100_90_80 = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-tests"));
 
     public static BuildEnvironment ForPreviousSdkOnly => s_instance_80.Value;
     public static BuildEnvironment ForCurrentSdkOnly => s_instance_90.Value;
     public static BuildEnvironment ForNextSdkOnly => s_instance_100.Value;
-    public static BuildEnvironment ForCurrentSdkAndPreviousRuntime => s_instance_90_80.Value;
-    public static BuildEnvironment ForNextSdkAndCurrentRuntime => s_instance_100_90.Value;
+    public static BuildEnvironment ForNextSdkWithCurrentAndPreviousRuntimes => s_instance_100_90_80.Value;
 
     public static BuildEnvironment ForDefaultFramework =>
         DefaultTargetFramework switch
@@ -65,7 +61,7 @@ public class BuildEnvironment
 
             // Use current+previous to allow running tests on helix built with 9.0 sdk
             // but targeting 8.0 tfm
-            TestTargetFramework.Current => ForCurrentSdkAndPreviousRuntime,
+            TestTargetFramework.Current => ForNextSdkWithCurrentAndPreviousRuntimes,
 
             _ => throw new ArgumentOutOfRangeException(nameof(DefaultTargetFramework))
         };
@@ -94,7 +90,7 @@ public class BuildEnvironment
                         $"Could not find a SDK with the necessary components installed at {sdkFromArtifactsPath} computed from {nameof(RepoRoot)}={RepoRoot}." +
                         $" Build all the packages with '{buildCmd} -pack'." +
                         $" Then install the SDK with 'dotnet build {workloadsProjString}'." +
-                        " See https://github.com/dotnet/aspire/tree/main/tests/Aspire.Templates.Tests#readme for more details.");
+                        " See https://github.com/microsoft/aspire/tree/main/tests/Aspire.Templates.Tests#readme for more details.");
                 }
             }
             else
@@ -186,8 +182,9 @@ public class BuildEnvironment
 
         if (OperatingSystem.IsMacOS())
         {
-            // Disable default developer certificate features in MacOS due to test performance issues
+            // Disable developer certificate trust and HTTPS termination in macOS template tests to avoid keychain prompts.
             EnvVars["ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_TRUST"] = "false";
+            EnvVars["ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_HTTPS_TERMINATION"] = "false";
         }
 
         DotNet = Path.Combine(sdkForTemplatePath!, "dotnet");
@@ -303,7 +300,8 @@ public enum TestTargetFramework
     // Current is default
     Current,
     Previous,
-    Next
+    Next,
+    None
 }
 
 public static class TestTargetFrameworkExtensions

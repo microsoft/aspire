@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Manage MCP (Model Context Protocol) server..
+        ///   Looks up a localized string similar to Interact with MCP (Model Context Protocol) tools exposed by Aspire resources..
         /// </summary>
         internal static string Description {
             get {
@@ -70,11 +70,155 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Start the MCP (Model Context Protocol) server..
+        ///   Looks up a localized string similar to Warning: &apos;aspire mcp&apos; commands are deprecated and will be removed in a future release. Please use &apos;aspire agent&apos; instead..
+        /// </summary>
+        internal static string DeprecatedCommandWarning {
+            get {
+                return ResourceManager.GetString("DeprecatedCommandWarning", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Which additional options do you want to enable?.
+        /// </summary>
+        internal static string InitCommand_AdditionalOptionsSelectPrompt {
+            get {
+                return ResourceManager.GetString("InitCommand_AdditionalOptionsSelectPrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Which agent environments do you want to configure?.
+        /// </summary>
+        internal static string InitCommand_AgentConfigurationSelectPrompt {
+            get {
+                return ResourceManager.GetString("InitCommand_AgentConfigurationSelectPrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Agent environment configuration complete..
+        /// </summary>
+        internal static string InitCommand_ConfigurationComplete {
+            get {
+                return ResourceManager.GetString("InitCommand_ConfigurationComplete", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Install Playwright CLI for browser automation?.
+        /// </summary>
+        internal static string InitCommand_ConfigurePlaywrightPrompt {
+            get {
+                return ResourceManager.GetString("InitCommand_ConfigurePlaywrightPrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Create agent environment specific instruction files?.
+        /// </summary>
+        internal static string InitCommand_CreateAgentInstructionsPrompt {
+            get {
+                return ResourceManager.GetString("InitCommand_CreateAgentInstructionsPrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Initialize MCP server configuration for detected agent environments. (deprecated, use &apos;agent init&apos;).
+        /// </summary>
+        internal static string InitCommand_Description {
+            get {
+                return ResourceManager.GetString("InitCommand_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Detecting agent environments....
+        /// </summary>
+        internal static string InitCommand_DetectingAgentEnvironments {
+            get {
+                return ResourceManager.GetString("InitCommand_DetectingAgentEnvironments", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No agent environments were detected..
+        /// </summary>
+        internal static string InitCommand_NoAgentEnvironmentsDetected {
+            get {
+                return ResourceManager.GetString("InitCommand_NoAgentEnvironmentsDetected", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Directory not found: {0}.
+        /// </summary>
+        internal static string InitCommand_WorkspaceRootNotFound {
+            get {
+                return ResourceManager.GetString("InitCommand_WorkspaceRootNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Enter the path to the root of your workspace:.
+        /// </summary>
+        internal static string InitCommand_WorkspaceRootPrompt {
+            get {
+                return ResourceManager.GetString("InitCommand_WorkspaceRootPrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Workspace root path is required..
+        /// </summary>
+        internal static string InitCommand_WorkspaceRootRequired {
+            get {
+                return ResourceManager.GetString("InitCommand_WorkspaceRootRequired", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Start the MCP (Model Context Protocol) server. (deprecated, use &apos;agent mcp&apos;).
         /// </summary>
         internal static string StartCommand_Description {
             get {
                 return ResourceManager.GetString("StartCommand_Description", resourceCulture);
+            }
+        }
+        
+        internal static string CallCommand_Description {
+            get {
+                return ResourceManager.GetString("CallCommand_Description", resourceCulture);
+            }
+        }
+        
+        internal static string CallCommand_ResourceArgumentDescription {
+            get {
+                return ResourceManager.GetString("CallCommand_ResourceArgumentDescription", resourceCulture);
+            }
+        }
+        
+        internal static string CallCommand_ToolArgumentDescription {
+            get {
+                return ResourceManager.GetString("CallCommand_ToolArgumentDescription", resourceCulture);
+            }
+        }
+        
+        internal static string CallCommand_InputOptionDescription {
+            get {
+                return ResourceManager.GetString("CallCommand_InputOptionDescription", resourceCulture);
+            }
+        }
+        
+        internal static string ToolsCommand_Description {
+            get {
+                return ResourceManager.GetString("ToolsCommand_Description", resourceCulture);
+            }
+        }
+        
+        internal static string ToolsCommand_FormatOptionDescription {
+            get {
+                return ResourceManager.GetString("ToolsCommand_FormatOptionDescription", resourceCulture);
             }
         }
     }

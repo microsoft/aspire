@@ -1,11 +1,11 @@
-﻿ARG SOURCE1_IMAGENAME=sourceimage:latest
+ARG SOURCE1_IMAGENAME=sourceimage:latest
 ARG SOURCE2_IMAGENAME=sourceimage2:latest
 
 FROM ${SOURCE1_IMAGENAME} AS source1_stage
 
 FROM ${SOURCE2_IMAGENAME} AS source2_stage
 
-FROM mcr.microsoft.com/dotnet/nightly/yarp:2.3.0-preview.4
+FROM mcr.microsoft.com/dotnet/nightly/yarp:2.3-preview
 WORKDIR /app
 COPY --from=source1_stage /app/dist /app/wwwroot
 COPY --from=source1_stage /app/assets /app/wwwroot

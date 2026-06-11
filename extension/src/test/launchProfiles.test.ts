@@ -9,6 +9,7 @@ import {
     determineWorkingDirectory,
     determineServerReadyAction,
     readLaunchSettings,
+    expandEnvironmentVariables,
     LaunchSettings,
     LaunchProfile
 } from '../debugger/launchProfiles';
@@ -153,7 +154,7 @@ suite('Launch Profile Tests', () => {
                 { name: 'VAR4', value: 'session4' }
             ];
 
-            const result = mergeEnvironmentVariables(baseProfileEnv, runSessionEnv);
+            const result = mergeEnvironmentVariables(baseProfileEnv, undefined, runSessionEnv);
 
             assert.strictEqual(result.length, 4);
 
@@ -178,7 +179,7 @@ suite('Launch Profile Tests', () => {
 
             const runSessionEnv: EnvVar[] = [];
 
-            const result = mergeEnvironmentVariables(baseProfileEnv, runSessionEnv, runApiEnv);
+            const result = mergeEnvironmentVariables(baseProfileEnv, undefined, runSessionEnv, runApiEnv);
 
             assert.strictEqual(result.length, 4);
 
@@ -205,7 +206,7 @@ suite('Launch Profile Tests', () => {
                 { name: 'VAR4', value: 'session4' }
             ];
 
-            const result = mergeEnvironmentVariables(baseProfileEnv, runSessionEnv, runApiEnv);
+            const result = mergeEnvironmentVariables(baseProfileEnv, undefined, runSessionEnv, runApiEnv);
 
             assert.strictEqual(result.length, 4);
 
@@ -216,43 +217,12 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(resultMap.get('VAR4'), 'session4');
         });
 
-        test('handles all three sources with correct precedence: session > api > base', () => {
-            const baseProfileEnv = {
-                'BASE_ONLY': 'base_value',
-                'OVERRIDDEN_BY_API': 'base_value',
-                'OVERRIDDEN_BY_SESSION': 'base_value',
-                'OVERRIDDEN_BY_BOTH': 'base_value'
-            };
-
-            const runApiEnv = {
-                'API_ONLY': 'api_value',
-                'OVERRIDDEN_BY_API': 'api_value',
-                'OVERRIDDEN_BY_BOTH': 'api_value'
-            };
-
-            const runSessionEnv: EnvVar[] = [
-                { name: 'SESSION_ONLY', value: 'session_value' },
-                { name: 'OVERRIDDEN_BY_SESSION', value: 'session_value' },
-                { name: 'OVERRIDDEN_BY_BOTH', value: 'session_value' }
-            ];
-
-            const result = mergeEnvironmentVariables(baseProfileEnv, runSessionEnv, runApiEnv);
-
-            const resultMap = new Map(result);
-            assert.strictEqual(resultMap.get('BASE_ONLY'), 'base_value');
-            assert.strictEqual(resultMap.get('API_ONLY'), 'api_value');
-            assert.strictEqual(resultMap.get('SESSION_ONLY'), 'session_value');
-            assert.strictEqual(resultMap.get('OVERRIDDEN_BY_API'), 'api_value');
-            assert.strictEqual(resultMap.get('OVERRIDDEN_BY_SESSION'), 'session_value');
-            assert.strictEqual(resultMap.get('OVERRIDDEN_BY_BOTH'), 'session_value');
-        });
-
         test('handles empty base profile environment', () => {
             const runSessionEnv: EnvVar[] = [
                 { name: 'VAR1', value: 'session1' }
             ];
 
-            const result = mergeEnvironmentVariables(undefined, runSessionEnv);
+            const result = mergeEnvironmentVariables(undefined, undefined, runSessionEnv);
 
             assert.strictEqual(result.length, 1);
             const resultMap = new Map(result);
@@ -265,7 +235,7 @@ suite('Launch Profile Tests', () => {
                 'VAR2': 'base2'
             };
 
-            const result = mergeEnvironmentVariables(baseProfileEnv, []);
+            const result = mergeEnvironmentVariables(baseProfileEnv, undefined, []);
 
             assert.strictEqual(result.length, 2);
 
@@ -280,13 +250,150 @@ suite('Launch Profile Tests', () => {
                 'VAR2': 'api2'
             };
 
-            const result = mergeEnvironmentVariables(undefined, [], runApiEnv);
+            const result = mergeEnvironmentVariables(undefined, undefined, [], runApiEnv);
 
             assert.strictEqual(result.length, 2);
 
             const resultMap = new Map(result);
             assert.strictEqual(resultMap.get('VAR1'), 'api1');
             assert.strictEqual(resultMap.get('VAR2'), 'api2');
+        });
+
+        test('debug configuration environment overrides launch profile environment', () => {
+            const launchProfileEnv = {
+                'VAR1': 'profile1',
+                'VAR2': 'profile2',
+                'VAR3': 'profile3'
+            };
+
+            const debugConfigEnv = {
+                'VAR2': 'debug2',
+                'VAR4': 'debug4'
+            };
+
+            const runSessionEnv: EnvVar[] = [];
+
+            const result = mergeEnvironmentVariables(launchProfileEnv, debugConfigEnv, runSessionEnv);
+
+            assert.strictEqual(result.length, 4);
+
+            const resultMap = new Map(result);
+            assert.strictEqual(resultMap.get('VAR1'), 'profile1');
+            assert.strictEqual(resultMap.get('VAR2'), 'debug2'); // Debug config overrides profile
+            assert.strictEqual(resultMap.get('VAR3'), 'profile3');
+            assert.strictEqual(resultMap.get('VAR4'), 'debug4');
+        });
+
+        test('run API environment overrides debug configuration environment', () => {
+            const launchProfileEnv = {
+                'VAR1': 'profile1'
+            };
+
+            const debugConfigEnv = {
+                'VAR2': 'debug2',
+                'VAR3': 'debug3'
+            };
+
+            const runApiEnv = {
+                'VAR3': 'api3',
+                'VAR4': 'api4'
+            };
+
+            const runSessionEnv: EnvVar[] = [];
+
+            const result = mergeEnvironmentVariables(launchProfileEnv, debugConfigEnv, runSessionEnv, runApiEnv);
+
+            assert.strictEqual(result.length, 4);
+
+            const resultMap = new Map(result);
+            assert.strictEqual(resultMap.get('VAR1'), 'profile1');
+            assert.strictEqual(resultMap.get('VAR2'), 'debug2');
+            assert.strictEqual(resultMap.get('VAR3'), 'api3'); // Run API overrides debug config
+            assert.strictEqual(resultMap.get('VAR4'), 'api4');
+        });
+
+        test('run session environment overrides debug configuration environment', () => {
+            const launchProfileEnv = {
+                'VAR1': 'profile1'
+            };
+
+            const debugConfigEnv = {
+                'VAR2': 'debug2',
+                'VAR3': 'debug3'
+            };
+
+            const runSessionEnv: EnvVar[] = [
+                { name: 'VAR3', value: 'session3' },
+                { name: 'VAR4', value: 'session4' }
+            ];
+
+            const result = mergeEnvironmentVariables(launchProfileEnv, debugConfigEnv, runSessionEnv);
+
+            assert.strictEqual(result.length, 4);
+
+            const resultMap = new Map(result);
+            assert.strictEqual(resultMap.get('VAR1'), 'profile1');
+            assert.strictEqual(resultMap.get('VAR2'), 'debug2');
+            assert.strictEqual(resultMap.get('VAR3'), 'session3'); // Run session overrides debug config
+            assert.strictEqual(resultMap.get('VAR4'), 'session4');
+        });
+
+        test('handles all four sources with correct precedence: session > api > debugConfig > profile', () => {
+            const launchProfileEnv = {
+                'PROFILE_ONLY': 'profile_value',
+                'OVERRIDDEN_BY_DEBUG': 'profile_value',
+                'OVERRIDDEN_BY_API': 'profile_value',
+                'OVERRIDDEN_BY_SESSION': 'profile_value',
+                'OVERRIDDEN_BY_ALL': 'profile_value'
+            };
+
+            const debugConfigEnv = {
+                'DEBUG_ONLY': 'debug_value',
+                'OVERRIDDEN_BY_DEBUG': 'debug_value',
+                'OVERRIDDEN_BY_API': 'debug_value',
+                'OVERRIDDEN_BY_SESSION': 'debug_value',
+                'OVERRIDDEN_BY_ALL': 'debug_value'
+            };
+
+            const runApiEnv = {
+                'API_ONLY': 'api_value',
+                'OVERRIDDEN_BY_API': 'api_value',
+                'OVERRIDDEN_BY_SESSION': 'api_value',
+                'OVERRIDDEN_BY_ALL': 'api_value'
+            };
+
+            const runSessionEnv: EnvVar[] = [
+                { name: 'SESSION_ONLY', value: 'session_value' },
+                { name: 'OVERRIDDEN_BY_SESSION', value: 'session_value' },
+                { name: 'OVERRIDDEN_BY_ALL', value: 'session_value' }
+            ];
+
+            const result = mergeEnvironmentVariables(launchProfileEnv, debugConfigEnv, runSessionEnv, runApiEnv);
+
+            const resultMap = new Map(result);
+            assert.strictEqual(resultMap.get('PROFILE_ONLY'), 'profile_value');
+            assert.strictEqual(resultMap.get('DEBUG_ONLY'), 'debug_value');
+            assert.strictEqual(resultMap.get('API_ONLY'), 'api_value');
+            assert.strictEqual(resultMap.get('SESSION_ONLY'), 'session_value');
+            assert.strictEqual(resultMap.get('OVERRIDDEN_BY_DEBUG'), 'debug_value');
+            assert.strictEqual(resultMap.get('OVERRIDDEN_BY_API'), 'api_value');
+            assert.strictEqual(resultMap.get('OVERRIDDEN_BY_SESSION'), 'session_value');
+            assert.strictEqual(resultMap.get('OVERRIDDEN_BY_ALL'), 'session_value');
+        });
+
+        test('handles only debug configuration environment', () => {
+            const debugConfigEnv = {
+                'VAR1': 'debug1',
+                'VAR2': 'debug2'
+            };
+
+            const result = mergeEnvironmentVariables(undefined, debugConfigEnv, []);
+
+            assert.strictEqual(result.length, 2);
+
+            const resultMap = new Map(result);
+            assert.strictEqual(resultMap.get('VAR1'), 'debug1');
+            assert.strictEqual(resultMap.get('VAR2'), 'debug2');
         });
     });
 
@@ -335,17 +442,19 @@ suite('Launch Profile Tests', () => {
     });
 
     suite('determineWorkingDirectory', () => {
-        const projectPath = path.join('C:', 'project', 'MyApp.csproj');
+        const projectDir = path.resolve(path.sep, 'project');
+        const projectPath = path.join(projectDir, 'MyApp.csproj');
+        const absoluteWorkingDir = path.resolve(path.sep, 'custom', 'working', 'dir');
 
         test('uses absolute working directory from launch profile', () => {
             const baseProfile: LaunchProfile = {
                 commandName: 'Project',
-                workingDirectory: path.join('C:', 'custom', 'working', 'dir')
+                workingDirectory: absoluteWorkingDir
             };
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, path.join('C:', 'custom', 'working', 'dir'));
+            assert.strictEqual(result, absoluteWorkingDir);
         });
 
         test('resolves relative working directory from launch profile', () => {
@@ -356,7 +465,7 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, path.join('C:', 'project', 'custom'));
+            assert.strictEqual(result, path.join(projectDir, 'custom'));
         });
 
         test('uses project directory when no working directory specified', () => {
@@ -366,30 +475,58 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, path.join('C:', 'project'));
+            assert.strictEqual(result, projectDir);
         });
 
         test('uses project directory when base profile is null', () => {
             const result = determineWorkingDirectory(projectPath, null);
 
-            assert.strictEqual(result, path.join('C:', 'project'));
+            assert.strictEqual(result, projectDir);
+        });
+
+        test('expands environment variables in working directory before resolving', () => {
+            process.env['TEST_WD_ROOT'] = '/opt/app';
+            const baseProfile: LaunchProfile = {
+                commandName: 'Executable',
+                workingDirectory: '$(TEST_WD_ROOT)/output'
+            };
+
+            const result = determineWorkingDirectory('/dummy/project.csproj', baseProfile);
+
+            // $(TEST_WD_ROOT) expands to /opt/app, making it an absolute path
+            assert.strictEqual(result, '/opt/app/output');
+            delete process.env['TEST_WD_ROOT'];
+        });
+
+        test('expands environment variables in relative working directory', () => {
+            process.env['TEST_WD_SUBDIR'] = 'build-output';
+            const baseProfile: LaunchProfile = {
+                commandName: 'Executable',
+                workingDirectory: '$(TEST_WD_SUBDIR)/bin'
+            };
+
+            const result = determineWorkingDirectory('/projects/myapp/myapp.csproj', baseProfile);
+
+            // $(TEST_WD_SUBDIR) expands to build-output, still relative, resolved against project dir
+            assert.strictEqual(result, path.resolve('/projects/myapp', 'build-output/bin'));
+            delete process.env['TEST_WD_SUBDIR'];
         });
     });
 
     suite('determineServerReadyAction', () => {
         test('returns undefined when launchBrowser is false', () => {
-            const result = determineServerReadyAction(false, 'https://localhost:5001');
+            const result = determineServerReadyAction(false, 'https://localhost:5001', undefined);
             assert.strictEqual(result, undefined);
         });
 
         test('returns undefined when applicationUrl is undefined', () => {
-            const result = determineServerReadyAction(true, undefined);
+            const result = determineServerReadyAction(true, undefined, undefined);
             assert.strictEqual(result, undefined);
         });
 
         test('returns serverReadyAction when launchBrowser true and applicationUrl provided', () => {
             const applicationUrl = 'https://localhost:5001';
-            const result = determineServerReadyAction(true, applicationUrl);
+            const result = determineServerReadyAction(true, applicationUrl, undefined);
 
             assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
@@ -399,12 +536,69 @@ suite('Launch Profile Tests', () => {
 
         test('returns serverReadyAction with first URL when multiple URLs separated by semicolon', () => {
             const applicationUrl = 'https://localhost:5001;http://localhost:5000';
-            const result = determineServerReadyAction(true, applicationUrl);
+            const result = determineServerReadyAction(true, applicationUrl, undefined);
 
             assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
             assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
             assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+        });
+
+        test('returns serverReadyAction with absolute launchUrl', () => {
+            const applicationUrl = 'https://localhost:5001;http://localhost:5000';
+            const launchUrl = 'https://localhost:5001/some/path';
+            const result = determineServerReadyAction(true, applicationUrl, launchUrl);
+
+            assert.notStrictEqual(result, undefined);
+            assert.strictEqual(result?.action, 'openExternally');
+            assert.strictEqual(result?.uriFormat, 'https://localhost:5001/some/path');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+        });
+
+        test('returns serverReadyAction with relative launchUrl', () => {
+            const applicationUrl = 'https://localhost:5001;http://localhost:5000';
+            const launchUrl = '/some/path';
+            const result = determineServerReadyAction(true, applicationUrl, launchUrl);
+
+            assert.notStrictEqual(result, undefined);
+            assert.strictEqual(result?.action, 'openExternally');
+            assert.strictEqual(result?.uriFormat, 'https://localhost:5001/some/path');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+        });
+
+        test('absolute launchUrl overrides wildcard-host applicationUrl', () => {
+            const result = determineServerReadyAction(
+                true,
+                'http://*:80/;https://*:443/',
+                'https://mywebsite.localhost');
+
+            assert.strictEqual(result?.uriFormat, 'https://mywebsite.localhost/');
+        });
+
+        test('falls back to applicationUrl when relative launchUrl resolves against wildcard-host applicationUrl', () => {
+            const applicationUrl = 'http://*:80/';
+            const result = determineServerReadyAction(true, applicationUrl, '/some/path');
+
+            assert.strictEqual(result?.uriFormat, applicationUrl);
+        });
+
+        test('falls back to applicationUrl when relative launchUrl cannot be resolved', () => {
+            const result = determineServerReadyAction(true, 'localhost:5001', '/some/path');
+
+            assert.strictEqual(result?.uriFormat, 'localhost:5001');
+        });
+
+        test('falls back to applicationUrl when applicationUrl is empty', () => {
+            const result = determineServerReadyAction(true, ';http://localhost:5000', '/some/path');
+
+            assert.strictEqual(result?.uriFormat, '');
+        });
+
+        test('falls back to applicationUrl when absolute launchUrl is not http or https', () => {
+            const applicationUrl = 'https://localhost:5001';
+            const result = determineServerReadyAction(true, applicationUrl, 'javascript:alert(1)');
+
+            assert.strictEqual(result?.uriFormat, applicationUrl);
         });
     });
 
@@ -495,7 +689,8 @@ suite('Launch Profile Tests', () => {
       },
       // Comment before applicationUrl
       "applicationUrl": "https://localhost:5001",
-      "launchBrowser": true
+      "launchBrowser": true,
+      "launchUrl": "https://localhost:5001/launch"
     },
     // Another profile
     "Production": {
@@ -517,7 +712,161 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result!.profiles['Development'].environmentVariables!.LOG_LEVEL, 'Debug');
             assert.strictEqual(result!.profiles['Development'].applicationUrl, 'https://localhost:5001');
             assert.strictEqual(result!.profiles['Development'].launchBrowser, true);
+            assert.strictEqual(result!.profiles['Development'].launchUrl, 'https://localhost:5001/launch');
             assert.strictEqual(result!.profiles['Production'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Production');
+        });
+
+        test('falls back to aspire.config.json profiles when .run.json does not exist for file-based app', async () => {
+            // Create a file-based app (.cs file) with no .run.json
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            // Create aspire.config.json with profiles
+            const aspireConfigPath = path.join(tempDir, 'TestProject', 'aspire.config.json');
+            const aspireConfig = {
+                appHost: { path: 'apphost.cs' },
+                profiles: {
+                    https: {
+                        applicationUrl: 'https://localhost:5001;http://localhost:5000',
+                        environmentVariables: {
+                            ASPNETCORE_ENVIRONMENT: 'Development'
+                        }
+                    },
+                    http: {
+                        applicationUrl: 'http://localhost:5000'
+                    }
+                }
+            };
+            fs.writeFileSync(aspireConfigPath, JSON.stringify(aspireConfig, null, 2));
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.notStrictEqual(result, null);
+            assert.strictEqual(Object.keys(result!.profiles).length, 2);
+            assert.strictEqual(result!.profiles['https'].applicationUrl, 'https://localhost:5001;http://localhost:5000');
+            assert.strictEqual(result!.profiles['https'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Development');
+            assert.strictEqual(result!.profiles['https'].commandName, 'Project');
+            assert.strictEqual(result!.profiles['http'].applicationUrl, 'http://localhost:5000');
+        });
+
+        test('returns null when neither .run.json nor aspire.config.json exists for file-based app', async () => {
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.strictEqual(result, null);
+        });
+
+        test('prefers .run.json over aspire.config.json profiles for file-based app', async () => {
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            // Create both .run.json and aspire.config.json
+            const runJsonPath = path.join(tempDir, 'TestProject', 'apphost.run.json');
+            const runJson = {
+                profiles: {
+                    default: {
+                        commandName: 'Project',
+                        applicationUrl: 'https://localhost:7000'
+                    }
+                }
+            };
+            fs.writeFileSync(runJsonPath, JSON.stringify(runJson, null, 2));
+
+            const aspireConfigPath = path.join(tempDir, 'TestProject', 'aspire.config.json');
+            const aspireConfig = {
+                profiles: {
+                    default: {
+                        applicationUrl: 'https://localhost:9999'
+                    }
+                }
+            };
+            fs.writeFileSync(aspireConfigPath, JSON.stringify(aspireConfig, null, 2));
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.notStrictEqual(result, null);
+            // Should use the .run.json value, not aspire.config.json
+            assert.strictEqual(result!.profiles['default'].applicationUrl, 'https://localhost:7000');
+        });
+
+        test('reads aspire.config.json profiles with comments', async () => {
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            const aspireConfigPath = path.join(tempDir, 'TestProject', 'aspire.config.json');
+            const aspireConfigWithComments = `{
+  // AppHost configuration
+  "appHost": { "path": "apphost.cs" },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:5001", // HTTPS endpoint
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}`;
+            fs.writeFileSync(aspireConfigPath, aspireConfigWithComments);
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.notStrictEqual(result, null);
+            assert.strictEqual(result!.profiles['https'].applicationUrl, 'https://localhost:5001');
+            assert.strictEqual(result!.profiles['https'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Development');
+        });
+    });
+
+    suite('expandEnvironmentVariables', () => {
+        test('expands $(VAR) syntax from process.env', () => {
+            process.env['TEST_EXPAND_VAR'] = '/test/path';
+            const result = expandEnvironmentVariables('$(TEST_EXPAND_VAR)/subfolder');
+            assert.strictEqual(result, '/test/path/subfolder');
+            delete process.env['TEST_EXPAND_VAR'];
+        });
+
+        test('expands %VAR% syntax from process.env', () => {
+            process.env['TEST_EXPAND_WIN'] = 'C:\\Users\\test';
+            const result = expandEnvironmentVariables('%TEST_EXPAND_WIN%\\subfolder');
+            assert.strictEqual(result, 'C:\\Users\\test\\subfolder');
+            delete process.env['TEST_EXPAND_WIN'];
+        });
+
+        test('expands multiple variables in one string', () => {
+            process.env['TEST_HOME'] = '/home/user';
+            process.env['TEST_VERSION'] = '1.0.0';
+            const result = expandEnvironmentVariables('$(TEST_HOME)/.store/tool/$(TEST_VERSION)/content');
+            assert.strictEqual(result, '/home/user/.store/tool/1.0.0/content');
+            delete process.env['TEST_HOME'];
+            delete process.env['TEST_VERSION'];
+        });
+
+        test('replaces undefined variables with empty string', () => {
+            delete process.env['NONEXISTENT_VAR_12345'];
+            const result = expandEnvironmentVariables('prefix/$(NONEXISTENT_VAR_12345)/suffix');
+            assert.strictEqual(result, 'prefix//suffix');
+        });
+
+        test('returns string unchanged when no variables present', () => {
+            const result = expandEnvironmentVariables('/plain/path/no/vars');
+            assert.strictEqual(result, '/plain/path/no/vars');
+        });
+
+        test('expands HOME variable like AWS Lambda launch profiles use', () => {
+            const home = process.env['HOME'] ?? '';
+            const input = '$(HOME)/.dotnet/tools/.store/amazon.lambda.testtool/0.13.0/content/RuntimeSupport.dll';
+            const result = expandEnvironmentVariables(input);
+            assert.strictEqual(result, `${home}/.dotnet/tools/.store/amazon.lambda.testtool/0.13.0/content/RuntimeSupport.dll`);
+        });
+
+        test('handles mixed $(VAR) and %VAR% in same string', () => {
+            process.env['TEST_MIX_A'] = 'alpha';
+            process.env['TEST_MIX_B'] = 'beta';
+            const result = expandEnvironmentVariables('$(TEST_MIX_A)/%TEST_MIX_B%/end');
+            assert.strictEqual(result, 'alpha/beta/end');
+            delete process.env['TEST_MIX_A'];
+            delete process.env['TEST_MIX_B'];
         });
     });
 });

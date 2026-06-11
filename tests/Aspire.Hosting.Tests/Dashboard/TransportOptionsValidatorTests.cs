@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Tests.Dashboard;
 
+[Trait("Partition", "3")]
 public class TransportOptionsValidatorTests
 {
     [Fact]
@@ -23,7 +24,7 @@ public class TransportOptionsValidatorTests
         var result = validator.Validate(null, options);
         Assert.True(result.Failed);
         Assert.Equal(
-            $"The 'applicationUrl' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/dotnet/aspire/allowunsecuredtransport for more details.",
+            $"The 'applicationUrl' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/aspire/allowunsecuredtransport for more details.",
             result.FailureMessage
             );
     }
@@ -102,7 +103,7 @@ public class TransportOptionsValidatorTests
     }
 
     [Fact]
-    public void ValidationFailsWithMissingUrl()
+    public void ValidationSucceedsWithMissingUrl()
     {
         var distributedApplicationOptions = new DistributedApplicationOptions();
         var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
@@ -113,15 +114,11 @@ public class TransportOptionsValidatorTests
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
-        Assert.True(result.Failed);
-        Assert.Equal(
-            $"AppHost does not have applicationUrl in launch profile, or {KnownConfigNames.AspNetCoreUrls} environment variable set.",
-            result.FailureMessage
-            );
+        Assert.True(result.Succeeded, result.FailureMessage);
     }
 
     [Fact]
-    public void ValidationFailsWithStringEmptyUrl()
+    public void ValidationSucceedsWithStringEmptyUrl()
     {
         var distributedApplicationOptions = new DistributedApplicationOptions();
         var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
@@ -133,17 +130,13 @@ public class TransportOptionsValidatorTests
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
-        Assert.True(result.Failed);
-        Assert.Equal(
-            $"AppHost does not have applicationUrl in launch profile, or {KnownConfigNames.AspNetCoreUrls} environment variable set.",
-            result.FailureMessage
-            );
+        Assert.True(result.Succeeded, result.FailureMessage);
     }
 
     [Theory]
     [InlineData(KnownConfigNames.ResourceServiceEndpointUrl)]
     [InlineData(KnownConfigNames.Legacy.ResourceServiceEndpointUrl)]
-    public void ValidationFailsWhenResourceUrlNotDefined(string resourceServiceEndpointUrlKey)
+    public void ValidationSucceedsWhenResourceUrlNotDefined(string resourceServiceEndpointUrlKey)
     {
         var distributedApplicationOptions = new DistributedApplicationOptions();
         var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
@@ -157,17 +150,13 @@ public class TransportOptionsValidatorTests
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
-        Assert.True(result.Failed);
-        Assert.Equal(
-            $"AppHost does not have the {KnownConfigNames.ResourceServiceEndpointUrl} setting defined.",
-            result.FailureMessage
-            );
+        Assert.True(result.Succeeded, result.FailureMessage);
     }
 
     [Theory]
     [InlineData(KnownConfigNames.DashboardOtlpGrpcEndpointUrl)]
     [InlineData(KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl)]
-    public void ValidationFailsWhenOtlpUrlNotDefined(string dashboardOtlpGrpcEndpointUrlKey)
+    public void ValidationSucceedsWhenOtlpUrlNotDefined(string dashboardOtlpGrpcEndpointUrlKey)
     {
         var distributedApplicationOptions = new DistributedApplicationOptions();
         var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
@@ -181,11 +170,7 @@ public class TransportOptionsValidatorTests
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
-        Assert.True(result.Failed);
-        Assert.Equal(
-            $"AppHost does not have the {KnownConfigNames.DashboardOtlpGrpcEndpointUrl} or {KnownConfigNames.DashboardOtlpHttpEndpointUrl} settings defined. At least one OTLP endpoint must be provided.",
-            result.FailureMessage
-            );
+        Assert.True(result.Succeeded, result.FailureMessage);
     }
 
     [Theory]
@@ -259,7 +244,7 @@ public class TransportOptionsValidatorTests
         var result = validator.Validate(null, options);
         Assert.True(result.Failed);
         Assert.Equal(
-            $"The '{otlpEndpointConfigName}' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/dotnet/aspire/allowunsecuredtransport for more details.",
+            $"The '{otlpEndpointConfigName}' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/aspire/allowunsecuredtransport for more details.",
             result.FailureMessage
             );
     }
@@ -283,7 +268,7 @@ public class TransportOptionsValidatorTests
         var result = validator.Validate(null, options);
         Assert.True(result.Failed);
         Assert.Equal(
-            $"The '{KnownConfigNames.ResourceServiceEndpointUrl}' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/dotnet/aspire/allowunsecuredtransport for more details.",
+            $"The '{KnownConfigNames.ResourceServiceEndpointUrl}' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/aspire/allowunsecuredtransport for more details.",
             result.FailureMessage
             );
     }

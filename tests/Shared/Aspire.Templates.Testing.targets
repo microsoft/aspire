@@ -29,8 +29,8 @@
     <SdkDirForNextTFM>$(ArtifactsBinDir)dotnet-10\</SdkDirForNextTFM>
     <SdkStampPathForNextTFM>$(SdkDirForNextTFM).version-$(SdkVersionForNextTFM).stamp</SdkStampPathForNextTFM>
 
-    <SdkDirForNextAndCurrentTFM>$(ArtifactsBinDir)dotnet-tests\</SdkDirForNextAndCurrentTFM>
-    <SdkStampPathForNextAndCurrentTFM>$(SdkDirForNextAndCurrentTFM).version-$(SdkVersionForNextTFM)-$(SdkVersionForCurrentTFM).stamp</SdkStampPathForNextAndCurrentTFM>
+    <SdkDirForNextWithCurrentAndPreviousRuntimes>$(ArtifactsBinDir)dotnet-tests\</SdkDirForNextWithCurrentAndPreviousRuntimes>
+    <SdkStampPathForNextAndCurrentTFM>$(SdkDirForNextWithCurrentAndPreviousRuntimes).version-$(SdkVersionForNextTFM)-$(SdkVersionForCurrentTFM).stamp</SdkStampPathForNextAndCurrentTFM>
   </PropertyGroup>
 
   <Import Project="$(MSBuildThisFileDirectory)InstallSdk.props" />
@@ -62,66 +62,43 @@
              Targets="ProvisionSdk" />
     <Touch Files="$(SdkStampPathForNextTFM)" AlwaysCreate="true" />
 
-    <CallTarget Targets="ProvisionSdkForCurrentAndPreviousTFM" />
+    <CallTarget Targets="ProvisionNextSDKWithCurrentAndPreviousRuntimes" />
   </Target>
 
-  <Target Name="ProvisionSdkForCurrentAndPreviousTFM" Condition="!Exists($(SdkStampPathForCurrentAndPreviousTFM))">
+  <Target Name="ProvisionNextSDKWithCurrentAndPreviousRuntimes" Condition="!Exists($(SdkStampPathForNextAndCurrentTFM))">
 
-    <!-- Install For Current sdk + previous runtime -->
+    <!-- Install For Next sdk + current + prev runtimes -->
 
-    <!-- 1. Prepare the target dir -->
-    <RemoveDir Directories="$(SdkDirForCurrentAndPreviousTFM)" />
-    <MakeDir Directories="$(SdkDirForCurrentAndPreviousTFM)" />
-
-    <!-- 2. Make a copy of current -->
-    <ItemGroup>
-      <_SdkCurrentFile Include="$(SdkDirForCurrentTFM)\**\*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(_SdkCurrentFile)" DestinationFolder="$(SdkDirForCurrentAndPreviousTFM)\%(RecursiveDir)" SkipUnchangedFiles="true" />
-
-    <!-- 3. Install both current runtimes (.NET 9) and previous runtimes (.NET 8) -->
-    <Exec Condition="'%(CurrentRuntimeToInstallArguments.Identity)' != '' and !$([MSBuild]::IsOSPlatform('windows'))"
-          IgnoreStandardErrorWarningFormat="true"
-          Command="$(_DotNetInstallScriptPath) -InstallDir $(SdkDirForCurrentAndPreviousTFM) -SkipNonVersionedFiles %(CurrentRuntimeToInstallArguments.Identity)" />
-
-    <Exec Condition="'%(CurrentRuntimeToInstallArguments.Identity)' != '' and $([MSBuild]::IsOSPlatform('windows'))"
-          IgnoreStandardErrorWarningFormat="true"
-          Command='powershell -ExecutionPolicy ByPass -NoProfile -command "&amp; $(_DotNetInstallScriptPath) -InstallDir $(SdkDirForCurrentAndPreviousTFM) -SkipNonVersionedFiles %(CurrentRuntimeToInstallArguments.Identity)"' />
-
-    <Exec Condition="'%(PreviousRuntimeToInstallArguments.Identity)' != '' and !$([MSBuild]::IsOSPlatform('windows'))"
-          IgnoreStandardErrorWarningFormat="true"
-          Command="$(_DotNetInstallScriptPath) -InstallDir $(SdkDirForCurrentAndPreviousTFM) -SkipNonVersionedFiles %(PreviousRuntimeToInstallArguments.Identity)" />
-
-    <Exec Condition="'%(PreviousRuntimeToInstallArguments.Identity)' != '' and $([MSBuild]::IsOSPlatform('windows'))"
-          IgnoreStandardErrorWarningFormat="true"
-          Command='powershell -ExecutionPolicy ByPass -NoProfile -command "&amp; $(_DotNetInstallScriptPath) -InstallDir $(SdkDirForCurrentAndPreviousTFM) -SkipNonVersionedFiles %(PreviousRuntimeToInstallArguments.Identity)"' />
-
-    <Touch Files="$(SdkStampPathForCurrentAndPreviousTFM)" AlwaysCreate="true" />
-  </Target>
-
-  <Target Name="ProvisionSdkForNextAndCurrentTFM" Condition="!Exists($(SdkStampPathForNextAndCurrentTFM))">
-
-    <!-- Install For Next sdk + current runtime -->
+    <PropertyGroup>
+      <_SdkDirToInstallTo>$(SdkDirForNextWithCurrentAndPreviousRuntimes)</_SdkDirToInstallTo>
+    </PropertyGroup>
 
     <!-- 1. Prepare the target dir -->
-    <RemoveDir Directories="$(SdkDirForNextAndCurrentTFM)" />
-    <MakeDir Directories="$(SdkDirForNextAndCurrentTFM)" />
+    <RemoveDir Directories="$(SdkDirForNextWithCurrentAndPreviousRuntimes)" />
+    <MakeDir Directories="$(SdkDirForNextWithCurrentAndPreviousRuntimes)" />
 
     <!-- 2. Make a copy of next -->
     <ItemGroup>
       <_SdkNextFile Include="$(SdkDirForNextTFM)\**\*" />
     </ItemGroup>
-    <Copy SourceFiles="@(_SdkNextFile)" DestinationFolder="$(SdkDirForNextAndCurrentTFM)\%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_SdkNextFile)" DestinationFolder="$(_SdkDirToInstallTo)\%(RecursiveDir)" SkipUnchangedFiles="true" />
 
     <!-- 3. Install current runtimes -->
     <Exec Condition="'%(CurrentRuntimeToInstallArguments.Identity)' != '' and !$([MSBuild]::IsOSPlatform('windows'))"
           IgnoreStandardErrorWarningFormat="true"
-          Command="$(_DotNetInstallScriptPath) -InstallDir $(SdkDirForNextAndCurrentTFM) -SkipNonVersionedFiles %(CurrentRuntimeToInstallArguments.Identity)" />
+          Command="$(_DotNetInstallScriptPath) -InstallDir $(_SdkDirToInstallTo) -SkipNonVersionedFiles %(CurrentRuntimeToInstallArguments.Identity)" />
 
     <Exec Condition="'%(CurrentRuntimeToInstallArguments.Identity)' != '' and $([MSBuild]::IsOSPlatform('windows'))"
           IgnoreStandardErrorWarningFormat="true"
-          Command='powershell -ExecutionPolicy ByPass -NoProfile -command "&amp; $(_DotNetInstallScriptPath) -InstallDir $(SdkDirForNextAndCurrentTFM) -SkipNonVersionedFiles %(CurrentRuntimeToInstallArguments.Identity)"' />
+          Command='powershell -ExecutionPolicy ByPass -NoProfile -command "&amp; $(_DotNetInstallScriptPath) -InstallDir $(_SdkDirToInstallTo) -SkipNonVersionedFiles %(CurrentRuntimeToInstallArguments.Identity)"' />
 
+    <Exec Condition="'%(PreviousRuntimeToInstallArguments.Identity)' != '' and !$([MSBuild]::IsOSPlatform('windows'))"
+          IgnoreStandardErrorWarningFormat="true"
+          Command="$(_DotNetInstallScriptPath) -InstallDir $(_SdkDirToInstallTo) -SkipNonVersionedFiles %(PreviousRuntimeToInstallArguments.Identity)" />
+
+    <Exec Condition="'%(PreviousRuntimeToInstallArguments.Identity)' != '' and $([MSBuild]::IsOSPlatform('windows'))"
+          IgnoreStandardErrorWarningFormat="true"
+          Command='powershell -ExecutionPolicy ByPass -NoProfile -command "&amp; $(_DotNetInstallScriptPath) -InstallDir $(_SdkDirToInstallTo) -SkipNonVersionedFiles %(PreviousRuntimeToInstallArguments.Identity)"' />
     <Touch Files="$(SdkStampPathForNextAndCurrentTFM)" AlwaysCreate="true" />
   </Target>
 
@@ -156,6 +133,7 @@
 
       <!-- Exclude the packages with arch-specific nugets -->
       <UnexpectedPackages Remove="@(UnexpectedPackages)" Condition="$([System.String]::Copy('%(UnexpectedPackages.FileName)').StartsWith('Aspire.Dashboard.Sdk.'))" />
+      <UnexpectedPackages Remove="@(UnexpectedPackages)" Condition="$([System.String]::Copy('%(UnexpectedPackages.FileName)').StartsWith('Aspire.TerminalHost.Sdk.'))" />
       <UnexpectedPackages Remove="@(UnexpectedPackages)" Condition="$([System.String]::Copy('%(UnexpectedPackages.FileName)').StartsWith('Aspire.Hosting.Orchestration.'))" />
       <UnexpectedPackages Remove="@(UnexpectedPackages)" Condition="$([System.String]::Copy('%(UnexpectedPackages.FileName)').StartsWith('Aspire.Cli.'))" />
 

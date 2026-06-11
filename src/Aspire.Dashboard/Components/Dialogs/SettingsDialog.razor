@@ -1,12 +1,9 @@
-﻿@using System.Globalization
-@using Aspire.Dashboard.Model
-@using Aspire.Dashboard.Resources
-@using Aspire.Dashboard.Utils
+﻿@using Aspire.Dashboard.Resources
 @using Humanizer
 @inject IStringLocalizer<Dialogs> Loc
 
 <FluentDialogBody>
-    <FluentStack Orientation="Orientation.Vertical" Style="display: flex; height: 100%" VerticalGap="12">
+    <FluentStack Orientation="Orientation.Vertical" Style="display: flex; height: 100%; overflow-y: auto;" VerticalGap="12">
         <div class="input-container">
             <FluentRadioGroup TValue="string"
                               Label="@Loc[nameof(Dialogs.SettingsDialogTheme)]"
@@ -22,10 +19,11 @@
         <div class="input-container">
             <FluentSelect
                 TOption="CultureInfo"
-                Immediate="true"
+                ChangeOnEnterOnly="true"
                 Position="SelectPosition.Below"
                 Label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 Items="@_languageOptions"
+                OptionValue="@(c => c!.Name)"
                 OptionText="@(c => c!.NativeName.Humanize())"
                 ValueChanged="@ValueChanged"
                 @bind-SelectedOption="@_selectedUiCulture"
@@ -35,14 +33,27 @@
             <p class="setting-subtext">@Loc[nameof(Dialogs.SettingsDialogLanguagePageReloads)]</p>
         </div>
 
+        <div class="input-container">
+            <FluentRadioGroup TValue="TimeFormat"
+                              Label="@Loc[nameof(Dialogs.SettingsDialogTimeFormat)]"
+                              @bind-Value="@_timeFormat"
+                              @bind-Value:after="OnTimeFormatChanged"
+                              Orientation="Orientation.Vertical">
+                @foreach (var format in Enum.GetValues<TimeFormat>())
+                {
+                    <FluentRadio Value="@format">@FormatTimeFormatOption(format)</FluentRadio>
+                }
+            </FluentRadioGroup>
+        </div>
+
         <div>
             <span class="setting-title">@Loc[nameof(Dialogs.SettingsDialogDashboardLogsAndTelemetry)]</span>
             <div>
-                <FluentButton IconStart="@(new Icons.Regular.Size16.Delete())"
-                              OnClick="ClearAllSignals"
-                              Title="@Loc[nameof(Dialogs.SettingsRemoveAllButtonText)]"
-                              aria-label="@Loc[nameof(Dialogs.SettingsRemoveAllButtonText)]">
-                    @Loc[nameof(Dialogs.SettingsRemoveAllButtonText)]
+                <FluentButton IconStart="@(new Icons.Regular.Size16.Settings())"
+                              OnClick="LaunchManageDataAsync"
+                              Title="@Loc[nameof(Dialogs.ManageDataManageButtonText)]"
+                              aria-label="@Loc[nameof(Dialogs.ManageDataManageButtonText)]">
+                    @Loc[nameof(Dialogs.ManageDataManageButtonText)]
                 </FluentButton>
             </div>
         </div>
@@ -51,7 +62,7 @@
         {
             <div>
                 <p class="setting-subtext">
-                    @Loc[nameof(Dialogs.SettingsDialogTelemetryEnabledInfo)] <a target="_blank" href="https://aka.ms/dotnet/aspire/microsoft-collected-telemetry" title="@Loc[nameof(Dialogs.SettingsDialogTelemetryInfoLinkTooltip)]">@Loc[nameof(Dialogs.SettingsDialogTelemetryInfoLinkText)]</a>
+                    @Loc[nameof(Dialogs.SettingsDialogTelemetryEnabledInfo)] <a target="_blank" href="https://aka.ms/aspire/dashboard-microsoft-collected-telemetry" title="@Loc[nameof(Dialogs.SettingsDialogTelemetryInfoLinkTooltip)]">@Loc[nameof(Dialogs.SettingsDialogTelemetryInfoLinkText)]</a>
                 </p>
             </div>
         }

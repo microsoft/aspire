@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- MongoDB.EntityFrameworkCore does not support EF Core 10 yet, so only target net8.0 and net9.0 -->
+    <TargetFrameworks>$(DefaultTargetFramework);net9.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <PackageTags>$(ComponentEfCorePackageTags)  MongoDB</PackageTags>
+    <PackageIconFullPath>$(SharedDir)MongoDB_300px.png</PackageIconFullPath>
+    <Description>A MongoDB provider for Entity Framework Core that integrates with Aspire, including connection pooling, health checks, logging, and telemetry.</Description>
+    <!-- MongoDB.Driver.Core.Extensions.DiagnosticSources and AspNetCore.HealthChecks.MongoDb packages are not signed -->
+    <NoWarn>$(NoWarn);CS8002</NoWarn>
+    <!-- Disable package validation as this package hasn't shipped yet. -->
+    <EnablePackageValidation>false</EnablePackageValidation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Common\ConfigurationSchemaAttributes.cs" Link="ConfigurationSchemaAttributes.cs" />
+    <Compile Include="..\Common\HealthChecksExtensions.cs" Link="HealthChecksExtensions.cs" />
+    <Compile Include="..\Common\ConnectionStringValidation.cs" Link="ConnectionStringValidation.cs" />
+    <Compile Include="..\Common\EntityFrameworkUtils.cs" Link="EntityFrameworkUtils.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
+    <PackageReference Include="MongoDB.EntityFrameworkCore" />
+    <PackageReference Include="Polly.Extensions" />
+    <PackageReference Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+  </ItemGroup>
+
+</Project>

@@ -1,16 +1,16 @@
-﻿---
+---
 apiVersion: "v1"
 kind: "ConfigMap"
 metadata:
   name: "servicea-config"
   labels:
-    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
     app.kubernetes.io/component: "ServiceA"
-    app.kubernetes.io/instance: "{{.Release.Name}}"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  ASPNETCORE_URLS: "{{ .Values.config.ServiceA.ASPNETCORE_URLS }}"
-  OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES: "{{ .Values.config.ServiceA.OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES }}"
-  OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES: "{{ .Values.config.ServiceA.OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES }}"
   OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.ServiceA.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
   ASPNETCORE_FORWARDEDHEADERS_ENABLED: "{{ .Values.config.ServiceA.ASPNETCORE_FORWARDEDHEADERS_ENABLED }}"
-  HTTP_PORTS: "{{ .Values.config.ServiceA.HTTP_PORTS }}"
+  HTTP_PORTS: "{{ .Values.parameters.ServiceA.port_http | int | toString }}"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.config.ServiceA.OTEL_EXPORTER_OTLP_ENDPOINT }}"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "{{ .Values.config.ServiceA.OTEL_EXPORTER_OTLP_PROTOCOL }}"
+  OTEL_SERVICE_NAME: "{{ .Values.config.ServiceA.OTEL_SERVICE_NAME }}"

@@ -32,6 +32,9 @@ public partial class StructuredLogDetails : IDisposable
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
 
+    [Inject]
+    public required StructuredLogMenuBuilder StructuredLogMenuBuilder { get; init; }
+
     internal IQueryable<TelemetryPropertyViewModel> FilteredItems =>
         _logEntryAttributes.Where(ApplyFilter).AsQueryable();
 
@@ -53,6 +56,7 @@ public partial class StructuredLogDetails : IDisposable
     private List<TelemetryPropertyViewModel> _logEntryAttributes = null!;
     private List<TelemetryPropertyViewModel> _contextAttributes = null!;
     private List<TelemetryPropertyViewModel> _exceptionAttributes = null!;
+    private readonly List<MenuButtonItem> _logActionsMenuItems = [];
     private AIContext? _aiContext;
 
     protected override void OnInitialized()
@@ -86,7 +90,10 @@ public partial class StructuredLogDetails : IDisposable
             [
                 new TelemetryPropertyViewModel { Name = "Category", Key = KnownStructuredLogFields.CategoryField, Value = _viewModel.LogEntry.Scope.Name }
             ];
-            MoveAttributes(attributes, _contextAttributes, a => a.Name is "event.name" or "logrecord.event.id" or "logrecord.event.name");
+            if (!string.IsNullOrEmpty(_viewModel.LogEntry.EventName))
+            {
+                _contextAttributes.Add(new TelemetryPropertyViewModel { Name = "EventName", Key = KnownStructuredLogFields.EventNameField, Value = _viewModel.LogEntry.EventName });
+            }
             if (HasTelemetryBaggage(_viewModel.LogEntry.TraceId))
             {
                 _contextAttributes.Add(new TelemetryPropertyViewModel { Name = "TraceId", Key = KnownStructuredLogFields.TraceIdField, Value = _viewModel.LogEntry.TraceId });
@@ -129,7 +136,15 @@ public partial class StructuredLogDetails : IDisposable
                     Parameters = { ["LogEntry"] = _viewModel.LogEntry }
                 },
             };
+
+            UpdateLogActionsMenu();
         }
+    }
+
+    private void UpdateLogActionsMenu()
+    {
+        _logActionsMenuItems.Clear();
+        StructuredLogMenuBuilder.AddMenuItems(_logActionsMenuItems, ViewModel.LogEntry, EventCallback.Empty, showViewDetails: false);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

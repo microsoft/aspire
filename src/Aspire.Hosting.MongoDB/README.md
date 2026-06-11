@@ -1,26 +1,37 @@
-# Aspire.Hosting.MongoDB library
+# MongoDB hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a MongoDB resource.
+Use this integration to model, configure, and orchestrate a MongoDB resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire MongoDB Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.MongoDB` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.MongoDB
+```bash
+aspire add Aspire.Hosting.MongoDB
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a MongoDB resource and consume the connection using the following methods:
+In the AppHost, add a MongoDB resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var db = builder.AddMongoDB("mongodb").AddDatabase("mydb");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(db);
+```
+
+**TypeScript**
+
+```typescript
+const db = await builder.addMongoDB("mongodb").addDatabase("mydb");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(db);
 ```
 
 ## Connection Properties
@@ -47,14 +58,15 @@ The MongoDB database resource combines the server properties above and adds the 
 
 | Property Name | Description |
 |---------------|-------------|
-| `Database` | The MongoDB database name |
+| `DatabaseName` | The MongoDB database name |
 
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
 
 ## Additional documentation
 
-* https://learn.microsoft.com/dotnet/aspire/database/mongodb-component
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/databases/mongodb/mongodb-host/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

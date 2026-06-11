@@ -7,6 +7,7 @@
     <IsPackable>true</IsPackable>
     <PackageTags>aspire hosting</PackageTags>
     <Description>Core library and MSBuild logic for Aspire AppHost projects.</Description>
+    <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -36,11 +37,13 @@
   <ItemGroup>
     <!-- Reference the analyzer to ensure it's built but don't reference its output -->
     <ProjectReference Include="..\Aspire.Hosting.Analyzers\Aspire.Hosting.Analyzers.csproj" ReferenceOutputAssembly="false" Private="true" />
+    <!-- Reference the tasks project to ensure it's built/restored but don't reference its output -->
+    <ProjectReference Include="..\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj" ReferenceOutputAssembly="false" Private="true" />
   </ItemGroup>
 
-  <!-- Include the analyzer in the package -->
+  <!-- Include the analyzer and tasks in the package -->
   <PropertyGroup>
-    <BeforePack>$(BeforePack);IncludeAnalyzerInPackage</BeforePack>
+    <BeforePack>$(BeforePack);IncludeAnalyzerInPackage;IncludeTasksInPackage</BeforePack>
   </PropertyGroup>
   <Target Name="IncludeAnalyzerInPackage">
     <MSBuild Projects="..\Aspire.Hosting.Analyzers\Aspire.Hosting.Analyzers.csproj" Targets="GetTargetPath">
@@ -51,6 +54,33 @@
 
     <ItemGroup>
       <None Include="$(AspireHostingAnalyzerFile)" Pack="True" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+
+    <!-- Build ALL TFMs of the tasks project before this project builds -->
+  <Target Name="BuildAllTasksTFMs">
+    <MSBuild Projects="..\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)" />
+    <!-- This builds all TFMs because the Tasks project is multi-targeted -->
+  </Target>
+
+  <Target Name="IncludeTasksInPackage"
+          DependsOnTargets="BuildAllTasksTFMs">
+    <!-- Get the output paths for the tasks project for both net8.0 and net472 -->
+    <MSBuild Projects="..\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj" Targets="GetTargetPath" Properties="TargetFramework=net8.0">
+      <Output TaskParameter="TargetOutputs" PropertyName="AspireHostingTasksNet80File" />
+    </MSBuild>
+    <MSBuild Projects="..\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj" Targets="GetTargetPath" Properties="TargetFramework=net472">
+      <Output TaskParameter="TargetOutputs" PropertyName="AspireHostingTasksNet472File" />
+    </MSBuild>
+
+    <Error Condition="'$(AspireHostingTasksNet80File)' == ''" Text="Could not find Aspire.Hosting.Tasks.dll for net8.0." />
+    <Error Condition="'$(AspireHostingTasksNet472File)' == ''" Text="Could not find Aspire.Hosting.Tasks.dll for net472." />
+
+    <ItemGroup>
+      <None Include="$(AspireHostingTasksNet80File)" Pack="True" PackagePath="tools/net8.0" />
+      <None Include="$(AspireHostingTasksNet472File)" Pack="True" PackagePath="tools/net472" />
     </ItemGroup>
   </Target>
 

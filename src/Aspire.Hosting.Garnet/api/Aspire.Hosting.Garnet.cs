@@ -10,24 +10,30 @@ namespace Aspire.Hosting
 {
     public static partial class GarnetBuilderExtensions
     {
+        [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> AddGarnet(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> AddGarnet(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use the overload without the keysChangedThreshold parameter.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> WithPersistence(this ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> builder, System.TimeSpan? interval, long keysChangedThreshold) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> WithPersistence(this ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> builder, System.TimeSpan? interval = null) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
-    public partial class GarnetResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class GarnetResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public GarnetResource(string name, ParameterResource password) : base(default!, default) { }
 
@@ -35,8 +41,16 @@ namespace Aspire.Hosting.ApplicationModel
 
         public ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
+        public EndpointReferenceExpression Host { get { throw null; } }
+
         public ParameterResource? PasswordParameter { get { throw null; } }
 
+        public EndpointReferenceExpression Port { get { throw null; } }
+
         public EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public ReferenceExpression UriExpression { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 }

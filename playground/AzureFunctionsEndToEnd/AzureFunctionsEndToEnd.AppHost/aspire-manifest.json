@@ -1,10 +1,14 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
+    "env-acr": {
+      "type": "azure.bicep.v0",
+      "path": "env-acr.module.bicep"
+    },
     "env": {
       "type": "azure.bicep.v0",
       "path": "env.module.bicep",
       "params": {
+        "env_acr_outputs_name": "{env-acr.outputs.name}",
         "userPrincipalId": ""
       }
     },
@@ -79,6 +83,7 @@
           "funcstorage67c6c_outputs_blobendpoint": "{funcstorage67c6c.outputs.blobEndpoint}",
           "funcstorage67c6c_outputs_queueendpoint": "{funcstorage67c6c.outputs.queueEndpoint}",
           "funcstorage67c6c_outputs_tableendpoint": "{funcstorage67c6c.outputs.tableEndpoint}",
+          "funcstorage67c6c_outputs_datalakeendpoint": "{funcstorage67c6c.outputs.dataLakeEndpoint}",
           "eventhubs_outputs_eventhubsendpoint": "{eventhubs.outputs.eventHubsEndpoint}",
           "messaging_outputs_servicebusendpoint": "{messaging.outputs.serviceBusEndpoint}",
           "cosmosdb_outputs_connectionstring": "{cosmosdb.outputs.connectionString}",
@@ -88,8 +93,6 @@
         }
       },
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
@@ -98,9 +101,11 @@
         "AzureWebJobsStorage__blobServiceUri": "{funcstorage67c6c.outputs.blobEndpoint}",
         "AzureWebJobsStorage__queueServiceUri": "{funcstorage67c6c.outputs.queueEndpoint}",
         "AzureWebJobsStorage__tableServiceUri": "{funcstorage67c6c.outputs.tableEndpoint}",
+        "AzureWebJobsStorage__dataLakeServiceUri": "{funcstorage67c6c.outputs.dataLakeEndpoint}",
         "Aspire__Azure__Storage__Blobs__AzureWebJobsStorage__ServiceUri": "{funcstorage67c6c.outputs.blobEndpoint}",
         "Aspire__Azure__Storage__Queues__AzureWebJobsStorage__ServiceUri": "{funcstorage67c6c.outputs.queueEndpoint}",
         "Aspire__Azure__Data__Tables__AzureWebJobsStorage__ServiceUri": "{funcstorage67c6c.outputs.tableEndpoint}",
+        "Aspire__Azure__Storage__Files__DataLake__AzureWebJobsStorage__ServiceUri": "{funcstorage67c6c.outputs.dataLakeEndpoint}",
         "myhub__fullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
         "Aspire__Azure__Messaging__EventHubs__EventHubProducerClient__myhub__FullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
         "Aspire__Azure__Messaging__EventHubs__EventHubConsumerClient__myhub__FullyQualifiedNamespace": "{eventhubs.outputs.eventHubsEndpoint}",
@@ -118,6 +123,8 @@
         "Aspire__Microsoft__EntityFrameworkCore__Cosmos__cosmosdb__AccountEndpoint": "{cosmosdb.outputs.connectionString}",
         "Aspire__Microsoft__Azure__Cosmos__cosmosdb__AccountEndpoint": "{cosmosdb.outputs.connectionString}",
         "ConnectionStrings__myblobcontainer": "{myblobcontainer.connectionString}",
+        "MYBLOBCONTAINER_URI": "{storage.outputs.blobEndpoint}",
+        "MYBLOBCONTAINER_BLOBCONTAINERNAME": "myblobcontainer",
         "blob__blobServiceUri": "{storage.outputs.blobEndpoint}",
         "blob__queueServiceUri": "{storage.outputs.queueEndpoint}",
         "Aspire__Azure__Storage__Blobs__blob__ServiceUri": "{storage.outputs.blobEndpoint}",
@@ -156,7 +163,9 @@
           "apiservice_identity_outputs_id": "{apiservice-identity.outputs.id}",
           "apiservice_containerport": "{apiservice.containerPort}",
           "eventhubs_outputs_eventhubsendpoint": "{eventhubs.outputs.eventHubsEndpoint}",
+          "eventhubs_outputs_eventhubshostname": "{eventhubs.outputs.eventHubsHostName}",
           "messaging_outputs_servicebusendpoint": "{messaging.outputs.serviceBusEndpoint}",
+          "messaging_outputs_servicebushostname": "{messaging.outputs.serviceBusHostName}",
           "cosmosdb_outputs_connectionstring": "{cosmosdb.outputs.connectionString}",
           "storage_outputs_queueendpoint": "{storage.outputs.queueEndpoint}",
           "storage_outputs_blobendpoint": "{storage.outputs.blobEndpoint}",
@@ -164,16 +173,22 @@
         }
       },
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{apiservice.bindings.http.targetPort}",
         "ConnectionStrings__myhub": "{myhub.connectionString}",
+        "MYHUB_HOST": "{eventhubs.outputs.eventHubsHostName}",
+        "MYHUB_URI": "{eventhubs.outputs.eventHubsEndpoint}",
+        "MYHUB_EVENTHUBNAME": "myhub",
         "ConnectionStrings__messaging": "{messaging.connectionString}",
+        "MESSAGING_HOST": "{messaging.outputs.serviceBusHostName}",
+        "MESSAGING_URI": "{messaging.outputs.serviceBusEndpoint}",
         "ConnectionStrings__cosmosdb": "{cosmosdb.connectionString}",
+        "COSMOSDB_URI": "{cosmosdb.outputs.connectionString}",
         "ConnectionStrings__queue": "{queue.connectionString}",
+        "QUEUE_URI": "{storage.outputs.queueEndpoint}",
         "ConnectionStrings__blob": "{blob.connectionString}",
+        "BLOB_URI": "{storage.outputs.blobEndpoint}",
         "FUNCAPP_HTTP": "{funcapp.bindings.http.url}",
         "services__funcapp__http__0": "{funcapp.bindings.http.url}",
         "FUNCAPP_HTTPS": "{funcapp.bindings.https.url}",
@@ -197,14 +212,6 @@
     "funcapp-identity": {
       "type": "azure.bicep.v0",
       "path": "funcapp-identity.module.bicep"
-    },
-    "funcapp-roles-funcstorage67c6c": {
-      "type": "azure.bicep.v0",
-      "path": "funcapp-roles-funcstorage67c6c.module.bicep",
-      "params": {
-        "funcstorage67c6c_outputs_name": "{funcstorage67c6c.outputs.name}",
-        "principalId": "{funcapp-identity.outputs.principalId}"
-      }
     },
     "funcapp-roles-eventhubs": {
       "type": "azure.bicep.v0",
@@ -235,6 +242,14 @@
       "path": "funcapp-roles-storage.module.bicep",
       "params": {
         "storage_outputs_name": "{storage.outputs.name}",
+        "principalId": "{funcapp-identity.outputs.principalId}"
+      }
+    },
+    "funcapp-roles-funcstorage67c6c": {
+      "type": "azure.bicep.v0",
+      "path": "funcapp-roles-funcstorage67c6c.module.bicep",
+      "params": {
+        "funcstorage67c6c_outputs_name": "{funcstorage67c6c.outputs.name}",
         "principalId": "{funcapp-identity.outputs.principalId}"
       }
     },

@@ -1,5 +1,4 @@
 ﻿@using Aspire.Dashboard.Extensions
-@using Aspire.Dashboard.Model
 @using Aspire.Dashboard.Resources
 
 @inject IStringLocalizer<Dialogs> Loc
@@ -13,19 +12,22 @@
             @Content.Description
         </FluentLabel>
 
-        <div Style="grid-area: dialog-format;">
-            <FluentMenuButton id="@_openSelectFormatButtonId"
-                              ButtonAppearance="Appearance.Stealth"
-                              IconEnd="@(new Icons.Regular.Size24.SlideTextEdit())"
-                              Text="@(_selectedFormat ?? Loc[nameof(Dialogs.TextVisualizerSelectFormatType)])"
-                              aria-label="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
-                              OnMenuChanged="@OnFormatOptionChanged">
-                @foreach (var option in _options)
-                {
-                    <FluentMenuItem Class="overflow-fluent-menu-item" Id="@option.Id" Disabled="@(!EnabledOptions.Contains(option.Id))" Value="@option.Id" title="@option.Name">@option.Name</FluentMenuItem>
-                }
-            </FluentMenuButton>
-        </div>
+        @if (!HasFixedFormat)
+        {
+            <div Style="grid-area: dialog-format;">
+                <FluentMenuButton id="@_openSelectFormatButtonId"
+                                  ButtonAppearance="Appearance.Stealth"
+                                  IconEnd="@(new Icons.Regular.Size24.SlideTextEdit())"
+                                  Text="@(_selectedFormat ?? Loc[nameof(Dialogs.TextVisualizerSelectFormatType)])"
+                                  aria-label="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
+                                  OnMenuChanged="@OnFormatOptionChanged">
+                    @foreach (var option in _options)
+                    {
+                        <FluentMenuItem Class="overflow-fluent-menu-item" Id="@option.Id" Disabled="@(!EnabledOptions.Contains(option.Id))" Value="@option.Id" title="@option.Name">@option.Name</FluentMenuItem>
+                    }
+                </FluentMenuButton>
+            </div>
+        }
     </div>
 </FluentDialogHeader>
 
@@ -33,17 +35,16 @@
     <div class="text-visualizer-container">
         @if (IsTextContentDisplayed)
         {
-            <TextVisualizer ViewModel="TextVisualizerViewModel" />
-
-            <FluentButton Id="@_copyButtonId"
-                          Class="text-visualizer-copy"
-                          AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
-                <span slot="start">
-                    <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
-                    <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
-                </span>
-                @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
-            </FluentButton>
+            if (IsMarkdownFormat)
+            {
+                <div class="markdown-content">
+                    <MarkdownRenderer Markdown="@Content.Text" MarkdownProcessor="@GetMarkdownProcessor()" SuppressParagraphOnNewLines="false" />
+                </div>
+            }
+            else
+            {
+                <TextVisualizer ViewModel="TextVisualizerViewModel" />
+            }
         }
         else if (ShowSecretsWarning is true)
         {
@@ -58,9 +59,38 @@
                     @Loc[nameof(Dialogs.TextVisualizerSecretWarningDescription)]
                 </div>
             </div>
-
-            <FluentButton Class="text-visualizer-unmask-content" OnClick="@UnmaskContentAsync">@Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]</FluentButton>
         }
+
+        <div class="button-container">
+            @if (ShowSecretsWarning is true)
+            {
+                <FluentButton Class="text-visualizer-unmask-content"
+                              OnClick="@UnmaskContentAsync">
+                    @Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]
+                </FluentButton>
+            }
+
+            <div class="button-container-right">
+                @if (Content.DownloadFileName is not null)
+                {
+                    <FluentButton OnClick="@DownloadAsync"
+                                  Title="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
+                                  aria-label="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
+                                  IconStart="new Icons.Regular.Size16.ArrowDownload()">
+                        @ControlsStringsLoc[nameof(ControlsStrings.Download)]
+                    </FluentButton>
+                }
+
+                <FluentButton Id="@_copyButtonId"
+                              AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                    <span slot="start">
+                        <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
+                        <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
+                    </span>
+                    @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
+                </FluentButton>
+            </div>
+        </div>
     </div>
 </FluentDialogBody>
 

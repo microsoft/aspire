@@ -5,9 +5,12 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
+#pragma warning disable ASPIRECSHARPAPPS001
+#pragma warning disable ASPIREEXTENSION001
 
 using System.Text;
 using System.Text.RegularExpressions;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
@@ -23,12 +26,58 @@ using Microsoft.Extensions.Hosting;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class ProjectResourceTests
 {
     [Fact]
+    public async Task AddProjectWithTrailingCommasInLaunchSettingsDoesNotThrow()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var projectDetails = await PrepareProjectWithTrailingCommasInLaunchSettingsAsync(tempDirectory.Path).DefaultTimeout();
+
+        var appBuilder = CreateBuilder();
+
+        // Should not throw - trailing commas are common in hand-edited JSON.
+        appBuilder.AddProject("project", projectDetails.ProjectFilePath);
+
+        async static Task<(string ProjectFilePath, string LaunchSettingsFilePath)> PrepareProjectWithTrailingCommasInLaunchSettingsAsync(string projectDirectoryPath)
+        {
+            var csProjContent = """
+                                <Project Sdk="Microsoft.NET.Sdk.Web">
+                                <!-- Not a real project, just a stub for testing -->
+                                </Project>
+                                """;
+
+            // Note: launchSettings.json is often edited by hand; allow trailing commas.
+            var launchSettingsContent = """
+                                        {
+                                            "profiles": {
+                                                "Development": {
+                                                    "commandName": "Project",
+                                                    "launchBrowser": true,
+                                                },
+                                            },
+                                        }
+                                        """;
+
+            var projectFilePath = Path.Combine(projectDirectoryPath, "Project.csproj");
+            var propertiesDirectoryPath = Path.Combine(projectDirectoryPath, "Properties");
+            var launchSettingsFilePath = Path.Combine(propertiesDirectoryPath, "launchSettings.json");
+
+            await File.WriteAllTextAsync(projectFilePath, csProjContent).DefaultTimeout();
+
+            Directory.CreateDirectory(propertiesDirectoryPath);
+            await File.WriteAllTextAsync(launchSettingsFilePath, launchSettingsContent).DefaultTimeout();
+
+            return (projectFilePath, launchSettingsFilePath);
+        }
+    }
+
+    [Fact]
     public async Task AddProjectWithInvalidLaunchSettingsShouldThrowSpecificError()
     {
-        var projectDetails = await PrepareProjectWithMalformedLaunchSettingsAsync().DefaultTimeout();
+        using var tempDirectory = new TestTempDirectory();
+        var projectDetails = await PrepareProjectWithMalformedLaunchSettingsAsync(tempDirectory.Path).DefaultTimeout();
 
         var ex = Assert.Throws<DistributedApplicationException>(() =>
         {
@@ -39,7 +88,7 @@ public class ProjectResourceTests
         var expectedMessage = $"Failed to get effective launch profile for project resource 'project'. There is malformed JSON in the project's launch settings file at '{projectDetails.LaunchSettingsFilePath}'.";
         Assert.Equal(expectedMessage, ex.Message);
 
-        async static Task<(string ProjectFilePath, string LaunchSettingsFilePath)> PrepareProjectWithMalformedLaunchSettingsAsync()
+        async static Task<(string ProjectFilePath, string LaunchSettingsFilePath)> PrepareProjectWithMalformedLaunchSettingsAsync(string projectDirectoryPath)
         {
             var csProjContent = """
                                 <Project Sdk="Microsoft.NET.Sdk.Web">
@@ -51,12 +100,10 @@ public class ProjectResourceTests
                                         this { is } { mal formed! >
                                         """;
 
-            var projectDirectoryPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
             var projectFilePath = Path.Combine(projectDirectoryPath, "Project.csproj");
             var propertiesDirectoryPath = Path.Combine(projectDirectoryPath, "Properties");
             var launchSettingsFilePath = Path.Combine(propertiesDirectoryPath, "launchSettings.json");
 
-            Directory.CreateDirectory(projectDirectoryPath);
             await File.WriteAllTextAsync(projectFilePath, csProjContent).DefaultTimeout();
 
             Directory.CreateDirectory(propertiesDirectoryPath);
@@ -90,16 +137,6 @@ public class ProjectResourceTests
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
         Assert.Collection(config,
-            env =>
-            {
-                Assert.Equal("OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES", env.Key);
-                Assert.Equal("true", env.Value);
-            },
-            env =>
-            {
-                Assert.Equal("OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES", env.Key);
-                Assert.Equal("true", env.Value);
-            },
             env =>
             {
                 Assert.Equal("OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY", env.Key);
@@ -361,6 +398,49 @@ public class ProjectResourceTests
                       e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p1");
                   })
                   .WithEndpoint("http2", e =>
+                  {
+                      e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p2");
+                  })
+                  .WithEndpoint("dontinjectme", e =>
+                  {
+                      e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p3");
+                  });
+
+        using var app = appBuilder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var projectResources = appModel.GetProjectResources();
+
+        var resource = Assert.Single(projectResources);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("http://localhost:p0;https://localhost:p1", config["ASPNETCORE_URLS"]);
+        Assert.Equal("5001", config["ASPNETCORE_HTTPS_PORT"]);
+        Assert.Equal("p2", config["SOME_ENV"]);
+    }
+
+    [Fact]
+    public async Task ExcludeLaunchProfileAddsHttpOrHttpsEndpointAddsToEnvWithEndpointNameFilter()
+    {
+        var appBuilder = CreateBuilder(operation: DistributedApplicationOperation.Run);
+
+        appBuilder.AddProject<Projects.ServiceA>("projectName", launchProfileName: null)
+                  .WithHttpEndpoint(port: 5000, name: "http")
+                  .WithHttpsEndpoint(port: 5001, name: "https")
+                  .WithHttpEndpoint(port: 5002, name: "http2", env: "SOME_ENV")
+                  .WithHttpEndpoint(port: 5003, name: "dontinjectme")
+                  .WithEndpointsInEnvironment(["http", "https", "http2"])
+                  .WithEndpoint("http", e =>
+                  {
+                      e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p0");
+                  })
+                  .WithEndpoint("https", e =>
+                  {
+                      e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p1");
+                  })
+                  .WithEndpoint("http2", e =>
                    {
                        e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p2");
                    })
@@ -508,8 +588,6 @@ public class ProjectResourceTests
               "type": "project.v0",
               "path": "another-path",
               "env": {
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                 "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory"{{fordwardedHeadersEnvVar}},
                 "HTTP_PORTS": "{projectName.bindings.http.targetPort}"
               },
@@ -558,8 +636,6 @@ public class ProjectResourceTests
                 "two"
               ],
               "env": {
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-                "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
                 "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
                 "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
                 "HTTP_PORTS": "{projectName.bindings.http.targetPort}"
@@ -753,23 +829,26 @@ public class ProjectResourceTests
 
         var resource = Assert.Single(projectResources);
 
-        // Verify the project has a PipelineStepAnnotation
+        // Verify the project has a single PipelineStepAnnotation that emits build and push steps
         var pipelineStepAnnotation = Assert.Single(resource.Annotations.OfType<PipelineStepAnnotation>());
 
-        // Create a factory context for testing the annotation
         var factoryContext = new PipelineStepFactoryContext
         {
-            PipelineContext = null!, // Not needed for this test
+            PipelineContext = null!,
             Resource = resource
         };
 
         var steps = (await pipelineStepAnnotation.CreateStepsAsync(factoryContext)).ToList();
+        Assert.Equal(2, steps.Count);
 
-        var buildStep = Assert.Single(steps);
-        Assert.Equal("build-test-project", buildStep.Name);
+        var buildStep = steps.First(s => s.Name == "build-test-project");
         Assert.Contains(WellKnownPipelineTags.BuildCompute, buildStep.Tags);
         Assert.Contains(WellKnownPipelineSteps.Build, buildStep.RequiredBySteps);
         Assert.Contains(WellKnownPipelineSteps.BuildPrereq, buildStep.DependsOnSteps);
+
+        var pushStep = steps.First(s => s.Name == "push-test-project");
+        Assert.Contains(WellKnownPipelineTags.PushContainerImage, pushStep.Tags);
+        Assert.Contains(WellKnownPipelineSteps.Push, pushStep.RequiredBySteps);
     }
 
     [Fact]
@@ -799,8 +878,7 @@ public class ProjectResourceTests
         Assert.Equal(sourceContainer.Resource, containerFilesAnnotation.Source);
         Assert.Equal("./wwwroot", containerFilesAnnotation.DestinationPath);
 
-        var pipelineStepAnnotations = resource.Annotations.OfType<PipelineStepAnnotation>().ToList();
-        Assert.Single(pipelineStepAnnotations);
+        Assert.Single(resource.Annotations.OfType<PipelineStepAnnotation>());
     }
 
     [Fact]
@@ -808,7 +886,8 @@ public class ProjectResourceTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "build-projectName");
         builder.Services.AddSingleton<IContainerRuntime, FakeContainerRuntime>();
-        builder.Services.AddSingleton<IResourceContainerImageBuilder, MockImageBuilder>();
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         // Create a test container resource that implements IResourceWithContainerFiles
         var sourceContainerResource = new TestContainerFilesResource("source");
@@ -825,7 +904,7 @@ public class ProjectResourceTests
         using var app = builder.Build();
         var fakeContainerRuntime = (FakeContainerRuntime)app.Services.GetRequiredService<IContainerRuntime>();
 
-        fakeContainerRuntime.BuildImageAsyncCallback = async (contextPath, dockerfilePath, imageName, options, buildArgs, buildSecrets, stage, cancellationToken) =>
+        fakeContainerRuntime.BuildImageAsyncCallback = async (contextPath, dockerfilePath, options, buildArgs, buildSecrets, stage, cancellationToken) =>
         {
             // Verify that the Dockerfile contains the expected COPY command
             var dockerFileContent = File.ReadAllText(dockerfilePath);
@@ -838,7 +917,7 @@ public class ProjectResourceTests
         await app.StartAsync();
         await app.WaitForShutdownAsync();
 
-        var mockImageBuilder = (MockImageBuilder)app.Services.GetRequiredService<IResourceContainerImageBuilder>();
+        var mockImageBuilder = (MockImageBuilder)app.Services.GetRequiredService<IResourceContainerImageManager>();
         Assert.True(mockImageBuilder.BuildImageCalled);
         var builtImage = Assert.Single(mockImageBuilder.BuildImageResources);
         Assert.Equal("projectName", builtImage.Name);
@@ -851,7 +930,7 @@ public class ProjectResourceTests
 
         Assert.True(fakeContainerRuntime.WasBuildImageCalled);
         var buildCall = Assert.Single(fakeContainerRuntime.BuildImageCalls);
-        Assert.Equal("projectname", buildCall.imageName);
+        Assert.Equal("projectname", buildCall.options?.ImageName);
         Assert.Empty(buildCall.contextPath);
         Assert.NotEmpty(buildCall.dockerfilePath);
 
@@ -861,6 +940,54 @@ public class ProjectResourceTests
         var removeCall = Assert.Single(fakeContainerRuntime.RemoveImageCalls);
         Assert.StartsWith("projectname:temp-", removeCall);
         Assert.Equal(tagCall.targetImageName, removeCall);
+    }
+
+    [Fact]
+    public void AddProjectGenericOverloadAddsSupportsDebuggingAnnotationInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddProject<TestProject>("projectName", options => { options.ExcludeLaunchProfile = true; });
+
+        var annotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("project", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void AddProjectWithPathAddsSupportsDebuggingAnnotationInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddProject("projectName", "another-path", options => { options.ExcludeLaunchProfile = true; });
+
+        var annotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("project", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void AddCSharpAppAddsSupportsDebuggingAnnotationInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var app = builder.AddCSharpApp("appName", "app-path", options => { options.ExcludeLaunchProfile = true; });
+
+        var annotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("project", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void AddProjectCreatesRebuilderWithNameValidationPolicyAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.AddProject<TestProject>("projectName", options => { options.ExcludeLaunchProfile = true; });
+
+        var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var rebuilder = appModel.Resources.OfType<ProjectRebuilderResource>().SingleOrDefault();
+        Assert.NotNull(rebuilder);
+        Assert.True(rebuilder.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
     internal static IDistributedApplicationBuilder CreateBuilder(string[]? args = null, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)

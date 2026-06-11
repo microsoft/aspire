@@ -1,8 +1,7 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Components.ConformanceTests;
-using Aspire.TestUtilities;
 using Azure.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -92,7 +91,6 @@ public class ConformanceTests : ConformanceTests<IChatClient, AzureOpenAISetting
         => RemoteInvokeWithLogging(() => new ConformanceTests().ActivitySourceTest(key: null), Output);
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9916")]
     public void TracingEnablesTheRightActivitySource_Keyed()
         => RemoteInvokeWithLogging(() => new ConformanceTests().ActivitySourceTest(key: "key"), Output);
 

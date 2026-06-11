@@ -26,13 +26,20 @@ public interface IDeveloperCertificateService
     bool SupportsContainerTrust { get; }
 
     /// <summary>
-    /// Indicates whether the available developer certificates support being used for TLS termination and should
-    /// be used by default if not explicitly disabled or overriden.
+    /// Indicates whether the default behavior is to attempt to use a developer certificate for server
+    /// authentication (i.e. HTTPS/TLS termination).
     /// </summary>
-    bool DefaultTlsTerminationEnabled { get; }
+    bool UseForHttps { get; }
 
     /// <summary>
     /// Indicates whether the default behavior is to attempt to trust the developer certificate(s) at runtime.
     /// </summary>
     bool TrustCertificate { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether a newer ASP.NET Core development certificate was detected
+    /// that is not in the trusted set. This is true when the highest-version/most-recent dev cert
+    /// is not trusted, even though older trusted certs may exist.
+    /// </summary>
+    bool LatestCertificateIsUntrusted => false;
 }

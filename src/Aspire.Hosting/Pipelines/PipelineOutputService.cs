@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
@@ -18,22 +20,55 @@ internal sealed class PipelineOutputService : IPipelineOutputService
     /// Stores the resolved output directory path, or <c>null</c> if not specified.
     /// </summary>
     private readonly string? _outputPath;
-    
-    /// <summary>
-    /// Lazily creates and stores the path to the temporary directory for pipeline output.
-    /// </summary>
-    private readonly Lazy<string> _tempDirectory;
 
-    public PipelineOutputService(IOptions<PipelineOptions> options, IConfiguration configuration)
+    /// <summary>
+    /// Stores the default output directory path.
+    /// </summary>
+    private readonly string _defaultOutputPath;
+
+    /// <summary>
+    /// Stores the path to the temporary directory for pipeline output.
+    /// </summary>
+    private readonly string _tempDirectory;
+
+    public PipelineOutputService(IOptions<PipelineOptions> options, IConfiguration configuration, IFileSystemService directoryService)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(directoryService);
+
         _outputPath = options.Value.OutputPath is not null ? Path.GetFullPath(options.Value.OutputPath) : null;
-        _tempDirectory = new Lazy<string>(() => CreateTempDirectory(configuration));
+        _defaultOutputPath = _outputPath is null
+            ? ResolveDefaultOutputPath(configuration)
+            : Path.Combine(Environment.CurrentDirectory, "aspire-output");
+        _tempDirectory = directoryService.TempDirectory.CreateTempSubdirectory("aspire-pipelines").Path;
+    }
+
+    private static string ResolveDefaultOutputPath(IConfiguration configuration)
+    {
+        // DistributedApplicationBuilder publishes the resolved AppHost directory here.
+        var appHostDirectory = configuration["AppHost:Directory"];
+        var baseDirectory = Environment.CurrentDirectory;
+
+        if (!string.IsNullOrWhiteSpace(appHostDirectory))
+        {
+            try
+            {
+                baseDirectory = Path.GetFullPath(appHostDirectory);
+            }
+            catch (Exception ex) when (ex is ArgumentException or PathTooLongException)
+            {
+                baseDirectory = Environment.CurrentDirectory;
+            }
+        }
+
+        return Path.Combine(baseDirectory, "aspire-output");
     }
 
     /// <inheritdoc/>
     public string GetOutputDirectory()
     {
-        return _outputPath ?? Path.Combine(Environment.CurrentDirectory, "aspire-output");
+        return _outputPath ?? _defaultOutputPath;
     }
 
     /// <inheritdoc/>
@@ -48,7 +83,7 @@ internal sealed class PipelineOutputService : IPipelineOutputService
     /// <inheritdoc/>
     public string GetTempDirectory()
     {
-        return _tempDirectory.Value;
+        return _tempDirectory;
     }
 
     /// <inheritdoc/>
@@ -58,24 +93,5 @@ internal sealed class PipelineOutputService : IPipelineOutputService
 
         var baseTempDir = GetTempDirectory();
         return Path.Combine(baseTempDir, resource.Name);
-    }
-
-    /// <summary>
-    /// Creates a temporary directory for pipeline build artifacts.
-    /// Uses AppHost:PathSha256 from configuration to create an isolated temp directory per app host,
-    /// enabling multiple app hosts to run concurrently without conflicts.
-    /// If AppHost:PathSha256 is not available, falls back to a generic "aspire" temp directory.
-    /// </summary>
-    private static string CreateTempDirectory(IConfiguration configuration)
-    {
-        var appHostSha = configuration["AppHost:PathSha256"];
-
-        if (!string.IsNullOrEmpty(appHostSha))
-        {
-            return Directory.CreateTempSubdirectory($"aspire-{appHostSha}").FullName;
-        }
-
-        // Fallback if AppHost:PathSha256 is not available
-        return Directory.CreateTempSubdirectory("aspire").FullName;
     }
 }

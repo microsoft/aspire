@@ -179,14 +179,35 @@ public class ResourceCreationTests
         Assert.True(nodeResource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var _));
         Assert.True(nodeResource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var _));
 
-        // Verify NO installer resource was created
-        var installerResources = appModel.Resources.OfType<JavaScriptInstallerResource>().ToList();
-        Assert.Empty(installerResources);
+        // Verify installer resource WAS created (new behavior)
+        var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+        Assert.Equal("test-app-installer", installerResource.Name);
 
-        // Verify no wait annotations were added
+        // Verify it has explicit start annotation
+        Assert.True(installerResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
+
+        // Verify no wait annotations were added to the app
         Assert.False(nodeResource.TryGetAnnotationsOfType<WaitAnnotation>(out _));
+    }
 
-        // Verify no package installer annotation was added
-        Assert.False(nodeResource.TryGetLastAnnotation<JavaScriptPackageInstallerAnnotation>(out _));
+    [Fact]
+    public void InstallerResourceHasCertificateTrustScopeNone()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var nodeApp = builder.AddJavaScriptApp("test-app", "./test-app");
+        nodeApp.WithNpm(install: true);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Verify the installer resource was created
+        var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+        Assert.Equal("test-app-installer", installerResource.Name);
+
+        // Verify the installer has CertificateTrustScope.None
+        Assert.True(installerResource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var certAnnotation));
+        Assert.Equal(CertificateTrustScope.None, certAnnotation.Scope);
     }
 }

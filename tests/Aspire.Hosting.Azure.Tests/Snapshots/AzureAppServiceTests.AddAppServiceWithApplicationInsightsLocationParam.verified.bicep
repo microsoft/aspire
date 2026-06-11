@@ -1,9 +1,11 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param userPrincipalId string = ''
 
 param tags object = { }
+
+param env_acr_outputs_name string
 
 param appInsightsLocation string
 
@@ -13,13 +15,8 @@ resource env_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = 
   tags: tags
 }
 
-resource env_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
-  name: take('envacr${uniqueString(resourceGroup().id)}', 50)
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  tags: tags
+resource env_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
+  name: env_acr_outputs_name
 }
 
 resource env_acr_env_mi_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -32,14 +29,12 @@ resource env_acr_env_mi_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04
   scope: env_acr
 }
 
-resource env_asplan 'Microsoft.Web/serverfarms@2024-11-01' = {
+resource env_asplan 'Microsoft.Web/serverfarms@2025-03-01' = {
   name: take('envasplan-${uniqueString(resourceGroup().id)}', 60)
   location: location
   properties: {
-    elasticScaleEnabled: false
     perSiteScaling: true
     reserved: true
-    maximumElasticWorkerCount: 10
   }
   kind: 'Linux'
   sku: {
@@ -62,7 +57,7 @@ resource env_ra 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-resource dashboard 'Microsoft.Web/sites@2024-11-01' = {
+resource dashboard 'Microsoft.Web/sites@2025-03-01' = {
   name: take('${toLower('env')}-${toLower('aspiredashboard')}-${uniqueString(resourceGroup().id)}', 60)
   location: location
   properties: {
@@ -74,20 +69,24 @@ resource dashboard 'Microsoft.Web/sites@2024-11-01' = {
       acrUserManagedIdentityID: env_mi.properties.clientId
       appSettings: [
         {
-          name: 'Dashboard__Frontend__AuthMode'
+          name: 'DASHBOARD__FRONTEND__AUTHMODE'
           value: 'Unsecured'
         }
         {
-          name: 'Dashboard__Otlp__AuthMode'
+          name: 'DASHBOARD__OTLP__AUTHMODE'
           value: 'Unsecured'
         }
         {
-          name: 'Dashboard__Otlp__SuppressUnsecuredTelemetryMessage'
+          name: 'DASHBOARD__OTLP__SUPPRESSUNSECUREDTELEMETRYMESSAGE'
           value: 'true'
         }
         {
-          name: 'Dashboard__ResourceServiceClient__AuthMode'
+          name: 'DASHBOARD__RESOURCESERVICECLIENT__AUTHMODE'
           value: 'Unsecured'
+        }
+        {
+          name: 'DASHBOARD__UI__DISABLEIMPORT'
+          value: 'true'
         }
         {
           name: 'WEBSITES_PORT'
@@ -117,8 +116,6 @@ resource dashboard 'Microsoft.Web/sites@2024-11-01' = {
       alwaysOn: true
       http20Enabled: true
       http20ProxyFlag: 1
-      functionAppScaleLimit: 1
-      elasticWebAppScaleLimit: 1
     }
   }
   identity: {

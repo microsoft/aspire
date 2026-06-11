@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Valkey.Tests;
 
-public class AddValkeyTests
+public class AddValkeyTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddValkeyContainerWithDefaultsAddsAnnotationMetadata()
@@ -121,7 +121,7 @@ public class AddValkeyTests
     [Fact]
     public async Task VerifyWithoutPasswordManifest()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var valkey = builder.AddValkey("myValkey");
 
         var manifest = await ManifestUtils.GetManifest(valkey.Resource);
@@ -155,7 +155,7 @@ public class AddValkeyTests
     [Fact]
     public async Task VerifyWithPasswordManifest()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var password = "p@ssw0rd1";
         builder.Configuration["Parameters:pass"] = password;
@@ -196,7 +196,7 @@ public class AddValkeyTests
     [InlineData(false)]
     public void WithDataVolumeAddsVolumeAnnotation(bool? isReadOnly)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var valkey = builder.AddValkey("myValkey");
         if (isReadOnly.HasValue)
         {
@@ -221,7 +221,7 @@ public class AddValkeyTests
     [InlineData(false)]
     public void WithDataBindMountAddsMountAnnotation(bool? isReadOnly)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var valkey = builder.AddValkey("myValkeydata");
         if (isReadOnly.HasValue)
         {
@@ -243,7 +243,7 @@ public class AddValkeyTests
     [Fact]
     public async Task WithDataVolumeAddsPersistenceAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var valkey = builder.AddValkey("myValkey")
                               .WithDataVolume();
 
@@ -256,7 +256,7 @@ public class AddValkeyTests
     [Fact]
     public async Task WithDataVolumeDoesNotAddPersistenceAnnotationIfIsReadOnly()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var valkey = builder.AddValkey("myValkey")
                            .WithDataVolume(isReadOnly: true);
 
@@ -267,7 +267,7 @@ public class AddValkeyTests
     [Fact]
     public async Task WithDataBindMountAddsPersistenceAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var valkey = builder.AddValkey("myValkey")
                            .WithDataBindMount("myvalkeydata");
 
@@ -280,7 +280,7 @@ public class AddValkeyTests
     [Fact]
     public async Task WithDataBindMountDoesNotAddPersistenceAnnotationIfIsReadOnly()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var valkey = builder.AddValkey("myValkey")
                            .WithDataBindMount("myvalkeydata", isReadOnly: true);
 
@@ -291,7 +291,7 @@ public class AddValkeyTests
     [Fact]
     public async Task WithPersistenceReplacesPreviousAnnotationInstances()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var valkey = builder.AddValkey("myValkey")
                            .WithDataVolume()
                            .WithPersistence(TimeSpan.FromSeconds(10), 2);
@@ -309,7 +309,7 @@ public class AddValkeyTests
     [Fact]
     public void WithPersistenceAddsCommandLineArgsAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var valkey = builder.AddValkey("myValkey")
                            .WithPersistence(TimeSpan.FromSeconds(60));
 
@@ -320,7 +320,7 @@ public class AddValkeyTests
     [Fact]
     public async Task AddValkeyContainerWithPasswordAnnotationMetadata()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var password = "p@ssw0rd1";
         var pass = builder.AddParameter("pass", password);

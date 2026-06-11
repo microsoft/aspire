@@ -1,0 +1,4 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "env-acr.module.bicep"
+}

@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Utils;
+
 namespace Aspire.Hosting.Tests;
 
-public class AsHttp2ServiceTests
+[Trait("Partition", "2")]
+public class AsHttp2ServiceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void Http2TransportIsNotSetWhenHttp2ServiceAnnotationIsNotApplied()
@@ -57,5 +60,10 @@ public class AsHttp2ServiceTests
         Assert.Equal("http2", httpsBinding.Transport);
     }
 
-    private static TestProgram CreateTestProgram(string[] args) => TestProgram.Create<AsHttp2ServiceTests>(args, disableDashboard: true);
+    private TestProgram CreateTestProgram(string[] args)
+    {
+        var program = TestProgram.Create<AsHttp2ServiceTests>(args, disableDashboard: true);
+        program.AppBuilder.WithTestAndResourceLogging(testOutputHelper);
+        return program;
+    }
 }

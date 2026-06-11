@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
@@ -17,16 +19,26 @@ public partial class TextVisualizerDialog : ComponentBase
     private List<SelectViewModel<string>> _options = null!;
     private string? _selectedFormat;
     private bool _isLoading = true;
+    private MarkdownProcessor? _markdownProcessor;
     internal TextVisualizerViewModel TextVisualizerViewModel { get; set; } = default!;
 
     public HashSet<string?> EnabledOptions { get; } = [];
     internal bool? ShowSecretsWarning { get; private set; }
+    internal bool IsMarkdownFormat => TextVisualizerViewModel.FormatKind == DashboardUIHelpers.MarkdownFormat;
+
+    /// <summary>
+    /// Returns true if the dialog has a fixed format that cannot be changed by the user.
+    /// </summary>
+    internal bool HasFixedFormat => Content.FixedFormat is not null;
 
     [Parameter, EditorRequired]
     public required TextVisualizerDialogViewModel Content { get; set; }
 
     [Inject]
     public required ILocalStorage LocalStorage { get; init; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -50,19 +62,34 @@ public partial class TextVisualizerDialog : ComponentBase
 
         _options = [
             new SelectViewModel<string> { Id = DashboardUIHelpers.PlaintextFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogPlaintextFormat)] },
+            new SelectViewModel<string> { Id = DashboardUIHelpers.MarkdownFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogMarkdownFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.JsonFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogJsonFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.XmlFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogXmlFormat)] }
         ];
 
-        TextVisualizerViewModel = new TextVisualizerViewModel(Content.Text, indentText: true);
-
-        if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.JsonFormat)
+        // If a fixed format is specified, use it directly without auto-detection.
+        if (Content.FixedFormat is not null)
         {
-            EnabledOptions.Add(DashboardUIHelpers.JsonFormat);
+            TextVisualizerViewModel = new TextVisualizerViewModel(Content.Text, indentText: true, Content.FixedFormat);
         }
-        else if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.XmlFormat)
+        else
         {
-            EnabledOptions.Add(DashboardUIHelpers.XmlFormat);
+            TextVisualizerViewModel = new TextVisualizerViewModel(Content.Text, indentText: true);
+
+            if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.JsonFormat)
+            {
+                EnabledOptions.Add(DashboardUIHelpers.JsonFormat);
+            }
+            else if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.XmlFormat)
+            {
+                EnabledOptions.Add(DashboardUIHelpers.XmlFormat);
+            }
+            else
+            {
+                // Markdown can't be reliably detected from content, so enable it when the format is
+                // unknown to let users switch to markdown rendering if they want.
+                EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
+            }
         }
     }
 
@@ -87,22 +114,33 @@ public partial class TextVisualizerDialog : ComponentBase
         TextVisualizerViewModel.UpdateFormat(newFormat ?? DashboardUIHelpers.PlaintextFormat);
     }
 
-    public static async Task OpenDialogAsync(ViewportInformation viewportInformation, IDialogService dialogService,
-        IStringLocalizer<Resources.Dialogs> dialogsLoc, string valueDescription, string value, bool containsSecret)
+    internal MarkdownProcessor GetMarkdownProcessor()
     {
-        var width = viewportInformation.IsDesktop ? "75vw" : "100vw";
+        return _markdownProcessor ??= new MarkdownProcessor(ControlsStringsLoc, safeUrlSchemes: MarkdownHelpers.SafeUrlSchemes, extensions: []);
+    }
+
+    public static async Task<IDialogReference> OpenDialogAsync(OpenTextVisualizerDialogOptions options)
+    {
+        var width = options.DialogService.IsDesktop ? "75vw" : "100vw";
         var parameters = new DialogParameters
         {
-            Title = valueDescription,
-            DismissTitle = dialogsLoc[nameof(Resources.Dialogs.DialogCloseButtonText)],
+            Title = options.ValueDescription,
             Width = $"min(1000px, {width})",
             TrapFocus = true,
             Modal = true,
             PreventScroll = true,
         };
 
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(
-            new TextVisualizerDialogViewModel(value, valueDescription, containsSecret), parameters);
+        return await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(
+            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat), parameters);
+    }
+
+    private async Task DownloadAsync()
+    {
+        if (Content.DownloadFileName is not null)
+        {
+            await JS.DownloadFileAsync(Content.DownloadFileName, TextVisualizerViewModel.FormattedText);
+        }
     }
 
     internal sealed record TextVisualizerDialogSettings(bool SecretsWarningAcknowledged);

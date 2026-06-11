@@ -45,7 +45,7 @@ public sealed class ConsoleLogsManager
         if (!_hasInitialized)
         {
             var filtersResult = await _sessionStorage.GetAsync<ConsoleLogsFilters>(BrowserStorageKeys.ConsoleLogFilters).ConfigureAwait(false);
-            _filters = filtersResult.Success ? filtersResult.Value : new();
+            _filters = filtersResult.Success ? filtersResult.Value : ConsoleLogsFilters.Default;
 
             _hasInitialized = true;
         }
@@ -100,5 +100,27 @@ public sealed class ConsoleLogsManager
         {
             await subscription.ExecuteAsync().ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Gets the filter date for a resource based on the current filters.
+    /// </summary>
+    /// <param name="resourceName">The resource name.</param>
+    /// <returns>The filter date, or null if no filter applies.</returns>
+    public DateTime? GetFilterDate(string resourceName)
+    {
+        if (!_hasInitialized || _filters is null)
+        {
+            return null;
+        }
+
+        // Check for resource-specific filter first
+        if (_filters.TryGetResourceFilterDate(resourceName, out var resourceFilterDate))
+        {
+            return resourceFilterDate;
+        }
+
+        // Fall back to global filter
+        return _filters.FilterAllLogsDate;
     }
 }

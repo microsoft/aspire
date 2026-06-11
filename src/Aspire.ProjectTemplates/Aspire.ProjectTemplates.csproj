@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk" InitialTargets="AddTemplatesToPackageAsContent">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
@@ -20,11 +20,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- see https://github.com/dotnet/aspire/pull/1225 -->
+    <!-- see https://github.com/microsoft/aspire/pull/1225 -->
     <None Include="templates\**\*" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Template config files: .template.config\*.json -->
+    <TemplateConfigFiles Include="$(MSBuildThisFileDirectory)templates\**\.template.config\*.json">
+      <PackagePath>content/templates/%(RecursiveDir)</PackagePath>
+      <DestinationFile>$(IntermediateOutputPath)content\templates\%(RecursiveDir)%(Filename)%(Extension)</DestinationFile>
+    </TemplateConfigFiles>
+
+    <TemplateConfigFilesObj Include="@(TemplateConfigFiles->'%(DestinationFile)')" />
+
     <!-- Template project files: *.csproj -->
     <TemplateProjectFiles Include="$(MSBuildThisFileDirectory)templates\**\*.csproj">
       <PackagePath>content/templates/%(RecursiveDir)</PackagePath>
@@ -37,61 +45,110 @@
       <DestinationFile>$(IntermediateOutputPath)content\templates\aspire-apphost-singlefile\%(RecursiveDir)%(Filename)%(Extension)</DestinationFile>
     </TemplateProjectFiles>
 
-    <!-- Template project files: apphost.cs (aspire-py-starter) -->
-    <TemplateProjectFiles Include="$(MSBuildThisFileDirectory)templates\aspire-py-starter\**\apphost.cs">
-      <PackagePath>content/templates/aspire-py-starter/%(RecursiveDir)</PackagePath>
-      <DestinationFile>$(IntermediateOutputPath)content\templates\aspire-py-starter\%(RecursiveDir)%(Filename)%(Extension)</DestinationFile>
-    </TemplateProjectFiles>
-
     <TemplateProjectFilesObj Include="@(TemplateProjectFiles->'%(DestinationFile)')" />
 
     <TemplateFiles Include="$(MSBuildThisFileDirectory)templates\**\*"
-                   Exclude="$(MSBuildThisFileDirectory)templates\**\bin\**;$(MSBuildThisFileDirectory)templates\**\obj\**;$(MSBuildThisFileDirectory)templates\**\*.csproj;$(MSBuildThisFileDirectory)templates\aspire-apphost-singlefile\**\apphost.cs;$(MSBuildThisFileDirectory)templates\aspire-py-starter\**\apphost.cs">
+                   Exclude="$(MSBuildThisFileDirectory)templates\**\bin\**;$(MSBuildThisFileDirectory)templates\**\obj\**;$(MSBuildThisFileDirectory)templates\**\*.csproj;$(MSBuildThisFileDirectory)templates\aspire-apphost-singlefile\**\apphost.cs">
       <PackagePath>content/templates/%(RecursiveDir)</PackagePath>
     </TemplateFiles>
+
     <TemplateFilesObj Include="@(TemplateFiles->'$(IntermediateOutputPath)content\templates\%(RecursiveDir)%(Filename)%(Extension)')" />
   </ItemGroup>
 
   <!-- When building a package, this target will run to copy all the templates into the intermediate directory,
        replaces the package versions, and adds them to the package.-->
   <Target Name="AddTemplatesToPackageAsContent"
+          AfterTargets="Build"
           DependsOnTargets="ReplacePackageVersionOnTemplates">
     <ItemGroup>
       <Content Include="@(TemplateFilesObj);@(TemplateProjectFilesObj)" />
     </ItemGroup>
   </Target>
 
-  <!-- Replaces the versions referenced by the templates projects to use the version of the packages being live-built -->
   <Target Name="ReplacePackageVersionOnTemplates"
-          DependsOnTargets="CopyTemplatesToIntermediateOutputPath"
-          Inputs="@(TemplateProjectFiles)"
-          Outputs="@(TemplateProjectFilesObj)">
+          DependsOnTargets="CopyTemplatesToIntermediateOutputPath">
 
-    <WriteLinesToFile File="%(TemplateProjectFiles.DestinationFile)"
-                      Lines="$([System.IO.File]::ReadAllText('%(TemplateProjectFiles.FullPath)')
-                                                 .Replace('!!REPLACE_WITH_LATEST_VERSION!!', '$(PackageVersion)')
-                                                 .Replace('!!REPLACE_WITH_ASPNETCORE_OPENAPI_9_VERSION!!', '$(MicrosoftAspNetCoreOpenApiVersion)')
-                                                 .Replace('!!REPLACE_WITH_ASPNETCORE_OPENAPI_10_VERSION!!', '$(MicrosoftAspNetCoreOpenApiPreviewVersion)')
-                                                 .Replace('!!REPLACE_WITH_DOTNET_EXTENSIONS_VERSION!!', '$(MicrosoftExtensionsHttpResilienceVersion)')
-                                                 .Replace('!!REPLACE_WITH_SERVICE_DISCOVERY_VERSION!!', '$(MicrosoftExtensionsServiceDiscoveryVersion)')
-                                                 .Replace('!!REPLACE_WITH_OTEL_NET8_VERSION!!', '$(OpenTelemetryNet8Version)')
-                                                 .Replace('!!REPLACE_WITH_OTEL_EXPORTER_VERSION!!', '$(OpenTelemetryExporterOpenTelemetryProtocolVersion)')
-                                                 .Replace('!!REPLACE_WITH_OTEL_HOSTING_VERSION!!', '$(OpenTelemetryInstrumentationExtensionsHostingVersion)')
-                                                 .Replace('!!REPLACE_WITH_OTEL_ASPNETCORE_VERSION!!', '$(OpenTelemetryInstrumentationAspNetCoreVersion)')
-                                                 .Replace('!!REPLACE_WITH_OTEL_HTTP_VERSION!!', '$(OpenTelemetryInstrumentationHttpVersion)')
-                                                 .Replace('!!REPLACE_WITH_OTEL_RUNTIME_VERSION!!', '$(OpenTelemetryInstrumentationRuntimeVersion)') )"
-                      WriteOnlyWhenDifferent="True"
-                      Overwrite="true" />
+    <PropertyGroup>
+      <!-- Extract purely numeric portions before any '-' prerelease tag -->
+      <_VersionBase>$(PackageVersion.Split('-')[0])</_VersionBase>
+      <!-- Build major.minor version -->
+      <VersionMajor>$(_VersionBase.Split('.')[0])</VersionMajor>
+      <VersionMinor>$(_VersionBase.Split('.')[1])</VersionMinor>
+      <VersionMajorMinor>$(VersionMajor).$(VersionMinor)</VersionMajorMinor>
+      <_RspFilePath>$(IntermediateOutputPath)replace-text-args.rsp</_RspFilePath>
+      <_ReplaceTextScriptPath>$(RepoRoot)tools/scripts/replace-text.cs</_ReplaceTextScriptPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <!-- This is defined here as these files aren't guaranteed to exist until the build has run -->
+      <TemplateLocalizedStringsFiles Include="$(MSBuildThisFileDirectory)templates\**\.template.config\localize\templatestrings.*.json" />
+      <TemplateLocalizedStringsFilesDest Include="@(TemplateLocalizedStringsFiles)"
+                                         DestinationFile="$(IntermediateOutputPath)content\templates\%(RecursiveDir)%(Filename)%(Extension)" />
+      <TemplateLocalizedStringsFilesObj Include="@(TemplateLocalizedStringsFilesDest->'%(DestinationFile)')" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <SourceFiles Include="@(TemplateConfigFilesObj)" />
+      <SourceFiles Include="@(TemplateProjectFilesObj)" />
+      <SourceFiles Include="@(TemplateLocalizedStringsFilesObj)" />
+      <!-- NOTE: These must be added in pairs, with text to replace first, then replacement text second -->
+      <Replacements Include="!!REPLACE_WITH_LATEST_VERSION!!" />
+      <Replacements Include="$(PackageVersion)" />
+      <Replacements Include="!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!" />
+      <Replacements Include="$(VersionMajorMinor)" />
+      <Replacements Include="!!REPLACE_WITH_ASPNETCORE_OPENAPI_9_VERSION!!" />
+      <Replacements Include="$(MicrosoftAspNetCoreOpenApiVersion)" />
+      <Replacements Include="!!REPLACE_WITH_ASPNETCORE_OPENAPI_10_VERSION!!" />
+      <Replacements Include="$(MicrosoftAspNetCoreOpenApiPreviewVersion)" />
+      <Replacements Include="!!REPLACE_WITH_DOTNET_EXTENSIONS_VERSION!!" />
+      <Replacements Include="$(MicrosoftExtensionsHttpResilienceVersion)" />
+      <Replacements Include="!!REPLACE_WITH_SERVICE_DISCOVERY_VERSION!!" />
+      <Replacements Include="$(MicrosoftExtensionsServiceDiscoveryVersion)" />
+      <Replacements Include="!!REPLACE_WITH_OTEL_EXPORTER_VERSION!!" />
+      <Replacements Include="$(OpenTelemetryExporterOpenTelemetryProtocolVersion)" />
+      <Replacements Include="!!REPLACE_WITH_OTEL_HOSTING_VERSION!!" />
+      <Replacements Include="$(OpenTelemetryInstrumentationExtensionsHostingVersion)" />
+      <Replacements Include="!!REPLACE_WITH_OTEL_ASPNETCORE_VERSION!!" />
+      <Replacements Include="$(OpenTelemetryInstrumentationAspNetCoreVersion)" />
+      <Replacements Include="!!REPLACE_WITH_OTEL_HTTP_VERSION!!" />
+      <Replacements Include="$(OpenTelemetryInstrumentationHttpVersion)" />
+      <Replacements Include="!!REPLACE_WITH_OTEL_RUNTIME_VERSION!!" />
+      <Replacements Include="$(OpenTelemetryInstrumentationRuntimeVersion)" />
+    </ItemGroup>
+
+    <!-- Build the .rsp file content as an item group -->
+    <ItemGroup>
+      <_RspLines Include="--files" />
+      <_RspLines Include="@(SourceFiles)" />
+      <_RspLines Include="--replacements" />
+      <_RspLines Include="@(Replacements)" />
+    </ItemGroup>
+
+    <!-- Write the .rsp file -->
+    <WriteLinesToFile File="$(_RspFilePath)"
+                      Lines="@(_RspLines)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+
+    <!-- Execute the script with the .rsp file, using double dash to pass arguments directly to the script -->
+    <Exec Command="dotnet &quot;$(_ReplaceTextScriptPath)&quot; -- @&quot;$(_RspFilePath)&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)"
+          StandardOutputImportance="Normal"
+          StandardErrorImportance="Normal" />
   </Target>
 
   <!-- Grabs the contents of the templates folder and copies them to IntermediateOutputPath directory -->
   <Target Name="CopyTemplatesToIntermediateOutputPath"
-          Inputs="@(TemplateFiles)"
-          Outputs="@(TemplateFilesObj)">
+          Inputs="@(TemplateFiles);@(TemplateProjectFiles)"
+          Outputs="@(TemplateFilesObj);@(TemplateProjectFilesObj)">
 
     <Copy SourceFiles="@(TemplateFiles)"
           DestinationFiles="@(TemplateFilesObj)"
           SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(TemplateProjectFiles)"
+          DestinationFiles="@(TemplateProjectFilesObj)"
+          SkipUnchangedFiles="true" />
+
   </Target>
 
 </Project>

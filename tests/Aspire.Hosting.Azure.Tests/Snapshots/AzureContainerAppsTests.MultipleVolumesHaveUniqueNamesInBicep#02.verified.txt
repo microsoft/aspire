@@ -2,6 +2,7 @@
   "type": "azure.bicep.v0",
   "path": "my-ace.module.bicep",
   "params": {
+    "my_ace_acr_outputs_name": "{my-ace-acr.outputs.name}",
     "userPrincipalId": ""
   }
 }

@@ -1,9 +1,8 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "keycloak": {
       "type": "container.v0",
-      "image": "quay.io/keycloak/keycloak:26.4",
+      "image": "quay.io/keycloak/keycloak:26.5",
       "args": [
         "start",
         "--import-realm"
@@ -25,7 +24,8 @@
       "env": {
         "KC_BOOTSTRAP_ADMIN_USERNAME": "admin",
         "KC_BOOTSTRAP_ADMIN_PASSWORD": "{keycloak-password.value}",
-        "KC_HEALTH_ENABLED": "true"
+        "KC_HEALTH_ENABLED": "true",
+        "KC_FEATURES": "opentelemetry"
       },
       "bindings": {
         "http": {
@@ -46,15 +46,13 @@
       "type": "project.v0",
       "path": "../Keycloak.ApiService/Keycloak.ApiService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{apiservice.bindings.http.targetPort}",
         "KEYCLOAK_HTTP": "{keycloak.bindings.http.url}",
         "services__keycloak__http__0": "{keycloak.bindings.http.url}",
         "KEYCLOAK_MANAGEMENT": "{keycloak.bindings.management.url}",
-        "services__keycloak__management__0": "{keycloak.bindings.management.url}"
+        "services__keycloak__http__1": "{keycloak.bindings.management.url}"
       },
       "bindings": {
         "http": {
@@ -73,15 +71,13 @@
       "type": "project.v0",
       "path": "../Keycloak.Web/Keycloak.Web.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{webfrontend.bindings.http.targetPort}",
         "KEYCLOAK_HTTP": "{keycloak.bindings.http.url}",
         "services__keycloak__http__0": "{keycloak.bindings.http.url}",
         "KEYCLOAK_MANAGEMENT": "{keycloak.bindings.management.url}",
-        "services__keycloak__management__0": "{keycloak.bindings.management.url}",
+        "services__keycloak__http__1": "{keycloak.bindings.management.url}",
         "APISERVICE_HTTP": "{apiservice.bindings.http.url}",
         "services__apiservice__http__0": "{apiservice.bindings.http.url}",
         "APISERVICE_HTTPS": "{apiservice.bindings.https.url}",

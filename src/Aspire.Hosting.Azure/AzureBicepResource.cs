@@ -14,7 +14,6 @@ using Aspire.Hosting.Azure.Utils;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Azure;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -49,6 +48,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
             var provisionStep = new PipelineStep
             {
                 Name = $"provision-{name}",
+                Description = $"Provisions the Azure Bicep resource {name} using Azure infrastructure.",
                 Action = async ctx => await ProvisionAzureBicepResourceAsync(ctx, this).ConfigureAwait(false),
                 Tags = [WellKnownPipelineTags.ProvisionInfrastructure]
             };
@@ -151,14 +151,11 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
             throw new InvalidOperationException("Multiple template sources are specified.");
         }
 
-        var path = TemplateFile;
-        var isTempFile = false;
-
-        if (path is null)
+        if (TemplateFile is null)
         {
-            isTempFile = directory is null;
+            var isTempFile = directory is null;
 
-            path = TempDirectory is null
+            var path = TempDirectory is null
                 ? Path.Combine(directory ?? Directory.CreateTempSubdirectory("aspire").FullName, $"{Name.ToLowerInvariant()}.module.bicep")
                 : Path.Combine(TempDirectory, $"{Name.ToLowerInvariant()}.module.bicep");
 
@@ -180,10 +177,14 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                 using var fs = File.OpenWrite(path);
                 resourceStream.CopyTo(fs);
             }
+
+            return new(path, isTempFile && deleteTemporaryFileOnDispose);
         }
 
-        var targetPath = directory is not null ? Path.Combine(directory, path) : path;
-        return new(targetPath, isTempFile && deleteTemporaryFileOnDispose);
+        // When TemplateFile is specified, return the original path directly.
+        // The directory parameter is only for writing temporary files when the template
+        // is from a string or embedded resource, not for combining with an existing file path.
+        return new(TemplateFile, deleteFileOnDispose: false);
     }
 
     /// <summary>
@@ -304,7 +305,6 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         }
 
         var bicepProvisioner = context.Services.GetRequiredService<IBicepProvisioner>();
-        var configuration = context.Services.GetRequiredService<IConfiguration>();
 
         // Find the AzureEnvironmentResource from the application model
         var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault();
@@ -316,7 +316,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         var provisioningContext = await azureEnvironment.ProvisioningContextTask.Task.ConfigureAwait(false);
 
         var resourceTask = await context.ReportingStep
-            .CreateTaskAsync($"Deploying **{resource.Name}**", context.CancellationToken)
+            .CreateTaskAsync(new MarkdownString($"Deploying **{resource.Name}**"), context.CancellationToken)
             .ConfigureAwait(false);
 
         await using (resourceTask.ConfigureAwait(false))
@@ -324,11 +324,11 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
             try
             {
                 if (await bicepProvisioner.ConfigureResourceAsync(
-                    configuration, resource, context.CancellationToken).ConfigureAwait(false))
+                    resource, context.CancellationToken).ConfigureAwait(false))
                 {
                     resource.ProvisioningTaskCompletionSource?.TrySetResult();
                     await resourceTask.CompleteAsync(
-                        $"Using existing deployment for **{resource.Name}**",
+                        new MarkdownString($"Using existing deployment for **{resource.Name}**"),
                         CompletionState.Completed,
                         context.CancellationToken).ConfigureAwait(false);
                 }
@@ -339,7 +339,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                         .ConfigureAwait(false);
                     resource.ProvisioningTaskCompletionSource?.TrySetResult();
                     await resourceTask.CompleteAsync(
-                        $"Successfully provisioned **{resource.Name}**",
+                        new MarkdownString($"Successfully provisioned **{resource.Name}**"),
                         CompletionState.Completed,
                         context.CancellationToken).ConfigureAwait(false);
                 }
@@ -354,10 +354,10 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                 };
                 resource.ProvisioningTaskCompletionSource?.TrySetException(ex);
                 await resourceTask.CompleteAsync(
-                    $"Failed to provision **{resource.Name}**: {errorMessage}",
+                    new MarkdownString($"Failed to provision **{resource.Name}**: {errorMessage}"),
                     CompletionState.CompletedWithError,
                     context.CancellationToken).ConfigureAwait(false);
-                throw;
+                throw new ProvisioningFailedException(errorMessage, ex);
             }
         }
     }
@@ -371,7 +371,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
     /// </summary>
     /// <param name="requestEx">The Azure RequestFailedException containing the error response</param>
     /// <returns>The most specific error message found, or the original exception message if parsing fails</returns>
-    private static string ExtractDetailedErrorMessage(RequestFailedException requestEx)
+    internal static string ExtractDetailedErrorMessage(RequestFailedException requestEx)
     {
         try
         {
@@ -399,7 +399,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                                     }
                                 }
 
-                                return $"{code}: {message}";
+                                return $"Error code = {code}, Message = {message}";
                             }
                         }
 
@@ -410,7 +410,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
 
                             if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(message))
                             {
-                                return $"{code}: {message}";
+                                return $"Error code = {code}, Message = {message}";
                             }
                         }
                     }
@@ -442,7 +442,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
 
                 if (!string.IsNullOrEmpty(detailCode) && !string.IsNullOrEmpty(detailMessage))
                 {
-                    return $"{detailCode}: {detailMessage}";
+                    return $"Error code = {detailCode}, Message = {detailMessage}";
                 }
             }
         }
@@ -571,7 +571,7 @@ public readonly struct BicepTemplateFile(string path, bool deleteFileOnDispose) 
 /// <param name="name">The name of the KeyVault secret.</param>
 /// <param name="resource">The <see cref="AzureBicepResource"/>.</param>
 [Obsolete("BicepSecretOutputReference is no longer supported. Use IAzureKeyVaultResource instead.")]
-public sealed class BicepSecretOutputReference(string name, AzureBicepResource resource) : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+public sealed class BicepSecretOutputReference(string name, AzureBicepResource resource) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences
 {
     /// <summary>
     /// Name of the KeyVault secret.
@@ -625,7 +625,8 @@ public sealed class BicepSecretOutputReference(string name, AzureBicepResource r
 /// </summary>
 /// <param name="name">The name of the output</param>
 /// <param name="resource">The <see cref="AzureBicepResource"/>.</param>
-public sealed class BicepOutputReference(string name, AzureBicepResource resource) : IManifestExpressionProvider, IValueProvider, IValueWithReferences, IEquatable<BicepOutputReference>
+[AspireExport(ExposeProperties = true)]
+public sealed class BicepOutputReference(string name, AzureBicepResource resource) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences, IEquatable<BicepOutputReference>
 {
     /// <summary>
     /// Name of the output.
@@ -663,7 +664,7 @@ public sealed class BicepOutputReference(string name, AzureBicepResource resourc
         {
             if (!Resource.Outputs.TryGetValue(Name, out var value))
             {
-                throw new InvalidOperationException($"No output for {Name}");
+                throw new InvalidOperationException($"No output for {Name} on resource {Resource.Name}");
             }
 
             return value?.ToString();

@@ -9,6 +9,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents an Azure OpenAI Deployment resource.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class AzureOpenAIDeploymentResource : Resource, IResourceWithParent<AzureOpenAIResource>, IResourceWithConnectionString
 {
     /// <value>"Standard"</value>
@@ -102,6 +103,16 @@ public class AzureOpenAIDeploymentResource : Resource, IResourceWithParent<Azure
     /// Gets the connection string expression for the Azure OpenAI Deployment resource.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression => Parent.GetConnectionString(DeploymentName);
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        {
+            yield return property;
+        }
+
+        yield return new("ModelName", ReferenceExpression.Create($"{DeploymentName}"));
+    }
 
     private static string ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)
     {

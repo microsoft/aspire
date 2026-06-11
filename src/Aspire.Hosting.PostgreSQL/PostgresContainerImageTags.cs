@@ -11,8 +11,8 @@ internal static class PostgresContainerImageTags
     /// <remarks>library/postgres</remarks>
     public const string Image = "library/postgres";
 
-    /// <remarks>18.0</remarks>
-    public const string Tag = "18.0";
+    /// <remarks>18.3</remarks>
+    public const string Tag = "18.3";
 
     /// <remarks>docker.io</remarks>
     public const string PgAdminRegistry = "docker.io";
@@ -20,8 +20,8 @@ internal static class PostgresContainerImageTags
     /// <remarks>dpage/pgadmin4</remarks>
     public const string PgAdminImage = "dpage/pgadmin4";
 
-    /// <remarks>9.9.0</remarks>
-    public const string PgAdminTag = "9.9.0";
+    /// <remarks>9.15.0</remarks>
+    public const string PgAdminTag = "9.15.0";
 
     /// <remarks>docker.io</remarks>
     public const string PgWebRegistry = "docker.io";
@@ -29,6 +29,15 @@ internal static class PostgresContainerImageTags
     /// <remarks>sosedoff/pgweb</remarks>
     public const string PgWebImage = "sosedoff/pgweb";
 
-    /// <remarks>0.16.2</remarks>
-    public const string PgWebTag = "0.16.2";
+    /// <remarks>0.17.0</remarks>
+    public const string PgWebTag = "0.17.0";
+
+    /// <remarks>docker.io</remarks>
+    public const string PostgresMcpRegistry = "docker.io";
+
+    /// <remarks>crystaldba/postgres-mcp</remarks>
+    public const string PostgresMcpImage = "crystaldba/postgres-mcp";
+
+    /// <remarks>0.3.0</remarks>
+    public const string PostgresMcpTag = "0.3.0";
 }

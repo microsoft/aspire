@@ -24,4 +24,13 @@ internal static class RoutingExtensions
             return Task.CompletedTask;
         });
     }
+
+    public static IEndpointConventionBuilder MapGetNotFound(this IEndpointRouteBuilder endpoints, string pattern)
+    {
+        return endpoints.MapGet(pattern, context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return Task.CompletedTask;
+        });
+    }
 }

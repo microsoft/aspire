@@ -31,6 +31,7 @@ public static class AzureContainerAppExecutableExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExport("publishExecutableAsAzureContainerApp", MethodName = "publishAsAzureContainerApp")]
     public static IResourceBuilder<T> PublishAsAzureContainerApp<T>(this IResourceBuilder<T> executable, Action<AzureResourceInfrastructure, ContainerApp> configure)
         where T : ExecutableResource
     {

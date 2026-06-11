@@ -7,7 +7,6 @@ public enum TestSdk
 {
     Previous,
     Current,
-    CurrentSdkAndPreviousRuntime,
     Next,
-    NextSdkAndCurrentRuntime
+    NextSdkWithCurrentAndPreviousRuntime
 }

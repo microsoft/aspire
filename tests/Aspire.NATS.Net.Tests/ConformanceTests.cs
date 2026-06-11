@@ -18,7 +18,7 @@ public class ConformanceTests : ConformanceTests<INatsConnection, NatsClientSett
     public ConformanceTests(NatsContainerFixture containerFixture, ITestOutputHelper? output = null) : base(output)
     {
         _containerFixture = containerFixture;
-        _connectionString = RequiresDockerAttribute.IsSupported
+        _connectionString = RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker)
             ? _containerFixture.GetConnectionString()
             : "nats://user:password@apire-host:4222";
     }
@@ -56,7 +56,7 @@ public class ConformanceTests : ConformanceTests<INatsConnection, NatsClientSett
 
     protected override bool CanCreateClientWithoutConnectingToServer => false;
 
-    protected override bool CanConnectToServer => RequiresDockerAttribute.IsSupported;
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
 
     protected override void TriggerActivity(INatsConnection service)
     {

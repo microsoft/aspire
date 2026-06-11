@@ -69,7 +69,7 @@ internal static class AddressAllocationModes
 }
 
 [DebuggerDisplay("Service {Metadata.Name} State={Status?.State}")]
-internal sealed class Service : CustomResource<ServiceSpec, ServiceStatus>
+internal sealed class Service : CustomResource<ServiceSpec, ServiceStatus>, IKubernetesStaticMetadata
 {
     [JsonConstructor]
     public Service(ServiceSpec spec) : base(spec) { }
@@ -109,5 +109,7 @@ internal sealed class Service : CustomResource<ServiceSpec, ServiceStatus>
             Status.EffectivePort = other.Status.EffectivePort;
         }
     }
+
+    public static string ObjectKind => Dcp.ServiceKind;
 }
 

@@ -8,6 +8,7 @@ resource eventhubns 'Microsoft.EventHub/namespaces@2024-01-01' = {
   location: location
   properties: {
     disableLocalAuth: true
+    publicNetworkAccess: 'Enabled'
   }
   sku: {
     name: sku
@@ -24,4 +25,8 @@ resource eventhubOne 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = {
 
 output eventHubsEndpoint string = eventhubns.properties.serviceBusEndpoint
 
+output eventHubsHostName string = split(replace(eventhubns.properties.serviceBusEndpoint, 'https://', ''), ':')[0]
+
 output name string = eventhubns.name
+
+output id string = eventhubns.id

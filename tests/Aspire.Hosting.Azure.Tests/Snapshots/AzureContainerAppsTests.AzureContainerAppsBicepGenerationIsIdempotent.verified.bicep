@@ -33,7 +33,7 @@ resource existingKv_secret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' existi
   parent: existingKv
 }
 
-resource api 'Microsoft.App/containerApps@2025-01-01' = {
+resource api 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'api'
   location: location
   properties: {

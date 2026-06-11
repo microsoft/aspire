@@ -31,9 +31,15 @@
       <_TestRunCommand Condition="'$(HelixPerWorkItemPreCommand)' != ''">$(HelixPerWorkItemPreCommand) $(_ShellCommandSeparator) $(_TestRunCommand)</_TestRunCommand>
     </PropertyGroup>
 
-    <ReadLinesFromFile File="$(TestArchiveTestsDirForTemplateTests)$(TestProjectName).tests.list">
-      <Output TaskParameter="Lines" ItemName="_TemplateTestsClassNames" />
-    </ReadLinesFromFile>
+    <Exec Command="pwsh -NoProfile -Command &quot;(Get-Content '$(TestArchiveTestsDirForTemplateTests)$(TestProjectName).tests-partitions.json' | ConvertFrom-Json).testPartitions&quot;"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_TemplateTestsClassNamesRaw" />
+    </Exec>
+
+    <!-- Strip class: prefix from test class names -->
+    <ItemGroup>
+      <_TemplateTestsClassNames Include="@(_TemplateTestsClassNamesRaw->'%(Identity)'->Replace('class:', ''))" />
+    </ItemGroup>
 
     <Error Condition="@(_TemplateTestsClassNames->Count()) == 0"
            Text="No workload test class names found" />

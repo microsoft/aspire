@@ -1,6 +1,5 @@
 ﻿@namespace Aspire.Dashboard.Components
 
-@using Aspire.Dashboard.Otlp.Model
 @using Aspire.Dashboard.Resources
 @using Metrics = Aspire.Dashboard.Components.Pages.Metrics
 @inject IStringLocalizer<ControlsStrings> Loc
@@ -26,7 +25,7 @@ else
                     <div class="block-warning-message">
                         <span class="title">@Loc[nameof(ControlsStrings.ChartContainerOverflowTitle)]</span>
                         @Loc[nameof(ControlsStrings.ChartContainerOverflowDescription)]<br/>
-                        @((MarkupString)string.Format(ControlsStrings.ChartContainerOverflowLink, "https://aka.ms/dotnet/aspire/cardinality-limits"))
+                        @((MarkupString)string.Format(ControlsStrings.ChartContainerOverflowLink, "https://aka.ms/aspire/cardinality-limits"))
                     </div>
                 </div>
             }
@@ -39,7 +38,7 @@ else
                        Icon="@(new Icons.Regular.Size24.DataArea())">
                 <div class="metrics-chart-container metric-tab">
                     <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources"/>
-                    <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters" />
+                    <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
             <FluentTab LabelClass="tab-label"
@@ -48,7 +47,7 @@ else
                        Icon="@(new Icons.Regular.Size24.Table())">
                 <div class="metrics-chart-container metric-tab">
                     <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" />
-                    <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters"/>
+                    <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
         </FluentTabs>

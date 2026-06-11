@@ -6,17 +6,11 @@
     <PackageTags>$(ComponentEfCorePackageTags) postgresql postgres npgsql sql cloud</PackageTags>
     <Description>An Azure Database for PostgreSQL® provider for Entity Framework Core that integrates with Aspire, including connection pooling, health checks, logging, and telemetry.</Description>
     <PackageIconFullPath>$(SharedDir)AzurePostgreSQL_256x.png</PackageIconFullPath>
-    <!-- Temporarily we need to ship this as prerelease until Npgsql.EntityFrameworkCore.PostgreSQL ships a stable version that depends on .NET 10 stable -->
-    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
   </PropertyGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <!-- Temporary until Npgsql.EntityFrameworkCore.PostgreSQL ships a stable version that depends on 10.0 -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" VersionOverride="10.0.0-rc.2.25502.107" />
-  </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\Common\ManagedIdentityTokenCredentialHelpers.cs" Link="ManagedIdentityTokenCredentialHelpers.cs" />
+    <Compile Include="..\..\Shared\AzureCredentialHelper.cs" Link="AzureCredentialHelper.cs" />
     <Compile Include="..\Common\EntityFrameworkUtils.cs" Link="EntityFrameworkUtils.cs" />
   </ItemGroup>
   
@@ -30,6 +24,10 @@
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <PackageVersion Update="Npgsql.DependencyInjection" Version="$(Npgsql8Version)" />
     <PackageVersion Update="Npgsql.OpenTelemetry" Version="$(Npgsql8Version)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageVersion Update="Npgsql.DependencyInjection" Version="$(Npgsql9Version)" />
+    <PackageVersion Update="Npgsql.OpenTelemetry" Version="$(Npgsql9Version)" />
   </ItemGroup>
 
 </Project>

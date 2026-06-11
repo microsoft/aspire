@@ -1,6 +1,6 @@
-# Integrating Angular, React, and Vue with .NET Aspire
+# Integrating Angular, React, and Vue with Aspire
 
-This sample demonstrates an approach for integrating several Node.js apps into a .NET Aspire application.
+This sample demonstrates an approach for integrating several Node.js apps into an Aspire application.
 
 The app consists of four services:
 
@@ -20,9 +20,9 @@ The app consists of four services:
 
 Before starting the app host run `npm install` in each javascript folder.
 
-Once the app is running, the .NET Aspire dashboard will launch in your browser:
+Once the app is running, the Aspire dashboard will launch in your browser:
 
-![.NET Aspire dashboard](./images/aspire-dashboard.png)
+![Aspire dashboard](./images/aspire-dashboard.png)
 
 From the dashboard, you can navigate to the Angular, React, and Vue apps:
 

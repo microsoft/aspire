@@ -8,6 +8,7 @@ namespace Aspire.Hosting.Milvus;
 /// <summary>
 /// A resource that represents a Milvus database.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class MilvusServerResource : ContainerResource, IResourceWithConnectionString
 {
     internal const string PrimaryEndpointName = "grpc";

@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Qdrant.Tests;
 
-public class QdrantPublicApiTests
+public class QdrantPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddQdrantShouldThrowWhenBuilderIsNull()
@@ -25,7 +25,7 @@ public class QdrantPublicApiTests
     [InlineData(false)]
     public void AddQdrantShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddQdrant(name);
@@ -64,7 +64,7 @@ public class QdrantPublicApiTests
     [InlineData(false)]
     public void WithDataBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builderResource = TestDistributedApplicationBuilder.Create();
+        var builderResource = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var qdrant = builderResource.AddQdrant("Qdrant");
         var source = isNull ? null! : string.Empty;
 
@@ -80,7 +80,7 @@ public class QdrantPublicApiTests
     public void WithReferenceShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<IResourceWithEnvironment> builder = null!;
-        var builderResource = TestDistributedApplicationBuilder.Create();
+        var builderResource = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var qdrantResource = builderResource.AddQdrant("Qdrant");
 
         var action = () => builder.WithReference(qdrantResource);
@@ -92,7 +92,7 @@ public class QdrantPublicApiTests
     [Fact]
     public void WithReferenceShouldThrowWhenQdrantResourceIsNull()
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var qdrant = builder.AddQdrant("Qdrant");
         IResourceBuilder<QdrantServerResource> qdrantResource = null!;
 
@@ -107,7 +107,7 @@ public class QdrantPublicApiTests
     [InlineData(false)]
     public void CtorQdrantServerResourceShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var distributedApplicationBuilder = TestDistributedApplicationBuilder.Create();
+        var distributedApplicationBuilder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var name = isNull ? null! : string.Empty;
         const string key = nameof(key);
         var apiKey = new ParameterResource(key, (ParameterDefault? parameterDefault) => key);

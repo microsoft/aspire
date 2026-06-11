@@ -3,19 +3,12 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
-using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
-using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.BrowserStorage;
-using Aspire.Dashboard.Otlp.Storage;
-using Aspire.Dashboard.Telemetry;
-using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
-using Aspire.Hosting.ConsoleLogs;
+using Aspire.Shared.ConsoleLogs;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.AspNetCore.Components;
@@ -23,10 +16,8 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
-using Aspire.TestUtilities;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
@@ -180,7 +171,8 @@ public partial class ConsoleLogsTests : DashboardTestContext
     public void ToggleHiddenResources_HiddenResourceVisibilityAndSelection_WorksCorrectly()
     {
         // Arrange
-        var regularResource = ModelTestHelpers.CreateResource(resourceName: "regular-resource", state: KnownResourceState.Running);
+        var regularResource1 = ModelTestHelpers.CreateResource(resourceName: "regular-resource1", state: KnownResourceState.Running);
+        var regularResource2 = ModelTestHelpers.CreateResource(resourceName: "regular-resource2", state: KnownResourceState.Running);
         var hiddenResource = ModelTestHelpers.CreateResource(resourceName: "hidden-resource", state: KnownResourceState.Running, hidden: true);
 
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
@@ -189,7 +181,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
             isEnabled: true,
             consoleLogsChannelProvider: name => consoleLogsChannel,
             resourceChannelProvider: () => resourceChannel,
-            initialResources: [regularResource, hiddenResource]);
+            initialResources: [regularResource1, regularResource2, hiddenResource]);
 
         SetupConsoleLogsServices(dashboardClient);
 
@@ -212,8 +204,8 @@ public partial class ConsoleLogsTests : DashboardTestContext
             var selectElement = resourceSelect.Find("fluent-select");
             var selectOptions = selectElement.QuerySelectorAll("fluent-option");
 
-            // Should have at least 1 option (regular resource) when resources are loaded
-            Assert.True(selectOptions.Length >= 1);
+            // Should have "All" + 2 regular resources when resources are loaded
+            Assert.Equal(3, selectOptions.Length);
         });
 
         // Initially, hidden resources should not be shown
@@ -221,10 +213,11 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var selectElement = resourceSelect.Find("fluent-select");
         var selectOptions = selectElement.QuerySelectorAll("fluent-option");
 
-        // Should only have regular resource (hidden resource filtered out)
-        Assert.Equal(1, selectOptions.Length); // regular-resource
+        // Should have "All" + 2 regular resources (hidden resource filtered out)
+        Assert.Equal(3, selectOptions.Length);
         var optionValues = selectOptions.Select(opt => opt.GetAttribute("value")).ToList();
-        Assert.Contains("regular-resource", optionValues);
+        Assert.Contains("regular-resource1", optionValues);
+        Assert.Contains("regular-resource2", optionValues);
         Assert.DoesNotContain("hidden-resource", optionValues);
 
         // Act & Assert 2: Click the settings menu button to show the menu, then click "Show hidden resources"
@@ -244,21 +237,16 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             var updatedOptions = selectElement.QuerySelectorAll("fluent-option");
-            // Should now have both resources
-            Assert.Equal(3, updatedOptions.Length); // "None" + regular-resource + hidden-resource
+            // Should now have "All" + all three resources
+            Assert.Equal(4, updatedOptions.Length);
             var updatedOptionValues = updatedOptions.Select(opt => opt.GetAttribute("value")).ToList();
-            Assert.Contains("regular-resource", updatedOptionValues);
+            Assert.Contains("regular-resource1", updatedOptionValues);
+            Assert.Contains("regular-resource2", updatedOptionValues);
             Assert.Contains("hidden-resource", updatedOptionValues);
         });
 
-        // Act & Assert 3: Select the hidden resource
-        var hiddenResourceOption = selectElement.QuerySelector("fluent-option[value='hidden-resource']");
-        Assert.NotNull(hiddenResourceOption);
-        selectElement.Change("hidden-resource");
-
-        cut.WaitForState(() => instance.PageViewModel.SelectedResource?.Name == "hidden-resource");
-
-        // Act & Assert 4: Click the settings menu button again and click "Hide hidden resources" to hide them again
+        // Act & Assert 3: Click the settings menu button again and click "Hide hidden resources" to hide them again
+        // Note: We stay on "All" view to test the hide functionality
         settingsMenuButton.Click();
 
         cut.WaitForAssertion(() =>
@@ -268,19 +256,70 @@ public partial class ConsoleLogsTests : DashboardTestContext
             hideHiddenMenuItem.Click();
         });
 
-        // Wait for UI to update - hidden resource should be filtered out and selection should be cleared
+        // Wait for UI to update - hidden resource should be filtered out
         cut.WaitForAssertion(() =>
         {
             var finalOptions = selectElement.QuerySelectorAll("fluent-option");
-            // Should be back to regular resource only
-            Assert.Equal(1, finalOptions.Length); // regular-resource
+            // Should be back to "All" + 2 regular resources only
+            Assert.Equal(3, finalOptions.Length);
             var finalOptionValues = finalOptions.Select(opt => opt.GetAttribute("value")).ToList();
-            Assert.Contains("regular-resource", finalOptionValues);
+            Assert.Contains("regular-resource1", finalOptionValues);
+            Assert.Contains("regular-resource2", finalOptionValues);
             Assert.DoesNotContain("hidden-resource", finalOptionValues);
         });
+    }
 
-        // Selection should be cleared since selected resource is now hidden
-        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == regularResource.Name);
+    [Fact]
+    public void ToggleHiddenResourcesMenuItem_WhenSingleResourceSelected_NotShown()
+    {
+        // Arrange
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var hiddenResource = ModelTestHelpers.CreateResource(resourceName: "hidden-resource", state: KnownResourceState.Running, hidden: true);
+
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: name => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource, hiddenResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        // Act: Render component with a specific resource selected
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, viewport);
+            builder.Add(p => p.ResourceName, "test-resource");
+        });
+
+        var instance = cut.Instance;
+
+        // Wait for resources to load and specific resource to be selected
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource?.Id?.InstanceId == "test-resource");
+
+        // Act: Click the settings menu button
+        var settingsMenuButton = cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
+        Assert.NotNull(settingsMenuButton);
+        settingsMenuButton.Click();
+
+        // Assert: The "Show hidden resources" / "Hide hidden resources" menu item should NOT be present
+        cut.WaitForAssertion(() =>
+        {
+            var menuItems = cut.FindAll("fluent-menu-item");
+            var hiddenResourcesMenuItems = menuItems.Where(item =>
+            {
+                var text = item.TextContent;
+                return text.Contains(Resources.ControlsStrings.ShowHiddenResources) ||
+                       text.Contains(Resources.ControlsStrings.HideHiddenResources);
+            }).ToList();
+
+            Assert.Empty(hiddenResourcesMenuItems);
+        });
     }
 
     [Fact]
@@ -332,7 +371,6 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/12740")]
     public async Task ReadingLogs_ErrorDuringRead_SetStatusAndLog()
     {
         // Arrange
@@ -536,7 +574,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var earliestEntry = instance._logEntries.GetEntries()[0];
         timeProvider.UtcNow = earliestEntry.Timestamp!.Value;
 
-        await consoleLogsManager.UpdateFiltersAsync(new ConsoleLogsFilters { FilterAllLogsDate = earliestEntry.Timestamp!.Value });
+        await consoleLogsManager.UpdateFiltersAsync(new ConsoleLogsFilters { FilterAllLogsDate = earliestEntry.Timestamp!.Value, FilterResourceLogsDates = new Dictionary<string, DateTime>() });
 
         cut.WaitForState(() => instance._logEntries.EntriesCount == 0);
 
@@ -552,7 +590,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var testResource = ModelTestHelpers.CreateResource(
             resourceName: "test-resource",
             state: KnownResourceState.Running,
-            commands: [new CommandViewModel("test-name", CommandViewModelState.Enabled, "test-displayname", "test-displaydescription", confirmationMessage: "", parameter: null, isHighlighted: true, iconName: string.Empty, iconVariant: IconVariant.Regular)]);
+            commands: [new CommandViewModel("test-name", CommandViewModelState.Enabled, "test-displayname", "test-displaydescription", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: string.Empty, iconVariant: IconVariant.Regular)]);
         var subscribedResourceNameTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -616,7 +654,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var testResource = ModelTestHelpers.CreateResource(
             resourceName: "test-resource",
             state: KnownResourceState.Running,
-            commands: [new CommandViewModel("test-name", CommandViewModelState.Enabled, "test-displayname", "test-displaydescription", confirmationMessage: "", parameter: null, isHighlighted: true, iconName: string.Empty, iconVariant: IconVariant.Regular)]);
+            commands: [new CommandViewModel("test-name", CommandViewModelState.Enabled, "test-displayname", "test-displaydescription", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: string.Empty, iconVariant: IconVariant.Regular)]);
         var subscribedResourceNameTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -794,62 +832,28 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
     private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null)
     {
-        var version = typeof(FluentMain).Assembly.GetName().Version!;
-
-        var dividerModule = JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Divider/FluentDivider.razor.js", version));
-        dividerModule.SetupVoid("setDividerAriaOrientation");
-
-        var inputLabelModule = JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Label/FluentInputLabel.razor.js", version));
-        inputLabelModule.SetupVoid("setInputAriaLabel", _ => true);
-
-        JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/List/ListComponentBase.razor.js", version));
-
-        var searchModule = JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Search/FluentSearch.razor.js", version));
-        searchModule.SetupVoid("addAriaHidden", _ => true);
-
-        var keycodeModule = JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/KeyCode/FluentKeyCode.razor.js", version));
-        keycodeModule.Setup<string>("RegisterKeyCode", _ => true);
-
-        var menuModule = JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Menu/FluentMenu.razor.js", version));
-        menuModule.SetupVoid("initialize", _ => true);
-
-        JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Anchor/FluentAnchor.razor.js", version));
-        JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/AnchoredRegion/FluentAnchoredRegion.razor.js", version));
-        JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Toolbar/FluentToolbar.razor.js", version));
+        FluentUISetupHelpers.SetupFluentDivider(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentList(this);
+        FluentUISetupHelpers.SetupFluentSearch(this);
+        FluentUISetupHelpers.SetupFluentKeyCode(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchor(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentToolbar(this);
 
         JSInterop.SetupVoid("initializeContinuousScroll");
         JSInterop.SetupVoid("resetContinuousScrollPosition");
 
+        FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
+
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
 
-        Services.AddLocalization();
         Services.AddSingleton<ILoggerFactory>(loggerFactory);
-        Services.AddSingleton<BrowserTimeProvider>(timeProvider ?? new TestTimeProvider());
-        Services.AddSingleton<IMessageService, MessageService>();
         Services.AddSingleton<IToastService, ToastService>();
-        Services.AddSingleton<GlobalState>();
-        Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
-        Services.AddSingleton<DimensionManager>();
-        Services.AddSingleton<TelemetryRepository>();
         Services.AddSingleton<IconResolver>();
-        Services.AddSingleton<IDialogService, DialogService>();
-        Services.AddSingleton<ISessionStorage, TestSessionStorage>();
-        Services.AddSingleton<ILocalStorage, TestLocalStorage>();
-        Services.AddSingleton<ShortcutManager>();
-        Services.AddSingleton<LibraryConfiguration>();
-        Services.AddSingleton<IKeyCodeService, KeyCodeService>();
         Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
-        Services.AddSingleton<DashboardCommandExecutor>();
+        Services.AddScoped<DashboardCommandExecutor>();
         Services.AddSingleton<ConsoleLogsManager>();
-        Services.AddSingleton<DashboardTelemetryService>();
-        Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
-        Services.AddSingleton<ComponentTelemetryContextProvider>();
-        Services.AddSingleton<PauseManager>();
-        Services.AddSingleton<IAIContextProvider, TestAIContextProvider>();
-    }
-
-    private static string GetFluentFile(string filePath, Version version)
-    {
-        return $"{filePath}?v={version}";
     }
 }

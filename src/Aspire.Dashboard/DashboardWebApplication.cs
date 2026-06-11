@@ -2,17 +2,18 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
+using System.Net.Sockets;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Authentication.Connection;
 using Aspire.Dashboard.Authentication.OpenIdConnect;
 using Aspire.Dashboard.Authentication.OtlpApiKey;
 using Aspire.Dashboard.Components;
+using Aspire.Shared;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Mcp;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Assistant.Prompts;
@@ -21,6 +22,7 @@ using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.Authentication;
@@ -45,16 +47,29 @@ namespace Aspire.Dashboard;
 
 public sealed class DashboardWebApplication : IAsyncDisposable
 {
+    /// <summary>
+    /// Exit code returned for unexpected startup errors.
+    /// </summary>
+    public const int ExitCodeUnexpectedError = DashboardExitCodes.UnexpectedError;
+
+    /// <summary>
+    /// Exit code returned when dashboard configuration is invalid.
+    /// </summary>
+    public const int ExitCodeValidationFailure = DashboardExitCodes.ValidationFailure;
+
+    /// <summary>
+    /// Exit code returned when the configured address is already in use.
+    /// </summary>
+    public const int ExitCodeAddressInUse = DashboardExitCodes.AddressInUse;
+
     private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
+    private const string DashboardHttpAuthCookieName = ".Aspire.Dashboard.Auth.Http";
     private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
 
     // Safe fallback endpoint URLs used when the dashboard enters error mode. They use the well-known
     // default dashboard ports so a user with invalid configuration can still reach the error page.
     private const string ErrorModeFrontendUrl = "http://localhost:18888";
     private const string ErrorModeOtlpGrpcUrl = "http://localhost:18889";
-    private const string ErrorModeMcpUrl = "http://localhost:18890";
-    //private static readonly List<ConnectionType> s_allConnectionTypes = [ConnectionType.Frontend, ConnectionType.Otlp, ConnectionType.Mcp];
-
     private readonly WebApplication _app;
     private readonly ILogger<DashboardWebApplication> _logger;
     private readonly IOptionsMonitor<DashboardOptions> _dashboardOptionsMonitor;
@@ -62,7 +77,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     private readonly List<Func<ResolvedEndpointInfo>> _frontendEndPointAccessor = new();
     private Func<ResolvedEndpointInfo>? _otlpServiceGrpcEndPointAccessor;
     private Func<ResolvedEndpointInfo>? _otlpServiceHttpEndPointAccessor;
-    private Func<ResolvedEndpointInfo>? _mcpEndPointAccessor;
 
     public List<Func<ResolvedEndpointInfo>> FrontendEndPointsAccessor
     {
@@ -104,11 +118,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         get => _otlpServiceHttpEndPointAccessor ?? throw new InvalidOperationException("WebApplication not started yet.");
     }
 
-    public Func<ResolvedEndpointInfo> McpEndPointAccessor
-    {
-        get => _mcpEndPointAccessor ?? throw new InvalidOperationException("WebApplication not started yet.");
-    }
-
     public IOptionsMonitor<DashboardOptions> DashboardOptionsMonitor => _dashboardOptionsMonitor;
 
     public IReadOnlyList<string> ValidationFailures => _validationFailures;
@@ -129,6 +138,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         AppContext.SetData("Microsoft.AspNetCore.Components.Web.Virtualization.Virtualize.MaxItemCount", 10_000);
 
         var builder = options is not null ? WebApplication.CreateBuilder(options) : WebApplication.CreateBuilder();
+
+        // WebApplication.CreateBuilder already enables static web assets in the Development environment.
+        // The dashboard also needs them in other environments when running from source (e.g. to serve
+        // _content/ files from NuGet packages like FluentUI). The call is a no-op when published
+        // because the static web assets manifest doesn't exist.
+        if (!builder.Environment.IsDevelopment())
+        {
+            builder.WebHost.UseStaticWebAssets();
+        }
 
         preConfigureBuilder?.Invoke(builder);
 
@@ -190,8 +208,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             dashboardOptions.Frontend.EndpointUrls = ErrorModeFrontendUrl;
             dashboardOptions.Otlp.AuthMode = OtlpAuthMode.Unsecured;
             dashboardOptions.Otlp.GrpcEndpointUrl = ErrorModeOtlpGrpcUrl;
-            dashboardOptions.Mcp.AuthMode = McpAuthMode.Unsecured;
-            dashboardOptions.Mcp.EndpointUrl = ErrorModeMcpUrl;
 
             // Layer the original configuration on top of the safe defaults. This preserves valid
             // user-provided values (e.g. custom endpoint ports) so the error page is served from the
@@ -218,16 +234,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             {
                 dashboardOptions.Otlp.GrpcEndpointUrl = ErrorModeOtlpGrpcUrl;
             }
-            if (!CanParseEndpointUrl(dashboardOptions.Mcp.EndpointUrl))
-            {
-                dashboardOptions.Mcp.EndpointUrl = ErrorModeMcpUrl;
-            }
 
             // Force unsecured auth regardless of the (possibly invalid) configuration so error mode never
             // requires a browser token or client certificate to reach the error page.
             dashboardOptions.Frontend.AuthMode = FrontendAuthMode.Unsecured;
             dashboardOptions.Otlp.AuthMode = OtlpAuthMode.Unsecured;
-            dashboardOptions.Mcp.AuthMode = McpAuthMode.Unsecured;
 
             // Parse the now-valid options to initialize internal state (e.g. endpoint addresses) that
             // later startup steps such as ConfigureKestrelEndpoints rely on.
@@ -238,10 +249,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             if (!dashboardOptions.Otlp.TryParseOptions(out var otlpParseError))
             {
                 throw new InvalidOperationException($"Failed to parse OTLP options in error mode: {otlpParseError}");
-            }
-            if (!dashboardOptions.Mcp.TryParseOptions(out var mcpParseError))
-            {
-                throw new InvalidOperationException($"Failed to parse MCP options in error mode: {mcpParseError}");
             }
 
             // Register the valid options directly instead of using configuration binding. This prevents
@@ -254,7 +261,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         else
         {
             _validationFailures = Array.Empty<string>();
-            
+
             // Normal path: configure options with binding and validation
             builder.Services.AddOptions<DashboardOptions>()
                 .Bind(dashboardConfigSection)
@@ -263,10 +270,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             builder.Services.AddSingleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>();
         }
 
-        ConfigureKestrelEndpoints(builder, dashboardOptions!);
+        var parsedDashboardOptions = dashboardOptions!;
 
-        var browserHttpsPort = dashboardOptions!.Frontend.GetEndpointAddresses().FirstOrDefault(IsHttpsOrNull)?.Port;
-        var isAllHttps = browserHttpsPort is not null && IsHttpsOrNull(dashboardOptions.Otlp.GetGrpcEndpointAddress()) && IsHttpsOrNull(dashboardOptions.Otlp.GetHttpEndpointAddress()) && IsHttpsOrNull(dashboardOptions.Mcp.GetEndpointAddress());
+        ConfigureKestrelEndpoints(builder, parsedDashboardOptions);
+
+        var browserHttpsPort = parsedDashboardOptions.Frontend.GetEndpointAddresses().FirstOrDefault(IsHttpsOrNull)?.Port;
+        var isAllHttps = browserHttpsPort is not null && IsHttpsOrNull(parsedDashboardOptions.Otlp.GetGrpcEndpointAddress()) && IsHttpsOrNull(parsedDashboardOptions.Otlp.GetHttpEndpointAddress());
         if (isAllHttps)
         {
             // Explicitly configure the HTTPS redirect port as we're possibly listening on multiple HTTPS addresses
@@ -276,7 +285,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddSingleton<IPolicyEvaluator, AspirePolicyEvaluator>();
 
-        ConfigureAuthentication(builder, dashboardOptions);
+        ConfigureAuthentication(builder, parsedDashboardOptions);
 
         // Add services to the container.
         builder.Services.AddRazorComponents().AddInteractiveServerComponents();
@@ -289,13 +298,13 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             options.MimeTypes = ["text/javascript", "application/javascript", "text/css", "image/svg+xml"];
         });
         builder.Services.AddHealthChecks();
-        if (dashboardOptions.Otlp.Cors.IsCorsEnabled)
+        if (parsedDashboardOptions.Otlp.Cors.IsCorsEnabled)
         {
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy(OtlpHttpEndpointsBuilder.CorsPolicyName, builder =>
                 {
-                    var corsOptions = dashboardOptions.Otlp.Cors;
+                    var corsOptions = parsedDashboardOptions.Otlp.Cors;
 
                     builder.WithOrigins(corsOptions.AllowedOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
                     builder.SetIsOriginAllowedToAllowWildcardSubdomains();
@@ -332,11 +341,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Data from the server.
         builder.Services.TryAddSingleton<IDashboardClient, DashboardClient>();
 
-        // Host an in-process MCP server so the dashboard can expose MCP tools (resource listing, diagnostics).
-        // Register the MCP server directly via the SDK.
-
-        builder.Services.AddAspireMcpTools(dashboardOptions);
-
+        builder.Services.TryAddSingleton<INotificationService, NotificationService>();
+        builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.TryAddScoped<DashboardCommandExecutor>();
 
         builder.Services.AddSingleton<PauseManager>();
@@ -357,6 +363,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddTransient<OtlpTraceService>();
         builder.Services.AddTransient<OtlpMetricsService>();
 
+        // Telemetry API.
+        builder.Services.AddSingleton<TelemetryApiService>();
+
         // AI assistant services.
         builder.Services.AddTransient<AssistantChatViewModel>();
         builder.Services.AddTransient<AssistantChatDataContext>();
@@ -374,6 +383,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // ShortcutManager is scoped because we want shortcuts to apply one browser window.
         builder.Services.AddScoped<ShortcutManager>();
         builder.Services.AddScoped<ConsoleLogsManager>();
+        builder.Services.AddScoped<ConsoleLogsFetcher>();
+        builder.Services.AddScoped<TelemetryExportService>();
+        builder.Services.AddScoped<TelemetryImportService>();
         builder.Services.AddSingleton<IInstrumentUnitResolver, DefaultInstrumentUnitResolver>();
 
         builder.Services.AddScoped<IAIContextProvider, AIContextProvider>();
@@ -387,7 +399,18 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddSingleton<IKnownPropertyLookup, KnownPropertyLookup>();
 
+        // Resolves per-replica HMP v1 producer streams server-side from the live
+        // resource snapshot stream. Default impl looks up by display name and
+        // replica index in IDashboardClient and connects to the consumer UDS
+        // path the AppHost stamped onto the snapshot.
+        builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver, Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver>();
+
         builder.Services.AddScoped<DimensionManager>();
+        builder.Services.AddScoped<DashboardDialogService>();
+        builder.Services.AddScoped<ResourceMenuBuilder>();
+        builder.Services.AddScoped<StructuredLogMenuBuilder>();
+        builder.Services.AddScoped<SpanMenuBuilder>();
+        builder.Services.AddScoped<TraceMenuBuilder>();
 
         builder.Services.AddLocalization();
 
@@ -428,7 +451,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             ResolvedEndpointInfo? frontendEndpointInfo = null;
             if (_frontendEndPointAccessor.Count > 0)
             {
-                if (dashboardOptions.Otlp.Cors.IsCorsEnabled)
+                if (parsedDashboardOptions.Otlp.Cors.IsCorsEnabled)
                 {
                     var corsOptions = _app.Services.GetRequiredService<IOptions<CorsOptions>>().Value;
 
@@ -457,35 +480,24 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 // This isn't used by dotnet watch but still useful to have for debugging
                 _logger.LogInformation("OTLP/HTTP listening on: {OtlpEndpointUri}", _otlpServiceHttpEndPointAccessor().GetResolvedAddress());
             }
-            if (_mcpEndPointAccessor != null)
-            {
-                // This isn't used by dotnet watch but still useful to have for debugging
-                _logger.LogInformation("MCP listening on: {McpEndpointUri}", _mcpEndPointAccessor().GetResolvedAddress());
-            }
-
-            if (_dashboardOptionsMonitor.CurrentValue.Otlp.AuthMode == OtlpAuthMode.Unsecured)
+            // Only show OTLP security warning if OTLP endpoints are configured
+            if ((_otlpServiceGrpcEndPointAccessor != null || _otlpServiceHttpEndPointAccessor != null) &&
+                _dashboardOptionsMonitor.CurrentValue.Otlp.AuthMode == OtlpAuthMode.Unsecured)
             {
                 _logger.LogWarning("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030");
             }
 
-            if (_dashboardOptionsMonitor.CurrentValue.Mcp.AuthMode == McpAuthMode.Unsecured)
+            _logger.LogDebug("Dashboard API disabled: {ApiDisabled}", _dashboardOptionsMonitor.CurrentValue.Api.Disabled.GetValueOrDefault());
+
+            // Only show API security warning if API is enabled and unsecured
+            // API runs on the frontend endpoint (no separate accessor needed)
+            if (!_dashboardOptionsMonitor.CurrentValue.Api.Disabled.GetValueOrDefault() &&
+                _dashboardOptionsMonitor.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured)
             {
-                _logger.LogWarning("MCP server is unsecured. Untrusted apps can access sensitive information.");
+                _logger.LogWarning("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.");
             }
 
-            // Log frontend login URL last at startup so it's easy to find in the logs.
-            if (frontendEndpointInfo != null)
-            {
-                var options = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
-                if (options.Frontend.AuthMode == FrontendAuthMode.BrowserToken)
-                {
-                    // DOTNET_RUNNING_IN_CONTAINER is a well-known environment variable added by official .NET images.
-                    // https://learn.microsoft.com/dotnet/core/tools/dotnet-environment-variables#dotnet_running_in_container-and-dotnet_running_in_containers
-                    var isContainer = _app.Configuration.GetBool("DOTNET_RUNNING_IN_CONTAINER") ?? false;
-
-                    LoggingHelpers.WriteDashboardUrl(_logger, frontendEndpointInfo.GetResolvedAddress(replaceIPAnyWithLocalhost: true), options.Frontend.BrowserToken, isContainer);
-                }
-            }
+            PrintSummary(frontendEndpointInfo);
 
             // One-off async initialization of telemetry service.
             var telemetryService = _app.Services.GetRequiredService<DashboardTelemetryService>();
@@ -541,11 +553,18 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await context.Response.WriteAsync("Dashboard is in error mode due to configuration errors.").ConfigureAwait(false);
         });
 
-        if (!string.IsNullOrEmpty(dashboardOptions.Otlp.Cors.AllowedOrigins))
+        if (!string.IsNullOrEmpty(parsedDashboardOptions.Otlp.Cors.AllowedOrigins))
         {
             // Only add CORS middleware when there is CORS configuration.
             // The default policy only allows the dashboard origin. Certain endpoints expose CORS for external origins, e.g. OTLP HTTP endpoints.
             _app.UseCors();
+        }
+
+        // Use Forwarded Headers middleware if configured. This must run before token validation because sign-in cookie
+        // behavior depends on the normalized request scheme.
+        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
+        {
+            _app.UseForwardedHeaders();
         }
 
         _app.UseMiddleware<ValidateTokenMiddleware>();
@@ -584,30 +603,49 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             }
         });
 
-        // Use Forwarded Headers middleware if configured.
-        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
-        {
-            _app.UseForwardedHeaders();
-        }
-
         _app.UseAuthorization();
 
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
         _app.UseAntiforgery();
+        _app.UseWebSockets();
 
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
+        // Terminal WebSocket proxy
+        _app.MapTerminalWebSocket();
+
         // OTLP HTTP services.
-        _app.MapHttpOtlpApi(dashboardOptions.Otlp);
+        _app.MapHttpOtlpApi(parsedDashboardOptions.Otlp);
 
         // OTLP gRPC services.
         _app.MapGrpcService<OtlpGrpcMetricsService>();
         _app.MapGrpcService<OtlpGrpcTraceService>();
         _app.MapGrpcService<OtlpGrpcLogsService>();
 
-        _app.MapDashboardMcp(dashboardOptions);
-        _app.MapDashboardApi(dashboardOptions);
+        _app.MapTelemetryApi(parsedDashboardOptions);
+        _app.MapDashboardApi(parsedDashboardOptions);
         _app.MapDashboardHealthChecks();
+    }
+
+    private void PrintSummary(ResolvedEndpointInfo? frontendEndpointInfo)
+    {
+        var options = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
+        var token = options.Frontend.AuthMode == FrontendAuthMode.BrowserToken ? options.Frontend.BrowserToken : null;
+        var frontendAddress = frontendEndpointInfo?.GetResolvedAddress(replaceIPAnyWithLocalhost: true);
+        var otlpGrpcAddress = _otlpServiceGrpcEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
+        var otlpHttpAddress = _otlpServiceHttpEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
+
+        // DOTNET_RUNNING_IN_CONTAINER is a well-known environment variable added by official .NET images.
+        // https://learn.microsoft.com/dotnet/core/tools/dotnet-environment-variables#dotnet_running_in_container-and-dotnet_running_in_containers
+        var isContainer = _app.Configuration.GetBool("DOTNET_RUNNING_IN_CONTAINER") ?? false;
+
+        LoggingHelpers.WriteDashboardSummary(
+            _logger,
+            frontendAddress,
+            otlpGrpcAddress,
+            otlpHttpAddress,
+            token,
+            isContainer);
     }
 
     private ILogger<DashboardWebApplication> GetLogger()
@@ -626,11 +664,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
     private static void WriteVersion(ILogger<DashboardWebApplication> logger)
     {
-        if (typeof(DashboardWebApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion is string informationalVersion)
+        if (AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly) is { Length: > 0 } informationalVersion)
         {
             // Write version at info level so it's written to the console by default. Help us debug user issues.
             // Display version and commit like 8.0.0-preview.2.23619.3+17dd83f67c6822954ec9a918ef2d048a78ad4697
-            logger.LogInformation("Aspire version: {Version}", informationalVersion);
+            logger.LogInformation("Aspire dashboard version: {Version}", informationalVersion);
         }
     }
 
@@ -711,7 +749,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
         EndpointInfo.TryAddEndpoint(endpoints, dashboardOptions.Otlp.GetGrpcEndpointAddress(), "OtlpGrpc", httpProtocols: HttpProtocols.Http2, requireCertificate: dashboardOptions.Otlp.AuthMode == OtlpAuthMode.ClientCertificate, connectionType: ConnectionType.OtlpGrpc);
         EndpointInfo.TryAddEndpoint(endpoints, dashboardOptions.Otlp.GetHttpEndpointAddress(), "OtlpHttp", httpProtocols: HttpProtocols.Http1AndHttp2, requireCertificate: dashboardOptions.Otlp.AuthMode == OtlpAuthMode.ClientCertificate, connectionType: ConnectionType.OtlpHttp);
-        EndpointInfo.TryAddEndpoint(endpoints, dashboardOptions.Mcp.GetEndpointAddress(), "Mcp", httpProtocols: HttpProtocols.Http1AndHttp2, requireCertificate: dashboardOptions.Otlp.AuthMode == OtlpAuthMode.ClientCertificate, connectionType: ConnectionType.Mcp);
 
         var initialValues = new Dictionary<string, string?>();
         foreach (var (address, addressEndpoints) in EndpointInfo.GroupEndpointsByAddress(endpoints))
@@ -799,9 +836,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                             case ConnectionType.OtlpHttp:
                                 _otlpServiceHttpEndPointAccessor ??= CreateEndPointAccessor(endpointConfiguration);
                                 break;
-                            case ConnectionType.Mcp:
-                                _mcpEndPointAccessor ??= CreateEndPointAccessor(endpointConfiguration);
-                                break;
                         }
                     }
 
@@ -841,11 +875,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             .AddScheme<FrontendCompositeAuthenticationHandlerOptions, FrontendCompositeAuthenticationHandler>(FrontendCompositeAuthenticationDefaults.AuthenticationScheme, o => { })
             .AddScheme<OtlpCompositeAuthenticationHandlerOptions, OtlpCompositeAuthenticationHandler>(OtlpCompositeAuthenticationDefaults.AuthenticationScheme, o => { })
             .AddScheme<OtlpApiKeyAuthenticationHandlerOptions, OtlpApiKeyAuthenticationHandler>(OtlpApiKeyAuthenticationDefaults.AuthenticationScheme, o => { })
-            .AddScheme<McpCompositeAuthenticationHandlerOptions, McpCompositeAuthenticationHandler>(McpCompositeAuthenticationDefaults.AuthenticationScheme, o => { })
-            .AddScheme<McpApiKeyAuthenticationHandlerOptions, McpApiKeyAuthenticationHandler>(McpApiKeyAuthenticationHandler.AuthenticationScheme, o => { })
+            .AddScheme<ApiAuthenticationHandlerOptions, ApiAuthenticationHandler>(ApiAuthenticationHandler.AuthenticationScheme, o => { })
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeFrontend, o => o.RequiredConnectionTypes = [ConnectionType.Frontend])
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeOtlp, o => o.RequiredConnectionTypes = [ConnectionType.OtlpGrpc, ConnectionType.OtlpHttp])
-            .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeMcp, o => o.RequiredConnectionTypes = [ConnectionType.Mcp])
             .AddCertificate(options =>
             {
                 // Bind options to configuration so they can be overridden by environment variables.
@@ -911,6 +943,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 authentication.AddCookie(options =>
                 {
                     options.Cookie.Name = DashboardAuthCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
                 });
 
                 authentication.AddOpenIdConnect(options =>
@@ -970,6 +1003,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                         return Task.CompletedTask;
                     };
                     options.Cookie.Name = DashboardAuthCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
                 });
                 break;
             case FrontendAuthMode.Unsecured:
@@ -986,9 +1020,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                     .Build());
 
             options.AddPolicy(
-                name: McpApiKeyAuthenticationHandler.PolicyName,
-                policy: new AuthorizationPolicyBuilder(McpCompositeAuthenticationDefaults.AuthenticationScheme)
-                    .RequireClaim(McpApiKeyAuthenticationHandler.McpClaimName, [bool.TrueString])
+                name: ApiAuthenticationHandler.PolicyName,
+                policy: new AuthorizationPolicyBuilder(ApiAuthenticationHandler.AuthenticationScheme)
+                    .RequireAuthenticatedUser()
                     .Build());
 
             switch (dashboardOptions.Frontend.AuthMode)
@@ -1045,13 +1079,41 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
     public int Run()
     {
-        // Start the app even if there are validation failures
-        // Error mode middleware will redirect to the error page
-        _app.Run();
-        
-        // Return non-zero exit code if there were validation failures
-        // Even if the user dismissed them, the configuration is still invalid
-        return _validationFailures.Count > 0 ? -1 : 0;
+        try
+        {
+            // Start even when configuration validation failed so standalone dashboard users can
+            // see the dismissible error page instead of only getting terminal output.
+            _app.Run();
+            return _validationFailures.Count > 0 ? ExitCodeValidationFailure : 0;
+        }
+        catch (IOException ex) when (ContainsAddressInUse(ex))
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return ExitCodeAddressInUse;
+        }
+        catch (Exception ex)
+        {
+            // Include the full exception (type, stack trace, inner exceptions)
+            // so that a "dashboard silently died" report has enough breadcrumbs
+            // to find the root cause from the AppHost log alone, without
+            // requiring a debugger attach.
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            Console.Error.WriteLine(ex.ToString());
+            return ExitCodeUnexpectedError;
+        }
+    }
+
+    private static bool ContainsAddressInUse(Exception ex)
+    {
+        for (var current = ex.InnerException; current is not null; current = current.InnerException)
+        {
+            if (current is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public Task StartAsync(CancellationToken cancellationToken = default)

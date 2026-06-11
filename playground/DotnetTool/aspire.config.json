@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "DotnetTool.AppHost/DotnetTool.AppHost.csproj"
+  }
+}

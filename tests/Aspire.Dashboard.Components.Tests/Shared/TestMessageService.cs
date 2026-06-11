@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
@@ -66,6 +67,11 @@ public class TestMessageService : IMessageService
         throw new NotImplementedException();
     }
 
+    public Message ShowMessageBar(MarkupString title, MessageIntent intent, string section)
+    {
+        throw new NotImplementedException();
+    }
+
     public Task<Message> ShowMessageBarAsync(Action<MessageOptions> options)
     {
         var messageOptions = new MessageOptions();
@@ -85,6 +91,11 @@ public class TestMessageService : IMessageService
     }
 
     public Task<Message> ShowMessageBarAsync(string title, MessageIntent intent, string section)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task<Message> ShowMessageBarAsync(MarkupString title, MessageIntent intent, string section)
     {
         throw new NotImplementedException();
     }

@@ -132,4 +132,28 @@
   <data name="DcpVersionCheckTooLowMessage" xml:space="preserve">
     <value>Newer version of the Aspire.Hosting.AppHost package is required to run the application. Ensure you are referencing at least version '{0}'.</value>
   </data>
+  <data name="InstallationInstructions" xml:space="preserve">
+    <value>Installation instructions</value>
+  </data>
+  <data name="MissingCommandNotificationTitle" xml:space="preserve">
+    <value>Missing command</value>
+  </data>
+  <data name="RequiredCommandNotFound" xml:space="preserve">
+    <value>Required command '{0}' was not found on PATH or at the specified location.</value>
+  </data>
+  <data name="RequiredCommandNotFoundWithLink" xml:space="preserve">
+    <value>Required command '{0}' was not found on PATH or at the specified location. For installation instructions, see: {1}</value>
+  </data>
+  <data name="RequiredCommandValidationFailed" xml:space="preserve">
+    <value>Command '{0}' validation failed: {1}</value>
+  </data>
+  <data name="RequiredCommandValidationFailedWithLink" xml:space="preserve">
+    <value>Command '{0}' validation failed: {1}. For installation instructions, see: {2}</value>
+  </data>
+  <data name="PersistentContainerWithoutUserSecrets" xml:space="preserve">
+    <value>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</value>
+  </data>
+  <data name="ResourceMayFailToStart" xml:space="preserve">
+    <value>Resource '{0}' may fail to start: {1}</value>
+  </data>
 </root>

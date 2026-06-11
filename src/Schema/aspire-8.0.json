@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://json.schemastore.org/aspire-8.0.json",
   "type": "object",
-  "description": "Defines the .NET Aspire 8.0 deployment manifest JSON schema.",
+  "description": "Defines the Aspire 8.0 deployment manifest JSON schema.",
   "required": ["resources"],
   "properties": {
     "resources": {
@@ -767,8 +767,7 @@
         "properties": {
           "scheme": {
             "type": "string",
-            "description": "The scheme used in URIs for this binding.",
-            "enum": [ "http", "https", "tcp", "udp" ]
+            "description": "The scheme used in URIs for this binding."
           },
           "protocol": {
             "type": "string",

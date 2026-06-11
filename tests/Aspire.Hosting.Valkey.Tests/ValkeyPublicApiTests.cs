@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Valkey.Tests;
 
-public class ValkeyPublicApiTests
+public class ValkeyPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddValkeyShouldThrowWhenBuilderIsNull()
@@ -25,7 +25,7 @@ public class ValkeyPublicApiTests
     [InlineData(false)]
     public void AddValkeyShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddValkey(name);
@@ -64,7 +64,7 @@ public class ValkeyPublicApiTests
     [InlineData(false)]
     public void WithDataBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddValkey("valkey");
         var source = isNull ? null! : string.Empty;
 

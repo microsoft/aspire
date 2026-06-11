@@ -13,6 +13,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// This event is only fired the first time a resource transitions to a ready state after starting.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 public class ResourceReadyEvent(IResource resource, IServiceProvider services) : IDistributedApplicationResourceEvent
 {
     /// <summary>
@@ -20,8 +21,6 @@ public class ResourceReadyEvent(IResource resource, IServiceProvider services) :
     /// </summary>
     public IResource Resource => resource;
 
-    /// <summary>
-    /// The service provider for the app host.
-    /// </summary>
+    /// <inheritdoc />
     public IServiceProvider Services => services;
 }

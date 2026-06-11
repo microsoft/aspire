@@ -23,7 +23,7 @@ public class AspireRabbitMQExtensionsTests : IClassFixture<RabbitMQContainerFixt
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(true)]
     [InlineData(false)]
     public void ReadsFromConnectionStringsCorrectly(bool useKeyed)
@@ -51,7 +51,7 @@ public class AspireRabbitMQExtensionsTests : IClassFixture<RabbitMQContainerFixt
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(true)]
     [InlineData(false)]
     public void ConnectionStringCanBeSetInCode(bool useKeyed)
@@ -80,7 +80,7 @@ public class AspireRabbitMQExtensionsTests : IClassFixture<RabbitMQContainerFixt
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(true)]
     [InlineData(false)]
     public void ConnectionNameWinsOverConfigSection(bool useKeyed)
@@ -160,7 +160,7 @@ public class AspireRabbitMQExtensionsTests : IClassFixture<RabbitMQContainerFixt
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task CanAddMultipleKeyedServices()
     {
         await using var container2 = await RabbitMQContainerFixture.CreateContainerAsync();
@@ -197,7 +197,7 @@ public class AspireRabbitMQExtensionsTests : IClassFixture<RabbitMQContainerFixt
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(false, false)]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task AutoActivationCanSet(bool useKeyed, bool autoActivate)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -234,7 +234,7 @@ public class AspireRabbitMQExtensionsTests : IClassFixture<RabbitMQContainerFixt
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task AutoActivationDisabledByDefault()
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);

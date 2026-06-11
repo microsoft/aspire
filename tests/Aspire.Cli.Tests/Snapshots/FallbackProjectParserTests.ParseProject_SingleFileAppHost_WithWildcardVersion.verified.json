@@ -1,0 +1,15 @@
+﻿{
+  "Items": {
+    "PackageReference": [
+      {
+        "Identity": "Aspire.Hosting.Redis",
+        "Version": "*"
+      }
+    ],
+    "ProjectReference": []
+  },
+  "Properties": {
+    "AspireHostingSDKVersion": "*"
+  },
+  "Fallback": true
+}

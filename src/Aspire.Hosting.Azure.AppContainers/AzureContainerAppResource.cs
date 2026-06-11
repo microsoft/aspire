@@ -7,8 +7,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
-using Aspire.Hosting.Publishing;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.AppContainers;
@@ -29,66 +27,43 @@ public class AzureContainerAppResource : AzureProvisioningResource
     {
         TargetResource = targetResource;
 
-        // Add pipeline step annotation for push
+        // Add pipeline step annotation for deploy
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
-            // Get the registry from the target resource's deployment target annotation
+            // Get the deployment target annotation
             var deploymentTargetAnnotation = targetResource.GetDeploymentTargetAnnotation();
-            if (deploymentTargetAnnotation?.ContainerRegistry is not IContainerRegistry registry)
+            if (deploymentTargetAnnotation is null)
             {
-                // No registry available, skip push
                 return [];
             }
 
             var steps = new List<PipelineStep>();
 
-            if (targetResource.RequiresImageBuildAndPush())
-            {
-                // Create push step for this deployment target
-                var pushStep = new PipelineStep
-                {
-                    Name = $"push-{targetResource.Name}",
-                    Action = async ctx =>
-                    {
-                        var containerImageBuilder = ctx.Services.GetRequiredService<IResourceContainerImageBuilder>();
-
-                        await AzureEnvironmentResourceHelpers.PushImageToRegistryAsync(
-                            registry,
-                            targetResource,
-                            ctx,
-                            containerImageBuilder).ConfigureAwait(false);
-                    },
-                    Tags = [WellKnownPipelineTags.PushContainerImage]
-                };
-
-                steps.Add(pushStep);
-            }
-
-            if (!targetResource.TryGetEndpoints(out var endpoints))
-            {
-                endpoints = [];
-            }
-
-            var anyPublicEndpoints = endpoints.Any(e => e.IsExternal);
-
             var printResourceSummary = new PipelineStep
             {
                 Name = $"print-{targetResource.Name}-summary",
+                Description = $"Prints the deployment summary and URL for {targetResource.Name}.",
                 Action = async ctx =>
                 {
                     var containerAppEnv = (AzureContainerAppEnvironmentResource)deploymentTargetAnnotation.ComputeEnvironment!;
 
                     var domainValue = await containerAppEnv.ContainerAppDomain.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
+                    var portalLink = await ContainerAppUrls.GetPortalLinkAsync(containerAppEnv, targetResource.Name.ToLowerInvariant(), ctx.CancellationToken).ConfigureAwait(false);
 
-                    if (anyPublicEndpoints)
+                    if (targetResource.TryGetEndpoints(out var endpoints) && endpoints.Any(e => e.IsExternal))
                     {
                         var endpoint = $"https://{targetResource.Name.ToLowerInvariant()}.{domainValue}";
+                        var summaryValue = $"[{endpoint}]({endpoint}) ({portalLink})";
 
-                        ctx.ReportingStep.Log(LogLevel.Information, $"Successfully deployed **{targetResource.Name}** to [{endpoint}]({endpoint})", enableMarkdown: true);
+                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to {summaryValue}"));
+                        ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
                     }
                     else
                     {
-                        ctx.ReportingStep.Log(LogLevel.Information, $"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. No public endpoints were configured.", enableMarkdown: true);
+                        var summaryValue = $"No public endpoints ({portalLink})";
+
+                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. {summaryValue}"));
+                        ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
                     }
                 },
                 Tags = ["print-summary"],
@@ -98,6 +73,7 @@ public class AzureContainerAppResource : AzureProvisioningResource
             var deployStep = new PipelineStep
             {
                 Name = $"deploy-{targetResource.Name}",
+                Description = $"Aggregation step for deploying {targetResource.Name} to Azure Container Apps.",
                 Action = _ => Task.CompletedTask,
                 Tags = [WellKnownPipelineTags.DeployCompute]
             };
@@ -113,26 +89,10 @@ public class AzureContainerAppResource : AzureProvisioningResource
         // Add pipeline configuration annotation to wire up dependencies
         Annotations.Add(new PipelineConfigurationAnnotation((context) =>
         {
-            // Find the push step for this resource
-            var pushSteps = context.GetSteps(this, WellKnownPipelineTags.PushContainerImage);
-
-            // Make push step depend on build steps of the target resource
-            var buildSteps = context.GetSteps(targetResource, WellKnownPipelineTags.BuildCompute);
-
-            pushSteps.DependsOn(buildSteps);
-
-            // Make push step depend on the registry being provisioned
-            var deploymentTargetAnnotation = targetResource.GetDeploymentTargetAnnotation();
-            if (deploymentTargetAnnotation?.ContainerRegistry is IResource registryResource)
-            {
-                var registryProvisionSteps = context.GetSteps(registryResource, WellKnownPipelineTags.ProvisionInfrastructure);
-
-                pushSteps.DependsOn(registryProvisionSteps);
-            }
-
             var provisionSteps = context.GetSteps(this, WellKnownPipelineTags.ProvisionInfrastructure);
 
-            // Make provision steps depend on push steps
+            // The app deployment should depend on push steps from the target resource
+            var pushSteps = context.GetSteps(targetResource, WellKnownPipelineTags.PushContainerImage);
             provisionSteps.DependsOn(pushSteps);
 
             // Ensure summary step runs after provision

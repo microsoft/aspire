@@ -8,19 +8,19 @@ using System.Globalization;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.ConsoleLogs;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
+using Aspire.Shared.ConsoleLogs;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
-using Aspire.Hosting.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -28,6 +28,8 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry, IAsyncDisposable, IPageWithSessionAndUrlState<ConsoleLogs.ConsoleLogsViewModel, ConsoleLogs.ConsoleLogsPageState>
 {
+    private static readonly TimeSpan s_noLogsMessageDelay = TimeSpan.FromSeconds(1.5);
+
     [DebuggerDisplay("Resource = {Resource.Name}, IsCancellationRequested = {CancellationToken.IsCancellationRequested}")]
     private sealed class ConsoleLogsSubscription
     {
@@ -99,9 +101,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public required IStringLocalizer<Dashboard.Resources.AIPrompts> AIPromptsLoc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Commands> CommandsLoc { get; init; }
-
-    [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
 
     [Inject]
@@ -131,13 +130,19 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     [Inject]
     public required IconResolver IconResolver { get; init; }
 
+    [Inject]
+    public required DashboardDialogService DialogService { get; init; }
+
+    [Inject]
+    public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
 
     [Parameter]
     public string? ResourceName { get; set; }
 
-    private record struct LogEntryToWrite(LogEntry LogEntry, int? LineNumber);
+    private record struct LogEntryToWrite(string ResourceName, LogEntry LogEntry, int? LineNumber);
 
     private readonly CancellationTokenSource _resourceSubscriptionCts = new();
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
@@ -154,8 +159,16 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _isSubscribedToAll;
     internal LogEntries _logEntries = null!;
     private readonly object _updateLogsLock = new object();
+    private CancellationTokenSource? _showNoLogsMessageCts;
+    private Task? _showNoLogsMessageDelayTask;
     private AIContext? _aiContext;
     private LogViewer? _logViewerRef;
+    private Controls.TerminalView? _terminalViewRef;
+    private bool _selectedResourceHasTerminal;
+    private string? _terminalResourceName;
+    private int _terminalReplicaIndex;
+    private Controls.TerminalToolbarState? _terminalToolbarState;
+    private IReadOnlyList<Controls.TerminalSizePreset> _terminalSizePresets = Array.Empty<Controls.TerminalSizePreset>();
 
     // UI
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
@@ -169,9 +182,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _showTimestamp;
     private bool _isTimestampUtc;
     private bool _noWrapLogs;
+    private bool _showNoLogsMessage;
     public ConsoleLogsViewModel PageViewModel { get; set; } = null!;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
-    private ConsoleLogsFilters _consoleLogFilters = new();
 
     public string BasePath => DashboardUrls.ConsoleLogBasePath;
     public string SessionStorageKey => BrowserStorageKeys.ConsoleLogsPageState;
@@ -188,13 +201,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         _consoleLogsFiltersChangedSubscription = ConsoleLogsManager.OnFiltersChanged(async () =>
         {
-            lock (_updateLogsLock)
-            {
-                _consoleLogFilters = ConsoleLogsManager.Filters;
-                _logEntries.Clear(keepActivePauseEntries: true);
-            }
+            var isAllSelected = IsAllSelected();
+            var selectedResourceName = PageViewModel.SelectedResource.Id?.InstanceId;
 
-            await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
+            await SubscribeAsync(isAllSelected, selectedResourceName);
         });
 
         var consoleSettingsResult = await LocalStorage.GetUnprotectedAsync<ConsoleLogConsoleSettings>(BrowserStorageKeys.ConsoleLogConsoleSettings);
@@ -212,7 +222,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         }
 
         await ConsoleLogsManager.EnsureInitializedAsync();
-        _consoleLogFilters = ConsoleLogsManager.Filters;
 
         var loadingTcs = new TaskCompletionSource();
 
@@ -311,13 +320,14 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         await foreach (var batch in _logEntryChannel.GetBatchesAsync(minReadInterval: TimeSpan.FromMilliseconds(100), cancellationToken: _resourceSubscriptionToken))
         {
+            var hasNewLogEntry = false;
             lock (_updateLogsLock)
             {
-                // Console logs are filtered in the UI by the timestamp of the log entry.
-                var timestampFilterDate = GetFilteredDateFromRemove();
-
-                foreach (var (logEntry, lineNumber) in batch)
+                foreach (var (resourceName, logEntry, lineNumber) in batch)
                 {
+                    // Console logs are filtered in the UI by the timestamp of the log entry.
+                    var timestampFilterDate = ConsoleLogsManager.GetFilterDate(resourceName);
+
                     if (lineNumber != null)
                     {
                         // Set the base line number using the reported line number of the first log line.
@@ -337,10 +347,19 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     }
 
                     _logEntries.InsertSorted(logEntry);
+                    hasNewLogEntry = true;
                 }
             }
 
-            await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
+            await InvokeAsync(async () =>
+            {
+                if (hasNewLogEntry)
+                {
+                    _showNoLogsMessage = false;
+                }
+
+                await _logViewerRef.SafeRefreshDataAsync();
+            });
         }
     }
 
@@ -386,45 +405,100 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         if (needsNewSubscription)
         {
-            Logger.LogDebug("Subscription change needed. IsAllSelected: {IsAllSelected}, SelectedResource: {SelectedResource}", isAllSelected, selectedResourceName);
-            _aiContext?.ContextHasChanged();
-
-            // Cancel all existing subscriptions
-            await CancelAllSubscriptionsAsync();
-
-            // Clear log entries for new subscription
-            Logger.LogDebug("Creating new log entries collection.");
-            lock (_updateLogsLock)
-            {
-                _logEntries.Clear(keepActivePauseEntries: false);
-            }
-
-            await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
-
-            if (isAllSelected)
-            {
-                // Subscribe to all available resources
-                _isSubscribedToAll = true;
-                await SubscribeToAllResourcesAsync();
-            }
-            else if (selectedResourceName is not null && _resourceByName.TryGetValue(selectedResourceName, out var resource))
-            {
-                // Subscribe to single resource
-                _isSubscribedToAll = false;
-                await SubscribeToSingleResourceAsync(resource);
-            }
-            else
-            {
-                Logger.LogDebug("Unexpected state. Unknown resource '{ResourceName}' selected.", selectedResourceName);
-            }
+            await SubscribeAsync(isAllSelected, selectedResourceName);
         }
 
         UpdateTelemetryProperties();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // After a layout transition (e.g. mobile→desktop viewport flip moves
+        // the toolbar back inline from the mobile filter dialog) the toolbar
+        // RenderFragment re-evaluates against the page's current state. If
+        // _terminalToolbarState was cleared during the transition but the
+        // JS terminal is still alive in MainSection, the toolbar would not
+        // re-render until the JS side happens to push a new snapshot — and
+        // JS suppresses no-op pushes via change detection. Ask JS to re-push
+        // so the toolbar controls reappear.
+        if (_selectedResourceHasTerminal &&
+            _terminalViewRef is { } terminalView &&
+            _terminalToolbarState is null)
+        {
+            await terminalView.RefreshToolbarStateAsync();
+        }
+    }
+
+    private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName)
+    {
+        Logger.LogDebug("Subscription change needed. IsAllSelected: {IsAllSelected}, SelectedResource: {SelectedResource}", isAllSelected, selectedResourceName);
+        _aiContext?.ContextHasChanged();
+
+        // Detect whether the selected resource has terminal support
+        _selectedResourceHasTerminal = false;
+        _terminalResourceName = null;
+        _terminalReplicaIndex = 0;
+        // Drop any prior terminal's toolbar state so we don't briefly render
+        // the wrong badge/dims/dropdown for the new resource while the JS
+        // terminal is initializing and pushing its first snapshot.
+        _terminalToolbarState = null;
+
+        if (!isAllSelected && selectedResourceName is not null &&
+            _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
+            selectedResource.HasTerminal() &&
+            selectedResource.TryGetTerminalReplicaInfo(out var replicaIndex, out _))
+        {
+            _selectedResourceHasTerminal = true;
+            _terminalResourceName = selectedResource.DisplayName;
+            _terminalReplicaIndex = replicaIndex;
+            Logger.LogDebug("Resource '{ResourceName}' has terminal at replica {ReplicaIndex}", selectedResourceName, replicaIndex);
+
+            // Don't subscribe to console logs for terminal resources —
+            // the terminal view replaces the log viewer.
+            await CancelAllSubscriptionsAsync();
+            _isSubscribedToAll = false;
+            return;
+        }
+
+        // Cancel all existing subscriptions
+        await CancelAllSubscriptionsAsync();
+
+        // Clear log entries for new subscription
+        Logger.LogDebug("Creating new log entries collection.");
+        lock (_updateLogsLock)
+        {
+            _logEntries.Clear(keepActivePauseEntries: false);
+        }
+        ResetNoLogsMessage();
+
+        await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
+
+        if (isAllSelected)
+        {
+            // Subscribe to all available resources
+            _isSubscribedToAll = true;
+            await SubscribeToAllResourcesAsync();
+        }
+        else if (selectedResourceName is not null && _resourceByName.TryGetValue(selectedResourceName, out var resource))
+        {
+            // Subscribe to single resource
+            _isSubscribedToAll = false;
+            await SubscribeToSingleResourceAsync(resource);
+        }
+        else
+        {
+            Logger.LogDebug("Unexpected state. Unknown resource '{ResourceName}' selected.", selectedResourceName);
+        }
+
+        if (!_consoleLogsSubscriptions.IsEmpty)
+        {
+            StartNoLogsMessageDelay();
+        }
+    }
+
     private bool IsAllSelected()
     {
-        return PageViewModel.SelectedResource == _allResource;
+        return PageViewModel?.SelectedResource is not null && PageViewModel.SelectedResource == _allResource;
     }
 
     private void UpdateMenuButtons()
@@ -448,27 +522,27 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         var selectedResource = GetSelectedResource();
 
-        CommonMenuItems.AddToggleHiddenResourcesMenuItem(
-            _logsMenuItems,
-            ControlsStringsLoc,
-            _showHiddenResources,
-            _resourceByName.Values,
-            SessionStorage,
-            EventCallback.Factory.Create<bool>(this, async
-            value =>
-            {
-                _showHiddenResources = value;
-                UpdateResourcesList();
-                UpdateMenuButtons();
-
-                if (!_showHiddenResources && selectedResource?.IsResourceHidden(showHiddenResources: false) is true)
+        // Only show the "Hide hidden resources" menu item when viewing all resources
+        // Use IsAllSelected() instead of _isSubscribedToAll because UpdateMenuButtons()
+        // can be called before the subscription is established
+        if (IsAllSelected())
+        {
+            CommonMenuItems.AddToggleHiddenResourcesMenuItem(
+                _logsMenuItems,
+                ControlsStringsLoc,
+                _showHiddenResources,
+                _resourceByName.Values,
+                SessionStorage,
+                EventCallback.Factory.Create<bool>(this, async
+                value =>
                 {
-                    PageViewModel.SelectedResource = _allResource;
-                    await this.AfterViewModelChangedAsync(_contentLayout, false);
-                }
+                    _showHiddenResources = value;
+                    UpdateResourcesList();
+                    UpdateMenuButtons();
 
-                await this.RefreshIfMobileAsync(_contentLayout);
-            }));
+                    await this.RefreshIfMobileAsync(_contentLayout);
+                }));
+        }
 
         _logsMenuItems.Add(new()
         {
@@ -499,18 +573,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 _highlightedCommands.AddRange(selectedResource.Commands.Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden).Take(DashboardUIHelpers.MaxHighlightedCommands));
             }
 
-            ResourceMenuItems.AddMenuItems(
+            ResourceMenuBuilder.AddMenuItems(
                 _resourceMenuItems,
                 selectedResource,
-                NavigationManager,
-                TelemetryRepository,
-                AIContextProvider,
-                GetResourceName,
-                ControlsStringsLoc,
-                ResourcesLoc,
-                AIAssistantLoc,
-                AIPromptsLoc,
-                CommandsLoc,
+                _resourceByName,
                 EventCallback.Factory.Create(this, () =>
                 {
                     NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(resource: selectedResource.Name));
@@ -518,9 +584,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 }),
                 EventCallback.Factory.Create<CommandViewModel>(this, ExecuteResourceCommandAsync),
                 (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
+                showViewDetails: true,
                 showConsoleLogsItem: false,
-                showUrls: true,
-                IconResolver);
+                showUrls: true);
         }
     }
 
@@ -650,6 +716,50 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         return Task.CompletedTask;
     }
 
+    private void StartNoLogsMessageDelay()
+    {
+        ResetNoLogsMessage();
+
+        _showNoLogsMessageCts = new();
+        _showNoLogsMessageDelayTask = ShowNoLogsMessageAfterDelayAsync(_showNoLogsMessageCts.Token);
+    }
+
+    private void ResetNoLogsMessage()
+    {
+        _showNoLogsMessageCts?.Cancel();
+        _showNoLogsMessage = false;
+    }
+
+    private async Task ShowNoLogsMessageAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(s_noLogsMessageDelay, cancellationToken);
+
+            await InvokeAsync(() =>
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    var hasNoLogEntries = false;
+                    lock (_updateLogsLock)
+                    {
+                        hasNoLogEntries = _logEntries.EntriesCount == 0;
+                    }
+
+                    _showNoLogsMessage = hasNoLogEntries;
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to show the no logs message.");
+        }
+    }
+
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
     internal static ImmutableList<SelectViewModel<ResourceTypeDetails>> GetConsoleLogResourceSelectViewModels(
@@ -769,6 +879,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 await InvokeAsync(StateHasChanged);
             }
 
+            var hasError = false;
             try
             {
                 lock (_updateLogsLock)
@@ -778,13 +889,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
                     foreach (var priorPause in pauseIntervals)
                     {
-                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(LogEntry.CreatePause(GetResourceName(subscription.Resource), priorPause.Start, priorPause.End), LineNumber: null));
+                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(subscription.Resource.Name, LogEntry.CreatePause(GetResourceName(subscription.Resource), priorPause.Start, priorPause.End), LineNumber: null));
                     }
                 }
 
-                var resourcePrefix = ResourceViewModel.GetResourceName(subscription.Resource, _resourceByName, _showHiddenResources);
+                var resourcePrefix = ResourceViewModel.GetResourceName(subscription.Resource, _resourceByName);
 
-                var logParser = new LogParser(ConsoleColor.Black);
+                var logParser = new LogParser(ConsoleColor.Black, encodeForHtml: true);
                 await foreach (var batch in logSubscription.ConfigureAwait(false))
                 {
                     subscription.CancellationToken.ThrowIfCancellationRequested();
@@ -798,7 +909,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     {
                         var logEntry = logParser.CreateLogEntry(content, isErrorOutput, resourcePrefix);
 
-                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(logEntry, lineNumber));
+                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(subscription.Resource.Name, logEntry, lineNumber));
                     }
                 }
             }
@@ -807,6 +918,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 // If the subscription is being canceled then error could be transient from cancellation. Ignore errors during cancellation.
                 if (!subscription.CancellationToken.IsCancellationRequested)
                 {
+                    hasError = true;
                     Logger.LogError(ex, "Error watching logs for resource {ResourceName}.", subscription.Resource.Name);
 
                     // For single resource subscriptions or first subscription in "All" mode, update status
@@ -824,7 +936,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
                 // If the subscription is being canceled then a new one could be starting.
                 // Don't set the status when finishing because overwrite the status from the new subscription.
-                if (!subscription.CancellationToken.IsCancellationRequested && !_isSubscribedToAll)
+                // Also don't overwrite error status if an error occurred.
+                if (!subscription.CancellationToken.IsCancellationRequested && !_isSubscribedToAll && !hasError)
                 {
                     SetStatus(PageViewModel, nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsFinishedWatchingLogs));
                     await InvokeAsync(StateHasChanged);
@@ -835,27 +948,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         });
 
         subscription.SubscriptionTask = consoleLogsTask;
-    }
-
-    private DateTime? GetFilteredDateFromRemove()
-    {
-        DateTime? timestampFilterDate;
-
-        if (PageViewModel.SelectedResource.Id is not null &&
-            _consoleLogFilters.FilterResourceLogsDates.TryGetValue(
-                PageViewModel.SelectedResource.Id.GetResourceKey().ToString(),
-                out var filterResourceLogsDate))
-        {
-            // There is a filter for this individual resource.
-            timestampFilterDate = filterResourceLogsDate;
-        }
-        else
-        {
-            // Fallback to the global filter (if any, it could be null).
-            timestampFilterDate = _consoleLogFilters.FilterAllLogsDate;
-        }
-
-        return timestampFilterDate;
     }
 
     private async Task HandleSelectedOptionChangedAsync()
@@ -911,34 +1003,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         // Write all log entry content to a stream as UTF8 chars. Strip control sequences from log lines.
         var stream = new MemoryStream();
-        using (var writer = new StreamWriter(stream, leaveOpen: true))
+        lock (_updateLogsLock)
         {
-            lock (_updateLogsLock)
-            {
-                foreach (var entry in _logEntries.GetEntries())
-                {
-                    if (entry.Type is LogEntryType.Pause)
-                    {
-                        continue;
-                    }
-
-                    // It's ok to use sync stream methods here because we're writing to a MemoryStream.
-                    if (entry.RawContent is not null)
-                    {
-                        writer.WriteLine(AnsiParser.StripControlSequences(entry.RawContent));
-                    }
-                    else
-                    {
-                        writer.WriteLine();
-                    }
-                }
-                writer.Flush();
-            }
+            LogEntrySerializer.WriteLogEntriesToStream(_logEntries.GetEntries(), stream);
         }
         stream.Seek(0, SeekOrigin.Begin);
 
-        using var streamReference = new DotNetStreamReference(stream);
-        await JS.InvokeVoidAsync("downloadStreamAsFile", GetFileName(), streamReference);
+        await JS.DownloadFileAsync(GetFileName(), stream);
     }
 
     private string GetFileName()
@@ -953,20 +1024,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private async Task ClearConsoleLogs(ResourceKey? key)
     {
         var now = TimeProvider.GetUtcNow().UtcDateTime;
-        if (key is null)
-        {
-            _consoleLogFilters.FilterAllLogsDate = now;
-            _consoleLogFilters.FilterResourceLogsDates?.Clear();
-        }
-        else
-        {
-            _consoleLogFilters.FilterResourceLogsDates ??= [];
-            _consoleLogFilters.FilterResourceLogsDates[key.Value.ToString()] = now;
-        }
+        var newFilters = key is null
+            ? ConsoleLogsFilters.CreateClearAll(now)
+            : ConsoleLogsManager.Filters.WithResourceCleared(key.Value.ToString(), now);
 
         // Save filters to session storage so they're persisted when navigating to and from the console logs page.
         // This makes remove behavior persistent which matches removing telemetry.
-        await ConsoleLogsManager.UpdateFiltersAsync(_consoleLogFilters);
+        await ConsoleLogsManager.UpdateFiltersAsync(newFilters);
     }
 
     private void OnPausedChanged(bool isPaused)
@@ -985,7 +1049,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     foreach (var subscription in _consoleLogsSubscriptions.Values)
                     {
                         Logger.LogDebug("Inserting new pause log entry for {Resource} starting at {StartTimestamp}.", subscription.Resource.Name, timestamp);
-                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(LogEntry.CreatePause(GetResourceName(subscription.Resource), timestamp), LineNumber: null));
+                        _logEntryChannel.Writer.TryWrite(new LogEntryToWrite(subscription.Resource.Name, LogEntry.CreatePause(GetResourceName(subscription.Resource), timestamp), LineNumber: null));
                     }
                 }
                 else
@@ -1012,6 +1076,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public async ValueTask DisposeAsync()
     {
         _aiContext?.Dispose();
+        ResetNoLogsMessage();
+        _showNoLogsMessageCts?.Cancel();
+        await TaskHelpers.WaitIgnoreCancelAsync(_showNoLogsMessageDelayTask);
 
         _consoleLogsFiltersChangedSubscription?.Dispose();
 
@@ -1093,6 +1160,102 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             };
         });
     }
+
+    // --- Terminal toolbar wiring -----------------------------------------
+    //
+    // The TerminalView component pushes a TerminalToolbarState snapshot up
+    // here whenever the underlying xterm/HMP1 state changes (role flips,
+    // resize, font change). Those snapshots drive the page-level toolbar
+    // that replaces the in-frame chrome the terminal used to render itself.
+    // JS remains the source of truth for terminal state; this layer just
+    // mirrors the latest snapshot and routes user actions back to JS via
+    // the TerminalView public methods.
+    private const int TerminalFontStep = 1;
+    private const int TerminalFontMin = 4;
+    private const int TerminalFontMax = 72;
+
+    private async Task OnTerminalToolbarStateChangedAsync(Controls.TerminalToolbarState state)
+    {
+        _terminalToolbarState = state;
+
+        // First snapshot after init — fetch the size preset list once so
+        // the dropdown stays in sync with whatever JS knows how to handle.
+        if (_terminalSizePresets.Count == 0 && _terminalViewRef is not null)
+        {
+            // The JS side ships labels as English string literals (it has no
+            // localization stack of its own). Numeric labels like "80×24" are
+            // language-neutral and pass through unchanged, but "Auto" is an
+            // English word and must come from the dashboard's .resx so it
+            // matches the rest of the terminal toolbar in every supported
+            // culture. Apply the localized label here, where we still have
+            // access to IStringLocalizer<Resources.ConsoleLogs>, before
+            // handing the list to FluentSelect.
+            var presets = await _terminalViewRef.GetSizePresetsAsync();
+            _terminalSizePresets = presets
+                .Select(p => p.Value == "auto"
+                    ? p with { Label = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)] }
+                    : p)
+                .ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private Task TerminalTakeControlAsync()
+        => _terminalViewRef?.TakePrimaryAsync() ?? Task.CompletedTask;
+
+    private Task TerminalFontMinusAsync()
+    {
+        if (_terminalToolbarState is not { } s || _terminalViewRef is null)
+        {
+            return Task.CompletedTask;
+        }
+        return _terminalViewRef.SetFontSizeAsync(Math.Max(TerminalFontMin, s.FontPx - TerminalFontStep));
+    }
+
+    private Task TerminalFontPlusAsync()
+    {
+        if (_terminalToolbarState is not { } s || _terminalViewRef is null)
+        {
+            return Task.CompletedTask;
+        }
+        return _terminalViewRef.SetFontSizeAsync(Math.Min(TerminalFontMax, s.FontPx + TerminalFontStep));
+    }
+
+    private Task TerminalSizeChangedAsync(string? newKey)
+    {
+        if (newKey is null || _terminalViewRef is null)
+        {
+            return Task.CompletedTask;
+        }
+        return _terminalViewRef.SetSizeModeAsync(newKey);
+    }
+
+    // Consolidated primary/take-control toggle. Appearance reflects the
+    // current role (Accent = you are primary, Neutral = not), and the label
+    // reflects the action available (or the current state when no action is
+    // possible). Disabled state comes from CanTakeControl in the snapshot.
+    private static Appearance TerminalPrimaryButtonAppearance(string status) => status switch
+    {
+        "primary" => Appearance.Accent,
+        _ => Appearance.Neutral,
+    };
+
+    private string TerminalPrimaryButtonLabel(string status) => status switch
+    {
+        "primary" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarPrimaryLabel)],
+        "connecting" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarConnectingLabel)],
+        _ => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarTakeControlLabel)],
+    };
+
+    private string TerminalPrimaryButtonTitle(string status) => status switch
+    {
+        "primary" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarPrimaryTitle)],
+        "no-primary" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarNoPrimaryTitle)],
+        "viewer" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarViewerTitle)],
+        "connecting" => Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarConnectingTitle)],
+        _ => status,
+    };
 
     // IComponentWithTelemetry impl
     public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Page, TelemetryComponentIds.ConsoleLogs);

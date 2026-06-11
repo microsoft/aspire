@@ -1,23 +1,24 @@
 {
   "$schema": "https://json.schemastore.org/template",
   "author": "Microsoft",
+  "generatorVersions": "1.0.0.0",
   "classifications": [
     "Common",
     "Aspire",
-    "Blazor",
+    "Cloud",
     "Web",
     "Web API",
     "API",
     "Service",
-    "Cloud",
+    "Blazor",
     "Test",
     "MSTest",
     "NUnit",
     "xUnit"
   ],
-  "name": "Aspire Starter App",
+  "name": "Aspire Starter App (ASP.NET Core/Blazor)",
   "defaultName": "AspireApp",
-  "description": "A project template for creating an Aspire app with a Blazor web frontend and web API backend service, optionally using Redis for caching.",
+  "description": "A project template for creating an Aspire app with a Blazor web frontend and web API backend service, with optional Redis caching.",
   "shortName": "aspire-starter",
   "sourceName": "Aspire-StarterApplication.1",
   "preferNameDirectory": false,
@@ -27,8 +28,8 @@
     "editorTreatAs": "solution"
   },
   "precedence": "9000",
-  "identity": "Aspire.Starter.CSharp.8.0",
-  "thirdPartyNotices": "https://aka.ms/dotnet/aspire/third-party-notices",
+  "identity": "Aspire.Starter.CSharp.!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
+  "thirdPartyNotices": "https://aka.ms/aspire/third-party-notices",
   "groupIdentity": "Aspire.Starter",
   "guids": [
     "80B24B1B-1E78-4FCB-BDC9-13678F1789F4",
@@ -41,28 +42,8 @@
   ],
   "sources": [
     {
-      "source": "./9.5",
+      "source": "./",
       "target": "./",
-      "condition": "AspireVersionActual == 9.5",
-      "modifiers": [
-        {
-          "condition": "(hostIdentifier != \"dotnetcli\" && hostIdentifier != \"dotnetcli-preview\")",
-          "exclude": [
-            "*.sln"
-          ]
-        },
-        {
-          "condition": "(TestFx == None)",
-          "exclude": [
-            "Aspire-StarterApplication.1.Tests/**/*.*"
-          ]
-        }
-      ]
-    },
-    {
-      "source": "./13.0",
-      "target": "./",
-      "condition": "AspireVersionActual == 13.0",
       "modifiers": [
         {
           "condition": "(hostIdentifier != \"dotnetcli\" && hostIdentifier != \"dotnetcli-preview\")",
@@ -101,42 +82,6 @@
       "replaces": "net8.0",
       "defaultValue": "net10.0"
     },
-    "AspireVersion": {
-      "type": "parameter",
-      "description": "The version of Aspire to use.",
-      "displayName": "Aspire version",
-      "datatype": "choice",
-      "choices": [
-        {
-          "choice": "13.0",
-          "displayName": "13.0",
-          "description": "Chooses Aspire 13.0"
-        },
-        {
-          "choice": "9.5",
-          "displayName": "9.5",
-          "description": "Chooses Aspire 9.5"
-        }
-      ],
-      "defaultValue": "13.0"
-    },
-    "AspireVersionActual": {
-      "type": "generated",
-      "generator": "switch",
-      "replaces": "aspireVersion",
-      "parameters": {
-        "cases": [
-          {
-            "condition": "AspireVersion == 9.5",
-            "value": "9.5"
-          },
-          {
-            "condition": "",
-            "value": "13.0"
-          }
-        ]
-      }
-    },
     "hostIdentifier": {
       "type": "bind",
       "binding": "HostIdentifier"
@@ -146,7 +91,7 @@
       "datatype": "bool",
       "defaultValue": "false",
       "displayName": "_Use Redis for caching (requires a supported container runtime)",
-      "description": "Configures whether to setup the application to use Redis for caching. Requires a supported container runtime to run locally, see https://aka.ms/dotnet/aspire/containers for more details."
+      "description": "Configures whether to setup the application to use Redis for caching. Requires a supported container runtime to run locally, see https://aka.ms/aspire/containers for more details."
     },
     "TestFx": {
       "type": "parameter",
@@ -189,12 +134,12 @@
         {
           "choice": "v3",
           "displayName": "v3",
-          "description": "Chooses xUnit.net v3 with VSTest (Aspire version 9.2 and later only)"
+          "description": "Chooses xUnit.net v3 with VSTest"
         },
         {
           "choice": "v3mtp",
           "displayName": "v3 with Microsoft Test Platform",
-          "description": "Chooses xUnit.net v3 with Microsoft Test Platform (Aspire version 9.2 and later only)"
+          "description": "Chooses xUnit.net v3 with Microsoft Test Platform"
         }
       ],
       "defaultValue": "v2"
@@ -258,28 +203,6 @@
         "fallbackVariableName": "appHostOtlpHttpPortGenerated"
       },
       "replaces": "19000"
-    },
-    "appHostMcpHttpPort": {
-      "type": "parameter",
-      "datatype": "integer",
-      "description": "Port number to use for the MCP HTTP endpoint in launchSettings.json of the AppHost project."
-    },
-    "appHostMcpHttpPortGenerated": {
-      "type": "generated",
-      "generator": "port",
-      "parameters": {
-        "low": 18000,
-        "high": 18300
-      }
-    },
-    "appHostMcpHttpPortReplacer": {
-      "type": "generated",
-      "generator": "coalesce",
-      "parameters": {
-        "sourceVariableName": "appHostMcpHttpPort",
-        "fallbackVariableName": "appHostMcpHttpPortGenerated"
-      },
-      "replaces": "18000"
     },
     "appHostResourceHttpPort": {
       "type": "parameter",
@@ -346,28 +269,6 @@
         "fallbackVariableName": "appHostOtlpHttpsPortGenerated"
       },
       "replaces": "21000"
-    },
-    "appHostMcpHttpsPort": {
-      "type": "parameter",
-      "datatype": "integer",
-      "description": "Port number to use for the MCP HTTPS endpoint in launchSettings.json of the AppHost project."
-    },
-    "appHostMcpHttpsPortGenerated": {
-      "type": "generated",
-      "generator": "port",
-      "parameters": {
-        "low": 23000,
-        "high": 23300
-      }
-    },
-    "appHostMcpHttpsPortReplacer": {
-      "type": "generated",
-      "generator": "coalesce",
-      "parameters": {
-        "sourceVariableName": "appHostMcpHttpsPort",
-        "fallbackVariableName": "appHostMcpHttpsPortGenerated"
-      },
-      "replaces": "23000"
     },
     "appHostResourceHttpsPort": {
       "type": "parameter",
@@ -520,10 +421,48 @@
     "LocalhostTld": {
       "type": "parameter",
       "datatype": "bool",
-      "isEnabled": "Framework == net10.0 && AspireVersion == 13.0",
+      "isEnabled": "Framework == net10.0",
       "defaultValue": "false",
       "displayName": "Use the .dev.localhost TLD in the application URL",
       "description": "Whether to combine the project name with the .dev.localhost TLD in the application URL for local development, e.g. https://myapp.dev.localhost:12345. Supported on .NET 10 and later."
+    },
+    "hostName": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "lowerCaseInvariantWithHyphens",
+      "replaces": "LocalhostTldHostNamePrefix"
+    }
+  },
+  "forms": {
+    "lowerCaseInvariantWithHyphens": {
+      "identifier": "chain",
+      "steps": [
+        "lowerCaseInvariant",
+        "replaceDnsInvalidCharsWithHyphens",
+        "replaceRepeatedHyphens",
+        "trimLeadingHyphens",
+        "trimTrailingHyphens"
+      ]
+    },
+    "replaceDnsInvalidCharsWithHyphens": {
+      "identifier": "replace",
+      "pattern": "[^a-z0-9-]",
+      "replacement": "-"
+    },
+    "replaceRepeatedHyphens": {
+      "identifier": "replace",
+      "pattern": "-{2,}",
+      "replacement": "-"
+    },
+    "trimLeadingHyphens": {
+      "identifier": "replace",
+      "pattern": "^-+",
+      "replacement": ""
+    },
+    "trimTrailingHyphens": {
+      "identifier": "replace",
+      "pattern": "-+$",
+      "replacement": ""
     }
   },
   "primaryOutputs": [
@@ -552,7 +491,7 @@
     {
       "id": "set-startup-project",
       "description": "Sets the startup project in the solution",
-      "manualInstructions": [],
+      "manualInstructions": [{ "text": "" }],
       "actionId": "5BECCC32-4D5A-4476-A0F9-BD2E81AF0689",
       "condition": "(hostIdentifier == \"vs\")",
       "args": {

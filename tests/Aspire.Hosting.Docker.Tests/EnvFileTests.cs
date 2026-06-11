@@ -8,7 +8,7 @@ public class EnvFileTests
     [Fact]
     public void Add_WithOnlyIfMissingTrue_DoesNotAddDuplicate()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         var envFilePath = Path.Combine(tempDir.Path, ".env");
 
         // Create initial .env file
@@ -34,7 +34,7 @@ public class EnvFileTests
     [Fact]
     public void Add_WithOnlyIfMissingFalse_UpdatesExistingKey()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         var envFilePath = Path.Combine(tempDir.Path, ".env");
 
         // Create initial .env file
@@ -60,7 +60,7 @@ public class EnvFileTests
     [Fact]
     public void Add_WithOnlyIfMissingFalse_UpdatesImageNameWithoutDuplication()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         var envFilePath = Path.Combine(tempDir.Path, ".env");
 
         // Create initial .env file simulating a project resource
@@ -100,7 +100,7 @@ public class EnvFileTests
     [Fact]
     public void Add_NewKey_AddsToFile()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         var envFilePath = Path.Combine(tempDir.Path, ".env");
 
         // Create initial .env file
@@ -125,7 +125,7 @@ public class EnvFileTests
     [Fact]
     public void Load_EmptyFile_ReturnsEmptyEnvFile()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         var envFilePath = Path.Combine(tempDir.Path, ".env");
 
         // Create empty file
@@ -142,7 +142,7 @@ public class EnvFileTests
     [Fact]
     public void Load_NonExistentFile_ReturnsEmptyEnvFile()
     {
-        using var tempDir = new TempDirectory();
+        using var tempDir = new TestTempDirectory();
         var envFilePath = Path.Combine(tempDir.Path, ".env");
 
         // Don't create the file

@@ -5,7 +5,9 @@ using System.Security.Claims;
 using System.Text.Json;
 using Aspire.Dashboard.Configuration;
 using Aspire.Hosting;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -214,18 +216,17 @@ public sealed class DashboardOptionsTests
     #region OTLP options
 
     [Fact]
-    public void OtlpOptions_NeitherEndpointSet()
+    public void OtlpOptions_NeitherEndpointSet_Succeeds()
     {
+        // OTLP endpoints are optional - telemetry can be imported via the UI
         var options = GetValidOptions();
         options.Otlp.GrpcEndpointUrl = null;
         options.Otlp.HttpEndpointUrl = null;
 
         var result = new ValidateDashboardOptions().Validate(null, options);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(
-            $"Neither OTLP/gRPC or OTLP/HTTP endpoint URLs are configured. Specify either a {DashboardConfigNames.DashboardOtlpGrpcUrlName.EnvVarName} or {DashboardConfigNames.DashboardOtlpHttpUrlName.EnvVarName} value.",
-            result.FailureMessage);
+        Assert.True(result.Succeeded);
+        Assert.Null(result.FailureMessage);
     }
 
     [Fact]
@@ -259,7 +260,7 @@ public sealed class DashboardOptionsTests
         [
             new("ASPNETCORE_URLS", "http://localhost:8000/"),
             new("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", "http://localhost:4319/"),
-            new(DashboardConfigNames.Legacy.DashboardOtlpSuppressUnsecuredTelemetryMessage.ConfigKey, "true"),
+            new(DashboardConfigNames.Legacy.DashboardOtlpSuppressUnsecuredTelemetryMessageName.ConfigKey, "true"),
         ]));
         var options = app.Services.GetService<IOptionsMonitor<DashboardOptions>>()!;
 
@@ -326,6 +327,32 @@ public sealed class DashboardOptionsTests
         Assert.Equal(2, claimIdentity.Claims.Count());
         Assert.True(claimIdentity.HasClaim("role", "admin"));
         Assert.True(claimIdentity.HasClaim("role", "test"));
+    }
+
+    [Fact]
+    public async Task OpenIdConnectOptions_UsesDashboardCookieManager()
+    {
+        await using var app = new DashboardWebApplication(builder => builder.Configuration.AddInMemoryCollection(
+        [
+            new("ASPNETCORE_URLS", "http://localhost:8000/"),
+            new("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", "http://localhost:4319/"),
+            new("Authentication:Schemes:OpenIdConnect:Authority", "https://id.aspire.dev/"),
+            new("Authentication:Schemes:OpenIdConnect:ClientId", "aspire-dashboard"),
+            new("Dashboard:Frontend:AuthMode", "OpenIdConnect")
+        ]));
+        var cookieOptions = app.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(CookieAuthenticationDefaults.AuthenticationScheme);
+        Assert.Equal(".Aspire.Dashboard.Auth", cookieOptions.Cookie.Name);
+
+        var httpContext = new DefaultHttpContext();
+        cookieOptions.CookieManager.AppendResponseCookie(httpContext, cookieOptions.Cookie.Name!, "value", new CookieOptions());
+        var httpCookie = Assert.Single(httpContext.Response.Headers.SetCookie);
+        Assert.StartsWith(".Aspire.Dashboard.Auth.Http=", httpCookie, StringComparison.Ordinal);
+
+        var httpsContext = new DefaultHttpContext();
+        httpsContext.Request.Scheme = "https";
+        cookieOptions.CookieManager.AppendResponseCookie(httpsContext, cookieOptions.Cookie.Name!, "value", new CookieOptions());
+        var httpsCookie = Assert.Single(httpsContext.Response.Headers.SetCookie);
+        Assert.StartsWith(".Aspire.Dashboard.Auth=", httpsCookie, StringComparison.Ordinal);
     }
 
     [Fact]

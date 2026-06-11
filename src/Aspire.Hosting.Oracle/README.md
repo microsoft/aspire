@@ -1,26 +1,37 @@
-# Aspire.Hosting.Oracle library
+# Oracle Database hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure an Oracle database resource.
+Use this integration to model, configure, and orchestrate an Oracle database resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire PostgreSQL Oracle library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Oracle` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Oracle
+```bash
+aspire add Aspire.Hosting.Oracle
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Oracle database resource and consume the connection using the following methods:
+In the AppHost, add an Oracle database resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var db = builder.AddOracle("oracle").AddDatabase("mydb");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(db);
+```
+
+**TypeScript**
+
+```typescript
+const db = await builder.addOracle("oracle").addDatabase("mydb");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(db);
 ```
 
 ## Connection Properties
@@ -48,14 +59,15 @@ The Oracle database resource inherits all properties from its parent `OracleData
 |---------------|-------------|
 | `Uri` | The connection URI in oracle:// format, with the format `oracle://{Username}:{Password}@{Host}:{Port}/{DatabaseName}` |
 | `JdbcConnectionString` | JDBC connection string with database name, with the format `jdbc:oracle:thin:@//{Host}:{Port}/{DatabaseName}`. User and password credentials are provided as separate `Username` and `Password` properties. |
-| `Database` | The name of the database |
+| `DatabaseName` | The name of the database |
 
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
 
 ## Additional documentation
 
-https://learn.microsoft.com/dotnet/aspire/database/oracle-entity-framework-component?tabs=dotnet-cli
+https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/databases/efcore/oracle/oracle-host/
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

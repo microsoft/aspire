@@ -1,4 +1,4 @@
-﻿@description('The location for the resource(s) to be deployed.')
+@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param env_outputs_azure_container_registry_endpoint string
@@ -23,7 +23,7 @@ param env_outputs_azure_application_insights_instrumentationkey string
 
 param env_outputs_azure_application_insights_connection_string string
 
-resource mainContainer 'Microsoft.Web/sites/sitecontainers@2024-11-01' = {
+resource mainContainer 'Microsoft.Web/sites/sitecontainers@2025-03-01' = {
   name: 'main'
   properties: {
     authType: 'UserAssigned'
@@ -35,7 +35,7 @@ resource mainContainer 'Microsoft.Web/sites/sitecontainers@2024-11-01' = {
   parent: webapp
 }
 
-resource webapp 'Microsoft.Web/sites@2024-11-01' = {
+resource webapp 'Microsoft.Web/sites@2025-03-01' = {
   name: take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)
   location: location
   properties: {
@@ -49,14 +49,6 @@ resource webapp 'Microsoft.Web/sites@2024-11-01' = {
         {
           name: 'WEBSITES_PORT'
           value: project1_containerport
-        }
-        {
-          name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-          value: 'true'
-        }
-        {
-          name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-          value: 'true'
         }
         {
           name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
@@ -129,4 +121,14 @@ resource project1_website_ra 'Microsoft.Authorization/roleAssignments@2022-04-01
     principalType: 'ServicePrincipal'
   }
   scope: webapp
+}
+
+resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
+  name: 'slotConfigNames'
+  properties: {
+    appSettingNames: [
+      'OTEL_SERVICE_NAME'
+    ]
+  }
+  parent: webapp
 }

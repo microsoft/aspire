@@ -33,7 +33,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public void AllowsConfigureConfigurationOptions()
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -53,7 +53,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(true)]
     [InlineData(false)]
     public void ReadsFromConnectionStringsCorrectly(bool useKeyed)
@@ -81,7 +81,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(true)]
     [InlineData(false)]
     public void ConnectionStringCanBeSetInCode(bool useKeyed)
@@ -112,7 +112,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
     }
 
     [Theory]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     [InlineData(true)]
     [InlineData(false)]
     public void ConnectionNameWinsOverConfigSection(bool useKeyed)
@@ -200,7 +200,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
 
     /// <summary>
     /// Verifies that both distributed and output caching components can be added to the same builder and their HealthChecks don't conflict.
-    /// See https://github.com/dotnet/aspire/issues/705
+    /// See https://github.com/microsoft/aspire/issues/705
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -261,7 +261,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public void KeyedServiceRedisInstrumentationEndToEnd()
     {
         RemoteExecutor.Invoke(async (connectionString) =>
@@ -298,7 +298,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task CanAddMultipleKeyedServices()
     {
         await using var container2 = await RedisContainerFixture.CreateContainerAsync();
@@ -334,7 +334,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
     /// Tests that you can use a keyed service for a distributed cache, another for an output cache, while also adding a plain Redis service.
     /// </summary>
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task CanAddMultipleKeyedCachingServices()
     {
         await using var container1 = await RedisContainerFixture.CreateContainerAsync();
@@ -388,7 +388,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
     /// using the Builder APIs.
     /// </summary>
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task CanAddMultipleKeyedCachingServicesBuilder()
     {
         await using var container1 = await RedisContainerFixture.CreateContainerAsync();
@@ -442,7 +442,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(false, false)]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task AutoActivationCanSet(bool useKeyed, bool autoActivate)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -474,7 +474,7 @@ public class AspireRedisExtensionsTests : IClassFixture<RedisContainerFixture>
     }
 
     [Fact]
-    [RequiresDocker]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task AutoActivationDisabledByDefault()
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);

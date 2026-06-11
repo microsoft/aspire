@@ -1,0 +1,16 @@
+{
+  "type": "azure.bicep.v0",
+  "path": "project1-website.module.bicep",
+  "params": {
+    "deploymentSlot": "{deploymentSlot.value}",
+    "env_outputs_azure_container_registry_endpoint": "{env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+    "env_outputs_planid": "{env.outputs.planId}",
+    "env_outputs_azure_container_registry_managed_identity_id": "{env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+    "env_outputs_azure_container_registry_managed_identity_client_id": "{env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_CLIENT_ID}",
+    "project1_containerimage": "{project1.containerImage}",
+    "project1_containerport": "{project1.containerPort}",
+    "env_outputs_azure_app_service_dashboard_uri": "{env.outputs.AZURE_APP_SERVICE_DASHBOARD_URI}",
+    "env_outputs_azure_website_contributor_managed_identity_id": "{env.outputs.AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_ID}",
+    "env_outputs_azure_website_contributor_managed_identity_principal_id": "{env.outputs.AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_PRINCIPAL_ID}"
+  }
+}

@@ -6,15 +6,14 @@ using System.Text.Json.Nodes;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -36,9 +35,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
 
         var cut = SetUpDialog(out var dialogService);
         await GenAIVisualizerDialog.OpenDialogAsync(
-            viewportInformation: new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false),
             dialogService: dialogService,
-            dialogsLoc: Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.Dialogs>>(),
             span: CreateOtlpSpan(resource, trace, scope, spanId: "abc", parentSpanId: null, startDate: s_testTime),
             selectedLogEntryId: null,
             telemetryRepository: Services.GetRequiredService<TelemetryRepository>(),
@@ -104,9 +101,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
 
         var cut = SetUpDialog(out var dialogService);
         await GenAIVisualizerDialog.OpenDialogAsync(
-            viewportInformation: new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false),
             dialogService: dialogService,
-            dialogsLoc: Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.Dialogs>>(),
             span: span,
             selectedLogEntryId: null,
             telemetryRepository: Services.GetRequiredService<TelemetryRepository>(),
@@ -153,8 +148,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var resource = resources[0];
         var tracesResult = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resource.ResourceKey,
-            FilterText = string.Empty,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -164,9 +158,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
 
         // Open dialog
         await GenAIVisualizerDialog.OpenDialogAsync(
-            viewportInformation: new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false),
             dialogService: dialogService,
-            dialogsLoc: Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.Dialogs>>(),
             span: span,
             selectedLogEntryId: null,
             telemetryRepository: repository,
@@ -239,8 +231,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var resource = resources[0];
         var tracesResult = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resource.ResourceKey,
-            FilterText = string.Empty,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -253,8 +244,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         {
             var currentTrace = repository.GetTraces(new GetTracesRequest
             {
-                ResourceKey = resource.ResourceKey,
-                FilterText = string.Empty,
+                ResourceKeys = [resource.ResourceKey],
                 StartIndex = 0,
                 Count = 10,
                 Filters = []
@@ -265,9 +255,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
 
         // Open dialog with the function that can retrieve updated spans
         await GenAIVisualizerDialog.OpenDialogAsync(
-            viewportInformation: new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false),
             dialogService: dialogService,
-            dialogsLoc: Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.Dialogs>>(),
             span: span,
             selectedLogEntryId: null,
             telemetryRepository: repository,
@@ -312,15 +300,18 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         });
     }
 
-    private IRenderedFragment SetUpDialog(out IDialogService dialogService)
+    private IRenderedFragment SetUpDialog(out DashboardDialogService dialogService)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentTab(this);
         FluentUISetupHelpers.SetupFluentOverflow(this);
-        
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);
 
-        dialogService = Services.GetRequiredService<IDialogService>();
+        dialogService = Services.GetRequiredService<DashboardDialogService>();
         return cut;
     }
 }

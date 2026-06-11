@@ -128,11 +128,9 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(true, false, false)]
-    [InlineData(true, true, false)]
-    [InlineData(true, false, true)]
-    [InlineData(false, true, true)]
-    public async Task OnInitialize_UnsecuredOtlp_SuppressConfigured_NoMessageBar(bool expectMessageBar, bool telemetrySuppressUnsecuredMessage, bool mcpSuppressUnsecuredMessage)
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task OnInitialize_UnsecuredOtlp_SuppressConfigured_NoMessageBar(bool expectMessageBar, bool telemetrySuppressUnsecuredMessage)
     {
         // Arrange
         var testLocalStorage = new TestLocalStorage();
@@ -141,7 +139,6 @@ public partial class MainLayoutTests : DashboardTestContext
         SetupMainLayoutServices(localStorage: testLocalStorage, messageService: messageService, configureOptions: o =>
         {
             o.Otlp.SuppressUnsecuredMessage = telemetrySuppressUnsecuredMessage;
-            o.Mcp.SuppressUnsecuredMessage = mcpSuppressUnsecuredMessage;
         });
 
         var messageShownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -190,18 +187,20 @@ public partial class MainLayoutTests : DashboardTestContext
     private void SetupMainLayoutServices(TestLocalStorage? localStorage = null, MessageService? messageService = null, Action<DashboardOptions>? configureOptions = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage, messageService: messageService);
-        
+
         Services.AddOptions();
         Services.AddSingleton<IThemeResolver, TestThemeResolver>();
         Services.AddSingleton<IDashboardClient, TestDashboardClient>();
         Services.AddSingleton<ITooltipService, TooltipService>();
         Services.AddSingleton<IToastService, ToastService>();
-        Services.AddSingleton<GlobalState>();
         Services.Configure<DashboardOptions>(o =>
         {
+            // Configure OTLP endpoint URLs so they can be parsed
+            o.Otlp.GrpcEndpointUrl = "http://localhost:4317";
             o.Otlp.AuthMode = OtlpAuthMode.Unsecured;
-            o.Mcp.AuthMode = McpAuthMode.Unsecured;
             configureOptions?.Invoke(o);
+            // Call TryParseOptions to populate parsed endpoint addresses
+            o.Otlp.TryParseOptions(out _);
         });
 
         FluentUISetupHelpers.SetupFluentDialogProvider(this);

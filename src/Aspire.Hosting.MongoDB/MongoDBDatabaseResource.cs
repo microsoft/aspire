@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
@@ -12,6 +13,9 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="name">The name of the resource.</param>
 /// <param name="databaseName">The database name.</param>
 /// <param name="parent">The MongoDB server resource associated with this database.</param>
+/// <ats-summary>A resource that represents a MongoDB database. This is a child resource of a <ats-see cref="!:type:MongoDBServerResource" />.</ats-summary>
+[DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+[AspireExport(ExposeProperties = true)]
 public class MongoDBDatabaseResource(string name, string databaseName, MongoDBServerResource parent)
     : Resource(name), IResourceWithParent<MongoDBServerResource>, IResourceWithConnectionString
 {
@@ -46,7 +50,7 @@ public class MongoDBDatabaseResource(string name, string databaseName, MongoDBSe
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
         Parent.CombineProperties([
-            new("Database", ReferenceExpression.Create($"{DatabaseName}")),
+            new("DatabaseName", ReferenceExpression.Create($"{DatabaseName}")),
             new("Uri", UriExpression),
         ]);
 }

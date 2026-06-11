@@ -1,20 +1,19 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "postgres": {
       "type": "container.v0",
       "connectionString": "Host={postgres.bindings.tcp.host};Port={postgres.bindings.tcp.port};Username=postgres;Password={postgres-password.value}",
-      "image": "docker.io/library/postgres:18.0",
+      "image": "docker.io/library/postgres:17.6",
       "volumes": [
         {
           "name": "testshop.apphost-48e1ce2b9b-postgres-data",
-          "target": "/var/lib/postgresql",
+          "target": "/var/lib/postgresql/data",
           "readOnly": false
         }
       ],
       "env": {
         "POSTGRES_HOST_AUTH_METHOD": "scram-sha-256",
-        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256 --auth-local=scram-sha-256 --no-data-checksums",
+        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256 --auth-local=scram-sha-256",
         "POSTGRES_USER": "postgres",
         "POSTGRES_PASSWORD": "{postgres-password.value}"
       },
@@ -33,8 +32,8 @@
     },
     "basketcache": {
       "type": "container.v0",
-      "connectionString": "{basketcache.bindings.tcp.host}:{basketcache.bindings.tcp.port},password={basketcache-password.value}",
-      "image": "docker.io/library/redis:8.2",
+      "connectionString": "{basketcache.bindings.tcp.host}:{basketcache.bindings.tcp.port},password={basketcache-password.value}{cond-basketcache-bindings-tcp-tlsenabled-8c2280ff.connectionString}",
+      "image": "docker.io/library/redis:8.6",
       "entrypoint": "/bin/sh",
       "args": [
         "-c",
@@ -52,7 +51,7 @@
       },
       "bindings": {
         "tcp": {
-          "scheme": "tcp",
+          "scheme": "redis",
           "protocol": "tcp",
           "transport": "tcp",
           "targetPort": 6379
@@ -63,8 +62,6 @@
       "type": "project.v0",
       "path": "../CatalogDb/CatalogDb.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{catalogdbapp.bindings.http.targetPort}",
@@ -75,7 +72,7 @@
         "CATALOGDB_PASSWORD": "{postgres-password.value}",
         "CATALOGDB_URI": "postgresql://postgres:{postgres-password-uri-encoded.value}@{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/catalogdb",
         "CATALOGDB_JDBCCONNECTIONSTRING": "jdbc:postgresql://{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/catalogdb",
-        "CATALOGDB_DATABASE": "catalogdb"
+        "CATALOGDB_DATABASENAME": "catalogdb"
       },
       "bindings": {
         "http": {
@@ -94,8 +91,6 @@
       "type": "project.v0",
       "path": "../CatalogService/CatalogService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{catalogservice.bindings.http.targetPort}",
@@ -106,7 +101,7 @@
         "CATALOGDB_PASSWORD": "{postgres-password.value}",
         "CATALOGDB_URI": "postgresql://postgres:{postgres-password-uri-encoded.value}@{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/catalogdb",
         "CATALOGDB_JDBCCONNECTIONSTRING": "jdbc:postgresql://{postgres.bindings.tcp.host}:{postgres.bindings.tcp.port}/catalogdb",
-        "CATALOGDB_DATABASE": "catalogdb"
+        "CATALOGDB_DATABASENAME": "catalogdb"
       },
       "bindings": {
         "http": {
@@ -155,8 +150,6 @@
       "type": "project.v0",
       "path": "../BasketService/BasketService.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{basketservice.bindings.http.targetPort}",
@@ -164,7 +157,7 @@
         "BASKETCACHE_HOST": "{basketcache.bindings.tcp.host}",
         "BASKETCACHE_PORT": "{basketcache.bindings.tcp.port}",
         "BASKETCACHE_PASSWORD": "{basketcache-password.value}",
-        "BASKETCACHE_URI": "redis://:{basketcache-password-uri-encoded.value}@{basketcache.bindings.tcp.host}:{basketcache.bindings.tcp.port}",
+        "BASKETCACHE_URI": "{basketcache.bindings.tcp.scheme}://:{basketcache-password-uri-encoded.value}@{basketcache.bindings.tcp.host}:{basketcache.bindings.tcp.port}",
         "ConnectionStrings__messaging": "{messaging.connectionString}",
         "MESSAGING_HOST": "{messaging.bindings.tcp.host}",
         "MESSAGING_PORT": "{messaging.bindings.tcp.port}",
@@ -189,8 +182,6 @@
       "type": "project.v0",
       "path": "../MyFrontend/MyFrontend.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{frontend.bindings.http.targetPort}",
@@ -222,8 +213,6 @@
       "type": "project.v0",
       "path": "../OrderProcessor/OrderProcessor.csproj",
       "env": {
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
-        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ConnectionStrings__messaging": "{messaging.connectionString}",
         "MESSAGING_HOST": "{messaging.bindings.tcp.host}",
@@ -235,7 +224,7 @@
     },
     "apigateway": {
       "type": "container.v0",
-      "image": "mcr.microsoft.com/dotnet/nightly/yarp:2.3.0-preview.4",
+      "image": "mcr.microsoft.com/dotnet/nightly/yarp:2.3-preview",
       "entrypoint": "dotnet",
       "args": [
         "/app/yarp.dll"
@@ -325,6 +314,10 @@
       "type": "annotated.string",
       "value": "{messaging-password.value}",
       "filter": "uri"
+    },
+    "cond-basketcache-bindings-tcp-tlsenabled-8c2280ff": {
+      "type": "value.v0",
+      "connectionString": ""
     }
   }
 }

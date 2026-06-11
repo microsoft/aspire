@@ -9,6 +9,7 @@
     "api_containerimage": "{api.containerImage}",
     "api_identity_outputs_id": "{api-identity.outputs.id}",
     "redis_outputs_connectionstring": "{redis.outputs.connectionString}",
+    "redis_outputs_hostname": "{redis.outputs.hostName}",
     "api_identity_outputs_clientid": "{api-identity.outputs.clientId}"
   }
 }

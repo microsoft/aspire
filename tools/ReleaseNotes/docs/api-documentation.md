@@ -32,28 +32,28 @@ analysis-output/api-changes-build-current/all-api-changes.txt
 #### Step 1: Start with API Changes Diff to Identify What's New
 
 ```bash
-grep -A 5 -B 2 "AddAzureAIFoundry" analysis-output/api-changes-build-current/api-changes-diff.txt
+grep -A 5 -B 2 "AddFoundry" analysis-output/api-changes-build-current/api-changes-diff.txt
 ```
 
 #### Step 2: Use Uber File Only for Writing Accurate Usage Examples  
 
 ```bash
-grep -A 10 -B 2 "AddAzureAIFoundry" analysis-output/api-changes-build-current/all-api-changes.txt
+grep -A 10 -B 2 "AddFoundry" analysis-output/api-changes-build-current/all-api-changes.txt
 ```
 
 #### Step 3: Extract Complete API Signatures for Code Samples
 
 ```csharp
 // From uber file - get complete API signature for accurate usage examples: 
-public static ApplicationModel.IResourceBuilder<Azure.AzureAIFoundryResource> AddAzureAIFoundry(this IDistributedApplicationBuilder builder, string name)
-public static ApplicationModel.IResourceBuilder<Azure.AzureAIFoundryDeploymentResource> AddDeployment(this ApplicationModel.IResourceBuilder<Azure.AzureAIFoundryResource> builder, string name, string modelName, string modelVersion, string format)
+public static ApplicationModel.IResourceBuilder<Azure.FoundryResource> AddFoundry(this IDistributedApplicationBuilder builder, string name)
+public static ApplicationModel.IResourceBuilder<Azure.FoundryDeploymentResource> AddDeployment(this ApplicationModel.IResourceBuilder<Azure.FoundryResource> builder, string name, string modelName, string modelVersion, string format)
 ```
 
 #### Step 4: Write Usage Example with Correct API Signatures
 
 ```csharp
 // ✅ CORRECT: Usage example based on actual API signatures from uber file
-var aiFoundry = builder.AddAzureAIFoundry("ai-foundry");
+var aiFoundry = builder.AddFoundry("ai-foundry");
 var deployment = aiFoundry.AddDeployment("gpt-4", "gpt-4", "1106", "OpenAI");
 ```
 
@@ -61,7 +61,7 @@ var deployment = aiFoundry.AddDeployment("gpt-4", "gpt-4", "1106", "OpenAI");
 
 ```csharp
 // ❌ WRONG: These methods are NOT found in the API diff or uber file
-builder.AddAzureAIFoundry("ai")
+builder.AddFoundry("ai")
     .WithModel("gpt-4", modelId: "gpt-4-1106")      // INVENTED - not in uber file
     .WithEndpoint("chat", deployment: "chat-latest") // INVENTED - not in uber file
     .WithRoleAssignments(roles: KeyVaultBuiltInRole.SecretsUser) // INVENTED - not in uber file
@@ -119,8 +119,8 @@ analysis-output/Aspire.Cli.md
 ### Find Related Documentation
 
 - Using the MicrosoftDocs MCP, search for existing documentation about the feature, starting with Aspire documentation.
-- Documentation can be referenced in multiple ways. If the doc is part of the aspire docset (learn.microsoft.com/dotnet/aspire/*) you can use a relative path (assume What's New is one level - ie ../ - below "root" dotnet/aspire/)
-- If the docset is on learn.microsoft.com, but not from Aspire, you can use an xref in the link path - for example, something under Azure docs (learn.microsoft.com/azure/ai-foundry/overview) would be [Azure AI Foundry documentation](xref:/azure/ai-foundry/overview)
+- Documentation can be referenced in multiple ways. If the doc is part of the aspire docset (learn.microsoft.com/microsoft/aspire/*) you can use a relative path (assume What's New is one level - ie ../ - below "root" microsoft/aspire/)
+- If the docset is on learn.microsoft.com, but not from Aspire, you can use an xref in the link path - for example, something under Azure docs (learn.microsoft.com/azure/ai-foundry/overview) would be [Microsoft Foundry documentation](xref:/azure/ai-foundry/overview)
 - If a new API is explicitly called out, use an xref to the API docs via the fully qualified API namespace. For example, `Aspire.Hosting.ApplicationModel.BeforeStartEvent` or simply `BeforeStartEvent` becomes <xref:aspire.hosting.applicationmodel.beforestartevent>
 - Do NOT put links to docs or APIs in the sample code. Only put them in the brief description above to set context, or the explanation for follow up content and API docs.
 - Some conceptual docs may not exist yet. If you are unsure of if a link's content fits, or if something is relevant, do not add a link at all.

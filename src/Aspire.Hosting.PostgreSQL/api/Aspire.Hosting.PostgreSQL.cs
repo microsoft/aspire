@@ -10,41 +10,61 @@ namespace Aspire.Hosting
 {
     public static partial class PostgresBuilderExtensions
     {
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, string name, string? databaseName = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> AddPostgres(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null, int? port = null) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> WithCreationScript(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> builder, string script) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
+        [AspireExport("withPostgresHostPort", MethodName = "withHostPort")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithHostPort(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, int? port) { throw null; }
 
+        [AspireExport("withPgAdminHostPort", MethodName = "withHostPort")]
         public static ApplicationModel.IResourceBuilder<Postgres.PgAdminContainerResource> WithHostPort(this ApplicationModel.IResourceBuilder<Postgres.PgAdminContainerResource> builder, int? port) { throw null; }
 
+        [AspireExport("withPgWebHostPort", MethodName = "withHostPort")]
         public static ApplicationModel.IResourceBuilder<Postgres.PgWebContainerResource> WithHostPort(this ApplicationModel.IResourceBuilder<Postgres.PgWebContainerResource> builder, int? port) { throw null; }
 
+        [AspireExportIgnore(Reason = "Obsolete. Use WithInitFiles instead.")]
         [System.Obsolete("Use WithInitFiles instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithInitBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, string source, bool isReadOnly = true) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithInitFiles(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, string source) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithPassword(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> password) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithPgAdmin<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<Postgres.PgAdminContainerResource>>? configureContainer = null, string? containerName = null)
             where T : ApplicationModel.PostgresServerResource { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithPgWeb(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, System.Action<ApplicationModel.IResourceBuilder<Postgres.PgWebContainerResource>>? configureContainer = null, string? containerName = null) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPOSTGRES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> WithPostgresMcp(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> builder, System.Action<ApplicationModel.IResourceBuilder<Postgres.PostgresMcpContainerResource>>? configureContainer = null, string? containerName = null) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithUserName(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> userName) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
-    public partial class PostgresDatabaseResource : Resource, IResourceWithParent<PostgresServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+    [AspireExport(ExposeProperties = true)]
+    public partial class PostgresDatabaseResource : Resource, IResourceWithParent<PostgresServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public PostgresDatabaseResource(string name, string databaseName, PostgresServerResource postgresParentResource) : base(default!) { }
 
@@ -52,10 +72,17 @@ namespace Aspire.Hosting.ApplicationModel
 
         public string DatabaseName { get { throw null; } }
 
+        public ReferenceExpression JdbcConnectionString { get { throw null; } }
+
         public PostgresServerResource Parent { get { throw null; } }
+
+        public ReferenceExpression UriExpression { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class PostgresServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class PostgresServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public PostgresServerResource(string name, ParameterResource? userName, ParameterResource password) : base(default!, default) { }
 
@@ -63,13 +90,23 @@ namespace Aspire.Hosting.ApplicationModel
 
         public System.Collections.Generic.IReadOnlyDictionary<string, string> Databases { get { throw null; } }
 
+        public EndpointReferenceExpression Host { get { throw null; } }
+
+        public ReferenceExpression JdbcConnectionString { get { throw null; } }
+
         public ParameterResource PasswordParameter { get { throw null; } set { } }
 
+        public EndpointReferenceExpression Port { get { throw null; } }
+
         public EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public ReferenceExpression UriExpression { get { throw null; } }
 
         public ParameterResource? UserNameParameter { get { throw null; } set { } }
 
         public ReferenceExpression UserNameReference { get { throw null; } }
+
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
         public System.Threading.Tasks.ValueTask<string?> GetConnectionStringAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
@@ -85,6 +122,13 @@ namespace Aspire.Hosting.Postgres
     public sealed partial class PgWebContainerResource : ApplicationModel.ContainerResource
     {
         public PgWebContainerResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+    }
+
+    public sealed partial class PostgresMcpContainerResource : ApplicationModel.ContainerResource
+    {
+        public PostgresMcpContainerResource(string name) : base(default!, default) { }
 
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
     }

@@ -19,6 +19,11 @@ namespace Aspire.Hosting.Pipelines;
 public sealed class DeploymentStateSection(string sectionName, JsonObject? data, long version)
 {
     /// <summary>
+    /// The key used to store a single scalar value in a section's Data object.
+    /// </summary>
+    private const string RootValueKey = "";
+
+    /// <summary>
     /// Gets the name of the state section.
     /// </summary>
     public string SectionName { get; } = sectionName;
@@ -40,4 +45,14 @@ public sealed class DeploymentStateSection(string sectionName, JsonObject? data,
     /// after a successful save, allowing multiple saves of the same section instance.
     /// </remarks>
     public long Version { get; set; } = version;
+
+    /// <summary>
+    /// Sets a single value in the section, replacing any existing data.
+    /// </summary>
+    /// <param name="value">The value to store in the section.</param>
+    public void SetValue(string value)
+    {
+        Data.Clear();
+        Data[RootValueKey] = JsonValue.Create(value);
+    }
 }

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
@@ -14,6 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource.</param>
 /// <param name="blobContainerName">The name of the blob container.</param>
 /// <param name="parent">The <see cref="AzureBlobStorageResource"/> that the resource is stored in.</param>
+[DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, BlobContainer = {BlobContainerName}")]
 public class AzureBlobStorageContainerResource(string name, string blobContainerName, AzureBlobStorageResource parent) : Resource(name),
     IResourceWithConnectionString,
     IResourceWithParent<AzureBlobStorageResource>
@@ -51,5 +53,15 @@ public class AzureBlobStorageContainerResource(string name, string blobContainer
     {
         ArgumentException.ThrowIfNullOrEmpty(argument, paramName);
         return argument;
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
+    {
+        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        {
+            yield return property;
+        }
+
+        yield return new("BlobContainerName", ReferenceExpression.Create($"{BlobContainerName}"));
     }
 }

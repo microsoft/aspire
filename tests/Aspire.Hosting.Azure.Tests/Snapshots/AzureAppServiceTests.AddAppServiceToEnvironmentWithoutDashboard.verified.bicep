@@ -13,7 +13,7 @@ param project2_containerimage string
 
 param project2_containerport string
 
-resource mainContainer 'Microsoft.Web/sites/sitecontainers@2024-11-01' = {
+resource mainContainer 'Microsoft.Web/sites/sitecontainers@2025-03-01' = {
   name: 'main'
   properties: {
     authType: 'UserAssigned'
@@ -25,7 +25,7 @@ resource mainContainer 'Microsoft.Web/sites/sitecontainers@2024-11-01' = {
   parent: webapp
 }
 
-resource webapp 'Microsoft.Web/sites@2024-11-01' = {
+resource webapp 'Microsoft.Web/sites@2025-03-01' = {
   name: take('${toLower('project2')}-${uniqueString(resourceGroup().id)}', 60)
   location: location
   properties: {
@@ -41,14 +41,6 @@ resource webapp 'Microsoft.Web/sites@2024-11-01' = {
           value: project2_containerport
         }
         {
-          name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES'
-          value: 'true'
-        }
-        {
-          name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES'
-          value: 'true'
-        }
-        {
           name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
           value: 'in_memory'
         }
@@ -62,11 +54,11 @@ resource webapp 'Microsoft.Web/sites@2024-11-01' = {
         }
         {
           name: 'PROJECT1_HTTP'
-          value: 'http://${take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
+          value: 'https://${take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
         }
         {
           name: 'services__project1__http__0'
-          value: 'http://${take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
+          value: 'https://${take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
         }
         {
           name: 'ASPIRE_ENVIRONMENT_NAME'
@@ -81,4 +73,15 @@ resource webapp 'Microsoft.Web/sites@2024-11-01' = {
       '${env_outputs_azure_container_registry_managed_identity_id}': { }
     }
   }
+}
+
+resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
+  name: 'slotConfigNames'
+  properties: {
+    appSettingNames: [
+      'PROJECT1_HTTP'
+      'services__project1__http__0'
+    ]
+  }
+  parent: webapp
 }

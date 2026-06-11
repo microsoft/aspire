@@ -1,0 +1,19 @@
+﻿{
+  "Items": {
+    "PackageReference": [
+      {
+        "Identity": "Aspire.Hosting.AppHost",
+        "Version": "9.5.0-test"
+      },
+      {
+        "Identity": "Aspire.Hosting.Redis",
+        "Version": "9.4.1"
+      }
+    ],
+    "ProjectReference": []
+  },
+  "Properties": {
+    "AspireHostingSDKVersion": "9.5.0-test"
+  },
+  "Fallback": true
+}

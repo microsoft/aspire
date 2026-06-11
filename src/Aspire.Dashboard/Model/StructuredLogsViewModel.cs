@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -11,6 +13,8 @@ public class StructuredLogsViewModel
 {
     private readonly TelemetryRepository _telemetryRepository;
     private readonly List<FieldTelemetryFilter> _filters = new();
+    // Cache span lookups for GenAI attributes to avoid repeated lookups.
+    private readonly ConcurrentDictionary<SpanKey, bool> _spanGenAICache = new();
 
     private PagedResult<OtlpLogEntry>? _logs;
     private ResourceKey? _resourceKey;
@@ -29,10 +33,37 @@ public class StructuredLogsViewModel
     public string FilterText { get => _filterText; set => SetValue(ref _filterText, value); }
     public IReadOnlyList<FieldTelemetryFilter> Filters => _filters;
 
+    public bool HasGenAISpan(string traceId, string spanId)
+    {
+        // Get a flag indicating whether the span has GenAI telemetry on it.
+        // This is cached to avoid repeated lookups. The cache is cleared when logs change.
+        // It's ok that this isn't completely thread safe, i.e. get and a clear happen at the same time.
+
+        var spanKey = new SpanKey(traceId, spanId);
+
+        if (_spanGenAICache.TryGetValue(spanKey, out var value))
+        {
+            return value;
+        }
+
+        var span = _telemetryRepository.GetSpan(spanKey.TraceId, spanKey.SpanId);
+        var hasGenAISpan = false;
+
+        if (span != null)
+        {
+            // Only cache a value if a span is present.
+            // We don't want to cache false if there is no span because the span may be added later.
+            hasGenAISpan = GenAIHelpers.HasGenAIAttribute(span.Attributes);
+            _spanGenAICache.TryAdd(spanKey, hasGenAISpan);
+        }
+
+        return hasGenAISpan;
+    }
+
     public void ClearFilters()
     {
         _filters.Clear();
-        _logs = null;
+        ClearData();
     }
 
     public void AddFilter(FieldTelemetryFilter filter)
@@ -47,14 +78,14 @@ public class StructuredLogsViewModel
         }
 
         _filters.Add(filter);
-        _logs = null;
+        ClearData();
     }
 
     public bool RemoveFilter(FieldTelemetryFilter filter)
     {
         if (_filters.Remove(filter))
         {
-            _logs = null;
+            ClearData();
             return true;
         }
         return false;
@@ -72,7 +103,7 @@ public class StructuredLogsViewModel
         }
 
         field = value;
-        _logs = null;
+        ClearData();
     }
 
     public PagedResult<OtlpLogEntry> GetLogs()
@@ -84,7 +115,7 @@ public class StructuredLogsViewModel
 
             logs = _telemetryRepository.GetLogs(new GetLogsContext
             {
-                ResourceKey = ResourceKey,
+                ResourceKeys = ResourceKey is { } key ? [key] : [],
                 StartIndex = StartIndex,
                 Count = Count,
                 Filters = filters
@@ -98,7 +129,7 @@ public class StructuredLogsViewModel
 
     public List<TelemetryFilter> GetFilters()
     {
-        var filters = Filters.Cast<TelemetryFilter>().ToList();;
+        var filters = Filters.Cast<TelemetryFilter>().ToList();
         if (!string.IsNullOrWhiteSpace(FilterText))
         {
             filters.Add(new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Message), Condition = FilterCondition.Contains, Value = FilterText });
@@ -123,7 +154,7 @@ public class StructuredLogsViewModel
 
         var errorLogs = _telemetryRepository.GetLogs(new GetLogsContext
         {
-            ResourceKey = ResourceKey,
+            ResourceKeys = ResourceKey is { } key ? [key] : [],
             StartIndex = 0,
             Count = count,
             Filters = filters
@@ -135,5 +166,8 @@ public class StructuredLogsViewModel
     public void ClearData()
     {
         _logs = null;
+
+        // Clear cache whenever log data changes to prevent it growing forever.
+        _spanGenAICache.Clear();
     }
 }

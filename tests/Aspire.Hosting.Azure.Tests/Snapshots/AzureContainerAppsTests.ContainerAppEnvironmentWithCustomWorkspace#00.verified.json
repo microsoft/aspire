@@ -2,6 +2,7 @@
   "type": "azure.bicep.v0",
   "path": "env.module.bicep",
   "params": {
+    "env_acr_outputs_name": "{env-acr.outputs.name}",
     "customworkspace_outputs_name": "{customworkspace.outputs.name}",
     "userPrincipalId": ""
   }

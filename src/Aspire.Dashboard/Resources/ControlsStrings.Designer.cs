@@ -196,7 +196,16 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Table.
+        ///   Looks up a localized string similar to Parameters.
+        /// </summary>
+        public static string ChartContainerParametersTab {
+            get {
+                return ResourceManager.GetString("ChartContainerParametersTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resources.
         /// </summary>
         public static string ChartContainerTableTab {
             get {
@@ -214,7 +223,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Remove all.
+        ///   Looks up a localized string similar to Remove all telemetry.
         /// </summary>
         public static string ClearAllResources {
             get {
@@ -223,7 +232,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Remove for resource.
+        ///   Looks up a localized string similar to Remove telemetry for resource.
         /// </summary>
         public static string ClearPendingSelectedResource {
             get {
@@ -232,7 +241,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Remove for {0}.
+        ///   Looks up a localized string similar to Remove telemetry for {0}.
         /// </summary>
         public static string ClearSelectedResource {
             get {
@@ -255,6 +264,33 @@ namespace Aspire.Dashboard.Resources {
         public static string CollapseAllSpansText {
             get {
                 return ResourceManager.GetString("CollapseAllSpansText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Export JSON.
+        /// </summary>
+        public static string ExportJson {
+            get {
+                return ResourceManager.GetString("ExportJson", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Export .env.
+        /// </summary>
+        public static string ExportEnv {
+            get {
+                return ResourceManager.GetString("ExportEnv", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Download.
+        /// </summary>
+        public static string Download {
+            get {
+                return ResourceManager.GetString("Download", resourceCulture);
             }
         }
         
@@ -752,7 +788,25 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("PropertyGridValueColumnHeader", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Value not set.
+        /// </summary>
+        public static string ParameterValueNotSet {
+            get {
+                return ResourceManager.GetString("ParameterValueNotSet", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Click to set parameter value.
+        /// </summary>
+        public static string ParameterSetValueAction {
+            get {
+                return ResourceManager.GetString("ParameterSetValueAction", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Resource actions.
         /// </summary>
@@ -798,6 +852,15 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to State details.
+        /// </summary>
+        public static string ResourceDetailsStateDescriptionHeader {
+            get {
+                return ResourceManager.GetString("ResourceDetailsStateDescriptionHeader", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Type.
         /// </summary>
@@ -916,11 +979,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Duration &lt;strong&gt;{0}&lt;/strong&gt;.
+        ///   Looks up a localized string similar to Duration.
         /// </summary>
-        public static string SpanDetailsDuration {
+        public static string SpanDetailsDurationLabel {
             get {
-                return ResourceManager.GetString("SpanDetailsDuration", resourceCulture);
+                return ResourceManager.GetString("SpanDetailsDurationLabel", resourceCulture);
             }
         }
         
@@ -943,11 +1006,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Resource &lt;strong&gt;{0}&lt;/strong&gt;.
+        ///   Looks up a localized string similar to Resource.
         /// </summary>
-        public static string SpanDetailsResource {
+        public static string SpanDetailsResourceLabel {
             get {
-                return ResourceManager.GetString("SpanDetailsResource", resourceCulture);
+                return ResourceManager.GetString("SpanDetailsResourceLabel", resourceCulture);
             }
         }
         
@@ -988,11 +1051,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Start time &lt;strong&gt;{0}&lt;/strong&gt;.
+        ///   Looks up a localized string similar to Start time.
         /// </summary>
-        public static string SpanDetailsStartTime {
+        public static string SpanDetailsStartTimeLabel {
             get {
-                return ResourceManager.GetString("SpanDetailsStartTime", resourceCulture);
+                return ResourceManager.GetString("SpanDetailsStartTimeLabel", resourceCulture);
             }
         }
         
@@ -1087,11 +1150,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Resource &lt;strong&gt;{0}&lt;/strong&gt;.
+        ///   Looks up a localized string similar to Resource.
         /// </summary>
-        public static string StructuredLogsDetailsResource {
+        public static string StructuredLogsDetailsResourceLabel {
             get {
-                return ResourceManager.GetString("StructuredLogsDetailsResource", resourceCulture);
+                return ResourceManager.GetString("StructuredLogsDetailsResourceLabel", resourceCulture);
             }
         }
         
@@ -1105,11 +1168,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Timestamp &lt;strong&gt;{0}&lt;/strong&gt;.
+        ///   Looks up a localized string similar to Timestamp.
         /// </summary>
-        public static string StructuredLogsDetailsTimestamp {
+        public static string StructuredLogsDetailsTimestampLabel {
             get {
-                return ResourceManager.GetString("StructuredLogsDetailsTimestamp", resourceCulture);
+                return ResourceManager.GetString("StructuredLogsDetailsTimestampLabel", resourceCulture);
             }
         }
         

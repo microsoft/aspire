@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -43,7 +44,7 @@ public partial class AspirePageContentLayout : ComponentBase
     public bool IsSummaryDetailsViewOpen { get; set; }
 
     [Inject]
-    public required IDialogService DialogService { get; init; }
+    public required DashboardDialogService DialogService { get; init; }
 
     private IDialogReference? _toolbarPanel;
 
@@ -80,7 +81,6 @@ public partial class AspirePageContentLayout : ComponentBase
             {
                 Alignment = HorizontalAlignment.Center,
                 Title = MobileToolbarButtonText ?? ControlsStringsLoc[nameof(ControlsStrings.ChartContainerFiltersHeader)],
-                DismissTitle = DialogsLoc[nameof(Resources.Dialogs.DialogCloseButtonText)],
                 Width = "100%",
                 Height = "90%",
                 Modal = false,

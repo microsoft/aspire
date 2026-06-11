@@ -11,7 +11,7 @@ Offers options for registering an [EventHubProducerClient](https://learn.microso
 
 ### Install the package
 
-Install the .NET Aspire Azure Event Hubs library with [NuGet](https://www.nuget.org):
+Install the Aspire Azure Event Hubs library with [NuGet](https://www.nuget.org):
 
 ```dotnetcli
 dotnet add package Aspire.Azure.Messaging.EventHubs
@@ -56,7 +56,7 @@ See the [Azure.Messaging.EventHubs documentation](https://github.com/Azure/azure
 
 ## Configuration
 
-The .NET Aspire Azure Event Hubs library provides multiple options to configure the Azure Event Hubs connection based on the requirements and conventions of your project. Note that either a `FullyQualifiedNamespace` or a `ConnectionString` is a required to be supplied.
+The Aspire Azure Event Hubs library provides multiple options to configure the Azure Event Hubs connection based on the requirements and conventions of your project. Note that either a `FullyQualifiedNamespace` or a `ConnectionString` is a required to be supplied.
 
 ### Use a connection string
 
@@ -74,7 +74,7 @@ And then the connection information will be retrieved from the `ConnectionString
 
 #### Fully Qualified Namespace
 
-The recommended approach is to use a fully qualified namespace, which works with the `AzureMessagingEventHubsSettings.Credential` property to establish a connection. If no credential is configured, the [DefaultAzureCredential](https://learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential) is used.
+The recommended approach is to use a fully qualified namespace, which works with the `AzureMessagingEventHubsSettings.Credential` property to establish a connection. If no credential is configured, a [default TokenCredential is created based on the current environment](https://aka.ms/aspire/default-azure-credential).
 
 ```json
 {
@@ -98,7 +98,7 @@ Alternatively, use a connection string:
 
 ### Use configuration providers
 
-The .NET Aspire Azure Event Hubs library supports [Microsoft.Extensions.Configuration](https://learn.microsoft.com/dotnet/api/microsoft.extensions.configuration). It loads the `AzureMessagingEventHubsSettings` and the associated Options, e.g. `EventProcessorClientOptions`, from configuration by using the `Aspire:Azure:Messaging:EventHubs:` key prefix, followed by the name of the specific client in use. Example `appsettings.json` that configures some of the options for an `EventProcessorClient`:
+The Aspire Azure Event Hubs library supports [Microsoft.Extensions.Configuration](https://learn.microsoft.com/dotnet/api/microsoft.extensions.configuration). It loads the `AzureMessagingEventHubsSettings` and the associated Options, e.g. `EventProcessorClientOptions`, from configuration by using the `Aspire:Azure:Messaging:EventHubs:` key prefix, followed by the name of the specific client in use. Example `appsettings.json` that configures some of the options for an `EventProcessorClient`:
 
 ```json
 {
@@ -162,9 +162,10 @@ builder.AddAzureEventProcessorClient("eventHubsConnectionName", settings =>
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/cloud/azure/azure-event-hubs/
 * https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/eventhub/Microsoft.Azure.EventHubs/README.md
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

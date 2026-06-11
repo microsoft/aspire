@@ -72,8 +72,6 @@ Future iterations may add CLI-specific tools or independent implementations, but
 ### Command Structure
 The MCP server is exposed via the `aspire mcp` CLI command, implemented in `McpCommand.cs`.
 
-**Feature Flag**: The command is gated behind the `mcpCommandEnabled` feature flag (defined in `KnownFeatures.cs`).
-
 ### Transport
 The CLI MCP server uses **stdio (standard input/output) transport**, which:
 - Eliminates TLS/certificate concerns present with HTTPS
@@ -335,11 +333,6 @@ All other tools match the Dashboard MCP server's tool list and are forwarded for
 - **Rationale**: Solves certificate compatibility issues with Node.js-based clients; required for GitHub CCA and similar agents
 - **Alternative considered**: HTTP/HTTPS server
 - **Trade-offs**: Less flexible than HTTP, but perfect fit for agent workflows
-
-**Decision: Feature flag for `aspire mcp` command**
-- **Rationale**: Allows iterative rollout and testing before general availability
-- **Alternative considered**: Ship directly without flag
-- **Trade-offs**: Extra configuration step, but safer rollout
  
 ## References
 

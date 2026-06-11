@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.RabbitMQ.Tests;
 
-public class RabbitMQPublicApiTests
+public class RabbitMQPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddRabbitMQShouldThrowWhenBuilderIsNull()
@@ -25,7 +25,7 @@ public class RabbitMQPublicApiTests
     [InlineData(false)]
     public void AddRabbitMQShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddRabbitMQ(name);
@@ -64,7 +64,7 @@ public class RabbitMQPublicApiTests
     [InlineData(false)]
     public void WithDataBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var rabbitMQ = builder.AddRabbitMQ("rabbitMQ");
         var source = isNull ? null! : string.Empty;
 
@@ -104,7 +104,7 @@ public class RabbitMQPublicApiTests
     [InlineData(false)]
     public void CtorRabbitMQServerResourceShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var name = isNull ? null! : string.Empty;
         const string passwordValue = nameof(passwordValue);
         ParameterResource? userName = null;

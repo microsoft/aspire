@@ -9,4 +9,6 @@ resource webPubSub 'Microsoft.SignalRService/webPubSub@2024-03-01' existing = {
 
 output endpoint string = 'https://${webPubSub.properties.hostName}'
 
-output name string = existingResourceName
+output name string = webPubSub.name
+
+output id string = webPubSub.id

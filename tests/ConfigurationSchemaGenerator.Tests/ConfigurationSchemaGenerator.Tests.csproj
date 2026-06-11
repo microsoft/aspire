@@ -20,7 +20,7 @@
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Newtonsoft.Json" />
-    <PackageReference Include="System.Text.Json" VersionOverride="9.0.7" />
+    <PackageReference Include="System.Text.Json" VersionOverride="10.0.1" />
   </ItemGroup>
 
   <ItemGroup>

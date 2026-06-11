@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAspireSharedProject>true</IsAspireSharedProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="!!REPLACE_WITH_DOTNET_EXTENSIONS_VERSION!!" />
+    <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="!!REPLACE_WITH_SERVICE_DISCOVERY_VERSION!!" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="!!REPLACE_WITH_OTEL_EXPORTER_VERSION!!" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="!!REPLACE_WITH_OTEL_HOSTING_VERSION!!" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="!!REPLACE_WITH_OTEL_ASPNETCORE_VERSION!!" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="!!REPLACE_WITH_OTEL_HTTP_VERSION!!" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="!!REPLACE_WITH_OTEL_RUNTIME_VERSION!!" />
+  </ItemGroup>
+
+</Project>

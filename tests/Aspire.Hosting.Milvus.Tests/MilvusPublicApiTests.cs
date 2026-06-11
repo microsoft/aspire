@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Milvus.Tests;
 
-public class MilvusPublicApiTests
+public class MilvusPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [InlineData(true)]
@@ -40,7 +40,7 @@ public class MilvusPublicApiTests
     [InlineData(false)]
     public void AddMilvusShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddMilvus(name);
@@ -68,7 +68,7 @@ public class MilvusPublicApiTests
     [InlineData(false)]
     public void AddDatabaseShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMilvus("Milvus");
         var name = isNull ? null! : string.Empty;
 
@@ -119,7 +119,7 @@ public class MilvusPublicApiTests
     [InlineData(false)]
     public void WithDataBindMountShouldThrowWhenSourceIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMilvus("Milvus");
         var source = isNull ? null! : string.Empty;
 
@@ -150,7 +150,7 @@ public class MilvusPublicApiTests
     [InlineData(false)]
     public void WithConfigurationBindMountShouldThrowWhenConfigurationFilePathIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMilvus("Milvus");
         string configurationFilePath = isNull ? null! : string.Empty;
 
@@ -181,7 +181,7 @@ public class MilvusPublicApiTests
     [InlineData(false)]
     public void WithConfigurationFileShouldThrowWhenConfigurationFilePathIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create()
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
             .AddMilvus("Milvus");
         string configurationFilePath = isNull ? null! : string.Empty;
 

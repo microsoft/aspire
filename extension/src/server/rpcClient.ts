@@ -10,6 +10,7 @@ export interface ICliRpcClient {
     getCliVersion(): Promise<string>;
     validatePromptInputString(input: string): Promise<ValidationResult | null>;
     stopCli(): Promise<void>;
+    getCliCapabilities(): Promise<string[]>;
 }
 
 export type ValidationResult = {
@@ -30,10 +31,11 @@ export class RpcClient implements ICliRpcClient {
         this._messageConnection = messageConnection;
         this._connectionClosed = false;
         this.debugSessionId = debugSessionId;
-        this.interactionService = new InteractionService(getAspireDebugSession, this);
+        this.interactionService = new InteractionService(getAspireDebugSession, this, () => terminalProvider.getAspireTerminal());
 
         this._messageConnection.onClose(() => {
             this._connectionClosed = true;
+            this.interactionService.clearProgressNotification();
             extensionLogOutputChannel.info('JSON-RPC connection closed');
         });
     }
@@ -63,6 +65,22 @@ export class RpcClient implements ICliRpcClient {
     async stopCli() {
         if (!this._connectionClosed) {
             await this._messageConnection.sendRequest('stopCli');
+        }
+    }
+
+    async getCliCapabilities(): Promise<string[]> {
+        try {
+            return await logAsyncOperation(
+                `Requesting CLI capabilities from CLI`,
+                (capabilities: string[]) => `Received CLI capabilities: ${capabilities.join(', ')}`,
+                async () => {
+                    return await this._messageConnection.sendRequest<string[]>('getCliCapabilities');
+                }
+            );
+        } catch (error) {
+            // Old CLI versions don't support getCliCapabilities, return empty array
+            extensionLogOutputChannel.info(`CLI does not support getCliCapabilities (error: ${error}), assuming no capabilities`);
+            return [];
         }
     }
 }

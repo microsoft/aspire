@@ -12,6 +12,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// A resource that represents a Redis resource independent of the hosting model.
 /// </remarks>
 /// <param name="name">The name of the resource.</param>
+[AspireExport(ExposeProperties = true)]
 public class RedisResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
     /// <summary>
@@ -29,6 +30,16 @@ public class RedisResource(string name) : ContainerResource(name), IResourceWith
 
     // The non-TLS endpoint if TLS is enabled, otherwise not allocated
     internal const string SecondaryEndpointName = "secondary";
+
+    /// <summary>
+    /// The standard URI scheme registered for Redis, similar to http. See: https://github.com/redis/redis-specifications/blob/1252427cdbc497f66a7f8550c6b5f2f35367dc92/uri/redis.txt
+    /// </summary>
+    internal const string StandardRedisScheme = "redis";
+
+    /// <summary>
+    /// The TLS URI scheme registered for Redis, similar to https. See: https://github.com/redis/redis-specifications/blob/1252427cdbc497f66a7f8550c6b5f2f35367dc92/uri/rediss.txt
+    /// </summary>
+    internal const string TlsRedisScheme = "rediss";
 
     private EndpointReference? _primaryEndpoint;
 
@@ -53,9 +64,17 @@ public class RedisResource(string name) : ContainerResource(name), IResourceWith
     public ParameterResource? PasswordParameter { get; private set; }
 
     /// <summary>
-    /// Determines whether Tls is enabled for the resource
+    /// Indicates whether TLS is enabled for the Redis server.
     /// </summary>
-    public bool TlsEnabled { get; internal set; }
+    /// <remarks>
+    /// This property proxies through to <see cref="EndpointAnnotation.TlsEnabled"/> on the
+    /// <see cref="PrimaryEndpoint"/>. When set to <see langword="true"/>, the connection string
+    /// expression dynamically includes <c>,ssl=true</c> and the URI expression uses the
+    /// <c>rediss://</c> scheme. This value is resolved lazily at expression evaluation time,
+    /// avoiding timing issues when TLS is enabled later in the application lifecycle
+    /// (e.g., during the <c>BeforeStartEvent</c>).
+    /// </remarks>
+    public bool TlsEnabled => PrimaryEndpoint.TlsEnabled;
 
     /// <summary>
     /// Arguments for the Dockerfile
@@ -72,10 +91,9 @@ public class RedisResource(string name) : ContainerResource(name), IResourceWith
             builder.Append($",password={PasswordParameter}");
         }
 
-        if (TlsEnabled)
-        {
-            builder.Append($",ssl=true");
-        }
+        builder.Append($"{PrimaryEndpoint.GetTlsValue(
+            enabledValue: ReferenceExpression.Create($",ssl=true"),
+            disabledValue: ReferenceExpression.Empty)}");
 
         return builder.Build();
     }
@@ -127,14 +145,8 @@ public class RedisResource(string name) : ContainerResource(name), IResourceWith
         get
         {
             var builder = new ReferenceExpressionBuilder();
-            if (TlsEnabled)
-            {
-                builder.AppendLiteral("rediss://");
-            }
-            else
-            {
-                builder.AppendLiteral("redis://");
-            }
+            builder.Append($"{PrimaryEndpoint.Property(EndpointProperty.Scheme)}");
+            builder.AppendLiteral("://");
 
             if (PasswordParameter is not null)
             {

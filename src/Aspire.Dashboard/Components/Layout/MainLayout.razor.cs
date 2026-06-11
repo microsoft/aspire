@@ -30,7 +30,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private IDisposable? _aiDisplayChangedSubscription;
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
-    private const string McpDialogId = "McpServerDialog";
+    private const string NotificationsDialogId = "NotificationsDialog";
+    private const string AIAgentsDialogId = "AIAgentsDialog";
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
@@ -48,13 +49,10 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Resources.Dialogs> DialogsLoc { get; init; }
-
-    [Inject]
     public required IStringLocalizer<Resources.AIAssistant> AIAssistantLoc { get; init; }
 
     [Inject]
-    public required IDialogService DialogService { get; init; }
+    public required DashboardDialogService DialogService { get; init; }
 
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
@@ -115,7 +113,14 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
         TimeProvider.SetBrowserTimeZone(result.TimeZone);
+        TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
         TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
+
+        var timeFormatResult = await LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
+        if (timeFormatResult.Success)
+        {
+            TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
+        }
 
         await DisplayUnsecuredEndpointsMessageAsync();
 
@@ -129,9 +134,9 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         {
             unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointTelemetryBody)]);
         }
-        if (ShouldShowUnsecuredMcpMessage())
+        if (ShouldShowUnsecuredApiMessage())
         {
-            unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointMcpBody)]);
+            unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointApiBody)]);
         }
 
         if (unsecuredEndpointsMessage.Length > 0)
@@ -174,12 +179,17 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private bool ShouldShowUnsecuredTelemetryMessage()
     {
-        return Options.CurrentValue.Otlp.AuthMode == OtlpAuthMode.Unsecured && !Options.CurrentValue.Otlp.SuppressUnsecuredMessage;
+        // Only show warning if at least one OTLP endpoint is configured
+        return (Options.CurrentValue.Otlp.GetGrpcEndpointAddress() != null || Options.CurrentValue.Otlp.GetHttpEndpointAddress() != null) &&
+               Options.CurrentValue.Otlp.AuthMode == OtlpAuthMode.Unsecured &&
+               !Options.CurrentValue.Otlp.SuppressUnsecuredMessage;
     }
 
-    private bool ShouldShowUnsecuredMcpMessage()
+    private bool ShouldShowUnsecuredApiMessage()
     {
-        return Options.CurrentValue.Mcp.AuthMode == McpAuthMode.Unsecured && !Options.CurrentValue.Mcp.SuppressUnsecuredMessage;
+        // Only show warning if API is enabled and unsecured
+        return !Options.CurrentValue.Api.Disabled.GetValueOrDefault() &&
+               Options.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -203,40 +213,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    private async Task LaunchMcpAsync()
-    {
-        DialogParameters parameters = new()
-        {
-            Title = "Aspire MCP server",
-            DismissTitle = DialogsLoc[nameof(Resources.Dialogs.DialogCloseButtonText)],
-            PrimaryAction = null,
-            SecondaryAction = null,
-            TrapFocus = true,
-            Modal = true,
-            Width = "min(800px, 100vw)",
-            Id = McpDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
-        };
-
-        if (_openPageDialog is not null)
-        {
-            if (Equals(_openPageDialog.Id, McpDialogId))
-            {
-                return;
-            }
-
-            await _openPageDialog.CloseAsync();
-        }
-
-        _openPageDialog = await DialogService.ShowDialogAsync<McpServerDialog>(parameters).ConfigureAwait(true);
-    }
-
     private async Task LaunchHelpAsync()
     {
         DialogParameters parameters = new()
         {
             Title = Loc[nameof(Resources.Layout.MainLayoutAspireDashboardHelpLink)],
-            DismissTitle = DialogsLoc[nameof(Resources.Dialogs.DialogCloseButtonText)],
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)],
             PrimaryActionEnabled = true,
             SecondaryAction = null,
@@ -251,7 +232,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         if (_openPageDialog is not null)
         {
-            if (Equals(_openPageDialog.Id, HelpDialogId))
+            if (Equals(_openPageDialog.Id, HelpDialogId) && !_openPageDialog.Result.IsCompleted)
             {
                 return;
             }
@@ -267,12 +248,41 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         _openPageDialog = null;
     }
 
+    public async Task LaunchAIAgentsAsync()
+    {
+        DialogParameters parameters = new()
+        {
+            Title = Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)],
+            PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)],
+            PrimaryActionEnabled = true,
+            SecondaryAction = null,
+            TrapFocus = true,
+            Modal = true,
+            Alignment = HorizontalAlignment.Center,
+            Width = "700px",
+            Height = "auto",
+            Id = AIAgentsDialogId,
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+        };
+
+        if (_openPageDialog is not null)
+        {
+            if (Equals(_openPageDialog.Id, AIAgentsDialogId) && !_openPageDialog.Result.IsCompleted)
+            {
+                return;
+            }
+
+            await _openPageDialog.CloseAsync();
+        }
+
+        _openPageDialog = await DialogService.ShowDialogAsync<AIAgentsDialog>(parameters).ConfigureAwait(true);
+    }
+
     public async Task LaunchSettingsAsync()
     {
         var parameters = new DialogParameters
         {
             Title = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogTitle)],
-            DismissTitle = DialogsLoc[nameof(Resources.Dialogs.DialogCloseButtonText)],
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)].Value,
             SecondaryAction = null,
             TrapFocus = true,
@@ -286,7 +296,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         if (_openPageDialog is not null)
         {
-            if (Equals(_openPageDialog.Id, SettingsDialogId))
+            if (Equals(_openPageDialog.Id, SettingsDialogId) && !_openPageDialog.Result.IsCompleted)
             {
                 return;
             }
@@ -304,6 +314,42 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         else
         {
             _openPageDialog = await DialogService.ShowDialogAsync<SettingsDialog>(parameters).ConfigureAwait(true);
+        }
+    }
+
+    public async Task LaunchNotificationsAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            Title = Loc[nameof(Resources.Layout.MainLayoutNotificationCenterTitle)],
+            PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)].Value,
+            SecondaryAction = null,
+            TrapFocus = true,
+            Modal = true,
+            Alignment = HorizontalAlignment.Right,
+            Width = "350px",
+            Height = "auto",
+            Id = NotificationsDialogId,
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+        };
+
+        if (_openPageDialog is not null)
+        {
+            if (Equals(_openPageDialog.Id, NotificationsDialogId) && !_openPageDialog.Result.IsCompleted)
+            {
+                return;
+            }
+
+            await _openPageDialog.CloseAsync();
+        }
+
+        if (ViewportInformation.IsDesktop)
+        {
+            _openPageDialog = await DialogService.ShowPanelAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
+        }
+        else
+        {
+            _openPageDialog = await DialogService.ShowDialogAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
         }
     }
 
