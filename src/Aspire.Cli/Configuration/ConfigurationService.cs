@@ -43,12 +43,17 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             settings = new JsonObject();
         }
 
+        // Canonicalize existing legacy "packages" before applying the new value. Otherwise setting
+        // "integrations.<name>" in a legacy-only file would create both top-level keys, and the
+        // conflict resolution below would treat the just-created "integrations" key as authoritative
+        // and drop the existing legacy entries.
+        AspireConfigFile.NormalizeLegacyIntegrationsKey(settings);
+
+        // Accept the old config-set spelling while continuing to write only the canonical key.
+        key = NormalizeSetKey(key);
+
         // Set the configuration value using dot notation support
         SetNestedValue(settings, key, value);
-
-        // Migrate any legacy "packages" key to "integrations" before writing so a legacy-keyed file
-        // is updated in place and we never leave a dual-key ("packages" + "integrations") file on disk.
-        AspireConfigFile.NormalizeLegacyIntegrationsKey(settings);
 
         await ConfigurationHelper.WriteSettingsFileAsync(settingsFilePath, settings, cancellationToken);
     }
@@ -86,7 +91,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             var normalized = AspireConfigFile.NormalizeLegacyIntegrationsKey(settings);
 
             // Delete using dot notation support and return whether deletion occurred
-            var deleted = DeleteNestedValue(settings, key);
+            var deleted = DeleteNestedValue(settings, NormalizeSetKey(key));
 
             if (deleted || normalized)
             {
@@ -238,6 +243,11 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // This prevents duplicate key errors when loading the configuration
         RemoveConflictingFlattenedKeys(settings, keyParts);
 
+        if (TrySetIntegrationReferenceValue(settings, keyParts, value))
+        {
+            return;
+        }
+
         var currentObject = settings;
 
         // Navigate to the parent object, creating objects as needed
@@ -257,6 +267,49 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Set the final value
         var finalKey = keyParts[keyParts.Length - 1];
         currentObject[finalKey] = value;
+    }
+
+    private static bool TrySetIntegrationReferenceValue(JsonObject settings, string[] keyParts, string value)
+    {
+        if (!IsIntegrationReferenceKey(keyParts))
+        {
+            return false;
+        }
+
+        if (!settings.ContainsKey(AspireConfigFile.IntegrationsKey) || settings[AspireConfigFile.IntegrationsKey] is not JsonObject)
+        {
+            settings[AspireConfigFile.IntegrationsKey] = new JsonObject();
+        }
+
+        // Integration references are a dictionary whose keys are package IDs like
+        // "Aspire.Hosting.Redis". After the "integrations" segment, the remaining dots belong to
+        // the package ID and must not be interpreted as additional JSON nesting.
+        var integrationName = GetIntegrationReferenceName(keyParts);
+        var integrations = settings[AspireConfigFile.IntegrationsKey]!.AsObject();
+        integrations[integrationName] = value;
+        return true;
+    }
+
+    private static bool IsIntegrationReferenceKey(string[] keyParts) =>
+        keyParts.Length > 1 && string.Equals(keyParts[0], AspireConfigFile.IntegrationsKey, StringComparison.OrdinalIgnoreCase);
+
+    private static string GetIntegrationReferenceName(string[] keyParts) =>
+        string.Join(".", keyParts.Skip(1));
+
+    private static string NormalizeSetKey(string key)
+    {
+        var normalizedKey = key.Replace(':', '.');
+        var keyParts = normalizedKey.Split('.');
+
+        if (keyParts.Length > 0 &&
+            (string.Equals(keyParts[0], AspireConfigFile.LegacyPackagesKey, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(keyParts[0], AspireConfigFile.IntegrationsKey, StringComparison.OrdinalIgnoreCase)))
+        {
+            keyParts[0] = AspireConfigFile.IntegrationsKey;
+            return string.Join(".", keyParts);
+        }
+
+        return normalizedKey;
     }
 
     /// <summary>
@@ -294,6 +347,11 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         key = key.Replace(':', '.');
 
         var keyParts = key.Split('.');
+
+        if (TryDeleteIntegrationReferenceValue(settings, keyParts, out var deletedIntegrationReference))
+        {
+            return deletedIntegrationReference;
+        }
 
         // Remove any flat colon-separated key at root level (legacy format)
         var flattenedKey = string.Join(":", keyParts);
@@ -347,6 +405,37 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         return true;
     }
 
+    private static bool TryDeleteIntegrationReferenceValue(JsonObject settings, string[] keyParts, out bool deleted)
+    {
+        deleted = false;
+
+        if (!IsIntegrationReferenceKey(keyParts))
+        {
+            return false;
+        }
+
+        var integrationName = GetIntegrationReferenceName(keyParts);
+
+        // Remove both the canonical flattened form produced by IConfiguration for dictionary keys
+        // ("integrations:Aspire.Hosting.Redis") and the split-all-dots form older normalization could
+        // create ("integrations:Aspire:Hosting:Redis").
+        deleted |= settings.Remove($"{AspireConfigFile.IntegrationsKey}:{integrationName}");
+        deleted |= settings.Remove($"{AspireConfigFile.LegacyPackagesKey}:{integrationName}");
+        deleted |= settings.Remove(string.Join(":", keyParts));
+
+        if (settings[AspireConfigFile.IntegrationsKey] is JsonObject integrations)
+        {
+            deleted |= integrations.Remove(integrationName);
+
+            if (integrations.Count == 0)
+            {
+                settings.Remove(AspireConfigFile.IntegrationsKey);
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// Recursively flattens a JsonObject into a dictionary with dot notation keys.
     /// </summary>
@@ -371,8 +460,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
     public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
     {
-        // Convert dot notation to colon notation for IConfiguration access
-        var configKey = key.Replace('.', ':');
+        var configKey = NormalizeConfigurationLookupKey(key);
         return Task.FromResult(configuration[configKey]);
     }
 
@@ -380,7 +468,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     {
         ArgumentNullException.ThrowIfNull(startDirectory);
 
-        var configKey = key.Replace('.', ':');
+        var configKey = NormalizeConfigurationLookupKey(key);
 
         // 1. Project-relative local settings: walk up from startDirectory to find the nearest
         //    config file. Most command lookups stop at that file, even when it omits the key,
@@ -432,6 +520,26 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         }
 
         return Task.FromResult<string?>(null);
+    }
+
+    private static string NormalizeConfigurationLookupKey(string key)
+    {
+        var normalizedKey = key.Replace(':', '.');
+        var keyParts = normalizedKey.Split('.');
+
+        if (keyParts.Length > 0 &&
+            (string.Equals(keyParts[0], AspireConfigFile.LegacyPackagesKey, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(keyParts[0], AspireConfigFile.IntegrationsKey, StringComparison.OrdinalIgnoreCase)))
+        {
+            keyParts[0] = AspireConfigFile.IntegrationsKey;
+
+            if (IsIntegrationReferenceKey(keyParts))
+            {
+                return $"{AspireConfigFile.IntegrationsKey}:{GetIntegrationReferenceName(keyParts)}";
+            }
+        }
+
+        return normalizedKey.Replace('.', ':');
     }
 
     private static bool TryReadConfigurationValue(string settingsFilePath, string configKey, [NotNullWhen(true)] out string? value)

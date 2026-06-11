@@ -196,6 +196,8 @@ internal sealed class AspireConfigFile
     /// <see cref="AspireConfigFile"/>) observe integration references under the new key. When
     /// <c>"integrations"</c> is already present (even as <c>null</c> or <c>{}</c>) the new key wins and
     /// the legacy <c>"packages"</c> entry is dropped, mirroring <see cref="MergeLegacyPackages"/>.
+    /// Also flattens malformed nested integration objects produced by older dot-notation writes
+    /// back into dictionary entries.
     /// </summary>
     /// <returns>
     /// <c>true</c> when the object was mutated (legacy <c>"packages"</c> was renamed or dropped);
@@ -205,15 +207,23 @@ internal sealed class AspireConfigFile
     /// </returns>
     internal static bool NormalizeLegacyIntegrationsKey(JsonObject root)
     {
+        var mutated = false;
+
         // Match the case-insensitive property binding the serializer uses (PropertyNameCaseInsensitive
         // = true) so e.g. "Integrations" is still treated as the new key.
         var legacyKey = FindKeyIgnoreCase(root, LegacyPackagesKey);
-        if (legacyKey is null)
+        var integrationsKey = FindKeyIgnoreCase(root, IntegrationsKey);
+
+        if (integrationsKey is not null)
         {
-            return false;
+            mutated |= NormalizeIntegrationReferenceObject(root, integrationsKey);
         }
 
-        var integrationsKey = FindKeyIgnoreCase(root, IntegrationsKey);
+        if (legacyKey is null)
+        {
+            return mutated;
+        }
+
         if (integrationsKey is not null)
         {
             // Both keys present: the new "integrations" key wins and the legacy "packages" entry is
@@ -226,7 +236,53 @@ internal sealed class AspireConfigFile
         var node = root[legacyKey]?.DeepClone();
         root.Remove(legacyKey);
         root[IntegrationsKey] = node;
+        NormalizeIntegrationReferenceObject(root, IntegrationsKey);
         return true;
+    }
+
+    private static bool NormalizeIntegrationReferenceObject(JsonObject root, string integrationsKey)
+    {
+        if (root[integrationsKey] is not JsonObject integrations)
+        {
+            return false;
+        }
+
+        var flattened = new JsonObject();
+        var mutated = FlattenIntegrationReferenceObject(integrations, flattened, prefix: string.Empty);
+
+        if (!mutated)
+        {
+            return false;
+        }
+
+        root[integrationsKey] = flattened;
+        return true;
+    }
+
+    private static bool FlattenIntegrationReferenceObject(JsonObject source, JsonObject target, string prefix)
+    {
+        var mutated = false;
+
+        foreach (var kvp in source)
+        {
+            var key = string.IsNullOrEmpty(prefix) ? kvp.Key : $"{prefix}.{kvp.Key}";
+
+            if (kvp.Value is JsonObject nestedObject)
+            {
+                // Older config-set code treated package IDs such as "Aspire.Hosting.Redis" as a
+                // dotted JSON path. Integrations are a dictionary, so flatten nested objects back
+                // into the package ID string before callers read or persist the config.
+                mutated = true;
+                FlattenIntegrationReferenceObject(nestedObject, target, key);
+            }
+            else
+            {
+                target[key] = kvp.Value?.DeepClone();
+                mutated |= !string.Equals(key, kvp.Key, StringComparison.Ordinal);
+            }
+        }
+
+        return mutated;
     }
 
     private static string? FindKeyIgnoreCase(JsonObject root, string name)
@@ -258,7 +314,8 @@ internal sealed class AspireConfigFile
         try
         {
             var json = File.ReadAllText(filePath);
-            var config = JsonSerializer.Deserialize(json, JsonSourceGenerationContext.Default.AspireConfigFile)
+            var normalizedJson = NormalizeJsonForDeserialization(json);
+            var config = JsonSerializer.Deserialize(normalizedJson, JsonSourceGenerationContext.Default.AspireConfigFile)
                 ?? new AspireConfigFile();
             config.MergeLegacyPackages(integrationsExplicitlySet: ContainsIntegrationsKey(json));
             return config;
@@ -269,6 +326,17 @@ internal sealed class AspireConfigFile
                 string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidJsonInConfigFile, filePath, ex.Message),
                 ex.Path, ex.LineNumber, ex.BytePositionInLine, ex);
         }
+    }
+
+    private static string NormalizeJsonForDeserialization(string json)
+    {
+        var node = JsonNode.Parse(json, documentOptions: ConfigurationHelper.ParseOptions);
+        if (node is not JsonObject settings)
+        {
+            return json;
+        }
+
+        return NormalizeLegacyIntegrationsKey(settings) ? settings.ToJsonString() : json;
     }
 
     /// <summary>
