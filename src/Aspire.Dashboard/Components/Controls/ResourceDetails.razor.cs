@@ -117,7 +117,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
     internal IQueryable<DisplayedResourcePropertyViewModel> FilteredResourceProperties =>
         GetResourceProperties(ordered: true)
-            .Where(vm => (_showAll || vm.KnownProperty != null) && vm.MatchesFilter(_filter))
+            .Where(vm => (_showAll || vm.KnownProperty != null || vm.IsHighlighted) && vm.MatchesFilter(_filter))
             .AsQueryable();
 
     private bool _isVolumesExpanded;
@@ -169,7 +169,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                     property.KnownProperty?.Key == KnownProperties.Parameter.Value &&
                     property.IsValueSensitive)
                 {
-                    displayedProperty = new ResourcePropertyViewModel(property.Name, property.Value, isValueSensitive: false, property.KnownProperty, property.Priority);
+                    displayedProperty = new ResourcePropertyViewModel(property.Name, property.Value, isValueSensitive: false, property.KnownProperty, property.Priority, property.DisplayName, property.IsHighlighted);
                 }
 
                 _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));

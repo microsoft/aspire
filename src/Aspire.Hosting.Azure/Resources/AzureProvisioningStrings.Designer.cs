@@ -673,5 +673,122 @@ namespace Aspire.Hosting.Azure.Resources {
                 return ResourceManager.GetString("ReprovisionResourceCommandSuccess", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure error code.
+        /// </summary>
+        internal static string FailurePropertyCodeDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyCodeDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure correlation ID.
+        /// </summary>
+        internal static string FailurePropertyCorrelationIdDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyCorrelationIdDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure current location.
+        /// </summary>
+        internal static string FailurePropertyCurrentLocationDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyCurrentLocationDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure HTTP status.
+        /// </summary>
+        internal static string FailurePropertyHttpStatusDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyHttpStatusDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure error message.
+        /// </summary>
+        internal static string FailurePropertyMessageDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyMessageDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation.
+        /// </summary>
+        internal static string FailurePropertyOperationDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyOperationDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure provider.
+        /// </summary>
+        internal static string FailurePropertyProviderDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyProviderDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure recommended actions.
+        /// </summary>
+        internal static string FailurePropertyRecommendedActionsDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyRecommendedActionsDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure request ID.
+        /// </summary>
+        internal static string FailurePropertyRequestIdDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyRequestIdDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure resource name.
+        /// </summary>
+        internal static string FailurePropertyResourceNameDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyResourceNameDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure resource type.
+        /// </summary>
+        internal static string FailurePropertyResourceTypeDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyResourceTypeDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure supported locations.
+        /// </summary>
+        internal static string FailurePropertySupportedLocationsDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertySupportedLocationsDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure target resource ID.
+        /// </summary>
+        internal static string FailurePropertyTargetResourceIdDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyTargetResourceIdDisplayName", resourceCulture);
+            }
+        }
     }
 }

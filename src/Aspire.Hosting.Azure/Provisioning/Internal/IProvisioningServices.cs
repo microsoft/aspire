@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
 using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
@@ -148,6 +149,17 @@ internal interface IArmClient
     Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets Azure locations that support the specified resource type.
+    /// </summary>
+    Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+    {
+        _ = subscriptionId;
+        _ = resourceType;
+        _ = cancellationToken;
+        return Task.FromResult(Enumerable.Empty<string>());
+    }
+
+    /// <summary>
     /// Gets role assignments collection for the specified scope.
     /// </summary>
     IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope);
@@ -171,6 +183,22 @@ internal interface IArmClient
     /// Gets Azure resource IDs targeted by the specified deployment.
     /// </summary>
     IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets Azure deployment operations for the specified deployment.
+    /// </summary>
+    async IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(
+        string deploymentId,
+        bool recursive = true,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        _ = deploymentId;
+        _ = recursive;
+        _ = cancellationToken;
+
+        await Task.CompletedTask.ConfigureAwait(false);
+        yield break;
+    }
 }
 
 /// <summary>

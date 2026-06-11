@@ -324,4 +324,43 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   <data name="DeleteAzureResourcesCommandSuccess" xml:space="preserve">
     <value>Azure resources deleted and provisioning state reset.</value>
   </data>
+  <data name="FailurePropertyCodeDisplayName" xml:space="preserve">
+    <value>Azure error code</value>
+  </data>
+  <data name="FailurePropertyCorrelationIdDisplayName" xml:space="preserve">
+    <value>Azure correlation ID</value>
+  </data>
+  <data name="FailurePropertyCurrentLocationDisplayName" xml:space="preserve">
+    <value>Azure current location</value>
+  </data>
+  <data name="FailurePropertyHttpStatusDisplayName" xml:space="preserve">
+    <value>Azure HTTP status</value>
+  </data>
+  <data name="FailurePropertyMessageDisplayName" xml:space="preserve">
+    <value>Azure error message</value>
+  </data>
+  <data name="FailurePropertyOperationDisplayName" xml:space="preserve">
+    <value>Azure operation</value>
+  </data>
+  <data name="FailurePropertyProviderDisplayName" xml:space="preserve">
+    <value>Azure provider</value>
+  </data>
+  <data name="FailurePropertyRecommendedActionsDisplayName" xml:space="preserve">
+    <value>Azure recommended actions</value>
+  </data>
+  <data name="FailurePropertyRequestIdDisplayName" xml:space="preserve">
+    <value>Azure request ID</value>
+  </data>
+  <data name="FailurePropertyResourceNameDisplayName" xml:space="preserve">
+    <value>Azure resource name</value>
+  </data>
+  <data name="FailurePropertyResourceTypeDisplayName" xml:space="preserve">
+    <value>Azure resource type</value>
+  </data>
+  <data name="FailurePropertySupportedLocationsDisplayName" xml:space="preserve">
+    <value>Azure supported locations</value>
+  </data>
+  <data name="FailurePropertyTargetResourceIdDisplayName" xml:space="preserve">
+    <value>Azure target resource ID</value>
+  </data>
 </root>

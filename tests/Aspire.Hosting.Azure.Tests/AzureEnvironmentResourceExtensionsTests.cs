@@ -5,6 +5,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
@@ -128,6 +129,7 @@ public class AzureEnvironmentResourceExtensionsTests
                 Assert.True(input.Required);
                 Assert.Equal(InputType.Choice, input.InputType);
                 Assert.True(input.AllowCustomChoice);
+                Assert.True(input.Disabled);
                 Assert.NotNull(input.DynamicLoading);
                 Assert.True(input.DynamicLoading.AlwaysLoadOnStart);
             },
@@ -148,6 +150,7 @@ public class AzureEnvironmentResourceExtensionsTests
                 Assert.True(input.Required);
                 Assert.Equal(InputType.Choice, input.InputType);
                 Assert.True(input.AllowCustomChoice);
+                Assert.True(input.Disabled);
                 Assert.NotNull(input.DynamicLoading);
                 Assert.True(input.DynamicLoading.AlwaysLoadOnStart);
                 Assert.Equal(["subscriptionId"], input.DynamicLoading.DependsOnInputs);
@@ -158,6 +161,7 @@ public class AzureEnvironmentResourceExtensionsTests
                 Assert.True(input.Required);
                 Assert.Equal(InputType.Choice, input.InputType);
                 Assert.True(input.AllowCustomChoice);
+                Assert.True(input.Disabled);
                 Assert.NotNull(input.DynamicLoading);
                 Assert.True(input.DynamicLoading.AlwaysLoadOnStart);
                 Assert.Equal(["subscriptionId", "resourceGroup"], input.DynamicLoading.DependsOnInputs);
@@ -189,8 +193,11 @@ public class AzureEnvironmentResourceExtensionsTests
         var inputs = CloneInputs(changeContextCommand.Arguments);
 
         var tenantInput = inputs["tenantId"];
+        Assert.True(tenantInput.Disabled);
+
         await LoadInputAsync(app.Services, inputs, tenantInput);
 
+        Assert.False(tenantInput.Disabled);
         Assert.Contains(tenantInput.Options!, option => option.Key == "87654321-4321-4321-4321-210987654321");
         Assert.Equal("87654321-4321-4321-4321-210987654321", tenantInput.Value);
 
@@ -205,6 +212,8 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal("12345678-1234-1234-1234-123456789012", subscriptionInput.Value);
 
         var resourceGroupInput = inputs["resourceGroup"];
+        Assert.True(resourceGroupInput.Disabled);
+
         await LoadInputAsync(app.Services, inputs, resourceGroupInput);
 
         Assert.False(resourceGroupInput.Disabled);
@@ -212,6 +221,8 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal("rg-test-2", resourceGroupInput.Value);
 
         var locationInput = inputs[AzureBicepResource.KnownParameters.Location];
+        Assert.True(locationInput.Disabled);
+
         await LoadInputAsync(app.Services, inputs, locationInput);
 
         Assert.True(locationInput.Disabled);
@@ -371,6 +382,10 @@ public class AzureEnvironmentResourceExtensionsTests
 
         Assert.True(result.Success);
         Assert.Equal("Azure provisioning state reset.", result.Message);
+        var resultData = AssertCommandJsonData(result);
+        Assert.Contains("orphaned", resultData["warning"]?.GetValue<string>(), StringComparison.Ordinal);
+        var recommendedActions = Assert.IsType<JsonArray>(resultData["recommendedActions"]);
+        Assert.Contains(recommendedActions, action => action?["code"]?.GetValue<string>() == "delete-live-resources");
 
         azureSection = await deploymentStateManager.AcquireSectionAsync("Azure");
         Assert.Empty(azureSection.Data);
@@ -517,6 +532,50 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.True(notifications.TryGetCurrentState(storage.Resource.Name, out var storageEvent));
         Assert.Equal("Running", storageEvent.Snapshot.State?.Text);
         Assert.Equal("https://storage.blob.core.windows.net/", storage.Resource.Outputs["blobEndpoint"]);
+    }
+
+    [Fact]
+    public async Task EnsureProvisionedAsync_CompletesExistingPendingProvisioningWaiters()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        var cachedStateProvisioner = new CachedStateTestBicepProvisioner();
+        var testProvisioningContextProvider = new TestProvisioningContextProvider();
+
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        builder.AddAzureProvisioning();
+        builder.Services.RemoveAll<AzureProvisioningController>();
+        builder.Services.AddSingleton(sp => new AzureProvisioningController(
+            sp.GetRequiredService<IConfiguration>(),
+            sp.GetRequiredService<IOptions<AzureProvisionerOptions>>(),
+            sp,
+            cachedStateProvisioner,
+            deploymentStateManager,
+            sp.GetRequiredService<IDistributedApplicationEventing>(),
+            testProvisioningContextProvider,
+            sp.GetRequiredService<IAzureProvisioningOptionsManager>(),
+            sp.GetRequiredService<ResourceNotificationService>(),
+            sp.GetRequiredService<ResourceLoggerService>(),
+            sp.GetRequiredService<ILogger<AzureProvisioningController>>()));
+
+        var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+
+        var existingTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.Resource.ProvisioningTaskCompletionSource = existingTcs;
+        var outputTask = storage.GetOutput("blobEndpoint").GetValueAsync(CancellationToken.None).AsTask();
+
+        Assert.False(outputTask.IsCompleted);
+
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await controller.EnsureProvisionedAsync(model);
+
+        Assert.Same(existingTcs, storage.Resource.ProvisioningTaskCompletionSource);
+        Assert.True(existingTcs.Task.IsCompletedSuccessfully);
+        Assert.Equal("https://storage.blob.core.windows.net/", await outputTask.WaitAsync(s_testSynchronizationTimeout));
     }
 
     [Fact]
@@ -701,6 +760,7 @@ public class AzureEnvironmentResourceExtensionsTests
         var locationArgument = Assert.Single(changeLocationCommand.Arguments);
         Assert.Equal(AzureBicepResource.KnownParameters.Location, locationArgument.Name);
         Assert.True(locationArgument.Required);
+        Assert.True(locationArgument.Disabled);
         Assert.Contains(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.GetAzureResourceCommandName);
         Assert.Contains(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.CancelDeploymentCommandName);
         Assert.Contains(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.DeleteAzureResourceCommandName);
@@ -830,6 +890,264 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public async Task GetAzureResourceCommand_ReturnsMissingLiveResourceReasonWhenCachedResourceDoesNotExist()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        const string subscriptionId = "12345678-1234-1234-1234-123456789012";
+        const string resourceId = $"/subscriptions/{subscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage";
+
+        builder.Configuration["Azure:SubscriptionId"] = subscriptionId;
+        builder.Configuration["Azure:Location"] = "westus2";
+        builder.Configuration["Azure:ResourceGroup"] = "test-rg";
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        builder.AddAzureProvisioning();
+        builder.Services.RemoveAll<IArmClientProvider>();
+        builder.Services.RemoveAll<ITokenCredentialProvider>();
+        builder.Services.AddSingleton<IArmClientProvider>(ProvisioningTestHelpers.CreateArmClientProvider(Array.Empty<string>()));
+        builder.Services.AddSingleton<ITokenCredentialProvider>(ProvisioningTestHelpers.CreateTokenCredentialProvider());
+
+        var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+
+        var storageSection = await deploymentStateManager.AcquireSectionAsync("Azure:Deployments:storage");
+        storageSection.Data["Outputs"] = $$"""
+            {
+              "id": {
+                "value": "{{resourceId}}"
+              }
+            }
+            """;
+        await deploymentStateManager.SaveSectionAsync(storageSection);
+
+        var getResourceCommand = Assert.Single(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.GetAzureResourceCommandName);
+
+        var result = await getResourceCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = storage.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        });
+
+        Assert.True(result.Success);
+
+        var data = AssertCommandJsonData(result);
+        var live = Assert.IsType<JsonObject>(data["live"]);
+        Assert.True(live["checked"]?.GetValue<bool>());
+        Assert.False(live["exists"]?.GetValue<bool>());
+        Assert.Equal("missing-live-resource", live["reason"]?.GetValue<string>());
+        Assert.Equal("azure", live["source"]?.GetValue<string>());
+        Assert.Equal("missing-live-resource", live["code"]?.GetValue<string>());
+        Assert.Contains("resource was not found in Azure", live["message"]?.GetValue<string>(), StringComparison.Ordinal);
+        var recommendedActions = Assert.IsType<JsonArray>(live["recommendedActions"]);
+        Assert.Contains(recommendedActions, action => action?["code"]?.GetValue<string>() == "reprovision-or-forget-state");
+    }
+
+    [Theory]
+    [InlineData(AzureProvisioningFailureDetails.MissingLiveResourceReason, "reprovision-or-forget-state")]
+    [InlineData(AzureProvisioningFailureDetails.ResourceGroupBeingDeletedErrorCode, "change-resource-group")]
+    [InlineData(AzureProvisioningFailureDetails.SubscriptionNotFoundErrorCode, "change-subscription")]
+    [InlineData(AzureProvisioningFailureDetails.ServiceModelDeprecatedErrorCode, "choose-supported-model-version")]
+    [InlineData(AzureProvisioningFailureDetails.InvalidResourcePropertiesErrorCode, "fix-resource-properties")]
+    public void AzureProvisioningFailureDetails_ReturnsKnownRecommendedActions(string errorCodeOrReason, string expectedActionCode)
+    {
+        var actions = AzureProvisioningFailureDetails.GetRecommendedActions(errorCodeOrReason);
+
+        Assert.Contains(actions, action => action.Code == expectedActionCode);
+    }
+
+    [Fact]
+    public void AzureProvisioningFailureDetails_ParsesDocumentedDeploymentOperationErrorShape()
+    {
+        const string targetResourceId =
+            "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage";
+        var response = new AzureProvisioningFailureTestResponse(400, "Bad Request",
+            $$"""
+            {
+              "properties": {
+                "statusCode": "BadRequest",
+                "statusMessage": {
+                  "error": {
+                    "code": "InvalidAccountType",
+                    "message": "The AccountType Standard_LRS1 is invalid. For more information, see - https://aka.ms/storageaccountskus"
+                  }
+                },
+                "targetResource": {
+                  "id": "{{targetResourceId}}",
+                  "resourceType": "Microsoft.Storage/storageAccounts",
+                  "resourceName": "storage"
+                }
+              }
+            }
+            """);
+
+        var details = AzureProvisioningFailureDetails.FromRequestFailedException(
+            new RequestFailedException(response),
+            AzureProvisioningFailureDetails.ProvisionOperation);
+
+        Assert.Equal("Microsoft.Storage", details.Provider);
+        Assert.Equal("Microsoft.Storage/storageAccounts", details.ResourceType);
+        Assert.Equal("storage", details.ResourceName);
+        Assert.Equal(targetResourceId, details.TargetResourceId);
+        Assert.Equal("InvalidAccountType", details.ErrorCode);
+        Assert.Contains("Standard_LRS1", details.ErrorMessage, StringComparison.Ordinal);
+
+        var json = details.ToJsonObject();
+        Assert.Equal("Microsoft.Storage/storageAccounts", json["resourceType"]?.GetValue<string>());
+        Assert.Equal("storage", json["resourceName"]?.GetValue<string>());
+        Assert.Equal(targetResourceId, json["targetResourceId"]?.GetValue<string>());
+
+        var properties = details.SetResourceProperties([], AzureProvisioningFailureDetails.ProvisionOperation);
+        Assert.All(
+            properties.Where(property => AzureProvisioningFailureDetails.IsFailureProperty(property.Name)),
+            property =>
+            {
+                Assert.True(property.IsHighlighted);
+                Assert.False(string.IsNullOrWhiteSpace(property.DisplayName));
+            });
+
+        var resourceNameProperty = properties.Single(property => property.Name == "azure.provisioning.error.resource.name");
+        Assert.Equal(
+            "storage",
+            resourceNameProperty.Value?.ToString());
+        Assert.Equal(AzureProvisioningStrings.FailurePropertyResourceNameDisplayName, resourceNameProperty.DisplayName);
+
+        var targetResourceIdProperty = properties.Single(property => property.Name == "azure.provisioning.error.target.resource.id");
+        Assert.Equal(
+            targetResourceId,
+            targetResourceIdProperty.Value?.ToString());
+        Assert.Equal(AzureProvisioningStrings.FailurePropertyTargetResourceIdDisplayName, targetResourceIdProperty.DisplayName);
+    }
+
+    [Fact]
+    public void AzureProvisioningFailureDetails_PromotesNestedProviderErrorAndKeepsTargetResource()
+    {
+        const string targetResourceId =
+            "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Search/searchServices/search";
+        var response = new AzureProvisioningFailureTestResponse(400, "Bad Request",
+            $$"""
+            {
+              "properties": {
+                "targetResource": {
+                  "id": "{{targetResourceId}}",
+                  "resourceType": "Microsoft.Search/searchServices",
+                  "resourceName": "search"
+                },
+                "statusMessage": {
+                  "error": {
+                    "code": "DeploymentFailed",
+                    "message": "At least one resource deployment operation failed.",
+                    "details": [
+                      {
+                        "code": "ResourceDeploymentFailure",
+                        "message": "The resource write operation failed to complete successfully.",
+                        "details": [
+                          {
+                            "code": "LocationNotAvailableForResourceType",
+                            "message": "The provided location 'australiacentral' is not available for resource type 'Microsoft.Search/searchServices'.",
+                            "target": "search"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            """);
+
+        var details = AzureProvisioningFailureDetails.FromRequestFailedException(
+            new RequestFailedException(response),
+            AzureProvisioningFailureDetails.ProvisionOperation);
+
+        Assert.Equal("Microsoft.Search", details.Provider);
+        Assert.Equal("Microsoft.Search/searchServices", details.ResourceType);
+        Assert.Equal("search", details.ResourceName);
+        Assert.Equal(targetResourceId, details.TargetResourceId);
+        Assert.Equal(AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode, details.ErrorCode);
+        Assert.Contains("australiacentral", details.ErrorMessage, StringComparison.Ordinal);
+        Assert.Equal(AzureProvisioningFailureDetails.ProvisionOperation, details.Operation);
+    }
+
+    [Fact]
+    public void AzureProvisioningFailureDetails_PromotesNestedResponseErrorAndKeepsTargetResource()
+    {
+        const string targetResourceId =
+            "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Search/searchServices/search";
+        var targetResource = new AzureDeploymentOperationTarget(
+            targetResourceId,
+            "Microsoft.Search/searchServices",
+            "search");
+        const string statusMessageContent = """
+            {
+              "status": "Failed",
+              "error": {
+                "code": "DeploymentFailed",
+                "message": "At least one resource deployment operation failed.",
+                "details": [
+                  {
+                    "code": "ResourceDeploymentFailure",
+                    "message": "The resource write operation failed to complete successfully.",
+                    "details": [
+                      {
+                        "code": "LocationNotAvailableForResourceType",
+                        "message": "The provided location 'australiacentral' is not available for resource type 'Microsoft.Search/searchServices'.",
+                        "target": "search"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            """;
+
+        var details = AzureProvisioningFailureDetails.FromResponseError(
+            new ResponseError("DeploymentFailed", "At least one resource deployment operation failed."),
+            targetResource,
+            AzureProvisioningFailureDetails.ProvisionOperation,
+            "BadRequest",
+            "request-id",
+            statusMessageContent);
+
+        Assert.NotNull(details);
+        Assert.Equal("Microsoft.Search", details.Provider);
+        Assert.Equal("Microsoft.Search/searchServices", details.ResourceType);
+        Assert.Equal("search", details.ResourceName);
+        Assert.Equal(targetResourceId, details.TargetResourceId);
+        Assert.Equal(AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode, details.ErrorCode);
+        Assert.Contains("australiacentral", details.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains(details.RecommendedActions, action => action.Code == "change-location");
+    }
+
+    [Fact]
+    public void ClearAzureProvisioningFailureProperties_RemovesOnlyFailureProperties()
+    {
+        ImmutableArray<ResourcePropertySnapshot> properties =
+        [
+            new("azure.provisioning.error.code", "LocationNotAvailableForResourceType"),
+            new("azure.provisioning.error.message", "old failure"),
+            new("azure.subscription.id", "12345678-1234-1234-1234-123456789012"),
+            new("custom.property", "kept")
+        ];
+
+        var cleared = properties.ClearAzureProvisioningFailureProperties();
+
+        Assert.DoesNotContain(cleared, property => AzureProvisioningFailureDetails.IsFailureProperty(property.Name));
+        Assert.Equal("12345678-1234-1234-1234-123456789012", cleared.Single(property => property.Name == "azure.subscription.id").Value);
+        Assert.Equal("kept", cleared.Single(property => property.Name == "custom.property").Value);
+    }
+
+    [Fact]
     public async Task GetAzureResourceCommand_ReturnsMissingResourceIdReasonWhenCachedStateHasNoOutputId()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -879,6 +1197,11 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.False(live["checked"]?.GetValue<bool>());
         Assert.Null(live["exists"]);
         Assert.Equal("missing-resource-id", live["reason"]?.GetValue<string>());
+        Assert.Equal("aspire", live["source"]?.GetValue<string>());
+        Assert.Equal("missing-resource-id", live["code"]?.GetValue<string>());
+        Assert.Contains("cached deployment state does not contain a resource ID", live["message"]?.GetValue<string>(), StringComparison.Ordinal);
+        var recommendedActions = Assert.IsType<JsonArray>(live["recommendedActions"]);
+        Assert.Contains(recommendedActions, action => action?["code"]?.GetValue<string>() == "reprovision-or-change-context");
     }
 
     [Fact]
@@ -938,8 +1261,12 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.True(live["checked"]?.GetValue<bool>());
         Assert.Null(live["exists"]);
         Assert.Equal("request-failed", live["reason"]?.GetValue<string>());
+        Assert.Equal("azure", live["source"]?.GetValue<string>());
         Assert.Equal(403, live["status"]?.GetValue<int>());
+        Assert.Equal("Azure", live["provider"]?.GetValue<string>());
+        Assert.Equal(403, live["httpStatus"]?.GetValue<int>());
         Assert.Equal("AuthorizationFailed", live["errorCode"]?.GetValue<string>());
+        Assert.Equal("live-resource-check", live["operation"]?.GetValue<string>());
         Assert.Contains("Forbidden", live["message"]?.GetValue<string>(), StringComparison.Ordinal);
     }
 
@@ -3207,6 +3534,97 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public async Task ReprovisionCommand_ReturnsStructuredProviderFailureDetailsWhenProvisioningFails()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        var testProvisioningContextProvider = new TestProvisioningContextProvider();
+        var requestFailedException = new RequestFailedException(
+            400,
+            "The provided location 'asia' is not available for resource type 'Microsoft.ManagedIdentity/userAssignedIdentities'.",
+            "LocationNotAvailableForResourceType",
+            innerException: null);
+
+        builder.Configuration["Azure:SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        builder.Configuration["Azure:Location"] = "asia";
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        builder.AddAzureProvisioning();
+        builder.Services.RemoveAll<AzureProvisioningController>();
+        builder.Services.AddSingleton(sp => new AzureProvisioningController(
+            sp.GetRequiredService<IConfiguration>(),
+            sp.GetRequiredService<IOptions<AzureProvisionerOptions>>(),
+            sp,
+            new ThrowingTestBicepProvisioner(requestFailedException),
+            deploymentStateManager,
+            sp.GetRequiredService<IDistributedApplicationEventing>(),
+            testProvisioningContextProvider,
+            sp.GetRequiredService<IAzureProvisioningOptionsManager>(),
+            sp.GetRequiredService<ResourceNotificationService>(),
+            sp.GetRequiredService<ResourceLoggerService>(),
+            sp.GetRequiredService<ILogger<AzureProvisioningController>>()));
+
+        var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+        await notifications.PublishUpdateAsync(storage.Resource, state => state with { State = KnownResourceStates.Running });
+
+        var reprovisionCommand = Assert.Single(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ReprovisionResourceCommandName);
+
+        var result = await reprovisionCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = storage.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        });
+
+        Assert.False(result.Success);
+        Assert.False(result.Canceled);
+        Assert.Contains("Azure provisioning failed.", result.Message, StringComparison.Ordinal);
+        Assert.Contains("LocationNotAvailableForResourceType", result.Message, StringComparison.Ordinal);
+        Assert.Contains(AzureProvisioningController.ChangeResourceLocationCommandName, result.Message, StringComparison.Ordinal);
+
+        var data = AssertCommandJsonData(result);
+        Assert.False(data["success"]?.GetValue<bool>());
+        Assert.Equal("failed", data["status"]?.GetValue<string>());
+        var diagnostics = Assert.IsType<JsonArray>(data["diagnostics"]);
+        var diagnostic = Assert.IsType<JsonObject>(Assert.Single(diagnostics));
+        Assert.Equal("azure", diagnostic["source"]?.GetValue<string>());
+        Assert.Equal("Microsoft.ManagedIdentity", diagnostic["provider"]?.GetValue<string>());
+        Assert.Equal("Microsoft.ManagedIdentity/userAssignedIdentities", diagnostic["resourceType"]?.GetValue<string>());
+        Assert.Equal(400, diagnostic["httpStatus"]?.GetValue<int>());
+        Assert.Equal("LocationNotAvailableForResourceType", diagnostic["errorCode"]?.GetValue<string>());
+        Assert.Equal("provision", diagnostic["operation"]?.GetValue<string>());
+        var resultRecommendedActions = Assert.IsType<JsonArray>(diagnostic["recommendedActions"]);
+        Assert.Contains(resultRecommendedActions, action => action?["code"]?.GetValue<string>() == "change-location");
+
+        Assert.True(notifications.TryGetCurrentState(storage.Resource.Name, out var storageEvent));
+        Assert.Equal("Failed to Provision", storageEvent.Snapshot.State?.Text);
+        Assert.All(
+            storageEvent.Snapshot.Properties.Where(property => AzureProvisioningFailureDetails.IsFailureProperty(property.Name)),
+            property =>
+            {
+                Assert.True(property.IsHighlighted);
+                Assert.False(string.IsNullOrWhiteSpace(property.DisplayName));
+            });
+        Assert.Equal("Microsoft.ManagedIdentity", storageEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.provider").Value?.ToString());
+        Assert.Equal("Microsoft.ManagedIdentity/userAssignedIdentities", storageEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.resource.type").Value?.ToString());
+        Assert.Equal("LocationNotAvailableForResourceType", storageEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.code").Value?.ToString());
+        Assert.Equal(400, storageEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.http.status").Value);
+        var snapshotRecommendedActions = Assert.IsType<string[]>(storageEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.recommendedActions").Value);
+        Assert.Contains(snapshotRecommendedActions, action => action.Contains(AzureProvisioningController.ChangeResourceLocationCommandName, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ResourceCommandCancellation_ReturnsCanceledResult()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -4024,6 +4442,53 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal(expectedState, command.State);
     }
 
+    private sealed class AzureProvisioningFailureTestResponse : Response
+    {
+        private readonly int _status;
+        private readonly string _reasonPhrase;
+
+        public AzureProvisioningFailureTestResponse(int status, string reasonPhrase, string content)
+        {
+            _status = status;
+            _reasonPhrase = reasonPhrase;
+            ContentStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+        }
+
+        public override int Status => _status;
+
+        public override string ReasonPhrase => _reasonPhrase;
+
+        public override Stream? ContentStream { get; set; }
+
+        public override string ClientRequestId { get; set; } = string.Empty;
+
+        public override void Dispose()
+        {
+        }
+
+        protected override bool TryGetHeader(
+            string name,
+            [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? value)
+        {
+            value = null;
+
+            return false;
+        }
+
+        protected override bool TryGetHeaderValues(
+            string name,
+            [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IEnumerable<string>? values)
+        {
+            values = null;
+
+            return false;
+        }
+
+        protected override bool ContainsHeader(string name) => false;
+
+        protected override IEnumerable<HttpHeader> EnumerateHeaders() => [];
+    }
+
     private static readonly TimeSpan s_testSynchronizationTimeout = TimeSpan.FromSeconds(30);
 
     private static async Task WaitForSignalBeforeOperationCompletesAsync(Task signalTask, Task operationTask, string completionMessage)
@@ -4463,12 +4928,14 @@ public class AzureEnvironmentResourceExtensionsTests
         }
     }
 
-    private sealed class ThrowingTestBicepProvisioner : IBicepProvisioner
+    private sealed class ThrowingTestBicepProvisioner(Exception? exception = null) : IBicepProvisioner
     {
+        private readonly Exception _exception = exception ?? new InvalidOperationException("boom");
+
         public Task<bool> ConfigureResourceAsync(AzureBicepResource resource, CancellationToken cancellationToken) => Task.FromResult(false);
 
         public Task GetOrCreateResourceAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
-            => Task.FromException(new InvalidOperationException("boom"));
+            => Task.FromException(_exception);
     }
 
     private sealed class CancelConflictArmClientProvider : IArmClientProvider

@@ -191,10 +191,14 @@ internal sealed class TestArmClient : IArmClient
     private readonly HashSet<string>? _existingResourceIds;
     private readonly List<string>? _deletedResourceIds;
     private readonly IEnumerable<string>? _deploymentTargetResourceIds;
+    private readonly IReadOnlyList<AzureDeploymentOperationDetails>? _deploymentOperations;
+    private readonly IReadOnlyDictionary<string, IEnumerable<string>>? _supportedLocationsByResourceType;
     private readonly List<string>? _canceledDeploymentIds;
     private readonly bool _resourceGroupLookupReturnsNotFound;
 
     public TestRoleAssignmentCollection RoleAssignments { get; } = new();
+    public int SupportedLocationsCallCount { get; private set; }
+    public int DeploymentOperationsCallCount { get; private set; }
 
     public TestArmClient(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null, bool resourceGroupLookupReturnsNotFound = false)
     {
@@ -206,6 +210,15 @@ internal sealed class TestArmClient : IArmClient
     public TestArmClient(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
     {
         _deploymentOutputsProvider = deploymentOutputsProvider;
+    }
+
+    public TestArmClient(
+        IReadOnlyList<AzureDeploymentOperationDetails> deploymentOperations,
+        IReadOnlyDictionary<string, IEnumerable<string>>? supportedLocationsByResourceType = null)
+        : this(new Dictionary<string, object>())
+    {
+        _deploymentOperations = deploymentOperations;
+        _supportedLocationsByResourceType = supportedLocationsByResourceType;
     }
 
     public TestArmClient(
@@ -292,6 +305,18 @@ internal sealed class TestArmClient : IArmClient
         return Task.FromResult<IEnumerable<(string, string)>>(resourceGroups);
     }
 
+    public Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+    {
+        _ = subscriptionId;
+        _ = cancellationToken;
+
+        SupportedLocationsCallCount++;
+
+        return Task.FromResult(_supportedLocationsByResourceType?.TryGetValue(resourceType, out var locations) == true
+            ? locations
+            : []);
+    }
+
     public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
     {
         return RoleAssignments;
@@ -330,6 +355,28 @@ internal sealed class TestArmClient : IArmClient
         {
             cancellationToken.ThrowIfCancellationRequested();
             yield return resourceId;
+        }
+    }
+
+    public async IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(
+        string deploymentId,
+        bool recursive = true,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        _ = deploymentId;
+        _ = recursive;
+        DeploymentOperationsCallCount++;
+        await Task.CompletedTask;
+
+        if (_deploymentOperations is null)
+        {
+            yield break;
+        }
+
+        foreach (var operation in _deploymentOperations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return operation;
         }
     }
 }

@@ -261,6 +261,10 @@ internal sealed class AzureProvisioningController(
             InputType = InputType.Choice,
             Required = true,
             AllowCustomChoice = true,
+            // The dashboard opens the dialog before dynamic options finish loading. Keep this
+            // server-owned until the startup load seeds the current tenant value; otherwise the
+            // client treats the empty local value as user-owned and ignores the loaded selection.
+            Disabled = true,
             DynamicLoading = new InputLoadOptions
             {
                 // Tenant ID has no dependencies, so startup loading is the only opportunity to
@@ -299,6 +303,7 @@ internal sealed class AzureProvisioningController(
             InputType = InputType.Choice,
             Required = true,
             AllowCustomChoice = true,
+            Disabled = true,
             DynamicLoading = new InputLoadOptions
             {
                 // Startup loading handles a subscription preselected from configuration/current
@@ -316,6 +321,7 @@ internal sealed class AzureProvisioningController(
             InputType = InputType.Choice,
             Required = true,
             AllowCustomChoice = true,
+            Disabled = true,
             DynamicLoading = new InputLoadOptions
             {
                 // Startup loading reflects a known resource-group location immediately; dependency
@@ -337,6 +343,7 @@ internal sealed class AzureProvisioningController(
             InputType = InputType.Choice,
             Required = true,
             AllowCustomChoice = true,
+            Disabled = true,
             DynamicLoading = new InputLoadOptions
             {
                 AlwaysLoadOnStart = true,
@@ -362,6 +369,10 @@ internal sealed class AzureProvisioningController(
         {
             context.Input.Options = tenantOptions;
         }
+
+        // Re-enable even when tenant enumeration fails. AllowCustomChoice lets users paste a tenant
+        // ID manually, and the current tenant value was already seeded from persisted/config state.
+        context.Input.Disabled = false;
     }
 
     private static async Task LoadSubscriptionArgumentOptionsAsync(LoadInputContext context)
@@ -454,6 +465,9 @@ internal sealed class AzureProvisioningController(
         var locationOptions = await controller.GetLocationOptionsAsync(subscriptionId, context.CancellationToken).ConfigureAwait(false);
         if (locationOptions.Count == 0)
         {
+            // Enumeration is best-effort and the input allows custom choices, so keep the field
+            // editable if ARM returns no location list.
+            context.Input.Disabled = false;
             return;
         }
 
@@ -661,7 +675,8 @@ internal sealed class AzureProvisioningController(
         return ExecuteCommandAsync(
             () => RunOperationAsync<bool>(model, new ResetStateIntent(ReprovisionAfterReset: true), context.CancellationToken),
             AzureProvisioningStrings.ResetProvisioningStateCommandSuccess,
-            () => CreateEnvironmentCommandResultDataAsync(ResetProvisioningStateCommandName, model, context.CancellationToken));
+            () => CreateEnvironmentCommandResultDataAsync(ResetProvisioningStateCommandName, model, context.CancellationToken),
+            AzureProvisioningFailureDetails.ProvisionOperation);
     }
 
     private Task<ExecuteCommandResult> ExecuteChangeAzureContextCommandAsync(ExecuteCommandContext context)
@@ -673,7 +688,8 @@ internal sealed class AzureProvisioningController(
         return ExecuteCommandAsync(
             () => ChangeAzureContextCommandAsync(model, context.Arguments, context.CancellationToken),
             AzureProvisioningStrings.ChangeAzureContextCommandSuccess,
-            () => CreateEnvironmentCommandResultDataAsync(ChangeAzureContextCommandName, model, context.CancellationToken));
+            () => CreateEnvironmentCommandResultDataAsync(ChangeAzureContextCommandName, model, context.CancellationToken),
+            AzureProvisioningFailureDetails.ProvisionOperation);
     }
 
     private Task<ExecuteCommandResult> ExecuteReprovisionAllCommandAsync(ExecuteCommandContext context)
@@ -685,7 +701,8 @@ internal sealed class AzureProvisioningController(
         return ExecuteCommandAsync(
             () => ReprovisionAllAsync(model, context.CancellationToken),
             AzureProvisioningStrings.ReprovisionAllCommandSuccess,
-            () => CreateEnvironmentCommandResultDataAsync(ReprovisionAllCommandName, model, context.CancellationToken));
+            () => CreateEnvironmentCommandResultDataAsync(ReprovisionAllCommandName, model, context.CancellationToken),
+            AzureProvisioningFailureDetails.ProvisionOperation);
     }
 
     private Task<ExecuteCommandResult> ExecuteDeleteAzureResourcesCommandAsync(ExecuteCommandContext context)
@@ -710,7 +727,8 @@ internal sealed class AzureProvisioningController(
         return ExecuteCommandAsync(
             () => ChangeResourceLocationCommandAsync(model, resourceName, context.Arguments, context.CancellationToken),
             AzureProvisioningStrings.ChangeResourceLocationCommandSuccess,
-            () => CreateResourceCommandResultDataAsync(ChangeResourceLocationCommandName, model, resourceName, context.CancellationToken));
+            () => CreateResourceCommandResultDataAsync(ChangeResourceLocationCommandName, model, resourceName, context.CancellationToken),
+            AzureProvisioningFailureDetails.ProvisionOperation);
     }
 
     private Task<ExecuteCommandResult> ExecuteGetAzureResourceCommandAsync(string resourceName, ExecuteCommandContext context)
@@ -775,7 +793,8 @@ internal sealed class AzureProvisioningController(
         return ExecuteCommandAsync(
             () => ReprovisionResourceAsync(model, resourceName, context.CancellationToken),
             AzureProvisioningStrings.ReprovisionResourceCommandSuccess,
-            () => CreateResourceCommandResultDataAsync(ReprovisionResourceCommandName, model, resourceName, context.CancellationToken));
+            () => CreateResourceCommandResultDataAsync(ReprovisionResourceCommandName, model, resourceName, context.CancellationToken),
+            AzureProvisioningFailureDetails.ProvisionOperation);
     }
 
     private async Task<bool> ChangeAzureContextCommandAsync(DistributedApplicationModel model, InteractionInputCollection arguments, CancellationToken cancellationToken)
@@ -920,12 +939,18 @@ internal sealed class AzureProvisioningController(
 
             // Per-resource provisioning completion is used to sequence dependent Azure resources. A resource completes
             // this TCS as soon as its own cached state is applied or its deployment finishes so dependents do not wait
-            // for unrelated resources in the same batch.
-            resource.AzureResource.ProvisioningTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            // for unrelated resources in the same batch. Preserve an existing incomplete TCS because project startup
+            // can already be resolving connection strings through BicepOutputReference; replacing that TCS would strand
+            // those waiters even after provisioning completes.
+            if (resource.AzureResource.ProvisioningTaskCompletionSource is not { Task.IsCompleted: false })
+            {
+                resource.AzureResource.ProvisioningTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
 
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Starting", KnownResourceStateStyles.Info)
+                State = new("Starting", KnownResourceStateStyles.Info),
+                Properties = state.Properties.ClearAzureProvisioningFailureProperties()
             }).ConfigureAwait(false);
 
             afterProvisionTasks.Add(AfterProvisionAsync(resource, parentChildLookup));
@@ -961,6 +986,23 @@ internal sealed class AzureProvisioningController(
         => azureResources.Any(static resource =>
             resource.AzureResource.ProvisioningTaskCompletionSource?.Task.Exception?.InnerExceptions.Any(IsMissingAzureContextFailure) == true);
 
+    private static Exception? GetProvisioningFailureException(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources)
+        => azureResources
+            .Select(static resource => resource.AzureResource.ProvisioningTaskCompletionSource?.Task.Exception)
+            .FirstOrDefault(static exception => exception is not null);
+
+    private static string CreateProvisioningFailureMessage(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources)
+    {
+        var failureException = GetProvisioningFailureException(azureResources);
+        if (failureException is not null &&
+            AzureProvisioningFailureDetails.TryCreate(failureException, AzureProvisioningFailureDetails.ProvisionOperation) is { } failure)
+        {
+            return $"Azure provisioning failed. {failure.ToCommandMessage()}";
+        }
+
+        return "Azure provisioning failed.";
+    }
+
     private async Task<bool> EnsureProvisionedOrThrowAsync(
         DistributedApplicationModel model,
         IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources,
@@ -968,7 +1010,11 @@ internal sealed class AzureProvisioningController(
     {
         if (!await EnsureProvisionedCoreAsync(model, azureResources, cancellationToken).ConfigureAwait(false))
         {
-            throw new InvalidOperationException("Azure provisioning failed.");
+            var failureException = GetProvisioningFailureException(azureResources);
+            var message = CreateProvisioningFailureMessage(azureResources);
+            throw failureException is null
+                ? new InvalidOperationException(message)
+                : new InvalidOperationException(message, failureException);
         }
 
         return true;
@@ -1765,7 +1811,7 @@ internal sealed class AzureProvisioningController(
     private static AzureControllerState CreateControllerState(AzureIntent? currentIntent)
         => new(new AzureControllerStatus(currentIntent));
 
-    private static async Task<ExecuteCommandResult> ExecuteCommandAsync(Func<Task> action, string successMessage, Func<Task<CommandResultData>> createResultData)
+    private static async Task<ExecuteCommandResult> ExecuteCommandAsync(Func<Task> action, string successMessage, Func<Task<CommandResultData>> createResultData, string? failureOperation = null)
     {
         try
         {
@@ -1778,11 +1824,11 @@ internal sealed class AzureProvisioningController(
         }
         catch (Exception ex)
         {
-            return CommandResults.Failure(ex.Message);
+            return CreateFailureCommandResult(ex, failureOperation);
         }
     }
 
-    private static async Task<ExecuteCommandResult> ExecuteCommandAsync<T>(Func<Task<T>> action, string successMessage, Func<T, Task<CommandResultData>> createResultData)
+    private static async Task<ExecuteCommandResult> ExecuteCommandAsync<T>(Func<Task<T>> action, string successMessage, Func<T, Task<CommandResultData>> createResultData, string? failureOperation = null)
     {
         try
         {
@@ -1795,11 +1841,11 @@ internal sealed class AzureProvisioningController(
         }
         catch (Exception ex)
         {
-            return CommandResults.Failure(ex.Message);
+            return CreateFailureCommandResult(ex, failureOperation);
         }
     }
 
-    private static async Task<ExecuteCommandResult> ExecuteCommandAsync(Func<Task<bool>> action, string successMessage, Func<Task<CommandResultData>> createResultData)
+    private static async Task<ExecuteCommandResult> ExecuteCommandAsync(Func<Task<bool>> action, string successMessage, Func<Task<CommandResultData>> createResultData, string? failureOperation = null)
     {
         try
         {
@@ -1813,7 +1859,7 @@ internal sealed class AzureProvisioningController(
         }
         catch (Exception ex)
         {
-            return CommandResults.Failure(ex.Message);
+            return CreateFailureCommandResult(ex, failureOperation);
         }
     }
 
@@ -1821,6 +1867,16 @@ internal sealed class AzureProvisioningController(
     {
         var json = await CreateCommandResultJsonAsync(commandName, resourceName: null, cancellationToken).ConfigureAwait(false);
         json["resourceCount"] = GetProvisionableAzureResources(model).Count;
+        if (string.Equals(commandName, ResetProvisioningStateCommandName, StringComparison.Ordinal))
+        {
+            json["warning"] = "Local Azure provisioning state was reset without deleting live Azure resources. Existing Azure resources may be orphaned if a later reprovision uses a different Azure context.";
+            json["recommendedActions"] = AzureProvisioningFailureDetails.CreateRecommendedActionsJsonArray(
+            [
+                new("delete-live-resources", $"Use '{DeleteAzureResourcesCommandName}' when you want Aspire to remove live Azure resources."),
+                new("review-azure-context", "Review the final 'azureContext' fields before reprovisioning.")
+            ]);
+        }
+
         return CreateJsonResultData(json);
     }
 
@@ -1937,6 +1993,11 @@ internal sealed class AzureProvisioningController(
         if (string.IsNullOrWhiteSpace(resourceId))
         {
             json["reason"] = "missing-resource-id";
+            json["source"] = "aspire";
+            json["code"] = "missing-resource-id";
+            json["message"] = "Live Azure resource existence cannot be checked because cached deployment state does not contain a resource ID. This can happen after state is forgotten, deleted, or before provisioning completes.";
+            json["recommendedActions"] = AzureProvisioningFailureDetails.CreateRecommendedActionsJsonArray(
+                AzureProvisioningFailureDetails.GetRecommendedActions(AzureProvisioningFailureDetails.MissingResourceIdReason));
             return json;
         }
 
@@ -1952,7 +2013,18 @@ internal sealed class AzureProvisioningController(
             var tokenCredentialProvider = serviceProvider.GetRequiredService<ITokenCredentialProvider>();
             var armClient = armClientProvider.GetArmClient(tokenCredentialProvider.TokenCredential, context.SubscriptionId);
             json["checked"] = true;
-            json["exists"] = await armClient.ResourceExistsAsync(resourceId, cancellationToken).ConfigureAwait(false);
+            var exists = await armClient.ResourceExistsAsync(resourceId, cancellationToken).ConfigureAwait(false);
+            json["exists"] = exists;
+
+            if (!exists)
+            {
+                json["reason"] = AzureProvisioningFailureDetails.MissingLiveResourceReason;
+                json["source"] = "azure";
+                json["code"] = AzureProvisioningFailureDetails.MissingLiveResourceReason;
+                json["message"] = "Cached deployment state points at an Azure resource ID, but the resource was not found in Azure. This can happen when resources are deleted outside Aspire or a resource group deletion is still in progress.";
+                json["recommendedActions"] = AzureProvisioningFailureDetails.CreateRecommendedActionsJsonArray(
+                    AzureProvisioningFailureDetails.GetRecommendedActions(AzureProvisioningFailureDetails.MissingLiveResourceReason));
+            }
         }
         catch (CredentialUnavailableException ex)
         {
@@ -1967,10 +2039,21 @@ internal sealed class AzureProvisioningController(
             // Surface ARM failures as structured JSON so agents can distinguish "missing",
             // authorization failures, and transient request errors without scraping logs.
             _logger.LogDebug(ex, "Unable to query live Azure resource state for {ResourceId}.", resourceId);
+            var failure = AzureProvisioningFailureDetails.FromRequestFailedException(ex, AzureProvisioningFailureDetails.LiveResourceCheckOperation);
             json["reason"] = "request-failed";
+            json["source"] = "azure";
             json["status"] = ex.Status;
-            json["errorCode"] = ex.ErrorCode;
-            json["message"] = ex.Message;
+            json["provider"] = failure.Provider;
+            json["httpStatus"] = failure.HttpStatus;
+            json["errorCode"] = failure.ErrorCode;
+            json["message"] = failure.ErrorMessage;
+            json["operation"] = failure.Operation;
+            json["requestId"] = failure.RequestId;
+            json["correlationId"] = failure.CorrelationId;
+            if (!failure.RecommendedActions.IsDefaultOrEmpty)
+            {
+                json["recommendedActions"] = AzureProvisioningFailureDetails.CreateRecommendedActionsJsonArray(failure.RecommendedActions);
+            }
         }
 
         return json;
@@ -2057,6 +2140,32 @@ internal sealed class AzureProvisioningController(
             Format = CommandResultFormat.Json,
             DisplayImmediately = displayImmediately
         };
+
+    private static ExecuteCommandResult CreateFailureCommandResult(Exception exception, string? operation = null)
+    {
+        if (AzureProvisioningFailureDetails.TryCreate(exception, operation) is not { } failure)
+        {
+            return CommandResults.Failure(exception.Message);
+        }
+
+        // Keep the human-facing message unchanged for existing dashboard/CLI behavior, but attach
+        // a stable diagnostics array so agents and JSON clients can reason over provider, code,
+        // resource type, request IDs, and recommended actions without scraping the rendered text.
+        var json = new JsonObject
+        {
+            ["schemaVersion"] = 1,
+            ["success"] = false,
+            ["message"] = exception.Message,
+            ["status"] = "failed",
+            ["summary"] = exception.Message,
+            ["diagnostics"] = new JsonArray
+            {
+                failure.ToJsonObject()
+            }
+        };
+
+        return CommandResults.Failure(exception.Message, CreateJsonResultData(json, displayImmediately: true));
+    }
 
     private async Task ApplyResourceOverridesAsync(IAzureResource azureResource, CancellationToken cancellationToken)
     {
@@ -2862,11 +2971,15 @@ internal sealed class AzureProvisioningController(
                 State = new("Missing subscription configuration", KnownResourceStateStyles.Error)
             }).ConfigureAwait(false);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            var failureDetails = AzureProvisioningFailureDetails.TryCreate(ex, AzureProvisioningFailureDetails.ProvisionOperation);
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Failed to Provision", KnownResourceStateStyles.Error)
+                State = new("Failed to Provision", KnownResourceStateStyles.Error),
+                Properties = failureDetails is null
+                    ? state.Properties
+                    : failureDetails.SetResourceProperties(state.Properties, AzureProvisioningFailureDetails.ProvisionOperation)
             }).ConfigureAwait(false);
         }
     }
@@ -3141,7 +3254,9 @@ internal sealed class AzureProvisioningController(
             return [];
         }
 
-        return [.. properties.Where(static property => !s_resettableProperties.Contains(property.Name, StringComparer.Ordinal))];
+        return [.. properties.Where(static property =>
+            !s_resettableProperties.Contains(property.Name, StringComparer.Ordinal) &&
+            !AzureProvisioningFailureDetails.IsFailureProperty(property.Name))];
     }
 
     private async Task PublishAzureEnvironmentStateAsync(

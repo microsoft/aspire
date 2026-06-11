@@ -2,11 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.ClientModel.Primitives;
+using System.Text.Json.Serialization;
 using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Authorization;
 using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.Resources.Models;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
 
@@ -15,19 +20,23 @@ namespace Aspire.Hosting.Azure.Provisioning.Internal;
 /// </summary>
 internal sealed class DefaultArmClientProvider : IArmClientProvider
 {
+    private const string ArmManagementEndpoint = "https://management.azure.com";
+    private const string ArmScope = $"{ArmManagementEndpoint}/.default";
+    private static readonly HttpClient s_httpClient = new();
+
     public IArmClient GetArmClient(TokenCredential credential, string subscriptionId)
     {
         var armClient = new ArmClient(credential, subscriptionId);
-        return new DefaultArmClient(armClient);
+        return new DefaultArmClient(armClient, credential);
     }
 
     public IArmClient GetArmClient(TokenCredential credential)
     {
         var armClient = new ArmClient(credential);
-        return new DefaultArmClient(armClient);
+        return new DefaultArmClient(armClient, credential);
     }
 
-    private sealed class DefaultArmClient(ArmClient armClient) : IArmClient
+    private sealed class DefaultArmClient(ArmClient armClient, TokenCredential credential) : IArmClient
     {
         public async Task<(ISubscriptionResource subscription, ITenantResource tenant)> GetSubscriptionAndTenantAsync(CancellationToken cancellationToken = default)
         {
@@ -124,6 +133,63 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             return resourceGroups.OrderBy(rg => rg.Name);
         }
 
+        public async Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+        {
+            if (!TrySplitResourceType(resourceType, out var providerNamespace, out var providerResourceType))
+            {
+                return [];
+            }
+
+            var locationNameByProviderValue = await CreateLocationNameLookupAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"{ArmManagementEndpoint}/subscriptions/{Uri.EscapeDataString(subscriptionId)}/providers/{Uri.EscapeDataString(providerNamespace)}?api-version=2021-04-01");
+
+            // The Azure.ResourceManager package version used here does not expose the provider
+            // metadata shape needed for per-resource supported locations, so use the documented ARM
+            // endpoint directly:
+            //   GET /subscriptions/{subscriptionId}/providers/Microsoft.Search?api-version=2021-04-01
+            // This is advisory diagnostics only; callers keep the original provider error if this
+            // metadata request fails.
+            var token = await credential.GetTokenAsync(new TokenRequestContext([ArmScope]), cancellationToken).ConfigureAwait(false);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+
+            using var response = await s_httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                throw new HttpRequestException($"Unable to query Azure resource provider locations. Status code: {(int)response.StatusCode}. Response: {content}");
+            }
+
+            // ARM provider metadata is shaped as:
+            //   { "resourceTypes": [ { "resourceType": "searchServices", "locations": [ "East US", "West US 2" ] } ] }
+            // The locations are often display names, while Aspire commands accept canonical names
+            // like "eastus", so map through the subscription location list before surfacing them.
+            var providerMetadata = await response.Content.ReadFromJsonAsync<ProviderMetadataResponse>(cancellationToken).ConfigureAwait(false);
+            if (providerMetadata?.ResourceTypes is not { } resourceTypes)
+            {
+                return [];
+            }
+
+            foreach (var resourceTypeMetadata in resourceTypes)
+            {
+                if (!string.Equals(resourceTypeMetadata.ResourceType, providerResourceType, StringComparison.OrdinalIgnoreCase) ||
+                    resourceTypeMetadata.Locations is not { Length: > 0 } locations)
+                {
+                    continue;
+                }
+
+                return locations
+                    .Where(static location => !string.IsNullOrWhiteSpace(location))
+                    .Select(location => TryGetLocationName(locationNameByProviderValue, location) ?? location)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(static location => location, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+
+            return [];
+        }
+
         public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
         {
             return new DefaultRoleAssignmentCollection(armClient.GetRoleAssignments(scope));
@@ -157,15 +223,151 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
 
         public async IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var deployment = armClient.GetArmDeploymentResource(new ResourceIdentifier(deploymentId));
-
-            await foreach (var operation in deployment.GetDeploymentOperationsAsync(top: null, cancellationToken).ConfigureAwait(false))
+            await foreach (var operation in GetDeploymentOperationsAsync(deploymentId, recursive: true, cancellationToken).ConfigureAwait(false))
             {
-                if (operation.Properties.TargetResource?.Id is { Length: > 0 } resourceId)
+                if (operation.TargetResource?.Id is { Length: > 0 } resourceId)
                 {
                     yield return resourceId;
                 }
             }
+        }
+
+        public async IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(
+            string deploymentId,
+            bool recursive = true,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var pendingDeployments = new Queue<ResourceIdentifier>();
+            var visitedDeployments = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            pendingDeployments.Enqueue(new ResourceIdentifier(deploymentId));
+
+            // ARM operation lists are per deployment, but Bicep frequently emits nested deployment
+            // resources. Walk those child deployments breadth-first so Aspire can surface the
+            // provider failure (for example Microsoft.Search/searchServices) instead of stopping at
+            // the outer Microsoft.Resources/deployments wrapper.
+            while (pendingDeployments.Count > 0)
+            {
+                var currentDeploymentId = pendingDeployments.Dequeue();
+                if (!visitedDeployments.Add(currentDeploymentId.ToString()))
+                {
+                    continue;
+                }
+
+                var deployment = armClient.GetArmDeploymentResource(currentDeploymentId);
+                await foreach (var operation in deployment.GetDeploymentOperationsAsync(top: null, cancellationToken).ConfigureAwait(false))
+                {
+                    var operationDetails = CreateDeploymentOperationDetails(operation, currentDeploymentId.ToString());
+                    yield return operationDetails;
+
+                    if (recursive &&
+                        operationDetails.IsNestedDeploymentCreate &&
+                        operationDetails.TargetResource?.Id is { Length: > 0 } nestedDeploymentId &&
+                        ResourceIdentifier.TryParse(nestedDeploymentId, out var nestedResourceId) &&
+                        nestedResourceId is not null)
+                    {
+                        pendingDeployments.Enqueue(nestedResourceId);
+                    }
+                }
+            }
+        }
+
+        private static AzureDeploymentOperationDetails CreateDeploymentOperationDetails(ArmDeploymentOperation operation, string deploymentId)
+        {
+            var properties = operation.Properties;
+            var targetResource = properties.TargetResource is { } target
+                ? new AzureDeploymentOperationTarget(target.Id, target.ResourceType?.ToString(), target.ResourceName)
+                : null;
+
+            // Deployment operations carry provider failures in properties.statusMessage.error and
+            // the target resource beside it. Capture both together so command JSON can include the
+            // failing resource ID/name even when the error payload itself only has code/message.
+            var failureDetails = AzureProvisioningFailureDetails.FromResponseError(
+                properties.StatusMessage?.Error,
+                targetResource,
+                properties.ProvisioningOperation?.ToString(),
+                properties.StatusCode,
+                properties.ServiceRequestId,
+                properties.StatusMessage is null
+                    ? null
+                    : ModelReaderWriter.Write(properties.StatusMessage, ModelReaderWriterOptions.Json).ToString());
+
+            return new(
+                OperationId: operation.OperationId,
+                DeploymentId: deploymentId,
+                ProvisioningOperation: properties.ProvisioningOperation?.ToString(),
+                ProvisioningState: properties.ProvisioningState,
+                Timestamp: properties.Timestamp,
+                Duration: properties.Duration,
+                StatusCode: properties.StatusCode,
+                ServiceRequestId: properties.ServiceRequestId,
+                TargetResource: targetResource,
+                FailureDetails: failureDetails);
+        }
+
+        private async Task<Dictionary<string, string>> CreateLocationNameLookupAsync(string subscriptionId, CancellationToken cancellationToken)
+        {
+            var locationNameByProviderValue = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (name, displayName) in await GetAvailableLocationsAsync(subscriptionId, cancellationToken).ConfigureAwait(false))
+            {
+                AddLocation(name, name);
+                AddLocation(displayName, name);
+                AddLocation(NormalizeLocation(displayName), name);
+            }
+
+            return locationNameByProviderValue;
+
+            void AddLocation(string? providerValue, string locationName)
+            {
+                if (!string.IsNullOrWhiteSpace(providerValue))
+                {
+                    locationNameByProviderValue.TryAdd(providerValue, locationName);
+                }
+            }
+        }
+
+        private static bool TrySplitResourceType(string resourceType, out string providerNamespace, out string providerResourceType)
+        {
+            var separator = resourceType.IndexOf('/');
+            if (separator <= 0 || separator == resourceType.Length - 1)
+            {
+                providerNamespace = string.Empty;
+                providerResourceType = string.Empty;
+                return false;
+            }
+
+            providerNamespace = resourceType[..separator];
+            providerResourceType = resourceType[(separator + 1)..];
+            return true;
+        }
+
+        private static string? TryGetLocationName(Dictionary<string, string> locationNameByProviderValue, string providerValue)
+        {
+            if (locationNameByProviderValue.TryGetValue(providerValue, out var locationName))
+            {
+                return locationName;
+            }
+
+            return locationNameByProviderValue.TryGetValue(NormalizeLocation(providerValue), out locationName)
+                ? locationName
+                : null;
+        }
+
+        private static string NormalizeLocation(string location)
+            => string.Concat(location.Where(static c => !char.IsWhiteSpace(c))).ToLowerInvariant();
+
+        private sealed class ProviderMetadataResponse
+        {
+            [JsonPropertyName("resourceTypes")]
+            public ProviderResourceTypeMetadata[]? ResourceTypes { get; init; }
+        }
+
+        private sealed class ProviderResourceTypeMetadata
+        {
+            [JsonPropertyName("resourceType")]
+            public string? ResourceType { get; init; }
+
+            [JsonPropertyName("locations")]
+            public string[]? Locations { get; init; }
         }
 
         private sealed class DefaultTenantResource(TenantResource tenantResource) : ITenantResource

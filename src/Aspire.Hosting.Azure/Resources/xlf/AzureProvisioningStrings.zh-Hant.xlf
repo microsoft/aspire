@@ -107,6 +107,71 @@
         <target state="new">Azure resources deleted and provisioning state reset.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FailurePropertyCodeDisplayName">
+        <source>Azure error code</source>
+        <target state="new">Azure error code</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyCorrelationIdDisplayName">
+        <source>Azure correlation ID</source>
+        <target state="new">Azure correlation ID</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyCurrentLocationDisplayName">
+        <source>Azure current location</source>
+        <target state="new">Azure current location</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyHttpStatusDisplayName">
+        <source>Azure HTTP status</source>
+        <target state="new">Azure HTTP status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyMessageDisplayName">
+        <source>Azure error message</source>
+        <target state="new">Azure error message</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyOperationDisplayName">
+        <source>Azure operation</source>
+        <target state="new">Azure operation</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyProviderDisplayName">
+        <source>Azure provider</source>
+        <target state="new">Azure provider</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyRecommendedActionsDisplayName">
+        <source>Azure recommended actions</source>
+        <target state="new">Azure recommended actions</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyRequestIdDisplayName">
+        <source>Azure request ID</source>
+        <target state="new">Azure request ID</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyResourceNameDisplayName">
+        <source>Azure resource name</source>
+        <target state="new">Azure resource name</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyResourceTypeDisplayName">
+        <source>Azure resource type</source>
+        <target state="new">Azure resource type</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertySupportedLocationsDisplayName">
+        <source>Azure supported locations</source>
+        <target state="new">Azure supported locations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailurePropertyTargetResourceIdDisplayName">
+        <source>Azure target resource ID</source>
+        <target state="new">Azure target resource ID</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ForgetStateCommandConfirmation">
         <source>This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</source>
         <target state="new">This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</target>
