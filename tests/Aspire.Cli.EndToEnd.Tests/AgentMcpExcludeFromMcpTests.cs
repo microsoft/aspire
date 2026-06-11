@@ -32,8 +32,7 @@ public sealed class AgentMcpExcludeFromMcpTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Create a starter project with apiservice and webfrontend
-        await auto.AspireNewAsync("McpExcludeApp", counter);
+        await auto.AspireNewAsync("McpExcludeApp", counter, useRedisCache: false);
 
         // Modify the AppHost to mark apiservice with ExcludeFromMcp()
         var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "McpExcludeApp", "McpExcludeApp.AppHost", "AppHost.cs");
