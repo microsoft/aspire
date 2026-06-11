@@ -17,6 +17,21 @@
         <target state="needs-review-translation">應用程式主機版本不相容。請升級應用程式主機或 Aspire CLI。</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateAppHost">
+        <source>The AppHost version is older than the Aspire CLI. Update the Aspire.Hosting package in the AppHost project.</source>
+        <target state="new">The AppHost version is older than the Aspire CLI. Update the Aspire.Hosting package in the AppHost project.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateCli">
+        <source>The AppHost version is newer than the Aspire CLI. Update the Aspire CLI.</source>
+        <target state="new">The AppHost version is newer than the Aspire CLI. Update the Aspire CLI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostPackageUpdateMessage">
+        <source>To update the AppHost package, run:</source>
+        <target state="new">To update the AppHost package, run:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostShutDown">
         <source>The application shut down.</source>
         <target state="new">The application shut down.</target>
@@ -25,6 +40,11 @@
       <trans-unit id="AspireCLIVersion">
         <source>Aspire CLI Version</source>
         <target state="translated">Aspire CLI 版本</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireCliUpdateMessage">
+        <source>To update the Aspire CLI when installed as a .NET tool, run:</source>
+        <target state="new">To update the Aspire CLI when installed as a .NET tool, run:</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">

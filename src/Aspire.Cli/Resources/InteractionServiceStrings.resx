@@ -124,6 +124,18 @@
   <data name="AppHostNotCompatibleConsiderUpgrading" xml:space="preserve">
     <value>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</value>
   </data>
+  <data name="AppHostNotCompatibleUpdateAppHost" xml:space="preserve">
+    <value>The AppHost version is older than the Aspire CLI. Update the Aspire.Hosting package in the AppHost project.</value>
+  </data>
+  <data name="AppHostNotCompatibleUpdateCli" xml:space="preserve">
+    <value>The AppHost version is newer than the Aspire CLI. Update the Aspire CLI.</value>
+  </data>
+  <data name="AppHostPackageUpdateMessage" xml:space="preserve">
+    <value>To update the AppHost package, run:</value>
+  </data>
+  <data name="AspireCliUpdateMessage" xml:space="preserve">
+    <value>To update the Aspire CLI when installed as a .NET tool, run:</value>
+  </data>
   <data name="AspireHostingSDKVersion" xml:space="preserve">
     <value>Aspire.Hosting Version</value>
   </data>

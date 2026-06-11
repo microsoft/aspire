@@ -9,6 +9,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -441,16 +442,53 @@ internal class ConsoleInteractionService : IInteractionService
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion)
     {
         var cliInformationalVersion = VersionHelper.GetDefaultTemplateVersion();
+        var guidance = GetAppHostCompatibilityGuidance(appHostHostingVersion, cliInformationalVersion);
 
-        DisplayError(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading);
+        DisplayError(guidance.Message);
         MessageConsole.WriteLine();
         MessageConsole.MarkupLine(
             $"\t[bold]{InteractionServiceStrings.AspireHostingSDKVersion}[/]: {appHostHostingVersion.EscapeMarkup()}");
         MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion.EscapeMarkup()}");
         MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability.EscapeMarkup()}");
         MessageConsole.WriteLine();
+
+        if (guidance is { UpdateCommand: not null, UpdateMessage: not null })
+        {
+            MessageConsole.MarkupLine($"\t[bold]{guidance.UpdateMessage.EscapeMarkup()}[/]");
+            MessageConsole.MarkupLine($"\t{guidance.UpdateCommand.EscapeMarkup()}");
+            MessageConsole.WriteLine();
+        }
+
         return CliExitCodes.AppHostIncompatible;
     }
+
+    private static AppHostCompatibilityGuidance GetAppHostCompatibilityGuidance(string appHostHostingVersion, string cliInformationalVersion)
+    {
+        if (SemVersion.TryParse(appHostHostingVersion, SemVersionStyles.Any, out var appHostVersion) &&
+            SemVersion.TryParse(cliInformationalVersion, SemVersionStyles.Any, out var cliVersion))
+        {
+            var comparison = appHostVersion.ComparePrecedenceTo(cliVersion);
+            if (comparison < 0)
+            {
+                return new(
+                    InteractionServiceStrings.AppHostNotCompatibleUpdateAppHost,
+                    InteractionServiceStrings.AppHostPackageUpdateMessage,
+                    FormattableString.Invariant($"dotnet add package Aspire.Hosting --version {cliInformationalVersion}"));
+            }
+
+            if (comparison > 0)
+            {
+                return new(
+                    InteractionServiceStrings.AppHostNotCompatibleUpdateCli,
+                    InteractionServiceStrings.AspireCliUpdateMessage,
+                    FormattableString.Invariant($"dotnet tool update -g Aspire.Cli --version {appHostHostingVersion}"));
+            }
+        }
+
+        return new(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading, null, null);
+    }
+
+    private sealed record AppHostCompatibilityGuidance(string Message, string? UpdateMessage, string? UpdateCommand);
 
     public void DisplayError(string errorMessage, bool allowMarkup = false)
     {

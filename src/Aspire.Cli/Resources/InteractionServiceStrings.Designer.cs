@@ -70,6 +70,42 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The AppHost version is older than the Aspire CLI. Update the Aspire.Hosting package in the AppHost project..
+        /// </summary>
+        public static string AppHostNotCompatibleUpdateAppHost {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleUpdateAppHost", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The AppHost version is newer than the Aspire CLI. Update the Aspire CLI..
+        /// </summary>
+        public static string AppHostNotCompatibleUpdateCli {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleUpdateCli", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to To update the AppHost package, run:.
+        /// </summary>
+        public static string AppHostPackageUpdateMessage {
+            get {
+                return ResourceManager.GetString("AppHostPackageUpdateMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to To update the Aspire CLI when installed as a .NET tool, run:.
+        /// </summary>
+        public static string AspireCliUpdateMessage {
+            get {
+                return ResourceManager.GetString("AspireCliUpdateMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Aspire CLI Version.
         /// </summary>
         public static string AspireCLIVersion {

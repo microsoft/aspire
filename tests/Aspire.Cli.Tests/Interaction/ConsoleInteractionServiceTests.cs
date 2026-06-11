@@ -516,6 +516,48 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public void DisplayIncompatibleVersionError_WhenAppHostIsOlder_ShowsAppHostUpdateCommand()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var interactionService = CreateInteractionService(console);
+        var ex = new AppHostIncompatibleException("Incompatible version", "testCapability");
+
+        interactionService.DisplayIncompatibleVersionError(ex, "9.2.0");
+
+        var outputString = output.ToString();
+        Assert.Contains("older than the Aspire CLI", outputString);
+        Assert.Contains($"dotnet add package Aspire.Hosting --version {VersionHelper.GetDefaultTemplateVersion()}", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_WhenCliIsOlder_ShowsCliUpdateCommand()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var interactionService = CreateInteractionService(console);
+        var ex = new AppHostIncompatibleException("Incompatible version", "testCapability");
+
+        interactionService.DisplayIncompatibleVersionError(ex, "99.0.0");
+
+        var outputString = output.ToString();
+        Assert.Contains("newer than the Aspire CLI", outputString);
+        Assert.Contains("dotnet tool update -g Aspire.Cli --version 99.0.0", outputString);
+    }
+
+    [Fact]
     public void DisplayMessage_WithMarkupCharactersInMessage_AutoEscapesByDefault()
     {
         // Arrange
