@@ -157,17 +157,7 @@ internal static class McpToolHelpers
         CancellationToken cancellationToken)
     {
         var excludedNames = await GetExcludedResourceNamesAsync(auxiliaryBackchannelMonitor, cancellationToken).ConfigureAwait(false);
-
-        if (excludedNames.Contains(resourceName))
-        {
-            return new CallToolResult
-            {
-                Content = [new TextContentBlock { Text = GetResourceNotAvailableMessage(resourceName) }],
-                IsError = true
-            };
-        }
-
-        return null;
+        return CreateExcludedResult(excludedNames, resourceName);
     }
 
     /// <summary>
@@ -180,7 +170,11 @@ internal static class McpToolHelpers
         CancellationToken cancellationToken)
     {
         var excludedNames = await GetExcludedResourceNamesAsync(connection, cancellationToken).ConfigureAwait(false);
+        return CreateExcludedResult(excludedNames, resourceName);
+    }
 
+    private static CallToolResult? CreateExcludedResult(HashSet<string> excludedNames, string resourceName)
+    {
         if (excludedNames.Contains(resourceName))
         {
             return new CallToolResult
@@ -217,7 +211,7 @@ internal static class McpToolHelpers
         CancellationToken cancellationToken)
     {
         var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
-        var excludedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var excludedNames = new HashSet<string>(StringComparers.ResourceName);
 
         foreach (var snapshot in snapshots)
         {
