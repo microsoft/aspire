@@ -792,12 +792,13 @@ pre-agent-steps:
   # matching unittest suite (`test_compute_signals.py`), so it can be
   # reviewed with syntax highlighting and exercised locally with
   # `python3 -m unittest discover -s .github/workflows/pr-docs-check -v`.
-  - name: Check out signal-computation script
+  - name: Check out pre-agent scripts
     # The `checkout:` block above made microsoft/aspire.dev the current
     # workspace because that's where the doc PR is authored. We need a
     # sparse, side-by-side checkout of microsoft/aspire to bring the
-    # signal-computation script into the runner. A sparse checkout keeps
-    # this fast — only `.github/workflows/pr-docs-check` is fetched.
+    # pre-agent scripts (signal computation + PR context) into the runner.
+    # A sparse checkout keeps this fast — only
+    # `.github/workflows/pr-docs-check` is fetched.
     #
     # Default `ref` resolves to the trigger ref (refs/pull/<N>/merge for
     # pull_request: closed, or the dispatcher-selected branch for
@@ -810,7 +811,7 @@ pre-agent-steps:
       sparse-checkout: |
         .github/workflows/pr-docs-check
       sparse-checkout-cone-mode: false
-  - name: Compute user-facing signals
+  - name: Compute user-facing signals and PR context
     env:
       GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
       PR_NUMBER: "${{ github.event.pull_request.number || github.event.inputs.pr_number }}"
@@ -847,9 +848,14 @@ pre-agent-steps:
       # https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
       PR_JSON="$(mktemp)"
       FILES_JSON="$(mktemp)"
+      REVIEWS_JSON="$(mktemp)"
       gh api "/repos/microsoft/aspire/pulls/${PR_NUMBER}" > "${PR_JSON}"
       gh api --paginate "/repos/microsoft/aspire/pulls/${PR_NUMBER}/files?per_page=100" \
         | jq -s 'add // []' > "${FILES_JSON}"
+      # Reviews drive SME resolution below. One paginated call here replaces a
+      # GitHub tool round-trip the agent would otherwise make inside the loop.
+      gh api --paginate "/repos/microsoft/aspire/pulls/${PR_NUMBER}/reviews?per_page=100" \
+        | jq -s 'add // []' > "${REVIEWS_JSON}"
 
       FILE_COUNT="$(jq 'length' "${FILES_JSON}")"
       echo "Files in PR  : ${FILE_COUNT}"
@@ -862,10 +868,35 @@ pre-agent-steps:
       python3 _repos/aspire/.github/workflows/pr-docs-check/compute_signals.py \
         "${PR_JSON}" "${FILES_JSON}" "${OUT}"
 
-      rm -f "${PR_JSON}" "${FILES_JSON}"
+      # --- 3. Build compact PR context ------------------------------------
+      # Reuse the same PR + files payloads (already fetched above) to write
+      # .pr-docs-check/pr.json — the curated metadata the agent reads in
+      # Step 1 instead of re-gathering it with several GitHub tool calls.
+      # That gathering is fully deterministic, so doing it once here removes
+      # those round-trips and the verbose API responses they add to context.
+      # See compute_pr_context.py.
+      PR_CONTEXT_OUT=.pr-docs-check/pr.json
+      python3 _repos/aspire/.github/workflows/pr-docs-check/compute_pr_context.py \
+        "${PR_JSON}" "${FILES_JSON}" "${PR_CONTEXT_OUT}"
+
+      # --- 4. Resolve the subject-matter expert (SME) ---------------------
+      # SME selection from assignees/reviews is a deterministic algorithm, so
+      # it runs once here (reading the curated pr.json + reviews) instead of
+      # inside the agent loop. The agent reads .pr-docs-check/sme.json in
+      # Step 2. Only the fuzzy CODEOWNERS hint is left to the agent, signalled
+      # via "needs_codeowners_fallback". See resolve_sme.py.
+      SME_OUT=.pr-docs-check/sme.json
+      python3 _repos/aspire/.github/workflows/pr-docs-check/resolve_sme.py \
+        "${PR_CONTEXT_OUT}" "${REVIEWS_JSON}" "${SME_OUT}"
+
+      rm -f "${PR_JSON}" "${FILES_JSON}" "${REVIEWS_JSON}"
 
       echo "--- ${OUT} ---"
       cat "${OUT}"
+      echo "--- ${PR_CONTEXT_OUT} ---"
+      cat "${PR_CONTEXT_OUT}"
+      echo "--- ${SME_OUT} ---"
+      cat "${SME_OUT}"
 
 timeout-minutes: 20
 ---
@@ -899,19 +930,27 @@ needed, create a draft PR with the actual documentation changes.
 > `workflow_dispatch` with `pr_number` when a maintainer wants to run the docs
 > check manually for a merged fork PR.
 
-## Step 1: Gather PR Information
+## Step 1: Read PR Information
 
-Use the GitHub tools to read the pull request details from `microsoft/aspire`
-for the PR number above. Gather the lightweight metadata first:
+The source PR's metadata was gathered deterministically by a `pre-agent-steps:`
+shell step and written to `.pr-docs-check/pr.json` in the workspace. **Read that
+file** — do **not** re-fetch this metadata with GitHub tools. The fields you will
+use are:
 
-- Title and description (the full PR body)
-- Author username, base branch, milestone, and labels
-- Any issues linked via `Closes #N` / `Fixes #N` / `Resolves #N` in the PR body
-- The list of changed files (filenames, status, additions/deletions)
+| Field | Purpose |
+| --- | --- |
+| `number`, `title`, `body` | Source PR identity and the author's own description of the change. |
+| `author.login`, `author.type` | Author identity; `type` (`User`/`Bot`) drives Step 2's Copilot-authored branch. |
+| `base_ref`, `milestone`, `labels` | Context for the change. |
+| `assignees` | Used by Step 2 to find the SME for Copilot-authored PRs. |
+| `linked_issues` | Same-repo issue numbers from `Closes`/`Fixes`/`Resolves #N` in the body. |
+| `changed_files` | Each `{filename, status, additions, deletions}`. |
 
-Only inspect diff hunks for files likely to affect user-facing behavior,
-configuration, or public API surface, or when the significance is unclear from
-filenames alone.
+Diff hunks (`patch`) are intentionally omitted to keep this file small. Inspect a
+file's diff only for files likely to affect user-facing behavior, configuration,
+or public API surface (or when significance is unclear from the filename), and
+only on the doc-drafting path — fetch the patch for that specific file with the
+GitHub tools in Step 9. Do **not** fetch diffs on the cheap skip path.
 
 **Defer the expensive comment-thread reads until you actually need them.** They
 are only required when you are writing documentation (Step 9), so do **not**
@@ -933,63 +972,26 @@ filenames. Step 11 must cite at least one piece of evidence per triggered signal
 category, and the comment threads are often where that evidence lives in
 human-readable form.
 
-If this was triggered via `workflow_dispatch`, use the `pr_number` input to look up
-the PR details.
-
 ## Step 2: Identify the Subject-Matter Expert (SME)
 
-Determine which human is the best fit to review the drafted documentation PR. The
-SME is the person most familiar with the change in the source `microsoft/aspire`
-PR — typically the human who reviewed/approved it, except when the PR was
-authored by GitHub Copilot Coding Agent (in which case the SME is the human who
-**initiated the Copilot session**, not whoever happened to approve the bot's
-output).
+The SME — the human best placed to review the drafted documentation PR — has
+already been resolved deterministically by a `pre-agent-steps:` shell step
+(`resolve_sme.py`) and written to `.pr-docs-check/sme.json`. **Read that file**;
+do **not** re-fetch assignees or reviews or re-run the selection logic.
 
-### Step 2a: If the source PR was authored by Copilot Coding Agent
+| Field | Meaning |
+| --- | --- |
+| `sme_login` | The chosen reviewer login (no `@`), or `""` if none could be resolved. |
+| `sme_source` | How it was chosen — e.g. `copilot_originator` (the human who initiated the Copilot session), `approved_reviewer`, `substantive_reviewer`, or `none`. |
+| `needs_codeowners_fallback` | `true` only when there was no usable assignee/review signal and you should consult CODEOWNERS as a last-resort hint. |
+| `candidates` | The eligible reviewers (login + latest state), for context. |
 
-Fetch the source PR's `user.login` and `user.type`. If the PR was authored by a
-Copilot bot — that is, `user.type == "Bot"` AND `user.login` matches `Copilot`,
-`copilot-swe-agent`, or any login containing `copilot` and ending in `[bot]` —
-then the **human session originator** (the person who assigned `@copilot` to
-an issue and therefore initiated the session) is recorded in the PR's
-`assignees[]` field alongside the `Copilot` bot itself. This person is the SME
-because they framed the original problem and have the deepest context for the
-change, even though they didn't author the code.
-
-Apply the following logic:
-
-1. Read `pull_request.assignees[]` from the source PR.
-2. Filter out bot accounts: any login matching `Copilot`, `copilot-swe-agent`,
-   anything ending in `[bot]`, or matching `dependabot`, `github-actions`,
-   `aspire-bot`.
-3. If exactly one human assignee remains, set `SME_LOGIN` = that login and
-   **skip the rest of Step 2**. That person initiated the Copilot session and
-   is the subject-matter expert.
-4. If multiple human assignees remain, prefer the assignee whose latest review
-   state on the source PR is `APPROVED`. If still ambiguous, pick the one whose
-   login appears earliest in `assignees[]`. **Skip the rest of Step 2.**
-5. If no human assignees remain (unusual — Copilot Coding Agent normally
-   assigns the originator), fall through to Step 2b.
-
-### Step 2b: For human-authored PRs (or as a fallback from Step 2a)
-
-Use the GitHub tools to list pull request reviews for the source PR
-(`GET /repos/microsoft/aspire/pulls/{N}/reviews`) and apply the following logic:
-
-1. **Collapse reviews by reviewer.** For each unique reviewer login, keep only their
-   *most recent* review event (the latest `submitted_at`).
-2. **Exclude** the source PR author and any bot account (login ending in `[bot]`,
-   or matching `dependabot`, `github-actions`, `aspire-bot`, `copilot`, etc.).
-3. **Prefer** reviewers whose latest collapsed state is `APPROVED`. Among those,
-   pick the one with the most recent `submitted_at`.
-4. **Fallback A**: if no `APPROVED` reviewer exists, pick the reviewer with any
-   non-`COMMENTED`-only state (for example, `CHANGES_REQUESTED`) whose latest
-   `submitted_at` is most recent.
-5. **Fallback B**: if no reviews exist at all, look at CODEOWNERS for the changed
-   files in `microsoft/aspire` and use the first individual login (skip team
-   handles). Treat this as a hint, not a strong signal.
-6. **Final fallback**: leave `SME_LOGIN` empty (the workflow will draft the PR
-   without an explicit reviewer rather than guess).
+Use `sme_login` directly as `SME_LOGIN`. **Only** when it is empty **and**
+`needs_codeowners_fallback` is `true`, look at CODEOWNERS for the changed files
+in `microsoft/aspire` and use the first individual login (skip team handles) as
+a weak hint. If `sme_login` is empty and the fallback flag is `false`, leave
+`SME_LOGIN` empty — the workflow drafts the PR without an explicit reviewer
+rather than guess.
 
 Capture the chosen login as `SME_LOGIN`. Do NOT include the `@` prefix. You will pass
 this to the `notify_source_pr` safe output later.
