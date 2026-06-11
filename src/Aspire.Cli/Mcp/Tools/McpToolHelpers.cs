@@ -171,6 +171,29 @@ internal static class McpToolHelpers
     }
 
     /// <summary>
+    /// Checks whether the specified resource is excluded from MCP using an existing connection.
+    /// Returns an error <see cref="CallToolResult"/> if the resource is excluded, or <c>null</c> if it is not excluded.
+    /// </summary>
+    internal static async Task<CallToolResult?> CheckResourceExcludedAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        string resourceName,
+        CancellationToken cancellationToken)
+    {
+        var excludedNames = await GetExcludedResourceNamesAsync(connection, cancellationToken).ConfigureAwait(false);
+
+        if (excludedNames.Contains(resourceName))
+        {
+            return new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = GetResourceNotAvailableMessage(resourceName) }],
+                IsError = true
+            };
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Gets the set of resource names that are excluded from MCP.
     /// </summary>
     internal static async Task<HashSet<string>> GetExcludedResourceNamesAsync(
@@ -183,6 +206,16 @@ internal static class McpToolHelpers
             return [];
         }
 
+        return await GetExcludedResourceNamesAsync(connection, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets the set of resource names that are excluded from MCP using an existing connection.
+    /// </summary>
+    internal static async Task<HashSet<string>> GetExcludedResourceNamesAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        CancellationToken cancellationToken)
+    {
         var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
         var excludedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

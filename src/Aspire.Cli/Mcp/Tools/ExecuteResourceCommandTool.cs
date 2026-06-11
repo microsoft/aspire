@@ -91,7 +91,7 @@ internal sealed class ExecuteResourceCommandTool(
         }
 
         // Check if the resource is excluded from MCP before executing commands.
-        var excludedResult = await McpToolHelpers.CheckResourceExcludedAsync(auxiliaryBackchannelMonitor, resourceName, cancellationToken).ConfigureAwait(false);
+        var excludedResult = await McpToolHelpers.CheckResourceExcludedAsync(connection, resourceName, cancellationToken).ConfigureAwait(false);
         if (excludedResult is not null)
         {
             return excludedResult;
