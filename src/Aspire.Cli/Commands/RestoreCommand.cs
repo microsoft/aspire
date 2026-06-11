@@ -145,13 +145,28 @@ internal sealed class RestoreCommand : BaseCommand
                 // the PrebuiltAppHostServer restore path used for polyglot AppHosts.
                 if (DotNetAppHostProject.IsCliManagedSingleFileAppHost(effectiveAppHostFile, _features))
                 {
+                    // Wire the module build output through an OutputCollector so the user sees
+                    // diagnostics (NU1101 for a missing package, NU1605 for downgrades, etc.) inline
+                    // when restore fails, instead of only "See logs at ...". Mirrors how AddCommand
+                    // surfaces failures via DisplayLines on the captured output.
+                    var buildOutputCollector = new OutputCollector();
+                    var buildOptions = new ProcessInvocationOptions
+                    {
+                        StandardOutputCallback = buildOutputCollector.AppendOutput,
+                        StandardErrorCallback = buildOutputCollector.AppendError,
+                    };
+
                     var layout = await _interactionService.ShowStatusAsync(
                         RestoreCommandStrings.RestoringSdkCode,
-                        async () => await _integrationClosureRestorer.RestoreAsync(effectiveAppHostFile, new IntegrationClosureRestoreOptions(), cancellationToken),
+                        async () => await _integrationClosureRestorer.RestoreAsync(
+                            effectiveAppHostFile,
+                            new IntegrationClosureRestoreOptions { BuildInvocationOptions = buildOptions },
+                            cancellationToken),
                         emoji: KnownEmojis.Gear);
 
                     if (layout is null)
                     {
+                        _interactionService.DisplayLines(buildOutputCollector.GetLines());
                         return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
                     }
 
