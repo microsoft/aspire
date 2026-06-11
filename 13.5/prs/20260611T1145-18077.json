@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only change: adds CLI E2E test for WithTerminal attach flow, no product file changes",
+  "mergedAt": "2026-06-11T11:45:43Z",
+  "number": 18077,
+  "runDate": "2026-06-11T13:16:42Z",
+  "status": "excluded",
+  "title": "Add CLI E2E coverage for WithTerminal attach flow"
+}
