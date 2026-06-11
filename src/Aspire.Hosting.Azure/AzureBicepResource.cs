@@ -14,7 +14,6 @@ using Aspire.Hosting.Azure.Utils;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Azure;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -306,7 +305,6 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         }
 
         var bicepProvisioner = context.Services.GetRequiredService<IBicepProvisioner>();
-        var configuration = context.Services.GetRequiredService<IConfiguration>();
 
         // Find the AzureEnvironmentResource from the application model
         var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault();
@@ -326,7 +324,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
             try
             {
                 if (await bicepProvisioner.ConfigureResourceAsync(
-                    configuration, resource, context.CancellationToken).ConfigureAwait(false))
+                    resource, context.CancellationToken).ConfigureAwait(false))
                 {
                     resource.ProvisioningTaskCompletionSource?.TrySetResult();
                     await resourceTask.CompleteAsync(

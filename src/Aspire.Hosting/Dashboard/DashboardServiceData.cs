@@ -291,6 +291,11 @@ internal sealed class DashboardServiceData : IDisposable
                 // If we're processing updates because of a dependency change, check to see if this input is depended on.
                 if (dependencyChange)
                 {
+                    // Response updates are sent by the dashboard when an input marked
+                    // UpdateStateOnChange changes. Only queue dependents whose source value actually
+                    // changed; otherwise a validation/update roundtrip for one field could repeatedly
+                    // restart unrelated dynamic loads. Inputs that need an initial load before any user
+                    // change must opt into AlwaysLoadOnStart.
                     var dependentInputs = inputsInfo.Inputs.Where(
                         i => i.DynamicLoading is { } dynamic &&
                         (dynamic.DependsOnInputs?.Any(d => string.Equals(modelInput.Name, d, StringComparisons.InteractionInputName)) ?? false));

@@ -1,11 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using System.IO.Hashing;
 using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.Provisioning;
 
@@ -14,6 +18,12 @@ namespace Aspire.Hosting.Azure.Provisioning;
 /// </summary>
 internal static class BicepUtilities
 {
+    internal const string DeploymentStateIdKey = "Id";
+    internal const string DeploymentStateParametersKey = "Parameters";
+    internal const string DeploymentStateOutputsKey = "Outputs";
+    internal const string DeploymentStateScopeKey = "Scope";
+    internal const string DeploymentStateChecksumKey = "CheckSum";
+
     // Known values since they will be filled in by the provisioner
     private static readonly string[] s_knownParameterNames =
     [
@@ -105,7 +115,7 @@ internal static class BicepUtilities
     public static async ValueTask<string?> GetCurrentChecksumAsync(AzureBicepResource resource, IConfiguration section, CancellationToken cancellationToken = default)
     {
         // Fill in parameters from configuration
-        if (section["Parameters"] is not string jsonString)
+        if (section[DeploymentStateParametersKey] is not string jsonString)
         {
             return null;
         }
@@ -113,7 +123,7 @@ internal static class BicepUtilities
         try
         {
             var parameters = JsonNode.Parse(jsonString)?.AsObject();
-            var scope = section["Scope"] is string scopeString
+            var scope = section[DeploymentStateScopeKey] is string scopeString
                 ? JsonNode.Parse(scopeString)?.AsObject()
                 : null;
 
@@ -138,6 +148,45 @@ internal static class BicepUtilities
         catch
         {
             // Unable to parse the JSON, to treat it as not existing
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets the current checksum for a Bicep resource from deployment state.
+    /// </summary>
+    public static async ValueTask<string?> GetCurrentChecksumAsync(AzureBicepResource resource, DeploymentStateSection section, ILogger logger, CancellationToken cancellationToken = default)
+    {
+        if (section.Data[DeploymentStateParametersKey]?.GetValue<string>() is not { Length: > 0 } jsonString)
+        {
+            return null;
+        }
+
+        try
+        {
+            var parameters = JsonNode.Parse(jsonString)?.AsObject();
+            var scope = section.Data[DeploymentStateScopeKey]?.GetValue<string>() is { Length: > 0 } scopeString
+                ? JsonNode.Parse(scopeString)?.AsObject()
+                : null;
+
+            if (parameters is null)
+            {
+                return null;
+            }
+
+            _ = resource.GetBicepTemplateString();
+
+            await SetParametersAsync(parameters, resource, skipKnownValues: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (scope is not null)
+            {
+                await SetScopeAsync(scope, resource, cancellationToken).ConfigureAwait(false);
+            }
+
+            return GetChecksum(resource, parameters, scope);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Unable to compute current checksum for resource {ResourceName}.", resource.Name);
             return null;
         }
     }
