@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
+    <PackageReference Include="System.CommandLine" />
     <PackageReference Include="YamlDotNet" />
   </ItemGroup>
 

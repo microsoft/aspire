@@ -19,6 +19,12 @@
       "commands": [
         "hex1b"
       ]
+    },
+    "dotnet-affected": {
+      "version": "6.2.0",
+      "commands": [
+        "dotnet-affected"
+      ]
     }
   }
 }
