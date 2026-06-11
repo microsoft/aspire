@@ -61,7 +61,149 @@ public sealed class TestSelector
         IReadOnlyCollection<string> changedFiles,
         IReadOnlyCollection<string> layer1Affected,
         SelectorOptions options)
-        => throw new NotImplementedException(
-            "SelectTests resolution is not implemented yet. See the acceptance tests in " +
-            "Infrastructure.Tests/TestTriggerMap/SelectTestsAcceptanceTests.cs for the expected behavior.");
+    {
+        var map = TriggerMap.Load(_mapPath);
+
+        var testProjects = new HashSet<string>(StringComparer.Ordinal);
+        var jobs = new HashSet<string>(StringComparer.Ordinal);
+        var selectsAll = false;
+        string? reason = null;
+
+        // Kill switch: a [full ci] token / run-all-tests label forces the whole matrix regardless
+        // of which files changed.
+        if (options.ForceAll)
+        {
+            selectsAll = true;
+            reason = "kill switch: a [full ci] token or run-all-tests label forces the full matrix";
+        }
+
+        foreach (var file in changedFiles)
+        {
+            // Tracks whether ANY rule claimed this file. A src/** file claimed by nothing fails
+            // open to ALL below: a missed test is a silent regression, an extra run is just slower.
+            var fileMatched = false;
+
+            // run_all catch-all (build infrastructure / broadly shared code) -> ALL.
+            if (map.RunAllGlobs.Any(g => TriggerMap.GlobMatches(g, file)))
+            {
+                selectsAll = true;
+                reason ??= $"run_all glob matched '{file}'";
+                fileMatched = true;
+            }
+
+            // test_self: a change under tests/<X>/** always runs test project <X>. The map's
+            // pattern is the literal placeholder "tests/<TestProject>/**", so match the shape
+            // (tests/<segment>/...) directly and take the second path segment as the project.
+            if (TryGetTestSelfProject(file, out var selfProject))
+            {
+                testProjects.Add(selfProject);
+                fileMatched = true;
+            }
+
+            foreach (var rule in map.AllPathRules())
+            {
+                if (rule.Paths.Any(g => TriggerMap.GlobMatches(g, file)))
+                {
+                    ApplyTargets(rule.Targets, map, testProjects, jobs, ref selectsAll, ref reason, file);
+                    fileMatched = true;
+                }
+            }
+
+            foreach (var job in map.CuratedJobs)
+            {
+                if (job.Paths.Any(g => TriggerMap.GlobMatches(g, file)))
+                {
+                    ApplyTargets(new[] { job.Target }, map, testProjects, jobs, ref selectsAll, ref reason, file);
+                    fileMatched = true;
+                }
+            }
+
+            // Fail-open: an unmapped src/** file must still run everything.
+            if (!fileMatched && file.StartsWith("src/", StringComparison.Ordinal))
+            {
+                selectsAll = true;
+                reason ??= $"fail-open: src file '{file}' matched no rule";
+            }
+        }
+
+        // Layer 1: the graph tool's affected/changed test projects are always part of the answer.
+        foreach (var project in layer1Affected)
+        {
+            testProjects.Add(project);
+        }
+
+        if (selectsAll)
+        {
+            // ALL = full matrix + all jobs. Replace any partial set so the result is exactly the
+            // universe the caller passed in (the matrix and the map's full job vocabulary).
+            return new SelectionResult(
+                SelectsAll: true,
+                TestProjects: new HashSet<string>(_allTestProjects, StringComparer.Ordinal),
+                Jobs: new HashSet<string>(map.AllJobTokens(), StringComparer.Ordinal),
+                EscalationReason: reason ?? "full matrix selected");
+        }
+
+        return new SelectionResult(
+            SelectsAll: false,
+            TestProjects: testProjects,
+            Jobs: jobs,
+            EscalationReason: null);
+    }
+
+    private static void ApplyTargets(
+        IEnumerable<string> targets,
+        TriggerMap map,
+        HashSet<string> testProjects,
+        HashSet<string> jobs,
+        ref bool selectsAll,
+        ref string? reason,
+        string file)
+    {
+        foreach (var target in targets)
+        {
+            if (target == "ALL")
+            {
+                selectsAll = true;
+                reason ??= $"a rule matching '{file}' selects ALL";
+            }
+            else if (map.Aliases.TryGetValue(target, out var members))
+            {
+                foreach (var member in members)
+                {
+                    testProjects.Add(StripTestPrefix(member));
+                }
+            }
+            else if (target.StartsWith("test:", StringComparison.Ordinal))
+            {
+                testProjects.Add(StripTestPrefix(target));
+            }
+            else if (target.StartsWith("job:", StringComparison.Ordinal))
+            {
+                jobs.Add(target);
+            }
+        }
+    }
+
+    // tests/<TestProject>/<more> -> <TestProject>. Returns false for paths outside tests/ or with
+    // no file under a project folder (e.g. a bare "tests/X" with no trailing segment).
+    private static bool TryGetTestSelfProject(string file, out string project)
+    {
+        project = "";
+        if (!file.StartsWith("tests/", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var parts = file.Split('/');
+        if (parts.Length < 3 || parts[1].Length == 0)
+        {
+            return false;
+        }
+
+        project = parts[1];
+        return true;
+    }
+
+    private static string StripTestPrefix(string target) =>
+        target.StartsWith("test:", StringComparison.Ordinal) ? target["test:".Length..] : target;
 }
