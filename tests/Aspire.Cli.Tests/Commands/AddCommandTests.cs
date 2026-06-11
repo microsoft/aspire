@@ -2274,7 +2274,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         };
 
         // Act
-        var result = await prompter.PromptForIntegrationVersionAsync(packages, CancellationToken.None).DefaultTimeout();
+        var result = await prompter.PromptForIntegrationVersionAsync(packages, configuredChannel: null, CancellationToken.None).DefaultTimeout();
 
         // Assert - For implicit channel with no explicit channels, should automatically select highest version without prompting
         Assert.Null(displayedChoices); // No prompt should be shown
@@ -2326,11 +2326,136 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         };
 
         // Act
-        await prompter.PromptForIntegrationVersionAsync(packages, CancellationToken.None).DefaultTimeout();
+        await prompter.PromptForIntegrationVersionAsync(packages, configuredChannel: null, CancellationToken.None).DefaultTimeout();
 
         // Assert - should show 2 root choices: one for implicit channel, one submenu for explicit channel
         Assert.NotNull(displayedChoices);
         Assert.Equal(2, displayedChoices!.Count);
+    }
+
+    [Fact]
+    public async Task AddCommandPrompter_ShowsConfiguredChannelAsFirstChoiceWhenChannelPinned()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/17294.
+        //
+        // When the apphost pins a channel (e.g. a polyglot apphost that persists `"channel": "daily"`
+        // in aspire.config.json), `aspire add` must surface that channel's package as the FIRST/default
+        // menu option. Pre-fix the implicit/ambient channel was always rendered first, so the default
+        // selection was the stable nuget.org version (e.g. 13.4.3) even though the project can only
+        // restore from the pinned daily feed — producing a confusing default and a failed restore.
+        List<string>? displayedLabels = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                var mockInteraction = new TestInteractionService();
+                mockInteraction.PromptForSelectionCallback = (message, choices, formatter, ct) =>
+                {
+                    var choicesList = choices.Cast<object>().ToList();
+                    displayedLabels = choicesList.Select(formatter).ToList();
+                    return choicesList.First();
+                };
+                return mockInteraction;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var interactionService = provider.GetRequiredService<IInteractionService>();
+
+        var prompter = new AddCommandPrompter(interactionService);
+
+        var fakeCache = new FakeNuGetPackageCache();
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], fakeCache, new TestFeatures());
+
+        // The implicit (ambient) channel surfaces a higher-precedence STABLE version; the pinned daily
+        // channel surfaces a PRERELEASE version. Pre-fix the higher stable version was always the default.
+        var packages = new[]
+        {
+            ("storage", new NuGetPackage { Id = "Aspire.Hosting.Azure.Storage", Version = "13.4.3", Source = "nuget" }, implicitChannel),
+            ("storage", new NuGetPackage { Id = "Aspire.Hosting.Azure.Storage", Version = "13.5.0-preview.1", Source = "daily" }, dailyChannel),
+        };
+
+        var result = await prompter.PromptForIntegrationVersionAsync(packages, configuredChannel: "daily", CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(displayedLabels);
+        // The pinned (daily) channel is the first/default choice; the implicit channel follows.
+        Assert.Equal("daily", displayedLabels![0]);
+        // Selecting the default (first) choice resolves to the daily channel's prerelease package.
+        Assert.Equal("13.5.0-preview.1", result.Package.Version);
+        Assert.Same(dailyChannel, result.Channel);
+    }
+
+    [Fact]
+    public async Task AddCommandNonInteractiveTypeScriptAppHostPinnedToDailyPrefersDailyChannelOverImplicitStable()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/17294.
+        //
+        // Repro: a polyglot (TypeScript) apphost created by a daily CLI persists `"channel": "daily"`
+        // in aspire.config.json, and its NuGet.config maps Aspire* to the daily (dotnet9) feed only.
+        // `aspire add azure-storage --non-interactive` discovers BOTH the implicit channel (ambient
+        // nuget.org -> stable 13.4.3) and the pinned daily channel (dotnet9 -> 13.5.0-preview.1).
+        //
+        // Pre-fix: GetPackageByInteractiveFlow ranked the implicit channel first, so the non-interactive
+        // path auto-selected the stable 13.4.3 — which the project then could NOT restore from the daily
+        // feed (the dotnet9 feed has no stable 13.4.3), surfacing as a hard restore failure.
+        //
+        // Post-fix: a pinned channel outranks the implicit channel, so the daily 13.5.0-preview.1 package
+        // is selected and restore from the pinned feed succeeds.
+        var addedPackageId = string.Empty;
+        var addedPackageVersion = string.Empty;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "daily"
+            }
+            """);
+
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Azure.Storage", "13.4.3")])
+        };
+        var dailyCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Azure.Storage", "13.5.0-preview.1")])
+        };
+
+        var tsFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        tsFactory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            addedPackageId = context.PackageId;
+            addedPackageVersion = context.PackageVersion;
+            return Task.FromResult(true);
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures())
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(tsFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        // Use the fully-qualified package id so it is an exact match (no fuzzy fallback) in non-interactive mode.
+        var result = command.Parse($"add Aspire.Hosting.Azure.Storage --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("Aspire.Hosting.Azure.Storage", addedPackageId);
+        Assert.Equal("13.5.0-preview.1", addedPackageVersion);
     }
 
     [Fact]
@@ -2665,7 +2790,7 @@ internal sealed class TestAddCommandPrompter(IInteractionService interactionServ
         };
     }
 
-    public override Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)
+    public override Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken)
     {
         return PromptForIntegrationVersionCallback switch
         {

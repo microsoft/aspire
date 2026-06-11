@@ -220,6 +220,7 @@ internal sealed class AddCommand : BaseCommand
                     packagesWithShortName,
                     integrationName,
                     version,
+                    configuredChannel,
                     cancellationToken,
                     promptForSinglePackage: integrationName is not null),
                 1 when packageMatchKind == ProfilingTelemetry.Values.AddPackageMatchKindExact
@@ -229,6 +230,7 @@ internal sealed class AddCommand : BaseCommand
                     effectiveAppHostProjectFile.Directory!,
                     filteredPackagesWithShortName,
                     version,
+                    configuredChannel,
                     cancellationToken,
                     promptForSingleFuzzyPackage)
             };
@@ -385,6 +387,7 @@ internal sealed class AddCommand : BaseCommand
         DirectoryInfo workingDirectory,
         IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages,
         string? preferredVersion,
+        string? configuredChannel,
         CancellationToken cancellationToken,
         bool promptForSinglePackage = false)
     {
@@ -442,11 +445,17 @@ internal sealed class AddCommand : BaseCommand
             return cliVersionPackage;
         }
 
-        // In non-interactive mode, prefer the implicit/default channel first to keep
-        // package selection aligned with the project's configured feeds. Then select
-        // the latest version within the chosen channel.
+        // In non-interactive mode, prefer the channel the apphost has pinned (e.g. a polyglot
+        // apphost that persists `channel: daily` in aspire.config.json). When a channel is pinned,
+        // it reflects explicit user intent and must outrank the implicit/ambient channel — otherwise
+        // the implicit channel (which for polyglot apphosts just mirrors nuget.org) shadows the pinned
+        // feed and we auto-select a stable version the pinned feed can't restore, producing a hard
+        // restore failure. See https://github.com/microsoft/aspire/issues/17294. When no channel is
+        // pinned (the common C# case, where configuredChannel is null) we keep the prior behavior:
+        // implicit/default channel first, then latest version within the chosen channel.
         var orderedPackageVersions = packageVersions
-            .OrderByDescending(p => p.Channel.Type is PackageChannelType.Implicit)
+            .OrderByDescending(p => MatchesConfiguredChannel(p.Channel, configuredChannel))
+            .ThenByDescending(p => p.Channel.Type is PackageChannelType.Implicit)
             .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
@@ -454,9 +463,19 @@ internal sealed class AddCommand : BaseCommand
         }
 
         // ... otherwise we had better prompt.
-        var version = await PromptForIntegrationVersionAsync(orderedPackageVersions, cancellationToken);
+        var version = await PromptForIntegrationVersionAsync(orderedPackageVersions, configuredChannel, cancellationToken);
 
         return version;
+    }
+
+    // A package "matches" the pinned channel when the apphost pinned an explicit channel name and the
+    // package was discovered from the explicit channel of that name (case-insensitive). The implicit
+    // channel never matches because it has no stable name to pin against.
+    private static bool MatchesConfiguredChannel(PackageChannel channel, string? configuredChannel)
+    {
+        return !string.IsNullOrEmpty(configuredChannel)
+            && channel.Type is PackageChannelType.Explicit
+            && string.Equals(channel.Name, configuredChannel, StringComparisons.ChannelName);
     }
 
     private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)
@@ -465,10 +484,10 @@ internal sealed class AddCommand : BaseCommand
         return await _prompter.PromptForIntegrationAsync(packages, cancellationToken);
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)
+    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken)
     {
         using var promptActivity = _profilingTelemetry.StartAddSelectPackagePrompt();
-        return await _prompter.PromptForIntegrationVersionAsync(packages, cancellationToken);
+        return await _prompter.PromptForIntegrationVersionAsync(packages, configuredChannel, cancellationToken);
     }
 
     private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlowWithNoMatchesMessage(
@@ -476,6 +495,7 @@ internal sealed class AddCommand : BaseCommand
         IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages,
         string? searchTerm,
         string? preferredVersion,
+        string? configuredChannel,
         CancellationToken cancellationToken,
         bool promptForSinglePackage = false)
     {
@@ -484,7 +504,7 @@ internal sealed class AddCommand : BaseCommand
             InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoPackagesMatchedSearchTerm, searchTerm));
         }
 
-        return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, cancellationToken, promptForSinglePackage);
+        return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, configuredChannel, cancellationToken, promptForSinglePackage);
     }
 
 }
@@ -492,12 +512,12 @@ internal sealed class AddCommand : BaseCommand
 internal interface IAddCommandPrompter
 {
     Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken);
-    Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken);
+    Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken);
 }
 
 internal class AddCommandPrompter(IInteractionService interactionService) : IAddCommandPrompter
 {
-    public virtual async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)
+    public virtual async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken)
     {
         var firstPackage = packages.First();
 
@@ -556,8 +576,28 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
             return implicitGroup.HighestVersion;
         }
 
-        // Build the root menu: implicit channel packages directly, explicit channels as submenus
+        // Build the root menu. When the apphost has pinned a channel (e.g. a polyglot apphost that
+        // persists `channel: daily` in aspire.config.json), surface that channel's package as the first
+        // option so it becomes the default selection — the pinned channel reflects explicit user intent
+        // and its feed is the one the project will actually restore from. Otherwise the implicit/ambient
+        // channel can shadow the pinned feed and offer a version the project can't restore. See
+        // https://github.com/microsoft/aspire/issues/17294.
         var rootChoices = new List<(string Label, Func<CancellationToken, Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> Action)>();
+
+        var configuredGroup = string.IsNullOrEmpty(configuredChannel)
+            ? null
+            : explicitGroups.FirstOrDefault(g => string.Equals(g.Channel.Name, configuredChannel, StringComparisons.ChannelName));
+
+        if (configuredGroup is not null)
+        {
+            var channel = configuredGroup.Channel;
+            var item = configuredGroup.HighestVersion;
+
+            rootChoices.Add((
+                Label: channel.Name.EscapeMarkup(),
+                Action: ct => PromptForChannelPackagesAsync(channel, new[] { item }, ct)
+            ));
+        }
 
         if (implicitGroup is not null)
         {
@@ -570,6 +610,12 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
 
         foreach (var channelGroup in explicitGroups)
         {
+            // The pinned channel (if any) was already added above as the first/default choice.
+            if (ReferenceEquals(channelGroup, configuredGroup))
+            {
+                continue;
+            }
+
             var channel = channelGroup.Channel;
             var item = channelGroup.HighestVersion;
 
