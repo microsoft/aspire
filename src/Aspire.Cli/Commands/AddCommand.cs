@@ -450,8 +450,9 @@ internal sealed class AddCommand : BaseCommand
         // it reflects explicit user intent and must outrank the implicit/ambient channel — otherwise
         // the implicit channel (which for polyglot apphosts just mirrors nuget.org) shadows the pinned
         // feed and we auto-select a stable version the pinned feed can't restore, producing a hard
-        // restore failure. See https://github.com/microsoft/aspire/issues/17294. When no channel is
-        // pinned (the common C# case, where configuredChannel is null) we keep the prior behavior:
+        // restore failure. See https://github.com/microsoft/aspire/issues/18114 (the polyglot
+        // selection-path manifestation of the C#-only display bug https://github.com/microsoft/aspire/issues/17294).
+        // When no channel is pinned (the common C# case, where configuredChannel is null) we keep the prior behavior:
         // implicit/default channel first, then latest version within the chosen channel.
         var orderedPackageVersions = packageVersions
             .OrderByDescending(p => MatchesConfiguredChannel(p.Channel, configuredChannel))
@@ -581,7 +582,7 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
         // option so it becomes the default selection — the pinned channel reflects explicit user intent
         // and its feed is the one the project will actually restore from. Otherwise the implicit/ambient
         // channel can shadow the pinned feed and offer a version the project can't restore. See
-        // https://github.com/microsoft/aspire/issues/17294.
+        // https://github.com/microsoft/aspire/issues/18114.
         var rootChoices = new List<(string Label, Func<CancellationToken, Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> Action)>();
 
         var configuredGroup = string.IsNullOrEmpty(configuredChannel)

@@ -2336,7 +2336,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommandPrompter_ShowsConfiguredChannelAsFirstChoiceWhenChannelPinned()
     {
-        // Regression for https://github.com/microsoft/aspire/issues/17294.
+        // Regression for https://github.com/microsoft/aspire/issues/18114.
         //
         // When the apphost pins a channel (e.g. a polyglot apphost that persists `"channel": "daily"`
         // in aspire.config.json), `aspire add` must surface that channel's package as the FIRST/default
@@ -2390,7 +2390,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommandNonInteractiveTypeScriptAppHostPinnedToDailyPrefersDailyChannelOverImplicitStable()
     {
-        // Regression for https://github.com/microsoft/aspire/issues/17294.
+        // Regression for https://github.com/microsoft/aspire/issues/18114.
         //
         // Repro: a polyglot (TypeScript) apphost created by a daily CLI persists `"channel": "daily"`
         // in aspire.config.json, and its NuGet.config maps Aspire* to the daily (dotnet9) feed only.
