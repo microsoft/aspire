@@ -33,6 +33,8 @@ jobs:
       run_extension_unit: ${{ steps.select_tests.outputs.run_extension_unit }}
       run_extension_e2e: ${{ steps.select_tests.outputs.run_extension_e2e }}
       run_cli_starter: ${{ steps.select_tests.outputs.run_cli_starter }}
+      run_winget_installer: ${{ steps.select_tests.outputs.run_winget_installer }}
+      run_homebrew_installer: ${{ steps.select_tests.outputs.run_homebrew_installer }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -149,9 +151,13 @@ jobs:
     name: Prepare WinGet installer artifacts
     uses: ./.github/workflows/prepare-installer-artifacts.yml
     needs: [
+      setup_for_tests,
       build_cli_archive_windows,
       build_cli_archive_windows_arm64,
     ]
+    # Audit: always runs. Enforcing: gated by the selector (the map ties the installer jobs to
+    # Aspire.Acquisition.Tests via derived_targets).
+    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_winget_installer == 'true' }}
     with:
       installer: winget
 
@@ -159,9 +165,11 @@ jobs:
     name: Prepare Homebrew installer artifacts
     uses: ./.github/workflows/prepare-installer-artifacts.yml
     needs: [
+      setup_for_tests,
       build_cli_archive_macos,
       build_cli_archive_macos_x64,
     ]
+    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_homebrew_installer == 'true' }}
     with:
       installer: homebrew
 
@@ -279,9 +287,10 @@ jobs:
     name: Polyglot SDK Validation
     # Pull requests validate the current TypeScript AppHost LTS runtime. Main branch
     # builds add the older supported LTS runtime without adding that cost to every PR.
-    if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+    # Audit: the selector gate is a no-op (selection_enforced 'false'); enforcing adds run_polyglot.
+    if: ${{ (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_polyglot == 'true') }}
     uses: ./.github/workflows/polyglot-validation.yml
-    needs: [build_packages, build_cli_archive_linux]
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux]
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
@@ -289,8 +298,8 @@ jobs:
     name: Aspire CLI Starter Validation (${{ matrix.os.name }})
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 15
-    needs: [build_packages, build_cli_archive_windows, build_cli_archive_windows_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_windows, build_cli_archive_windows_arm64]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_cli_starter == 'true') }}
     strategy:
       fail-fast: false
       matrix:
@@ -368,6 +377,11 @@ jobs:
   extension_tests_win:
     name: Run VS Code extension unit tests (Windows)
     runs-on: windows-latest
+    needs: [setup_for_tests]
+    # Audit: always runs. Enforcing: gated by run_extension_unit (extension/** changes). Also runs
+    # when run_extension_e2e is set, because extension_e2e_tests `needs` this job -- gating it off
+    # while e2e runs would skip e2e via need-propagation.
+    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
@@ -456,6 +470,8 @@ jobs:
     # platform-specific branch beyond Linux is the cache path, which is
     # explicitly overridden via COREPACK_HOME in the build entrypoints.
     runs-on: ubuntu-latest
+    needs: [setup_for_tests]
+    if: ${{ needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
@@ -629,10 +645,10 @@ jobs:
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
                (github.event_name == 'pull_request' &&
-                (needs.extension_tests_win.result == 'skipped' ||
+                ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_extension_unit == 'true')) ||
                  (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
-                 needs.cli_starter_validation_windows.result == 'skipped' ||
+                 (needs.cli_starter_validation_windows.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_cli_starter == 'true')) ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.selection_enforced != 'true' ||
                    needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
@@ -640,8 +656,8 @@ jobs:
                   (needs.setup_for_tests.outputs.selection_enforced != 'true' ||
                    needs.setup_for_tests.outputs.run_typescript_api_compat == 'true')) ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
-                 needs.prepare_winget_installer_artifacts.result == 'skipped' ||
-                 needs.prepare_homebrew_installer_artifacts.result == 'skipped' ||
+                 (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
+                 (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
                  needs.tests_no_nugets.result == 'skipped' ||
                  needs.tests_requires_nugets_linux.result == 'skipped' ||
                  needs.tests_requires_nugets_windows.result == 'skipped' ||
@@ -650,22 +666,22 @@ jobs:
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
                   needs.build_cli_e2e_image.result == 'skipped') ||
                  needs.tests_requires_cli_archive.result == 'skipped' ||
-                 needs.polyglot_validation.result == 'skipped')) ||
+                 (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_polyglot == 'true')))) ||
                (github.event_name != 'pull_request' &&
-                (needs.extension_tests_win.result == 'skipped' ||
+                ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_extension_unit == 'true')) ||
                  (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.selection_enforced != 'true' ||
                    needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
-                 needs.prepare_winget_installer_artifacts.result == 'skipped' ||
-                 needs.prepare_homebrew_installer_artifacts.result == 'skipped' ||
+                 (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
+                 (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
                  needs.tests_no_nugets.result == 'skipped' ||
                  needs.tests_requires_nugets_linux.result == 'skipped' ||
                  needs.tests_requires_nugets_windows.result == 'skipped' ||
                  (github.ref == 'refs/heads/main' &&
-                  needs.polyglot_validation.result == 'skipped') ||
+                  (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.selection_enforced != 'true' || needs.setup_for_tests.outputs.run_polyglot == 'true'))) ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
                   needs.tests_requires_nugets_macos.result == 'skipped')))) }}
         run: |

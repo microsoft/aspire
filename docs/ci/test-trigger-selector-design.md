@@ -176,9 +176,19 @@ enumerate-tests (action)  ->  all_tests JSON {"include":[...]}
 
 `SelectTests` runs as one step after `enumerate-tests` and before the split. The
 split, per-OS/per-dependency bucketing, and `run-tests.yml` are unchanged. The
-`run_*` step outputs become `setup_for_tests` job outputs that gate the non-.NET
-jobs (`extension_e2e_tests`, `typescript_sdk_tests`, `typescript_api_compat`) via
-their `if:` — replacing the old hand-rolled `extension_e2e_changes` regex job.
+`run_*` step outputs become `setup_for_tests` job outputs that gate every non-.NET
+job — `polyglot_validation`, `typescript_sdk_tests`, `typescript_api_compat`,
+`extension_tests_win`, `extension_bootstrap_linux`, `extension_e2e_tests`,
+`cli_starter_validation_windows`, and the WinGet/Homebrew installer-prepare jobs —
+via their `if:`, combined with each job's existing event conditions. (The .NET test
+jobs need no `run_*` gate: they are already gated by their matrix bucket being
+empty once SelectTests filters the matrix. Base builds stay ungated — they are
+upstream `needs:` that run whenever a dependent does.) This replaces the old
+hand-rolled `extension_e2e_changes` regex job.
+
+The extension-unit jobs (`extension_tests_win` / `extension_bootstrap_linux`) gate
+on `run_extension_unit` **or** `run_extension_e2e`, because `extension_e2e_tests`
+`needs:` them — gating them off while e2e runs would skip e2e via need-propagation.
 
 **Audit vs. enforce is one `setup_for_tests` output, `selection_enforced`** (default
 `'false'`). While `'false'`: SelectTests runs in audit mode (emits the full matrix
