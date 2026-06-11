@@ -1,13 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -168,6 +172,57 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
 
         Assert.Contains("--skipApiVersionCheck", args);
         Assert.Contains("--disableProductStyleUrl", args);
+    }
+
+    [Fact]
+    public async Task RunAsEmulatorInitializesStorageClientsWhenEndpointsAreAllocatedBeforeHealthCheckRuns()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var blobEndpointListener = new TcpListener(IPAddress.Loopback, 0);
+        blobEndpointListener.Start();
+        var blobEndpointPort = ((IPEndPoint)blobEndpointListener.LocalEndpoint).Port;
+
+        try
+        {
+            var storage = builder.AddAzureStorage("storage").RunAsEmulator(emulator =>
+            {
+                emulator.WithEndpoint("blob", e => e.AllocatedEndpoint = new(e, "127.0.0.1", blobEndpointPort));
+                emulator.WithEndpoint("queue", e => e.AllocatedEndpoint = new(e, "127.0.0.1", 2));
+                emulator.WithEndpoint("table", e => e.AllocatedEndpoint = new(e, "127.0.0.1", 3));
+            });
+
+            using var app = builder.Build();
+
+            var healthCheckKey = $"{storage.Resource.Name}_check";
+            var healthCheckService = app.Services.GetRequiredService<HealthCheckService>();
+
+            var initializationException = await Assert.ThrowsAsync<InvalidOperationException>(() => healthCheckService.CheckHealthAsync(r => r.Name == healthCheckKey));
+            Assert.Equal("BlobServiceClient is not initialized.", initializationException.Message);
+
+            await builder.Eventing.PublishAsync(
+                new ResourceEndpointsAllocatedEvent(storage.Resource, app.Services),
+                EventDispatchBehavior.BlockingSequential);
+
+            using var healthCheckResponseCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var blobEndpointTask = ServeSuccessfulStorageHealthCheckResponseAsync(blobEndpointListener, healthCheckResponseCts.Token);
+
+            try
+            {
+                var afterAllocationReport = await healthCheckService.CheckHealthAsync(r => r.Name == healthCheckKey, healthCheckResponseCts.Token);
+                Assert.True(afterAllocationReport.Entries.TryGetValue(healthCheckKey, out var afterAllocationEntry));
+                Assert.Equal(HealthStatus.Healthy, afterAllocationEntry.Status);
+            }
+            finally
+            {
+                await healthCheckResponseCts.CancelAsync();
+            }
+
+            await blobEndpointTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            blobEndpointListener.Stop();
+        }
     }
 
     [Fact]
@@ -981,5 +1036,61 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
             method.Invoke(null, [container, storage, roles]));
 
         Assert.Null(exception);
+    }
+
+    private static async Task ServeSuccessfulStorageHealthCheckResponseAsync(TcpListener listener, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = await listener.AcceptTcpClientAsync(cancellationToken);
+            await using var stream = client.GetStream();
+            var buffer = new byte[4096];
+            var requestText = new StringBuilder();
+
+            while (true)
+            {
+                var bytesRead = await stream.ReadAsync(buffer, cancellationToken);
+                if (bytesRead == 0)
+                {
+                    break;
+                }
+
+                requestText.Append(Encoding.ASCII.GetString(buffer, 0, bytesRead));
+
+                // HTTP request headers end with an empty line. Accumulate chunks so the
+                // delimiter is still detected when "\r\n\r\n" spans two reads.
+                if (requestText.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+                {
+                    break;
+                }
+            }
+
+            // AzureBlobStorageHealthCheck lists blob containers, so return the minimal service response
+            // shape that BlobServiceClient can deserialize without needing a real Azurite instance.
+            var responseBodyBytes = Encoding.ASCII.GetBytes("""
+                <?xml version="1.0" encoding="utf-8"?>
+                <EnumerationResults ServiceEndpoint="http://127.0.0.1/devstoreaccount1">
+                  <Prefix />
+                  <Marker />
+                  <MaxResults>5000</MaxResults>
+                  <Containers />
+                  <NextMarker />
+                </EnumerationResults>
+                """.ReplaceLineEndings(""));
+            var responseHeader = Encoding.ASCII.GetBytes(
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: application/xml\r\n" +
+                $"Content-Length: {responseBodyBytes.Length}\r\n" +
+                "x-ms-request-id: health-check-test\r\n" +
+                "x-ms-version: 2023-11-03\r\n" +
+                "Date: Mon, 01 Jan 2001 00:00:00 GMT\r\n" +
+                "Connection: close\r\n" +
+                "\r\n");
+            await stream.WriteAsync(responseHeader, cancellationToken);
+            await stream.WriteAsync(responseBodyBytes, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
     }
 }

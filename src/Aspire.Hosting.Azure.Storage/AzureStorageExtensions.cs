@@ -208,16 +208,16 @@ public static class AzureStorageExtensions
         QueueServiceClient? queueServiceClient = null;
 
         builder
-            .OnBeforeResourceStarted(async (storage, @event, ct) =>
+            .OnResourceEndpointsAllocated(async (storage, @event, ct) =>
             {
                 // The BlobServiceClient and QueueServiceClient are created before the health check is run.
                 // We can't use ConnectionStringAvailableEvent here because the resource doesn't have a connection string, so
-                // we use BeforeResourceStartedEvent
+                // we use ResourceEndpointsAllocatedEvent.
 
-                var blobConnectionString = await builder.Resource.GetBlobConnectionString().GetValueAsync(ct).ConfigureAwait(false) ?? throw new DistributedApplicationException($"{nameof(ConnectionStringAvailableEvent)} was published for the '{builder.Resource.Name}' resource but the connection string was null.");
+                var blobConnectionString = await builder.Resource.GetBlobConnectionString().GetValueAsync(ct).ConfigureAwait(false) ?? throw new DistributedApplicationException($"{nameof(ResourceEndpointsAllocatedEvent)} was published for the '{builder.Resource.Name}' resource but the connection string was null.");
                 blobServiceClient = CreateBlobServiceClient(blobConnectionString);
 
-                var queueConnectionString = await builder.Resource.GetQueueConnectionString().GetValueAsync(ct).ConfigureAwait(false) ?? throw new DistributedApplicationException($"{nameof(ConnectionStringAvailableEvent)} was published for the '{builder.Resource.Name}' resource but the connection string was null.");
+                var queueConnectionString = await builder.Resource.GetQueueConnectionString().GetValueAsync(ct).ConfigureAwait(false) ?? throw new DistributedApplicationException($"{nameof(ResourceEndpointsAllocatedEvent)} was published for the '{builder.Resource.Name}' resource but the connection string was null.");
                 queueServiceClient = CreateQueueServiceClient(queueConnectionString);
             })
             .OnResourceReady(async (storage, @event, ct) =>

@@ -1025,8 +1025,11 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 ContainerPort = ea.TargetPort,
             };
 
-            if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
+            if (!ea.IsProxied && (ea.SpecifiedPort ?? sp.Service.AllocatedPort ?? ea.AllocatedEndpoint?.Port) is int hostPort)
             {
+                // Dynamic proxyless endpoints get their host port from DCP on the first start.
+                // Reuse that port for later container recreations so endpoint references and one-shot
+                // endpoint allocation subscribers remain valid across resource restarts.
                 sp.Service.Spec.Port ??= hostPort;
                 portSpec.HostPort = hostPort;
             }

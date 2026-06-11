@@ -1844,6 +1844,42 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task EndpointPortsContainerProxylessNoPortTargetPortSetReusesAllocatedPortOnRestart()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        const int desiredTargetPort = TestKubernetesService.StartOfAutoPortRange - 999;
+        var database = builder.AddContainer("database", "image")
+            .WithEndpoint(name: "NoPortTargetPortSet", targetPort: desiredTargetPort, isProxied: false);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync();
+
+        var firstContainer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        var allocatedPortString = await database.GetEndpoint("NoPortTargetPortSet").Property(EndpointProperty.Port).GetValueAsync();
+        Assert.False(string.IsNullOrWhiteSpace(allocatedPortString));
+        var allocatedPort = int.Parse(allocatedPortString, CultureInfo.InvariantCulture);
+
+        Assert.True(allocatedPort >= TestKubernetesService.StartOfAutoPortRange);
+        Assert.NotNull(firstContainer.Spec.Ports);
+        Assert.Contains(firstContainer.Spec.Ports!, p => p.HostPort is null && p.ContainerPort == desiredTargetPort);
+
+        var resourceReference = appExecutor.GetResource(firstContainer.Metadata.Name);
+        await appExecutor.StopResourceAsync(resourceReference, CancellationToken.None);
+        await appExecutor.StartResourceAsync(resourceReference, CancellationToken.None);
+
+        var restartedContainer = kubernetesService.CreatedResources.OfType<Container>().Last();
+
+        Assert.NotSame(firstContainer, restartedContainer);
+        Assert.NotNull(restartedContainer.Spec.Ports);
+        Assert.Contains(restartedContainer.Spec.Ports!, p => p.HostPort == allocatedPort && p.ContainerPort == desiredTargetPort);
+        Assert.Equal(allocatedPortString, await database.GetEndpoint("NoPortTargetPortSet").Property(EndpointProperty.Port).GetValueAsync());
+    }
+
+    [Fact]
     public async Task EndpointPortsContainerProxylessNoPortTargetPortSetUsesTargetPortFallbackWhenResolvedBeforeContainerCreation()
     {
         var builder = DistributedApplication.CreateBuilder();
