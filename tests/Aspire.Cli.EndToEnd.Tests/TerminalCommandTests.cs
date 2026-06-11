@@ -74,31 +74,11 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
             timeout: TimeSpan.FromSeconds(30),
             description: "waiting for Vite help shortcuts");
 
-        var detached = false;
-        for (var i = 0; i < 3 && !detached; i++)
-        {
-            // In CI we occasionally lose the chord when both keys are injected in the same burst.
-            // Sending the prefix and chord key as separate events with a short delay matches
-            // interactive behavior more closely.
-            await auto.Ctrl().KeyAsync(Hex1bKey.B);
-            await auto.WaitAsync(300);
-            await auto.KeyAsync(Hex1bKey.D);
-
-            try
-            {
-                await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(10));
-                detached = true;
-            }
-            catch (TimeoutException) when (i < 2)
-            {
-                await auto.WaitAsync(1000);
-            }
-        }
-
-        if (!detached)
-        {
-            throw new InvalidOperationException("Failed to detach from 'aspire terminal attach frontend' after multiple Ctrl+B D attempts.");
-        }
+        // Keep an explicit pause between chord keys to mirror interactive input cadence.
+        await auto.Ctrl().KeyAsync(Hex1bKey.B);
+        await auto.WaitAsync(1000);
+        await auto.KeyAsync(Hex1bKey.D);
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(30));
 
         await auto.AspireStopAsync(counter);
     }
