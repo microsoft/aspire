@@ -1034,7 +1034,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     private static partial Regex BlankLineAfterListRegex();
 
     /// <summary>
-    /// Pre-indexed document with lowercase text for faster searching.
+    /// Pre-indexed document with normalized search text for faster searching.
     /// </summary>
     private sealed class IndexedDocument
     {
@@ -1111,7 +1111,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         public string IdentitySearchableTextLower { get; }
 
         /// <summary>
-        /// Concatenated lowercase text of every searchable field (slug, title, summary,
+        /// Concatenated normalized text of every searchable field (slug, title, summary,
         /// each section heading + content), separated by single spaces. Used by
         /// <c>SearchAsync</c> as a fast reject filter: if none of the query tokens appear
         /// anywhere in this haystack, the document cannot score &gt; 0 and we skip the
