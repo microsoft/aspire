@@ -7,6 +7,7 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECOMPUTE001
 #pragma warning disable ASPIRECOMPUTE003
+#pragma warning disable ASPIRECONTAINERRUNTIME001 // IContainerRuntimeResolver is experimental
 #pragma warning disable IDE0005
 
 using Aspire.Hosting.Backchannel;
@@ -30,6 +31,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
         var context = CreateDeployingContext(builder.Build());
@@ -43,6 +45,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -65,6 +68,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -102,6 +106,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -136,6 +141,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -170,6 +176,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -210,6 +217,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -269,6 +277,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -304,6 +313,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -346,6 +356,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -362,6 +373,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -380,6 +392,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -398,6 +411,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -432,6 +446,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -457,6 +472,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -516,6 +532,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -555,6 +572,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -594,6 +612,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -613,6 +632,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -671,6 +691,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -705,6 +726,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -733,6 +755,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -770,6 +793,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -815,6 +839,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -848,6 +873,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -882,6 +908,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -916,6 +943,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -959,6 +987,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var pipeline = new DistributedApplicationPipeline();
@@ -991,6 +1020,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var pipeline = new DistributedApplicationPipeline();
@@ -1015,6 +1045,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -1081,6 +1112,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1121,6 +1153,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1148,6 +1181,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1179,6 +1213,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1219,6 +1254,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1265,6 +1301,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var pipeline = new DistributedApplicationPipeline();
@@ -1299,6 +1336,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var pipeline = new DistributedApplicationPipeline();
@@ -1359,6 +1397,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var pipeline = new DistributedApplicationPipeline();
@@ -1398,6 +1437,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var pipeline = new DistributedApplicationPipeline();
@@ -1468,6 +1508,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, logLevel: configuredLogLevel, step: "logging-step").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var pipeline = new DistributedApplicationPipeline();
@@ -1538,6 +1579,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -1584,6 +1626,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -1621,6 +1664,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -1667,6 +1711,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1720,6 +1765,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1763,6 +1809,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1787,6 +1834,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1810,6 +1858,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1834,6 +1883,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1875,6 +1925,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
         var pipeline = new DistributedApplicationPipeline();
 
@@ -1967,6 +2018,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "non-existent-step").WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -1991,6 +2043,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "step5").WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -2062,6 +2115,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "independent-step").WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -2102,6 +2156,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // Arrange
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
@@ -2170,6 +2225,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // Arrange
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
@@ -2242,6 +2298,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 
         var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
@@ -2266,6 +2323,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // Arrange
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         // Add a project that requires build and push
@@ -2293,6 +2351,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // Arrange
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         // Add a project that requires build and push
@@ -2322,6 +2381,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // Arrange
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         // Add a project that requires build and push without specifying Destination
@@ -2345,6 +2405,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // Arrange
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         // Add a project that requires build and push
@@ -2375,6 +2436,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // Arrange
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         // Add a container registry so non-excluded projects can push
@@ -2411,6 +2473,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var pipeline = new DistributedApplicationPipeline();
@@ -2430,6 +2493,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var pipeline = new DistributedApplicationPipeline();
@@ -2454,6 +2518,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var pipeline = new DistributedApplicationPipeline();
@@ -2477,6 +2542,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         var stepExecuted = false;
@@ -2566,6 +2632,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // then cause the next ResolveStepsAsync to fail with "depends on unknown step".
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         // A resource that emits a step required by the built-in 'deploy' aggregation step.
