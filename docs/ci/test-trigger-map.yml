@@ -1,15 +1,24 @@
-# Test trigger map (machine-readable)
+# Test trigger map (machine-readable) -- the CURATED layer of selective CI.
 #
-# Maps repo path globs -> CI targets that must run when a matching file changes.
-# Base derived from the .csproj graph: ProjectReference edges PLUS cross-src
-# <Compile Include> edges (a project compiling another src project's .cs file depends
-# on it), traversed src->src only so leaf integrations are NOT inflated by the shared
-# tests/Aspire.Hosting.Tests hub. Curated rules layer on for runtime/loose-file deps and
-# the non-.NET jobs. Companion doc: test-trigger-map.md
+# This file maps repo path globs -> CI targets that must run when a matching file changes.
+# It deliberately contains ONLY what the MSBuild project graph cannot see. The graph-derived
+# closure (ProjectReference edges, Central Package Management, Directory.Build.* , and
+# file-level <Compile Include> of another project's source) is computed at runtime by
+# `dotnet-affected` over Aspire.slnx (Layer 1); the selector unions that with the rules here
+# (Layer 2). So leaf integration -> own test, core fan-out, and the test-hub fan-out are NOT
+# enumerated here -- dotnet-affected reproduces them live and can never drift.
 #
-# STATUS: descriptive map for auditing a future selective-CI implementation. Today CI runs
-# the full matrix (gated only by eng/testing/github-ci-trigger-patterns.txt). Nothing
-# consumes this file yet.
+# What stays curated here (graph-invisible):
+#   run_all_globs           build infrastructure / broadly shared code -> ALL
+#   curated_jobs            non-.NET jobs (polyglot, extension, typescript, ...) -- no MSBuild edge
+#   loose_file_deps         runtime/loose-file reads (tests reading files by path, hive installs)
+#   shared_source           shared dirs with no owning csproj (Components/Common, Vendoring)
+#   shared_compiled_source  specific files link-compiled elsewhere; the oracle (--assume-changes)
+#                           is project-granular and cannot verify these, so they stay static
+#   test_self               a test project's own folder change -> that test project
+#   groups                  named, reusable bundles of test: and/or job: targets
+#
+# Companion docs: test-trigger-map.md, test-trigger-selector-design.md
 #
 # Target vocabulary:
 #   test:<Name>                a .NET test project tests/<Name> (run-tests.yml matrix entry)
@@ -23,60 +32,16 @@
 #   job:ats-diffs              generate-ats-diffs.yml    (schedule-only today)
 #   job:deployment-e2e         deployment-tests.yml      (schedule/dispatch-only today)
 #   ALL                        full test matrix + all jobs
-#   ALL_HOSTING_TESTS          alias: every hosting-side test project (see aliases:)
-#   ALL_COMPONENT_TESTS        alias: every client-component test project (see aliases:)
+#   <GROUP_NAME>               a named group (see groups:) expanding to its test:/job: members
 #
-# Resolution: union the targets of every rule whose glob matches a changed file. Any match
-# in run_all_globs short-circuits to ALL. Self-changes to a test project always run that
+# Resolution: union the targets of every rule whose glob matches a changed file, expanding
+# group names to their members, and union in the Layer 1 (dotnet-affected) test projects. Any
+# match in run_all_globs short-circuits to ALL. Self-changes to a test project always run that
 # project (see test_self).
 version: 1
 
-# Aliases ----------------------------------------------------------------------
-aliases:
-  ALL_HOSTING_TESTS:
-    - test:Aspire.Hosting.Analyzers.Tests
-    - test:Aspire.Hosting.Azure.Kubernetes.Tests
-    - test:Aspire.Hosting.Azure.Kusto.Tests
-    - test:Aspire.Hosting.Azure.Tests
-    - test:Aspire.Hosting.Blazor.Tests
-    - test:Aspire.Hosting.Browsers.Tests
-    - test:Aspire.Hosting.CodeGeneration.Go.Tests
-    - test:Aspire.Hosting.CodeGeneration.Java.Tests
-    - test:Aspire.Hosting.CodeGeneration.Python.Tests
-    - test:Aspire.Hosting.CodeGeneration.Rust.Tests
-    - test:Aspire.Hosting.CodeGeneration.TypeScript.Tests
-    - test:Aspire.Hosting.Containers.Tests
-    - test:Aspire.Hosting.DevTunnels.Tests
-    - test:Aspire.Hosting.Docker.Tests
-    - test:Aspire.Hosting.DotnetTool.Tests
-    - test:Aspire.Hosting.EntityFrameworkCore.Tests
-    - test:Aspire.Hosting.Foundry.Tests
-    - test:Aspire.Hosting.Garnet.Tests
-    - test:Aspire.Hosting.GitHub.Models.Tests
-    - test:Aspire.Hosting.Go.Tests
-    - test:Aspire.Hosting.JavaScript.Tests
-    - test:Aspire.Hosting.Kafka.Tests
-    - test:Aspire.Hosting.Keycloak.Tests
-    - test:Aspire.Hosting.Kubernetes.Tests
-    - test:Aspire.Hosting.Maui.Tests
-    - test:Aspire.Hosting.Milvus.Tests
-    - test:Aspire.Hosting.MongoDB.Tests
-    - test:Aspire.Hosting.MySql.Tests
-    - test:Aspire.Hosting.Nats.Tests
-    - test:Aspire.Hosting.OpenAI.Tests
-    - test:Aspire.Hosting.Oracle.Tests
-    - test:Aspire.Hosting.PostgreSQL.Tests
-    - test:Aspire.Hosting.Python.Tests
-    - test:Aspire.Hosting.Qdrant.Tests
-    - test:Aspire.Hosting.RabbitMQ.Tests
-    - test:Aspire.Hosting.Redis.Tests
-    - test:Aspire.Hosting.RemoteHost.Tests
-    - test:Aspire.Hosting.Seq.Tests
-    - test:Aspire.Hosting.SqlServer.Tests
-    - test:Aspire.Hosting.Testing.Tests
-    - test:Aspire.Hosting.Tests
-    - test:Aspire.Hosting.Valkey.Tests
-    - test:Aspire.Hosting.Yarp.Tests
+# Named groups (test projects and/or jobs) -----------------------------------
+groups:
   ALL_COMPONENT_TESTS:
     - test:Aspire.Azure.AI.Inference.Tests
     - test:Aspire.Azure.AI.OpenAI.Tests
@@ -132,6 +97,11 @@ aliases:
     - test:Aspire.StackExchange.Redis.OutputCaching.Tests
     - test:Aspire.StackExchange.Redis.Tests
 
+  CLI_BUNDLE:
+    - test:Aspire.Cli.EndToEnd.Tests
+    - job:cli-starter
+    - job:extension-e2e
+
 # 0. Test self-changes: tests/<X>/** -> test:<X> (applies to every test project) ----
 test_self:
   pattern: tests/<TestProject>/**
@@ -154,6 +124,7 @@ run_all_globs:
   - tests/Directory.Packages.props
   - eng/*.props      # any root-level eng build prop (Versions, Testing, Build, Publishing, Signing, ...) -> err toward ALL
   - eng/*.targets    # any root-level eng build target (Testing, AfterSigning, ReplaceText, ...) -> err toward ALL
+  - eng/OuterPreBuild.proj   # build-wide project-name validation traversal -> err toward ALL
   - eng/Version.Details.xml
   - eng/common/**
   - src/Shared/**
@@ -169,16 +140,7 @@ run_all_globs:
   - .github/workflows/build-cli-native-archives.yml
   - .github/workflows/build-cli-e2e-image.yml
 
-# 2. Shared TEST hubs -> run all dependent test projects -----------------------
-test_hubs:
-  - paths: [tests/Aspire.Components.Common.TestUtilities/**]
-    targets: [ALL_COMPONENT_TESTS]   # referenced by ~36 component/client test projects
-  - paths: [tests/Aspire.Hosting.Tests/**]
-    targets: [ALL_HOSTING_TESTS]     # referenced by ~34 hosting test projects
-  - paths: [tests/Aspire.TestUtilities/**]
-    targets: [ALL]                   # broad shared utility used across both sides
-
-# 3. Shared source dirs with no owning csproj ----------------------------------
+# 2. Shared source dirs with no owning csproj ----------------------------------
 shared_source:
   - paths: [src/Components/Common/**]
     targets: [ALL_COMPONENT_TESTS]   # compiled into many client components (Package.targets glob)
@@ -189,22 +151,7 @@ shared_source:
     targets: [test:Aspire.Confluent.Kafka.Tests]
     note: vendored OTel sources compiled into src/Components/Aspire.Confluent.Kafka
 
-# 4. Core / build-SDK source -> broad fan-out (>=20 hosting test projects) ------
-core_source:
-  - paths: [src/Aspire.Hosting/**]
-    fanout: 43
-    targets: [test:Aspire.Hosting.Analyzers.Tests, test:Aspire.Hosting.Azure.Kubernetes.Tests, test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.Blazor.Tests, test:Aspire.Hosting.Browsers.Tests, test:Aspire.Hosting.CodeGeneration.Go.Tests, test:Aspire.Hosting.CodeGeneration.Java.Tests, test:Aspire.Hosting.CodeGeneration.Python.Tests, test:Aspire.Hosting.CodeGeneration.Rust.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.Containers.Tests, test:Aspire.Hosting.DevTunnels.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.DotnetTool.Tests, test:Aspire.Hosting.EntityFrameworkCore.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Garnet.Tests, test:Aspire.Hosting.GitHub.Models.Tests, test:Aspire.Hosting.Go.Tests, test:Aspire.Hosting.JavaScript.Tests, test:Aspire.Hosting.Kafka.Tests, test:Aspire.Hosting.Keycloak.Tests, test:Aspire.Hosting.Kubernetes.Tests, test:Aspire.Hosting.Maui.Tests, test:Aspire.Hosting.Milvus.Tests, test:Aspire.Hosting.MongoDB.Tests, test:Aspire.Hosting.MySql.Tests, test:Aspire.Hosting.Nats.Tests, test:Aspire.Hosting.OpenAI.Tests, test:Aspire.Hosting.Oracle.Tests, test:Aspire.Hosting.PostgreSQL.Tests, test:Aspire.Hosting.Python.Tests, test:Aspire.Hosting.Qdrant.Tests, test:Aspire.Hosting.RabbitMQ.Tests, test:Aspire.Hosting.Redis.Tests, test:Aspire.Hosting.RemoteHost.Tests, test:Aspire.Hosting.Seq.Tests, test:Aspire.Hosting.SqlServer.Tests, test:Aspire.Hosting.Testing.Tests, test:Aspire.Hosting.Tests, test:Aspire.Hosting.Valkey.Tests, test:Aspire.Hosting.Yarp.Tests]
-  - paths: [src/Aspire.Hosting.Analyzers/**]
-    fanout: 27
-    targets: [test:Aspire.Hosting.Analyzers.Tests, test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Blazor.Tests, test:Aspire.Hosting.Browsers.Tests, test:Aspire.Hosting.Containers.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.DotnetTool.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Garnet.Tests, test:Aspire.Hosting.GitHub.Models.Tests, test:Aspire.Hosting.Go.Tests, test:Aspire.Hosting.JavaScript.Tests, test:Aspire.Hosting.Kubernetes.Tests, test:Aspire.Hosting.Milvus.Tests, test:Aspire.Hosting.MySql.Tests, test:Aspire.Hosting.Nats.Tests, test:Aspire.Hosting.OpenAI.Tests, test:Aspire.Hosting.Oracle.Tests, test:Aspire.Hosting.PostgreSQL.Tests, test:Aspire.Hosting.Python.Tests, test:Aspire.Hosting.Qdrant.Tests, test:Aspire.Hosting.RabbitMQ.Tests, test:Aspire.Hosting.Redis.Tests, test:Aspire.Hosting.Seq.Tests, test:Aspire.Hosting.Testing.Tests, test:Aspire.Hosting.Tests, test:Aspire.Hosting.Yarp.Tests]
-  - paths: [src/Aspire.Hosting.AppHost/**]
-    fanout: 27
-    targets: [test:Aspire.Hosting.Analyzers.Tests, test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Blazor.Tests, test:Aspire.Hosting.Browsers.Tests, test:Aspire.Hosting.Containers.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.DotnetTool.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Garnet.Tests, test:Aspire.Hosting.GitHub.Models.Tests, test:Aspire.Hosting.Go.Tests, test:Aspire.Hosting.JavaScript.Tests, test:Aspire.Hosting.Kubernetes.Tests, test:Aspire.Hosting.Milvus.Tests, test:Aspire.Hosting.MySql.Tests, test:Aspire.Hosting.Nats.Tests, test:Aspire.Hosting.OpenAI.Tests, test:Aspire.Hosting.Oracle.Tests, test:Aspire.Hosting.PostgreSQL.Tests, test:Aspire.Hosting.Python.Tests, test:Aspire.Hosting.Qdrant.Tests, test:Aspire.Hosting.RabbitMQ.Tests, test:Aspire.Hosting.Redis.Tests, test:Aspire.Hosting.Seq.Tests, test:Aspire.Hosting.Testing.Tests, test:Aspire.Hosting.Tests, test:Aspire.Hosting.Yarp.Tests]
-  - paths: [src/Aspire.Hosting.Tasks/**]
-    fanout: 27
-    targets: [test:Aspire.Hosting.Analyzers.Tests, test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Blazor.Tests, test:Aspire.Hosting.Browsers.Tests, test:Aspire.Hosting.Containers.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.DotnetTool.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Garnet.Tests, test:Aspire.Hosting.GitHub.Models.Tests, test:Aspire.Hosting.Go.Tests, test:Aspire.Hosting.JavaScript.Tests, test:Aspire.Hosting.Kubernetes.Tests, test:Aspire.Hosting.Milvus.Tests, test:Aspire.Hosting.MySql.Tests, test:Aspire.Hosting.Nats.Tests, test:Aspire.Hosting.OpenAI.Tests, test:Aspire.Hosting.Oracle.Tests, test:Aspire.Hosting.PostgreSQL.Tests, test:Aspire.Hosting.Python.Tests, test:Aspire.Hosting.Qdrant.Tests, test:Aspire.Hosting.RabbitMQ.Tests, test:Aspire.Hosting.Redis.Tests, test:Aspire.Hosting.Seq.Tests, test:Aspire.Hosting.Testing.Tests, test:Aspire.Hosting.Tests, test:Aspire.Hosting.Yarp.Tests]
-
-# 5. Curated job rules ---------------------------------------------------------
+# 3. Curated job rules ---------------------------------------------------------
 curated_jobs:
   - target: job:polyglot
     reason: ATS typesystem -> per-language SDK generators -> RemoteHost server + CLI run + fixtures
@@ -315,7 +262,7 @@ curated_jobs:
       - src/Aspire.AppHost.Sdk/**
       - eng/clipack/**
 
-# 6. Runtime / loose-file dependencies (invisible to the csproj graph) ----------
+# 4. Runtime / loose-file dependencies (invisible to the csproj graph) ----------
 loose_file_deps:
   - paths:
       - eng/scripts/get-aspire-cli.sh
@@ -367,225 +314,11 @@ loose_file_deps:
     targets: [test:Infrastructure.Tests]
     reason: Infrastructure.Tests WorkflowScripts/Pipelines assert on workflow & pipeline files
 
-# 7. Leaf source rules: integration (src/Aspire.Hosting.*) + client (src/Components/*)
-#    src/<Name>/** -> test project(s) referencing it via src-only transitive paths -----
-leaf_source:
-  - paths: [src/Aspire.AppHost.Sdk/Aspire.RuntimeIdentifier.Tool/**]
-    targets: [test:Aspire.Hosting.Sdk.Tests]
-  - paths: [src/Aspire.Cli/**]
-    targets: [test:Aspire.Cli.Tests]
-  - paths: [src/Aspire.Dashboard/**]
-    targets: [test:Aspire.Dashboard.Components.Tests, test:Aspire.Dashboard.Tests, test:Aspire.Hosting.RemoteHost.Tests, test:Aspire.Managed.Tests]
-  - paths: [src/Aspire.Hosting.Azure/**]
-    targets: [test:Aspire.Hosting.Azure.Kubernetes.Tests, test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Tests]
-  - paths: [src/Aspire.Hosting.Azure.AppConfiguration/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.AppContainers/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.Tests]
-  - paths: [src/Aspire.Hosting.Azure.AppService/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests]
-  - paths: [src/Aspire.Hosting.Azure.ApplicationInsights/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.Foundry.Tests]
-  - paths: [src/Aspire.Hosting.Azure.CognitiveServices/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.ContainerRegistry/**]
-    targets: [test:Aspire.Hosting.Azure.Kubernetes.Tests, test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Tests]
-  - paths: [src/Aspire.Hosting.Azure.CosmosDB/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.Foundry.Tests]
-  - paths: [src/Aspire.Hosting.Azure.EventHubs/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.FrontDoor/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.Functions/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.KeyVault/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.Foundry.Tests]
-  - paths: [src/Aspire.Hosting.Azure.Kubernetes/**]
-    targets: [test:Aspire.Hosting.Azure.Kubernetes.Tests]
-  - paths: [src/Aspire.Hosting.Azure.Kusto/**]
-    targets: [test:Aspire.Hosting.Azure.Kusto.Tests, test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.Network/**]
-    targets: [test:Aspire.Hosting.Azure.Kubernetes.Tests, test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.OperationalInsights/**]
-    targets: [test:Aspire.Hosting.Azure.Kubernetes.Tests, test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Tests]
-  - paths: [src/Aspire.Hosting.Azure.PostgreSQL/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.Redis/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.Search/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.Foundry.Tests]
-  - paths: [src/Aspire.Hosting.Azure.ServiceBus/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.SignalR/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.Sql/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Azure.Storage/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.Foundry.Tests]
-  - paths: [src/Aspire.Hosting.Azure.WebPubSub/**]
-    targets: [test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Aspire.Hosting.Blazor/**]
-    targets: [test:Aspire.Hosting.Blazor.Tests]
-  - paths: [src/Aspire.Hosting.Browsers/**]
-    targets: [test:Aspire.Hosting.Browsers.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests]
-  - paths: [src/Aspire.Hosting.CodeGeneration.Go/**]
-    targets: [test:Aspire.Hosting.CodeGeneration.Go.Tests, test:Aspire.Hosting.RemoteHost.Tests]
-  - paths: [src/Aspire.Hosting.CodeGeneration.Java/**]
-    targets: [test:Aspire.Hosting.CodeGeneration.Java.Tests, test:Aspire.Hosting.RemoteHost.Tests]
-  - paths: [src/Aspire.Hosting.CodeGeneration.Python/**]
-    targets: [test:Aspire.Hosting.CodeGeneration.Python.Tests, test:Aspire.Hosting.RemoteHost.Tests]
-  - paths: [src/Aspire.Hosting.CodeGeneration.Rust/**]
-    targets: [test:Aspire.Hosting.CodeGeneration.Rust.Tests, test:Aspire.Hosting.RemoteHost.Tests]
-  - paths: [src/Aspire.Hosting.CodeGeneration.TypeScript/**]
-    targets: [test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.RemoteHost.Tests]
-  - paths: [src/Aspire.Hosting.DevTunnels/**]
-    targets: [test:Aspire.Hosting.DevTunnels.Tests, test:Aspire.Hosting.Maui.Tests, test:Aspire.Hosting.Tests]
-  - paths: [src/Aspire.Hosting.Docker/**]
-    targets: [test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.Kubernetes.Tests, test:Aspire.Hosting.Yarp.Tests]
-  - paths: [src/Aspire.Hosting.EntityFrameworkCore/**]
-    targets: [test:Aspire.Hosting.EntityFrameworkCore.Tests]
-  - paths: [src/Aspire.Hosting.Foundry/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.Foundry.Tests]
-  - paths: [src/Aspire.Hosting.Garnet/**]
-    targets: [test:Aspire.Hosting.Garnet.Tests]
-  - paths: [src/Aspire.Hosting.GitHub.Models/**]
-    targets: [test:Aspire.Hosting.GitHub.Models.Tests]
-  - paths: [src/Aspire.Hosting.Go/**]
-    targets: [test:Aspire.Hosting.Go.Tests]
-  - paths: [src/Aspire.Hosting.Integration.Analyzers/**]
-    targets: [test:Aspire.Hosting.Analyzers.Tests]
-  - paths: [src/Aspire.Hosting.JavaScript/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.JavaScript.Tests, test:Aspire.Hosting.Tests]
-  - paths: [src/Aspire.Hosting.Kafka/**]
-    targets: [test:Aspire.Hosting.Kafka.Tests]
-  - paths: [src/Aspire.Hosting.Keycloak/**]
-    targets: [test:Aspire.Hosting.Keycloak.Tests]
-  - paths: [src/Aspire.Hosting.Kubernetes/**]
-    targets: [test:Aspire.Hosting.Azure.Kubernetes.Tests, test:Aspire.Hosting.Docker.Tests, test:Aspire.Hosting.Kubernetes.Tests]
-  - paths: [src/Aspire.Hosting.Maui/**]
-    targets: [test:Aspire.Hosting.Maui.Tests]
-  - paths: [src/Aspire.Hosting.Milvus/**]
-    targets: [test:Aspire.Hosting.Milvus.Tests]
-  - paths: [src/Aspire.Hosting.MongoDB/**]
-    targets: [test:Aspire.Hosting.MongoDB.Tests]
-  - paths: [src/Aspire.Hosting.MySql/**]
-    targets: [test:Aspire.Hosting.MySql.Tests]
-  - paths: [src/Aspire.Hosting.Nats/**]
-    targets: [test:Aspire.Hosting.Nats.Tests]
-  - paths: [src/Aspire.Hosting.OpenAI/**]
-    targets: [test:Aspire.Hosting.OpenAI.Tests]
-  - paths: [src/Aspire.Hosting.Oracle/**]
-    targets: [test:Aspire.Hosting.Oracle.Tests]
-  - paths: [src/Aspire.Hosting.PostgreSQL/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.PostgreSQL.Tests]
-  - paths: [src/Aspire.Hosting.Python/**]
-    targets: [test:Aspire.Hosting.Foundry.Tests, test:Aspire.Hosting.Python.Tests, test:Aspire.Hosting.Tests]
-  - paths: [src/Aspire.Hosting.Qdrant/**]
-    targets: [test:Aspire.Hosting.Qdrant.Tests]
-  - paths: [src/Aspire.Hosting.RabbitMQ/**]
-    targets: [test:Aspire.Hosting.RabbitMQ.Tests]
-  - paths: [src/Aspire.Hosting.Redis/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.Redis.Tests]
-  - paths: [src/Aspire.Hosting.RemoteHost/**]
-    targets: [test:Aspire.Hosting.CodeGeneration.Go.Tests, test:Aspire.Hosting.CodeGeneration.Java.Tests, test:Aspire.Hosting.CodeGeneration.Python.Tests, test:Aspire.Hosting.CodeGeneration.Rust.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.RemoteHost.Tests, test:Aspire.Managed.Tests]
-  - paths: [src/Aspire.Hosting.Seq/**]
-    targets: [test:Aspire.Hosting.Seq.Tests]
-  - paths: [src/Aspire.Hosting.SqlServer/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Hosting.SqlServer.Tests]
-  - paths: [src/Aspire.Hosting.Testing/**]
-    targets: [test:Aspire.Hosting.Containers.Tests, test:Aspire.Hosting.GitHub.Models.Tests, test:Aspire.Hosting.OpenAI.Tests, test:Aspire.Hosting.Testing.Tests, test:Aspire.Hosting.Tests]
-  - paths: [src/Aspire.Hosting.Valkey/**]
-    targets: [test:Aspire.Hosting.Valkey.Tests]
-  - paths: [src/Aspire.Hosting.Yarp/**]
-    targets: [test:Aspire.Hosting.RemoteHost.Tests, test:Aspire.Hosting.Tests, test:Aspire.Hosting.Yarp.Tests]
-  - paths: [src/Aspire.Managed/**]
-    targets: [test:Aspire.Hosting.RemoteHost.Tests, test:Aspire.Managed.Tests]
-  - paths: [src/Aspire.TerminalHost/**]
-    targets: [test:Aspire.Hosting.RemoteHost.Tests, test:Aspire.Managed.Tests, test:Aspire.TerminalHost.Tests]
-  - paths: [src/Aspire.TypeSystem/**]
-    targets: [test:Aspire.Cli.Tests, test:Aspire.Hosting.CodeGeneration.Go.Tests, test:Aspire.Hosting.CodeGeneration.Java.Tests, test:Aspire.Hosting.CodeGeneration.Python.Tests, test:Aspire.Hosting.CodeGeneration.Rust.Tests, test:Aspire.Hosting.CodeGeneration.TypeScript.Tests, test:Aspire.Hosting.RemoteHost.Tests, test:Aspire.Hosting.Tests, test:Aspire.Managed.Tests]
-  - paths: [src/Components/Aspire.Azure.AI.Inference/**]
-    targets: [test:Aspire.Azure.AI.Inference.Tests]
-  - paths: [src/Components/Aspire.Azure.AI.OpenAI/**]
-    targets: [test:Aspire.Azure.AI.OpenAI.Tests]
-  - paths: [src/Components/Aspire.Azure.Data.Tables/**]
-    targets: [test:Aspire.Azure.Data.Tables.Tests]
-  - paths: [src/Components/Aspire.Azure.Messaging.EventHubs/**]
-    targets: [test:Aspire.Azure.Messaging.EventHubs.Tests, test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Components/Aspire.Azure.Messaging.ServiceBus/**]
-    targets: [test:Aspire.Azure.Messaging.ServiceBus.Tests, test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Components/Aspire.Azure.Messaging.WebPubSub/**]
-    targets: [test:Aspire.Azure.Messaging.WebPubSub.Tests]
-  - paths: [src/Components/Aspire.Azure.Npgsql/**]
-    targets: [test:Aspire.Azure.Npgsql.Tests]
-  - paths: [src/Components/Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL/**]
-    targets: [test:Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.Tests]
-  - paths: [src/Components/Aspire.Azure.Search.Documents/**]
-    targets: [test:Aspire.Azure.Search.Documents.Tests]
-  - paths: [src/Components/Aspire.Azure.Security.KeyVault/**]
-    targets: [test:Aspire.Azure.Security.KeyVault.Tests]
-  - paths: [src/Components/Aspire.Azure.Storage.Blobs/**]
-    targets: [test:Aspire.Azure.Messaging.EventHubs.Tests, test:Aspire.Azure.Storage.Blobs.Tests, test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Components/Aspire.Azure.Storage.Files.DataLake/**]
-    targets: [test:Aspire.Azure.Storage.Files.DataLake.Tests]
-  - paths: [src/Components/Aspire.Azure.Storage.Queues/**]
-    targets: [test:Aspire.Azure.Storage.Queues.Tests, test:Aspire.Hosting.Azure.Tests]
-  - paths: [src/Components/Aspire.Confluent.Kafka/**]
-    targets: [test:Aspire.Confluent.Kafka.Tests, test:Aspire.Hosting.Kafka.Tests]
-  - paths: [src/Components/Aspire.Keycloak.Authentication/**]
-    targets: [test:Aspire.Keycloak.Authentication.Tests]
-  - paths: [src/Components/Aspire.Microsoft.Azure.Cosmos/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Microsoft.Azure.Cosmos.Tests]
-  - paths: [src/Components/Aspire.Microsoft.Azure.StackExchangeRedis/**]
-    targets: [test:Aspire.Microsoft.Azure.StackExchangeRedis.Tests]
-  - paths: [src/Components/Aspire.Microsoft.Data.SqlClient/**]
-    targets: [test:Aspire.Hosting.SqlServer.Tests, test:Aspire.Microsoft.Data.SqlClient.Tests]
-  - paths: [src/Components/Aspire.Microsoft.EntityFrameworkCore.Cosmos/**]
-    targets: [test:Aspire.Hosting.Azure.Tests, test:Aspire.Microsoft.EntityFrameworkCore.Cosmos.Tests]
-  - paths: [src/Components/Aspire.Microsoft.EntityFrameworkCore.SqlServer/**]
-    targets: [test:Aspire.Hosting.SqlServer.Tests, test:Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests]
-  - paths: [src/Components/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration/**]
-    targets: [test:Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.Tests]
-  - paths: [src/Components/Aspire.Milvus.Client/**]
-    targets: [test:Aspire.Hosting.Milvus.Tests, test:Aspire.Milvus.Client.Tests]
-  - paths: [src/Components/Aspire.MongoDB.Driver/**]
-    targets: [test:Aspire.Hosting.MongoDB.Tests, test:Aspire.MongoDB.Driver.Tests]
-  - paths: [src/Components/Aspire.MongoDB.Driver.v2/**]
-    targets: [test:Aspire.MongoDB.Driver.v2.Tests]
-  - paths: [src/Components/Aspire.MongoDB.EntityFrameworkCore/**]
-    targets: [test:Aspire.MongoDB.EntityFrameworkCore.Tests]
-  - paths: [src/Components/Aspire.MySqlConnector/**]
-    targets: [test:Aspire.Hosting.MySql.Tests, test:Aspire.MySqlConnector.Tests]
-  - paths: [src/Components/Aspire.NATS.Net/**]
-    targets: [test:Aspire.Hosting.Nats.Tests, test:Aspire.NATS.Net.Tests]
-  - paths: [src/Components/Aspire.Npgsql/**]
-    targets: [test:Aspire.Azure.Npgsql.Tests, test:Aspire.Hosting.PostgreSQL.Tests, test:Aspire.Npgsql.Tests]
-  - paths: [src/Components/Aspire.Npgsql.EntityFrameworkCore.PostgreSQL/**]
-    targets: [test:Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.Tests, test:Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests]
-  - paths: [src/Components/Aspire.OpenAI/**]
-    targets: [test:Aspire.Azure.AI.OpenAI.Tests, test:Aspire.OpenAI.Tests]
-  - paths: [src/Components/Aspire.Oracle.EntityFrameworkCore/**]
-    targets: [test:Aspire.Hosting.Oracle.Tests, test:Aspire.Oracle.EntityFrameworkCore.Tests]
-  - paths: [src/Components/Aspire.Pomelo.EntityFrameworkCore.MySql/**]
-    targets: [test:Aspire.Hosting.MySql.Tests, test:Aspire.Pomelo.EntityFrameworkCore.MySql.Tests]
-  - paths: [src/Components/Aspire.Qdrant.Client/**]
-    targets: [test:Aspire.Hosting.Qdrant.Tests, test:Aspire.Qdrant.Client.Tests]
-  - paths: [src/Components/Aspire.RabbitMQ.Client/**]
-    targets: [test:Aspire.Hosting.RabbitMQ.Tests, test:Aspire.RabbitMQ.Client.Tests]
-  - paths: [src/Components/Aspire.RabbitMQ.Client.v6/**]
-    targets: [test:Aspire.RabbitMQ.Client.v6.Tests]
-  - paths: [src/Components/Aspire.Seq/**]
-    targets: [test:Aspire.Seq.Tests]
-  - paths: [src/Components/Aspire.StackExchange.Redis/**]
-    targets: [test:Aspire.Hosting.Garnet.Tests, test:Aspire.Hosting.Redis.Tests, test:Aspire.Hosting.Valkey.Tests, test:Aspire.Microsoft.Azure.StackExchangeRedis.Tests, test:Aspire.StackExchange.Redis.DistributedCaching.Tests, test:Aspire.StackExchange.Redis.OutputCaching.Tests, test:Aspire.StackExchange.Redis.Tests]
-  - paths: [src/Components/Aspire.StackExchange.Redis.DistributedCaching/**]
-    targets: [test:Aspire.StackExchange.Redis.DistributedCaching.Tests, test:Aspire.StackExchange.Redis.Tests]
-  - paths: [src/Components/Aspire.StackExchange.Redis.OutputCaching/**]
-    targets: [test:Aspire.StackExchange.Redis.OutputCaching.Tests, test:Aspire.StackExchange.Redis.Tests]
-  - paths: [src/Tools/ConfigurationSchemaGenerator/**]
-    targets: [test:ConfigurationSchemaGenerator.Tests]
+  - paths: [eng/Bundle.proj]
+    targets: [CLI_BUNDLE]
+    reason: assembles the CLI bundle (Aspire.Managed + native CLI + DCP); consumed by CLI e2e/starter/extension, not integrations
 
-# 8. Shared compiled source: a specific src file link-compiled into other projects --
+# 5. Shared compiled source: a specific src file link-compiled into other projects --
 #    Change to the FILE (not the whole owning project) runs the consuming test(s).
 shared_compiled_source:
   - paths: [src/Aspire.AppHost.Sdk/Aspire.RuntimeIdentifier.Tool/NuGetUtils.cs]
@@ -694,7 +427,7 @@ shared_compiled_source:
     targets: [test:ConfigurationSchemaGenerator.Tests]
     note: link-compiled into ConfigurationSchemaGenerator.Tests, which is not an ALL_COMPONENT_TESTS member
 
-# 9. Known gaps ----------------------------------------------------------------
+# 6. Known gaps ----------------------------------------------------------------
 gaps:
   - paths: [src/Aspire.Hosting.Orleans/**]
     note: no Aspire.Hosting.Orleans.Tests exists; only covered transitively via src/Aspire.Hosting

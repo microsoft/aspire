@@ -23,11 +23,11 @@ public sealed record SelectorOptions(bool ForceAll = false);
 /// <param name="Jobs">The selected non-.NET jobs (e.g. <c>job:polyglot</c>, <c>job:extension-e2e</c>).</param>
 /// <param name="EscalationReason">When <see cref="SelectsAll"/> is true, a short human-readable reason.</param>
 /// <param name="UnmatchedFiles">
-/// Changed files that matched <em>no</em> curated map rule (Layer 2). Because the verifier keeps
-/// every <c>src</c> project reachable by some rule, a green-verifier repo only lands loose,
-/// non-project files here (docs, new tooling dirs, …) — i.e. the files neither Layer 1
-/// (<c>dotnet-affected</c>, which silently ignores files it cannot attribute to a project) nor
-/// Layer 2 accounts for. Surfaced as an early warning for a missing Layer 2 rule.
+/// Changed files that matched <em>no</em> curated map rule (Layer 2). After the trim, normal
+/// <c>src</c> files are expected here (Layer 1 / <c>dotnet-affected</c> owns the project closure),
+/// so a consumer that wants the "neither layer" set subtracts the files Layer 1 attributed. The
+/// raw set is still the early-warning signal for a loose, non-project dependency that needs a
+/// curated rule.
 /// </param>
 public sealed record SelectionResult(
     bool SelectsAll,
@@ -127,16 +127,10 @@ public sealed class TestSelector
                 }
             }
 
-            // Fail-open: an unmapped src/** file must still run everything.
-            if (!fileMatched && file.StartsWith("src/", StringComparison.Ordinal))
-            {
-                selectsAll = true;
-                reason ??= $"fail-open: src file '{file}' matched no rule";
-            }
-
-            // A changed file no Layer 2 rule claimed. With a green verifier (every src project is
-            // rule-reachable), these are the loose, non-project files Layer 1 also cannot attribute
-            // — the set worth auditing for a missing curated rule.
+            // Fail-open is no longer applied per-src-file: after the trim, most src files match no
+            // Layer 2 rule on purpose (dotnet-affected owns the project closure), so escalating
+            // every unmapped src file to ALL would be wrong. Src safety is instead "Layer 1 must
+            // run" (enforced by the caller) plus the unmatched-files audit signal below.
             if (!fileMatched)
             {
                 unmatchedFiles.Add(file);
@@ -185,11 +179,19 @@ public sealed class TestSelector
                 selectsAll = true;
                 reason ??= $"a rule matching '{file}' selects ALL";
             }
-            else if (map.Aliases.TryGetValue(target, out var members))
+            else if (map.Groups.TryGetValue(target, out var members))
             {
+                // A named group can hold both test: and job: members; route each by its prefix.
                 foreach (var member in members)
                 {
-                    testProjects.Add(StripTestPrefix(member));
+                    if (member.StartsWith("job:", StringComparison.Ordinal))
+                    {
+                        jobs.Add(member);
+                    }
+                    else if (member.StartsWith("test:", StringComparison.Ordinal))
+                    {
+                        testProjects.Add(StripTestPrefix(member));
+                    }
                 }
             }
             else if (target.StartsWith("test:", StringComparison.Ordinal))

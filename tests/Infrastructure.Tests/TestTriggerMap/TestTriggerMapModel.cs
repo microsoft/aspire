@@ -17,40 +17,32 @@ public sealed class TestTriggerMap
 {
     public int Version { get; set; }
 
-    public Dictionary<string, List<string>> Aliases { get; set; } = new();
+    public Dictionary<string, List<string>> Groups { get; set; } = new();
 
     public TestSelfRule? TestSelf { get; set; }
 
     public List<string> RunAllGlobs { get; set; } = new();
 
-    public List<PathRule> TestHubs { get; set; } = new();
-
     public List<PathRule> SharedSource { get; set; } = new();
-
-    public List<PathRule> CoreSource { get; set; } = new();
 
     public List<JobRule> CuratedJobs { get; set; } = new();
 
     public List<PathRule> LooseFileDeps { get; set; } = new();
-
-    public List<PathRule> LeafSource { get; set; } = new();
 
     public List<PathRule> SharedCompiledSource { get; set; } = new();
 
     public List<PathRule> Gaps { get; set; } = new();
 
     /// <summary>
-    /// Every rule section that carries <c>paths</c> globs, in one sequence. Used by the
-    /// path-existence and coverage checks. <see cref="Gaps"/> is excluded: it documents
-    /// known-uncovered source on purpose, so it must not satisfy coverage.
+    /// Every rule section that carries <c>paths</c> globs, in one sequence. The graph-derived
+    /// sections (leaf/core/test_hubs) are gone — <c>dotnet-affected</c> reproduces them — so this
+    /// is the curated surface only. <see cref="Gaps"/> is excluded: it documents known-uncovered
+    /// source on purpose, so it must not satisfy coverage.
     /// </summary>
     public IEnumerable<PathRule> AllPathRules()
     {
-        foreach (var r in TestHubs) { yield return r; }
         foreach (var r in SharedSource) { yield return r; }
-        foreach (var r in CoreSource) { yield return r; }
         foreach (var r in LooseFileDeps) { yield return r; }
-        foreach (var r in LeafSource) { yield return r; }
         foreach (var r in SharedCompiledSource) { yield return r; }
     }
 
@@ -73,13 +65,13 @@ public sealed class TestTriggerMap
 
     /// <summary>
     /// Every concrete target string (<c>test:*</c> / <c>job:*</c> / <c>ALL*</c>) referenced
-    /// anywhere in the map: alias members, every rule's targets, and the curated-job targets.
+    /// anywhere in the map: group members, every rule's targets, and the curated-job targets.
     /// The <c>test_self</c> target is excluded because it is the literal placeholder
     /// <c>test:&lt;TestProject&gt;</c>, not a concrete project reference.
     /// </summary>
     public IEnumerable<string> AllReferencedTargets()
     {
-        foreach (var members in Aliases.Values)
+        foreach (var members in Groups.Values)
         {
             foreach (var t in members) { yield return t; }
         }
@@ -92,28 +84,17 @@ public sealed class TestTriggerMap
 
     /// <summary>
     /// Resolves which test projects the map selects for a single changed file: the union of
-    /// every matching rule's targets, with aliases expanded to their member test projects.
+    /// every matching rule's targets, with groups expanded to their member test projects.
     /// <paramref name="selectsAll"/> is set when any matching rule yields the <c>ALL</c>
     /// sentinel (the whole matrix), in which case the test-project set is not meaningful.
     /// <c>job:</c> targets are ignored — this resolves test projects only.
     /// </summary>
     public IReadOnlySet<string> SelectTestProjects(string changedPath, out bool selectsAll)
-        => SelectTestProjects(changedPath, projectLevelOnly: false, out selectsAll);
-
-    /// <param name="projectLevelOnly">
-    /// When true, resolves using only the rules derived from the ProjectReference graph
-    /// (<c>run_all_globs</c>, <c>core_source</c>, <c>leaf_source</c>) — the rules a
-    /// project-granular graph tool like <c>dotnet-affected</c> can reproduce. File-granular
-    /// (<c>shared_compiled_source</c>), runtime (<c>loose_file_deps</c>), and test-side
-    /// (<c>test_hubs</c>) rules are excluded because that tool cannot see them at project
-    /// granularity. Used by the oracle cross-check.
-    /// </param>
-    public IReadOnlySet<string> SelectTestProjects(string changedPath, bool projectLevelOnly, out bool selectsAll)
     {
         selectsAll = false;
         var result = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var (globs, targets) in SelectionRules(projectLevelOnly))
+        foreach (var (globs, targets) in SelectionRules())
         {
             if (!globs.Any(g => GlobMatches(g, changedPath)))
             {
@@ -126,9 +107,13 @@ public sealed class TestTriggerMap
                 {
                     selectsAll = true;
                 }
-                else if (Aliases.TryGetValue(target, out var members))
+                else if (Groups.TryGetValue(target, out var members))
                 {
-                    foreach (var m in members) { result.Add(StripTestPrefix(m)); }
+                    // Only test: members are test projects; job: members are ignored here.
+                    foreach (var m in members)
+                    {
+                        if (m.StartsWith("test:", StringComparison.Ordinal)) { result.Add(StripTestPrefix(m)); }
+                    }
                 }
                 else if (target.StartsWith("test:", StringComparison.Ordinal))
                 {
@@ -141,17 +126,10 @@ public sealed class TestTriggerMap
         return result;
     }
 
-    private IEnumerable<(IReadOnlyList<string> Globs, IReadOnlyList<string> Targets)> SelectionRules(bool projectLevelOnly)
+    private IEnumerable<(IReadOnlyList<string> Globs, IReadOnlyList<string> Targets)> SelectionRules()
     {
         // run_all_globs is a flat list of globs that all select the ALL sentinel.
         yield return (RunAllGlobs, new[] { "ALL" });
-
-        if (projectLevelOnly)
-        {
-            foreach (var r in CoreSource) { yield return (r.Paths, r.Targets); }
-            foreach (var r in LeafSource) { yield return (r.Paths, r.Targets); }
-            yield break;
-        }
 
         foreach (var r in AllPathRules()) { yield return (r.Paths, r.Targets); }
         foreach (var j in CuratedJobs) { yield return (j.Paths, new[] { j.Target }); }

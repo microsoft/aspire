@@ -7,11 +7,15 @@ using Xunit;
 namespace Infrastructure.Tests.TestTriggerMap;
 
 /// <summary>
-/// Acceptance/behavior spec for the <see cref="TestSelector"/> tool, derived from the dependency
-/// kinds the curated <c>docs/ci/test-trigger-map.yml</c> describes (and the selector design doc).
-/// Each test states "given these changed files, the selector must pick these targets" for one
-/// dependency kind or edge case. They are RED until the selector is implemented — that is the
-/// point: implementing <c>TestSelector.Select</c> is "done" when these pass.
+/// Behavior spec for the <see cref="TestSelector"/> tool, expressed as a contract:
+/// given a set of changed files (and, where relevant, the Layer 1 / <c>dotnet-affected</c>
+/// set injected as project names), assert on the returned <see cref="SelectionResult"/>
+/// (selected test projects, jobs, whether the full matrix is forced, and the unmatched files).
+///
+/// The selector only owns Layer 2 (the curated <c>docs/ci/test-trigger-map.yml</c>): the
+/// graph-derived project closure (leaf/core/test-hub fan-out) is computed at runtime by
+/// <c>dotnet-affected</c> and supplied to <see cref="TestSelector.Select"/>, so those edges are
+/// exercised here by injecting the Layer 1 set rather than by the map.
 /// </summary>
 public sealed class SelectTestsAcceptanceTests
 {
@@ -21,105 +25,10 @@ public sealed class SelectTestsAcceptanceTests
     private static SelectionResult Select(params string[] changedFiles)
         => new TestSelector(s_mapPath, s_allTestProjects).Select(changedFiles, [], new SelectorOptions());
 
-    // --- ProjectReference closure (leaf + core) ---------------------------------------------
+    private static SelectionResult SelectWithLayer1(string[] changedFiles, string[] layer1Affected)
+        => new TestSelector(s_mapPath, s_allTestProjects).Select(changedFiles, layer1Affected, new SelectorOptions());
 
-    [Fact]
-    public void SelectsLeafIntegrationTests()
-    {
-        // A leaf hosting integration maps to its own test project, not the whole hosting cluster.
-        var result = Select("src/Aspire.Hosting.Kafka/KafkaResource.cs");
-
-        Assert.False(result.SelectsAll);
-        Assert.Contains("Aspire.Hosting.Kafka.Tests", result.TestProjects);
-    }
-
-    [Fact]
-    public void CoreHostingChangeSelectsHostingNotComponents()
-    {
-        // src/Aspire.Hosting reaches the hosting side but not the pure client-component tests.
-        var result = Select("src/Aspire.Hosting/ApplicationModel/Resource.cs");
-
-        Assert.Contains("Aspire.Hosting.Tests", result.TestProjects);
-        Assert.DoesNotContain("Aspire.Npgsql.Tests", result.TestProjects);
-    }
-
-    [Fact]
-    public void ComponentChangeDoesNotPullOtherComponents()
-    {
-        // Component <-> component isolation: an Npgsql change must not drag Redis/Mongo/RabbitMQ.
-        var result = Select("src/Components/Aspire.Npgsql/AspireNpgsqlExtensions.cs");
-
-        Assert.Contains("Aspire.Npgsql.Tests", result.TestProjects);
-        Assert.DoesNotContain("Aspire.StackExchange.Redis.Tests", result.TestProjects);
-        Assert.DoesNotContain("Aspire.MongoDB.Driver.Tests", result.TestProjects);
-    }
-
-    // --- Foreign <Compile Include> is FILE-granular -----------------------------------------
-
-    [Fact]
-    public void LinkCompiledFileSelectsItsConsumers()
-    {
-        // The shared constants file is link-compiled into 5 Npgsql tests; changing it runs them all.
-        var result = Select("src/Aspire.Hosting.PostgreSQL/PostgresContainerImageTags.cs");
-
-        Assert.Contains("Aspire.Npgsql.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Azure.Npgsql.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Hosting.Tests", result.TestProjects);
-    }
-
-    [Fact]
-    public void NonSharedFileDoesNotDragCompileConsumers()
-    {
-        // A different file in the same project must NOT pull the borrowed-file consumers — the
-        // whole point of tracking compile-include at file granularity rather than project closure.
-        var result = Select("src/Aspire.Hosting.PostgreSQL/PostgresBuilderExtensions.cs");
-
-        Assert.Contains("Aspire.Hosting.PostgreSQL.Tests", result.TestProjects);
-        Assert.DoesNotContain("Aspire.Npgsql.Tests", result.TestProjects);
-    }
-
-    // --- Test hubs and shared source dirs ---------------------------------------------------
-
-    [Fact]
-    public void TestHubChangeSelectsAllHosting()
-    {
-        // tests/Aspire.Hosting.Tests is referenced by the whole hosting cluster.
-        var result = Select("tests/Aspire.Hosting.Tests/SomeHelper.cs");
-
-        Assert.Contains("Aspire.Hosting.Yarp.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Hosting.Redis.Tests", result.TestProjects);
-    }
-
-    [Fact]
-    public void ComponentTestUtilHubSelectsAllComponents()
-    {
-        var result = Select("tests/Aspire.Components.Common.TestUtilities/ConformanceTests.cs");
-
-        Assert.Contains("Aspire.Npgsql.Tests", result.TestProjects);
-        Assert.Contains("Aspire.StackExchange.Redis.Tests", result.TestProjects);
-    }
-
-    [Fact]
-    public void ComponentsCommonSelectsAllComponents()
-    {
-        // src/Components/Common is compiled into many client components (no owning csproj).
-        var result = Select("src/Components/Common/HealthChecksExtensions.cs");
-
-        Assert.Contains("Aspire.Npgsql.Tests", result.TestProjects);
-    }
-
-    [Fact]
-    public void VendoredOtelSelectsRedisAndKafka()
-    {
-        var result = Select("src/Vendoring/OpenTelemetry.Shared/SomeShared.cs");
-
-        Assert.Contains("Aspire.StackExchange.Redis.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Confluent.Kafka.Tests", result.TestProjects);
-    }
-
-    // --- run_all catch-all and fail-open ----------------------------------------------------
+    // --- run_all catch-all -> full matrix ---------------------------------------------------
 
     [Fact]
     public void BuildInfraChangeSelectsAll()
@@ -131,78 +40,71 @@ public sealed class SelectTestsAcceptanceTests
     }
 
     [Fact]
-    public void UnknownRootBuildPropSelectsAll()
-    {
-        // Broadened run_all globs (eng/*.props, eng/*.targets) err toward caution: an eng build
-        // prop that is not individually enumerated must still run everything.
-        var result = Select("eng/Publishing.props");
-
-        Assert.True(result.SelectsAll);
-    }
-
-    [Fact]
-    public void UnmappedSourceFileFailsOpenToAll()
-    {
-        // A src/** file that matches no rule must fail open to ALL — a missed test is a silent
-        // regression, an extra run is just slower.
-        var result = Select("src/Aspire.BrandNewThing/Thing.cs");
-
-        Assert.True(result.SelectsAll);
-        Assert.NotNull(result.EscalationReason);
-    }
-
-    [Fact]
-    public void SelectsAllExpandsToFullMatrix()
+    public void SelectsAllExpandsToFullMatrixAndAllJobs()
     {
         var result = Select("global.json");
 
-        Assert.True(result.SelectsAll);
         Assert.True(result.TestProjects.SetEquals(s_allTestProjects),
             "SelectsAll must expand TestProjects to the full matrix.");
-    }
-
-    // --- test_self --------------------------------------------------------------------------
-
-    [Fact]
-    public void TestSelfChangeRunsThatTest()
-    {
-        var result = Select("tests/Aspire.Cli.Tests/SomeTest.cs");
-
-        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
-    }
-
-    // --- Curated jobs -----------------------------------------------------------------------
-
-    [Fact]
-    public void TypeSystemChangeTriggersPolyglotNotAllHosting()
-    {
-        // Aspire.TypeSystem drives the polyglot/codegen + CLI surface, not the whole hosting set.
-        var result = Select("src/Aspire.TypeSystem/TypeModel.cs");
-
         Assert.Contains("job:polyglot", result.Jobs);
-        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
-        Assert.DoesNotContain("Aspire.Hosting.Redis.Tests", result.TestProjects);
-    }
-
-    [Fact]
-    public void ExtensionChangeTriggersExtensionJobs()
-    {
-        var result = Select("extension/src/extension.ts");
-
-        Assert.Contains("job:extension-unit", result.Jobs);
         Assert.Contains("job:extension-e2e", result.Jobs);
     }
 
     [Fact]
-    public void ComponentChangeTriggersNoJobs()
+    public void BuildOrchestrationProjSelectsAll()
     {
-        // A pure client-component .cs change matches none of the curated job globs.
-        var result = Select("src/Components/Aspire.Npgsql/AspireNpgsqlExtensions.cs");
+        // eng/OuterPreBuild.proj is build-wide project-name validation -> err toward ALL.
+        var result = Select("eng/OuterPreBuild.proj");
 
-        Assert.Empty(result.Jobs);
+        Assert.True(result.SelectsAll);
     }
 
-    // --- Runtime / loose-file dependencies (invisible to the project graph) -----------------
+    // --- shared source (no owning csproj) ---------------------------------------------------
+
+    [Fact]
+    public void ComponentsCommonSelectsAllComponents()
+    {
+        // src/Components/Common is compiled into many client components (group expansion).
+        var result = Select("src/Components/Common/HealthChecksExtensions.cs");
+
+        Assert.Contains("Aspire.Npgsql.Tests", result.TestProjects);
+        Assert.False(result.SelectsAll);
+    }
+
+    [Fact]
+    public void VendoredOtelSelectsRedisAndKafka()
+    {
+        var result = Select("src/Vendoring/OpenTelemetry.Shared/SomeShared.cs");
+
+        Assert.Contains("Aspire.StackExchange.Redis.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Confluent.Kafka.Tests", result.TestProjects);
+    }
+
+    // --- shared_compiled_source is FILE-granular --------------------------------------------
+
+    [Fact]
+    public void LinkCompiledFileSelectsItsConsumers()
+    {
+        // The shared constants file is link-compiled into several Npgsql tests; changing it runs them.
+        var result = Select("src/Aspire.Hosting.PostgreSQL/PostgresContainerImageTags.cs");
+
+        Assert.Contains("Aspire.Npgsql.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Azure.Npgsql.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Hosting.Tests", result.TestProjects);
+    }
+
+    [Fact]
+    public void NonSharedFileInSameProjectDoesNotDragCompileConsumers()
+    {
+        // A different file in the same project must NOT pull the borrowed-file consumers — file
+        // granularity. (The file still matches the src/Aspire.Hosting*/** curated job globs, which
+        // is expected; what matters is it does not select the Npgsql tests.)
+        var result = Select("src/Aspire.Hosting.PostgreSQL/PostgresBuilderExtensions.cs");
+
+        Assert.DoesNotContain("Aspire.Npgsql.Tests", result.TestProjects);
+    }
+
+    // --- loose-file / runtime dependencies --------------------------------------------------
 
     [Fact]
     public void ClipackChangeSelectsCliAndInfraTests()
@@ -233,45 +135,125 @@ public sealed class SelectTestsAcceptanceTests
     [Fact]
     public void GenericWorkflowChangeSelectsInfrastructureTestsOnly()
     {
-        // A non-run_all workflow file maps to Infrastructure.Tests and must NOT escalate to ALL
-        // (tests.yml / run-tests.yml are separately in run_all_globs; an arbitrary one is not).
         var result = Select(".github/workflows/some-other-workflow.yml");
 
         Assert.False(result.SelectsAll);
         Assert.Contains("Infrastructure.Tests", result.TestProjects);
     }
 
-    // --- Composition: union, aliases, layer 1, kill switch ----------------------------------
+    // --- curated jobs -----------------------------------------------------------------------
 
     [Fact]
-    public void MultipleChangesUnionTheirTargets()
+    public void ExtensionChangeTriggersExtensionJobs()
     {
-        // Rules are additive across all changed files.
-        var result = Select("src/Aspire.Hosting.Kafka/KafkaResource.cs", "extension/src/extension.ts");
+        var result = Select("extension/src/extension.ts");
 
-        Assert.Contains("Aspire.Hosting.Kafka.Tests", result.TestProjects);
         Assert.Contains("job:extension-unit", result.Jobs);
+        Assert.Contains("job:extension-e2e", result.Jobs);
     }
 
     [Fact]
-    public void AliasesExpandToConcreteProjects()
+    public void TypeSystemChangeTriggersPolyglotNotAllHosting()
     {
-        var result = Select("tests/Aspire.Hosting.Tests/SomeHelper.cs");
+        var result = Select("src/Aspire.TypeSystem/TypeModel.cs");
 
-        Assert.DoesNotContain("ALL_HOSTING_TESTS", result.TestProjects);
-        Assert.Contains("Aspire.Hosting.Yarp.Tests", result.TestProjects);
+        Assert.Contains("job:polyglot", result.Jobs);
+        Assert.DoesNotContain("Aspire.Hosting.Redis.Tests", result.TestProjects);
     }
+
+    [Fact]
+    public void ComponentChangeTriggersNoJobs()
+    {
+        // A pure client-component .cs change matches none of the curated job globs.
+        var result = Select("src/Components/Aspire.Npgsql/AspireNpgsqlExtensions.cs");
+
+        Assert.Empty(result.Jobs);
+    }
+
+    // --- named groups (test projects + jobs) ------------------------------------------------
+
+    [Fact]
+    public void CliBundleGroupExpandsToTestsAndJobs()
+    {
+        // eng/Bundle.proj maps to the CLI_BUNDLE group, which mixes a test project and two jobs.
+        var result = Select("eng/Bundle.proj");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("job:cli-starter", result.Jobs);
+        Assert.Contains("job:extension-e2e", result.Jobs);
+    }
+
+    // --- test_self --------------------------------------------------------------------------
+
+    [Fact]
+    public void TestSelfChangeRunsThatTest()
+    {
+        var result = Select("tests/Aspire.Cli.Tests/SomeTest.cs");
+
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+    }
+
+    // --- Layer 1 (dotnet-affected) ownership of the project closure -------------------------
 
     [Fact]
     public void Layer1AffectedProjectsAreIncluded()
     {
-        // The graph tool (Layer 1) reports a project the curated map would not select for this
-        // file (e.g. via a ProjectReference / CPM / Directory.Build edge). It must be unioned in.
-        var result = new TestSelector(s_mapPath, s_allTestProjects)
-            .Select(["src/Aspire.Hosting.Kafka/KafkaResource.cs"], ["Aspire.Hosting.Redis.Tests"], new SelectorOptions());
+        // A leaf integration change is owned by Layer 1 now: the curated map selects nothing for
+        // it, and the graph-derived projects are unioned in from the injected set.
+        var result = SelectWithLayer1(
+            ["src/Aspire.Hosting.Kafka/KafkaResource.cs"],
+            ["Aspire.Hosting.Kafka.Tests", "Aspire.Hosting.Redis.Tests"]);
 
         Assert.Contains("Aspire.Hosting.Kafka.Tests", result.TestProjects);
         Assert.Contains("Aspire.Hosting.Redis.Tests", result.TestProjects);
+    }
+
+    [Fact]
+    public void LeafComponentFileIsLayer2UnmatchedWithoutLayer1()
+    {
+        // A client-component leaf file matches no curated rule (component closure is Layer 1's
+        // job), so the curated map selects nothing for it and it is reported unmatched. Hosting
+        // files differ — they match the src/Aspire.Hosting*/** curated job globs — so a component
+        // file is the clean "owned only by Layer 1" example.
+        var result = Select("src/Components/Aspire.Npgsql/AspireNpgsqlExtensions.cs");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+        Assert.Contains("src/Components/Aspire.Npgsql/AspireNpgsqlExtensions.cs", result.UnmatchedFiles);
+    }
+
+    // --- unattributed (unmatched) files -----------------------------------------------------
+
+    [Fact]
+    public void LooseFileMatchedByNoRuleIsReportedUnmatched()
+    {
+        var result = Select("docs/architecture/some-notes.md");
+
+        Assert.Contains("docs/architecture/some-notes.md", result.UnmatchedFiles);
+        Assert.False(result.SelectsAll);
+    }
+
+    [Fact]
+    public void RunAllFileIsNotReportedUnmatched()
+    {
+        var result = Select("global.json");
+
+        Assert.True(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
+    // --- composition: union + kill switch ---------------------------------------------------
+
+    [Fact]
+    public void MultipleChangesUnionTheirTargets()
+    {
+        var result = Select("eng/Bundle.proj", "extension/src/extension.ts");
+
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("job:cli-starter", result.Jobs);
+        Assert.Contains("job:extension-unit", result.Jobs);
     }
 
     [Fact]
@@ -281,69 +263,7 @@ public sealed class SelectTestsAcceptanceTests
             .Select(["src/Aspire.Cli/Program.cs"], [], new SelectorOptions(ForceAll: true));
 
         Assert.True(result.SelectsAll);
-    }
-
-    // --- Unattributed (unmatched) changed files ---------------------------------------------
-
-    [Fact]
-    public void LooseFileMatchedByNoRuleIsReportedUnmatched()
-    {
-        // A loose, non-project file no curated rule covers (and not src/**, so no fail-open). It is
-        // the early-warning signal that a new dependency may need a Layer 2 rule.
-        var result = Select("docs/architecture/some-notes.md");
-
-        Assert.Contains("docs/architecture/some-notes.md", result.UnmatchedFiles);
-        Assert.False(result.SelectsAll);
-        Assert.Empty(result.TestProjects);
-        Assert.Empty(result.Jobs);
-    }
-
-    [Fact]
-    public void MappedFilesAreNotReportedUnmatched()
-    {
-        // Files covered by Layer 2 (leaf rule, curated job, test_self) must not appear as unmatched.
-        var result = Select(
-            "src/Aspire.Hosting.Kafka/KafkaResource.cs",
-            "extension/src/extension.ts",
-            "tests/Aspire.Cli.Tests/SomeTest.cs");
-
-        Assert.Empty(result.UnmatchedFiles);
-    }
-
-    [Fact]
-    public void RunAllFileIsNotReportedUnmatched()
-    {
-        // A run_all match is still a Layer 2 match, so it is attributed (not unmatched) even though
-        // it escalates to ALL.
-        var result = Select("global.json");
-
-        Assert.True(result.SelectsAll);
-        Assert.Empty(result.UnmatchedFiles);
-    }
-
-    [Fact]
-    public void UnmatchedFilesUnionAcrossChangesAndExcludeMatched()
-    {
-        // Additive across files: the unmapped ones are collected; the mapped one is not.
-        var result = Select(
-            "docs/a.md",
-            "media/diagram.png",
-            "src/Aspire.Hosting.Kafka/KafkaResource.cs");
-
-        Assert.Contains("docs/a.md", result.UnmatchedFiles);
-        Assert.Contains("media/diagram.png", result.UnmatchedFiles);
-        Assert.DoesNotContain("src/Aspire.Hosting.Kafka/KafkaResource.cs", result.UnmatchedFiles);
-    }
-
-    [Fact]
-    public void UnmappedSrcFileIsBothUnmatchedAndFailsOpen()
-    {
-        // A src/** file no rule covers fails open to ALL and is also reported unmatched, so the
-        // audit shows exactly which file forced the escalation.
-        var result = Select("src/Aspire.BrandNewThing/Thing.cs");
-
-        Assert.True(result.SelectsAll);
-        Assert.Contains("src/Aspire.BrandNewThing/Thing.cs", result.UnmatchedFiles);
+        Assert.True(result.TestProjects.SetEquals(s_allTestProjects));
     }
 
     private static IReadOnlyCollection<string> EnumerateMatrixTestProjects()

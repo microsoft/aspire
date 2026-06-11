@@ -15,35 +15,29 @@ internal sealed class TriggerMap
 {
     public int Version { get; set; }
 
-    public Dictionary<string, List<string>> Aliases { get; set; } = new();
+    public Dictionary<string, List<string>> Groups { get; set; } = new();
 
     public TestSelfRule? TestSelf { get; set; }
 
     public List<string> RunAllGlobs { get; set; } = new();
 
-    public List<PathRule> TestHubs { get; set; } = new();
-
     public List<PathRule> SharedSource { get; set; } = new();
-
-    public List<PathRule> CoreSource { get; set; } = new();
 
     public List<JobRule> CuratedJobs { get; set; } = new();
 
     public List<PathRule> LooseFileDeps { get; set; } = new();
 
-    public List<PathRule> LeafSource { get; set; } = new();
-
     public List<PathRule> SharedCompiledSource { get; set; } = new();
 
     // gaps: documents known-uncovered source on purpose, so it is not a selecting rule.
+    // ProjectReference closure, CPM, Directory.Build.*, and file-level <Compile Include> are
+    // computed at runtime by dotnet-affected (Layer 1), so leaf_source/core_source/test_hubs are
+    // intentionally absent here.
 
     public IEnumerable<PathRule> AllPathRules()
     {
-        foreach (var r in TestHubs) { yield return r; }
         foreach (var r in SharedSource) { yield return r; }
-        foreach (var r in CoreSource) { yield return r; }
         foreach (var r in LooseFileDeps) { yield return r; }
-        foreach (var r in LeafSource) { yield return r; }
         foreach (var r in SharedCompiledSource) { yield return r; }
     }
 

@@ -140,7 +140,10 @@ public sealed class TestTriggerMapTests
             }
         }
 
-        var dupeLeafGlobs = s_map.LeafSource.Concat(s_map.SharedCompiledSource)
+        // shared_source intentionally repeats a glob across rules with different targets (e.g. the
+        // vendored OTel dir feeds both Redis and Kafka), so only the file-granular
+        // shared_compiled_source is checked for duplicate globs (a dupe there is a merge slip).
+        var dupeLeafGlobs = s_map.SharedCompiledSource
             .SelectMany(r => r.Paths)
             .GroupBy(p => p, StringComparer.Ordinal)
             .Where(g => g.Count() > 1)
@@ -149,34 +152,50 @@ public sealed class TestTriggerMapTests
             .ToList();
         if (dupeLeafGlobs.Count > 0)
         {
-            problems.Add($"duplicate leaf/compiled globs: {string.Join(", ", dupeLeafGlobs)}");
+            problems.Add($"duplicate shared_compiled_source globs: {string.Join(", ", dupeLeafGlobs)}");
         }
 
         Assert.True(problems.Count == 0, string.Join("; ", problems));
     }
 
     [Fact]
-    public void EverySourceProjectIsReachableBySomeRule()
+    public void EverySourceProjectIsReachableByLayer1OrACuratedRule()
     {
-        // A new src/ project that no rule maps to would silently never run any test. Require
-        // every source .csproj to be matched by at least one selecting glob, so adding an
-        // unmapped project fails here instead of going untested in CI.
+        // The graph closure is owned by dotnet-affected (Layer 1), which discovers projects from
+        // Aspire.slnx. So a src project is "covered" if it is in the solution (∴ Layer 1 sees it)
+        // OR matched by a curated glob (the deliberately out-of-slnx ones — e.g. the template
+        // placeholders that crash discovery — are covered by loose_file_deps). A new src project
+        // that is neither in the solution nor curated would silently never run any test, so it
+        // must fail here.
+        var inSolution = LoadSolutionProjectPaths();
+
         var selecting = new Matcher(StringComparison.Ordinal);
         foreach (var glob in s_map.AllSelectingGlobs())
         {
             selecting.AddInclude(glob);
         }
-        var covered = selecting.Match(s_trackedFiles).Files
+        var curatedCovered = selecting.Match(s_trackedFiles).Files
             .Select(f => f.Path)
             .ToHashSet(StringComparer.Ordinal);
 
         var uncovered = s_trackedFiles
             .Where(f => f.StartsWith("src/", StringComparison.Ordinal) && f.EndsWith(".csproj", StringComparison.Ordinal))
-            .Where(csproj => !covered.Contains(csproj))
+            .Where(csproj => !inSolution.Contains(csproj) && !curatedCovered.Contains(csproj))
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.True(uncovered.Count == 0, $"src projects not reachable by any rule: {string.Join(", ", uncovered)}");
+        Assert.True(uncovered.Count == 0,
+            $"src projects neither in Aspire.slnx nor matched by a curated rule: {string.Join(", ", uncovered)}");
+    }
+
+    // Repo-relative '/'-separated project paths listed in Aspire.slnx (the dotnet-affected root).
+    private static IReadOnlySet<string> LoadSolutionProjectPaths()
+    {
+        var slnx = File.ReadAllText(Path.Combine(RepoRoot.Path, "Aspire.slnx"));
+        // <Project Path="src/Foo/Foo.csproj" /> — paths use '/' in the slnx already.
+        return System.Text.RegularExpressions.Regex.Matches(slnx, "Path=\"([^\"]+\\.csproj)\"")
+            .Select(m => m.Groups[1].Value.Replace('\\', '/'))
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     [Fact]
@@ -223,32 +242,33 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
-    public void AliasesResolveToValidTestTargets()
+    public void GroupsResolveToValidTargets()
     {
-        // Aliases (ALL_HOSTING_TESTS / ALL_COMPONENT_TESTS) are expanded into concrete test:
-        // targets by a consumer. Each member must be a well-formed test: target (existence is
-        // covered by EveryTestTargetNamesAnExistingTestProject, which includes alias members),
-        // an alias must not nest another alias, and must be non-empty with no duplicates.
-        foreach (var (name, members) in s_map.Aliases)
+        // Named groups (e.g. ALL_COMPONENT_TESTS, CLI_BUNDLE) expand into concrete test:/job:
+        // targets by a consumer. Each member must be a well-formed test: or job: target (existence
+        // is covered by EveryTestTargetNamesAnExistingTestProject / EveryJobTargetMapsToAnExisting-
+        // WorkflowOrJob, which include group members), a group must not nest another group, and
+        // must be non-empty with no duplicates.
+        foreach (var (name, members) in s_map.Groups)
         {
-            Assert.True(members.Count > 0, $"alias {name} is empty");
+            Assert.True(members.Count > 0, $"group {name} is empty");
 
-            var bad = members.Where(m => !m.StartsWith("test:", StringComparison.Ordinal))
+            var bad = members.Where(m => !m.StartsWith("test:", StringComparison.Ordinal) && !m.StartsWith("job:", StringComparison.Ordinal))
                 .Order(StringComparer.Ordinal).ToList();
-            Assert.True(bad.Count == 0, $"alias {name} has non-test: members: {string.Join(", ", bad)}");
+            Assert.True(bad.Count == 0, $"group {name} has members that are neither test: nor job:: {string.Join(", ", bad)}");
 
             var dupes = members.GroupBy(m => m, StringComparer.Ordinal)
                 .Where(g => g.Count() > 1).Select(g => g.Key).Order(StringComparer.Ordinal).ToList();
-            Assert.True(dupes.Count == 0, $"alias {name} has duplicate members: {string.Join(", ", dupes)}");
+            Assert.True(dupes.Count == 0, $"group {name} has duplicate members: {string.Join(", ", dupes)}");
         }
 
-        // Every alias-like token used as a target (uppercase, not test:/job:) is either the
-        // ALL sentinel or a defined alias — so a typo'd alias reference fails loudly.
+        // Every group-like token used as a target (uppercase, not test:/job:) is either the
+        // ALL sentinel or a defined group — so a typo'd group reference fails loudly.
         var undefined = s_map.AllReferencedTargets()
             .Where(t => !t.StartsWith("test:", StringComparison.Ordinal) && !t.StartsWith("job:", StringComparison.Ordinal))
-            .Where(t => t != "ALL" && !s_map.Aliases.ContainsKey(t))
+            .Where(t => t != "ALL" && !s_map.Groups.ContainsKey(t))
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        Assert.True(undefined.Count == 0, $"undefined alias references: {string.Join(", ", undefined)}");
+        Assert.True(undefined.Count == 0, $"undefined group references: {string.Join(", ", undefined)}");
     }
 
     [Fact]
