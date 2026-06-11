@@ -141,15 +141,25 @@ jobs:
           SRC_SHA=$(sha256sum /tmp/src.tar.gz | awk '{print $1}')
           rm /tmp/src.tar.gz
 
-          # Synthetic version string. Brew requires a version when the URL
-          # doesn't follow the tagged-archive convention. Tag with the PR
-          # number when available for traceability in failure logs.
-          PR_NUM="${{ github.event.pull_request.number }}"
-          if [ -n "$PR_NUM" ]; then
-            SRC_VERSION="0.0.0-pr${PR_NUM}"
+          # Formula version = the Arcade-computed CLI version, so it matches
+          # what the binary reports (`aspire --version`) and the canonical
+          # test_do `assert_match version.to_s, ...` holds. build-cli.sh builds
+          # with ContinuousIntegrationBuild=true (the pipeline's `-ci`), so the
+          # version Arcade stamps is:
+          #   * VersionPrefix          when StabilizePackageVersion=true (release tag)
+          #   * VersionPrefix + "-ci"  otherwise (preview / main)
+          # Verified against
+          #   dotnet msbuild src/Aspire.Cli/Aspire.Cli.csproj /p:ContinuousIntegrationBuild=true -getProperty:Version
+          # (-> e.g. 13.5.0-ci). eng/Versions.props is a standalone props file,
+          # so this evaluation needs no SDK restore — the runner's dotnet suffices.
+          VERSION_PREFIX=$(dotnet msbuild eng/Versions.props -getProperty:VersionPrefix)
+          STABILIZE=$(dotnet msbuild eng/Versions.props -getProperty:StabilizePackageVersion)
+          if [ "$STABILIZE" = "true" ]; then
+            SRC_VERSION="$VERSION_PREFIX"
           else
-            SRC_VERSION="0.0.0-${COMMIT_SHA:0:7}"
+            SRC_VERSION="${VERSION_PREFIX}-ci"
           fi
+          echo "Resolved formula version: $SRC_VERSION (VersionPrefix=$VERSION_PREFIX StabilizePackageVersion=$STABILIZE)"
 
           SDK_VERSION=$(jq -r .sdk.version global.json)
           if [ -z "$SDK_VERSION" ] || [ "$SDK_VERSION" = "null" ]; then
@@ -244,15 +254,13 @@ jobs:
       # resolve job. Drop `no_autobump!` (rejected outside official taps).
       # Rewrite the `url` line entirely because the template's tagged-
       # release URL shape doesn't match the archive/<sha> shape we use
-      # against a PR commit; we also have to inject `version "..."` since
-      # the synthetic URL doesn't carry a version brew can infer.
+      # against a PR commit; we also inject `version "..."` since the
+      # archive URL doesn't carry a version brew can infer.
       #
-      # The canonical test_do assertion `assert_match version.to_s,
-      # shell_output("#{bin}/aspire --version")` works as-is: the formula
-      # passes --version version.to_s to build-cli.sh, which forwards it
-      # into the binary's VersionPrefix/VersionSuffix at publish time. So
-      # the binary's --version output contains the formula version
-      # (including in CI where the formula version is synthetic).
+      # The version we inject is the Arcade-computed version (see the resolve
+      # job), which is exactly what build-cli.sh bakes into the binary. So the
+      # canonical test_do `assert_match version.to_s,
+      # shell_output("#{bin}/aspire --version")` holds without any test patch.
       - name: Render formula into scratch tap
         env:
           SDK_VERSION:    ${{ needs.resolve.outputs.sdk_version }}
@@ -278,7 +286,6 @@ jobs:
             -e "s|__SHA_LINUX_X64__|${SHA_LINUX_X64}|g" \
             -e "s|__SHA_LINUX_ARM64__|${SHA_LINUX_ARM64}|g" \
             -e "s|^  url \"https://github.com/microsoft/aspire/archive/refs/tags/v${SRC_VERSION}.tar.gz\"|  url \"${SRC_URL}\"\n  version \"${SRC_VERSION}\"|" \
-            -e 's|"-n", "SmokeTest"|"-n", "SmokeTest",\n           "--version", "13.4.2"|' \
             -e '/no_autobump!/d' \
             eng/homebrew-core/aspire.rb.template \
             > "$TAP_REPO/Formula/aspire.rb"

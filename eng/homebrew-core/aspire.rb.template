@@ -86,6 +86,8 @@ class Aspire < Formula
            "--dotnet-root", buildpath/"dotnet-sdk",
            "--libexec", libexec,
            "--bin", bin,
+           # Only the versions/<v> layout dir name. The binary's version is the
+           # Arcade-computed value; `version` equals it (resolved at render time).
            "--version", version.to_s
   end
 

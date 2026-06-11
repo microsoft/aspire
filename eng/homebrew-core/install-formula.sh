@@ -41,10 +41,11 @@
 #                  files, and the bundle layout are laid out under here.
 #   --bin          The formula's bin dir. A relative symlink to libexec/aspire
 #                  is created here.
-#   --version      Full version string baked into the binary (so `aspire
-#                  --version` reports it) and used as the versions/<version>
-#                  layout directory name. Pass the formula's `version` so the
-#                  canonical test_do `--version` assertion holds.
+#   --version      The formula's `version`, used as the versions/<version>
+#                  layout directory name. NOT passed to the build: the binary's
+#                  version is the Arcade-computed value (see build-cli.sh), and
+#                  the formula `version` is set to that same value at render
+#                  time so the canonical test_do `--version` assertion holds.
 
 set -euo pipefail
 
@@ -88,12 +89,13 @@ export DOTNET_NOLOGO=1
 # (managed/, dcp/) into --output. We reorganize managed/ and dcp/ into the
 # versioned layout below. `--channel stable` bakes the release channel into
 # the binary's assembly metadata so install-route gating (e.g. `aspire
-# doctor`) identifies brew-installed binaries correctly.
+# doctor`) identifies brew-installed binaries correctly. We do NOT pass a
+# version: build-cli.sh builds with the Arcade-computed version (the proper
+# internal-build version), and $VERSION here is only the layout directory name.
 "$SCRIPT_DIR/build-cli.sh" \
     --rid "$RID" \
     --output "$LIBEXEC" \
     --channel stable \
-    --version "$VERSION" \
     --no-embed
 
 # Move the bundle components into the canonical sidecar-route shape:
