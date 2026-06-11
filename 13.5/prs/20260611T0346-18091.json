@@ -1,0 +1,9 @@
+{
+  "author": "maddymontaquila",
+  "comment": "Bug fix: increased CDP startup timeout for WithBrowserLogs() reliability",
+  "mergedAt": "2026-06-11T03:46:07Z",
+  "number": 18091,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "included",
+  "title": "Increase BrowserLogs CDP command timeout for tracked browser startup"
+}

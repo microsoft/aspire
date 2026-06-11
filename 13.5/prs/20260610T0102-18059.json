@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Grouped with #17959: exposes IServiceProvider and callback contexts to ATS polyglot hosts",
+  "mergedAt": "2026-06-10T01:02:51Z",
+  "number": 18059,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "included",
+  "title": "Expose IServiceProvider and callback contexts to ATS polyglot hosts"
+}

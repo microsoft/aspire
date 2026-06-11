@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Internal tooling: adds GitHub Copilot canvas extension for issue triage, not a product feature",
+  "mergedAt": "2026-06-10T22:31:26Z",
+  "number": 18071,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "excluded",
+  "title": "Add issue triage canvas extension"
+}

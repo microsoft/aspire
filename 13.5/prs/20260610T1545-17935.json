@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Internal refactoring: renames RegistrationOrder to SortOrder in extension/CLI backend, no user-visible change",
+  "mergedAt": "2026-06-10T15:45:03Z",
+  "number": 17935,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "excluded",
+  "title": "Rename RegistrationOrder to SortOrder"
+}

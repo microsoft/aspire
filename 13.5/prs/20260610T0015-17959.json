@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "IInteractionService exposed to polyglot app hosts (TypeScript, Python, Go, Java, Rust)",
+  "mergedAt": "2026-06-10T00:15:50Z",
+  "number": 17959,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "included",
+  "title": "Expose IInteractionService to polyglot app hosts"
+}

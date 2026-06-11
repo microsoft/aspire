@@ -1,0 +1,9 @@
+{
+  "author": "shauryalowkeygotaura",
+  "comment": "Bug fix: use last 8 chars of GUID for unique replica display names in dashboard telemetry",
+  "mergedAt": "2026-06-11T04:31:38Z",
+  "number": 18064,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "included",
+  "title": "Use last 8 characters of GUID service.instance.id in resource display name"
+}

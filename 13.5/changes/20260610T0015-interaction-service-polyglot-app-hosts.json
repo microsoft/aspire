@@ -1,0 +1,20 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "IInteractionService (prompts, message boxes, notifications, and dynamic inputs) is now available in polyglot app hosts written in TypeScript, Python, Go, Java, and Rust. Callback contexts such as IServiceProvider and builder overloads are also exposed to polyglot hosts, enabling feature parity with C# app hosts.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-06-10T00:15:50Z",
+  "lastMergedAt": "2026-06-10T01:02:51Z",
+  "name": "IInteractionService available in polyglot app hosts",
+  "owner": "sebastienros",
+  "prs": [
+    17959,
+    18059
+  ]
+}

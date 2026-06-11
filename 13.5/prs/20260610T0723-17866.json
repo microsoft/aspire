@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "New WithTerminal() API for interactive terminal sessions in resources",
+  "mergedAt": "2026-06-10T07:23:45Z",
+  "number": 17866,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "included",
+  "title": "WithTerminal(): per-replica interactive terminal sessions (Aspire side, draft)"
+}

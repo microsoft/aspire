@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "IInteractionService and all related interaction types (InteractionInput, InteractionInputCollection, InputType, InteractionOptions, and others) have been promoted from experimental to stable and no longer require suppressing the ASPIREINTERACTION001 diagnostic.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "✅",
+  "firstMergedAt": "2026-06-10T01:50:57Z",
+  "lastMergedAt": "2026-06-10T01:50:57Z",
+  "name": "IInteractionService promoted to stable",
+  "owner": "JamesNK",
+  "prs": [
+    18032
+  ]
+}

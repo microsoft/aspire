@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Breaking: ServiceProvider property renamed to Services on context types",
+  "mergedAt": "2026-06-09T18:58:24Z",
+  "number": 18034,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "included",
+  "title": "Obsolete ServiceProvider property, add Services property on context types"
+}

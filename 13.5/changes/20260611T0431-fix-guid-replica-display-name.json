@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@shauryalowkeygotaura"
+  ],
+  "description": "Fixed a display name collision for telemetry resources with multiple replicas. The dashboard now uses the last 8 characters of the service.instance.id GUID instead of the first 8, which prevents identical display names when using version 7 GUIDs (Guid.CreateVersion7()).",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔤",
+  "firstMergedAt": "2026-06-11T04:31:38Z",
+  "lastMergedAt": "2026-06-11T04:31:38Z",
+  "name": "Fix duplicate replica display names in telemetry",
+  "owner": "radical",
+  "prs": [
+    18064
+  ]
+}

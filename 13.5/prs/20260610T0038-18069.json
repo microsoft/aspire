@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only change: fixes flaky Qdrant health check test",
+  "mergedAt": "2026-06-10T00:38:59Z",
+  "number": 18069,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "excluded",
+  "title": "Fix flaky Qdrant health check test by using HTTP readiness wait strategy"
+}

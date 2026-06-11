@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "CLI detects coding agent environment and records in telemetry",
+  "mergedAt": "2026-06-10T01:21:01Z",
+  "number": 18065,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "included",
+  "title": "Add coding agent telemetry detection"
+}

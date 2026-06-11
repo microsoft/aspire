@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The ServiceProvider property on all hosting context types is now marked obsolete and replaced with a new Services property, consistent with existing patterns like BeforeStartEvent.Services and DistributedApplication.Services. The old property still works but will generate a compiler warning.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-06-09T18:58:24Z",
+  "lastMergedAt": "2026-06-09T18:58:24Z",
+  "name": "ServiceProvider renamed to Services on context types",
+  "owner": "JamesNK",
+  "prs": [
+    18034
+  ]
+}

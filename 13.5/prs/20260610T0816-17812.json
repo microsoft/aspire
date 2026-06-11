@@ -1,0 +1,9 @@
+{
+  "author": "javiercn",
+  "comment": "Internal build infrastructure: downloads blazor.web.js from NuGet at build time, no user-visible change",
+  "mergedAt": "2026-06-10T08:16:59Z",
+  "number": 17812,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "excluded",
+  "title": "Download blazor.web.js from NuGet at build time instead of checking in copies"
+}

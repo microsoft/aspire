@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "TypeScript AppHost startup no longer waits a fixed delay before the CLI attempts to connect. The CLI now races the RPC connection retry loop against process exit, reducing the time from aspire run to an active AppHost.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-06-10T07:29:08Z",
+  "lastMergedAt": "2026-06-10T07:29:08Z",
+  "name": "Faster TypeScript AppHost startup",
+  "owner": "davidfowl",
+  "prs": [
+    18075
+  ]
+}

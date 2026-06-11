@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Dependency version bump: .NET servicing release updates (10.0.8→10.0.9, etc.)",
+  "mergedAt": "2026-06-11T03:04:40Z",
+  "number": 18061,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "excluded",
+  "title": "Update dependencies from latest .NET Servicing"
+}

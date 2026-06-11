@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "PR has NO-MERGE label, likely merged experimentally or prematurely",
+  "mergedAt": "2026-06-10T22:07:14Z",
+  "number": 15697,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "excluded",
+  "title": "Harden Azure provisioning recovery"
+}

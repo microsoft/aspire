@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Grouped with #18065: refines copilot-cli detection name in telemetry",
+  "mergedAt": "2026-06-10T21:26:18Z",
+  "number": 18094,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "included",
+  "title": "Report copilot-cli specifically & update tests to work in test explorer"
+}

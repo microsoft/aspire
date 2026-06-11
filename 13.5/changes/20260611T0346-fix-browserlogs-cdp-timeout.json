@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a startup reliability issue with WithBrowserLogs() where tracked browser sessions could fail with Browser debug pipe closed errors even when the browser eventually became responsive. The CDP startup command timeout has been increased to accommodate slower browser starts.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-06-11T03:46:07Z",
+  "lastMergedAt": "2026-06-11T03:46:07Z",
+  "name": "Fix WithBrowserLogs() startup timeout",
+  "owner": "maddymontaquila",
+  "prs": [
+    18091
+  ]
+}

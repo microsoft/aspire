@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "IInteractionService and related types promoted from experimental to stable",
+  "mergedAt": "2026-06-10T01:50:57Z",
+  "number": 18032,
+  "runDate": "2026-06-11T07:35:09Z",
+  "status": "included",
+  "title": "Remove [Experimental] from IInteractionService and related types"
+}
