@@ -22,7 +22,6 @@ public class ExcludeFromMcpTests
     private const string ApiServiceName = "api-service";
     private const string SecretServiceName = "secret-service";
 
-
     [Fact]
     public void IsExcludedFromMcp_ReturnsFalse_WhenPropertyNotSet()
     {
@@ -94,8 +93,6 @@ public class ExcludeFromMcpTests
 
         Assert.False(McpToolHelpers.IsExcludedFromMcp(snapshot));
     }
-
-
 
     [Fact]
     public async Task ListResourcesTool_ExcludesResourceWithExcludeFromMcp()
@@ -169,8 +166,6 @@ public class ExcludeFromMcpTests
         Assert.Contains("No resources found", textContent.Text);
     }
 
-
-
     [Fact]
     public async Task ListConsoleLogsTool_ReturnsError_WhenResourceIsExcluded()
     {
@@ -243,8 +238,6 @@ public class ExcludeFromMcpTests
         Assert.Contains("Application started", textContent.Text);
     }
 
-
-
     [Fact]
     public async Task ExecuteResourceCommandTool_ReturnsError_WhenResourceIsExcluded()
     {
@@ -283,8 +276,6 @@ public class ExcludeFromMcpTests
         Assert.Equal(McpToolHelpers.GetResourceNotAvailableMessage(SecretServiceName), textContent.Text);
     }
 
-
-
     [Fact]
     public async Task ListStructuredLogsTool_ReturnsError_WhenSpecificResourceIsExcluded()
     {
@@ -321,8 +312,6 @@ public class ExcludeFromMcpTests
         Assert.Contains(ApiServiceName, textContent.Text);
         Assert.DoesNotContain(SecretServiceName, textContent.Text);
     }
-
-
 
     [Fact]
     public async Task ListTracesTool_ReturnsError_WhenSpecificResourceIsExcluded()
@@ -361,7 +350,75 @@ public class ExcludeFromMcpTests
         Assert.DoesNotContain(SecretServiceName, textContent.Text);
     }
 
+    [Fact]
+    public async Task ListTraceStructuredLogsTool_FiltersExcludedResourceLogs()
+    {
+        var monitor = CreateMonitorWithDashboardAndExcludedResource();
+        var (mockHttpClientFactory, _) = CreateMockHttpWithLogs(ApiServiceName, SecretServiceName);
 
+        var tool = CreateTraceStructuredLogsTool(monitor, mockHttpClientFactory);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["traceId"] = JsonDocument.Parse("\"abc123def456\"").RootElement
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        var textContent = result.Content![0] as TextContentBlock;
+        Assert.NotNull(textContent);
+        Assert.Contains(ApiServiceName, textContent.Text);
+        Assert.DoesNotContain(SecretServiceName, textContent.Text);
+    }
+
+    [Fact]
+    public async Task ListTraceStructuredLogsTool_ReturnsAllLogs_WhenNoResourcesExcluded()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            DashboardInfoResponse = new GetDashboardInfoResponse
+            {
+                ApiBaseUrl = "http://localhost:5000",
+                ApiToken = "test-token",
+                DashboardUrls = ["http://localhost:18888"]
+            },
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = ApiServiceName,
+                    DisplayName = "API Service",
+                    ResourceType = "Project",
+                    State = "Running"
+                },
+                new ResourceSnapshot
+                {
+                    Name = SecretServiceName,
+                    DisplayName = "Secret Service",
+                    ResourceType = "Project",
+                    State = "Running"
+                }
+            ]
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var (mockHttpClientFactory, _) = CreateMockHttpWithLogs(ApiServiceName, SecretServiceName);
+
+        var tool = CreateTraceStructuredLogsTool(monitor, mockHttpClientFactory);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["traceId"] = JsonDocument.Parse("\"abc123def456\"").RootElement
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        var textContent = result.Content![0] as TextContentBlock;
+        Assert.NotNull(textContent);
+        Assert.Contains(ApiServiceName, textContent.Text);
+        Assert.Contains(SecretServiceName, textContent.Text);
+    }
 
     private static TestAuxiliaryBackchannelMonitor CreateMonitorWithDashboardAndExcludedResource()
     {
@@ -539,6 +596,18 @@ public class ExcludeFromMcpTests
             monitor,
             httpClientFactory,
             NullLogger<ListTracesTool>.Instance);
+    }
+
+    private static ListTraceStructuredLogsTool CreateTraceStructuredLogsTool(
+        TestAuxiliaryBackchannelMonitor monitor,
+        IHttpClientFactory httpClientFactory)
+    {
+        IDashboardInfoProvider dashboardInfoProvider = new BackchannelDashboardInfoProvider(monitor, NullLogger<BackchannelDashboardInfoProvider>.Instance);
+        return new ListTraceStructuredLogsTool(
+            dashboardInfoProvider,
+            monitor,
+            httpClientFactory,
+            NullLogger<ListTraceStructuredLogsTool>.Instance);
     }
 
 }

@@ -1039,12 +1039,14 @@ internal static class CliE2EAutomatorHelpers
     /// <param name="counter">The prompt sequence counter.</param>
     /// <param name="toolName">The MCP tool name to invoke (e.g. <c>list_structured_logs</c>).</param>
     /// <param name="expectedMarker">A string expected in the tool call output (e.g. <c>STRUCTURED LOGS DATA</c>).</param>
+    /// <param name="doesNotContainMarker">An optional string that must NOT appear in the tool call output.</param>
     /// <param name="mcpArgs">Additional arguments to pass to <c>aspire agent mcp</c> (e.g. <c>--dashboard-url "..."</c>).</param>
     internal static async Task CallAgentMcpToolAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter,
         string toolName,
         string expectedMarker,
+        string? doesNotContainMarker = null,
         string? mcpArgs = null)
     {
         var argsFragment = mcpArgs is not null ? $" {mcpArgs}" : string.Empty;
@@ -1076,6 +1078,17 @@ internal static class CliE2EAutomatorHelpers
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("MCP_DATA_PRESENT", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForAnyPromptAsync(counter);
+
+        // If a doesNotContainMarker is specified, verify it is NOT in the output
+        if (doesNotContainMarker is not null)
+        {
+            await auto.TypeAsync(
+                $"if grep -q '{doesNotContainMarker}' /tmp/mcp_out.txt; then echo 'MCP_EXCLUDED_MARKER_FOUND'; " +
+                "else echo 'MCP_EXCLUDED_MARKER_ABSENT'; fi");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("MCP_EXCLUDED_MARKER_ABSENT", timeout: TimeSpan.FromSeconds(10));
+            await auto.WaitForAnyPromptAsync(counter);
+        }
 
         // Verify the initialize response was received (confirms MCP handshake worked)
         await auto.TypeAsync(
