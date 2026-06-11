@@ -12,6 +12,7 @@ using Aspire.Dashboard.Telemetry;
 using Aspire.Hosting;
 using Aspire.Tests.Shared.Telemetry;
 using Google.Protobuf;
+using Grpc.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
@@ -130,6 +131,32 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.Collection(app.ValidationFailures,
             s => Assert.Contains("Dashboard:Otlp:AllowedCertificates:0:Thumbprint", s));
+    }
+
+    [Fact]
+    public async Task ErrorMode_BlocksGrpcOtlpAndDashboardApiRequests()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.ClientCertificate);
+                data[$"{DashboardConfigNames.DashboardOtlpAllowedCertificatesName.ConfigKey}:0"] = string.Empty;
+            });
+        await app.StartAsync().DefaultTimeout();
+
+        using var grpcChannel = IntegrationTestHelpers.CreateGrpcChannel($"http://{app.OtlpServiceGrpcEndPointAccessor().EndPoint}", testOutputHelper);
+        var grpcClient = new LogsService.LogsServiceClient(grpcChannel);
+
+        var grpcException = await Assert.ThrowsAsync<RpcException>(() => grpcClient.ExportAsync(new ExportLogsServiceRequest()).ResponseAsync).DefaultTimeout();
+        Assert.Equal(StatusCode.Unavailable, grpcException.StatusCode);
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var apiRequest = new HttpRequestMessage(HttpMethod.Get, "/api/set-language");
+        apiRequest.Headers.Accept.ParseAdd("application/json");
+
+        var apiResponse = await httpClient.SendAsync(apiRequest).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, apiResponse.StatusCode);
     }
 
     [Theory]

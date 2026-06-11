@@ -478,45 +478,26 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await next(context).ConfigureAwait(false);
         });
 
-        // Error mode middleware: redirect to error mode page if the dashboard has validation failures
-        // and the user hasn't dismissed the errors yet.
+        // Error mode middleware: redirect browser navigation to the error page and reject every other
+        // non-asset request until the user explicitly dismisses the configuration errors.
         _app.Use(async (context, next) =>
         {
             var errorMode = context.RequestServices.GetRequiredService<DashboardErrorMode>();
-            
-            // Allow access to static files, error mode page, and Blazor framework files even in error mode
-            if (!context.Request.Path.StartsWithSegments("/errormode", StringComparison.OrdinalIgnoreCase) &&
-                !context.Request.Path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase) &&
-                !context.Request.Path.StartsWithSegments("/_content", StringComparison.OrdinalIgnoreCase) &&
-                !context.Request.Path.StartsWithSegments("/css", StringComparison.OrdinalIgnoreCase) &&
-                !context.Request.Path.StartsWithSegments("/js", StringComparison.OrdinalIgnoreCase) &&
-                (context.Request.Path.Value?.EndsWith(".css", StringComparison.OrdinalIgnoreCase) != true) &&
-                (context.Request.Path.Value?.EndsWith(".js", StringComparison.OrdinalIgnoreCase) != true) &&
-                (context.Request.Path.Value?.EndsWith(".ico", StringComparison.OrdinalIgnoreCase) != true))
-            {
-                // Block OTLP and MCP endpoints when in error mode
-                if (errorMode.ShouldBlock &&
-                    (context.Request.Path.StartsWithSegments("/v1/logs", StringComparison.OrdinalIgnoreCase) ||
-                     context.Request.Path.StartsWithSegments("/v1/traces", StringComparison.OrdinalIgnoreCase) ||
-                     context.Request.Path.StartsWithSegments("/v1/metrics", StringComparison.OrdinalIgnoreCase) ||
-                     context.Request.Path.StartsWithSegments("/mcp", StringComparison.OrdinalIgnoreCase)))
-                {
-                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-                    await context.Response.WriteAsync("Dashboard is in error mode due to configuration errors.").ConfigureAwait(false);
-                    return;
-                }
 
-                // Redirect browser requests to error mode page
-                if (errorMode.ShouldBlock && 
-                    context.Request.Method == HttpMethods.Get &&
-                    context.Request.Headers.Accept.ToString().Contains("text/html", StringComparison.OrdinalIgnoreCase))
-                {
-                    context.Response.Redirect("/errormode");
-                    return;
-                }
+            if (!errorMode.ShouldBlock || IsErrorModeAllowedRequest(context.Request.Path))
+            {
+                await next(context).ConfigureAwait(false);
+                return;
             }
 
-            await next(context).ConfigureAwait(false);
+            if (IsHtmlNavigationRequest(context.Request))
+            {
+                context.Response.Redirect("/errormode");
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsync("Dashboard is in error mode due to configuration errors.").ConfigureAwait(false);
         });
 
         if (!string.IsNullOrEmpty(dashboardOptions.Otlp.Cors.AllowedOrigins))
@@ -610,6 +591,47 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             // Display version and commit like 8.0.0-preview.2.23619.3+17dd83f67c6822954ec9a918ef2d048a78ad4697
             logger.LogInformation("Aspire version: {Version}", informationalVersion);
         }
+    }
+
+    private static bool IsErrorModeAllowedRequest(PathString path)
+    {
+        if (path.StartsWithSegments("/errormode", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/_content", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/css", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/framework", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/js", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // The error page is rendered by the same interactive Blazor host as the rest of the dashboard.
+        // Keep the circuit endpoint reachable so the dismissal button can run, while other dashboard
+        // and ingestion endpoints stay blocked by default.
+        if (path.StartsWithSegments("/_blazor", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var value = path.Value;
+        if (value is null)
+        {
+            return false;
+        }
+
+        return value.EndsWith(".css", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".ico", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".js", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".woff", StringComparison.OrdinalIgnoreCase) ||
+            value.EndsWith(".woff2", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsHtmlNavigationRequest(HttpRequest request)
+    {
+        return HttpMethods.IsGet(request.Method) &&
+            request.Headers.Accept.ToString().Contains("text/html", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
