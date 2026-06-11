@@ -1252,21 +1252,23 @@ Ensure all changes follow the doc-writer skill guidelines from Step 7. Include:
 > [!IMPORTANT]
 > Emit `create_pull_request` **exactly once**, and only after you have actually
 > written documentation file changes to the workspace in Step 9. The safe output
-> builds the PR from those workspace changes; if none exist it returns an error
-> such as `No changes to commit - no commits found`.
+> builds the PR from those workspace changes.
 >
-> **Never re-emit `create_pull_request` after an error.** A repeated emission is a
-> deterministic failure loop that burns the run's token budget without making
-> progress. Handle a `create_pull_request` failure exactly once, as follows:
+> **Treat any `create_pull_request` failure as non-retryable and never re-emit the
+> same safe output after it.** Re-emitting after a deterministic error (no commits
+> found, no diff to commit, an empty/invalid patch, a base-branch or validation
+> error, a protected-file rejection, etc.) is a failure loop that burns the run's
+> token budget without making progress. Handle a failure exactly once:
 >
 > - If it failed because you had not yet written any doc changes, write them now
 >   (Step 9) and emit `create_pull_request` one more time — at most.
-> - If it still reports no changes (the triggering change has no concrete
->   documentation edit you can make — for example a signal fired on a string that
->   is not actually an Aspire user-facing feature), **stop drafting**. Emit a
->   single `notify_source_pr` with `result: "skipped"` whose `summary` states that
->   no concrete documentation change could be produced and lists the triggered
->   signals, then end the run. Do not loop.
+> - For any other failure, or if it still reports no changes to commit (the
+>   triggering change has no concrete documentation edit you can make — for
+>   example a signal fired on a string that is not actually an Aspire user-facing
+>   feature), **stop drafting**. Emit a single `notify_source_pr` with
+>   `result: "skipped"` whose `summary` states that no docs PR could be produced,
+>   names the failure reason, and lists the triggered signals, then end the run.
+>   Do not loop.
 
 Create a draft pull request on `microsoft/aspire.dev` with:
 
