@@ -77,14 +77,19 @@ jobs:
           if printf '%s' "$PR_BODY" | grep -qiF '[full ci]' || [ "$HAS_RUN_ALL_LABEL" = "true" ]; then
             args+=(--force-all)
           elif [ -n "$PR_BASE_SHA" ]; then
-            # Pull requests diff base..head. The enumerate-tests checkout is shallow, so fetch the base
-            # commit; if it is unavailable, force the full set rather than under-select.
-            git fetch --no-tags --depth=1 origin "$PR_BASE_SHA" || true
-            if git cat-file -e "${PR_BASE_SHA}^{commit}" 2>/dev/null; then
-              args+=(--from "$PR_BASE_SHA" --to "$HEAD_SHA")
-            else
-              args+=(--force-all)
+            # Pull requests diff base..head. The enumerate-tests checkout is shallow, so fetch the
+            # base commit. If it can't be made available we FAIL rather than fall back to --force-all:
+            # base.sha is always reachable on origin, so a failure here is a real problem (a bad fetch
+            # or a rewritten base), and masking it with run-all would teach the audit nothing.
+            if ! git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"; then
+              echo "::error::Failed to fetch PR base commit $PR_BASE_SHA; cannot compute the changed-file diff." >&2
+              exit 1
             fi
+            if ! git cat-file -e "${PR_BASE_SHA}^{commit}" 2>/dev/null; then
+              echo "::error::PR base commit $PR_BASE_SHA is unavailable after fetch; cannot compute the changed-file diff." >&2
+              exit 1
+            fi
+            args+=(--from "$PR_BASE_SHA" --to "$HEAD_SHA")
           else
             # Non-PR events (e.g. push to main) have no reliable base -> run everything.
             args+=(--force-all)

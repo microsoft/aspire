@@ -198,12 +198,18 @@ consumes the emitted matrix. In audit (`'false'`, no `--enforce`) the selector
 **returns run-all**: the full matrix plus `run_* = true`, with the advisory summary
 showing what enforcing *would* have selected. Flipping it to `'true'` makes the
 selector return the selective matrix and `run_*`, and the same gates then narrow.
-If SelectTests fails outright, the step fails **open** — emits the full matrix and
-sets every `run_*` to true — so coverage is never silently reduced.
+The tool fails **open by design** when it *decides* to run everything (the kill
+switch, or a non-PR event with no base — see below): it emits the full matrix and
+sets every `run_*` to true. A non-zero exit therefore means the selector itself
+crashed, and the step lets that **fail the run** rather than masking the bug behind
+a silent fallback — surfacing it is the point of the audit phase.
 
 The kill switch is wired in the same step: a `[full ci]` token in the PR body or a
-`run-all-tests` label passes `--force-all`. Non-PR events (no reliable base SHA)
-also force the full set.
+`run-all-tests` label passes `--force-all`. Non-PR events (no base SHA at all, e.g.
+a push to `main`) also force the full set. A PR *with* a base SHA that cannot be
+fetched **fails the step** instead of forcing run-all: `base.sha` is always
+reachable on origin, so a fetch failure is a real problem, and masking it with
+run-all would teach the audit nothing.
 
 dotnet-affected adds an MSBuild `ProjectGraph` evaluation to the critical-path
 `setup_for_tests` job; it is a local tool restored via `dotnet tool restore` and
