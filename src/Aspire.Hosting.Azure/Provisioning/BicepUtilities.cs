@@ -201,15 +201,6 @@ internal static class BicepUtilities
         }
     }
 
-    internal static object? GetExistingResourceGroup(AzureBicepResource resource) =>
-        GetExistingResourceScope(resource)?.ResourceGroup;
-
-    internal static object? GetExistingSubscription(AzureBicepResource resource) =>
-        GetExistingResourceScope(resource)?.Subscription;
-
-    internal static bool IsTenantScoped(AzureBicepResource resource) =>
-        GetExistingResourceScope(resource)?.IsTenantScope == true;
-
     internal static AzureBicepResourceScope? GetExistingResourceScope(AzureBicepResource resource)
     {
         if (resource.Scope is not null)
