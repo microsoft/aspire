@@ -24,11 +24,15 @@ internal sealed class TriggerMap
 
     public List<PathRule> PathRules { get; set; } = new();
 
+    public List<ProjectRule> ProjectRules { get; set; } = new();
+
     public List<DerivedRule> DerivedTargets { get; set; } = new();
 
-    // Only four matchers exist; a section is a key only when the selector treats it differently.
+    // Five matchers exist; a section is a key only when the selector treats it differently.
     // The graph closure (ProjectReference, CPM, Directory.Build.*, foreign <Compile Include>) is
     // computed at runtime by dotnet-affected (Layer 1), so those edges are intentionally absent.
+    // project_rules are distinct from path_rules because they key off the affected PROJECT set
+    // (Layer 1) by project name, not off changed file paths.
 
     // Every job: token the map can ever emit -- the "all jobs" set an ALL selection expands to.
     // Collected from every section that can carry a job: target (path-rule targets, derived
@@ -48,6 +52,14 @@ internal sealed class TriggerMap
         foreach (var d in DerivedTargets)
         {
             foreach (var t in d.Targets)
+            {
+                AddJobTokensFromTarget(tokens, t);
+            }
+        }
+
+        foreach (var rule in ProjectRules)
+        {
+            foreach (var t in rule.Targets)
             {
                 AddJobTokensFromTarget(tokens, t);
             }
@@ -107,6 +119,14 @@ internal sealed class TriggerMap
         return matcher.Match(new[] { path }).HasMatches;
     }
 
+    // Matches a project NAME (dotnet-affected's Name, == the .csproj base name) against a
+    // project_rules pattern, supporting simple '*'/'?' wildcards (e.g. "Aspire.Hosting*" matches
+    // every hosting project by name). This is over the project-NAME string space, not file paths,
+    // so a project_rule survives a project moving directories and follows the graph's transitive
+    // closure (a dependency change marks the project affected). Ordinal/case-sensitive to mirror CI.
+    public static bool ProjectNameMatches(string pattern, string name) =>
+        System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern, name, ignoreCase: false);
+
     // Expands a path_conventions rule against a changed file. The pattern carries a single <name>
     // placeholder for one path segment and a trailing "/**"; e.g. "src/Components/<name>/**" against
     // "src/Components/Aspire.Npgsql/Foo.cs" captures name="Aspire.Npgsql" and substitutes it into the
@@ -150,6 +170,19 @@ internal sealed class PathRule
     public List<string> Targets { get; set; } = new();
 
     public string? Note { get; set; }
+
+    public string? Reason { get; set; }
+}
+
+// project_rules entry: when ANY affected project (Layer 1) matches one of Projects by name glob,
+// add Targets. Replaces the duplicated src/<Project>/** path globs that previously drove the
+// non-.NET jobs, and is more robust: it follows the graph's transitive closure rather than literal
+// file paths.
+internal sealed class ProjectRule
+{
+    public List<string> Projects { get; set; } = new();
+
+    public List<string> Targets { get; set; } = new();
 
     public string? Reason { get; set; }
 }

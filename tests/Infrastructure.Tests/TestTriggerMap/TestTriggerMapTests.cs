@@ -90,6 +90,20 @@ public sealed class TestTriggerMapTests
             }
         }
 
+        // project_rules: each entry needs at least one project name glob and at least one target.
+        foreach (var rule in s_map.ProjectRules)
+        {
+            var label = rule.Projects.Count > 0 ? rule.Projects[0] : "(no projects)";
+            if (rule.Projects.Count == 0 || rule.Projects.Any(string.IsNullOrWhiteSpace))
+            {
+                problems.Add($"project_rules entry '{label}' has an empty project glob");
+            }
+            if (rule.Targets.Count == 0 || rule.Targets.Any(string.IsNullOrWhiteSpace))
+            {
+                problems.Add($"project_rules entry '{label}' has no targets");
+            }
+        }
+
         Assert.True(problems.Count == 0, string.Join("; ", problems));
     }
 
@@ -131,6 +145,29 @@ public sealed class TestTriggerMapTests
         return System.Text.RegularExpressions.Regex.Matches(slnx, "Path=\"([^\"]+\\.csproj)\"")
             .Select(m => m.Groups[1].Value.Replace('\\', '/'))
             .ToHashSet(StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void EveryProjectRuleGlobMatchesASolutionProject()
+    {
+        // project_rules key off the affected PROJECT set (Layer 1), matched by project-name glob.
+        // dotnet-affected can only ever report a project that is in Aspire.slnx, so a project glob
+        // that matches no solution project name would silently select nothing — assert each matches
+        // at least one. Project Name == the .csproj base name (what dotnet-affected emits).
+        var solutionProjectNames = LoadSolutionProjectPaths()
+            .Select(p => Path.GetFileNameWithoutExtension(p))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var dead = s_map.ProjectRules
+            .SelectMany(r => r.Projects)
+            .Distinct(StringComparer.Ordinal)
+            .Where(pattern => !solutionProjectNames.Any(name =>
+                System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern, name, ignoreCase: false)))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(dead.Count == 0,
+            $"project_rules globs matching no project in Aspire.slnx: {string.Join(", ", dead)}");
     }
 
     [Fact]

@@ -58,9 +58,12 @@ dotnet-affected \
 (`--filter-file-path` is the current flag for scoping discovery to a solution;
 the older `--solution-path` alias is marked obsolete in `dotnet-affected` 6.2.0.)
 
-Output is `[{ "Name": "...", "FilePath": "..." }]`, where `Name` is exactly the
-matrix `projectName`. The tool reads `.Name` and intersects it with the
-enumerated matrix — no path-to-name mapping needed.
+Output is `[{ "Name": "...", "FilePath": "..." }]`, where `Name` is the project
+name (the `.csproj` base name; for a test project, exactly the matrix
+`projectName`). The tool keeps the **full** affected set: it intersects the test
+names with the enumerated matrix (the selected test projects) and matches the
+**production** names against `project_rules` (the job/test triggers that used to be
+hand-written `src/<Project>/**` path globs).
 
 What Layer 1 covers (each verified against the `dotnet-affected` source and a
 probe — see [evidence](#appendix-validation-evidence)):
@@ -95,7 +98,7 @@ it cannot be pulled from nuget.org in the internal build.
 ## Layer 2 — curated (the only hand-maintained part)
 
 What the MSBuild graph provably cannot see, plus a convention backstop. Exactly
-four matchers — a section is a key only when the selector treats it differently:
+five matchers — a section is a key only when the selector treats it differently:
 
 - **`conventions`**: `<name>`-capture pattern → target template, additive and
   existence-guarded. Covers a test's own folder (`tests/<name>/**` →
@@ -104,16 +107,22 @@ four matchers — a section is a key only when the selector treats it differentl
 - **`ignore`**: shared dirs Layer 1 already covers (`src/Components/Common`, the
   vendored OTel instrumentation dirs) or that are inert
   (`src/Vendoring/OpenTelemetry.Shared`), listed so they don't trip the fallback.
-- **`path_rules`**: the one general glob → targets matcher (`test:` / `job:` /
+- **`path_rules`**: the one general path-glob → targets matcher (`test:` / `job:` /
   group / `ALL`). Comment headers group its entries by intent — they have no
   distinct selector behavior:
   - the **catch-all** entry (target `ALL`), trimmed of what Layer 1 now covers;
   - **convention misses** (`src/Aspire.Hosting.Azure.*/**` → `Aspire.Hosting.Azure.Tests`);
-  - **non-.NET jobs** (`polyglot`, `typescript-sdk`, `typescript-api-compat`,
-    `extension-unit`, `extension-e2e`, `cli-starter`, the installer jobs, and the
-    schedule-only `api-diffs` / `ats-diffs` / `deployment-e2e`);
+  - **non-.NET job loose triggers** — only the paths the graph can't attribute
+    (`tests/PolyglotAppHosts/**`, the `*.ats.txt` / `*.tscompat.suppression.txt`
+    baselines, `tools/TypeScriptApiCompat/**`, `extension/**`); the jobs'
+    *production-project* triggers live in `project_rules`;
+  - the **linked-compiled** `src/Aspire/Cli/**` (no owning project);
   - **loose-file reads** (`eng/clipack/**`, `eng/winget/**`, `eng/homebrew/**`,
     `src/Aspire.ProjectTemplates/**`, `.github/workflows/**`, `playground/**`, …).
+- **`project_rules`**: an affected **production** project (matched by project-name
+  glob against Layer 1's affected set) → a target set. Replaces the duplicated
+  `src/<Project>/**` job globs and follows the graph's transitive closure (a
+  dependency change marks the project affected). Inert when Layer 1 is skipped.
 - **`derived_targets`**: "if **any** of these tests is selected, also run these
   targets", applied to the union of both layers to a fixpoint (e.g. CLI tests →
   `cli-starter`; acquisition → the installer jobs).
@@ -127,19 +136,23 @@ matrix split:
 
 1. **Inputs:** changed files (or `--from`/`--to`), the `all_tests` matrix JSON,
    the curated YAML, and the `Aspire.slnx` project dirs (for attribution).
-2. **Layer 1:** invoke `dotnet-affected`; read affected/changed project names.
+2. **Layer 1:** invoke `dotnet-affected`; read the full affected project set
+   (production + test). Test names ∩ matrix are selected; production names feed
+   `project_rules`.
 3. **Layer 2:** per changed file — apply `conventions` (existence-guarded),
    `path_rules` (expanding groups recursively; a `targets: [ALL]` rule selects the
    whole matrix), and `ignore` (accounts for a file with no target).
-4. **Derived pass:** for each selected test (Layer 1 ∪ Layer 2), add its
-   `derived_targets`, to a fixpoint (cycle-safe).
-5. **Run-all fallback:** a `src/**` file matched by no Layer 2 rule, not ignored,
+4. **`project_rules`:** for each affected production project, add the targets of
+   every rule whose project-name glob it matches.
+5. **Derived pass:** for each selected test (Layer 1 ∪ Layer 2 ∪ project_rules),
+   add its `derived_targets`, to a fixpoint (cycle-safe).
+6. **Run-all fallback:** a `src/**` file matched by no Layer 2 rule, not ignored,
    and *not* under a project in `Aspire.slnx` (so `dotnet-affected` didn't
    attribute it) → `ALL`. A missed test is a silent regression; an extra run is
    just slower. Non-`src` leftovers are audit-only.
-6. **Kill switch:** a `[full ci]` token in the PR or a `run-all-tests` label →
+7. **Kill switch:** a `[full ci]` token in the PR or a `run-all-tests` label →
    `ALL`.
-7. **Outputs:** the filtered matrix (`include[]` entries whose top-level
+8. **Outputs:** the filtered matrix (`include[]` entries whose top-level
    `projectName` is selected) plus per-job booleans (`run_polyglot`,
    `run_extension_e2e`, …).
 
@@ -217,19 +230,21 @@ A test under `Infrastructure.Tests` (which already asserts on workflow files)
 keeps the curated layer honest:
 
 - **Referential integrity:** every curated `test:` / `job:` target (including
-  `derived_targets`) names a real test project / a known `tests.yml` job; every
-  glob is valid; every `conventions` pattern carries a `<name>` placeholder that
-  its target substitutes.
+  `project_rules` and `derived_targets`) names a real test project / a known
+  `tests.yml` job; every path glob is valid; every `project_rules` project-name
+  glob matches at least one project in `Aspire.slnx` (so a renamed project fails
+  loudly); every `conventions` pattern carries a `<name>` placeholder that its
+  target substitutes.
 - **Coverage:** every test project and every `src` project is reachable by some
   rule (or `Aspire.slnx`), so a newly added, unmapped project fails CI loudly
   instead of silently never running.
 
 A convention-miss dir with no same-named test (the `Azure.<service>` family,
 `Orleans`, `AppHost`, `Tasks`) is intentionally not asserted: its MSBuild files
-are owned by Layer 1 and matched by the `src/Aspire.Hosting*/**` rules, and a
-non-MSBuild change there safely hits the run-all fallback. A specific
-`path_rules` entry (like the Azure one) is a selectivity *nicety*, not a
-correctness requirement, so it is not verifier-enforced.
+are owned by Layer 1, and a non-MSBuild change there safely hits the run-all
+fallback (or the convention backstop). A specific `path_rules` entry (like the
+Azure one) is a selectivity *nicety*, not a correctness requirement, so it is not
+verifier-enforced.
 
 ## Rollout
 

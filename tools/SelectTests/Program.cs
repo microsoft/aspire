@@ -139,7 +139,7 @@ internal static class Selection
 
         var layer1Affected = (options.ForceAll || options.SkipLayer1)
             ? Array.Empty<string>()
-            : RunLayer1(options, allTestProjects);
+            : RunLayer1(options);
 
         var projectDirectories = LoadProjectDirectories(options.RepoRoot);
 
@@ -210,8 +210,9 @@ internal static class Selection
 
     // Layer 1: dotnet-affected builds the MSBuild ProjectGraph and reports every project hit by the
     // diff — the union of *changed* (incl. foreign <Compile Include> consumers) and *affected*
-    // (downstream dependents). We keep only the names that are matrix test projects.
-    private static IReadOnlyCollection<string> RunLayer1(RunOptions options, IReadOnlySet<string> allTestProjects)
+    // (downstream dependents). We return the full set of project names: the selector intersects the
+    // test projects into the matrix and matches the production projects against project_rules.
+    private static IReadOnlyCollection<string> RunLayer1(RunOptions options)
     {
         var outDir = Directory.CreateTempSubdirectory("aspire-affected");
         try
@@ -298,7 +299,7 @@ internal static class Selection
             using var doc = JsonDocument.Parse(File.ReadAllText(jsonPath));
             return doc.RootElement.EnumerateArray()
                 .Select(e => e.TryGetProperty("Name", out var n) ? n.GetString() : null)
-                .Where(name => name is not null && allTestProjects.Contains(name))
+                .Where(name => name is not null)
                 .Select(name => name!)
                 .ToHashSet(StringComparer.Ordinal);
         }
@@ -414,7 +415,7 @@ internal static class Selection
         sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {(options.Enforce ? "enforcing" : "audit (full matrix still runs)")}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- change source: {source}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- force-all (kill switch): {options.ForceAll}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- layer 1 (dotnet-affected): {(options.SkipLayer1 || options.ForceAll ? "skipped" : $"{layer1Affected.Count} test project(s)")}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- layer 1 (dotnet-affected): {(options.SkipLayer1 || options.ForceAll ? "skipped" : $"{layer1Affected.Count} affected project(s) (production + test)")}");
         sb.AppendLine();
 
         // The changed files that came in, so a reader can tell which inputs drove the selection.

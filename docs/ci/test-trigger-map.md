@@ -17,10 +17,11 @@ Selective CI is split by **who can know a dependency**:
   `ProjectReference` edges, Central Package Management, `Directory.Build.*`, and
   file-level `<Compile Include>` of another project's source — is computed at
   runtime by [`dotnet-affected`](https://github.com/leonardochaia/dotnet-affected)
-  over `Aspire.slnx`. It can never drift, so the map does **not** enumerate it.
-  This is why there is no `leaf_source` / `core_source` / `test_hubs` section: a
-  leaf integration → its own test, the core hosting fan-out, and the test-hub
-  fan-out are all reproduced live by the graph tool.
+  over `Aspire.slnx`. It reports the full affected set — **production and test**
+  projects. It can never drift, so the map does **not** enumerate it. This is why
+  there is no `leaf_source` / `core_source` / `test_hubs` section: a leaf
+  integration → its own test, the core hosting fan-out, and the test-hub fan-out
+  are all reproduced live by the graph tool.
 
 - **Layer 2 — curated (this file).** Only what the project graph provably cannot
   see. The selector unions Layer 1's result with the rules here.
@@ -33,15 +34,17 @@ non-.NET jobs and loose-file reads.
 
 ## What stays curated here
 
-Only four matchers exist — a section is its own key only when the selector treats
-it differently. Everything that is "a glob set → a target set" lives in one
-section (`path_rules`); the groupings inside it are comments.
+Only five matchers exist — a section is its own key only when the selector treats
+it differently. Everything that is "a path glob set → a target set" lives in one
+section (`path_rules`); the groupings inside it are comments. `project_rules` is
+separate because it keys off the affected-**project** set (by name), not file paths.
 
 | Section | What it is |
 |---------|------------|
 | `conventions` | `<name>`-capture pattern → target template, emitted only if the derived test exists (existence guard). Additive. Covers a test's own folder (`tests/<name>/**`) and the Hosting/Components integration dirs (a backstop for non-MSBuild files the graph can't attribute). |
 | `ignore` | globs Layer 2 accounts for with **no** target (Layer 1 covers them, or inert), so they don't trip the run-all fallback |
-| `path_rules` | a glob set → a target set (`test:` / `job:` / a group / `ALL`). The single general matcher: catch-all-to-`ALL`, convention misses, non-.NET jobs, and loose-file reads all live here under comment headers |
+| `path_rules` | a path glob set → a target set (`test:` / `job:` / a group / `ALL`). The single general path matcher: catch-all-to-`ALL`, convention misses, non-.NET job loose-file triggers, and loose-file reads all live here under comment headers |
+| `project_rules` | an affected **production** project (matched by project-name glob against Layer 1's affected set) → a target set. Replaces the `src/<Project>/**` globs the job rules used to repeat; follows the graph's transitive closure (a dependency change marks the project affected) |
 | `derived_targets` | "if any of these tests is selected, also run these jobs/tests" — a *test-set* relationship, not a file edge |
 | `groups` | named, reusable bundles of `test:`/`job:` targets (expand recursively) |
 
@@ -144,22 +147,44 @@ src/Vendoring/OpenTelemetry.Shared/**             # compiled by nothing (each in
 
 ### Path rules (`path_rules`)
 
-The one general glob→targets matcher. `targets` may be `test:` / `job:` / a group
-name / `ALL`. Comment headers in the YAML group the entries by intent; the
+The one general path-glob→targets matcher. `targets` may be `test:` / `job:` / a
+group name / `ALL`. Comment headers in the YAML group the entries by intent; the
 selector treats them all identically. Highlights:
 
 - **convention misses** — `src/Aspire.Hosting.Azure.*/** → test:Aspire.Hosting.Azure.Tests`
   (the Azure hosting integrations have no dedicated test; the aggregate test covers them),
   `src/Aspire.Hosting.Integration.Analyzers/** → test:Aspire.Hosting.Analyzers.Tests`.
-- **non-.NET jobs** — `job:polyglot` ← `src/Aspire.TypeSystem/**`, the `CodeGeneration.*`
-  generators, `src/Aspire.Cli/**`, …; `job:extension-unit` / `job:extension-e2e` ← `extension/**`;
-  `job:typescript-api-compat` / `job:ats-diffs` ← `src/Aspire.Hosting*/**` (so a hosting integration
-  change triggers these, and **every** Hosting file is "matched" by Layer 2 — a non-MSBuild Hosting
-  change never falls to the run-all fallback).
+- **non-.NET job loose triggers** — only the paths the project graph cannot
+  attribute: `job:polyglot` ← `tests/PolyglotAppHosts/**` + the workflow;
+  `job:typescript-api-compat` / `job:ats-diffs` ← the checked-in `*.ats.txt` /
+  `*.tscompat.suppression.txt` baselines (not compiled items) + `tools/TypeScriptApiCompat/**`;
+  `job:extension-unit` / `job:extension-e2e` ← `extension/**`. The *production-project*
+  triggers for these jobs (e.g. `Aspire.Cli`, `Aspire.Hosting*`) moved to `project_rules`.
+- **linked-compiled source** — `src/Aspire/Cli/**` is link-compiled only into
+  `Aspire.Hosting.CodeGeneration.TypeScript` and is not its own project dir, so it carries an
+  explicit `path_rules` entry with the targets its old per-job globs had.
 - **loose-file deps** — `eng/clipack/**` (read by `Aspire.Cli.Tests`), `eng/winget/**` /
   `eng/homebrew/**` (installer manifests → `Aspire.Acquisition.Tests` + the installer jobs),
   `src/Aspire.ProjectTemplates/**` (template hive install), `playground/**`, `.github/workflows/**`
   (asserted by `Infrastructure.Tests`), `eng/Bundle.proj` → `CLI_BUNDLE`.
+
+### Project rules (`project_rules`)
+
+An affected **production** project → a target set, matched by project-**name** glob
+against Layer 1's affected set (production projects only; matrix test projects are
+handled by the Layer 1 intersection). This replaces the `src/<Project>/**` path
+globs the job rules used to repeat, and is more robust: it follows the graph's
+transitive closure (a change to a project's *dependency* marks it affected, so the
+job fires) and survives a project moving directories. It is additive and inert when
+Layer 1 did not run (`--skip-layer1`); the loose-file `path_rules` still cover those
+triggers. Project Name == the `.csproj` base name (what `dotnet-affected` emits).
+
+```yaml
+- projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
+  targets: [job:cli-starter]
+- projects: [Aspire.Hosting*, Aspire.Cli]
+  targets: [job:typescript-api-compat]
+```
 
 ### Derived targets (`derived_targets`)
 

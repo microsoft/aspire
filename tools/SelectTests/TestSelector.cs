@@ -72,8 +72,10 @@ public sealed class TestSelector
 
     /// <param name="changedFiles">Repo-relative, '/'-separated paths changed in the PR.</param>
     /// <param name="layer1Affected">
-    /// Test projects reported by the graph tool (the union of its <em>changed</em> and
-    /// <em>affected</em> sets). May be empty.
+    /// The full affected project set reported by the graph tool — production <em>and</em> test
+    /// project names (the union of its <em>changed</em> and <em>affected</em> sets). Test names are
+    /// intersected with the matrix and selected; production names drive <c>project_rules</c>. May be
+    /// empty.
     /// </param>
     /// <param name="options">Selection overrides (kill switch).</param>
     public SelectionResult Select(
@@ -156,10 +158,28 @@ public sealed class TestSelector
             }
         }
 
-        // Layer 1: the graph tool's affected/changed test projects are always part of the answer.
+        // Layer 1: the graph tool reports the full affected set (production + test projects). The
+        // affected TEST projects are always part of the answer; the production names drive
+        // project_rules below.
         foreach (var project in layer1Affected)
         {
-            testProjects.Add(project);
+            if (_allTestProjects.Contains(project))
+            {
+                testProjects.Add(project);
+            }
+        }
+
+        // project_rules: an affected PRODUCTION project (matched by name glob) pulls in jobs/tests.
+        // This replaces the duplicated src/<Project>/** path globs the job rules used to carry, and
+        // follows the graph's transitive closure (a dependency change marks the project affected).
+        // Keyed on the affected-project set, so it contributes nothing when Layer 1 produced none
+        // (e.g. --skip-layer1) -- the path_rules still cover the loose-file triggers in that case.
+        foreach (var rule in map.ProjectRules)
+        {
+            if (layer1Affected.Any(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name))))
+            {
+                ApplyTargets(rule.Targets, map, testProjects, jobs, ref selectsAll, ref reason, "(affected project)");
+            }
         }
 
         if (selectsAll)

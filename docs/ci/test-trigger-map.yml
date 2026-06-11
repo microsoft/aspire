@@ -8,24 +8,28 @@
 # test, core fan-out, and link-compiled-file edges are NOT enumerated here.
 #
 # Selector flow (see test-trigger-selector-design.md):
-#   changed-files + Layer 1 (dotnet-affected) selected test projects
+#   changed-files + Layer 1 (dotnet-affected) affected projects (production + test)
 #     -> per changed file, Layer 2 classifies it: convention / ignore / path_rule / leftover
-#     -> selected test set = Layer1 union Layer2-matched tests
+#     -> selected test set = (Layer1 affected ∩ matrix) union Layer2-matched tests
+#     -> project_rules: affected PRODUCTION projects (by name glob) add jobs/tests
 #     -> derived pass (fixpoint): each selected test may add jobs/tests
 #     -> ALL decision: a path_rule whose target is ALL, the kill switch, OR a leftover src/** file
 #        that is NOT Layer-1-owned (under no csproj in Aspire.slnx) forces the full matrix. Non-src
 #        leftovers are audit-only. ALL = full matrix + every job token.
 #
-# There are exactly four matchers -- a section is its own key only when the selector treats it
-# differently. Everything that is "a glob set -> a target set" lives in ONE section (path_rules);
-# the groupings inside it are comments, not behavior.
+# There are exactly five matchers -- a section is its own key only when the selector treats it
+# differently. Everything that is "a path glob set -> a target set" lives in ONE section
+# (path_rules); the groupings inside it are comments, not behavior. project_rules is separate
+# because it keys off the affected-PROJECT set (by project name), not changed file paths.
 #
 #   conventions      <name>-capture pattern -> target template; emitted only if the derived test
 #                    exists in the matrix (existence guard). Additive. Covers a test's own folder
 #                    and the Hosting/Components integration dirs.
 #   ignore           globs Layer 2 accounts for with NO target (Layer 1 covers them, or inert), so
 #                    they do not trip the run-all fallback.
-#   path_rules       a glob set -> a target set. targets may be test: / job: / a GROUP / ALL.
+#   path_rules       a path glob set -> a target set. targets may be test: / job: / a GROUP / ALL.
+#   project_rules    an affected PRODUCTION project (name glob) -> a target set. Keyed off Layer 1's
+#                    affected-project set, so it follows the graph's transitive closure.
 #   derived_targets  a selected test project -> extra jobs/tests (fixpoint, cycle-safe).
 #   groups           named, reusable bundles of test:/job: targets (expand recursively).
 #
@@ -122,52 +126,34 @@ path_rules:
   - paths: [src/Aspire.Hosting.Integration.Analyzers/**]
     targets: [test:Aspire.Hosting.Analyzers.Tests]
 
-  # --- non-.NET jobs (no MSBuild edge) --------------------------------------------------------
+  # --- non-.NET jobs: loose-file & sub-project triggers ---------------------------------------
+  # The production-project triggers these jobs used to repeat as src/<Project>/** globs now live in
+  # project_rules (keyed off the affected-project set). Only paths the project graph cannot attribute
+  # to a project (loose files, narrow sub-paths, non-compiled baselines) remain here.
   - paths:
-      - src/Aspire.TypeSystem/**
-      - src/Aspire.Hosting.RemoteHost/**
-      - src/Aspire.Managed/**
-      - src/Aspire.Cli/**
-      - src/Aspire/Cli/**
-      - src/Aspire.AppHost.Sdk/**
-      - src/Aspire.Hosting.CodeGeneration.Go/**
-      - src/Aspire.Hosting.CodeGeneration.Java/**
-      - src/Aspire.Hosting.CodeGeneration.Python/**
-      - src/Aspire.Hosting.CodeGeneration.Rust/**
-      - src/Aspire.Hosting.CodeGeneration.TypeScript/**
-      - src/Aspire.Hosting.Go/**
-      - src/Aspire.Hosting.JavaScript/**
-      - src/Aspire.Hosting.Python/**
       - tests/PolyglotAppHosts/**
       - .github/workflows/polyglot-validation/**
       - .github/workflows/polyglot-validation.yml
     targets: [job:polyglot]
-    reason: ATS typesystem -> per-language SDK generators -> RemoteHost server + CLI run + fixtures
+    reason: polyglot fixtures + workflow; the typesystem/SDK/CLI/codegen production projects are in project_rules
   - paths:
-      - src/Aspire.Hosting.CodeGeneration.TypeScript/**
       - tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**
       - src/Aspire.Cli/Templating/Templates/ts-starter/**
       - .github/workflows/typescript-sdk-tests.yml
     targets: [job:typescript-sdk]
-    reason: vitest unit tests over generated TS SDK (@aspire/transport, @aspire/base)
+    reason: vitest over generated TS SDK; ts-starter is a narrow sub-path of Aspire.Cli, not the whole project
   - paths:
-      - src/Aspire.Hosting*/**
       - src/Aspire.Hosting*/api/*.ats.txt
       - src/**/*.tscompat.suppression.txt
-      - src/Aspire.Cli/**
       - tools/TypeScriptApiCompat/**
       - .github/workflows/typescript-api-compat.yml
     targets: [job:typescript-api-compat]
-    reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`
+    reason: checked-in *.ats.txt/suppression baselines are not compiled items (Layer 1 blind); Hosting/Cli production projects are in project_rules
   - paths: [extension/**]
     targets: [job:extension-unit]
     reason: extension_tests_win + extension_bootstrap_linux run yarn build/test in extension/
   - paths:
       - extension/**
-      - src/Aspire.Cli/**
-      - src/Aspire/Cli/**
-      - src/Aspire.Hosting*/**
-      - src/Aspire.Dashboard*/**
       - tests/Aspire.Cli.Tests/**
       - tests/Aspire.Cli.EndToEnd.Tests/**
       - tests/Aspire.Hosting.Tests/Cli/**
@@ -177,16 +163,12 @@ path_rules:
       - .github/workflows/build-packages.yml
       - .github/workflows/build-cli-native-archives.yml
     targets: [job:extension-e2e]
-    reason: verbatim curated filter in tests.yml extension_e2e_changes job
+    reason: mirrors tests.yml extension_e2e_changes filter; Cli/Hosting/Dashboard production projects are in project_rules
   - paths:
       - eng/scripts/get-aspire-cli-pr.ps1
       - eng/scripts/cli-starter-validation.ps1
-      - src/Aspire.Cli/**
-      - src/Aspire/Cli/**
-      - src/Aspire.TypeSystem/**
-      - src/Aspire.Managed/**
     targets: [job:cli-starter]
-    reason: Windows starter-app smoke installing the PR CLI via dogfood script
+    reason: Windows starter-app smoke installing the PR CLI via dogfood script; Cli/TypeSystem/Managed production projects are in project_rules
   - paths:
       - src/**/*.csproj
       - src/**/api/*.cs
@@ -194,44 +176,33 @@ path_rules:
     targets: [job:api-diffs]
     reason: SCHEDULE-ONLY today; regenerates src/*/api/*.cs reference baselines
   - paths:
-      - src/Aspire.Hosting*/**
       - src/Aspire.Hosting*/api/*.ats.txt
-      - src/Aspire.Cli/**
       - src/**/*.tscompat.suppression.txt
       - .github/workflows/generate-ats-diffs.yml
     targets: [job:ats-diffs]
-    reason: SCHEDULE-ONLY today; regenerates *.ats.txt via `aspire sdk dump`
+    reason: SCHEDULE-ONLY today; regenerates *.ats.txt; Hosting/Cli production projects are in project_rules
   - paths:
       - tests/Aspire.Deployment.EndToEnd.Tests/**
-      - src/Aspire.Hosting.Azure*/**
-      - src/Aspire.Cli/**
-      - src/Aspire/Cli/**
-      - src/Aspire.TypeSystem/**
-      - src/Aspire.Managed/**
       - src/Aspire.ProjectTemplates/**
       - .github/workflows/deployment-tests.yml
     targets: [job:deployment-e2e]
-    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
+    reason: SCHEDULE/DISPATCH-ONLY today; ProjectTemplates is a Layer-1 blind spot; Azure/Cli/TypeSystem/Managed production projects are in project_rules
 
-  # --- outerloop / e2e test targets gated by path ---------------------------------------------
+  # --- linked-compiled source with no owning project ------------------------------------------
+  # src/Aspire/Cli is link-compiled only into Aspire.Hosting.CodeGeneration.TypeScript and is not
+  # itself a project dir, so dotnet-affected attributes it to that consumer, not to these targets.
+  # Listed explicitly with the exact targets its old per-job src/Aspire/Cli/** globs carried.
+  - paths: [src/Aspire/Cli/**]
+    targets: [job:polyglot, job:extension-e2e, job:cli-starter, job:deployment-e2e, test:Aspire.Cli.EndToEnd.Tests]
+    reason: linked-compiled source with no owning project; preserves the targets the old src/Aspire/Cli/** job globs carried
+
+  # --- outerloop / e2e test targets: loose paths (production projects in project_rules) --------
   - paths:
       - tests/Aspire.EndToEnd.Tests/**
       - tests/testproject/**
-      - src/Aspire.Hosting/**
-      - src/Aspire.Hosting.AppHost/**
-      - src/Aspire.Hosting.PostgreSQL/**
-      - src/Aspire.Hosting.Redis/**
     targets: [test:Aspire.EndToEnd.Tests]
-    reason: OUTERLOOP-ONLY today (SkipTests on GH Actions unless RunOuterloopTests); builds testproject apphost against built nugets
-  - paths:
-      - src/Aspire.Cli/**
-      - src/Aspire/Cli/**
-      - src/Aspire.TypeSystem/**
-      - src/Aspire.Managed/**
-      - src/Aspire.AppHost.Sdk/**
-      - eng/clipack/**
-    targets: [test:Aspire.Cli.EndToEnd.Tests]
-    reason: consumes the CLI native archive (RequiresCliArchive=true) built from these sources; runs aspire end-to-end
+    reason: OUTERLOOP-ONLY today (SkipTests on GH Actions unless RunOuterloopTests); the Hosting production projects it builds against are in project_rules
+
 
   # --- runtime / loose-file dependencies (invisible to the csproj graph) ----------------------
   - paths:
@@ -294,6 +265,52 @@ path_rules:
   - paths: [eng/Bundle.proj]
     targets: [CLI_BUNDLE]
     reason: assembles the CLI bundle (Aspire.Managed + native CLI + DCP); consumed by CLI e2e/starter/extension, not integrations
+
+# Project rules: an affected PRODUCTION project (Layer 1, matched by project-NAME glob) -> targets.
+# This replaces the src/<Project>/** path globs the job rules used to repeat, and follows the graph's
+# transitive closure: a change to a project's dependency marks it affected, so its jobs fire too
+# (more correct than a literal path glob, and additive -- never removes a trigger). Matched only
+# against the affected PRODUCTION projects (matrix test projects are handled by the Layer 1
+# intersection), so a name glob like "Aspire.Hosting*" keys off production identity. Inert when
+# Layer 1 did not run (--skip-layer1); the loose-file path_rules above still cover those triggers.
+# Project Name == the .csproj base name (what dotnet-affected emits).
+project_rules:
+  - projects:
+      - Aspire.TypeSystem
+      - Aspire.Hosting.RemoteHost
+      - Aspire.Managed
+      - Aspire.Cli
+      - Aspire.AppHost.Sdk
+      - Aspire.Hosting.CodeGeneration.*
+      - Aspire.Hosting.Go
+      - Aspire.Hosting.JavaScript
+      - Aspire.Hosting.Python
+    targets: [job:polyglot]
+    reason: ATS typesystem -> per-language SDK generators -> RemoteHost server + CLI run + fixtures
+  - projects: [Aspire.Hosting.CodeGeneration.TypeScript]
+    targets: [job:typescript-sdk]
+    reason: vitest unit tests over generated TS SDK (@aspire/transport, @aspire/base)
+  - projects: [Aspire.Hosting*, Aspire.Cli]
+    targets: [job:typescript-api-compat]
+    reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`
+  - projects: [Aspire.Cli, Aspire.Hosting*, Aspire.Dashboard*]
+    targets: [job:extension-e2e]
+    reason: mirrors the production-project half of tests.yml extension_e2e_changes
+  - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
+    targets: [job:cli-starter]
+    reason: Windows starter-app smoke installing the PR CLI via dogfood script
+  - projects: [Aspire.Hosting*, Aspire.Cli]
+    targets: [job:ats-diffs]
+    reason: SCHEDULE-ONLY today; regenerates *.ats.txt via `aspire sdk dump`
+  - projects: [Aspire.Hosting.Azure*, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
+    targets: [job:deployment-e2e]
+    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
+  - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
+    targets: [test:Aspire.EndToEnd.Tests]
+    reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets
+  - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed, Aspire.AppHost.Sdk]
+    targets: [test:Aspire.Cli.EndToEnd.Tests]
+    reason: consumes the CLI native archive (RequiresCliArchive=true) built from these sources
 
 # Derived targets: selected test project -> extra jobs/tests. Applied to the UNION of Layer 1 and
 # Layer 2 selected tests, to a fixpoint (a derived test is itself expanded; cycle-safe). This is how

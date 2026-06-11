@@ -78,6 +78,19 @@ public sealed class SelectTestsAcceptanceTests
             targets: [test:DerCycB]
           - tests: [test:DerCycB]
             targets: [test:DerCycA]
+        project_rules:
+          - projects: [Aspire.ProjCli, Aspire.Managed]
+            targets: [job:projjob]
+          - projects: [Aspire.Hosting.Proj*]
+            targets: [job:hostjob]
+          - projects: [Aspire.ProjSelectsTest]
+            targets: [test:RealOne]
+          - projects: [Aspire.ProjChain]
+            targets: [test:ChainA]
+          - projects: [Aspire.ProjGroup]
+            targets: [MIXED]
+          - projects: [Aspire.ProjAll]
+            targets: [ALL]
         """;
 
     // The matrix universe for the synthetic tests. Deliberately omits Aspire.Hosting.Ghost.Tests
@@ -390,6 +403,7 @@ public sealed class SelectTestsAcceptanceTests
         Assert.Contains("job:hostjob", r.Jobs);
         Assert.Contains("job:cli-starter", r.Jobs);
         Assert.Contains("job:group-job", r.Jobs);
+        Assert.Contains("job:projjob", r.Jobs);
     }
 
     [Fact]
@@ -498,6 +512,93 @@ public sealed class SelectTestsAcceptanceTests
         var r = Select(["src/allgrp/Thing.cs"]);
 
         Assert.True(r.SelectsAll);
+    }
+
+    // --- J. project_rules (affected-project -> targets) --------------------------------------
+
+    [Fact]
+    public void ProjectRuleFiresForAffectedProductionProject()
+    {
+        // An affected production project (not a matrix test) drives the rule's job.
+        var r = Select([], layer1: ["Aspire.ProjCli"]);
+
+        Assert.Contains("job:projjob", r.Jobs);
+    }
+
+    [Fact]
+    public void ProjectRuleProductionNameIsNotSelectedAsATest()
+    {
+        // The production name is matched by project_rules but is not a matrix project, so it must
+        // not leak into the selected test set.
+        var r = Select([], layer1: ["Aspire.ProjCli"]);
+
+        Assert.DoesNotContain("Aspire.ProjCli", r.TestProjects);
+    }
+
+    [Fact]
+    public void ProjectRuleMatchesByNameGlob()
+    {
+        // Aspire.Hosting.Proj* matches an affected hosting project by NAME (not path).
+        var r = Select([], layer1: ["Aspire.Hosting.ProjRedis"]);
+
+        Assert.Contains("job:hostjob", r.Jobs);
+    }
+
+    [Fact]
+    public void ProjectRuleFiresForAnyProjectInItsList()
+    {
+        // The projjob rule lists two projects; the second one must fire it too.
+        var r = Select([], layer1: ["Aspire.Managed"]);
+
+        Assert.Contains("job:projjob", r.Jobs);
+    }
+
+    [Fact]
+    public void ProjectRuleIsAdditiveWithLayer1Tests()
+    {
+        // A real matrix test in the affected set is still selected alongside the project rule's job.
+        var r = Select([], layer1: ["Aspire.ProjCli", "T1"]);
+
+        Assert.Contains("T1", r.TestProjects);
+        Assert.Contains("job:projjob", r.Jobs);
+    }
+
+    [Fact]
+    public void ProjectRuleSelectedTestFeedsDerivedTargets()
+    {
+        // Aspire.ProjChain -> test:ChainA (project_rule); ChainA -> ChainB -> job:chain-job (derived).
+        var r = Select([], layer1: ["Aspire.ProjChain"]);
+
+        Assert.Contains("ChainA", r.TestProjects);
+        Assert.Contains("ChainB", r.TestProjects);
+        Assert.Contains("job:chain-job", r.Jobs);
+    }
+
+    [Fact]
+    public void ProjectRuleExpandsGroup()
+    {
+        var r = Select([], layer1: ["Aspire.ProjGroup"]);
+
+        Assert.Contains("GroupTest", r.TestProjects);
+        Assert.Contains("job:group-job", r.Jobs);
+    }
+
+    [Fact]
+    public void ProjectRuleCanForceAll()
+    {
+        var r = Select([], layer1: ["Aspire.ProjAll"]);
+
+        Assert.True(r.SelectsAll);
+    }
+
+    [Fact]
+    public void UnmatchedAffectedProjectAddsNothing()
+    {
+        var r = Select([], layer1: ["Aspire.Unrelated"]);
+
+        Assert.False(r.SelectsAll);
+        Assert.Empty(r.TestProjects);
+        Assert.Empty(r.Jobs);
     }
 
     // --- H. Real-map invariant smoke (computed from the filesystem; no hardcoded names) ------
