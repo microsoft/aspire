@@ -725,8 +725,8 @@ For more information about using AI agents with the dashboard, including setting
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningDescription">
-        <source>Confirm you want to show the value. In the future, opening the text visualizer will automatically display all values</source>
-        <target state="translated">Confirmez que vous souhaitez afficher la valeur. À l’avenir, l’ouverture du visualiseur de texte affichera automatiquement toutes les valeurs</target>
+        <source>Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically</source>
+        <target state="needs-review-translation">Confirmez que vous souhaitez afficher la valeur. À l’avenir, l’ouverture du visualiseur de texte affichera automatiquement toutes les valeurs</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningTitle">

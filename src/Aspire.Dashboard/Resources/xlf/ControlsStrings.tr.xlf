@@ -157,9 +157,9 @@
         <target state="translated">ENV dosyasını dışarı aktar</target>
         <note />
       </trans-unit>
-      <trans-unit id="ExportJson">
-        <source>Export JSON</source>
-        <target state="translated">JSON Dosyasını Dışarı Aktar</target>
+      <trans-unit id="ViewJson">
+        <source>View JSON</source>
+        <target state="new">View JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterPlaceholder">
