@@ -657,11 +657,11 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task WithModuleAddsCommandLineArgsForNativeModule()
+    public async Task WithModuleAddsCommandLineArgsForWellKnownModule()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var redis = builder.AddRedis("myRedis")
-            .WithModule(RedisNativeModule.Json);
+            .WithModule(RedisModules.Json);
 
         var args = await GetCommandLineArgs(redis);
 
@@ -673,11 +673,11 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var redis = builder.AddRedis("myRedis")
-            .WithModule("/opt/redis/custom-module.so");
+            .WithModule("/opt/redis/custom-module");
 
         var args = await GetCommandLineArgs(redis);
 
-        Assert.Contains("--loadmodule /opt/redis/custom-module.so", args);
+        Assert.Contains("--loadmodule /opt/redis/custom-module", args);
     }
 
     [Fact]
@@ -685,7 +685,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var redis = builder.AddRedis("myRedis")
-            .WithModule(RedisNativeModule.Search)
+            .WithModule(RedisModules.Search)
             .WithModule("/opt/redis/custom-module.so");
 
         var args = await GetCommandLineArgs(redis);
@@ -698,7 +698,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var redis = builder.AddRedis("myRedis")
-            .WithModule(RedisNativeModule.Json)
+            .WithModule(RedisModules.Json)
             .WithModule("/usr/local/lib/redis/modules/rejson.so");
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource);

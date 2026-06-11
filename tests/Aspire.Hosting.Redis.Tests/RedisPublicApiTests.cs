@@ -138,7 +138,7 @@ public class RedisPublicApiTests(ITestOutputHelper testOutputHelper)
     {
         IResourceBuilder<RedisResource> builder = null!;
 
-        var action = () => builder.WithModule(RedisNativeModule.Json);
+        var action = () => builder.WithModule(RedisModules.Json);
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(builder), exception.ParamName);
@@ -163,9 +163,7 @@ public class RedisPublicApiTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData("custom-module.so")]
-    [InlineData("/opt/redis/custom-module")]
-    [InlineData("/opt/redis/custom-module.txt")]
-    public void WithModuleShouldThrowWhenPathIsNotAbsoluteSoPath(string path)
+    public void WithModuleShouldThrowWhenPathIsNotAbsolutePath(string path)
     {
         var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
         var redis = builder.AddRedis("Redis");
@@ -174,32 +172,6 @@ public class RedisPublicApiTests(ITestOutputHelper testOutputHelper)
 
         var exception = Assert.Throws<ArgumentException>(action);
         Assert.Equal(nameof(path), exception.ParamName);
-    }
-
-    [Fact]
-    public void WithModuleUnionShouldThrowWhenModuleIsNull()
-    {
-        var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
-        var redis = builder.AddRedis("Redis");
-        object module = null!;
-
-        var action = () => redis.WithModule(module);
-
-        var exception = Assert.Throws<ArgumentNullException>(action);
-        Assert.Equal(nameof(module), exception.ParamName);
-    }
-
-    [Fact]
-    public void WithModuleUnionShouldThrowWhenModuleTypeIsUnsupported()
-    {
-        var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
-        var redis = builder.AddRedis("Redis");
-        object module = 1;
-
-        var action = () => redis.WithModule(module);
-
-        var exception = Assert.Throws<ArgumentException>(action);
-        Assert.Equal(nameof(module), exception.ParamName);
     }
 
     [Fact]

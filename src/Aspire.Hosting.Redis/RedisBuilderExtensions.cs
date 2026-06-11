@@ -530,71 +530,29 @@ public static class RedisBuilderExtensions
     }
 
     /// <summary>
-    /// Configures the Redis resource to use the specified native Redis module.
+    /// Configures the Redis resource to use the specified Redis module by providing its path inside the container.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="module">The well-known, pre-installed Redis module to load, or the path to the Redis module <c>.so</c> file on the container.</param>
+    /// <param name="path">The absolute path to the Redis module inside the Redis container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// This method passes the module path to <c>redis-server</c> as a <c>--loadmodule</c> argument. Redis resolves the path inside the
+    /// container, not on the host. To load a module built on the host machine, mount it into the Redis container first and then use
+    /// the mounted container path. Use <see cref="RedisModules" /> for well-known module paths that are included in the default
+    /// Redis container image.
+    /// <code lang="csharp">
+    /// var cache = builder.AddRedis("cache")
+    ///                    .WithModule(RedisModules.Json)
+    ///                    .WithModule(RedisModules.Search);
+    ///
+    /// var customModuleCache = builder.AddRedis("custom-cache")
+    ///                                .WithBindMount("/host/redis/modules", "/redis/modules", isReadOnly: true)
+    ///                                .WithModule("/redis/modules/custom-module.so");
+    /// </code>
+    /// For more information, see the Redis module loading documentation at <see href="https://redis.io/docs/latest/develop/reference/modules/" />.
+    /// </remarks>
     [AspireExport]
-    internal static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, [AspireUnion(typeof(RedisNativeModule), typeof(string))] object module)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        return module switch
-        {
-            RedisNativeModule nativeModule => builder.WithModule(nativeModule),
-            string path => builder.WithModule(path),
-            null => throw new ArgumentNullException(nameof(module)),
-            _ => throw new ArgumentException($"Unsupported Redis module type '{module.GetType()}'.", nameof(module)),
-        };
-    }
-
-    /// <summary>
-    /// Configures the Redis resource to use the specified native Redis module.
-    /// </summary>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="nativeModule">The well-known, pre-installed Redis module to load.</param>
-    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// This method loads a well-known Redis module that is pre-installed in the Redis container image from version 8 onward.
-    /// <code lang="csharp">
-    /// var cache = builder.AddRedis("cache")
-    ///                    .WithModule(RedisNativeModule.Json)
-    ///                    .WithModule(RedisNativeModule.Search);
-    /// </code>
-    /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the canonical withModule export with a RedisNativeModule|string union.")]
-    public static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, RedisNativeModule nativeModule)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        return builder.WithAnnotation(new RedisModuleAnnotation(GetModulePath(nativeModule)));
-
-        static string GetModulePath(RedisNativeModule nativeModule) => nativeModule switch
-        {
-            RedisNativeModule.Search => "/usr/local/lib/redis/modules/redisearch.so",
-            RedisNativeModule.Json => "/usr/local/lib/redis/modules/rejson.so",
-            RedisNativeModule.BloomFilter => "/usr/local/lib/redis/modules/redisbloom.so",
-            RedisNativeModule.TimeSeries => "/usr/local/lib/redis/modules/redistimeseries.so",
-            _ => throw new NotSupportedException($"The Redis native module '{nativeModule}' is not supported."),
-        };
-    }
-
-    /// <summary>
-    /// Configures the Redis resource to use the specified Redis module by providing the path to the module's <c>.so</c> file on the container.
-    /// </summary>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="path">The path to the Redis module <c>.so</c> file on the container. This should be an absolute path.</param>
-    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// This method loads a Redis module from a container path. The path must point to a <c>.so</c> file that exists in the Redis container image.
-    /// <code lang="csharp">
-    /// var cache = builder.AddRedis("cache")
-    ///                    .WithModule("/usr/local/lib/redis/modules/redisearch.so");
-    /// </code>
-    /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the canonical withModule export with a RedisNativeModule|string union.")]
     public static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, string path)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -602,11 +560,6 @@ public static class RedisBuilderExtensions
         if (path[0] is not '/')
         {
             throw new ArgumentException("The Redis module path must be an absolute container path.", nameof(path));
-        }
-
-        if (!path.EndsWith(".so", StringComparison.Ordinal))
-        {
-            throw new ArgumentException("The Redis module path must point to a .so file.", nameof(path));
         }
 
         return builder.WithAnnotation(new RedisModuleAnnotation(path));

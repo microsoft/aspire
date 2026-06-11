@@ -39,8 +39,8 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// withModule on RedisResource — AspireUnion supports native modules and custom module paths
-	cache.WithModule(aspire.RedisNativeModuleJson)
+	// withModule on RedisResource - well-known and custom module paths
+	cache.WithModule(aspire.RedisModules.Json)
 	cache.WithModule("/opt/redis/custom-module.so")
 	if err = cache.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))

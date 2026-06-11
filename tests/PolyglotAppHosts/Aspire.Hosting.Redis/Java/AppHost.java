@@ -12,8 +12,8 @@ void main() throws Exception {
         cache.withPersistence(new WithPersistenceOptions().interval(600000000.0).keysChangedThreshold(5.0));
         // withDataBindMount on RedisResource
         cache2.withDataBindMount("/tmp/redis-data");
-        // withModule on RedisResource - AspireUnion supports native modules and custom module paths
-        cache.withModule(RedisNativeModule.JSON);
+        // withModule on RedisResource - well-known and custom module paths
+        cache.withModule(RedisModules.Json);
         cache.withModule("/opt/redis/custom-module.so");
         // withHostPort on RedisResource
         cache.withHostPort(6379.0);
