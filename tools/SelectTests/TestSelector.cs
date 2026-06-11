@@ -22,11 +22,19 @@ public sealed record SelectorOptions(bool ForceAll = false);
 /// <param name="TestProjects">The selected test project names (matrix <c>projectName</c>), aliases expanded.</param>
 /// <param name="Jobs">The selected non-.NET jobs (e.g. <c>job:polyglot</c>, <c>job:extension-e2e</c>).</param>
 /// <param name="EscalationReason">When <see cref="SelectsAll"/> is true, a short human-readable reason.</param>
+/// <param name="UnmatchedFiles">
+/// Changed files that matched <em>no</em> curated map rule (Layer 2). Because the verifier keeps
+/// every <c>src</c> project reachable by some rule, a green-verifier repo only lands loose,
+/// non-project files here (docs, new tooling dirs, …) — i.e. the files neither Layer 1
+/// (<c>dotnet-affected</c>, which silently ignores files it cannot attribute to a project) nor
+/// Layer 2 accounts for. Surfaced as an early warning for a missing Layer 2 rule.
+/// </param>
 public sealed record SelectionResult(
     bool SelectsAll,
     IReadOnlySet<string> TestProjects,
     IReadOnlySet<string> Jobs,
-    string? EscalationReason);
+    string? EscalationReason,
+    IReadOnlySet<string> UnmatchedFiles);
 
 /// <summary>
 /// Filters the full CI matrix down to the subset relevant to a PR's changed files, using the
@@ -66,6 +74,7 @@ public sealed class TestSelector
 
         var testProjects = new HashSet<string>(StringComparer.Ordinal);
         var jobs = new HashSet<string>(StringComparer.Ordinal);
+        var unmatchedFiles = new HashSet<string>(StringComparer.Ordinal);
         var selectsAll = false;
         string? reason = null;
 
@@ -124,6 +133,14 @@ public sealed class TestSelector
                 selectsAll = true;
                 reason ??= $"fail-open: src file '{file}' matched no rule";
             }
+
+            // A changed file no Layer 2 rule claimed. With a green verifier (every src project is
+            // rule-reachable), these are the loose, non-project files Layer 1 also cannot attribute
+            // — the set worth auditing for a missing curated rule.
+            if (!fileMatched)
+            {
+                unmatchedFiles.Add(file);
+            }
         }
 
         // Layer 1: the graph tool's affected/changed test projects are always part of the answer.
@@ -140,14 +157,16 @@ public sealed class TestSelector
                 SelectsAll: true,
                 TestProjects: new HashSet<string>(_allTestProjects, StringComparer.Ordinal),
                 Jobs: new HashSet<string>(map.AllJobTokens(), StringComparer.Ordinal),
-                EscalationReason: reason ?? "full matrix selected");
+                EscalationReason: reason ?? "full matrix selected",
+                UnmatchedFiles: unmatchedFiles);
         }
 
         return new SelectionResult(
             SelectsAll: false,
             TestProjects: testProjects,
             Jobs: jobs,
-            EscalationReason: null);
+            EscalationReason: null,
+            UnmatchedFiles: unmatchedFiles);
     }
 
     private static void ApplyTargets(

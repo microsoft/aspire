@@ -408,6 +408,29 @@ internal static class Selection
         sb.AppendLine("</details>");
         sb.AppendLine();
 
+        // Files neither layer accounted for: matched no curated map rule, and (given the verifier
+        // keeps every src project rule-reachable) not a project file dotnet-affected would attribute
+        // either. A non-empty list here is the early warning that a new loose-file dependency needs
+        // a Layer 2 rule. Always shown, including under ALL.
+        var unmatched = result.UnmatchedFiles.OrderBy(f => f, StringComparer.Ordinal).ToList();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"### Unattributed changed files ({unmatched.Count})");
+        sb.AppendLine();
+        if (unmatched.Count == 0)
+        {
+            sb.AppendLine("_none — every changed file was matched by Layer 1 or Layer 2._");
+        }
+        else
+        {
+            sb.AppendLine("Matched by no map rule (Layer 2) and not a project-owned source file");
+            sb.AppendLine("(Layer 1). Add a curated rule if any of these gate a test:");
+            sb.AppendLine();
+            foreach (var file in unmatched)
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- `{file}`");
+            }
+        }
+        sb.AppendLine();
+
         sb.AppendLine("### Selection");
         if (result.SelectsAll)
         {

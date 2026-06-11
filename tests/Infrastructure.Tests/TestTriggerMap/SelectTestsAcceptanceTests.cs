@@ -283,6 +283,69 @@ public sealed class SelectTestsAcceptanceTests
         Assert.True(result.SelectsAll);
     }
 
+    // --- Unattributed (unmatched) changed files ---------------------------------------------
+
+    [Fact]
+    public void LooseFileMatchedByNoRuleIsReportedUnmatched()
+    {
+        // A loose, non-project file no curated rule covers (and not src/**, so no fail-open). It is
+        // the early-warning signal that a new dependency may need a Layer 2 rule.
+        var result = Select("docs/architecture/some-notes.md");
+
+        Assert.Contains("docs/architecture/some-notes.md", result.UnmatchedFiles);
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Fact]
+    public void MappedFilesAreNotReportedUnmatched()
+    {
+        // Files covered by Layer 2 (leaf rule, curated job, test_self) must not appear as unmatched.
+        var result = Select(
+            "src/Aspire.Hosting.Kafka/KafkaResource.cs",
+            "extension/src/extension.ts",
+            "tests/Aspire.Cli.Tests/SomeTest.cs");
+
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
+    [Fact]
+    public void RunAllFileIsNotReportedUnmatched()
+    {
+        // A run_all match is still a Layer 2 match, so it is attributed (not unmatched) even though
+        // it escalates to ALL.
+        var result = Select("global.json");
+
+        Assert.True(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
+    [Fact]
+    public void UnmatchedFilesUnionAcrossChangesAndExcludeMatched()
+    {
+        // Additive across files: the unmapped ones are collected; the mapped one is not.
+        var result = Select(
+            "docs/a.md",
+            "media/diagram.png",
+            "src/Aspire.Hosting.Kafka/KafkaResource.cs");
+
+        Assert.Contains("docs/a.md", result.UnmatchedFiles);
+        Assert.Contains("media/diagram.png", result.UnmatchedFiles);
+        Assert.DoesNotContain("src/Aspire.Hosting.Kafka/KafkaResource.cs", result.UnmatchedFiles);
+    }
+
+    [Fact]
+    public void UnmappedSrcFileIsBothUnmatchedAndFailsOpen()
+    {
+        // A src/** file no rule covers fails open to ALL and is also reported unmatched, so the
+        // audit shows exactly which file forced the escalation.
+        var result = Select("src/Aspire.BrandNewThing/Thing.cs");
+
+        Assert.True(result.SelectsAll);
+        Assert.Contains("src/Aspire.BrandNewThing/Thing.cs", result.UnmatchedFiles);
+    }
+
     private static IReadOnlyCollection<string> EnumerateMatrixTestProjects()
     {
         // tests/<Name>/<Name>.csproj — the matrix test projects the map's test: targets refer to.
