@@ -35,7 +35,7 @@ jobs:
         persist-credentials: false
 
     - name: Extract command and arguments
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       id: extract-command
       with:
         result-encoding: string
@@ -216,7 +216,7 @@ jobs:
     - name: Verify user has write access
       if: success()
       id: verify-permission
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const comment_user = context.payload.comment.user.login;
@@ -245,7 +245,7 @@ jobs:
     - name: Unlock issue/PR if locked
       id: unlock-issue
       if: success() && github.event.issue.locked == true
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           // Capture the original lock reason for re-locking later
@@ -261,7 +261,7 @@ jobs:
 
     - name: Add reaction to indicate processing
       if: success()
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           await github.rest.reactions.createForIssueComment({
@@ -274,7 +274,7 @@ jobs:
     - name: Determine target PR and branch
       if: success()
       id: determine-target
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         TARGET_PR_URL: ${{ steps.extract-command.outputs.target_pr_url }}
         IS_COMMENT_ON_PR: ${{ steps.extract-command.outputs.is_comment_on_pr }}
@@ -353,7 +353,7 @@ jobs:
 
     - name: Post started comment
       if: success()
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_VERB: ${{ steps.extract-command.outputs.action_verb }}
         TEST_NAMES: ${{ steps.extract-command.outputs.test_names }}
@@ -457,7 +457,7 @@ jobs:
 
     - name: Create or Update Pull Request
       if: steps.check-changes.outputs.has_changes == 'true'
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_VERB: ${{ steps.extract-command.outputs.action_verb }}
         TEST_NAMES: ${{ steps.extract-command.outputs.test_names }}
@@ -625,7 +625,7 @@ jobs:
 
     - name: Post no-changes comment
       if: steps.check-changes.outputs.has_changes == 'false'
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_VERB: ${{ steps.extract-command.outputs.action_verb }}
         TARGET_PR_NUMBER: ${{ steps.determine-target.outputs.target_pr_number }}
@@ -660,7 +660,7 @@ jobs:
 
     - name: Post failure comment
       if: failure()
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ACTION_VERB: ${{ steps.extract-command.outputs.action_verb || '' }}
         TOOL_OUTPUT: ${{ steps.run-tool.outputs.tool_output || '' }}
@@ -708,7 +708,7 @@ jobs:
 
     - name: Re-lock issue/PR if it was locked
       if: github.event.issue.locked == true && (success() || failure())
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ORIGINAL_LOCK_REASON: ${{ steps.unlock-issue.outputs.original_lock_reason }}
       with:

@@ -60,7 +60,7 @@ jobs:
 
       - name: Analyze failed jobs
         id: analyze
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MANUAL_RUN_ID: ${{ inputs.run_id }}
@@ -388,7 +388,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Rerun matched jobs
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RETRYABLE_JOBS: ${{ needs.analyze-transient-failures.outputs.retryable_jobs }}
           PULL_REQUEST_NUMBERS: ${{ needs.analyze-transient-failures.outputs.pull_request_numbers }}
