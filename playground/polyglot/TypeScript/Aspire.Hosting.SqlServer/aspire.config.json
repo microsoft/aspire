@@ -1,9 +1,0 @@
-{
-  "appHost": {
-    "path": "ValidationAppHost/apphost.ts",
-    "language": "typescript/nodejs"
-  },
-  "integrations": {
-    "Aspire.Hosting.SqlServer": ""
-  }
-}

@@ -1,7 +1,10 @@
 {
   "appHost": {
-    "path": "ValidationAppHost/apphost.py",
+    "path": "apphost.py",
     "language": "python"
+  },
+  "features": {
+    "experimentalPolyglot:python": true
   },
   "integrations": {
     "Aspire.Hosting.Azure.EventHubs": ""

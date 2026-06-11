@@ -3,7 +3,7 @@
     "path": "AppHost.java",
     "language": "java"
   },
-  "packages": {
+  "integrations": {
     "Aspire.Hosting.JavaScript": "{{aspireVersion}}"
   },
   "profiles": {

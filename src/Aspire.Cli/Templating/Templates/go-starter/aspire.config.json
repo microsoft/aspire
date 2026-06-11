@@ -3,7 +3,7 @@
     "path": "apphost.go",
     "language": "go"
   },
-  "packages": {
+  "integrations": {
     "Aspire.Hosting.Go": "{{aspireVersion}}",
     "Aspire.Hosting.Redis": "{{aspireVersion}}"
   },

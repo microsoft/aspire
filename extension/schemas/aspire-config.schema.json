@@ -198,13 +198,6 @@
         "type": "string"
       }
     },
-    "packages": {
-      "description": "Deprecated: use \"integrations\" instead. Legacy key for integration references, kept for backward compatibility.",
-      "type": "object",
-      "additionalProperties": {
-        "type": "string"
-      }
-    },
     "profiles": {
       "description": "Launch profiles (ports, environment variables). Replaces apphost.run.json.",
       "type": "object",
