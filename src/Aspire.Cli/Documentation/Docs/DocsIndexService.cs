@@ -104,9 +104,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     private const float HeadingWeight = 6.0f;     // H2/H3 headings
     private const float CodeWeight = 5.0f;        // Code identifiers
     private const float BodyWeight = 1.0f;        // Body text
-    private const float TitlePhraseBonus = 40.0f;
-    private const float SummaryPhraseBonus = 20.0f;
-    private const float HeadingPhraseBonus = 15.0f;
+    private const float TitlePhraseBonus = 40.0f;   // Exact query phrase in H1 title
+    private const float SummaryPhraseBonus = 20.0f; // Exact query phrase in blockquote summary
+    private const float HeadingPhraseBonus = 15.0f; // Exact query phrase in H2/H3 heading
 
     // Scoring constants
     private const float BaseMatchScore = 1.0f;
@@ -668,7 +668,17 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         => token is "new" or "whats" or "what";
 
     private static bool ContainsDigit(string token)
-        => token.Any(static c => char.IsDigit(c));
+    {
+        foreach (var c in token.AsSpan())
+        {
+            if (char.IsDigit(c))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static int CountDistinctIdentityTokenMatches(string lowerText, string[] queryTokens)
     {
