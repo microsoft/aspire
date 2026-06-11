@@ -572,9 +572,6 @@
   <Folder Name="/Tools/QuarantineTools/">
     <Project Path="tools/QuarantineTools/QuarantineTools.csproj" />
   </Folder>
-  <Folder Name="/Tools/Dogfooder/">
-    <Project Path="tools/Dogfooder/Dogfooder.csproj" />
-  </Folder>
   <Folder Name="/Workload/">
     <Project Path="src/Aspire.AppHost.Sdk/Aspire.AppHost.Sdk.csproj" />
   </Folder>
