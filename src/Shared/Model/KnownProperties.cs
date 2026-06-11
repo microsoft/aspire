@@ -57,6 +57,14 @@ internal static class KnownProperties
         public const string LaunchProfile = "project.launchProfile";
     }
 
+    public static class Terminal
+    {
+        public const string Enabled = "terminal.enabled";
+        public const string ReplicaIndex = "terminal.replicaIndex";
+        public const string ReplicaCount = "terminal.replicaCount";
+        public const string ConsumerUdsPath = "terminal.consumerUdsPath";
+    }
+
     public static class Parameter
     {
         public const string Value = "Value";

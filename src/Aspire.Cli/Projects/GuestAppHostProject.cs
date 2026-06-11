@@ -431,18 +431,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     _profilingTelemetry);
                 try
                 {
-                    // Give the server a moment to start
-                    await Task.Delay(500, cancellationToken);
-
-                    if (serverSession.ServerProcess.HasExited)
-                    {
-                        _interactionService.DisplayLines(serverSession.Output.GetLines());
-                        _interactionService.DisplayError("App host exited unexpectedly.");
-                        await serverSession.DisposeAsync();
-                        return CliExitCodes.FailedToDotnetRunAppHost;
-                    }
-
-                    // Step 5: Connect to server for RPC calls
+                    // Step 5: Connect to server for RPC calls. The connection helper retries until
+                    // the RPC socket is available and fails early if the server process exits.
                     rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
                     // Step 6: Generate SDK code via RPC if needed
@@ -460,6 +450,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     }
 
                     await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
+                }
+                catch (Exception) when (serverSession.ServerProcess.HasExited && !cancellationToken.IsCancellationRequested)
+                {
+                    // If the helper server exits while we are connecting or making setup RPC calls,
+                    // its captured output is the only place the real startup failure may be recorded.
+                    _interactionService.DisplayLines(serverSession.Output.GetLines());
+                    _interactionService.DisplayError("App host exited unexpectedly.");
+                    await serverSession.DisposeAsync();
+                    return CliExitCodes.FailedToDotnetRunAppHost;
                 }
                 catch
                 {
@@ -602,7 +601,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // appHostSystemCts is linked to cancellationToken) tears down the guest process. The
                 // launcher will kill the guest's process tree when this token cancels.
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
-                    appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, appHostSystemToken);
+                    appHostFile, directory, environmentVariables, enableHotReload, context.NoBuild, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, appHostSystemToken);
             }
 
             // If the user cancelled (Ctrl+C), surface that as cancellation instead of a "guest failed"
@@ -1010,27 +1009,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     _logger,
                     _profilingTelemetry);
 
-                // Start connecting to the backchannel (fire-and-forget) so the caller is unblocked
-                // as soon as the server is reachable; the post-start work below races alongside it.
-                if (context.BackchannelCompletionSource is not null)
-                {
-                    _ = StartBackchannelConnectionAsync(serverSession.ServerProcess, backchannelSocketPath, context.BackchannelCompletionSource, enableHotReload: false, startProjectContext, cancellationToken);
-                }
-
                 try
                 {
-                    // Give the server a moment to start
-                    await Task.Delay(500, cancellationToken);
-
-                    if (serverSession.ServerProcess.HasExited)
-                    {
-                        _interactionService.DisplayLines(serverSession.Output.GetLines());
-                        _interactionService.DisplayError("App host exited unexpectedly.");
-                        await serverSession.DisposeAsync();
-                        return CliExitCodes.FailedToDotnetRunAppHost;
-                    }
-
-                    // Step 3: Connect to server for RPC calls
+                    // Step 3: Connect to server for RPC calls. The connection helper retries until
+                    // the RPC socket is available and fails early if the server process exits.
                     rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
                     // Step 4: Generate code via RPC if needed
@@ -1049,11 +1031,23 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
                     await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
                 }
+                catch (Exception) when (serverSession.ServerProcess.HasExited && !cancellationToken.IsCancellationRequested)
+                {
+                    // The publish pipeline waits on the AppHost backchannel independently from this
+                    // setup path. If the helper server exits before the guest AppHost can launch,
+                    // fault that waiter immediately instead of letting it burn the full connection timeout.
+                    context.BackchannelCompletionSource?.TrySetException(
+                        new InvalidOperationException("The app host server exited unexpectedly."));
+                    _interactionService.DisplayLines(serverSession.Output.GetLines());
+                    _interactionService.DisplayError("App host exited unexpectedly.");
+                    await serverSession.DisposeAsync();
+                    return CliExitCodes.FailedToDotnetRunAppHost;
+                }
                 catch (Exception ex)
                 {
-                    // The backchannel connection task was started before code generation
-                    // (see StartBackchannelConnectionAsync above); fault it eagerly so the
-                    // caller doesn't wait out the connection timeout when generateCode fails.
+                    // Code generation and runtime-spec lookup happen before the publish guest process
+                    // starts. Surface those setup failures through the same backchannel completion path
+                    // so callers do not keep waiting for a guest AppHost that will never be launched.
                     context.BackchannelCompletionSource?.TrySetException(ex);
 
                     // Once Start() succeeds we own the server process, so dispose it here when
@@ -1110,8 +1104,18 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
                 // Step 6: Execute the guest apphost for publishing
                 // Pass the publish arguments (e.g., --operation publish --step deploy)
+                Task StartBackchannelConnectionAfterGuestAppHostLaunchesAsync()
+                {
+                    if (context.BackchannelCompletionSource is not null)
+                    {
+                        _ = StartBackchannelConnectionAsync(appHostServerProcess, backchannelSocketPath, context.BackchannelCompletionSource, enableHotReload: false, startProjectContext, cancellationToken);
+                    }
+
+                    return Task.CompletedTask;
+                }
+
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostForPublishAsync(
-                    appHostFile, directory, environmentVariables, context.Arguments, rpcClient, cancellationToken);
+                    appHostFile, directory, environmentVariables, context.Arguments, context.NoBuild, rpcClient, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, cancellationToken);
             }
 
             if (guestExitCode != 0)
@@ -1485,7 +1489,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var genericAppHostPath = appHostServerProject.GetInstanceIdentifier();
 
         // Find matching sockets for this AppHost
-        var matchingSockets = AppHostHelper.FindMatchingSockets(genericAppHostPath, homeDirectory.FullName);
+        var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+            genericAppHostPath,
+            homeDirectory.FullName,
+            Environment.ProcessId,
+            _logger);
 
         // Check if any socket files exist
         if (matchingSockets.Length == 0)
@@ -1875,6 +1883,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         DirectoryInfo directory,
         IDictionary<string, string> environmentVariables,
         bool watchMode,
+        bool noBuild,
         IAppHostRpcClient rpcClient,
         IGuestProcessLauncher launcher,
         Func<Task>? afterAppHostLaunchedAsync,
@@ -1888,7 +1897,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
-        return await _guestRuntime.RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, cancellationToken, afterAppHostLaunchedAsync: afterAppHostLaunchedAsync);
+        return await _guestRuntime.RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, cancellationToken, noBuild: noBuild, afterAppHostLaunchedAsync: afterAppHostLaunchedAsync);
     }
 
     /// <summary>
@@ -1899,7 +1908,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         DirectoryInfo directory,
         IDictionary<string, string> environmentVariables,
         string[]? publishArgs,
+        bool noBuild,
         IAppHostRpcClient rpcClient,
+        Func<Task>? afterAppHostLaunchedAsync,
         CancellationToken cancellationToken)
     {
         await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
@@ -1910,7 +1921,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
-        return await _guestRuntime.PublishAsync(appHostFile, directory, environmentVariables, publishArgs, _guestRuntime.CreateDefaultLauncher(), cancellationToken);
+        return await _guestRuntime.PublishAsync(appHostFile, directory, environmentVariables, publishArgs, _guestRuntime.CreateDefaultLauncher(), noBuild: noBuild, afterAppHostLaunchedAsync: afterAppHostLaunchedAsync, cancellationToken: cancellationToken);
     }
 
     /// <summary>

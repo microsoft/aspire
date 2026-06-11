@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -394,7 +393,7 @@ public static class AzureKustoBuilderExtensions
             {
                 // If the launcher fails (which may mean we're in a remote session or can't detect a browser),
                 // show a notification with a clickable link to the Kusto Web Explorer
-                var interactionService = context.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = context.Services.GetRequiredService<IInteractionService>();
                 if (interactionService.IsAvailable)
                 {
                     _ = await interactionService.PromptMessageBoxAsync(

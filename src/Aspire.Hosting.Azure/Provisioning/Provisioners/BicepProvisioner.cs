@@ -11,8 +11,9 @@ using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Pipelines;
 using Azure;
 using Azure.Core;
+using Azure.ResourceManager;
+using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.Provisioning;
@@ -27,30 +28,50 @@ internal sealed class BicepProvisioner(
     IDeploymentStateManager deploymentStateManager,
     DistributedApplicationExecutionContext executionContext,
     IFileSystemService fileSystemService,
-    ILogger<BicepProvisioner> logger) : IBicepProvisioner
+    ILogger<BicepProvisioner> logger,
+    TimeProvider? timeProvider = null) : IBicepProvisioner
 {
-    /// <inheritdoc />
-    public async Task<bool> ConfigureResourceAsync(IConfiguration configuration, AzureBicepResource resource, CancellationToken cancellationToken)
-    {
-        var section = configuration.GetSection($"Azure:Deployments:{resource.Name}");
+    internal const string DeploymentStateProvisioningStateKey = "ProvisioningState";
+    internal const string DeploymentStateProvisioningStateRunning = "Running";
+    internal const string DeploymentStateProvisioningStateCanceled = "Canceled";
+    internal const string DeploymentStateProvisioningStateSucceeded = "Succeeded";
 
-        if (!section.Exists())
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
+    /// <inheritdoc />
+    public async Task<bool> ConfigureResourceAsync(AzureBicepResource resource, CancellationToken cancellationToken)
+    {
+        var stateSection = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{resource.Name}", cancellationToken).ConfigureAwait(false);
+        if (stateSection.Data.Count == 0)
         {
             return false;
         }
 
-        var currentCheckSum = await BicepUtilities.GetCurrentChecksumAsync(resource, section, cancellationToken).ConfigureAwait(false);
-        var configCheckSum = section["CheckSum"];
-
-        if (currentCheckSum != configCheckSum)
+        if (stateSection.Data[DeploymentStateProvisioningStateKey]?.GetValue<string>() is { Length: > 0 } provisioningState &&
+            !string.Equals(provisioningState, DeploymentStateProvisioningStateSucceeded, StringComparison.Ordinal))
         {
-            logger.LogDebug("Checksum mismatch for resource {ResourceName}. Expected: {ExpectedChecksum}, Actual: {ActualChecksum}", resource.Name, currentCheckSum, configCheckSum);
+            logger.LogDebug("Cached deployment state for resource {ResourceName} is incomplete because provisioning state is {ProvisioningState}.", resource.Name, provisioningState);
+            return false;
+        }
+
+        var currentCheckSum = await BicepUtilities.GetCurrentChecksumAsync(resource, stateSection, logger, cancellationToken).ConfigureAwait(false);
+        var configCheckSum = stateSection.Data[BicepUtilities.DeploymentStateChecksumKey]?.GetValue<string>();
+
+        if (string.IsNullOrEmpty(configCheckSum))
+        {
+            logger.LogDebug("Cached deployment state for resource {ResourceName} is incomplete because it is missing a checksum.", resource.Name);
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(currentCheckSum) || !string.Equals(currentCheckSum, configCheckSum, StringComparison.Ordinal))
+        {
+            logger.LogDebug("Checksum mismatch for resource {ResourceName}. Expected cached checksum {ExpectedChecksum}, computed checksum {ActualChecksum}", resource.Name, configCheckSum, currentCheckSum);
             return false;
         }
 
         logger.LogDebug("Configuring resource {ResourceName} from existing deployment state.", resource.Name);
 
-        if (section["Outputs"] is string outputJson)
+        if (stateSection.Data[BicepUtilities.DeploymentStateOutputsKey]?.GetValue<string>() is { Length: > 0 } outputJson)
         {
             JsonNode? outputObj = null;
             try
@@ -83,23 +104,32 @@ internal sealed class BicepProvisioner(
 
         var portalUrls = new List<UrlSnapshot>();
 
-        if (section["Id"] is string deploymentId &&
-            ResourceIdentifier.TryParse(deploymentId, out var id) &&
+        string? deploymentId = null;
+        ResourceIdentifier? deploymentResourceId = null;
+        if (stateSection.Data[BicepUtilities.DeploymentStateIdKey]?.GetValue<string>() is { Length: > 0 } configuredDeploymentId &&
+            ResourceIdentifier.TryParse(configuredDeploymentId, out var id) &&
             id is not null)
         {
+            deploymentId = configuredDeploymentId;
+            deploymentResourceId = id;
             portalUrls.Add(new(Name: "deployment", Url: GetDeploymentUrl(id), IsInternal: false));
         }
 
+        var azureContext = await GetCurrentAzureContextAsync(deploymentResourceId, cancellationToken).ConfigureAwait(false);
+        var configuredLocation = GetConfiguredLocation(stateSection, azureContext.Location);
+
         await notificationService.PublishUpdateAsync(resource, state =>
         {
-            ImmutableArray<ResourcePropertySnapshot> props = [
-                .. state.Properties,
-                    new("azure.subscription.id", configuration["Azure:SubscriptionId"]),
-                    // new("azure.resource.group", configuration["Azure:ResourceGroup"]!),
-                    new("azure.tenant.domain", configuration["Azure:Tenant"]),
-                    new("azure.location", configuration["Azure:Location"]),
-                    new(CustomResourceKnownProperties.Source, section["Id"])
-            ];
+            // Reused deployment state should expose the same Azure identity metadata as a freshly provisioned resource
+            // so agents and commands can reliably locate the backing Azure deployment.
+            var props = state.Properties.SetResourcePropertyRange([
+                new("azure.subscription.id", azureContext.SubscriptionId),
+                new("azure.resource.group", azureContext.ResourceGroup),
+                new("azure.tenant.id", azureContext.TenantId),
+                new("azure.tenant.domain", azureContext.TenantDomain),
+                new("azure.location", configuredLocation),
+                new(CustomResourceKnownProperties.Source, deploymentId)
+            ]);
 
             return state with
             {
@@ -137,6 +167,7 @@ internal sealed class BicepProvisioner(
             BicepUtilities.GetExistingSubscription(resource) is not null &&
             BicepUtilities.GetExistingResourceGroup(resource) is null;
         var resourceGroupName = isTenantScoped || isSubscriptionScoped ? null : resourceGroup.Id.Name;
+        var effectiveLocation = GetEffectiveLocation(resource, context);
 
         await notificationService.PublishUpdateAsync(resource, state => state with
         {
@@ -145,8 +176,9 @@ internal sealed class BicepProvisioner(
             Properties = state.Properties.SetResourcePropertyRange([
                 new("azure.subscription.id", subscription.Id.Name),
                 new("azure.resource.group", resourceGroupName),
+                new("azure.tenant.id", context.Tenant.TenantId?.ToString()),
                 new("azure.tenant.domain", context.Tenant.DefaultDomain),
-                new("azure.location", context.Location.ToString()),
+                new("azure.location", effectiveLocation),
             ])
         }).ConfigureAwait(false);
 
@@ -177,13 +209,22 @@ internal sealed class BicepProvisioner(
         var scope = new JsonObject();
         await BicepUtilities.SetScopeAsync(scope, resource, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        var deployments = isTenantScoped
+            ? context.Tenant.GetArmDeployments()
+            : isSubscriptionScoped
+                ? subscription.GetArmDeployments()
+                : resourceGroup.GetArmDeployments();
+        var deploymentName = executionContext.IsPublishMode ? $"{resource.Name}-{_timeProvider.GetUtcNow().ToUnixTimeSeconds()}" : resource.Name;
+        var deploymentId = GetDeploymentId(resource, subscription, resourceGroup, deploymentName);
+        var checksum = BicepUtilities.GetChecksum(resource, parameters, scope);
         var sw = Stopwatch.StartNew();
 
         await notificationService.PublishUpdateAsync(resource, state =>
         {
             return state with
             {
-                State = new("Creating ARM Deployment", KnownResourceStateStyles.Info)
+                State = new(AzureProvisioningController.CreatingArmDeploymentState, KnownResourceStateStyles.Info),
+                Properties = state.Properties.SetResourceProperty(CustomResourceKnownProperties.Source, deploymentId.ToString()),
             };
         })
         .ConfigureAwait(false);
@@ -191,13 +232,6 @@ internal sealed class BicepProvisioner(
         var deploymentTargetName = GetDeploymentTargetName(resource, subscription, resourceGroup);
         resourceLogger.LogInformation("Deploying {Name} to {DeploymentTarget}", resource.Name, deploymentTargetName);
         logger.LogDebug("Starting deployment of resource {ResourceName} to {DeploymentTarget}", resource.Name, deploymentTargetName);
-
-        var deployments = isTenantScoped
-            ? context.Tenant.GetArmDeployments()
-            : isSubscriptionScoped
-                ? subscription.GetArmDeployments()
-                : resourceGroup.GetArmDeployments();
-        var deploymentName = executionContext.IsPublishMode ? $"{resource.Name}-{DateTimeOffset.Now.ToUnixTimeSeconds()}" : resource.Name;
 
         var deploymentContent = new ArmDeploymentContent(new(ArmDeploymentMode.Incremental)
         {
@@ -208,13 +242,43 @@ internal sealed class BicepProvisioner(
 
         if (isTenantScoped || isSubscriptionScoped)
         {
-            deploymentContent.Location = context.Location;
+            deploymentContent.Location = new AzureLocation(effectiveLocation);
         }
 
-        var operation = await deployments.CreateOrUpdateAsync(WaitUntil.Started, deploymentName, deploymentContent, cancellationToken).ConfigureAwait(false);
+        ArmOperation<ArmDeploymentResource> operation;
+        try
+        {
+            operation = await deployments.CreateOrUpdateAsync(WaitUntil.Started, deploymentName, deploymentContent, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            if (context.ExecutionContext.IsRunMode &&
+                await TryCancelDeploymentAsync(deployments, deploymentName, resourceLogger, treatMissingOrInactiveAsCanceled: false).ConfigureAwait(false))
+            {
+                var sectionName = $"Azure:Deployments:{resource.Name}";
+                var canceledStateSection = await deploymentStateManager.AcquireSectionAsync(sectionName, CancellationToken.None).ConfigureAwait(false);
+                var canceledLocationOverride = canceledStateSection.Data[AzureProvisioningController.LocationOverrideKey]?.GetValue<string>();
+                UpdateDeploymentState(canceledStateSection, canceledLocationOverride, deploymentId, parameters, outputObj: null, scope, checksum, effectiveLocation, DeploymentStateProvisioningStateCanceled);
+                await deploymentStateManager.SaveSectionAsync(canceledStateSection, CancellationToken.None).ConfigureAwait(false);
+            }
 
+            throw;
+        }
+
+        var statePersistenceCancellationToken = context.ExecutionContext.IsRunMode ? CancellationToken.None : cancellationToken;
+        DeploymentStateSection? stateSection = null;
+        string? locationOverride = null;
+
+        if (context.ExecutionContext.IsRunMode)
+        {
+            var sectionName = $"Azure:Deployments:{resource.Name}";
+            stateSection = await deploymentStateManager.AcquireSectionAsync(sectionName, statePersistenceCancellationToken).ConfigureAwait(false);
+            locationOverride = stateSection.Data[AzureProvisioningController.LocationOverrideKey]?.GetValue<string>();
+            UpdateDeploymentState(stateSection, locationOverride, deploymentId, parameters, outputObj: null, scope, checksum, effectiveLocation, DeploymentStateProvisioningStateRunning);
+            await deploymentStateManager.SaveSectionAsync(stateSection, statePersistenceCancellationToken).ConfigureAwait(false);
+        }
         // Resolve the deployment URL before waiting for the operation to complete
-        var url = GetDeploymentUrl(resource, subscription, resourceGroup, deploymentName);
+        var url = GetDeploymentUrl(deploymentId);
 
         resourceLogger.LogInformation("Deployment started: {Url}", url);
 
@@ -222,13 +286,28 @@ internal sealed class BicepProvisioner(
         {
             return state with
             {
-                State = new("Waiting for Deployment", KnownResourceStateStyles.Info),
+                State = new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info),
                 Urls = [.. state.Urls, new(Name: "deployment", Url: url, IsInternal: false)],
+                Properties = state.Properties.SetResourceProperty(CustomResourceKnownProperties.Source, deploymentId.ToString()),
             };
         })
         .ConfigureAwait(false);
 
-        await operation.WaitForCompletionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await operation.WaitForCompletionAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            if (await TryCancelDeploymentAsync(deployments, deploymentName, resourceLogger, treatMissingOrInactiveAsCanceled: true).ConfigureAwait(false) &&
+                stateSection is not null)
+            {
+                UpdateDeploymentState(stateSection, locationOverride, deploymentId, parameters, outputObj: null, scope, checksum, effectiveLocation, DeploymentStateProvisioningStateCanceled);
+                await deploymentStateManager.SaveSectionAsync(stateSection, statePersistenceCancellationToken).ConfigureAwait(false);
+            }
+
+            throw;
+        }
 
         sw.Stop();
         resourceLogger.LogInformation("Deployment of {Name} to {DeploymentTarget} took {Elapsed}", resource.Name, deploymentTargetName, sw.Elapsed);
@@ -236,9 +315,9 @@ internal sealed class BicepProvisioner(
 
         var deployment = operation.Value;
 
-        var outputs = deployment.Data.Properties.Outputs;
+        var provisioningState = deployment.Data.Properties.ProvisioningState;
 
-        if (deployment.Data.Properties.ProvisioningState == ResourcesProvisioningState.Succeeded)
+        if (provisioningState == ResourcesProvisioningState.Succeeded)
         {
             if (context.ExecutionContext.IsRunMode)
             {
@@ -247,42 +326,28 @@ internal sealed class BicepProvisioner(
         }
         else
         {
-            throw new InvalidOperationException($"Deployment of {resource.Name} to {deploymentTargetName} failed with {deployment.Data.Properties.ProvisioningState}");
+            if (stateSection is not null)
+            {
+                UpdateDeploymentState(stateSection, locationOverride, deployment.Id, parameters, outputObj: null, scope, checksum, effectiveLocation, provisioningState.ToString());
+                await deploymentStateManager.SaveSectionAsync(stateSection, statePersistenceCancellationToken).ConfigureAwait(false);
+            }
+
+            throw new InvalidOperationException($"Deployment of {resource.Name} to {deploymentTargetName} failed with {provisioningState}");
         }
 
         // e.g. {  "sqlServerName": { "type": "String", "value": "<value>" }}
+        var outputs = deployment.Data.Properties.Outputs;
         var outputObj = outputs?.ToObjectFromJson<JsonObject>();
 
-        // Acquire resource-specific state section for thread-safe deployment state management
-        var sectionName = $"Azure:Deployments:{resource.Name}";
-        var stateSection = await deploymentStateManager.AcquireSectionAsync(sectionName, cancellationToken).ConfigureAwait(false);
-
-        // Update deployment state for this specific resource
-        stateSection.Data.Clear();
-
-        // Save the deployment id to the configuration
-        stateSection.Data["Id"] = deployment.Id.ToString();
-
-        // Stash all parameters as a single JSON string
-        stateSection.Data["Parameters"] = parameters.ToJsonString();
-
-        if (outputObj is not null)
+        if (stateSection is null)
         {
-            // Same for outputs
-            stateSection.Data["Outputs"] = outputObj.ToJsonString();
+            var sectionName = $"Azure:Deployments:{resource.Name}";
+            stateSection = await deploymentStateManager.AcquireSectionAsync(sectionName, statePersistenceCancellationToken).ConfigureAwait(false);
+            locationOverride = stateSection.Data[AzureProvisioningController.LocationOverrideKey]?.GetValue<string>();
         }
 
-        // Write resource scope to config for consistent checksums
-        if (scope is not null)
-        {
-            stateSection.Data["Scope"] = scope.ToJsonString();
-        }
-
-        // Save the checksum to the configuration
-        stateSection.Data["CheckSum"] = BicepUtilities.GetChecksum(resource, parameters, scope);
-
-        // Save the section back to the deployment state manager
-        await deploymentStateManager.SaveSectionAsync(stateSection, cancellationToken).ConfigureAwait(false);
+        UpdateDeploymentState(stateSection, locationOverride, deployment.Id, parameters, outputObj, scope, checksum, effectiveLocation, provisioningState: null);
+        await deploymentStateManager.SaveSectionAsync(stateSection, statePersistenceCancellationToken).ConfigureAwait(false);
 
         if (outputObj is not null)
         {
@@ -302,15 +367,19 @@ internal sealed class BicepProvisioner(
 
         await notificationService.PublishUpdateAsync(resource, state =>
         {
-            ImmutableArray<ResourcePropertySnapshot> properties = [
-                .. state.Properties,
-                new(CustomResourceKnownProperties.Source, deployment.Id.Name)
-            ];
+            ImmutableArray<ResourcePropertySnapshot> properties = state.Properties.SetResourcePropertyRange([
+                new("azure.subscription.id", subscription.Id.Name),
+                new("azure.resource.group", resourceGroupName),
+                new("azure.tenant.id", context.Tenant.TenantId?.ToString()),
+                new("azure.tenant.domain", context.Tenant.DefaultDomain),
+                new("azure.location", effectiveLocation),
+                new(CustomResourceKnownProperties.Source, deployment.Id.ToString())
+            ]);
 
             return state with
             {
                 State = new("Provisioned", KnownResourceStateStyles.Success),
-                CreationTimeStamp = DateTime.UtcNow,
+                CreationTimeStamp = _timeProvider.GetUtcNow().UtcDateTime,
                 Properties = properties
             };
         })
@@ -325,6 +394,70 @@ internal sealed class BicepProvisioner(
             IValueProvider valueProvider => await valueProvider.GetValueAsync(cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException("The Azure resource scope value cannot be null."),
             _ => throw new NotSupportedException($"The scope value type {scopeValue.GetType()} is not supported.")
         };
+    }
+
+    private async Task<bool> TryCancelDeploymentAsync(IArmDeploymentCollection deployments, string deploymentName, ILogger resourceLogger, bool treatMissingOrInactiveAsCanceled)
+    {
+        try
+        {
+            await deployments.CancelAsync(deploymentName, CancellationToken.None).ConfigureAwait(false);
+            resourceLogger.LogInformation("Cancellation requested for Azure deployment {DeploymentName}.", deploymentName);
+            return true;
+        }
+        catch (RequestFailedException ex) when (treatMissingOrInactiveAsCanceled && (ex.Status == 404 || ex.Status == 409))
+        {
+            logger.LogInformation(ex, "Azure deployment {DeploymentName} was already absent or no longer active during cancellation.", deploymentName);
+            resourceLogger.LogInformation("Azure deployment {DeploymentName} was already absent or no longer active during cancellation.", deploymentName);
+            return true;
+        }
+        catch (RequestFailedException ex)
+        {
+            logger.LogWarning(ex, "Failed to cancel Azure deployment {DeploymentName}.", deploymentName);
+            resourceLogger.LogWarning("Failed to cancel Azure deployment {DeploymentName}: {Message}", deploymentName, ex.Message);
+            return false;
+        }
+    }
+
+    private static void UpdateDeploymentState(
+        DeploymentStateSection stateSection,
+        string? locationOverride,
+        ResourceIdentifier deploymentId,
+        JsonObject parameters,
+        JsonObject? outputObj,
+        JsonObject? scope,
+        string checksum,
+        string effectiveLocation,
+        string? provisioningState)
+    {
+        stateSection.Data.Clear();
+
+        // Only preserve a per-resource override when it still matches the resource we just deployed. This keeps
+        // run-mode reprovisioning sticky while allowing global context changes to clear stale overrides naturally.
+        if (!string.IsNullOrEmpty(locationOverride) &&
+            string.Equals(locationOverride, effectiveLocation, StringComparison.OrdinalIgnoreCase))
+        {
+            stateSection.Data[AzureProvisioningController.LocationOverrideKey] = locationOverride;
+        }
+
+        stateSection.Data[BicepUtilities.DeploymentStateIdKey] = deploymentId.ToString();
+        stateSection.Data[BicepUtilities.DeploymentStateParametersKey] = parameters.ToJsonString();
+
+        if (outputObj is not null)
+        {
+            stateSection.Data[BicepUtilities.DeploymentStateOutputsKey] = outputObj.ToJsonString();
+        }
+
+        if (scope is not null)
+        {
+            stateSection.Data[BicepUtilities.DeploymentStateScopeKey] = scope.ToJsonString();
+        }
+
+        stateSection.Data[BicepUtilities.DeploymentStateChecksumKey] = checksum;
+
+        if (!string.IsNullOrEmpty(provisioningState))
+        {
+            stateSection.Data[DeploymentStateProvisioningStateKey] = provisioningState;
+        }
     }
 
     private void ConfigureSecretResolver(IAzureKeyVaultResource kvr)
@@ -380,21 +513,14 @@ internal sealed class BicepProvisioner(
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = "User";
         }
 
-        // Always specify the location
-        resource.Parameters[AzureBicepResource.KnownParameters.Location] = context.Location.Name;
+        if (!resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.Location, out var location) || location is null)
+        {
+            resource.Parameters[AzureBicepResource.KnownParameters.Location] = context.Location.Name;
+        }
     }
 
-    private static string GetDeploymentUrl(AzureBicepResource resource, ISubscriptionResource subscription, IResourceGroupResource resourceGroup, string deploymentName)
-    {
-        var deploymentId = BicepUtilities.IsTenantScoped(resource)
-            ? $"/providers/Microsoft.Resources/deployments/{deploymentName}"
-            : BicepUtilities.GetExistingSubscription(resource) is not null &&
-                BicepUtilities.GetExistingResourceGroup(resource) is null
-                ? $"{subscription.Id}/providers/Microsoft.Resources/deployments/{deploymentName}"
-                : $"{subscription.Id}/resourceGroups/{resourceGroup.Name}/providers/Microsoft.Resources/deployments/{deploymentName}";
-
-        return AzurePortalUrls.GetDeploymentUrl(new ResourceIdentifier(deploymentId));
-    }
+    public static string GetDeploymentUrl(ResourceIdentifier deploymentId) =>
+        AzurePortalUrls.GetDeploymentUrl(deploymentId);
 
     private static string GetDeploymentTargetName(AzureBicepResource resource, ISubscriptionResource subscription, IResourceGroupResource resourceGroup)
     {
@@ -412,6 +538,61 @@ internal sealed class BicepProvisioner(
         return $"resource group {resourceGroup.Name}";
     }
 
-    public static string GetDeploymentUrl(ResourceIdentifier deploymentId) =>
-        AzurePortalUrls.GetDeploymentUrl(deploymentId);
+    private static ResourceIdentifier GetDeploymentId(AzureBicepResource resource, ISubscriptionResource subscription, IResourceGroupResource resourceGroup, string deploymentName)
+    {
+        var deploymentPath = BicepUtilities.IsTenantScoped(resource)
+            ? $"/providers/Microsoft.Resources/deployments/{deploymentName}"
+            : BicepUtilities.GetExistingSubscription(resource) is not null &&
+                BicepUtilities.GetExistingResourceGroup(resource) is null
+                ? $"{subscription.Id}/providers/Microsoft.Resources/deployments/{deploymentName}"
+                : $"{resourceGroup.Id}/providers/Microsoft.Resources/deployments/{deploymentName}";
+
+        return new(deploymentPath);
+    }
+
+    private async Task<AzureContextState> GetCurrentAzureContextAsync(ResourceIdentifier? deploymentId, CancellationToken cancellationToken)
+    {
+        var section = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
+
+        return new AzureContextState(
+            GetStateValue(section, "SubscriptionId") ?? deploymentId?.SubscriptionId,
+            deploymentId is not null ? deploymentId.ResourceGroupName : GetStateValue(section, "ResourceGroup"),
+            GetStateValue(section, "TenantId"),
+            GetStateValue(section, "Tenant"),
+            GetStateValue(section, "Location"));
+    }
+
+    private static string? GetStateValue(DeploymentStateSection section, string key) =>
+        section.Data[key]?.GetValue<string>() is { Length: > 0 } value ? value : null;
+
+    private static string GetConfiguredLocation(DeploymentStateSection section, string? fallbackLocation)
+    {
+        if (section.Data[AzureProvisioningController.LocationOverrideKey]?.GetValue<string>() is { Length: > 0 } locationOverride)
+        {
+            return locationOverride;
+        }
+
+        if (section.Data[BicepUtilities.DeploymentStateParametersKey]?.GetValue<string>() is { Length: > 0 } parametersJson)
+        {
+            try
+            {
+                if (JsonNode.Parse(parametersJson)?[AzureBicepResource.KnownParameters.Location]?["value"]?.GetValue<string>() is { Length: > 0 } configuredLocation)
+                {
+                    return configuredLocation;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return fallbackLocation ?? string.Empty;
+    }
+
+    private static string GetEffectiveLocation(AzureBicepResource resource, ProvisioningContext context) =>
+        resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.Location, out var location) && location is not null
+            ? location.ToString() ?? context.Location.ToString()
+            : context.Location.ToString();
+
+    private sealed record AzureContextState(string? SubscriptionId, string? ResourceGroup, string? TenantId, string? TenantDomain, string? Location);
 }
