@@ -208,6 +208,51 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetAllConfigurationAsync_ExposesLegacyPackagesAsIntegrations()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.0"
+              }
+            }
+            """);
+
+        var config = await service.GetAllConfigurationAsync();
+
+        Assert.Equal("13.2.0", config["integrations.Aspire.Hosting.Redis"]);
+        Assert.DoesNotContain("packages.Aspire.Hosting.Redis", config.Keys);
+    }
+
+    [Fact]
+    public async Task GetAllConfigurationAsync_PrefersIntegrations_WhenBothKeysPresent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "integrations": {
+                "Aspire.Hosting.Redis": "14.0.0"
+              },
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.0"
+              }
+            }
+            """);
+
+        var config = await service.GetAllConfigurationAsync();
+
+        Assert.Equal("14.0.0", config["integrations.Aspire.Hosting.Redis"]);
+        Assert.DoesNotContain("packages.Aspire.Hosting.Redis", config.Keys);
+    }
+
+    [Fact]
     public async Task GetConfigurationFromDirectoryAsync_WithContinueSearchWhenKeyMissing_WalksUpWhenNearestConfigDoesNotContainKey()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -198,6 +198,9 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
             if (settings is not null)
             {
+                // Surface legacy "packages" entries under the new "integrations" key so `aspire config`
+                // listings present the renamed key consistently regardless of the on-disk key.
+                AspireConfigFile.NormalizeLegacyIntegrationsKey(settings);
                 FlattenJsonObject(settings, config, string.Empty);
             }
         }

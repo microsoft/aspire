@@ -58,4 +58,13 @@ public class SettingsSchemaBuilderTests
         Assert.NotNull(appHostProperty.SubProperties);
         Assert.Contains(appHostProperty.SubProperties, static property => property.Name == "path");
     }
+
+    [Fact]
+    public void BuildConfigFileSchema_HidesLegacyPackages()
+    {
+        var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+
+        Assert.Contains(schema.Properties, static property => property.Name == "integrations");
+        Assert.DoesNotContain(schema.Properties, static property => property.Name == "packages");
+    }
 }
