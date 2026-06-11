@@ -1294,7 +1294,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // `aspire run` resolves the newly added package without requiring an explicit `aspire restore`.
         var layout = await _integrationClosureRestorer.RestoreAsync(
             context.AppHostFile,
-            new IntegrationClosureRestoreOptions { BuildInvocationOptions = options },
+            new IntegrationClosureRestoreOptions
+            {
+                BuildInvocationOptions = options,
+                PackageSourceOverride = packageSourceOverride,
+            },
             cancellationToken);
         if (layout is null)
         {
@@ -1475,7 +1479,14 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         var closureLayout = _integrationClosureRestorer.TryLoad(appHostFile);
         if (closureLayout is not null)
         {
-            env[KnownConfigNames.IntegrationProbeManifestPath] = closureLayout.ProbeManifestPath;
+            // Only wire the probe-manifest env var when a manifest was actually written. An
+            // AppHost with only project-ref integrations (no package-backed entries) has no
+            // probe manifest, and setting the env var to a non-existent path would cause the
+            // runtime AppHost to fail when it tries to read the file.
+            if (!string.IsNullOrWhiteSpace(closureLayout.ProbeManifestPath))
+            {
+                env[KnownConfigNames.IntegrationProbeManifestPath] = closureLayout.ProbeManifestPath;
+            }
             if (!string.IsNullOrWhiteSpace(closureLayout.IntegrationLibsPath))
             {
                 env[KnownConfigNames.IntegrationLibsPath] = closureLayout.IntegrationLibsPath;

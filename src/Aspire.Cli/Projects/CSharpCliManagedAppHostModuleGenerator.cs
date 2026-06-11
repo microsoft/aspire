@@ -212,7 +212,11 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
     {
         var doc = new XDocument(new XElement("Project"));
         var itemGroup = new XElement("ItemGroup");
-        var resolvedReferences = CSharpIntegrationProjectReferences.Resolve(integrationReferences, repoRoot);
+        // privateProjectReferences:false: this module exists specifically to harvest the
+        // integration closure via ReferenceCopyLocalPaths. Setting Private=false would drop
+        // in-repo project-ref output assemblies (e.g. Aspire.Hosting.Redis from src/) from
+        // the closure files and leave the runtime AppHost unable to load them.
+        var resolvedReferences = CSharpIntegrationProjectReferences.Resolve(integrationReferences, repoRoot, privateProjectReferences: false);
         itemGroup.Add(resolvedReferences.ProjectReferences);
         itemGroup.Add(resolvedReferences.PackageReferences);
         if (TryGetRepositoryProject(repoRoot, "Aspire.Dashboard", out var dashboardProjectPath))

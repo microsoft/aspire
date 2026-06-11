@@ -4,6 +4,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -49,7 +50,7 @@ internal sealed record IntegrationClosureRestoreOptions(bool BuildModule = true,
 
 internal sealed record IntegrationClosureLayout(
     DirectoryInfo WorkingDirectory,
-    string ProbeManifestPath,
+    string? ProbeManifestPath,
     string? IntegrationLibsPath);
 
 internal sealed class IntegrationClosureRestorer(
@@ -68,7 +69,27 @@ internal sealed class IntegrationClosureRestorer(
 
     public async Task<IntegrationClosureLayout?> RestoreAsync(FileInfo appHostFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken)
     {
-        var moduleProjectFile = await moduleGenerator.TryGenerateAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        // Honor the caller-supplied PackageSourceOverride during module regeneration so that
+        // workflows like `aspire add --source <feed>` keep their additional feed wired into the
+        // generated module project. Without this, the regenerated project would lose the
+        // override's RestoreAdditionalProjectSources / RestoreConfigFile entry and the
+        // subsequent build would fail when the package is only resolvable via the override.
+        FileInfo? moduleProjectFile;
+        if (options.PackageSourceOverride is { Length: > 0 } packageSourceOverride)
+        {
+            var appHostDirectory = appHostFile.Directory
+                ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' has no parent directory.");
+            var configDirectory = ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
+            var config = AspireConfigFile.Load(configDirectory.FullName) ?? new AspireConfigFile();
+            moduleProjectFile = await moduleGenerator
+                .TryGenerateAsync(appHostFile, config, configDirectory, packageSourceOverride, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            moduleProjectFile = await moduleGenerator.TryGenerateAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        }
+
         if (moduleProjectFile is null)
         {
             return null;
@@ -86,13 +107,20 @@ internal sealed class IntegrationClosureRestorer(
         }
 
         var probeManifestPath = Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName);
-        if (!File.Exists(probeManifestPath))
+        var integrationLibsPath = TryReadIntegrationLibsPathFromState(workingDirectory.FullName);
+        var manifestExists = File.Exists(probeManifestPath);
+
+        // Surface null when neither artifact is present so callers can decide to re-restore
+        // instead of attempting to wire env vars pointing at missing files.
+        if (!manifestExists && integrationLibsPath is null)
         {
             return null;
         }
 
-        var integrationLibsPath = TryReadIntegrationLibsPathFromState(workingDirectory.FullName);
-        return new IntegrationClosureLayout(workingDirectory, probeManifestPath, integrationLibsPath);
+        return new IntegrationClosureLayout(
+            workingDirectory,
+            manifestExists ? probeManifestPath : null,
+            integrationLibsPath);
     }
 
     private async Task<IntegrationClosureLayout?> RestoreCoreAsync(
@@ -164,15 +192,11 @@ internal sealed class IntegrationClosureRestorer(
         // having to re-read the closure manifest.
         await PersistStateAsync(workingDirectory.FullName, integrationLibsPath, cancellationToken).ConfigureAwait(false);
 
-        if (probeManifestPath is null && integrationLibsPath is null)
-        {
-            return new IntegrationClosureLayout(workingDirectory, Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName), null);
-        }
-
-        return new IntegrationClosureLayout(
-            workingDirectory,
-            probeManifestPath ?? Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName),
-            integrationLibsPath);
+        // ProbeManifestPath is nullable: only set it when a manifest was actually written so
+        // downstream wiring won't point ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH at a non-existent
+        // file (which happens when an AppHost has only project-ref integrations and no
+        // package-backed ones).
+        return new IntegrationClosureLayout(workingDirectory, probeManifestPath, integrationLibsPath);
     }
 
     private async Task<AppHostServerClosureManifest?> ReadClosureManifestAsync(string restoreDir, FileInfo moduleProjectFile, CancellationToken cancellationToken)

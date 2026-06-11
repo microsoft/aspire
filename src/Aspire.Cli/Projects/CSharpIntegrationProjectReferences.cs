@@ -8,7 +8,7 @@ namespace Aspire.Cli.Projects;
 
 internal static class CSharpIntegrationProjectReferences
 {
-    public static ResolvedReferences Resolve(IEnumerable<IntegrationReference> integrationReferences, string? repoRoot)
+    public static ResolvedReferences Resolve(IEnumerable<IntegrationReference> integrationReferences, string? repoRoot, bool privateProjectReferences = true)
     {
         var projectReferences = new List<XElement>();
         var packageReferences = new List<XElement>();
@@ -20,7 +20,7 @@ internal static class CSharpIntegrationProjectReferences
             {
                 if (addedProjects.Add(integrationReference.Name))
                 {
-                    projectReferences.Add(CreateProjectReferenceElement(integrationReference.ProjectPath!));
+                    projectReferences.Add(CreateProjectReferenceElement(integrationReference.ProjectPath!, privateProjectReferences));
                 }
 
                 continue;
@@ -30,7 +30,7 @@ internal static class CSharpIntegrationProjectReferences
             {
                 if (addedProjects.Add(integrationReference.Name))
                 {
-                    projectReferences.Add(CreateProjectReferenceElement(projectPath));
+                    projectReferences.Add(CreateProjectReferenceElement(projectPath, privateProjectReferences));
                 }
 
                 continue;
@@ -67,13 +67,26 @@ internal static class CSharpIntegrationProjectReferences
         return true;
     }
 
-    private static XElement CreateProjectReferenceElement(string projectPath)
+    private static XElement CreateProjectReferenceElement(string projectPath, bool privateReference)
     {
-        return new XElement("ProjectReference",
+        // Private controls whether the referenced project's primary output flows into
+        // ReferenceCopyLocalPaths. The polyglot AppHost server project (DotNetBasedAppHostServerProject)
+        // sets Private=false because its integrations are wired via package resolution at runtime
+        // and shouldn't pollute the AppHost bin. The CLI-managed module project, in contrast,
+        // exists specifically to harvest the integration closure via ReferenceCopyLocalPaths, so
+        // it MUST keep CopyLocal=true (Private omitted) to capture in-repo project-ref outputs
+        // (e.g. Aspire.Hosting.Redis built from src/) in the closure files.
+        var element = new XElement("ProjectReference",
             new XAttribute("Include", projectPath),
             new XElement("IsAspireProjectResource", "false"),
-            new XElement("ReferenceOutputAssembly", "true"),
-            new XElement("Private", "false"));
+            new XElement("ReferenceOutputAssembly", "true"));
+
+        if (privateReference)
+        {
+            element.Add(new XElement("Private", "false"));
+        }
+
+        return element;
     }
 
     internal sealed record ResolvedReferences(
