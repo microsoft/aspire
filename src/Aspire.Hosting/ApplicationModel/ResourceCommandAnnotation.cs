@@ -2,13 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting.ApplicationModel;
-
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
 
 /// <summary>
 /// Represents a command annotation for a resource.
@@ -136,13 +133,11 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// <see cref="InteractionInput.Name"/>.
     /// </para>
     /// </remarks>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IReadOnlyList<InteractionInput> Arguments { get; }
 
     /// <summary>
     /// Gets the callback that validates invocation arguments before the command callback is executed.
     /// </summary>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public Func<InputsDialogValidationContext, Task>? ValidateArguments { get; }
 
     /// <summary>
@@ -375,7 +370,7 @@ public sealed class UpdateCommandStateContext
     /// The service provider.
     /// </summary>
     [Obsolete("Use Services instead.")]
-    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
+    [AspireExportIgnore(Reason = "Obsolete alias for Services. The service provider is exposed to polyglot hosts via Services (services).")]
     public IServiceProvider ServiceProvider
     {
         get => Services;
@@ -385,7 +380,6 @@ public sealed class UpdateCommandStateContext
     /// <summary>
     /// The service provider.
     /// </summary>
-    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
     public required IServiceProvider Services { get; init; }
 }
 
@@ -444,7 +438,7 @@ public sealed class ExecuteCommandContext
     /// The service provider.
     /// </summary>
     [Obsolete("Use Services instead.")]
-    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command callbacks.")]
+    [AspireExportIgnore(Reason = "Obsolete alias for Services. The service provider is exposed to polyglot hosts via Services (services).")]
     public IServiceProvider ServiceProvider
     {
         get => Services;
@@ -454,7 +448,6 @@ public sealed class ExecuteCommandContext
     /// <summary>
     /// The service provider.
     /// </summary>
-    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command callbacks.")]
     public required IServiceProvider Services { get; init; }
 
     /// <summary>
@@ -486,4 +479,3 @@ public sealed class ExecuteCommandContext
 
 }
 
-#pragma warning restore ASPIREINTERACTION001

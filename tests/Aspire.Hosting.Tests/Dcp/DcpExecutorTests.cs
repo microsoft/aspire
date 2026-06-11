@@ -4810,6 +4810,189 @@ public class DcpExecutorTests
             .Where(e => e.AppModelResourceName == appModelResourceName)];
     }
 
+    [Fact]
+    public async Task Project_WithTerminal_PopulatesPerReplicaTerminalSpec()
+    {
+        // When a project resource is configured with WithTerminal(), each replica's
+        // Executable spec should carry a Terminal block whose UdsPath matches the
+        // per-replica producer path from TerminalHostLayout.ProducerUdsPaths.
+
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddProject<Projects.ServiceA>("ServiceA")
+            .WithReplicas(2)
+            .WithTerminal(options =>
+            {
+                options.Columns = 100;
+                options.Rows = 30;
+            })
+            .Resource;
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The per-replica TerminalHostResources are now materialized inside BeforeStartEvent
+        // (see TerminalResourceBuilderExtensions.WithTerminal). DcpExecutor.RunApplicationAsync
+        // does not raise that event itself, so the test publishes it manually before running
+        // the executor — otherwise TerminalAnnotation.TerminalHosts would still be empty when
+        // ExecutableCreator looks up the per-replica producer UDS path.
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, distributedAppModel));
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync();
+
+        var exes = kubernetesService.CreatedResources.OfType<Executable>()
+            .Where(e => e.AppModelResourceName == "ServiceA")
+            .OrderBy(e => e.Metadata.Annotations?[CustomResource.ResourceReplicaIndex], StringComparer.Ordinal)
+            .ToList();
+        Assert.Equal(2, exes.Count);
+
+        // Each parent replica gets its own per-replica TerminalHostResource — the
+        // annotation now carries the list, and the Executable for replica i must
+        // dial the producer UDS owned by TerminalHosts[i].
+        var hosts = resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        Assert.Equal(2, hosts.Count);
+
+        for (var i = 0; i < exes.Count; i++)
+        {
+            var spec = exes[i].Spec.Terminal;
+            Assert.NotNull(spec);
+            Assert.Equal(hosts[i].Layout.ProducerUdsPath, spec!.UdsPath);
+            Assert.Equal(100, spec.Cols);
+            Assert.Equal(30, spec.Rows);
+            // Aspire's terminal host owns the listener at UdsPath, so DCP must dial it.
+            // Changing this to "listen" (the DCP default) would silently break attach.
+            Assert.Equal("connect", spec.SocketMode);
+        }
+    }
+
+    [Fact]
+    public async Task Project_WithoutTerminal_HasNullTerminalSpec()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<Projects.ServiceA>("ServiceA");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "ServiceA");
+        Assert.Null(exe.Spec.Terminal);
+    }
+
+    [Fact]
+    public async Task PlainExecutable_WithTerminal_PopulatesTerminalSpec()
+    {
+        // Regression test: plain executables added via AddExecutable() were missing
+        // the ResourceReplicaIndex/ResourceReplicaCount annotations, which caused
+        // BuildExecutableConfiguration to skip the spec.Terminal wire-up entirely
+        // (the per-replica producer UDS path lookup in TerminalHostLayout was guarded
+        // by a successful TryGetReplicaIndex).
+
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddExecutable("shell", "cmd.exe", ".")
+            .WithTerminal(options =>
+            {
+                options.Columns = 100;
+                options.Rows = 30;
+            })
+            .Resource;
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // BeforeStartEvent is where the per-replica TerminalHostResources are now
+        // materialized. See the matching note in Project_WithTerminal_PopulatesPerReplicaTerminalSpec.
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, distributedAppModel));
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "shell");
+        // Plain executables are always single-replica — there's exactly one host
+        // at index 0, owning the only producer UDS.
+        var host = Assert.Single(resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts);
+
+        Assert.NotNull(exe.Spec.Terminal);
+        Assert.Equal(host.Layout.ProducerUdsPath, exe.Spec.Terminal!.UdsPath);
+        Assert.Equal(100, exe.Spec.Terminal.Cols);
+        Assert.Equal(30, exe.Spec.Terminal.Rows);
+        // Aspire's terminal host owns the listener, so DCP must dial it. The DCP
+        // default is "listen", so we have to explicitly opt into "connect".
+        Assert.Equal("connect", exe.Spec.Terminal.SocketMode);
+
+        // Plain executables are always single-replica today; both annotations must
+        // be present for the per-replica lookup to succeed.
+        Assert.Equal("1", exe.Metadata.Annotations?[CustomResource.ResourceReplicaCount]);
+        Assert.Equal("0", exe.Metadata.Annotations?[CustomResource.ResourceReplicaIndex]);
+    }
+
+    [Fact]
+    public async Task Container_WithTerminal_PopulatesTerminalSpec()
+    {
+        // Containers are always single-replica today, so ContainerCreator wires
+        // spec.Terminal from TerminalHosts[0]. This guards the DCP wire-up so a
+        // future refactor that drops the assignment (or changes SocketMode away
+        // from "connect") gets caught here rather than at attach time.
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddContainer("aContainer", "image")
+            .WithTerminal(options =>
+            {
+                options.Columns = 100;
+                options.Rows = 30;
+            })
+            .Resource;
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // BeforeStartEvent materializes the per-replica TerminalHostResources;
+        // see the matching note in Project_WithTerminal_PopulatesPerReplicaTerminalSpec.
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, distributedAppModel));
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
+        var host = Assert.Single(resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts);
+
+        Assert.NotNull(container.Spec.Terminal);
+        Assert.Equal(host.Layout.ProducerUdsPath, container.Spec.Terminal!.UdsPath);
+        Assert.Equal(100, container.Spec.Terminal.Cols);
+        Assert.Equal(30, container.Spec.Terminal.Rows);
+        // Aspire's terminal host owns the listener, so DCP must dial it.
+        Assert.Equal("connect", container.Spec.Terminal.SocketMode);
+    }
+
+    [Fact]
+    public void TerminalSpec_SerializesToDcpWireContract()
+    {
+        // The DCP terminal contract is a JSON document with camelCase property names
+        // (driven by [JsonPropertyName] attributes on TerminalSpec). DCP parses the
+        // payload into api/v1/terminal_types.go; field names and SocketMode values
+        // must stay in lockstep with the Go side. This test guards the wire shape so
+        // that a rename or attribute removal in the Aspire model gets caught here
+        // rather than at runtime when DCP rejects the spec.
+        var spec = new TerminalSpec
+        {
+            UdsPath = "/tmp/aspire/term.sock",
+            SocketMode = "connect",
+            Cols = 100,
+            Rows = 30
+        };
+
+        var json = JsonSerializer.Serialize(spec);
+
+        Assert.Equal(
+            "{\"udsPath\":\"/tmp/aspire/term.sock\",\"socketMode\":\"connect\",\"cols\":100,\"rows\":30}",
+            json);
+    }
+
     private static DcpExecutor CreateAppExecutor(
         DistributedApplicationModel distributedAppModel,
         IHostEnvironment? hostEnvironment = null,

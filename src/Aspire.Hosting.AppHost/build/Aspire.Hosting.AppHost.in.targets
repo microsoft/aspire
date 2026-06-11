@@ -193,12 +193,18 @@ namespace Projects%3B
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
       <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
       <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
+      <Output TaskParameter="AspireTerminalHostDir" PropertyName="_AspireCliBundleTerminalHostDir" />
+      <Output TaskParameter="AspireTerminalHostPath" PropertyName="_AspireCliBundleTerminalHostPath" />
+      <Output TaskParameter="AspireTerminalHostInvocationArgs" PropertyName="_AspireCliBundleTerminalHostInvocationArgs" />
     </ResolveAspireCliBundle>
 
     <PropertyGroup>
       <DcpDir Condition="'$(DcpDir)' == ''">$(_AspireCliBundleDcpDir)</DcpDir>
       <AspireDashboardDir Condition="'$(AspireDashboardDir)' == ''">$(_AspireCliBundleDashboardDir)</AspireDashboardDir>
       <AspireDashboardPath Condition="'$(AspireDashboardPath)' == ''">$(_AspireCliBundleDashboardPath)</AspireDashboardPath>
+      <AspireTerminalHostDir Condition="'$(AspireTerminalHostDir)' == ''">$(_AspireCliBundleTerminalHostDir)</AspireTerminalHostDir>
+      <AspireTerminalHostPath Condition="'$(AspireTerminalHostPath)' == ''">$(_AspireCliBundleTerminalHostPath)</AspireTerminalHostPath>
+      <AspireTerminalHostInvocationArgs Condition="'$(AspireTerminalHostInvocationArgs)' == ''">$(_AspireCliBundleTerminalHostInvocationArgs)</AspireTerminalHostInvocationArgs>
     </PropertyGroup>
 
     <PropertyGroup>
@@ -290,6 +296,28 @@ namespace Projects%3B
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
         <_Parameter1>aspiredashboardpath</_Parameter1>
         <_Parameter2>$(AspireDashboardPath)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="SetTerminalHostDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireTerminalHostDir)' != '' or '$(AspireTerminalHostPath)' != '' ">
+    <PropertyGroup>
+      <AspireTerminalHostDir Condition=" '$(AspireTerminalHostDir)' != '' ">$([MSBuild]::EnsureTrailingSlash('$(AspireTerminalHostDir)'))</AspireTerminalHostDir>
+      <_AspireTerminalHostPathInferredFromDir Condition=" '$(AspireTerminalHostPath)' == '' and '$(AspireTerminalHostDir)' != '' ">true</_AspireTerminalHostPathInferredFromDir>
+      <AspireTerminalHostPath Condition=" '$(AspireTerminalHostPath)' == '' ">$([MSBuild]::NormalizePath($(AspireTerminalHostDir), 'Aspire.TerminalHost'))</AspireTerminalHostPath>
+      <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and '$(OS)' == 'Windows_NT' and !$(AspireTerminalHostPath.EndsWith('.exe')) ">$(AspireTerminalHostPath).exe</AspireTerminalHostPath>
+      <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and $([MSBuild]::IsOsPlatform('OSX')) and !$(AspireTerminalHostPath.EndsWith('.dll'))">$(AspireTerminalHostPath).dll</AspireTerminalHostPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
+        <_Parameter1>aspireterminalhostpath</_Parameter1>
+        <_Parameter2>$(AspireTerminalHostPath)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata"
+                         Condition=" '$(AspireTerminalHostInvocationArgs)' != '' ">
+        <_Parameter1>aspireterminalhostinvocationargs</_Parameter1>
+        <_Parameter2>$(AspireTerminalHostInvocationArgs)</_Parameter2>
       </AssemblyAttribute>
     </ItemGroup>
   </Target>
