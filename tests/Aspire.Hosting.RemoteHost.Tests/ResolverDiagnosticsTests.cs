@@ -84,6 +84,35 @@ public class ResolverDiagnosticsTests
         Assert.DoesNotContain(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("did not contribute"));
     }
 
+    [Fact]
+    public void CodeGeneratorResolver_ExposesSwallowedLoadFailures()
+    {
+        var logger = new RecordingLogger<CodeGeneratorResolver>();
+        var stub = new TypeLoadFailingAssembly("Aspire.Hosting.CodeGeneration.TypeScript");
+
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var resolver = new CodeGeneratorResolver(services, () => (IReadOnlyList<Assembly>)[stub], logger);
+
+        // The generator is silently dropped, but the underlying load failure must be retained so
+        // callers can turn it into an actionable incompatible-SDK diagnostic.
+        Assert.Null(resolver.GetCodeGenerator("TypeScript"));
+
+        var failure = Assert.Single(resolver.GetDiscoveryLoadFailures());
+        Assert.Contains("synthetic loader exception", failure.LoaderExceptions[0]!.Message);
+    }
+
+    [Fact]
+    public void CodeGeneratorResolver_NoLoadFailures_ReturnsEmpty()
+    {
+        var logger = new RecordingLogger<CodeGeneratorResolver>();
+
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var resolver = new CodeGeneratorResolver(services, Array.Empty<Assembly>, logger);
+
+        Assert.Null(resolver.GetCodeGenerator("TypeScript"));
+        Assert.Empty(resolver.GetDiscoveryLoadFailures());
+    }
+
     private sealed class TypeLoadFailingAssembly : Assembly
     {
         private readonly AssemblyName _name;

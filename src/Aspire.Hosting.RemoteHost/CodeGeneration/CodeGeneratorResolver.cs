@@ -13,7 +13,7 @@ namespace Aspire.Hosting.RemoteHost.CodeGeneration;
 /// </summary>
 internal sealed class CodeGeneratorResolver
 {
-    private readonly Lazy<Dictionary<string, ICodeGenerator>> _generators;
+    private readonly Lazy<DiscoveryResult> _discovery;
     private readonly ILogger<CodeGeneratorResolver> _logger;
 
     public CodeGeneratorResolver(
@@ -32,7 +32,7 @@ internal sealed class CodeGeneratorResolver
         ILogger<CodeGeneratorResolver> logger)
     {
         _logger = logger;
-        _generators = new Lazy<Dictionary<string, ICodeGenerator>>(
+        _discovery = new Lazy<DiscoveryResult>(
             () => DiscoverGenerators(serviceProvider, assembliesProvider()));
     }
 
@@ -43,7 +43,7 @@ internal sealed class CodeGeneratorResolver
     /// <returns>The code generator, or null if not found.</returns>
     public ICodeGenerator? GetCodeGenerator(string language)
     {
-        _generators.Value.TryGetValue(language, out var generator);
+        _discovery.Value.Generators.TryGetValue(language, out var generator);
         return generator;
     }
 
@@ -53,14 +53,27 @@ internal sealed class CodeGeneratorResolver
     /// <returns>The set of supported language identifiers.</returns>
     public IReadOnlyCollection<string> GetSupportedLanguages()
     {
-        return _generators.Value.Keys.ToArray();
+        return _discovery.Value.Generators.Keys.ToArray();
     }
 
-    private Dictionary<string, ICodeGenerator> DiscoverGenerators(
+    /// <summary>
+    /// Gets the <see cref="ReflectionTypeLoadException"/>s that were swallowed while discovering
+    /// generators. A non-empty result almost always means a code generator was silently dropped
+    /// because of a binary mismatch (typically a diverged <c>Aspire.TypeSystem</c> version between
+    /// the bundled apphost server and the restored SDK assemblies). Callers use this to turn an
+    /// otherwise-opaque "no generator found" failure into an actionable incompatible-SDK diagnostic.
+    /// </summary>
+    public IReadOnlyList<ReflectionTypeLoadException> GetDiscoveryLoadFailures()
+    {
+        return _discovery.Value.LoadFailures;
+    }
+
+    private DiscoveryResult DiscoverGenerators(
         IServiceProvider serviceProvider,
         IReadOnlyList<Assembly> assemblies)
     {
         var generators = new Dictionary<string, ICodeGenerator>(StringComparer.OrdinalIgnoreCase);
+        var loadFailures = new List<ReflectionTypeLoadException>();
 
         foreach (var assembly in assemblies)
         {
@@ -74,6 +87,10 @@ internal sealed class CodeGeneratorResolver
             catch (ReflectionTypeLoadException ex)
             {
                 hadTypeLoadFailure = true;
+                // Remember the load failure so a downstream "no generator found" error can be
+                // re-cast as an actionable incompatible-SDK diagnostic instead of a cryptic
+                // ArgumentException (see GetDiscoveryLoadFailures).
+                loadFailures.Add(ex);
                 // Surface loader binding failures at Warning level. These typically indicate
                 // a binary mismatch between the bundled runtime assemblies and the integration
                 // assemblies loaded from disk (for example, when Aspire.TypeSystem versions
@@ -130,10 +147,14 @@ internal sealed class CodeGeneratorResolver
             }
         }
 
-        return generators;
+        return new DiscoveryResult(generators, loadFailures);
     }
 
     private static bool LooksLikeCodeGeneratorAssembly(string? assemblyName)
         => assemblyName is not null
            && assemblyName.StartsWith("Aspire.Hosting.CodeGeneration.", StringComparison.OrdinalIgnoreCase);
+
+    private sealed record DiscoveryResult(
+        Dictionary<string, ICodeGenerator> Generators,
+        IReadOnlyList<ReflectionTypeLoadException> LoadFailures);
 }

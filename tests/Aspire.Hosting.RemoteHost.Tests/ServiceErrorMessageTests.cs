@@ -8,6 +8,7 @@ using Aspire.Hosting.RemoteHost.Language;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using StreamJsonRpc;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
@@ -65,6 +66,21 @@ public class ServiceErrorMessageTests
         Assert.Contains("No code generator found for language: TypeScript", ex.Message);
         Assert.Contains("LoaderExceptions", ex.Message);
         Assert.Contains("binary mismatch", ex.Message);
+    }
+
+    [Fact]
+    public void GenerateCode_GeneratorDroppedByLoadFailure_ThrowsIncompatibleSdkDiagnostic()
+    {
+        // Reproduces the TypeScript AppHost failure: the TypeScript generator is silently dropped
+        // because Aspire.TypeSystem failed to load. Instead of a cryptic ArgumentException, the
+        // service must emit the actionable incompatible-SDK RPC error the CLI knows how to render.
+        var codeService = CreateCodeGenerationServiceWithLoadFailingAssembly();
+
+        var ex = Assert.Throws<LocalRpcException>(() => codeService.GenerateCode("TypeScript"));
+
+        Assert.Equal(CodeGenerationErrorCodes.IncompatibleAspireSdk, ex.ErrorCode);
+        var diagnostic = Assert.IsType<CodeGenerationDiagnostic>(ex.ErrorData);
+        Assert.False(string.IsNullOrWhiteSpace(diagnostic.RemediationHint));
     }
 
     private static (LanguageService Lang, CodeGenerationService Code) CreateServices()
@@ -133,10 +149,47 @@ public class ServiceErrorMessageTests
         return new CodeGenerationService(auth, atsContextFactory, codeResolver, loader, NullLogger<CodeGenerationService>.Instance, telemetry);
     }
 
+    private static CodeGenerationService CreateCodeGenerationServiceWithLoadFailingAssembly()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
+
+        var telemetry = CreateTelemetry();
+        var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance, telemetry);
+        var services = new ServiceCollection().BuildServiceProvider();
+        var codeResolver = new CodeGeneratorResolver(
+            services,
+            () => (IReadOnlyList<Assembly>)[new LoadFailingAssembly("Aspire.Hosting.CodeGeneration.TypeScript")],
+            NullLogger<CodeGeneratorResolver>.Instance);
+
+        var auth = CreateAuthenticatedState();
+        var atsContextFactory = new AtsContextFactory(loader, NullLogger<AtsContextFactory>.Instance, telemetry);
+        return new CodeGenerationService(auth, atsContextFactory, codeResolver, loader, NullLogger<CodeGenerationService>.Instance, telemetry);
+    }
+
     // The default state is "authenticated" when no JsonRpcAuthToken is present in configuration.
     private static JsonRpcAuthenticationState CreateAuthenticatedState()
         => new(new ConfigurationBuilder().Build());
 
     private static RemoteHostProfilingTelemetry CreateTelemetry()
         => new(new ConfigurationBuilder().Build());
+
+    // Simulates a code-generation assembly whose type discovery fails because a dependency
+    // (Aspire.TypeSystem) cannot be loaded — the exact shape of the reported TypeScript failure.
+    private sealed class LoadFailingAssembly : Assembly
+    {
+        private readonly AssemblyName _name;
+
+        public LoadFailingAssembly(string name) => _name = new AssemblyName(name);
+
+        public override AssemblyName GetName() => _name;
+
+        public override Type[] GetTypes()
+            => throw new ReflectionTypeLoadException(
+                [null, typeof(string)],
+                [new FileNotFoundException(
+                    "Could not load file or assembly 'Aspire.TypeSystem, Version=42.42.42.42'. The system cannot find the file specified.",
+                    "Aspire.TypeSystem, Version=42.42.42.42, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51")]);
+    }
 }

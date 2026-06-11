@@ -159,6 +159,13 @@ internal static class CodeGenerationDiagnosticBuilder
             case FileLoadException fle:
                 typeName = fle.FileName;
                 break;
+            case FileNotFoundException fnfe:
+                // The CLR reports a missing dependency assembly (e.g. a diverged Aspire.TypeSystem)
+                // as "Could not load file or assembly '...'. The system cannot find the file
+                // specified.", which surfaces as a FileNotFoundException in the LoaderExceptions of
+                // a ReflectionTypeLoadException. Capture the offending assembly name for diagnostics.
+                typeName = fnfe.FileName;
+                break;
             case BadImageFormatException bife:
                 typeName = bife.FileName;
                 break;
@@ -214,6 +221,7 @@ internal static class CodeGenerationDiagnosticBuilder
         or MissingMethodException
         or MissingFieldException
         or FileLoadException
+        or FileNotFoundException
         or BadImageFormatException
         or ReflectionTypeLoadException;
 

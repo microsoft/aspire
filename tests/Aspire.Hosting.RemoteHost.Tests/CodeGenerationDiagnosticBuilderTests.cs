@@ -96,6 +96,44 @@ public class CodeGenerationDiagnosticBuilderTests
     }
 
     [Fact]
+    public void TryCreateRpcException_FileNotFoundLoaderException_CapturesMissingAssemblyName()
+    {
+        // Mirrors the real failure: a code-generation assembly references an Aspire.TypeSystem
+        // version that is absent on disk, so the CLR raises a FileNotFoundException inside the
+        // ReflectionTypeLoadException's LoaderExceptions.
+        var loader = new FileNotFoundException(
+            "Could not load file or assembly 'Aspire.TypeSystem, Version=42.42.42.42'. The system cannot find the file specified.",
+            "Aspire.TypeSystem, Version=42.42.42.42, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51");
+        var rtle = new ReflectionTypeLoadException([null], [loader]);
+
+        var result = CodeGenerationDiagnosticBuilder.TryCreateRpcException(rtle, assemblyLoader: null);
+
+        var localRpc = Assert.IsType<LocalRpcException>(result);
+        Assert.Equal(CodeGenerationErrorCodes.IncompatibleAspireSdk, localRpc.ErrorCode);
+        var diagnostic = Assert.IsType<CodeGenerationDiagnostic>(localRpc.ErrorData);
+        Assert.Equal(typeof(FileNotFoundException).FullName, diagnostic.OriginalExceptionType);
+        Assert.Contains("Aspire.TypeSystem", diagnostic.TypeName);
+    }
+
+    [Fact]
+    public void TryCreateRpcException_ArgumentExceptionWrappingReflectionLoad_FindsInnerCause()
+    {
+        // Repro of the TypeScript "no code generator found" path: GenerateCode throws an
+        // ArgumentException whose inner exception is the swallowed ReflectionTypeLoadException.
+        var loader = new FileNotFoundException("missing", "Aspire.TypeSystem, Version=42.42.42.42");
+        var rtle = new ReflectionTypeLoadException([null], [loader]);
+        var argument = new ArgumentException("No code generator found for language: TypeScript.", rtle);
+
+        var result = CodeGenerationDiagnosticBuilder.TryCreateRpcException(argument, assemblyLoader: null);
+
+        var localRpc = Assert.IsType<LocalRpcException>(result);
+        Assert.Equal(CodeGenerationErrorCodes.IncompatibleAspireSdk, localRpc.ErrorCode);
+        Assert.False(string.IsNullOrWhiteSpace(localRpc.Message));
+        // The actionable message must not leak the raw "no code generator found" text.
+        Assert.DoesNotContain("no code generator found", localRpc.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void BuildDiagnostic_CapturesRuntimeAspireHostingVersion()
     {
         // BuildDiagnostic looks for the loaded Aspire.Hosting assembly via AppDomain. Calling
