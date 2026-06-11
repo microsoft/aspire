@@ -46,8 +46,8 @@ internal sealed class DashboardClient : IDashboardClient
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly CancellationToken _clientCancellationToken;
-    private readonly TaskCompletionSource _whenConnectedTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly TaskCompletionSource _initialDataReceivedTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource _whenConnectedTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource _initialDataReceivedTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Channel<WatchInteractionsRequestUpdate> _incomingInteractionChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
     private readonly object _lock = new();
     private readonly TaskCompletionSource _resourceWatchCompleteTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -61,6 +61,10 @@ internal sealed class DashboardClient : IDashboardClient
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
     private string? _applicationName;
+
+    private DashboardConnectionState _connectionState;
+    private readonly object _reconnectDelayLock = new();
+    private CancellationTokenSource? _reconnectDelayCts;
 
     private const int StateDisabled = -1;
     private const int StateNone = 0;
@@ -227,6 +231,53 @@ internal sealed class DashboardClient : IDashboardClient
 
     public bool IsEnabled => _state is not StateDisabled;
 
+    public DashboardConnectionState ConnectionState => _connectionState;
+
+    public event Action<DashboardConnectionState>? ConnectionStateChanged;
+
+    public Task ReconnectAsync()
+    {
+        if (_state is StateDisabled or StateDisposed)
+        {
+            return Task.CompletedTask;
+        }
+
+        // Cancel any existing reconnect delay to attempt immediately.
+        lock (_reconnectDelayLock)
+        {
+            _reconnectDelayCts?.Cancel();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void SetConnectionState(DashboardConnectionState state)
+    {
+        if (_connectionState == state)
+        {
+            return;
+        }
+
+        _connectionState = state;
+        _logger.LogDebug("Dashboard connection state changed to {State}.", state);
+
+        // Reset the WhenConnected TCS when disconnecting so that callers can re-await it.
+        if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting)
+        {
+            if (_whenConnectedTcs.Task.IsCompleted)
+            {
+                _whenConnectedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            if (_initialDataReceivedTcs.Task.IsCompleted)
+            {
+                _initialDataReceivedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+        }
+
+        ConnectionStateChanged?.Invoke(state);
+    }
+
     private void EnsureInitialized()
     {
         var priorState = Interlocked.CompareExchange(ref _state, value: StateInitialized, comparand: StateNone);
@@ -242,6 +293,7 @@ internal sealed class DashboardClient : IDashboardClient
             return;
         }
 
+        SetConnectionState(DashboardConnectionState.Connecting);
         _connection = Task.Run(() => ConnectAndWatchAsync(_clientCancellationToken), _clientCancellationToken);
     }
 
@@ -249,7 +301,7 @@ internal sealed class DashboardClient : IDashboardClient
     {
         try
         {
-            await ConnectAsync().ConfigureAwait(false);
+            await ConnectWithRetryAsync(cancellationToken).ConfigureAwait(false);
 
             await Task.WhenAll(
                 Task.Run(async () =>
@@ -272,20 +324,74 @@ internal sealed class DashboardClient : IDashboardClient
             _logger.LogError(ex, "Error loading data from the resource service.");
             throw;
         }
+    }
 
-        async Task ConnectAsync()
+    /// <summary>
+    /// Attempts to connect to the resource service with exponential backoff retry.
+    /// On failure, transitions to Disconnected and waits before retrying. The delay can be
+    /// cancelled by <see cref="ReconnectAsync"/> for immediate retry.
+    /// </summary>
+    private async Task ConnectWithRetryAsync(CancellationToken cancellationToken)
+    {
+        var errorCount = 0;
+
+        while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (errorCount > 0)
+            {
+                SetConnectionState(DashboardConnectionState.Disconnected);
+
+                var delay = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, errorCount - 1), 15));
+                _logger.LogDebug("Waiting {Delay} before next connection attempt.", delay);
+
+                // Allow the delay to be cancelled by ReconnectAsync() for immediate retry.
+                CancellationTokenSource delayCts;
+                lock (_reconnectDelayLock)
+                {
+                    delayCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    _reconnectDelayCts = delayCts;
+                }
+                try
+                {
+                    await Task.Delay(delay, delayCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // ReconnectAsync() cancelled the delay — retry immediately.
+                    _logger.LogDebug("Reconnect delay cancelled, retrying immediately.");
+                }
+                finally
+                {
+                    lock (_reconnectDelayLock)
+                    {
+                        _reconnectDelayCts = null;
+                    }
+                    delayCts.Dispose();
+                }
+
+                SetConnectionState(DashboardConnectionState.Connecting);
+            }
+
             try
             {
                 var response = await _client!.GetApplicationInformationAsync(new(), headers: _headers, cancellationToken: cancellationToken);
 
                 _applicationName = response.ApplicationName;
 
+                SetConnectionState(DashboardConnectionState.Connected);
                 _whenConnectedTcs.TrySetResult();
+                return;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                _whenConnectedTcs.TrySetException(ex);
+                errorCount++;
+                _logger.LogError(ex, "Error #{ErrorCount} connecting to the resource service.", errorCount);
             }
         }
     }
@@ -309,12 +415,38 @@ internal sealed class DashboardClient : IDashboardClient
 
             if (retryContext.ErrorCount > 0)
             {
+                // Transition to disconnected when watch streams fail.
+                // Only the first watcher to fail will trigger the state change.
+                SetConnectionState(DashboardConnectionState.Disconnected);
+
                 // The most recent attempt failed. There may be more than one failure.
                 // We wait for a period of time determined by the number of errors,
                 // where the time grows exponentially, until a threshold.
                 var delay = ExponentialBackOff(retryContext.ErrorCount, maxSeconds: 15);
 
-                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                // Allow the delay to be cancelled by ReconnectAsync() for immediate retry.
+                CancellationTokenSource delayCts;
+                lock (_reconnectDelayLock)
+                {
+                    delayCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    _reconnectDelayCts = delayCts;
+                }
+                try
+                {
+                    await Task.Delay(delay, delayCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // ReconnectAsync() cancelled the delay — retry immediately.
+                }
+                finally
+                {
+                    lock (_reconnectDelayLock)
+                    {
+                        _reconnectDelayCts = null;
+                    }
+                    delayCts.Dispose();
+                }
             }
 
             try
@@ -365,7 +497,11 @@ internal sealed class DashboardClient : IDashboardClient
             lock (_lock)
             {
                 // We received a message, which means we are connected. Clear the error count.
-                retryContext.ErrorCount = 0;
+                if (retryContext.ErrorCount > 0)
+                {
+                    retryContext.ErrorCount = 0;
+                    SetConnectionState(DashboardConnectionState.Connected);
+                }
 
                 if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
                 {
@@ -490,7 +626,11 @@ internal sealed class DashboardClient : IDashboardClient
             await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: cts.Token).ConfigureAwait(false))
             {
                 // We received a message, which means we are connected. Clear the error count.
-                retryContext.ErrorCount = 0;
+                if (retryContext.ErrorCount > 0)
+                {
+                    retryContext.ErrorCount = 0;
+                    SetConnectionState(DashboardConnectionState.Connected);
+                }
 
                 lock (_lock)
                 {
