@@ -196,12 +196,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
             Assert.False(noRestore);
             Assert.Equal("true", options.MSBuildProperties[CSharpCliManagedAppHostModuleGenerator.BuildPropertyName]);
-
             var moduleProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj");
-            var targetsPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets");
             Assert.True(File.Exists(moduleProjectPath));
-            Assert.True(File.Exists(targetsPath));
-            Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(targetsPath));
+            Assert.False(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
+            Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(moduleProjectPath));
             return 0;
         };
         runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
@@ -336,10 +334,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             // project (.aspire/modules/Aspire.csproj) via IntegrationClosureRestorer, not the
             // user's apphost.cs.
             var moduleProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj");
-            var targetsPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets");
             Assert.Equal(moduleProjectPath, projectFile.FullName);
-            Assert.True(File.Exists(targetsPath));
-            Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(targetsPath));
+            Assert.False(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
+            Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(moduleProjectPath));
 
             var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
             var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureRestorer.IntegrationRestoreFolderName);

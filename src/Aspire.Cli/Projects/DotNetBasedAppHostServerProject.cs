@@ -162,16 +162,63 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         var doc = XDocument.Parse(template);
 
-        var resolvedReferences = CSharpIntegrationProjectReferences.Resolve(integrations, _repoRoot);
+        // Add project references for Aspire.Hosting.* packages, NuGet for others
+        var projectRefGroup = new XElement("ItemGroup");
+        var addedProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var otherPackages = new List<(string Name, string Version)>();
 
-        if (resolvedReferences.ProjectReferences.Count > 0)
+        foreach (var integration in integrations)
         {
-            doc.Root!.Add(new XElement("ItemGroup", resolvedReferences.ProjectReferences));
+            if (integration.IsProjectReference)
+            {
+                // Explicit project reference from settings.json
+                if (addedProjects.Add(integration.Name))
+                {
+                    projectRefGroup.Add(new XElement("ProjectReference",
+                        new XAttribute("Include", integration.ProjectPath!),
+                        new XElement("IsAspireProjectResource", "false")));
+                }
+            }
+            else if (integration.Name.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase))
+            {
+                var projectPath = Path.Combine(_repoRoot, "src", integration.Name, $"{integration.Name}.csproj");
+                if (File.Exists(projectPath) && addedProjects.Add(integration.Name))
+                {
+                    projectRefGroup.Add(new XElement("ProjectReference",
+                        new XAttribute("Include", projectPath),
+                        new XElement("IsAspireProjectResource", "false")));
+                }
+            }
+            else
+            {
+                if (integration.Version is null)
+                {
+                    throw new InvalidOperationException($"Integration '{integration.Name}' is neither a project reference nor a package reference (both Version and ProjectPath are null).");
+                }
+                otherPackages.Add((integration.Name, integration.Version));
+            }
         }
 
-        if (resolvedReferences.PackageReferences.Count > 0)
+        // Always add Aspire.Hosting project reference
+        var hostingPath = Path.Combine(_repoRoot, "src", "Aspire.Hosting", "Aspire.Hosting.csproj");
+        if (File.Exists(hostingPath) && addedProjects.Add("Aspire.Hosting"))
         {
-            doc.Root!.Add(new XElement("ItemGroup", resolvedReferences.PackageReferences));
+            projectRefGroup.Add(new XElement("ProjectReference",
+                new XAttribute("Include", hostingPath),
+                new XElement("IsAspireProjectResource", "false")));
+        }
+
+        if (projectRefGroup.HasElements)
+        {
+            doc.Root!.Add(projectRefGroup);
+        }
+
+        if (otherPackages.Count > 0)
+        {
+            doc.Root!.Add(new XElement("ItemGroup",
+                otherPackages.Select(p => new XElement("PackageReference",
+                    new XAttribute("Include", p.Name),
+                    new XAttribute("Version", p.Version)))));
         }
 
         // Add imports for in-repo AppHost building

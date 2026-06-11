@@ -24,7 +24,6 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
 {
     internal const string ModulesDirectoryName = "modules";
     internal const string ModuleProjectFileName = "Aspire.csproj";
-    internal const string ModuleTargetsFileName = "Aspire.targets";
     internal const string NuGetConfigFileName = "nuget.config";
     internal const string BuildPropertyName = "AspireCliManagedAppHostBuild";
 
@@ -63,8 +62,8 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         modulesDirectory.Create();
 
         var moduleProjectFile = new FileInfo(Path.Combine(modulesDirectory.FullName, ModuleProjectFileName));
-        var moduleTargetsFile = new FileInfo(Path.Combine(modulesDirectory.FullName, ModuleTargetsFileName));
         var nuGetConfigFile = new FileInfo(Path.Combine(modulesDirectory.FullName, NuGetConfigFileName));
+        var legacyModuleTargetsFile = new FileInfo(Path.Combine(modulesDirectory.FullName, "Aspire.targets"));
 
         var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(appHostDirectory.FullName);
         var integrationReferences = config
@@ -87,9 +86,13 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         var integrationRestoreDir = Path.Combine(workingDirectory.FullName, IntegrationClosureRestorer.IntegrationRestoreFolderName);
         Directory.CreateDirectory(integrationRestoreDir);
 
-        await WriteModuleProjectFileAsync(moduleProjectFile, restoreSources.AdditionalSources, restoreSources.PackageSourceMappings is not null ? nuGetConfigFile : null, integrationRestoreDir, cancellationToken).ConfigureAwait(false);
-        await WriteModuleTargetsFileAsync(moduleTargetsFile, integrationReferences, repoRoot, cancellationToken).ConfigureAwait(false);
+        await WriteModuleProjectFileAsync(moduleProjectFile, restoreSources.AdditionalSources, restoreSources.PackageSourceMappings is not null ? nuGetConfigFile : null, integrationRestoreDir, integrationReferences, repoRoot, cancellationToken).ConfigureAwait(false);
+        if (legacyModuleTargetsFile.Exists)
+        {
+            legacyModuleTargetsFile.Delete();
+        }
 
+        // Write sentinel files to prevent upstream props/targets from overriding generated project behavior.
         await File.WriteAllTextAsync(Path.Combine(modulesDirectory.FullName, "Directory.Build.props"), "<Project />", cancellationToken).ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(modulesDirectory.FullName, "Directory.Build.targets"), "<Project />", cancellationToken).ConfigureAwait(false);
         await File.WriteAllTextAsync(
@@ -173,7 +176,14 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         return new ModuleRestoreSources(additionalSources, packageSourceMappings, configureGlobalPackagesFolder);
     }
 
-    private static async Task WriteModuleProjectFileAsync(FileInfo moduleProjectFile, IReadOnlyList<string> additionalSources, FileInfo? restoreConfigFile, string integrationRestoreDir, CancellationToken cancellationToken)
+    private static async Task WriteModuleProjectFileAsync(
+        FileInfo moduleProjectFile,
+        IReadOnlyList<string> additionalSources,
+        FileInfo? restoreConfigFile,
+        string integrationRestoreDir,
+        IReadOnlyList<IntegrationReference> integrationReferences,
+        string? repoRoot,
+        CancellationToken cancellationToken)
     {
         var propertyGroup = new XElement("PropertyGroup",
             new XElement("TargetFramework", DotNetBasedAppHostServerProject.TargetFramework),
@@ -184,7 +194,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
             new XElement("IsPublishable", "false"));
 
         // The closure-manifest properties point into .aspire/integrations/apphosts/<hash>/integration-restore/,
-        // mirroring the PrebuiltAppHostServer cache layout. AfterBuild targets (added in Aspire.targets)
+        // mirroring the PrebuiltAppHostServer cache layout. AfterBuild targets
         // write the closure files to those paths so IntegrationClosureRestorer can read them and emit
         // the probe manifest the runtime AppHost consumes.
         IntegrationClosureRestorer.AddClosureProperties(propertyGroup, integrationRestoreDir);
@@ -201,16 +211,8 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         var doc = new XDocument(
             new XElement("Project",
                 new XAttribute("Sdk", "Microsoft.NET.Sdk"),
-                propertyGroup,
-                new XElement("Import", new XAttribute("Project", ModuleTargetsFileName))));
+                propertyGroup));
 
-        await using var stream = moduleProjectFile.Create();
-        await doc.SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteModuleTargetsFileAsync(FileInfo moduleTargetsFile, IReadOnlyList<IntegrationReference> integrationReferences, string? repoRoot, CancellationToken cancellationToken)
-    {
-        var doc = new XDocument(new XElement("Project"));
         var itemGroup = new XElement("ItemGroup");
         // privateProjectReferences:false: this module exists specifically to harvest the
         // integration closure via ReferenceCopyLocalPaths. Setting Private=false would drop
@@ -243,7 +245,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         // can post-process them into a stable libs layout + IntegrationPackageProbeManifest.
         IntegrationClosureRestorer.AddClosureTargets(doc.Root!);
 
-        await using var stream = moduleTargetsFile.Create();
+        await using var stream = moduleProjectFile.Create();
         await doc.SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
     }
 

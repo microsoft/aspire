@@ -113,11 +113,10 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
                     // The CLI-managed restore path builds the integration module project
                     // (.aspire/modules/Aspire.csproj), not the user's apphost.cs.
                     var moduleProjectPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj");
-                    var targetsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets");
                     Assert.Equal(moduleProjectPath, projectFilePath.FullName);
                     Assert.True(File.Exists(moduleProjectPath));
-                    Assert.True(File.Exists(targetsPath));
-                    Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(targetsPath));
+                    Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
+                    Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(moduleProjectPath));
 
                     // Stub out the closure-manifest files MSBuild would emit so the restorer
                     // post-processes them into a probe manifest.

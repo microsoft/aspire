@@ -137,6 +137,30 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task CreateProjectFiles_PreservesCoreScannerReferenceWithoutConfiguredIntegrations()
+    {
+        var hostingProjectDirectory = _workspace.WorkspaceRoot
+            .CreateSubdirectory("src")
+            .CreateSubdirectory("Aspire.Hosting");
+        var hostingProjectPath = Path.Combine(hostingProjectDirectory.FullName, "Aspire.Hosting.csproj");
+        await File.WriteAllTextAsync(hostingProjectPath, """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        var project = CreateProject();
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync([]).DefaultTimeout();
+
+        var doc = XDocument.Load(projectPath);
+        var hostingReference = doc.Descendants("ProjectReference")
+            .SingleOrDefault(e => string.Equals(e.Attribute("Include")?.Value, hostingProjectPath, StringComparison.Ordinal));
+
+        Assert.NotNull(hostingReference);
+        Assert.Equal("false", hostingReference.Element("IsAspireProjectResource")?.Value);
+        Assert.Null(hostingReference.Element("Private"));
+        Assert.Null(hostingReference.Element("ReferenceOutputAssembly"));
+    }
+
+    [Fact]
     public async Task CreateProjectFiles_CopiesAppSettingsToOutput()
     {
         // Arrange

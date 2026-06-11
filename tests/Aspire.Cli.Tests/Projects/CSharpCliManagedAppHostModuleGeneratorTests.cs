@@ -60,19 +60,15 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
 
         var moduleProject = XDocument.Load(moduleProjectFile.FullName);
         Assert.Equal("Microsoft.NET.Sdk", moduleProject.Root!.Attribute("Sdk")!.Value);
-        Assert.Contains(moduleProject.Root.Elements("Import"), e => e.Attribute("Project")?.Value == "Aspire.targets");
-
-        var targetsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets");
-        Assert.True(File.Exists(targetsPath));
-
-        var targets = XDocument.Load(targetsPath);
-        Assert.Contains(targets.Descendants("PackageReference"), e =>
+        Assert.DoesNotContain(moduleProject.Root.Elements("Import"), e => e.Attribute("Project")?.Value == "Aspire.targets");
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
+        Assert.Contains(moduleProject.Descendants("PackageReference"), e =>
             e.Attribute("Include")?.Value == "Example.Package" &&
             e.Attribute("Version")?.Value == "1.2.3");
-        Assert.Contains(targets.Descendants("ProjectReference"), e =>
+        Assert.Contains(moduleProject.Descendants("ProjectReference"), e =>
             e.Attribute("Include")?.Value == projectReferenceFile.FullName &&
             e.Element("IsAspireProjectResource")?.Value == "false");
-        Assert.Contains(targets.Descendants("Target"), e =>
+        Assert.Contains(moduleProject.Descendants("Target"), e =>
             e.Attribute("Name")?.Value == "FailDirectDotnetForCliManagedAppHost" &&
             e.Attribute("BeforeTargets")?.Value == "Build;Publish" &&
             e.Attribute("Condition")?.Value == "'$(AspireCliManagedAppHostBuild)' != 'true'");
@@ -108,10 +104,10 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
 
         await generator.TryGenerateAsync(appHostFile, config, appHostDirectory, packageSourceOverride: null, CancellationToken.None);
 
-        var targetsPath = Path.Combine(appHostDirectory.FullName, ".aspire", "modules", "Aspire.targets");
-        var targets = XDocument.Load(targetsPath);
-        var packageReferences = targets.Descendants("PackageReference").ToArray();
-        var projectReferences = targets.Descendants("ProjectReference").ToArray();
+        var moduleProjectPath = Path.Combine(appHostDirectory.FullName, ".aspire", "modules", "Aspire.csproj");
+        var moduleProject = XDocument.Load(moduleProjectPath);
+        var packageReferences = moduleProject.Descendants("PackageReference").ToArray();
+        var projectReferences = moduleProject.Descendants("ProjectReference").ToArray();
 
         Assert.Empty(packageReferences);
         Assert.Contains(projectReferences, e => e.Attribute("Include")?.Value == hostingProject.FullName);
