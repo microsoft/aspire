@@ -57,20 +57,16 @@ internal sealed class CodeGeneratorResolver
     }
 
     /// <summary>
-    /// Gets the <see cref="ReflectionTypeLoadException"/>s that were swallowed while discovering
-    /// generators. A non-empty result almost always means a code generator was silently dropped
-    /// because of a binary mismatch (typically a diverged <c>Aspire.TypeSystem</c> version between
-    /// the bundled apphost server and the restored SDK assemblies). Callers use this to turn an
+    /// Gets the result of generator discovery: the resolved generators and any
+    /// <see cref="ReflectionTypeLoadException"/>s swallowed while probing assemblies. A non-empty
+    /// <see cref="DiscoveryResult.LoadFailures"/> almost always means a code generator was silently
+    /// dropped because of a binary mismatch (typically a diverged <c>Aspire.TypeSystem</c> version
+    /// between the bundled apphost server and the restored SDK assemblies); callers use it to turn an
     /// otherwise-opaque "no generator found" failure into an actionable incompatible-SDK diagnostic.
+    /// Exposing the whole result (rather than a dedicated accessor) also lets unit tests observe the
+    /// swallowed failures, which discovery otherwise hides; see <c>ResolverDiagnosticsTests</c>.
     /// </summary>
-    /// <remarks>
-    /// This is also the only way unit tests can observe the swallowed load failures, since discovery
-    /// otherwise hides them; see <c>ResolverDiagnosticsTests</c>.
-    /// </remarks>
-    public IReadOnlyList<ReflectionTypeLoadException> GetDiscoveryLoadFailures()
-    {
-        return _discovery.Value.LoadFailures;
-    }
+    internal DiscoveryResult Discovery => _discovery.Value;
 
     private DiscoveryResult DiscoverGenerators(
         IServiceProvider serviceProvider,
@@ -93,7 +89,7 @@ internal sealed class CodeGeneratorResolver
                 hadTypeLoadFailure = true;
                 // Remember the load failure so a downstream "no generator found" error can be
                 // re-cast as an actionable incompatible-SDK diagnostic instead of a cryptic
-                // ArgumentException (see GetDiscoveryLoadFailures).
+                // ArgumentException (see Discovery).
                 loadFailures.Add(ex);
                 // Surface loader binding failures at Warning level. These typically indicate
                 // a binary mismatch between the bundled runtime assemblies and the integration
@@ -158,7 +154,7 @@ internal sealed class CodeGeneratorResolver
         => assemblyName is not null
            && assemblyName.StartsWith("Aspire.Hosting.CodeGeneration.", StringComparison.OrdinalIgnoreCase);
 
-    private sealed record DiscoveryResult(
+    internal sealed record DiscoveryResult(
         Dictionary<string, ICodeGenerator> Generators,
         IReadOnlyList<ReflectionTypeLoadException> LoadFailures);
 }

@@ -247,7 +247,7 @@ internal sealed class CodeGenerationService
                 // exception. This lets CodeGenerationDiagnosticBuilder classify the failure as an
                 // incompatible SDK and return the actionable "run aspire update" diagnostic instead
                 // of the opaque "no code generator found" message reaching the user verbatim.
-                var loadFailures = _resolver.GetDiscoveryLoadFailures();
+                var loadFailures = _resolver.Discovery.LoadFailures;
                 var loadFailure = loadFailures.Count > 0 ? loadFailures[0] : null;
                 throw new ArgumentException(BuildNoCodeGeneratorMessage(language), loadFailure);
             }

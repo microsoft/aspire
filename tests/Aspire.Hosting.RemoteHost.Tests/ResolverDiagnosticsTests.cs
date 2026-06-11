@@ -97,7 +97,7 @@ public class ResolverDiagnosticsTests
         // callers can turn it into an actionable incompatible-SDK diagnostic.
         Assert.Null(resolver.GetCodeGenerator("TypeScript"));
 
-        var failure = Assert.Single(resolver.GetDiscoveryLoadFailures());
+        var failure = Assert.Single(resolver.Discovery.LoadFailures);
         Assert.Contains("synthetic loader exception", failure.LoaderExceptions[0]!.Message);
     }
 
@@ -110,7 +110,7 @@ public class ResolverDiagnosticsTests
         var resolver = new CodeGeneratorResolver(services, Array.Empty<Assembly>, logger);
 
         Assert.Null(resolver.GetCodeGenerator("TypeScript"));
-        Assert.Empty(resolver.GetDiscoveryLoadFailures());
+        Assert.Empty(resolver.Discovery.LoadFailures);
     }
 
     private sealed class TypeLoadFailingAssembly : Assembly
