@@ -568,6 +568,28 @@ internal sealed class TestArmDeploymentResource : ArmDeploymentResource
             {
                 data = _deploymentData!;
             }
+
+            // The auto-generated ACR pull identity is deployed as its own user-assigned identity
+            // module named "{environment}-acr-pull-identity", and a separate role-assignment module
+            // consumes that identity's principalId output. Real Azure returns id/clientId/principalId
+            // (plus name/principalName) from a UAI deployment; the default test outputs are empty
+            // (or, for the registry-shaped provider above, only name/loginServer), so the role module
+            // would otherwise fail with "No output for principalId". Synthesize the identity outputs
+            // here to mirror Azure. BicepProvisioner names deployments "{resource.Name}" in run mode
+            // and "{resource.Name}-{unixSeconds}" in publish mode, so match on substring rather than
+            // suffix, and exclude the "{identity}-roles-{target}" role module that embeds the same name.
+            // A copy is taken so the shared backing dictionary is never mutated, and TryAdd preserves
+            // any outputs a test provided explicitly.
+            if (_name.Contains("-acr-pull-identity", StringComparison.Ordinal) && !_name.Contains("-roles-", StringComparison.Ordinal))
+            {
+                data = new Dictionary<string, object>(data);
+                data.TryAdd("id", new { type = "String", value = $"/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{_name}" });
+                data.TryAdd("clientId", new { type = "String", value = "00000000-0000-0000-0000-000000000001" });
+                data.TryAdd("principalId", new { type = "String", value = "00000000-0000-0000-0000-000000000002" });
+                data.TryAdd("principalName", new { type = "String", value = _name });
+                data.TryAdd("name", new { type = "String", value = _name });
+            }
+
             return ArmResourcesModelFactory.ArmDeploymentData(Id, _name, properties: ArmResourcesModelFactory.ArmDeploymentPropertiesExtended(provisioningState: ResourcesProvisioningState.Succeeded, outputs: BinaryData.FromObjectAsJson(data)));
         }
     }

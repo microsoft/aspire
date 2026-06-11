@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 50
+Total steps defined: 52
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -14,8 +14,8 @@ EXECUTION ORDER
 This shows the order in which steps would execute, respecting all dependencies.
 Steps with no dependencies run first, followed by steps that depend on them.
 
-  1. azure-prepare-resources
-  2. validate-compute-environments
+  1. validate-compute-environments
+  2. azure-prepare-resources
   3. prepare-azure-container-apps-env
   4. validate-azure-container-apps
   5. before-start
@@ -41,29 +41,31 @@ Steps with no dependencies run first, followed by steps that depend on them.
  25. provision-pe-subnet-sql-pe
  26. provision-api-roles-sql
  27. provision-env-acr
- 28. provision-env
- 29. provision-privatelink-documents-azure-com
- 30. provision-pe-subnet-cosmos-pe
- 31. login-to-acr-env-acr
- 32. push-prereq
- 33. push-api
- 34. provision-api-containerapp
- 35. print-api-summary
- 36. provision-sql-admin-identity
- 37. provision-sql-admin-identity-roles-sql-store
- 38. provision-azure-bicep-resources
- 39. print-dashboard-url-env
- 40. deploy
- 41. deploy-api
- 42. destroy-prereq
- 43. destroy-azure-azure634f9
- 44. destroy
- 45. diagnostics
- 46. publish-prereq
- 47. publish-azure634f9
- 48. publish
- 49. publish-manifest
- 50. push
+ 28. provision-env-acr-pull-identity
+ 29. provision-env-roles-env-acr
+ 30. provision-env
+ 31. provision-privatelink-documents-azure-com
+ 32. provision-pe-subnet-cosmos-pe
+ 33. login-to-acr-env-acr
+ 34. push-prereq
+ 35. push-api
+ 36. provision-api-containerapp
+ 37. print-api-summary
+ 38. provision-sql-admin-identity
+ 39. provision-sql-admin-identity-roles-sql-store
+ 40. provision-azure-bicep-resources
+ 41. print-dashboard-url-env
+ 42. deploy
+ 43. deploy-api
+ 44. destroy-prereq
+ 45. destroy-azure-azure634f9
+ 46. destroy
+ 47. diagnostics
+ 48. publish-prereq
+ 49. publish-azure634f9
+ 50. publish
+ 51. publish-manifest
+ 52. push
 
 DETAILED STEP ANALYSIS
 ======================
@@ -72,7 +74,7 @@ Shows each step's dependencies, associated resources, tags, and descriptions.
 
 Step: azure-prepare-resources
     Description: Prepares the Azure resources.
-    Dependencies: none
+    Dependencies: ✓ validate-compute-environments
     Resource: azure634f9 (AzureEnvironmentResource)
 
 Step: before-start
@@ -161,7 +163,7 @@ Step: process-parameters
 
 Step: provision-api-containerapp
     Description: Provisions the Azure Bicep resource api-containerapp using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-api-roles-cosmos, ✓ provision-api-roles-sql, ✓ provision-cosmos, ✓ provision-env, ✓ provision-pe-subnet-cosmos-pe, ✓ provision-pe-subnet-sql-pe, ✓ provision-sql, ✓ push-api
+    Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-api-roles-cosmos, ✓ provision-api-roles-sql, ✓ provision-cosmos, ✓ provision-env, ✓ provision-env-roles-env-acr, ✓ provision-pe-subnet-cosmos-pe, ✓ provision-pe-subnet-sql-pe, ✓ provision-sql, ✓ push-api
     Resource: api-containerapp (AzureContainerAppResource)
     Tags: provision-infra
 
@@ -185,7 +187,7 @@ Step: provision-api-roles-sql
 
 Step: provision-azure-bicep-resources
     Description: Aggregation step for all Azure infrastructure provisioning operations.
-    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-api-containerapp, ✓ provision-api-identity, ✓ provision-api-roles-cosmos, ✓ provision-api-roles-sql, ✓ provision-cosmos, ✓ provision-env, ✓ provision-env-acr, ✓ provision-pe-subnet-cosmos-pe, ✓ provision-pe-subnet-files-pe, ✓ provision-pe-subnet-sql-pe, ✓ provision-privatelink-database-windows-net, ✓ provision-privatelink-documents-azure-com, ✓ provision-privatelink-file-core-windows-net, ✓ provision-sql, ✓ provision-sql-admin-identity, ✓ provision-sql-admin-identity-roles-sql-store, ✓ provision-sql-nsg, ✓ provision-sql-store, ✓ provision-vnet
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-api-containerapp, ✓ provision-api-identity, ✓ provision-api-roles-cosmos, ✓ provision-api-roles-sql, ✓ provision-cosmos, ✓ provision-env, ✓ provision-env-acr, ✓ provision-env-acr-pull-identity, ✓ provision-env-roles-env-acr, ✓ provision-pe-subnet-cosmos-pe, ✓ provision-pe-subnet-files-pe, ✓ provision-pe-subnet-sql-pe, ✓ provision-privatelink-database-windows-net, ✓ provision-privatelink-documents-azure-com, ✓ provision-privatelink-file-core-windows-net, ✓ provision-sql, ✓ provision-sql-admin-identity, ✓ provision-sql-admin-identity-roles-sql-store, ✓ provision-sql-nsg, ✓ provision-sql-store, ✓ provision-vnet
     Resource: azure634f9 (AzureEnvironmentResource)
     Tags: provision-infra
 
@@ -197,7 +199,7 @@ Step: provision-cosmos
 
 Step: provision-env
     Description: Provisions the Azure Bicep resource env using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-env-acr
+    Dependencies: ✓ create-provisioning-context, ✓ provision-env-acr, ✓ provision-env-acr-pull-identity, ✓ provision-env-roles-env-acr
     Resource: env (AzureContainerAppEnvironmentResource)
     Tags: provision-infra
 
@@ -205,6 +207,18 @@ Step: provision-env-acr
     Description: Provisions the Azure Bicep resource env-acr using Azure infrastructure.
     Dependencies: ✓ create-provisioning-context
     Resource: env-acr (AzureContainerRegistryResource)
+    Tags: provision-infra
+
+Step: provision-env-acr-pull-identity
+    Description: Provisions the Azure Bicep resource env-acr-pull-identity using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context
+    Resource: env-acr-pull-identity (AzureUserAssignedIdentityResource)
+    Tags: provision-infra
+
+Step: provision-env-roles-env-acr
+    Description: Provisions the Azure Bicep resource env-roles-env-acr using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-env-acr, ✓ provision-env-acr-pull-identity
+    Resource: env-roles-env-acr (AzureRoleAssignmentResource)
     Tags: provision-infra
 
 Step: provision-pe-subnet-cosmos-pe
@@ -337,18 +351,20 @@ Shows what steps would run for each possible target step and in what order.
 Steps at the same level can run concurrently.
 ─────────────────────────────────────────────────────────────────────────────
 If targeting 'azure-prepare-resources':
-  Direct dependencies: none
-  Total steps: 1
+  Direct dependencies: validate-compute-environments
+  Total steps: 2
   Execution order:
-    [0] azure-prepare-resources
+    [0] validate-compute-environments
+    [1] azure-prepare-resources
 
 If targeting 'before-start':
   Direct dependencies: azure-prepare-resources, prepare-azure-container-apps-env, validate-azure-container-apps, validate-compute-environments
   Total steps: 5
   Execution order:
-    [0] azure-prepare-resources | validate-azure-container-apps | validate-compute-environments (parallel)
-    [1] prepare-azure-container-apps-env
-    [2] before-start
+    [0] validate-azure-container-apps | validate-compute-environments (parallel)
+    [1] azure-prepare-resources
+    [2] prepare-azure-container-apps-env
+    [3] before-start
 
 If targeting 'build':
   Direct dependencies: build-api
@@ -391,15 +407,15 @@ If targeting 'create-provisioning-context':
 
 If targeting 'deploy':
   Direct dependencies: build-api, create-provisioning-context, print-api-summary, print-dashboard-url-env, provision-azure-bicep-resources, validate-azure-login
-  Total steps: 34
+  Total steps: 36
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
-    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-sql-admin-identity | provision-vnet (parallel)
-    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | provision-sql-admin-identity-roles-sql-store | push-prereq (parallel)
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-env-acr-pull-identity | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env-roles-env-acr | provision-sql-admin-identity | provision-vnet (parallel)
+    [6] provision-env | provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | provision-sql-admin-identity-roles-sql-store | push-prereq (parallel)
     [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
     [8] provision-api-roles-sql
     [9] provision-api-containerapp
@@ -409,15 +425,15 @@ If targeting 'deploy':
 
 If targeting 'deploy-api':
   Direct dependencies: print-api-summary
-  Total steps: 30
+  Total steps: 32
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
-    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-vnet (parallel)
-    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | push-prereq (parallel)
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-env-acr-pull-identity | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env-roles-env-acr | provision-vnet (parallel)
+    [6] provision-env | provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | push-prereq (parallel)
     [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
     [8] provision-api-roles-sql
     [9] provision-api-containerapp
@@ -473,20 +489,21 @@ If targeting 'prepare-azure-container-apps-env':
   Direct dependencies: azure-prepare-resources, validate-compute-environments
   Total steps: 3
   Execution order:
-    [0] azure-prepare-resources | validate-compute-environments (parallel)
-    [1] prepare-azure-container-apps-env
+    [0] validate-compute-environments
+    [1] azure-prepare-resources
+    [2] prepare-azure-container-apps-env
 
 If targeting 'print-api-summary':
   Direct dependencies: provision-api-containerapp
-  Total steps: 29
+  Total steps: 31
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
-    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-vnet (parallel)
-    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | push-prereq (parallel)
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-env-acr-pull-identity | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env-roles-env-acr | provision-vnet (parallel)
+    [6] provision-env | provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | push-prereq (parallel)
     [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
     [8] provision-api-roles-sql
     [9] provision-api-containerapp
@@ -494,15 +511,15 @@ If targeting 'print-api-summary':
 
 If targeting 'print-dashboard-url-env':
   Direct dependencies: provision-azure-bicep-resources, provision-env
-  Total steps: 32
+  Total steps: 34
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
-    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-sql-admin-identity | provision-vnet (parallel)
-    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | provision-sql-admin-identity-roles-sql-store | push-prereq (parallel)
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-env-acr-pull-identity | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env-roles-env-acr | provision-sql-admin-identity | provision-vnet (parallel)
+    [6] provision-env | provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | provision-sql-admin-identity-roles-sql-store | push-prereq (parallel)
     [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
     [8] provision-api-roles-sql
     [9] provision-api-containerapp
@@ -516,16 +533,16 @@ If targeting 'process-parameters':
     [0] process-parameters
 
 If targeting 'provision-api-containerapp':
-  Direct dependencies: create-provisioning-context, provision-api-identity, provision-api-roles-cosmos, provision-api-roles-sql, provision-cosmos, provision-env, provision-pe-subnet-cosmos-pe, provision-pe-subnet-sql-pe, provision-sql, push-api
-  Total steps: 28
+  Direct dependencies: create-provisioning-context, provision-api-identity, provision-api-roles-cosmos, provision-api-roles-sql, provision-cosmos, provision-env, provision-env-roles-env-acr, provision-pe-subnet-cosmos-pe, provision-pe-subnet-sql-pe, provision-sql, push-api
+  Total steps: 30
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
-    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-vnet (parallel)
-    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | push-prereq (parallel)
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-env-acr-pull-identity | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env-roles-env-acr | provision-vnet (parallel)
+    [6] provision-env | provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | push-prereq (parallel)
     [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
     [8] provision-api-roles-sql
     [9] provision-api-containerapp
@@ -566,16 +583,16 @@ If targeting 'provision-api-roles-sql':
     [8] provision-api-roles-sql
 
 If targeting 'provision-azure-bicep-resources':
-  Direct dependencies: create-provisioning-context, deploy-prereq, provision-api-containerapp, provision-api-identity, provision-api-roles-cosmos, provision-api-roles-sql, provision-cosmos, provision-env, provision-env-acr, provision-pe-subnet-cosmos-pe, provision-pe-subnet-files-pe, provision-pe-subnet-sql-pe, provision-privatelink-database-windows-net, provision-privatelink-documents-azure-com, provision-privatelink-file-core-windows-net, provision-sql, provision-sql-admin-identity, provision-sql-admin-identity-roles-sql-store, provision-sql-nsg, provision-sql-store, provision-vnet
-  Total steps: 31
+  Direct dependencies: create-provisioning-context, deploy-prereq, provision-api-containerapp, provision-api-identity, provision-api-roles-cosmos, provision-api-roles-sql, provision-cosmos, provision-env, provision-env-acr, provision-env-acr-pull-identity, provision-env-roles-env-acr, provision-pe-subnet-cosmos-pe, provision-pe-subnet-files-pe, provision-pe-subnet-sql-pe, provision-privatelink-database-windows-net, provision-privatelink-documents-azure-com, provision-privatelink-file-core-windows-net, provision-sql, provision-sql-admin-identity, provision-sql-admin-identity-roles-sql-store, provision-sql-nsg, provision-sql-store, provision-vnet
+  Total steps: 33
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
-    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env | provision-sql-admin-identity | provision-vnet (parallel)
-    [6] provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | provision-sql-admin-identity-roles-sql-store | push-prereq (parallel)
+    [4] provision-api-identity | provision-cosmos | provision-env-acr | provision-env-acr-pull-identity | provision-sql | provision-sql-nsg | provision-sql-store (parallel)
+    [5] login-to-acr-env-acr | provision-api-roles-cosmos | provision-env-roles-env-acr | provision-sql-admin-identity | provision-vnet (parallel)
+    [6] provision-env | provision-privatelink-database-windows-net | provision-privatelink-documents-azure-com | provision-privatelink-file-core-windows-net | provision-sql-admin-identity-roles-sql-store | push-prereq (parallel)
     [7] provision-pe-subnet-cosmos-pe | provision-pe-subnet-files-pe | provision-pe-subnet-sql-pe | push-api (parallel)
     [8] provision-api-roles-sql
     [9] provision-api-containerapp
@@ -592,15 +609,16 @@ If targeting 'provision-cosmos':
     [4] provision-cosmos
 
 If targeting 'provision-env':
-  Direct dependencies: create-provisioning-context, provision-env-acr
-  Total steps: 7
+  Direct dependencies: create-provisioning-context, provision-env-acr, provision-env-acr-pull-identity, provision-env-roles-env-acr
+  Total steps: 9
   Execution order:
     [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
-    [4] provision-env-acr
-    [5] provision-env
+    [4] provision-env-acr | provision-env-acr-pull-identity (parallel)
+    [5] provision-env-roles-env-acr
+    [6] provision-env
 
 If targeting 'provision-env-acr':
   Direct dependencies: create-provisioning-context
@@ -611,6 +629,27 @@ If targeting 'provision-env-acr':
     [2] validate-azure-login
     [3] create-provisioning-context
     [4] provision-env-acr
+
+If targeting 'provision-env-acr-pull-identity':
+  Direct dependencies: create-provisioning-context
+  Total steps: 6
+  Execution order:
+    [0] process-parameters | validate-build-only-container-references (parallel)
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-env-acr-pull-identity
+
+If targeting 'provision-env-roles-env-acr':
+  Direct dependencies: create-provisioning-context, provision-env-acr, provision-env-acr-pull-identity
+  Total steps: 8
+  Execution order:
+    [0] process-parameters | validate-build-only-container-references (parallel)
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-env-acr | provision-env-acr-pull-identity (parallel)
+    [5] provision-env-roles-env-acr
 
 If targeting 'provision-pe-subnet-cosmos-pe':
   Direct dependencies: create-provisioning-context, provision-cosmos, provision-privatelink-documents-azure-com, provision-vnet

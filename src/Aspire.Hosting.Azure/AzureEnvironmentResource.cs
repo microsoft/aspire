@@ -87,7 +87,15 @@ public sealed class AzureEnvironmentResource : Resource
                     var preparer = context.Services.GetRequiredService<AzureResourcePreparer>();
                     await preparer.PrepareResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
                 },
-                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
+                // PrepareResourcesAsync mutates the model (it adds role-assignment resources via
+                // appModel.Resources.Add and adds annotations to existing resources). The core
+                // validate-compute-environments step enumerates model.Resources and each resource's
+                // annotations. Both steps are only ordered relative to BeforeStart, so without an
+                // explicit edge they run concurrently and the validation can observe the collection
+                // being mutated ("Collection was modified; enumeration operation may not execute").
+                // Depend on validation so it completes (and fails fast) before we start mutating.
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments]
             };
             steps.Add(prepareResourcesStep);
 
