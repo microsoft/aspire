@@ -308,12 +308,18 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             return [];
         }
 
+        if (topK <= 0)
+        {
+            return [];
+        }
+
         // Pre-compute queryAsSlug once to avoid repeated allocation in hot path
         var queryAsSlug = string.Join("-", queryTokens);
         var queryAsPhrase = queryTokens.Length > 1 ? string.Join(' ', queryTokens) : string.Empty;
         var queryTokenWeights = GetQueryTokenWeights(queryTokens);
 
-        var results = new List<DocsSearchResult>();
+        var results = new List<SearchCandidate>(Math.Min(topK, _indexedDocuments.Count));
+        var documentIndex = 0;
 
         foreach (var doc in _indexedDocuments)
         {
@@ -337,6 +343,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
             if (!anyTokenMatches)
             {
+                documentIndex++;
                 continue;
             }
 
@@ -344,24 +351,49 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
             if (score > 0)
             {
-                results.Add(new DocsSearchResult
-                {
-                    Title = doc.Source.Title,
-                    Slug = doc.Source.Slug,
-                    Summary = doc.Source.Summary,
-                    MatchedSection = matchedSection,
-                    Score = score
-                });
+                AddTopResult(results, new SearchCandidate(doc, matchedSection, score, documentIndex), topK);
             }
+
+            documentIndex++;
         }
 
         return
         [
             .. results
-                .OrderByDescending(static r => r.Score)
-                .Take(topK)
+                .Select(static r => new DocsSearchResult
+                {
+                    Title = r.Document.Source.Title,
+                    Slug = r.Document.Source.Slug,
+                    Summary = r.Document.Source.Summary,
+                    MatchedSection = r.MatchedSection,
+                    Score = r.Score
+                })
         ];
     }
+
+    private static void AddTopResult(List<SearchCandidate> results, SearchCandidate candidate, int topK)
+    {
+        var insertIndex = 0;
+        while (insertIndex < results.Count && !IsBetterCandidate(candidate, results[insertIndex]))
+        {
+            insertIndex++;
+        }
+
+        if (insertIndex >= topK)
+        {
+            return;
+        }
+
+        results.Insert(insertIndex, candidate);
+        if (results.Count > topK)
+        {
+            results.RemoveAt(results.Count - 1);
+        }
+    }
+
+    private static bool IsBetterCandidate(SearchCandidate candidate, SearchCandidate current)
+        => candidate.Score > current.Score ||
+           (candidate.Score == current.Score && candidate.DocumentIndex < current.DocumentIndex);
 
     public async ValueTask<DocsContent?> GetDocumentAsync(string slug, string? section = null, CancellationToken cancellationToken = default)
     {
@@ -408,14 +440,15 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         };
     }
 
-    private Dictionary<string, float> GetQueryTokenWeights(string[] queryTokens)
+    private float[] GetQueryTokenWeights(string[] queryTokens)
     {
         var tokenIdf = _tokenIdf;
-        var weights = new Dictionary<string, float>(queryTokens.Length, StringComparer.Ordinal);
+        var weights = new float[queryTokens.Length];
 
-        foreach (var token in queryTokens)
+        for (var i = 0; i < queryTokens.Length; i++)
         {
-            weights[token] = tokenIdf is not null && tokenIdf.TryGetValue(token, out var idf)
+            var token = queryTokens[i];
+            weights[i] = tokenIdf is not null && tokenIdf.TryGetValue(token, out var idf)
                 ? idf
                 : 1.0f;
         }
@@ -426,7 +459,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     private static (float Score, string? MatchedSection) ScoreDocument(
         IndexedDocument doc,
         string[] queryTokens,
-        IReadOnlyDictionary<string, float> queryTokenWeights,
+        float[] queryTokenWeights,
         string queryAsSlug,
         string queryAsPhrase)
     {
@@ -479,17 +512,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             contextScore *= WhatsNewPenaltyMultiplier;
         }
 
-        var score = identityScore + contextScore;
-        if (queryTokens.Length > 1)
-        {
-            // Multi-token queries should reward coverage, not just one common word.
-            // For "azure container apps environment", a page matching only "azure"
-            // should not outrank a page that matches the full phrase in its title.
-            var coverage = CountDistinctTokenMatches(doc.AllSearchableTextLower, queryTokens) / (float)queryTokens.Length;
-            score *= 0.5f + (coverage * 0.5f);
-        }
-
-        return (score, matchedSection);
+        return (identityScore + contextScore, matchedSection);
     }
 
     /// <summary>
@@ -700,22 +723,6 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         return false;
     }
 
-    private static int CountDistinctTokenMatches(string lowerText, string[] queryTokens)
-    {
-        var count = 0;
-        var textSpan = lowerText.AsSpan();
-
-        foreach (var token in queryTokens)
-        {
-            if (textSpan.IndexOf(token, StringComparison.Ordinal) >= 0)
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
     private static string NormalizeSearchText(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -758,7 +765,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     /// <summary>
     /// Scores how well a normalized field matches the query tokens.
     /// </summary>
-    private static float ScoreField(string lowerText, string[] queryTokens, IReadOnlyDictionary<string, float> queryTokenWeights)
+    private static float ScoreField(string lowerText, string[] queryTokens, float[] queryTokenWeights)
     {
         if (string.IsNullOrEmpty(lowerText))
         {
@@ -769,8 +776,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         var textSpan = lowerText.AsSpan();
         var occurrenceLimit = MaxOccurrenceBonus + 1;
 
-        foreach (var token in queryTokens)
+        for (var i = 0; i < queryTokens.Length; i++)
         {
+            var token = queryTokens[i];
             var startIndex = 0;
             var firstMatchIndex = -1;
             var count = 0;
@@ -809,7 +817,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
                 tokenScore += Math.Min(count - 1, MaxOccurrenceBonus) * MultipleOccurrenceBonus;
             }
 
-            score += tokenScore * GetQueryTokenWeight(queryTokenWeights, token);
+            score += tokenScore * queryTokenWeights[i];
         }
 
         return score;
@@ -827,22 +835,23 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         IReadOnlyList<string> codeSpans,
         IReadOnlyList<string> identifiers,
         string[] queryTokens,
-        IReadOnlyDictionary<string, float> queryTokenWeights)
+        float[] queryTokenWeights)
     {
         var score = 0.0f;
 
-        foreach (var token in queryTokens)
+        for (var i = 0; i < queryTokens.Length; i++)
         {
+            var token = queryTokens[i];
             var codeSpanMatches = CountContainingTokens(codeSpans, token);
             if (codeSpanMatches > 0)
             {
-                score += ScoreRepeatedMatches(BaseMatchScore, codeSpanMatches) * GetQueryTokenWeight(queryTokenWeights, token);
+                score += ScoreRepeatedMatches(BaseMatchScore, codeSpanMatches) * queryTokenWeights[i];
             }
 
             var identifierMatches = CountContainingTokens(identifiers, token);
             if (identifierMatches > 0)
             {
-                score += ScoreRepeatedMatches(CodeIdentifierBonus, identifierMatches) * GetQueryTokenWeight(queryTokenWeights, token);
+                score += ScoreRepeatedMatches(CodeIdentifierBonus, identifierMatches) * queryTokenWeights[i];
             }
         }
 
@@ -870,9 +879,6 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
     private static float ScoreRepeatedMatches(float baseScore, int count)
         => baseScore + Math.Min(count - 1, MaxOccurrenceBonus) * MultipleOccurrenceBonus;
-
-    private static float GetQueryTokenWeight(IReadOnlyDictionary<string, float> queryTokenWeights, string token)
-        => queryTokenWeights.TryGetValue(token, out var weight) ? weight : 1.0f;
 
     /// <summary>
     /// Normalizes markdown content from llms.txt sources.
@@ -1032,6 +1038,8 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
     [GeneratedRegex(@"(?m)(^(?:\*\s|\d+\.\s)[^\n]*\n)(?!\n|\*\s|\d+\.\s|```)")]
     private static partial Regex BlankLineAfterListRegex();
+
+    private readonly record struct SearchCandidate(IndexedDocument Document, string? MatchedSection, float Score, int DocumentIndex);
 
     /// <summary>
     /// Pre-indexed document with normalized search text for faster searching.
