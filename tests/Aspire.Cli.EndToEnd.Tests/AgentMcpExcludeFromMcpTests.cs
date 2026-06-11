@@ -62,7 +62,7 @@ public sealed class AgentMcpExcludeFromMcpTests(ITestOutputHelper output)
         await auto.CallAgentMcpToolAsync(
             counter,
             "list_resources",
-            expectedMarker: "webfrontend",
+            expectedMarker: "\"webfrontend\"",
             doesNotContainMarker: "\"apiservice\"");
 
         // Stop the AppHost
