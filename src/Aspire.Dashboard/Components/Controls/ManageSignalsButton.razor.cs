@@ -12,7 +12,7 @@ using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Controls;
 
-public partial class ClearSignalsButton : ComponentBase
+public partial class ManageSignalsButton : ComponentBase
 {
     private static readonly Icon s_downloadLogsIcon = new Icons.Regular.Size16.ArrowDownload();
     private static readonly Icon s_clearSelectedResourceIcon = new Icons.Regular.Size16.Delete();
