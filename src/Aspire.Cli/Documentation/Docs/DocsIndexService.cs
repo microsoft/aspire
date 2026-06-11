@@ -139,10 +139,10 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     private readonly string _llmsTxtUrl = DocsSourceConfiguration.GetLlmsTxtUrl(configuration);
     private readonly ILogger<DocsIndexService> _logger = logger;
 
-    // Volatile ensures the double-checked locking pattern works correctly by preventing
-    // instruction reordering that could expose a partially-constructed list to other threads.
+    // Volatile ensures the double-checked locking pattern publishes the fully initialized
+    // index data before any thread observes _indexedDocuments as non-null.
     private volatile List<IndexedDocument>? _indexedDocuments;
-    private Dictionary<string, float>? _tokenIdf;
+    private volatile Dictionary<string, float>? _tokenIdf;
     private readonly SemaphoreSlim _indexLock = new(1, 1);
 
     /// <inheritdoc />
