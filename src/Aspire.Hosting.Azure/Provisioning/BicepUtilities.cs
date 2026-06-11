@@ -210,7 +210,7 @@ internal static class BicepUtilities
     internal static bool IsTenantScoped(AzureBicepResource resource) =>
         GetExistingResourceScope(resource)?.IsTenantScope == true;
 
-    private static AzureBicepResourceScope? GetExistingResourceScope(AzureBicepResource resource)
+    internal static AzureBicepResourceScope? GetExistingResourceScope(AzureBicepResource resource)
     {
         if (resource.Scope is not null)
         {

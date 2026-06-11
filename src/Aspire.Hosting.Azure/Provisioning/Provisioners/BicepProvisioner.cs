@@ -148,24 +148,24 @@ internal sealed class BicepProvisioner(
         var resourceGroup = context.ResourceGroup;
         var subscription = context.Subscription;
         var resourceLogger = loggerService.GetLogger(resource);
+        var targetScope = BicepUtilities.GetExistingResourceScope(resource);
+        var isTenantScoped = targetScope?.IsTenantScope == true;
+        var isSubscriptionScoped = !isTenantScoped &&
+            targetScope is { Subscription: not null, ResourceGroup: null };
 
-        if (BicepUtilities.GetExistingSubscription(resource) is { } existingSubscription)
+        if (targetScope?.Subscription is { } existingSubscription)
         {
             var existingSubscriptionId = await ResolveScopeValueAsync(existingSubscription, cancellationToken).ConfigureAwait(false);
             subscription = await context.ArmClient.GetSubscriptionAsync(existingSubscriptionId, cancellationToken).ConfigureAwait(false);
         }
 
-        if (BicepUtilities.GetExistingResourceGroup(resource) is { } existingResourceGroup)
+        if (targetScope?.ResourceGroup is { } existingResourceGroup)
         {
             var existingResourceGroupName = await ResolveScopeValueAsync(existingResourceGroup, cancellationToken).ConfigureAwait(false);
             var response = await subscription.GetResourceGroups().GetAsync(existingResourceGroupName, cancellationToken).ConfigureAwait(false);
             resourceGroup = response.Value;
         }
 
-        var isTenantScoped = BicepUtilities.IsTenantScoped(resource);
-        var isSubscriptionScoped = !isTenantScoped &&
-            BicepUtilities.GetExistingSubscription(resource) is not null &&
-            BicepUtilities.GetExistingResourceGroup(resource) is null;
         var resourceGroupName = isTenantScoped || isSubscriptionScoped ? null : resourceGroup.Id.Name;
         var effectiveLocation = GetEffectiveLocation(resource, context);
 
@@ -215,7 +215,7 @@ internal sealed class BicepProvisioner(
                 ? subscription.GetArmDeployments()
                 : resourceGroup.GetArmDeployments();
         var deploymentName = executionContext.IsPublishMode ? $"{resource.Name}-{_timeProvider.GetUtcNow().ToUnixTimeSeconds()}" : resource.Name;
-        var deploymentId = GetDeploymentId(resource, subscription, resourceGroup, deploymentName);
+        var deploymentId = GetDeploymentId(isTenantScoped, isSubscriptionScoped, subscription, resourceGroup, deploymentName);
         var checksum = BicepUtilities.GetChecksum(resource, parameters, scope);
         var sw = Stopwatch.StartNew();
 
@@ -229,7 +229,7 @@ internal sealed class BicepProvisioner(
         })
         .ConfigureAwait(false);
 
-        var deploymentTargetName = GetDeploymentTargetName(resource, subscription, resourceGroup);
+        var deploymentTargetName = GetDeploymentTargetName(isTenantScoped, isSubscriptionScoped, subscription, resourceGroup);
         resourceLogger.LogInformation("Deploying {Name} to {DeploymentTarget}", resource.Name, deploymentTargetName);
         logger.LogDebug("Starting deployment of resource {ResourceName} to {DeploymentTarget}", resource.Name, deploymentTargetName);
 
@@ -522,15 +522,14 @@ internal sealed class BicepProvisioner(
     public static string GetDeploymentUrl(ResourceIdentifier deploymentId) =>
         AzurePortalUrls.GetDeploymentUrl(deploymentId);
 
-    private static string GetDeploymentTargetName(AzureBicepResource resource, ISubscriptionResource subscription, IResourceGroupResource resourceGroup)
+    private static string GetDeploymentTargetName(bool isTenantScoped, bool isSubscriptionScoped, ISubscriptionResource subscription, IResourceGroupResource resourceGroup)
     {
-        if (BicepUtilities.IsTenantScoped(resource))
+        if (isTenantScoped)
         {
             return "tenant";
         }
 
-        if (BicepUtilities.GetExistingSubscription(resource) is not null &&
-            BicepUtilities.GetExistingResourceGroup(resource) is null)
+        if (isSubscriptionScoped)
         {
             return $"subscription {subscription.Id.Name}";
         }
@@ -538,12 +537,11 @@ internal sealed class BicepProvisioner(
         return $"resource group {resourceGroup.Name}";
     }
 
-    private static ResourceIdentifier GetDeploymentId(AzureBicepResource resource, ISubscriptionResource subscription, IResourceGroupResource resourceGroup, string deploymentName)
+    private static ResourceIdentifier GetDeploymentId(bool isTenantScoped, bool isSubscriptionScoped, ISubscriptionResource subscription, IResourceGroupResource resourceGroup, string deploymentName)
     {
-        var deploymentPath = BicepUtilities.IsTenantScoped(resource)
+        var deploymentPath = isTenantScoped
             ? $"/providers/Microsoft.Resources/deployments/{deploymentName}"
-            : BicepUtilities.GetExistingSubscription(resource) is not null &&
-                BicepUtilities.GetExistingResourceGroup(resource) is null
+            : isSubscriptionScoped
                 ? $"{subscription.Id}/providers/Microsoft.Resources/deployments/{deploymentName}"
                 : $"{resourceGroup.Id}/providers/Microsoft.Resources/deployments/{deploymentName}";
 
