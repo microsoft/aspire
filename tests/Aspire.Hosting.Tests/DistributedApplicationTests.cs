@@ -1648,7 +1648,7 @@ public class DistributedApplicationTests
     }
 
     [Fact]
-    public async Task ProxylessEndpointWithoutPortThrows()
+    public async Task ProxylessEndpointWithoutPortIsAllocated()
     {
         const string testName = "proxyess-endpoint-without-port";
         using var testProgram = CreateTestProgram(testName);
@@ -1660,9 +1660,12 @@ public class DistributedApplicationTests
 
         await using var app = testProgram.Build();
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await app.StartAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout));
-        var suffix = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value.ResourceNameSuffix;
-        Assert.Equal($"Service '{testName}-servicea-{suffix}' needs to specify a port for endpoint 'http' since it isn't using a proxy.", ex.Message);
+        await app.StartAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+
+        var endpoint = testProgram.ServiceABuilder.Resource.GetEndpoint("http");
+        var allocatedEndpointSnapshot = Assert.Single(endpoint.EndpointAnnotation.AllAllocatedEndpoints);
+        var allocatedEndpoint = await allocatedEndpointSnapshot.Snapshot.GetValueAsync().DefaultTimeout();
+        Assert.InRange(allocatedEndpoint.Port, 10000, 32767);
     }
 
     [Fact]
@@ -1786,7 +1789,7 @@ public class DistributedApplicationTests
             endpoint.IsProxied = false;
         });
 
-        // Since port is not specified, the container runtime will assign the host port after the container is created.
+        // Since port is not specified, Aspire will assign the host port before the container is created.
         var redisNoPort = builder.AddRedis($"{testName}-redisNoPort").WithEndpoint("tcp", endpoint =>
         {
             endpoint.IsProxied = false;
@@ -1829,7 +1832,7 @@ public class DistributedApplicationTests
         }
 
         var otherRedisService = GetEndpointService(serviceList, redisNoPort.Resource, redisNoPort.Resource.PrimaryEndpoint);
-        var otherRedisPort = AssertRuntimeAssignedProxylessPort(otherRedisService);
+        var otherRedisPort = AssertAllocatedProxylessPort(otherRedisService);
         var otherRedisEnv = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redisNoPort");
         sslVal = redisNoPort.Resource.TlsEnabled ? ",ssl=true" : string.Empty;
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -1839,13 +1842,13 @@ public class DistributedApplicationTests
         if (redisNoPort.Resource.TlsEnabled)
         {
             Assert.Equal(2, otherRedisContainer.Spec.Ports!.Count);
-            Assert.Contains(otherRedisContainer.Spec.Ports!, p => p.HostPort is null && p.ContainerPort == 6379);
+            Assert.Contains(otherRedisContainer.Spec.Ports!, p => p.HostPort == otherRedisPort && p.ContainerPort == 6379);
         }
         else
         {
             var portSpec = Assert.Single(otherRedisContainer.Spec.Ports!);
             Assert.Equal(6379, portSpec.ContainerPort);
-            Assert.Null(portSpec.HostPort);
+            Assert.Equal(otherRedisPort, portSpec.HostPort);
         }
 
         await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
@@ -1862,7 +1865,7 @@ public class DistributedApplicationTests
         var port = await Network.GetAvailablePortAsync();
         var redis = builder.AddRedis($"{testName}-redis", port).WithEndpointProxySupport(false);
 
-        // Since port is not specified, the container runtime will assign the host port after the container is created.
+        // Since port is not specified, Aspire will assign the host port before the container is created.
         var redisNoPort = builder.AddRedis($"{testName}-redisNoPort").WithEndpointProxySupport(false);
 
         var servicea = builder.AddProject<Projects.ServiceA>($"{testName}-servicea")
@@ -1906,7 +1909,7 @@ public class DistributedApplicationTests
         }
 
         var otherRedisService = GetEndpointService(serviceList, redisNoPort.Resource, redisNoPort.Resource.PrimaryEndpoint);
-        var otherRedisPort = AssertRuntimeAssignedProxylessPort(otherRedisService);
+        var otherRedisPort = AssertAllocatedProxylessPort(otherRedisService);
         var otherRedisEnv = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redisNoPort");
         sslVal = redisNoPort.Resource.TlsEnabled ? ",ssl=true" : string.Empty;
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -1917,13 +1920,13 @@ public class DistributedApplicationTests
         if (redisNoPort.Resource.TlsEnabled)
         {
             Assert.Equal(2, otherRedisContainer.Spec.Ports!.Count);
-            Assert.Contains(otherRedisContainer.Spec.Ports!, p => p.HostPort is null && p.ContainerPort == 6379);
+            Assert.Contains(otherRedisContainer.Spec.Ports!, p => p.HostPort == otherRedisPort && p.ContainerPort == 6379);
         }
         else
         {
             var portSpec = Assert.Single(otherRedisContainer.Spec.Ports!);
             Assert.Equal(6379, portSpec.ContainerPort);
-            Assert.Null(portSpec.HostPort);
+            Assert.Equal(otherRedisPort, portSpec.HostPort);
         }
 
         await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
@@ -2308,14 +2311,15 @@ public class DistributedApplicationTests
         return Assert.Single(services, s => string.Equals(s.Metadata.Name, expectedServiceName, StringComparison.Ordinal));
     }
 
-    private static int AssertRuntimeAssignedProxylessPort(Service service)
+    private static int AssertAllocatedProxylessPort(Service service)
     {
         Assert.Equal(AddressAllocationModes.Proxyless, service.Spec.AddressAllocationMode);
-        Assert.Null(service.Spec.Port);
 
-        var effectivePort = service.Status?.EffectivePort.GetValueOrDefault() ?? 0;
-        Assert.InRange(effectivePort, 1, 65535);
-        return effectivePort;
+        var port = Assert.IsType<int>(service.Spec.Port);
+        var effectivePort = Assert.IsType<int>(service.Status?.EffectivePort);
+        Assert.Equal(port, effectivePort);
+        Assert.InRange(port, 10000, 32767);
+        return port;
     }
 
     private static object? GetResourcePropertyValue(ResourceEvent resourceEvent, string propertyName)

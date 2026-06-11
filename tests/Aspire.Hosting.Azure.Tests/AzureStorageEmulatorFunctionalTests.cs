@@ -287,12 +287,17 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
     }
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    public Task AzureStorageEmulator_WithPersistentLifetime_ReusesContainer()
+    public Task AzureStorageEmulator_WithPersistentLifetime_ReusesContainersAndPorts()
     {
-        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+        return PersistentContainerTestHelpers.AssertResourcesReuseContainersAsync(
             testOutputHelper,
-            builder => builder.AddAzureStorage("storage").RunAsEmulator(container => container.WithPersistentLifetime()),
-            "storage");
+            builder =>
+            {
+                builder.AddAzureStorage("storage1").RunAsEmulator(container => container.WithPersistentLifetime());
+                builder.AddAzureStorage("storage2").RunAsEmulator(container => container.WithPersistentLifetime());
+            },
+            ["storage1", "storage2"],
+            compareUrls: true);
     }
 
 }
