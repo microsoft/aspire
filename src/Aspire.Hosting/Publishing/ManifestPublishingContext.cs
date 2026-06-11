@@ -294,6 +294,11 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
             Writer.WriteBoolean("secret", true);
         }
 
+        if (!parameter.Required)
+        {
+            Writer.WriteBoolean("required", false);
+        }
+
         if (parameter.Default is not null)
         {
             Writer.WriteStartObject("default");

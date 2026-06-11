@@ -12285,6 +12285,8 @@ class ParameterResourceKwargs(_BaseResourceKwargs, total=False):
     """ParameterResource options."""
 
     description: str | tuple[str, bool]
+    optional: typing.Literal[True]
+    required: bool | typing.Literal[True]
     custom_input: ParameterCustomInputOptions
 
 class ParameterResource(_BaseResource, AbstractExpressionValue):
@@ -12306,6 +12308,28 @@ class ParameterResource(_BaseResource, AbstractExpressionValue):
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_optional(self) -> typing.Self:
+        """Marks the parameter resource as optional."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withOptional',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_required(self, *, required: bool = True) -> typing.Self:
+        """Sets whether the parameter resource requires a value."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if required is not None:
+            rpc_args['required'] = required
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withRequired',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_custom_input(self, options: ParameterCustomInputOptions) -> typing.Self:
         """Sets a custom input for the parameter resource from a polyglot app host."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -12316,6 +12340,27 @@ class ParameterResource(_BaseResource, AbstractExpressionValue):
         )
         self._handle = self._wrap_builder(result)
         return self
+
+    def try_get_current_value(self) -> str:
+        """Gets the current value for this parameter without waiting for unresolved input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue',
+            rpc_args,
+        )
+        return typing.cast(str, result)
+
+    def set_value(self, *, value: str | None = None, timeout: int | None = None) -> None:
+        """Sets or replaces the value for this parameter."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        if value is not None:
+            rpc_args['value'] = value
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync',
+            rpc_args
+        )
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ParameterResourceKwargs]) -> None:
         if _description := kwargs.pop("description", None):
@@ -12330,6 +12375,22 @@ class ParameterResource(_BaseResource, AbstractExpressionValue):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDescription', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'description'. Expected: str or (str, bool)")
+        if _optional := kwargs.pop("optional", None):
+            if _optional is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOptional', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'optional'. Expected: Literal[True]")
+        if _required := kwargs.pop("required", None):
+            if _validate_type(_required, bool):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["required"] = typing.cast(bool, _required)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequired', rpc_args))
+            elif _required is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequired', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'required'. Expected: bool or Literal[True]")
         if _custom_input := kwargs.pop("custom_input", None):
             if _validate_type(_custom_input, ParameterCustomInputOptions):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

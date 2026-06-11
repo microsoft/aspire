@@ -17094,6 +17094,29 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks the parameter resource as optional. */
+    public ParameterResource withOptional() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withOptional", reqArgs);
+        return this;
+    }
+
+    public ParameterResource withRequired() {
+        return withRequired(null);
+    }
+
+    /** Sets whether the parameter resource requires a value. */
+    public ParameterResource withRequired(Boolean required) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (required != null) {
+            reqArgs.put("required", AspireClient.serializeValue(required));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequired", reqArgs);
+        return this;
+    }
+
     /** Sets a custom input for the parameter resource from a polyglot app host. */
     public ParameterResource withCustomInput(ParameterCustomInputOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -17578,6 +17601,38 @@ public class ParameterResource extends ResourceBuilderBase {
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
         return (IExecutionConfigurationBuilder) result;
+    }
+
+    /** Gets the current value for this parameter without waiting for unresolved input. */
+    public String tryGetCurrentValue() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue", reqArgs);
+        return (String) result;
+    }
+
+    /** Sets or replaces the value for this parameter. */
+    public void setValueAsync(SetValueAsyncOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        setValueAsyncImpl(value, cancellationToken);
+    }
+
+    public void setValueAsync() {
+        setValueAsync(null);
+    }
+
+    /** Sets or replaces the value for this parameter. */
+    private void setValueAsyncImpl(String value, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        if (value != null) {
+            reqArgs.put("value", AspireClient.serializeValue(value));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync", reqArgs);
     }
 
     /** Configures container build options for a compute resource using an async callback. */
@@ -21405,6 +21460,33 @@ public class ResourceUrlsEditor extends HandleWrapperBase {
             reqArgs.put("displayText", AspireClient.serializeValue(displayText));
         }
         getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.addForEndpoint", reqArgs);
+    }
+
+}
+
+// ===== SetValueAsyncOptions.java =====
+// SetValueAsyncOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for SetValueAsync. */
+public final class SetValueAsyncOptions {
+    private String value;
+    private CancellationToken cancellationToken;
+
+    public String getValue() { return value; }
+    public SetValueAsyncOptions value(String value) {
+        this.value = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public SetValueAsyncOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
     }
 
 }
@@ -29023,6 +29105,7 @@ public final class WithVolumeOptions {
 .aspire/modules/ResourceUrlAnnotation.java
 .aspire/modules/ResourceUrlsCallbackContext.java
 .aspire/modules/ResourceUrlsEditor.java
+.aspire/modules/SetValueAsyncOptions.java
 .aspire/modules/TestCallbackContext.java
 .aspire/modules/TestCollectionContext.java
 .aspire/modules/TestConfigDto.java

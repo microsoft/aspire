@@ -1600,6 +1600,13 @@ export interface SaveStateJsonOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
+export interface SetValueAsyncOptions {
+    /** The value to use for this parameter. */
+    value?: string;
+    /** The cancellation token to observe while applying the value. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
 export interface UpdateTaskMarkdownOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
@@ -1841,6 +1848,11 @@ export interface WithRequiredCommandOptions {
 export interface WithRequiredCommandValidationOptions {
     /** An optional help link URL to guide users when the command is missing or fails validation. */
     helpLink?: string;
+}
+
+export interface WithRequiredOptions {
+    /** A value indicating whether the parameter must have a value before it can be resolved. */
+    required?: boolean;
 }
 
 export interface WithUrlOptions {
@@ -35363,6 +35375,20 @@ export interface ParameterResource {
      */
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise;
     /**
+     * Marks the parameter resource as optional.
+     *
+     * Optional parameters that do not have values are not prompted for during run or publish operations.
+     * When referenced as environment variables or other value providers, unset optional parameters resolve to `null`.
+     * @returns The configured resource builder.
+     */
+    withOptional(): ParameterResourcePromise;
+    /**
+     * Sets whether the parameter resource requires a value.
+     * @param options Additional options.
+     * @returns The configured resource builder.
+     */
+    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
+    /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
      * @returns Resource builder for the parameter.
@@ -35593,6 +35619,23 @@ export interface ParameterResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Gets the current value for this parameter without waiting for unresolved input.
+     *
+     * This method returns `null` for unresolved parameters, parameters with initialization errors, and optional
+     * parameters that resolved without a value.
+     * @returns The current parameter value, or `null` if the parameter does not currently have a non-empty value.
+     */
+    tryGetCurrentValue(): Promise<string>;
+    /**
+     * Sets or replaces the value for this parameter.
+     *
+     * Setting a value directly on the resource updates dashboard state after the resource has been observed by the host.
+     * It does not save the value to deployment state. Required parameters set to `null` or an empty string
+     * are faulted with `MissingParameterValueException`, while optional parameters can be cleared to `null`.
+     * @param options Additional options.
+     */
+    setValueAsync(options?: SetValueAsyncOptions): Promise<void>;
     /**
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
@@ -35693,6 +35736,20 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise;
     /**
+     * Marks the parameter resource as optional.
+     *
+     * Optional parameters that do not have values are not prompted for during run or publish operations.
+     * When referenced as environment variables or other value providers, unset optional parameters resolve to `null`.
+     * @returns The configured resource builder.
+     */
+    withOptional(): ParameterResourcePromise;
+    /**
+     * Sets whether the parameter resource requires a value.
+     * @param options Additional options.
+     * @returns The configured resource builder.
+     */
+    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
+    /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
      * @returns Resource builder for the parameter.
@@ -35923,6 +35980,23 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Gets the current value for this parameter without waiting for unresolved input.
+     *
+     * This method returns `null` for unresolved parameters, parameters with initialization errors, and optional
+     * parameters that resolved without a value.
+     * @returns The current parameter value, or `null` if the parameter does not currently have a non-empty value.
+     */
+    tryGetCurrentValue(): Promise<string>;
+    /**
+     * Sets or replaces the value for this parameter.
+     *
+     * Setting a value directly on the resource updates dashboard state after the resource has been observed by the host.
+     * It does not save the value to deployment state. Required parameters set to `null` or an empty string
+     * are faulted with `MissingParameterValueException`, while optional parameters can be cleared to `null`.
+     * @param options Additional options.
+     */
+    setValueAsync(options?: SetValueAsyncOptions): Promise<void>;
     /**
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
@@ -36075,6 +36149,48 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise {
         const enableMarkdown = options?.enableMarkdown;
         return new ParameterResourcePromiseImpl(this._withDescriptionInternal(description, enableMarkdown), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalInternal(): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withOptional',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks the parameter resource as optional.
+     *
+     * Optional parameters that do not have values are not prompted for during run or publish operations.
+     * When referenced as environment variables or other value providers, unset optional parameters resolve to `null`.
+     * @returns The configured resource builder.
+     */
+    withOptional(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withOptionalInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredInternal(required?: boolean): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (required !== undefined) rpcArgs.required = required;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withRequired',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets whether the parameter resource requires a value.
+     * @param options Additional options.
+     * @returns The configured resource builder.
+     */
+    withRequired(options?: WithRequiredOptions): ParameterResourcePromise {
+        const required = options?.required;
+        return new ParameterResourcePromiseImpl(this._withRequiredInternal(required), this._client);
     }
 
     /** @internal */
@@ -36902,6 +37018,41 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
+    /**
+     * Gets the current value for this parameter without waiting for unresolved input.
+     *
+     * This method returns `null` for unresolved parameters, parameters with initialization errors, and optional
+     * parameters that resolved without a value.
+     * @returns The current parameter value, or `null` if the parameter does not currently have a non-empty value.
+     */
+    async tryGetCurrentValue(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Sets or replaces the value for this parameter.
+     *
+     * Setting a value directly on the resource updates dashboard state after the resource has been observed by the host.
+     * It does not save the value to deployment state. Required parameters set to `null` or an empty string
+     * are faulted with `MissingParameterValueException`, while optional parameters can be cleared to `null`.
+     * @param options Additional options.
+     */
+    async setValueAsync(options?: SetValueAsyncOptions): Promise<void> {
+        const value = options?.value;
+        const cancellationToken = options?.cancellationToken;
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        if (value !== undefined) rpcArgs.value = value;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<void>(
+            'Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<ParameterResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
@@ -37330,6 +37481,14 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withDescription(description, options)), this._client);
     }
 
+    withOptional(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withOptional()), this._client);
+    }
+
+    withRequired(options?: WithRequiredOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withRequired(options)), this._client);
+    }
+
     withCustomInput(options: ParameterCustomInputOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withCustomInput(options)), this._client);
     }
@@ -37460,6 +37619,14 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    tryGetCurrentValue(): Promise<string> {
+        return this._promise.then(obj => obj.tryGetCurrentValue());
+    }
+
+    setValueAsync(options?: SetValueAsyncOptions): Promise<void> {
+        return this._promise.then(obj => obj.setValueAsync(options));
     }
 
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ParameterResourcePromise {

@@ -107,7 +107,7 @@ public class ParameterProcessorTests
     public async Task InitializeParametersAsync_WithMissingParameterValue_AddsToUnresolvedWhenInteractionAvailable()
     {
         // Arrange
-        var interactionService = CreateInteractionService();
+        var interactionService = new TestInteractionService { IsAvailable = true };
         var parameterProcessor = CreateParameterProcessor(interactionService: interactionService);
         var parameterWithMissingValue = CreateParameterWithMissingValue("missingParam");
 
@@ -117,6 +117,84 @@ public class ParameterProcessorTests
         // Assert
         Assert.NotNull(parameterWithMissingValue.WaitForValueTcs);
         Assert.False(parameterWithMissingValue.WaitForValueTcs.Task.IsCompleted);
+    }
+
+    [Fact]
+    public async Task InitializeParametersAsync_WithMissingOptionalParameterValue_DoesNotPrompt()
+    {
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var parameterProcessor = CreateParameterProcessor(
+            notificationService: notificationService,
+            interactionService: interactionService);
+        var parameter = CreateParameterWithMissingValue("optionalParam");
+        parameter.Required = false;
+
+        var updates = notificationService.WatchAsync().GetAsyncEnumerator();
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        Assert.NotNull(parameter.WaitForValueTcs);
+        Assert.True(parameter.WaitForValueTcs.Task.IsCompletedSuccessfully);
+        Assert.Null(await parameter.WaitForValueTcs.Task.DefaultTimeout());
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
+
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
+        Assert.DoesNotContain(updates.Current.Snapshot.Properties, property => property.Name == KnownProperties.Parameter.Value);
+    }
+
+    [Fact]
+    public async Task InitializeParametersAsync_WithProgrammaticallySetValue_DoesNotOverwriteValue()
+    {
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: interactionService);
+        var parameter = CreateParameterWithMissingValue("programmaticParam");
+
+        Assert.True(parameter.TrySetValue("programmaticValue"));
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        Assert.Equal("programmaticValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task InitializeParametersAsync_WithProgrammaticallySetMissingParameterException_PromptsForValue()
+    {
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: interactionService);
+        var parameter = CreateParameterResource("programmaticMissing", "fallback");
+
+        Assert.True(parameter.TrySetException(new MissingParameterValueException("Missing parameter value.")));
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var messageBarInteraction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionStrings.ParametersBarTitle, messageBarInteraction.Title);
+        messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        inputsInteraction.Inputs["programmaticMissing"].Value = "resolved";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("resolved", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task SetValueAsync_WithMissingParameterValue_ResolvesParameter()
+    {
+        var parameterProcessor = CreateParameterProcessor();
+        var parameter = CreateParameterWithMissingValue("programmaticParam");
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        Assert.NotNull(parameter.WaitForValueTcs);
+        Assert.True(parameter.WaitForValueTcs.Task.IsFaulted);
+
+        await parameterProcessor.SetValueAsync(parameter, "programmaticValue", cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal("programmaticValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
     }
 
     [Fact]
@@ -190,7 +268,7 @@ public class ParameterProcessorTests
         foreach (var param in parameters)
         {
             // Initialize the parameters' WaitForValueTcs
-            param.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            param.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
         var updates = notificationService.WatchAsync().GetAsyncEnumerator();
@@ -217,19 +295,19 @@ public class ParameterProcessorTests
             {
                 Assert.Equal("param1", input.Label);
                 Assert.Equal(InputType.Text, input.InputType);
-                Assert.False(input.Required);
+                Assert.True(input.Required);
             },
             input =>
             {
                 Assert.Equal("param2", input.Label);
                 Assert.Equal(InputType.Text, input.InputType);
-                Assert.False(input.Required);
+                Assert.True(input.Required);
             },
             input =>
             {
                 Assert.Equal("secretParam", input.Label);
                 Assert.Equal(InputType.SecretText, input.InputType);
-                Assert.False(input.Required);
+                Assert.True(input.Required);
             },
             input =>
             {
@@ -279,7 +357,7 @@ public class ParameterProcessorTests
         var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
         var parameterWithMissingValue = CreateParameterWithMissingValue("missingParam");
 
-        parameterWithMissingValue.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        parameterWithMissingValue.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // Act - Start handling unresolved parameters
         _ = parameterProcessor.HandleUnresolvedParametersAsync([parameterWithMissingValue], CancellationToken.None);
@@ -374,7 +452,7 @@ public class ParameterProcessorTests
             interactionService: testInteractionService);
         var parameter = CreateParameterWithMissingValue("testParam");
 
-        parameter.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        parameter.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // Set up log watching
         var logsTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(loggerService, 1, parameter);
@@ -426,7 +504,7 @@ public class ParameterProcessorTests
 
         foreach (var param in parameters)
         {
-            param.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            param.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
         // Act
@@ -470,7 +548,7 @@ public class ParameterProcessorTests
         secretParam.EnableDescriptionMarkdown = false;
 
         List<ParameterResource> parameters = [secretParam];
-        secretParam.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secretParam.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // Act
         _ = parameterProcessor.HandleUnresolvedParametersAsync(parameters, CancellationToken.None);
@@ -503,7 +581,7 @@ public class ParameterProcessorTests
             userSecretsManager: noopUserSecretsManager);
 
         var param = CreateParameterWithMissingValue("param1");
-        param.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        param.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         List<ParameterResource> parameters = [param];
 
@@ -542,7 +620,7 @@ public class ParameterProcessorTests
             userSecretsManager: mockUserSecretsManager);
 
         var param = CreateParameterWithMissingValue("param1");
-        param.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        param.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         List<ParameterResource> parameters = [param];
 
@@ -1082,7 +1160,7 @@ public class ParameterProcessorTests
 
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
 
-        parameter.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        parameter.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var result = await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("newValue"), CancellationToken.None).DefaultTimeout();
 
@@ -1099,7 +1177,7 @@ public class ParameterProcessorTests
 
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
 
-        parameter.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        parameter.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var result = await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments(value: null), CancellationToken.None).DefaultTimeout();
 
@@ -1330,7 +1408,7 @@ public class ParameterProcessorTests
             "mydb",
             _ => throw new MissingParameterValueException("Connection string 'mydb' is missing"),
             null);
-        connectionStringParam.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        connectionStringParam.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         List<ParameterResource> parameters = [connectionStringParam];
 
@@ -1371,7 +1449,7 @@ public class ParameterProcessorTests
             "myparam",
             _ => throw new MissingParameterValueException("Parameter 'myparam' is missing"),
             secret: false);
-        regularParam.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        regularParam.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         List<ParameterResource> parameters = [regularParam];
 
@@ -1415,7 +1493,7 @@ public class ParameterProcessorTests
         {
             ConfigurationKey = "MyCustomSection:MyCustomKey"
         };
-        customParam.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        customParam.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         List<ParameterResource> parameters = [customParam];
 
@@ -1520,6 +1598,186 @@ public class ParameterProcessorTests
         inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
 
         Assert.Equal("newValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task DeleteParameterCoreAsync_ForOptionalParameterClearsValueWithoutPrompting()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        parameter.Required = false;
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("savedValue"), CancellationToken.None).DefaultTimeout();
+
+        var result = await parameterProcessor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Null(await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.False(testInteractionService.Interactions.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task SetValueAsync_UpdatesCurrentValueAndDeploymentState()
+    {
+        var capturingStateManager = new CapturingMockDeploymentStateManager();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var parameterProcessor = CreateParameterProcessor(
+            notificationService: notificationService,
+            deploymentStateManager: capturingStateManager);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        var updates = notificationService.WatchAsync().GetAsyncEnumerator();
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await updates.MoveNextAsync().DefaultTimeout();
+
+        await parameterProcessor.SetValueAsync(parameter, "programmaticValue", saveToUserSecrets: true, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal("programmaticValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.True(capturingStateManager.State.TryGetPropertyValue($"Parameters:{parameter.Name}", out var savedValueNode));
+        Assert.Equal("programmaticValue", savedValueNode?.GetValue<string>());
+
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
+        var valueProperty = Assert.Single(updates.Current.Snapshot.Properties, property => property.Name == KnownProperties.Parameter.Value);
+        Assert.Equal("programmaticValue", valueProperty.Value);
+    }
+
+    [Fact]
+    public async Task ParameterSetValueAsync_AfterInitializationUpdatesDashboardState()
+    {
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var capturingStateManager = new CapturingMockDeploymentStateManager();
+        var parameterProcessor = CreateParameterProcessor(
+            notificationService: notificationService,
+            deploymentStateManager: capturingStateManager);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        var updates = notificationService.WatchAsync().GetAsyncEnumerator();
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await updates.MoveNextAsync().DefaultTimeout();
+
+        await parameter.SetValueAsync("resourceValue").DefaultTimeout();
+
+        Assert.Equal("resourceValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.False(capturingStateManager.State.TryGetPropertyValue($"Parameters:{parameter.Name}", out _));
+
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
+        var valueProperty = Assert.Single(updates.Current.Snapshot.Properties, property => property.Name == KnownProperties.Parameter.Value);
+        Assert.Equal("resourceValue", valueProperty.Value);
+    }
+
+    [Fact]
+    public async Task ParameterSetValueAsync_WithMissingParameterResolvesPromptAndUpdatesDashboardState()
+    {
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(
+            notificationService: notificationService,
+            interactionService: testInteractionService);
+        var parameter = CreateParameterWithMissingValue("testParam");
+        var updates = notificationService.WatchAsync().GetAsyncEnumerator();
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.ValueMissing, updates.Current.Snapshot.State?.Text);
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(InteractionStrings.ParametersBarTitle, notificationInteraction.Title);
+        Assert.False(notificationInteraction.CancellationToken.IsCancellationRequested);
+
+        await parameter.SetValueAsync("resourceValue").DefaultTimeout();
+
+        Assert.Equal("resourceValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.True(notificationInteraction.CancellationToken.IsCancellationRequested);
+
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
+        var valueProperty = Assert.Single(updates.Current.Snapshot.Properties, property => property.Name == KnownProperties.Parameter.Value);
+        Assert.Equal("resourceValue", valueProperty.Value);
+    }
+
+    [Fact]
+    public async Task ParameterSetValueAsync_WithOptionalNullValueClearsDashboardValue()
+    {
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var parameterProcessor = CreateParameterProcessor(notificationService: notificationService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        parameter.Required = false;
+        var updates = notificationService.WatchAsync().GetAsyncEnumerator();
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await updates.MoveNextAsync().DefaultTimeout();
+
+        await parameter.SetValueAsync(null).DefaultTimeout();
+
+        Assert.Null(await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
+        Assert.DoesNotContain(updates.Current.Snapshot.Properties, property => property.Name == KnownProperties.Parameter.Value);
+    }
+
+    [Fact]
+    public async Task ParameterSetValueAsync_WithRequiredNullValueMarksParameterMissing()
+    {
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(
+            notificationService: notificationService,
+            interactionService: testInteractionService);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        var updates = notificationService.WatchAsync().GetAsyncEnumerator();
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
+
+        await parameter.SetValueAsync(null).DefaultTimeout();
+
+        await Assert.ThrowsAsync<MissingParameterValueException>(() => parameter.GetValueAsync(CancellationToken.None).AsTask()).DefaultTimeout();
+
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.ValueMissing, updates.Current.Snapshot.State?.Text);
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(InteractionStrings.ParametersBarTitle, notificationInteraction.Title);
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(InteractionStrings.ParametersInputsTitle, inputsInteraction.Title);
+        inputsInteraction.Inputs["testParam"].Value = "resolvedValue";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("resolvedValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task ParameterTrySetValue_AfterInitializationUpdatesDashboardState()
+    {
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(
+            notificationService: notificationService,
+            interactionService: testInteractionService);
+        var parameter = CreateParameterWithMissingValue("testParam");
+        var updates = notificationService.WatchAsync().GetAsyncEnumerator();
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.ValueMissing, updates.Current.Snapshot.State?.Text);
+
+        Assert.True(parameter.TrySetValue("trySetValue"));
+
+        Assert.Equal("trySetValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
+        var valueProperty = Assert.Single(updates.Current.Snapshot.Properties, property => property.Name == KnownProperties.Parameter.Value);
+        Assert.Equal("trySetValue", valueProperty.Value);
     }
 
     [Fact]
