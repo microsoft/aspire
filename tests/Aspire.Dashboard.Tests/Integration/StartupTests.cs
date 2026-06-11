@@ -174,6 +174,28 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ErrorMode_PartiallyMalformedFrontendUrl_PreservesValidFrontendUrl()
+    {
+        // When a ';'-separated frontend URL list mixes valid and malformed parts, error mode keeps the
+        // valid URLs (here an https endpoint with a dynamic port) instead of discarding the whole list
+        // and falling back to the default http error-mode URL. The app must still enter error mode and
+        // surface the parse failure.
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0;not-a-valid-url";
+            });
+        await app.StartAsync().DefaultTimeout();
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse frontend endpoint URLs", StringComparison.Ordinal));
+
+        // The preserved URL is https; the discarded error-mode fallback would have been http. A single
+        // https endpoint proves the valid part survived and the malformed part was dropped.
+        Assert.Collection(app.FrontendEndPointsAccessor,
+            a => Assert.True(a().IsHttps));
+    }
+
+    [Fact]
     public async Task ErrorMode_MalformedOtlpGrpcUrl_EntersErrorModeWithoutThrowing()
     {
         await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,

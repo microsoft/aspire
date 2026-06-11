@@ -203,10 +203,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             // in the first place. Revert any endpoint URL that can't be parsed back to a safe default;
             // otherwise the TryParseOptions calls below fail and crash startup instead of letting error
             // mode start and display the configuration errors.
-            if (!CanParseFrontendEndpointUrls(dashboardOptions.Frontend.EndpointUrls))
-            {
-                dashboardOptions.Frontend.EndpointUrls = ErrorModeFrontendUrl;
-            }
+            dashboardOptions.Frontend.EndpointUrls = SanitizeFrontendEndpointUrls(dashboardOptions.Frontend.EndpointUrls);
             if (!CanParseEndpointUrl(dashboardOptions.Otlp.GrpcEndpointUrl))
             {
                 dashboardOptions.Otlp.GrpcEndpointUrl = null;
@@ -1080,23 +1077,28 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     private static bool CanParseEndpointUrl(string? url) =>
         string.IsNullOrEmpty(url) || OptionsHelpers.TryParseBindingAddress(url, out _);
 
-    // The frontend supports multiple ';'-separated URLs and requires at least one. Returns true only when
-    // a URL is configured and every part parses as a binding address.
-    private static bool CanParseFrontendEndpointUrls(string? urls)
+    // The frontend supports multiple ';'-separated URLs and requires at least one. Parse each part
+    // independently using the same split semantics as FrontendOptions.TryParseOptions, keeping the
+    // parts that parse as binding addresses in their original order. This preserves valid user-provided
+    // URLs (e.g. a custom port) even when another part in the list is malformed, instead of discarding
+    // the whole list. Falls back to ErrorModeFrontendUrl only when no valid URL remains so error mode
+    // still has an address to bind and serve the error page from.
+    private static string SanitizeFrontendEndpointUrls(string? urls)
     {
         if (string.IsNullOrEmpty(urls))
         {
-            return false;
+            return ErrorModeFrontendUrl;
         }
 
+        var validParts = new List<string>();
         foreach (var part in urls.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            if (!OptionsHelpers.TryParseBindingAddress(part, out _))
+            if (OptionsHelpers.TryParseBindingAddress(part, out _))
             {
-                return false;
+                validParts.Add(part);
             }
         }
 
-        return true;
+        return validParts.Count > 0 ? string.Join(';', validParts) : ErrorModeFrontendUrl;
     }
 }
