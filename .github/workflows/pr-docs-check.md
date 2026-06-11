@@ -1042,10 +1042,12 @@ Read `.pr-docs-check/signals.json`. The fields you will use are:
 
 | Field | Purpose |
 | --- | --- |
-| `recommendation` | `"docs_required"` if any gating signal fired, otherwise `"docs_optional"`. This is the primary gate for Step 5. |
-| `triggered_signals` | The names of the boolean signals that fired (advisory `only_test_or_build_changes` is excluded from this list and never forces `docs_required`). |
+| `excluded` | `true` when the PR is out of scope for docs generation (currently: a backport). When `true` it **overrides `recommendation`** — go straight to the Step 5 exclusion branch and skip. |
+| `exclusion_reasons` | The reason names that caused `excluded` (e.g. `base_branch_is_release`, `head_branch_is_backport`, `title_release_prefix`, `body_backport_marker`, `backport_label`). Empty when `excluded == false`. |
+| `recommendation` | `"docs_required"` if any gating signal fired, otherwise `"docs_optional"`. This is the primary gate for Step 5 **unless `excluded == true`**. |
+| `triggered_signals` | The names of the boolean signals that fired (the advisory `only_test_or_build_changes` and the meta `is_backport` are excluded from this list and never force `docs_required`). |
 | `signal_count` | `len(triggered_signals)`. |
-| `signals` | The full boolean map, including the advisory `only_test_or_build_changes`. |
+| `signals` | The full boolean map, including the advisory `only_test_or_build_changes` and the meta `is_backport`. |
 | `evidence` | Per-triggered-signal list of `{ file, hint }` entries showing the changed file and the matching diff fragment or PR-body snippet. Use these to write the PR description and the `notify_source_pr` summary. |
 
 The catalog favors recall over precision: a false positive at worst
@@ -1086,9 +1088,33 @@ Step 10 and the `summary` you emit in Step 11 must both cite at least
 one `evidence` entry per triggered signal category so a human auditor
 can verify the decision.
 
+**Short-circuit:** if `excluded == true`, you do **not** need the
+enumeration above — note the `exclusion_reasons` and go directly to the
+Step 5 exclusion branch.
+
 ## Step 5: Decide Whether a Docs PR Is Required
 
-The decision is driven by `recommendation` in `.pr-docs-check/signals.json`:
+The decision is driven by `.pr-docs-check/signals.json`.
+
+### When `excluded == true` (checked first — overrides everything)
+
+When `excluded` is `true`, the PR is **out of scope** for docs
+generation and you must **not** draft a docs PR — regardless of
+`recommendation`, `triggered_signals`, or the ambiguity rule below.
+
+The current exclusion is **backport PRs**: a backport ports an
+already-merged change onto a `release/*` branch, and its user-facing
+documentation is authored against the original (forward) PR on the
+default branch. Drafting a second docs PR for the backport is pure
+duplicate noise. This workflow runs on `release/*` merges as well as
+`main` (see the `on:` trigger), so backports reach this step and must
+be filtered out here.
+
+Take the `skipped` path: go to Step 6 and emit a single
+`notify_source_pr` whose Step 5 branch is named
+`"excluded → <reason>"`, citing the `exclusion_reasons` from
+`signals.json`. Do **not** evaluate the `recommendation` branches below,
+and do **not** apply the ambiguity rule.
 
 ### When `recommendation == "docs_required"`
 
@@ -1154,7 +1180,8 @@ docs PR.
 
 When the evidence is mixed or you are unsure, **draft the PR** (recall over
 precision, as explained in Step 4). The drafted PR is in `draft:` state; it does
-not merge until a human flips it out of draft.
+not merge until a human flips it out of draft. This rule does **not** apply
+when `excluded == true` — an excluded PR is always skipped.
 
 ## Step 6: Emit the No-Docs Outcome (only when Step 5 allowed it)
 
@@ -1167,7 +1194,9 @@ result. Emit a single `notify_source_pr` safe output with:
 - `summary`: a structured markdown rationale that proves the decision.
   It **must** include:
   1. The Step 5 branch you took, named explicitly: either
-     `"docs_required → already documented by name"` *or*
+     `"excluded → <reason>"` (use the `exclusion_reasons` from
+     `signals.json`, e.g. `excluded → base_branch_is_release`),
+     `"docs_required → already documented by name"`, *or*
      `"docs_optional → <allowlist_category>"` (use the category name
      from the table above).
   2. The list of triggered signals from `.pr-docs-check/signals.json`
@@ -1176,6 +1205,9 @@ result. Emit a single `notify_source_pr` safe output with:
      file path and quoted sentence/code block from Step 5.
   4. For the allowlist branch: the changed-file globs that justify the
      chosen category (for example, *"all 4 changed files match `tests/**`"*).
+  5. For the `excluded` branch: the `exclusion_reasons` from
+     `signals.json` (for example, *"backport: base branch is
+     `release/13.3` and title is prefixed `[release/13.3]`"*).
 
 Then **stop**. Do **not** emit `create_pull_request` or any other safe
 output on the no-docs path.

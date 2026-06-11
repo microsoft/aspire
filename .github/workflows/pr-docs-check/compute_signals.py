@@ -15,6 +15,11 @@ The agent reads the resulting file verbatim and treats
 Each triggered signal carries evidence (file path + matching diff
 fragment or PR-body snippet) so the audit trail is reproducible.
 
+Backport PRs are hard-excluded: when `excluded == true` (with
+`exclusion_reasons` recording why), the PR is out of scope for docs
+generation regardless of which signals fired, because a backport is
+documented against its original forward PR — see `detect_backport`.
+
 Usage
 -----
 
@@ -326,6 +331,70 @@ _ONLY_TEST_OR_BUILD_RE = re.compile(
 )
 
 
+# ============================================================
+# Exclusion: backport PRs
+# ============================================================
+# A backport PR ports an already-merged change onto a release branch. Its
+# user-facing documentation is authored against the original (forward) PR on
+# the default branch, so a backport must NEVER spawn its own aspire.dev docs
+# PR — even when it carries user-facing signals. Re-documenting a backport is
+# pure noise: a duplicate draft PR a human has to close.
+#
+# This matters because the workflow runs on release/* merges as well as main
+# (see `on:` in pr-docs-check.md), so without this guard every merged backport
+# would be analyzed and could draft a redundant docs PR.
+#
+# We detect both the `/backport` bot's PRs (.github/workflows/backport.yml)
+# and explicit/manual backports, which follow the same conventions. Any one of
+# the following is sufficient evidence; the matched reason names are surfaced
+# in `exclusion_reasons` for the audit trail:
+#
+#   reason name              example match
+#   -----------------------  --------------------------------------------------
+#   base_branch_is_release   base.ref = "release/13.3"
+#   head_branch_is_backport  head.ref = "backport/pr-1234-to-release/13.3"
+#   title_release_prefix     title    = "[release/13.3] Fix the thing"
+#   body_backport_marker     body     = "Backport of #1234 to release/13.3"
+#   backport_label           labels   = ["backport"]
+_BACKPORT_BASE_RE = re.compile(r"^release/", re.IGNORECASE)
+_BACKPORT_HEAD_RE = re.compile(r"^backport/", re.IGNORECASE)
+_BACKPORT_TITLE_RE = re.compile(r"^\s*\[release/", re.IGNORECASE)
+# Anchor the body marker to the start of a line so ordinary prose like
+# "we should backport this later" does NOT trip it. The bot/explicit body
+# starts with "Backport of #<N> to release/X.Y".
+_BACKPORT_BODY_RE = re.compile(r"(?im)^\s*backport(?:ed|ing)?\s+of\s+#?\d+")
+
+
+def detect_backport(pr: dict) -> list[str]:
+    """Return the backport reasons that matched (empty list means not a backport)."""
+    reasons: list[str] = []
+    base_ref = ((pr.get("base") or {}).get("ref")) or ""
+    head_ref = ((pr.get("head") or {}).get("ref")) or ""
+    title = pr.get("title") or ""
+    body = pr.get("body") or ""
+    labels = [(lab.get("name") or "") for lab in (pr.get("labels") or [])]
+
+    if _BACKPORT_BASE_RE.match(base_ref):
+        reasons.append("base_branch_is_release")
+    if _BACKPORT_HEAD_RE.match(head_ref):
+        reasons.append("head_branch_is_backport")
+    if _BACKPORT_TITLE_RE.match(title):
+        reasons.append("title_release_prefix")
+    if _BACKPORT_BODY_RE.search(body):
+        reasons.append("body_backport_marker")
+    if any("backport" in lab.lower() for lab in labels):
+        reasons.append("backport_label")
+    return reasons
+
+
+# Meta signals that describe the change but must never gate doc generation:
+# `only_test_or_build_changes` is advisory; `is_backport` drives the exclusion.
+# Both are excluded from `triggered_signals`.
+_NON_GATING_SIGNALS = frozenset({"only_test_or_build_changes", "is_backport"})
+
+
+
+
 def _trim_hint(text: str, limit: int = 200) -> str:
     """Trim a single-line evidence hint so signals.json stays readable."""
     text = text.strip()
@@ -466,18 +535,41 @@ def compute_signals(pr: dict, files: list[dict]) -> dict:
     else:
         signals["only_test_or_build_changes"] = False
 
-    # `only_test_or_build_changes` is advisory — exclude it from
-    # triggered_signals so it can't accidentally force docs_required.
+    # ---- Exclusion: backport PRs ----
+    # Detected from the PR's base/head branch, title, body, or labels. A
+    # backport is documented via its forward PR, so it is hard-excluded below
+    # regardless of which user-facing signals fired.
+    backport_reasons = detect_backport(pr)
+    signals["is_backport"] = bool(backport_reasons)
+
+    # `only_test_or_build_changes` and `is_backport` are meta signals —
+    # exclude them from triggered_signals so they can't be mistaken for
+    # gating signals (the former is advisory; the latter is an exclusion).
     gating_signals = [
         name for name, v in signals.items()
-        if v and name != "only_test_or_build_changes"
+        if v and name not in _NON_GATING_SIGNALS
     ]
+
+    excluded = bool(backport_reasons)
+    if excluded:
+        # A backport's docs are handled against its forward PR on the default
+        # branch, so never recommend a separate docs PR for it — even when
+        # gating signals fired. The triggered signals are still reported for
+        # the audit trail; the prompt's Step 5 exclusion branch explains the
+        # skip and cites `exclusion_reasons`.
+        recommendation = "docs_optional"
+    else:
+        recommendation = "docs_required" if gating_signals else "docs_optional"
 
     return {
         "source_pr_number": int(pr.get("number") or 0),
         "triggered_signals": sorted(gating_signals),
         "signal_count": len(gating_signals),
-        "recommendation": "docs_required" if gating_signals else "docs_optional",
+        "recommendation": recommendation,
+        # `excluded` overrides `recommendation`: when true the PR is out of
+        # scope for docs generation (e.g. a backport) and the agent must skip.
+        "excluded": excluded,
+        "exclusion_reasons": backport_reasons,
         "signals": signals,
         # Evidence is only emitted for triggered signals to keep the
         # file small and to avoid confusing the agent with empty arrays.
