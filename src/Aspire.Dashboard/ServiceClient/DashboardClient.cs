@@ -63,6 +63,7 @@ internal sealed class DashboardClient : IDashboardClient
     private string? _applicationName;
 
     private DashboardConnectionState _connectionState;
+    private readonly object _connectionStateLock = new();
     private readonly object _reconnectDelayLock = new();
     private CancellationTokenSource? _reconnectDelayCts;
 
@@ -253,28 +254,35 @@ internal sealed class DashboardClient : IDashboardClient
 
     private void SetConnectionState(DashboardConnectionState state)
     {
-        if (_connectionState == state)
+        // Lock ensures that concurrent calls from both watch tasks don't duplicate
+        // state transitions or fire the ConnectionStateChanged event multiple times.
+        lock (_connectionStateLock)
         {
-            return;
-        }
-
-        _connectionState = state;
-        _logger.LogDebug("Dashboard connection state changed to {State}.", state);
-
-        // Reset the WhenConnected TCS when disconnecting so that callers can re-await it.
-        if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting)
-        {
-            if (_whenConnectedTcs.Task.IsCompleted)
+            if (_connectionState == state)
             {
-                _whenConnectedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                return;
             }
 
-            if (_initialDataReceivedTcs.Task.IsCompleted)
+            _connectionState = state;
+            _logger.LogDebug("Dashboard connection state changed to {State}.", state);
+
+            // Reset the WhenConnected TCS when disconnecting so that callers can re-await it.
+            if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting)
             {
-                _initialDataReceivedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                if (_whenConnectedTcs.Task.IsCompleted)
+                {
+                    _whenConnectedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+
+                if (_initialDataReceivedTcs.Task.IsCompleted)
+                {
+                    _initialDataReceivedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
             }
         }
 
+        // Invoke the event outside the lock to avoid potential deadlocks
+        // if a subscriber tries to access DashboardClient state.
         ConnectionStateChanged?.Invoke(state);
     }
 
@@ -951,6 +959,9 @@ internal sealed class DashboardClient : IDashboardClient
             await TaskHelpers.WaitIgnoreCancelAsync(_connection, _logger, "Unexpected error from connection task.").ConfigureAwait(false);
         }
     }
+
+    // Internal for testing.
+    internal void SetConnectionStateForTesting(DashboardConnectionState state) => SetConnectionState(state);
 
     // Internal for testing.
     // TODO: Improve this in the future by making the client injected with DI and have it return data.

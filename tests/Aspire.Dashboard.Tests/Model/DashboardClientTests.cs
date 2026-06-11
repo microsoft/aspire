@@ -243,6 +243,97 @@ public sealed class DashboardClientTests
         await instance.InteractionWatchCompleteTask.DefaultTimeout();
     }
 
+    [Fact]
+    public async Task ConnectionState_InitialState_IsConnecting()
+    {
+        await using var instance = CreateResourceServiceClient();
+
+        IDashboardClient client = instance;
+
+        Assert.Equal(DashboardConnectionState.Connecting, client.ConnectionState);
+    }
+
+    [Fact]
+    public async Task ConnectionState_SetConnected_FiresEvent()
+    {
+        await using var instance = CreateResourceServiceClient();
+
+        IDashboardClient client = instance;
+        var stateChanges = new List<DashboardConnectionState>();
+        client.ConnectionStateChanged += stateChanges.Add;
+
+        instance.SetConnectionStateForTesting(DashboardConnectionState.Connected);
+
+        Assert.Equal(DashboardConnectionState.Connected, client.ConnectionState);
+        Assert.Single(stateChanges);
+        Assert.Equal(DashboardConnectionState.Connected, stateChanges[0]);
+    }
+
+    [Fact]
+    public async Task ConnectionState_DuplicateState_DoesNotFireEvent()
+    {
+        await using var instance = CreateResourceServiceClient();
+
+        IDashboardClient client = instance;
+        var stateChanges = new List<DashboardConnectionState>();
+        client.ConnectionStateChanged += stateChanges.Add;
+
+        instance.SetConnectionStateForTesting(DashboardConnectionState.Connected);
+        instance.SetConnectionStateForTesting(DashboardConnectionState.Connected);
+
+        Assert.Single(stateChanges);
+    }
+
+    [Fact]
+    public async Task ConnectionState_DisconnectedResetsWhenConnected()
+    {
+        await using var instance = CreateResourceServiceClient();
+
+        IDashboardClient client = instance;
+        var stateChanges = new List<DashboardConnectionState>();
+        client.ConnectionStateChanged += stateChanges.Add;
+
+        // Transition through Connected then to Disconnected.
+        instance.SetConnectionStateForTesting(DashboardConnectionState.Connected);
+        instance.SetConnectionStateForTesting(DashboardConnectionState.Disconnected);
+
+        Assert.Equal(DashboardConnectionState.Disconnected, client.ConnectionState);
+        Assert.Collection(stateChanges,
+            s => Assert.Equal(DashboardConnectionState.Connected, s),
+            s => Assert.Equal(DashboardConnectionState.Disconnected, s));
+    }
+
+    [Fact]
+    public async Task ReconnectAsync_CancelsDelay()
+    {
+        await using var instance = CreateResourceServiceClient();
+
+        IDashboardClient client = instance;
+
+        // ReconnectAsync should not throw even when there's no active delay.
+        await client.ReconnectAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ConnectionState_ConcurrentSetSameState_FiresEventOnce()
+    {
+        await using var instance = CreateResourceServiceClient();
+
+        IDashboardClient client = instance;
+        var eventCount = 0;
+        client.ConnectionStateChanged += _ => Interlocked.Increment(ref eventCount);
+
+        // Simulate concurrent calls from both watch tasks transitioning to Disconnected.
+        var tasks = Enumerable.Range(0, 10).Select(_ => Task.Run(() =>
+        {
+            instance.SetConnectionStateForTesting(DashboardConnectionState.Disconnected);
+        }));
+        await Task.WhenAll(tasks).DefaultTimeout();
+
+        // The event should fire exactly once because the lock prevents duplicate transitions.
+        Assert.Equal(1, eventCount);
+    }
+
     private sealed class MockDashboardServiceClient : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient
     {
         public override AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate> WatchInteractions(CallOptions options)
