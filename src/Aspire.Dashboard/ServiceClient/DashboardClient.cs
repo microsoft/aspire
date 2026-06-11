@@ -246,7 +246,11 @@ internal sealed class DashboardClient : IDashboardClient
         // Cancel any existing reconnect delay to attempt immediately.
         lock (_reconnectDelayLock)
         {
-            _reconnectDelayCts?.Cancel();
+            if (_reconnectDelayCts is { } cts)
+            {
+                cts.Cancel();
+                _reconnectDelayCts = null;
+            }
         }
 
         return Task.CompletedTask;
@@ -266,9 +270,15 @@ internal sealed class DashboardClient : IDashboardClient
             _connectionState = state;
             _logger.LogDebug("Dashboard connection state changed to {State}.", state);
 
-            // Reset the WhenConnected TCS when disconnecting so that callers can re-await it.
-            if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting)
+            if (state is DashboardConnectionState.Connected)
             {
+                // Complete the WhenConnected TCS so that callers waiting on it can proceed.
+                // This handles both initial connection and reconnection after a disconnect.
+                _whenConnectedTcs.TrySetResult();
+            }
+            else if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting)
+            {
+                // Reset the WhenConnected TCS when disconnecting so that callers can re-await it.
                 if (_whenConnectedTcs.Task.IsCompleted)
                 {
                     _whenConnectedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -358,8 +368,7 @@ internal sealed class DashboardClient : IDashboardClient
                 CancellationTokenSource delayCts;
                 lock (_reconnectDelayLock)
                 {
-                    delayCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    _reconnectDelayCts = delayCts;
+                    delayCts = _reconnectDelayCts ??= CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 }
                 try
                 {
@@ -374,8 +383,12 @@ internal sealed class DashboardClient : IDashboardClient
                 {
                     lock (_reconnectDelayLock)
                     {
-                        _reconnectDelayCts = null;
+                        if (ReferenceEquals(_reconnectDelayCts, delayCts))
+                        {
+                            _reconnectDelayCts = null;
+                        }
                     }
+
                     delayCts.Dispose();
                 }
 
@@ -389,7 +402,6 @@ internal sealed class DashboardClient : IDashboardClient
                 _applicationName = response.ApplicationName;
 
                 SetConnectionState(DashboardConnectionState.Connected);
-                _whenConnectedTcs.TrySetResult();
                 return;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -433,11 +445,11 @@ internal sealed class DashboardClient : IDashboardClient
                 var delay = ExponentialBackOff(retryContext.ErrorCount, maxSeconds: 15);
 
                 // Allow the delay to be cancelled by ReconnectAsync() for immediate retry.
+                // Multiple watchers share the same CTS so ReconnectAsync cancels all pending delays.
                 CancellationTokenSource delayCts;
                 lock (_reconnectDelayLock)
                 {
-                    delayCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    _reconnectDelayCts = delayCts;
+                    delayCts = _reconnectDelayCts ??= CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 }
                 try
                 {
@@ -451,8 +463,16 @@ internal sealed class DashboardClient : IDashboardClient
                 {
                     lock (_reconnectDelayLock)
                     {
-                        _reconnectDelayCts = null;
+                        // Clear the shared field if we're still the owner, so the next retry
+                        // iteration creates a fresh CTS.
+                        if (ReferenceEquals(_reconnectDelayCts, delayCts))
+                        {
+                            _reconnectDelayCts = null;
+                        }
                     }
+
+                    // Always dispose locally. CTS.Dispose is idempotent so multiple watchers
+                    // or ReconnectAsync disposing the same instance is safe.
                     delayCts.Dispose();
                 }
             }
@@ -501,6 +521,7 @@ internal sealed class DashboardClient : IDashboardClient
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             List<ResourceViewModelChange>? changes = null;
+            var shouldUpdateConnectionState = false;
 
             lock (_lock)
             {
@@ -508,7 +529,7 @@ internal sealed class DashboardClient : IDashboardClient
                 if (retryContext.ErrorCount > 0)
                 {
                     retryContext.ErrorCount = 0;
-                    SetConnectionState(DashboardConnectionState.Connected);
+                    shouldUpdateConnectionState = true;
                 }
 
                 if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
@@ -576,6 +597,13 @@ internal sealed class DashboardClient : IDashboardClient
                         .Select(r => ResourceViewModel.GetResourceName(r, _resourceByName));
                     ColorGenerator.Instance.ResolveAll(resolvedNames);
                 }
+            }
+
+            // Update connection state outside the lock to avoid potential deadlocks
+            // if a subscriber tries to access DashboardClient state.
+            if (shouldUpdateConnectionState)
+            {
+                SetConnectionState(DashboardConnectionState.Connected);
             }
 
             if (changes is not null)
