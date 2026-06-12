@@ -47,11 +47,7 @@ internal static class PathNormalizer
     {
         if (!OperatingSystem.IsWindows())
         {
-            var resolvedPath = OperatingSystem.IsMacOS()
-                ? ResolveMacOSFirmlinkPath(path)
-                : path;
-
-            return ResolveSymlinks(resolvedPath);
+            return ResolveSymlinks(path);
         }
 
         // Only handle standard drive-letter paths (e.g. C:\...).
@@ -88,28 +84,6 @@ internal static class PathNormalizer
 
         return path;
     }
-
-    private static string ResolveMacOSFirmlinkPath(string path)
-    {
-        if (!Path.IsPathFullyQualified(path))
-        {
-            path = Path.GetFullPath(path);
-        }
-
-        foreach (var firmlink in s_macosFirmlinks)
-        {
-            if (path.Length >= firmlink.Length &&
-                path.StartsWith(firmlink, StringComparison.Ordinal) &&
-                (path.Length == firmlink.Length || path[firmlink.Length] == Path.DirectorySeparatorChar))
-            {
-                return Path.Combine("/private", path.TrimStart(Path.DirectorySeparatorChar));
-            }
-        }
-
-        return path;
-    }
-
-    private static readonly string[] s_macosFirmlinks = ["/var", "/tmp", "/etc"];
 
     /// <summary>
     /// Resolves symbolic links along every segment of <paramref name="path"/> and returns
