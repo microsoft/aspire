@@ -173,7 +173,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task BuildAsyncDisablesBuildServersWithCommandLineArgument()
+    public async Task BuildAsyncDoesNotInjectDotnetCliUseMsBuildServerEnvironmentVariable()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -190,7 +190,6 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             executionContext,
             (args, env, _, _) =>
             {
-                Assert.Contains("--disable-build-servers", args);
                 Assert.NotNull(env);
                 Assert.False(env.ContainsKey("DOTNET_CLI_USE_MSBUILD_SERVER"));
             },
@@ -256,7 +255,6 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             executionContext,
             (args, env, _, _) =>
             {
-                Assert.Contains("--disable-build-servers", args);
                 Assert.NotNull(env);
                 Assert.False(env.ContainsKey("DOTNET_CLI_USE_MSBUILD_SERVER"));
             },

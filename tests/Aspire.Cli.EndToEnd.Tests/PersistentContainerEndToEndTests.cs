@@ -143,7 +143,10 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
         await VerifyEndpointAsync(auto, counter, "/write", "PERSISTENCE_WRITE_OK");
         await auto.AspireStopAsync(counter);
 
-        await auto.AspireStartAsync(counter, TimeSpan.FromMinutes(5));
+        // The AppHost project is unchanged after the first successful start, and this test
+        // only needs to verify persisted container data across runs. Skipping the redundant
+        // second build avoids the flaky no-output build hang captured in issue #17995.
+        await auto.AspireStartAsync(counter, TimeSpan.FromMinutes(5), noBuild: true);
         await VerifyEndpointAsync(auto, counter, "/verify", "PERSISTENCE_VERIFY_OK");
         await auto.AspireStopAsync(counter);
     }

@@ -1078,10 +1078,7 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         var noRestoreSwitch = noRestore ? "--no-restore" : string.Empty;
-        // AppHost builds can run repeatedly from long-lived CLI sessions. Avoid reusing stale
-        // MSBuild/Roslyn build servers across stop/start cycles because a stuck server can consume
-        // the entire AppHost startup timeout before any build output is produced.
-        string[] cliArgs = ["build", noRestoreSwitch, "--disable-build-servers", projectFilePath.FullName];
+        string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName];
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
 
         return await ExecuteAsync(
