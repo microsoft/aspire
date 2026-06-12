@@ -79,14 +79,32 @@ public class AppHostTests
             if (testEndpoints.WaitForResources?.Count > 0)
             {
                 // Wait until each resource transitions to the required state
-                var waitForResourceTasks = testEndpoints.WaitForResources
+                var waits = testEndpoints.WaitForResources.ToArray();
+                var waitForResourceTasks = waits
                     .Select(wait =>
                     {
                         _testOutput.WriteLine($"Waiting for resource '{wait.ResourceName}' to reach state '{wait.TargetState}' in app '{appHost.AppHostAssembly}'");
                         return app.WaitForResource(wait.ResourceName, wait.TargetState).WaitAsync(TimeSpan.FromMinutes(5));
-                    });
+                    })
+                    .ToArray();
 
-                await Task.WhenAll(waitForResourceTasks);
+                try
+                {
+                    await Task.WhenAll(waitForResourceTasks);
+                }
+                catch (TimeoutException te)
+                {
+                    StringBuilder sb = new();
+                    for (int i = 0; i < waits.Length; i++)
+                    {
+                        if (!waitForResourceTasks[i].IsCompletedSuccessfully)
+                        {
+                            sb.AppendLine($"Timed out waiting for resource '{waits[i].ResourceName}' to reach state '{waits[i].TargetState}' in app '{appHost.AppHostAssembly}'");
+                        }
+                    }
+
+                    throw new XunitException(sb.ToString(), te);
+                }
             }
         }
 
