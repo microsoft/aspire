@@ -8,6 +8,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -134,7 +135,7 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            var targetPath = projectFile.FullName;
+            var targetPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
             var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
                 targetPath,
                 executionContext.HomeDirectory.FullName,
@@ -161,7 +162,7 @@ internal sealed class AppHostConnectionResolver(
                 }
             }
 
-            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, targetPath);
+            var displayPath = Path.GetRelativePath(PathNormalizer.ResolveToFilesystemPath(executionContext.WorkingDirectory.FullName), targetPath);
 
             return new AppHostConnectionResult
             {

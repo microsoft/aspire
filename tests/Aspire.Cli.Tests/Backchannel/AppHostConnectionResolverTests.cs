@@ -8,6 +8,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Backchannel;
@@ -176,7 +177,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         var backchannelsDir = Path.Combine(homeDirectory.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, homeDirectory.FullName);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(PathNormalizer.ResolveToFilesystemPath(appHostPath), homeDirectory.FullName);
         var appHostId = Path.GetFileName(prefix);
         var socketPath = Path.Combine(
             backchannelsDir,

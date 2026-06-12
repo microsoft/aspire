@@ -28,9 +28,9 @@ internal static class PathNormalizer
     }
 
     /// <summary>
-    /// On Windows, resolves a path to its filesystem-canonical form by querying the OS for
-    /// the actual casing of each path component. On other platforms this is a no-op because
-    /// the file system is case-sensitive and there is no casing ambiguity.
+    /// Resolves a path to its filesystem-canonical form. On Windows, this queries the OS for
+    /// the actual casing of each path component. On Unix-like platforms, this resolves symbolic
+    /// links and macOS APFS firmlinks.
     /// </summary>
     /// <remarks>
     /// Use this when the path needs to match what MSBuild reports for the same file.
@@ -40,14 +40,18 @@ internal static class PathNormalizer
     /// </remarks>
     /// <param name="path">An absolute path to a file that exists on disk.</param>
     /// <returns>
-    /// The path with OS-canonical casing, or <paramref name="path"/> unchanged if it
-    /// cannot be resolved (file does not exist, UNC path, etc.).
+    /// The filesystem-canonical path, or <paramref name="path"/> unchanged if it cannot be
+    /// resolved (file does not exist, UNC path, etc.).
     /// </returns>
     public static string ResolveToFilesystemPath(string path)
     {
         if (!OperatingSystem.IsWindows())
         {
-            return path;
+            var resolvedPath = OperatingSystem.IsMacOS()
+                ? ResolveMacOSFirmlinkPath(path)
+                : path;
+
+            return ResolveSymlinks(resolvedPath);
         }
 
         // Only handle standard drive-letter paths (e.g. C:\...).
@@ -84,6 +88,28 @@ internal static class PathNormalizer
 
         return path;
     }
+
+    private static string ResolveMacOSFirmlinkPath(string path)
+    {
+        if (!Path.IsPathFullyQualified(path))
+        {
+            path = Path.GetFullPath(path);
+        }
+
+        foreach (var firmlink in s_macosFirmlinks)
+        {
+            if (path.Length >= firmlink.Length &&
+                path.StartsWith(firmlink, StringComparison.Ordinal) &&
+                (path.Length == firmlink.Length || path[firmlink.Length] == Path.DirectorySeparatorChar))
+            {
+                return Path.Combine("/private", path.TrimStart(Path.DirectorySeparatorChar));
+            }
+        }
+
+        return path;
+    }
+
+    private static readonly string[] s_macosFirmlinks = ["/var", "/tmp", "/etc"];
 
     /// <summary>
     /// Resolves symbolic links along every segment of <paramref name="path"/> and returns

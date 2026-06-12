@@ -93,6 +93,53 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
         Assert.False(string.IsNullOrEmpty(resolved));
     }
 
+    [Fact]
+    public void ResolveToFilesystemPath_ResolvesSymlinkedDirectory()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix symlink canonicalization is covered by this test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
+        var projectFile = new FileInfo(Path.Combine(realDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(projectFile.FullName, "<Project />");
+
+        var linkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        TryCreateSymlink(linkDirectory, realDirectory.FullName, isDirectory: true);
+
+        var linkPath = Path.Combine(linkDirectory, projectFile.Name);
+        var resolved = PathNormalizer.ResolveToFilesystemPath(linkPath);
+
+        Assert.Equal(PathNormalizer.ResolveSymlinks(projectFile.FullName), resolved);
+    }
+
+    [Fact]
+    public void ResolveToFilesystemPath_ResolvesMacOSFirmlink()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsMacOS(), "macOS APFS firmlinks only exist on macOS.");
+
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-path-normalizer-");
+        try
+        {
+            var file = new FileInfo(Path.Combine(tempDirectory.FullName, "AppHost.csproj"));
+            File.WriteAllText(file.FullName, "<Project />");
+
+            var logicalPath = file.FullName.StartsWith("/private/var/", StringComparison.Ordinal)
+                ? file.FullName["/private".Length..]
+                : file.FullName;
+
+            Assert.SkipWhen(!logicalPath.StartsWith("/var/", StringComparison.Ordinal), $"Temp path '{logicalPath}' is not under /var.");
+
+            var resolved = PathNormalizer.ResolveToFilesystemPath(logicalPath);
+
+            Assert.Equal($"/private{logicalPath}", resolved);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
     private static void TryCreateSymlink(string linkPath, string targetPath, bool isDirectory)
     {
         try
