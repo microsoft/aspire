@@ -240,6 +240,22 @@ internal class PackagingService : IPackagingService
         channels.Add(dailyChannel);
         channels.AddRange(prPackageChannels);
 
+        if (_executionContext.IdentityPackagesDirectory is { } identityPackagesDirectory)
+        {
+            // ASPIRE_CLI_PACKAGES / the sidecar `packages` field points the CLI's Aspire* feed directly
+            // at a flat directory of freshly built .nupkg files (e.g. artifacts/packages/<Config>/Shipping)
+            // instead of a hive staged under ~/.aspire/hives, so a locally built CLI can resolve locally
+            // built packages without copying them. The synthesized channel takes the running CLI's
+            // identity-channel name and wins over ANY same-named channel synthesized above — whether a
+            // built-in (e.g. emulating `daily`/`stable` while supplying local packages), a discovered
+            // ~/.aspire/hives/<channel> hive, or a PR-install hive — because the explicit override is the
+            // most specific signal of intent. We replace it here (after the full list is built) rather
+            // than earlier so built-in channels are covered too. See docs/specs/cli-identity-sidecar.md.
+            EnsurePackagesOverrideDirectoryIsUnambiguous(identityPackagesDirectory);
+            channels.RemoveAll(c => string.Equals(c.Name, _executionContext.IdentityChannel, StringComparisons.ChannelName));
+            channels.Add(CreateLocalHiveChannel(_executionContext.IdentityChannel, identityPackagesDirectory));
+        }
+
         return Task.FromResult<IEnumerable<PackageChannel>>(channels);
     }
 
@@ -678,5 +694,95 @@ internal class PackagingService : IPackagingService
                 .OrderByDescending(version => SemVersion.Parse(version, SemVersionStyles.Strict), SemVersion.PrecedenceComparer)
                 .FirstOrDefault();
         }
+    }
+
+    // The ASPIRE_CLI_PACKAGES override maps Aspire* -> a flat directory feed. A flat directory has no
+    // "latest stable vs latest prerelease" semantics: when an id appears with more than one version,
+    // NuGet resolves the highest, silently masking the version the developer meant to test. Fail fast
+    // with an actionable message instead of resolving the wrong package. Only Aspire* ids are checked
+    // because the synthesized channel only routes Aspire* to this directory (everything else goes to
+    // nuget.org), so unrelated multi-versioned packages in the same folder are harmless.
+    private static void EnsurePackagesOverrideDirectoryIsUnambiguous(DirectoryInfo packagesDirectory)
+    {
+        if (!packagesDirectory.Exists)
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.CurrentCulture,
+                PackagingStrings.PackagesOverrideDirectoryNotFound,
+                packagesDirectory.FullName));
+        }
+
+        var versionsById = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in packagesDirectory.EnumerateFiles("Aspire*.nupkg"))
+        {
+            if (!TryParseNupkgFileName(file.Name, out var id, out var version))
+            {
+                continue;
+            }
+
+            if (!versionsById.TryGetValue(id, out var versions))
+            {
+                versions = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                versionsById[id] = versions;
+            }
+
+            versions.Add(version);
+        }
+
+        var duplicates = versionsById
+            .Where(static kvp => kvp.Value.Count > 1)
+            .OrderBy(static kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (duplicates.Count > 0)
+        {
+            // e.g. "Aspire.Hosting (13.4.1, 13.4.2); Aspire.Hosting.Azure (13.4.1, 13.4.2)"
+            var details = string.Join("; ", duplicates.Select(static kvp =>
+                $"{kvp.Key} ({string.Join(", ", kvp.Value)})"));
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.CurrentCulture,
+                PackagingStrings.PackagesOverrideDirectoryHasDuplicateVersions,
+                packagesDirectory.FullName,
+                details));
+        }
+    }
+
+    // Splits a NuGet package file name into its package id and version. The file name shape is
+    // "<id>.<version>.nupkg", where <id> may itself contain dots (e.g. "Aspire.Hosting.Azure.Storage")
+    // and <version> is a strict SemVer that always begins with a numeric major component. Example:
+    //   "Aspire.Hosting.Azure.Storage.13.4.0-preview.1.25366.3.nupkg"
+    //     -> id = "Aspire.Hosting.Azure.Storage", version = "13.4.0-preview.1.25366.3"
+    // The first '.'-delimited segment that begins with a digit marks the start of the version, because
+    // package-id segments never start with a digit. Returns false (and the file is ignored by the
+    // guardrail) when no split yields a strict-SemVer version.
+    private static bool TryParseNupkgFileName(string fileName, out string id, out string version)
+    {
+        id = string.Empty;
+        version = string.Empty;
+
+        const string suffix = ".nupkg";
+        if (!fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var stem = fileName[..^suffix.Length];
+        var parts = stem.Split('.');
+        for (var i = 1; i < parts.Length; i++)
+        {
+            if (parts[i].Length == 0 || !char.IsDigit(parts[i][0]))
+            {
+                continue;
+            }
+
+            var candidateVersion = string.Join('.', parts[i..]);
+            if (SemVersion.TryParse(candidateVersion, SemVersionStyles.Strict, out _))
+            {
+                id = string.Join('.', parts[..i]);
+                version = candidateVersion;
+                return true;
+            }
+        }
+
+        return false;
     }
 }

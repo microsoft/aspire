@@ -84,7 +84,8 @@ internal sealed class InstallSidecarReader : IInstallSidecarReader
             Channel: fields.Channel,
             Version: fields.Version,
             Commit: fields.Commit,
-            NuGetServiceIndexOverride: fields.NuGetServiceIndexOverride));
+            NuGetServiceIndexOverride: fields.NuGetServiceIndexOverride,
+            Packages: fields.Packages));
     }
 
     /// <summary>
@@ -147,7 +148,8 @@ internal sealed class InstallSidecarReader : IInstallSidecarReader
         string? Channel,
         string? Version,
         string? Commit,
-        string? NuGetServiceIndexOverride);
+        string? NuGetServiceIndexOverride,
+        string? Packages);
 
     private static SidecarFields ReadSidecarFieldsFromExistingSidecar(string sidecarPath)
     {
@@ -163,7 +165,8 @@ internal sealed class InstallSidecarReader : IInstallSidecarReader
             Channel: ReadOptionalString(doc.RootElement, "channel"),
             Version: ReadOptionalString(doc.RootElement, "version"),
             Commit: ReadOptionalString(doc.RootElement, "commit"),
-            NuGetServiceIndexOverride: ReadOptionalString(doc.RootElement, "nugetServiceIndexOverride"));
+            NuGetServiceIndexOverride: ReadOptionalString(doc.RootElement, "nugetServiceIndexOverride"),
+            Packages: ReadOptionalString(doc.RootElement, "packages"));
     }
 
     private static string? ReadOptionalString(JsonElement obj, string propertyName)

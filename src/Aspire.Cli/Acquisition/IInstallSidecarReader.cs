@@ -47,6 +47,13 @@ namespace Aspire.Cli.Acquisition;
 /// effect, in which case callers use the canonical URL from
 /// <c>PackageSources.NuGetOrg</c>.
 /// </param>
+/// <param name="Packages">
+/// Optional path to a flat directory of <c>.nupkg</c> files that the CLI's
+/// <c>Aspire*</c> package feed should resolve from directly (the sidecar
+/// equivalent of <c>ASPIRE_CLI_PACKAGES</c>). Null when absent. Consumed by
+/// <c>PackagingService</c>, which synthesizes a package channel pointing at
+/// this directory. See <c>docs/specs/cli-identity-sidecar.md</c>.
+/// </param>
 internal sealed record InstallSidecarInfo(
     string SidecarPath,
     InstallSource Source,
@@ -54,7 +61,8 @@ internal sealed record InstallSidecarInfo(
     string? Channel = null,
     string? Version = null,
     string? Commit = null,
-    string? NuGetServiceIndexOverride = null);
+    string? NuGetServiceIndexOverride = null,
+    string? Packages = null);
 
 /// <summary>
 /// Result of attempting to read an install-route sidecar.

@@ -36,6 +36,7 @@ internal sealed class IdentityResolver : IIdentityResolver
     internal const string VersionEnvVar = AspireCliIdentityEnvVars.Version;
     internal const string CommitEnvVar = AspireCliIdentityEnvVars.Commit;
     internal const string NuGetServiceIndexEnvVar = AspireCliIdentityEnvVars.NuGetServiceIndex;
+    internal const string PackagesEnvVar = AspireCliIdentityEnvVars.Packages;
 
     /// <summary>
     /// The full set of <c>ASPIRE_CLI_*</c> identity-override environment
@@ -65,6 +66,7 @@ internal sealed class IdentityResolver : IIdentityResolver
     private readonly Lazy<IdentityValue<string>> _version;
     private readonly Lazy<IdentityValue<string>> _commit;
     private readonly Lazy<IdentityValue<string?>> _nugetServiceIndexOverride;
+    private readonly Lazy<IdentityValue<string?>> _packagesDirectory;
 
     public IdentityResolver(
         IInstallSidecarReader sidecarReader,
@@ -88,6 +90,7 @@ internal sealed class IdentityResolver : IIdentityResolver
         _version = new Lazy<IdentityValue<string>>(ResolveVersionCore, LazyThreadSafetyMode.ExecutionAndPublication);
         _commit = new Lazy<IdentityValue<string>>(ResolveCommitCore, LazyThreadSafetyMode.ExecutionAndPublication);
         _nugetServiceIndexOverride = new Lazy<IdentityValue<string?>>(ResolveNuGetServiceIndexOverrideCore, LazyThreadSafetyMode.ExecutionAndPublication);
+        _packagesDirectory = new Lazy<IdentityValue<string?>>(ResolvePackagesDirectoryCore, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
@@ -101,6 +104,9 @@ internal sealed class IdentityResolver : IIdentityResolver
 
     /// <inheritdoc />
     public IdentityValue<string?> ResolveNuGetServiceIndexOverride() => _nugetServiceIndexOverride.Value;
+
+    /// <inheritdoc />
+    public IdentityValue<string?> ResolvePackagesDirectory() => _packagesDirectory.Value;
 
     private IdentityValue<string> ResolveChannelCore()
     {
@@ -173,6 +179,25 @@ internal sealed class IdentityResolver : IIdentityResolver
 
         // No assembly-baked override exists or could meaningfully exist. The
         // override is a runtime testing affordance, not a build-time property.
+        return new IdentityValue<string?>(null, IdentitySource.TerminalDefault);
+    }
+
+    private IdentityValue<string?> ResolvePackagesDirectoryCore()
+    {
+        if (TryGetEnv(PackagesEnvVar, out var env))
+        {
+            return new IdentityValue<string?>(env, IdentitySource.Environment);
+        }
+
+        var sidecarValue = _sidecar.Value?.Packages;
+        if (!string.IsNullOrEmpty(sidecarValue))
+        {
+            return new IdentityValue<string?>(sidecarValue, IdentitySource.Sidecar);
+        }
+
+        // Like the NuGet service-index override, this is a runtime testing
+        // affordance with no assembly-baked equivalent, so the terminal
+        // default is "no override".
         return new IdentityValue<string?>(null, IdentitySource.TerminalDefault);
     }
 

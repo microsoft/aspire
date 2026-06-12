@@ -665,12 +665,19 @@ public class Program
         var version = identityResolver.ResolveVersion();
         var commit = identityResolver.ResolveCommit();
         var nugetOverride = identityResolver.ResolveNuGetServiceIndexOverride().Value;
+        var packagesOverride = identityResolver.ResolvePackagesDirectory();
 
         // The CLI is "emulating" another build whenever any identity field was supplied by an
         // ASPIRE_CLI_* env var or the install sidecar rather than the assembly's build-time stamp.
         // This drives the startup override notice so a diagnostic run is never mistaken for a real one.
         static bool IsOverride(IdentitySource source) => source is IdentitySource.Environment or IdentitySource.Sidecar;
-        var identityOverridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source);
+        var identityOverridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source) || IsOverride(packagesOverride.Source);
+
+        // A null/whitespace value means "no override"; only materialize a DirectoryInfo when a real
+        // path was supplied. PackagingService validates existence + uniqueness when it consumes this.
+        var identityPackagesDirectory = string.IsNullOrWhiteSpace(packagesOverride.Value)
+            ? null
+            : new DirectoryInfo(packagesOverride.Value);
 
         return new CliExecutionContext(
             workingDirectory,
@@ -686,7 +693,8 @@ public class Program
             identityVersion: version.Value,
             identityCommit: commit.Value,
             nugetServiceIndexOverride: nugetOverride,
-            identityOverridden: identityOverridden);
+            identityOverridden: identityOverridden,
+            identityPackagesDirectory: identityPackagesDirectory);
     }
 
     private static DirectoryInfo GetCacheDirectory(string? processPath = null)

@@ -7,7 +7,7 @@ using Aspire.Shared;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local", DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local", DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
@@ -86,11 +86,12 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
 
     /// <summary>
     /// Gets a value indicating whether at least one identity field
-    /// (<see cref="IdentityChannel"/>, <see cref="IdentityVersion"/> or
-    /// <see cref="IdentityCommit"/>) was sourced from an <c>ASPIRE_CLI_*</c>
-    /// environment variable or the install sidecar rather than the assembly's
-    /// build-time stamp. When <see langword="true"/> the CLI is emulating a
-    /// build it is not, so a startup notice is surfaced (see
+    /// (<see cref="IdentityChannel"/>, <see cref="IdentityVersion"/>,
+    /// <see cref="IdentityCommit"/> or <see cref="IdentityPackagesDirectory"/>)
+    /// was sourced from an <c>ASPIRE_CLI_*</c> environment variable or the
+    /// install sidecar rather than the assembly's build-time stamp. When
+    /// <see langword="true"/> the CLI is emulating a build it is not, so a
+    /// startup notice is surfaced (see
     /// <c>Program.DisplayFirstTimeUseNoticeIfNeededAsync</c>) and tooling can
     /// flag the run as diagnostic. See <c>docs/specs/cli-identity-sidecar.md</c>.
     /// </summary>
@@ -105,6 +106,27 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// <c>docs/specs/cli-identity-sidecar.md</c>.
     /// </summary>
     public string? NuGetServiceIndexOverride { get; } = nugetServiceIndexOverride;
+
+    /// <summary>
+    /// Optional directory of <c>.nupkg</c> files that the CLI's <c>Aspire*</c>
+    /// package feed resolves from directly, sourced from
+    /// <c>ASPIRE_CLI_PACKAGES</c> or the <c>packages</c> field of the install
+    /// sidecar. <see langword="null"/> means no override is in effect.
+    /// </summary>
+    /// <remarks>
+    /// When set, <c>PackagingService.GetChannelsAsync</c> synthesizes a package
+    /// channel named after <see cref="IdentityChannel"/> that maps
+    /// <c>Aspire*</c> to this directory (and everything else to nuget.org),
+    /// replacing any same-named hive discovered under <c>~/.aspire/hives</c>.
+    /// This lets a locally built CLI resolve locally built packages (for
+    /// example from <c>artifacts/packages/&lt;Config&gt;/Shipping</c>) without
+    /// copying them into a hive. The directory must contain at most one version
+    /// of each <c>Aspire*</c> package — the packaging service fails fast on
+    /// duplicates so an unintended version cannot be silently selected. This is
+    /// distinct from <see cref="PackagesDirectory"/>, which is the CLI's own
+    /// restore cache. See <c>docs/specs/cli-identity-sidecar.md</c>.
+    /// </remarks>
+    public DirectoryInfo? IdentityPackagesDirectory { get; } = identityPackagesDirectory;
 
     /// <summary>
     /// Gets the directory where restored NuGet packages are cached for apphost server sessions.

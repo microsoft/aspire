@@ -2141,6 +2141,111 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.Null(localChannel.PinnedVersion);
     }
 
+    [Fact]
+    public async Task GetChannelsAsync_WhenPackagesOverrideSet_RegistersChannelMappedToOverrideDirectory()
+    {
+        // ASPIRE_CLI_PACKAGES points the Aspire* feed at a flat .nupkg directory and the service
+        // synthesizes a channel named after the running CLI's identity channel that maps Aspire* there
+        // and pins to the version discovered in the directory.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+
+        var packagesOverrideDir = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "shipping"));
+        const string overrideVersion = "13.5.0-preview.1.26310.9";
+        File.WriteAllText(Path.Combine(packagesOverrideDir.FullName, $"Aspire.ProjectTemplates.{overrideVersion}.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesOverrideDir.FullName, $"Aspire.Hosting.{overrideVersion}.nupkg"), string.Empty);
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            identityChannel: PackageChannelNames.Daily,
+            hivesDirectory: hivesDir,
+            identityPackagesDirectory: packagesOverrideDir);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var overrideChannel = Assert.Single(channels, c => string.Equals(c.Name, PackageChannelNames.Daily, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(overrideVersion, overrideChannel.PinnedVersion);
+        var aspireMapping = Assert.Single(overrideChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(packagesOverrideDir.FullName.Replace('\\', '/'), aspireMapping.Source);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenPackagesOverrideSet_ReplacesSameNamedDiscoveredHive()
+    {
+        // A discovered ~/.aspire/hives/<channel> hive must not mask the explicit override directory:
+        // the override is the most specific signal of intent, so it wins and only one channel remains.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+
+        var staleHiveDir = Directory.CreateDirectory(Path.Combine(hivesDir.FullName, PackageChannelNames.Daily, "packages"));
+        File.WriteAllText(Path.Combine(staleHiveDir.FullName, "Aspire.Hosting.13.4.0.nupkg"), string.Empty);
+
+        var packagesOverrideDir = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "shipping"));
+        const string overrideVersion = "13.5.0-preview.1.26310.9";
+        File.WriteAllText(Path.Combine(packagesOverrideDir.FullName, $"Aspire.Hosting.{overrideVersion}.nupkg"), string.Empty);
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            identityChannel: PackageChannelNames.Daily,
+            hivesDirectory: hivesDir,
+            identityPackagesDirectory: packagesOverrideDir);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var overrideChannel = Assert.Single(channels, c => string.Equals(c.Name, PackageChannelNames.Daily, StringComparison.OrdinalIgnoreCase));
+        var aspireMapping = Assert.Single(overrideChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(packagesOverrideDir.FullName.Replace('\\', '/'), aspireMapping.Source);
+        Assert.Equal(overrideVersion, overrideChannel.PinnedVersion);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenPackagesOverrideHasDuplicateAspireVersions_ThrowsFailFast()
+    {
+        // A flat directory has no latest-stable/latest-prerelease semantics, so two versions of the
+        // same Aspire package would let NuGet silently resolve the highest. Fail fast instead.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        var packagesOverrideDir = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "shipping"));
+        File.WriteAllText(Path.Combine(packagesOverrideDir.FullName, "Aspire.Hosting.13.4.1.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesOverrideDir.FullName, "Aspire.Hosting.13.4.2.nupkg"), string.Empty);
+        // A single-versioned package alongside the duplicate must not be reported as a conflict.
+        File.WriteAllText(Path.Combine(packagesOverrideDir.FullName, "Aspire.ProjectTemplates.13.4.2.nupkg"), string.Empty);
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            identityChannel: PackageChannelNames.Daily,
+            identityPackagesDirectory: packagesOverrideDir);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => packagingService.GetChannelsAsync()).DefaultTimeout();
+        Assert.Contains("Aspire.Hosting", ex.Message);
+        Assert.Contains("13.4.1", ex.Message);
+        Assert.Contains("13.4.2", ex.Message);
+        Assert.DoesNotContain("Aspire.ProjectTemplates", ex.Message);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenPackagesOverrideDirectoryMissing_ThrowsFailFast()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        var missingDir = new DirectoryInfo(Path.Combine(tempDir.FullName, "does-not-exist"));
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            identityChannel: PackageChannelNames.Daily,
+            identityPackagesDirectory: missingDir);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => packagingService.GetChannelsAsync()).DefaultTimeout();
+        Assert.Contains(missingDir.FullName, ex.Message);
+    }
+
     private sealed class FakeNuGetPackageCacheWithPackages(List<Aspire.Shared.NuGetPackageCli> packages) : INuGetPackageCache
     {
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)

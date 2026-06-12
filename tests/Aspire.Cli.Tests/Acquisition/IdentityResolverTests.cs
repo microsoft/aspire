@@ -209,6 +209,59 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ResolvePackagesDirectory_NullByDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        // No sidecar field, no env var — the override must remain null so the
+        // packaging service does not synthesize an override channel.
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("PackagesNull", channel: "local", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: _ => null);
+
+        var resolved = resolver.ResolvePackagesDirectory();
+        Assert.Null(resolved.Value);
+        Assert.Equal(IdentitySource.TerminalDefault, resolved.Source);
+    }
+
+    [Fact]
+    public void ResolvePackagesDirectory_EnvWins()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","packages":"/sidecar/packages"}""");
+
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("PackagesEnv", channel: "local", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: name => name == IdentityResolver.PackagesEnvVar
+                ? "/env/packages"
+                : null);
+
+        var resolved = resolver.ResolvePackagesDirectory();
+        Assert.Equal("/env/packages", resolved.Value);
+        Assert.Equal(IdentitySource.Environment, resolved.Source);
+    }
+
+    [Fact]
+    public void ResolvePackagesDirectory_SidecarUsedWhenEnvAbsent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","packages":"/sidecar/packages"}""");
+
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("PackagesSc", channel: "local", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: _ => null);
+
+        var resolved = resolver.ResolvePackagesDirectory();
+        Assert.Equal("/sidecar/packages", resolved.Value);
+        Assert.Equal(IdentitySource.Sidecar, resolved.Source);
+    }
+
+    [Fact]
     public void BuildCliExecutionContext_FlagsIdentityOverridden_WhenEnvVersionSupplied()
     {
         // ASPIRE_CLI_VERSION emulation must light up the override notice and feed IdentityVersion.
@@ -272,7 +325,31 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void IdentityEnvVarNames_ContainsAllFourOverrides()
+    public void BuildCliExecutionContext_FlagsIdentityOverridden_AndSetsPackagesDirectory_WhenPackagesOverrideSupplied()
+    {
+        // ASPIRE_CLI_PACKAGES emulation must light up the override notice and surface the directory
+        // so PackagingService can synthesize an override channel from it.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packagesDir = Path.Combine(workspace.WorkspaceRoot.FullName, "shipping");
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("EnvPackagesOverride", channel: "local", informationalVersion: "13.5.0-dev+local"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: name => name == IdentityResolver.PackagesEnvVar ? packagesDir : null);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: workspace.WorkspaceRoot.FullName,
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "cli.log"),
+            identityResolver: resolver);
+
+        Assert.True(context.IdentityOverridden);
+        Assert.NotNull(context.IdentityPackagesDirectory);
+        Assert.Equal(packagesDir, context.IdentityPackagesDirectory!.FullName);
+    }
+
+    [Fact]
+    public void IdentityEnvVarNames_ContainsAllFiveOverrides()
     {
         // The strip-list used by PeerInstallProbe / ProcessExecutionFactory must
         // cover every override the resolver reads — otherwise a leaked env var
@@ -286,6 +363,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
                 IdentityResolver.VersionEnvVar,
                 IdentityResolver.CommitEnvVar,
                 IdentityResolver.NuGetServiceIndexEnvVar,
+                IdentityResolver.PackagesEnvVar,
             },
             IdentityResolver.IdentityEnvVarNames);
     }

@@ -51,7 +51,8 @@ internal static class TestExecutionContextHelper
         string? logFilePath = null,
         string? identityVersion = null,
         string? identityCommit = null,
-        bool identityOverridden = false)
+        bool identityOverridden = false,
+        DirectoryInfo? identityPackagesDirectory = null)
     {
         var root = rootDirectory.FullName;
         hivesDirectory ??= new DirectoryInfo(Path.Combine(root, ".aspire", "hives"));
@@ -75,6 +76,7 @@ internal static class TestExecutionContextHelper
             identityChannel: identityChannel,
             identityVersion: identityVersion,
             identityCommit: identityCommit,
-            identityOverridden: identityOverridden);
+            identityOverridden: identityOverridden,
+            identityPackagesDirectory: identityPackagesDirectory);
     }
 }

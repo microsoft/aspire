@@ -13,6 +13,7 @@ Tracked in PR [#18087](https://github.com/microsoft/aspire/pull/18087). The reso
 - **`--version` — overridden.** A custom version action (`Commands/IdentityVersionAction.cs`) prints `IdentityVersion`, so emulated runs report the emulated version. The non-override output is byte-identical to the System.CommandLine default.
 - **Startup override notice — added.** When `IdentityOverridden` and output is human-readable, a yellow notice on stderr makes a diagnostic run impossible to mistake for a real one.
 - **`aspire doctor` — physical by design.** Doctor reports the *physical* install truth (like `--self`); emulation is surfaced by the startup notice rather than rewiring doctor's assembly-backed channel read (which `DoctorCommandTests` pin). `InstallationDiscovery` and `AspireVersionCheck.TryReadIdentityChannel` are annotated accordingly.
+- **`ASPIRE_CLI_PACKAGES` packages-directory override — landed.** Resolves (env → sidecar → null) to `CliExecutionContext.IdentityPackagesDirectory`. When set, `PackagingService.GetChannelsAsync` registers a synthesized channel (named after the identity channel) that routes `Aspire*` to the directory and replaces any same-named channel; a fail-fast guardrail rejects a missing directory or duplicate `Aspire*` versions. Documented for repro workflows by the `cli-channel-debugging` skill.
 
 ## Goal
 
@@ -50,7 +51,7 @@ This is the same shift the broader packaging rethink ([#17580](https://github.co
 
 ### Sidecar schema (extension to `.aspire-install.json`)
 
-`docs/specs/install-routes.md` already defines `.aspire-install.json` as the route-identifying sidecar. This spec extends that file with four optional identity / emulation fields:
+`docs/specs/install-routes.md` already defines `.aspire-install.json` as the route-identifying sidecar. This spec extends that file with five optional identity / emulation fields:
 
 ```json
 {
@@ -58,11 +59,12 @@ This is the same shift the broader packaging rethink ([#17580](https://github.co
   "channel": "stable",                                  // new, optional — packaging/quality identity
   "version": "13.4.0",                                  // new, optional — informational version
   "commit":  "abc123def…",                              // new, optional — source revision
-  "nugetServiceIndexOverride": "http://127.0.0.1:5400/v3/index.json"  // new, optional — see below
+  "nugetServiceIndexOverride": "http://127.0.0.1:5400/v3/index.json",  // new, optional — see below
+  "packages": "/path/to/artifacts/packages/Release/Shipping"  // new, optional — see below
 }
 ```
 
-All four new fields are **optional**. When absent, the resolver falls back to the assembly-baked value (channel/version/commit) or to no-override (nugetServiceIndexOverride) so existing installs continue to work unchanged during the migration window.
+All five new fields are **optional**. When absent, the resolver falls back to the assembly-baked value (channel/version/commit) or to no-override (nugetServiceIndexOverride, packages) so existing installs continue to work unchanged during the migration window.
 
 #### `nugetServiceIndexOverride`
 
@@ -81,22 +83,31 @@ public string? NuGetServiceIndexOverride { get; }
 
 Call sites that today emit `api.nuget.org` directly (`NuGetConfigMerger`, `TemplateNuGetConfigService`, etc.) consult this property; when it returns non-null, the emitted config carries the override URL. When null, the existing canonical URL is used. This is the bytes-side half of the identity story tracked separately in #17823; the API and the sidecar/env plumbing land **now** so that #17823's proxy work has a stable consumer surface to slot into.
 
+#### `packages`
+
+The `packages` field points the CLI at a **flat directory of `.nupkg` files** (for example `artifacts/packages/Release/Shipping`). When set, the CLI synthesizes a package channel — named after the resolved identity channel — that maps `Aspire*` package globs to this directory (everything else resolves from nuget.org). This synthesized channel **replaces** any same-named built-in, discovered-hive, or PR-install channel, so the CLI resolves Aspire packages from the directory while still presenting the emulated channel/version/commit identity. It is exposed on `CliExecutionContext` as `IdentityPackagesDirectory` (a `DirectoryInfo?`, null when no override is active) — distinct from the existing `PackagesDirectory`, which is the restore cache.
+
+This lets a locally built CLI test against packages it just built (or against a PR's CI-built packages staged into a directory) without copying them into a hive. It pairs with `ASPIRE_CLI_CHANNEL` for the "PR build identity + locally built packages" and "released repro with a CLI+hosting fix spanning packages" scenarios (see the `cli-channel-debugging` skill for the full matrix).
+
+**Cleanliness guardrail (fail-fast).** A flat directory has no "latest stable vs latest prerelease" semantics: if the same `Aspire*` package id appears with more than one version, NuGet would silently resolve the highest and mask the intended version. The CLI therefore **fails fast** at channel-resolution time when the directory is missing, or when any `Aspire*` package id carries more than one distinct version, with a diagnostic listing the conflicting ids and versions (e.g. `Aspire.Hosting (13.4.1, 13.4.2)`). Only `Aspire*` packages are checked because the synthesized channel only routes those to the directory. This is intentional friction — `localhive.sh` accumulates auto-versioned builds in `Shipping`, so the directory must be cleaned (or freshly packed) before it can be used as an override.
+
 ### Resolution order
 
 Each identity field is resolved **independently** so you can override one and inherit the rest. Resolution order, highest precedence first:
 
-1. **Environment variable**: `ASPIRE_CLI_CHANNEL`, `ASPIRE_CLI_VERSION`, `ASPIRE_CLI_COMMIT`, `ASPIRE_CLI_NUGET_SERVICE_INDEX`.
+1. **Environment variable**: `ASPIRE_CLI_CHANNEL`, `ASPIRE_CLI_VERSION`, `ASPIRE_CLI_COMMIT`, `ASPIRE_CLI_NUGET_SERVICE_INDEX`, `ASPIRE_CLI_PACKAGES`.
 2. **Sidecar field**: the matching field in `.aspire-install.json` next to the running binary.
 3. **Terminal fallback**:
    - `channel` → `local`.
    - `version` and `commit` → the value read from `AssemblyInformationalVersion` (still stamped by Arcade for every assembly; this is not stamping we control or intend to remove).
    - `nugetServiceIndexOverride` → `null` (no override; callers use the canonical `https://api.nuget.org/v3/index.json`).
+   - `packages` → `null` (no override; the CLI uses its normal channel/hive package sources).
 
 The resolver distinguishes four outcomes per field, each surfaced in `aspire doctor --self`: `from-env`, `from-sidecar`, `from-assembly-fallback`, `defaulted-to-local`. This makes "is my override actually taking effect?" trivially debuggable and prevents the soft-fallback class of bug the critique flagged (a missing installer write silently looking healthy because the resolver fell back to a baked value).
 
 ### Env-var scope: process-local, not inherited
 
-`ASPIRE_CLI_CHANNEL`, `ASPIRE_CLI_VERSION`, `ASPIRE_CLI_COMMIT`, and `ASPIRE_CLI_NUGET_SERVICE_INDEX` are **deliberately not propagated to child Aspire processes**. The CLI strips them from the environment of:
+`ASPIRE_CLI_CHANNEL`, `ASPIRE_CLI_VERSION`, `ASPIRE_CLI_COMMIT`, `ASPIRE_CLI_NUGET_SERVICE_INDEX`, and `ASPIRE_CLI_PACKAGES` are **deliberately not propagated to child Aspire processes**. The CLI strips them from the environment of:
 
 - Peer Aspire CLIs spawned by `aspire doctor` install discovery (`PeerInstallProbe`).
 - AppHost child processes launched by `aspire run` / `aspire start` and friends, unless the override is also passed via a separate explicit opt-in (TBD; see open questions).

@@ -24,7 +24,7 @@ namespace Aspire.Shared;
 /// and <c>tools/Dogfooder/Dogfooder.csproj</c> (and any future host that
 /// needs to author these env vars) rather than exposed via a runtime
 /// dependency, because both consumers ship as standalone executables and
-/// neither can afford a NuGet package round-trip just to share four string
+/// neither can afford a NuGet package round-trip just to share these string
 /// constants.
 /// </para>
 /// </remarks>
@@ -56,12 +56,27 @@ internal static class AspireCliIdentityEnvVars
     /// </summary>
     public const string NuGetServiceIndex = "ASPIRE_CLI_NUGET_SERVICE_INDEX";
 
+    /// <summary>
+    /// Points the CLI's <c>Aspire*</c> package feed directly at a flat
+    /// directory of <c>.nupkg</c> files (for example
+    /// <c>artifacts/packages/&lt;Config&gt;/Shipping</c>) instead of a hive
+    /// staged under <c>~/.aspire/hives</c>. The CLI synthesizes a package
+    /// channel named after its resolved identity channel that maps
+    /// <c>Aspire*</c> to this directory, so a locally built CLI can resolve
+    /// freshly built packages without copying them. The directory must
+    /// contain at most one version of each <c>Aspire*</c> package; the CLI
+    /// fails fast when duplicates are present so an unintended version cannot
+    /// be silently selected.
+    /// </summary>
+    public const string Packages = "ASPIRE_CLI_PACKAGES";
+
     private static readonly string[] s_all =
     [
         Channel,
         Version,
         Commit,
         NuGetServiceIndex,
+        Packages,
     ];
 
     /// <summary>
