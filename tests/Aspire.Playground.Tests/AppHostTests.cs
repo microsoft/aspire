@@ -46,7 +46,12 @@ public class AppHostTests
             // immediately during startup under CI contention.
             readyStateTexts = testEndpoints.WaitForTexts.ToArray();
             waitForTextTasks = readyStateTexts
-                .Select(wait => app.WaitForTextAsync(log => new Regex(wait.Pattern).IsMatch(log), wait.ResourceName))
+                .Select(wait =>
+                {
+                    // Compile once per wait entry; the callback runs for each emitted log line.
+                    var regex = new Regex(wait.Pattern);
+                    return app.WaitForTextAsync(log => regex.IsMatch(log), wait.ResourceName);
+                })
                 .ToArray();
         }
 
