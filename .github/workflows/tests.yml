@@ -41,9 +41,15 @@ jobs:
         with:
           global-json-file: ${{ github.workspace }}/global.json
 
+      # [EXPERIMENT] Restrict restore to the test-project graph. The default restore pulls all 415
+      # repo projects, incl. the native CLI (Aspire.Cli ~10s), Aspire.TerminalHost (~10s), the
+      # per-RID dcppack/dashboardpack packaging projects, and playground apps -- none of which
+      # selection or enumeration needs. BuildTestsOnly restricts eng/Build.props ProjectToBuild to
+      # tests/** (still pulling their src ProjectReferences); SkipNativeBuild drops the clipack
+      # native-AOT projects (not gated by BuildTestsOnly).
       - name: Restore
         shell: bash
-        run: ./restore.sh
+        run: ./restore.sh /p:BuildTestsOnly=true /p:SkipNativeBuild=true
 
       - name: Select relevant tests
         id: select_tests
@@ -110,7 +116,7 @@ jobs:
       - uses: ./.github/actions/enumerate-tests
         id: generate_tests_matrix
         with:
-          buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }}'
+          buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }} /p:BuildTestsOnly=true /p:SkipNativeBuild=true'
           checkout: 'false'
           restore: 'false'
           beforeBuildPropsPath: ${{ steps.select_tests.outputs.before_build_props }}
