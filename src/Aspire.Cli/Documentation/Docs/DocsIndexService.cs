@@ -788,7 +788,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         for (var i = 0; i < text.Length; i++)
         {
             var c = text[i];
-            if (IsApostropheLike(c))
+            if (IsIgnoredPunctuation(c))
             {
                 continue;
             }
@@ -806,7 +806,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         return builder.ToString();
     }
 
-    private static bool IsApostropheLike(char c)
+    private static bool IsIgnoredPunctuation(char c)
         => c is '\'' or '\u2019' or '\u2018' or '\u02BC' or '`';
 
     private static bool IsNumericVersionSeparator(string text, int index)
