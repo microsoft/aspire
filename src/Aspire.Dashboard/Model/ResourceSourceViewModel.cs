@@ -60,10 +60,39 @@ internal sealed record ResourceSourceViewModel(string value, List<LaunchArgument
                 && resourceViewModel.TryGetExecutableArguments(out var effectiveArguments)
                 && !effectiveArguments.IsDefaultOrEmpty)
             {
-                var effectiveArgumentList = effectiveArguments.Select(arg => new LaunchArgument(arg, true)).ToList();
-                var effectiveArgsString = string.Join(" ", effectiveArgumentList.Select(a => a.Value));
+                // The sensitivity array (AppArgsSensitivity) is positionally aligned with the app args, NOT the
+                // effective args. For a plain executable the two line up 1:1 (effective args are the same args with
+                // template expressions resolved), but other shapes (e.g. dotnet tools) only display a suffix of the
+                // effective args, so the lengths can differ. We must never expose a sensitive value, so:
+                //  - When nothing is sensitive, show the resolved effective args as-is.
+                //  - When the sensitivity array lines up 1:1 with the effective args, mask per index. Masking by
+                //    index (rather than by value) is important: a sensitive value may itself be resolved by DCP, so
+                //    the effective value differs from the app arg yet must still be masked at the same position.
+                //  - Otherwise (sensitive args present but the counts don't align), fall back to the app-args path
+                //    below, which masks correctly using the app-arg alignment (showing unresolved template text).
+                var hasSensitivity = resourceViewModel.TryGetAppArgsSensitivity(out var effectiveArgsSensitivity);
 
-                return new CommandLineInfo(Arguments: effectiveArgumentList, ArgumentsString: effectiveArgsString, TooltipString: effectiveArgsString);
+                if (!hasSensitivity || !effectiveArgsSensitivity.Contains(true))
+                {
+                    var effectiveArgumentList = effectiveArguments.Select(arg => new LaunchArgument(arg, IsShown: true)).ToList();
+                    var effectiveArgsString = string.Join(" ", effectiveArguments);
+
+                    return new CommandLineInfo(Arguments: effectiveArgumentList, ArgumentsString: effectiveArgsString, TooltipString: effectiveArgsString);
+                }
+
+                if (effectiveArgsSensitivity.Length == effectiveArguments.Length)
+                {
+                    var maskedArguments = effectiveArguments
+                        .Select((arg, i) => new LaunchArgument(arg, IsShown: !effectiveArgsSensitivity[i]))
+                        .ToList();
+
+                    return new CommandLineInfo(
+                        Arguments: maskedArguments,
+                        ArgumentsString: string.Join(" ", effectiveArguments),
+                        TooltipString: string.Join(" ", maskedArguments.Select(arg => arg.IsShown
+                            ? arg.Value
+                            : DashboardUIHelpers.GetMaskingText(6).Text)));
+                }
             }
 
             var argumentsString = string.Join(" ", launchArguments);

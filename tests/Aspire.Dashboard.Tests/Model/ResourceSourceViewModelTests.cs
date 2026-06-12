@@ -177,6 +177,43 @@ public sealed class ResourceSourceViewModelTests
                 ValueToVisualize: """path/to/executable -port {{- portForServing "exe" -}}""",
                 Tooltip: """path/to/executable -port {{- portForServing "exe" -}}"""));
 
+        // Executable with sensitive effective args. The sensitivity array aligns 1:1 with the effective args,
+        // so the resolved secret value must be masked in the grid (IsShown: false) and the tooltip, just like
+        // the app-args path. The value-to-visualize stays unmasked (gated behind the secret flag in the UI).
+        data.Add(new TestData(
+                ResourceType: "Executable",
+                ExecutablePath: "path/to/executable",
+                ExecutableArguments: ["--key", "resolvedsecret", "notsecret"],
+                AppArgs: ["--key", """{{- parameter "secret" -}}""", "notsecret"],
+                AppArgsSensitivity: [false, true, false],
+                ProjectPath: null,
+                ContainerImage: null,
+                SourceProperty: null),
+            new ExpectedData(
+                Value: "executable",
+                ContentAfterValue: [new ExpectedLaunchArgument("--key", true), new ExpectedLaunchArgument("resolvedsecret", false), new ExpectedLaunchArgument("notsecret", true)],
+                ValueToVisualize: "path/to/executable --key resolvedsecret notsecret",
+                Tooltip: $"path/to/executable --key {maskingText} notsecret"));
+
+        // Executable where the effective args don't align 1:1 with the app args (e.g. a dotnet tool whose
+        // displayed args are only a suffix of the effective args) and a sensitive arg is present. Because the
+        // sensitivity array can't be safely mapped onto the effective args, we must fall back to the app-args
+        // path so the secret stays masked, even though that shows the unresolved app args.
+        data.Add(new TestData(
+                ResourceType: "Executable",
+                ExecutablePath: "path/to/executable",
+                ExecutableArguments: ["tool", "run", "mytool", "--key", "resolvedsecret"],
+                AppArgs: ["--key", "secret"],
+                AppArgsSensitivity: [false, true],
+                ProjectPath: null,
+                ContainerImage: null,
+                SourceProperty: null),
+            new ExpectedData(
+                Value: "executable",
+                ContentAfterValue: [new ExpectedLaunchArgument("--key", true), new ExpectedLaunchArgument("secret", false)],
+                ValueToVisualize: "path/to/executable --key secret",
+                Tooltip: $"path/to/executable --key {maskingText}"));
+
         // Container image
         data.Add(new TestData(
                 ResourceType: "Container",
