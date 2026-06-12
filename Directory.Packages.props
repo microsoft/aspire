@@ -129,7 +129,7 @@
     <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
     <PackageVersion Include="Qdrant.Client" Version="1.18.1" />
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
-    <PackageVersion Include="Spectre.Console" Version="0.55.2" />
+    <PackageVersion Include="Spectre.Console" Version="0.57.0" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.1" />
     <PackageVersion Include="System.IO.Hashing" Version="10.0.8" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
