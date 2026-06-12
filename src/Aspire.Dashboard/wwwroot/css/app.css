@@ -1,5 +1,191 @@
+/* ============================================================
+   Aspire Brand Fonts
+   ============================================================ */
+@font-face {
+    font-family: 'Poppins';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/poppins/poppins-latin-400.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Poppins';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../fonts/poppins/poppins-latin-500.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Poppins';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../fonts/poppins/poppins-latin-600.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Poppins';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../fonts/poppins/poppins-latin-700.woff2') format('woff2');
+}
+
+/* ============================================================
+   Aspire Brand Token System
+   ============================================================ */
+:root {
+    /* Brand core palette */
+    --aspire-color-primary: #7455DD;
+    --aspire-color-purple: #512BD4;
+    --aspire-color-secondary: #B9AAEE;
+    --aspire-color-muted: #DCD5F6;
+    --aspire-color-grey: #DCE0E8;
+    --aspire-color-black: #1F1E33;
+    --aspire-color-white: #FFFFFF;
+
+    /* Brand accent colors */
+    --aspire-accent-magenta: #B30F87;
+    --aspire-accent-flamingo: #F65163;
+    --aspire-accent-blue: #0078D7;
+    --aspire-accent-cyan: #0B7E84;
+    --aspire-accent-yellow: #9B8308;
+
+    /* Brand gradients */
+    --aspire-gradient-purple-magenta: linear-gradient(90deg, #7455DD 0%, #B30F87 100%);
+    --aspire-gradient-blue-purple: linear-gradient(90deg, #0078D7 0%, #7455DD 100%);
+    --aspire-gradient-flamingo-purple: linear-gradient(90deg, #F65163 0%, #7455DD 100%);
+    --aspire-gradient-purple-cyan: linear-gradient(90deg, #7455DD 0%, #0B7E84 100%);
+
+    /* Typography - override Fluent body-font */
+    --body-font: 'Poppins', 'Aptos', system-ui, -apple-system, sans-serif !important;
+
+    /* Brand-themed surfaces (light defaults, overridden in dark) */
+    --aspire-surface-nav: #FAFAFF;
+    --aspire-surface-header: var(--aspire-color-white);
+    --aspire-surface-page: #F8F7FC;
+    --aspire-surface-card: var(--aspire-color-white);
+    --aspire-border-subtle: rgba(116, 85, 221, 0.08);
+    --aspire-border-muted: rgba(116, 85, 221, 0.15);
+    --aspire-border-accent: color-mix(in srgb, var(--aspire-border-muted) 75%, var(--aspire-color-secondary) 25%);
+    --aspire-border-accent-muted: color-mix(in srgb, var(--aspire-border-muted) 80%, var(--aspire-color-secondary) 20%);
+    --aspire-accent-gradient: var(--aspire-gradient-purple-magenta);
+    --aspire-accent-gradient-subtle: linear-gradient(90deg, color-mix(in srgb, var(--aspire-color-primary) 86%, transparent) 0%, color-mix(in srgb, var(--aspire-accent-magenta) 86%, transparent) 100%);
+    --aspire-accent-gradient-directional: var(--aspire-gradient-blue-purple);
+    --aspire-nav-active-border: var(--aspire-gradient-purple-magenta);
+    --aspire-radius-control: 10px;
+    --aspire-radius-card: 12px;
+    --aspire-radius-panel: 14px;
+    --aspire-radius-section: 8px;
+    --aspire-radius-tag: 6px;
+    --aspire-radius-pill: 999px;
+    --aspire-hover-fill: rgba(116, 85, 221, 0.05);
+    --aspire-hover-fill-strong: color-mix(in srgb, var(--aspire-surface-card) 86%, var(--aspire-color-primary) 14%);
+    --aspire-selected-fill: color-mix(in srgb, var(--aspire-surface-card) 82%, var(--aspire-color-primary) 18%);
+    --aspire-row-hover-fill: var(--aspire-hover-fill);
+    --aspire-pill-hover-fill: color-mix(in srgb, var(--aspire-color-primary) 8%, transparent);
+    --aspire-pill-selected-fill: color-mix(in srgb, var(--aspire-color-primary) 14%, transparent);
+    --aspire-pill-selected-border: color-mix(in srgb, var(--aspire-color-primary) 10%, transparent);
+    --aspire-focus-ring-color: var(--aspire-color-primary);
+    --aspire-focus-shadow-soft: 0 0 0 3px color-mix(in srgb, var(--aspire-color-primary) 6%, transparent);
+    --aspire-focus-shadow-strong: 0 0 0 3px color-mix(in srgb, var(--aspire-color-primary) 12%, transparent);
+    --aspire-table-header-bg: #FBFAFF;
+    --aspire-details-header-bg: color-mix(in srgb, var(--aspire-surface-card) 88%, var(--aspire-color-primary) 12%);
+    --aspire-details-section-bg: color-mix(in srgb, var(--property-grid-background-color) 92%, var(--aspire-surface-card) 8%);
+    --aspire-details-section-header-bg: color-mix(in srgb, var(--aspire-details-header-bg) 82%, transparent);
+    --aspire-content-header-bg: linear-gradient(135deg, color-mix(in srgb, var(--aspire-color-primary) 6%, transparent) 0%, color-mix(in srgb, var(--aspire-accent-magenta) 3%, transparent) 100%);
+    --aspire-control-fill: color-mix(in srgb, var(--aspire-surface-card) 90%, var(--aspire-color-primary) 10%);
+    --aspire-control-fill-hover: color-mix(in srgb, var(--aspire-surface-card) 84%, var(--aspire-color-primary) 16%);
+    --aspire-control-border: var(--aspire-border-muted);
+    --aspire-control-popup-fill: var(--aspire-surface-card);
+    --aspire-control-option-hover-fill: var(--aspire-control-fill);
+    --aspire-control-option-selected-fill: var(--aspire-selected-fill);
+    --aspire-icon-button-hover-fill: color-mix(in srgb, var(--aspire-color-secondary) 12%, transparent);
+    --aspire-icon-button-active-fill: color-mix(in srgb, var(--aspire-color-secondary) 18%, transparent);
+    --aspire-messagebar-strip-bg: linear-gradient(90deg, #7455DD 0%, #B30F87 50%, #F65163 100%);
+    --aspire-messagebar-fill: linear-gradient(135deg, #F6F2FF 0%, #FFF4FC 100%);
+    --aspire-messagebar-control-fill: color-mix(in srgb, var(--aspire-color-primary) 4%, transparent);
+    --aspire-splitter-divider-bg: var(--aspire-accent-gradient-directional);
+    --aspire-splitter-divider-opacity: 0.45;
+    --aspire-trace-tag-fill: color-mix(in srgb, var(--aspire-surface-page) 88%, var(--aspire-color-primary) 12%);
+    --aspire-chart-background: #FFFFFF;
+    --aspire-chart-grid-color: rgba(116, 85, 221, 0.12);
+    --aspire-chart-axis-color: rgba(93, 93, 93, 0.68);
+    --aspire-chart-series-1: #2F8EDB;
+    --aspire-chart-series-1-fill: rgba(47, 142, 219, 0.18);
+    --aspire-chart-series-2: #F65163;
+    --aspire-chart-series-2-fill: rgba(246, 81, 99, 0.16);
+    --aspire-chart-series-3: #8FC98F;
+    --aspire-chart-series-3-fill: rgba(143, 201, 143, 0.16);
+    --aspire-card-shadow: 0 1px 3px color-mix(in srgb, var(--aspire-color-primary) 4%, transparent), 0 4px 16px rgba(0, 0, 0, 0.03);
+    --aspire-elevated-card-shadow: 0 8px 32px color-mix(in srgb, var(--aspire-color-primary) 12%, transparent), 0 2px 8px rgba(0, 0, 0, 0.08);
+    --aspire-dialog-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1);
+    --aspire-popup-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="dark"] {
+    --aspire-surface-nav: #1A1930;
+    --aspire-surface-header: #1A1930;
+    --aspire-surface-page: #19182B;
+    --aspire-surface-card: #282642;
+    --aspire-border-subtle: #332F55;
+    --aspire-border-muted: #443F68;
+    --aspire-hover-fill: rgba(185, 170, 238, 0.08);
+    --aspire-hover-fill-strong: color-mix(in srgb, var(--aspire-surface-card) 80%, var(--aspire-color-primary) 20%);
+    --aspire-selected-fill: color-mix(in srgb, var(--aspire-surface-card) 72%, var(--aspire-color-primary) 28%);
+    --aspire-row-hover-fill: var(--aspire-hover-fill);
+    --aspire-pill-selected-fill: color-mix(in srgb, var(--aspire-color-primary) 18%, transparent);
+    --aspire-pill-selected-border: color-mix(in srgb, var(--aspire-color-secondary) 12%, transparent);
+    --aspire-table-header-bg: #211F38;
+    --aspire-details-header-bg: color-mix(in srgb, var(--aspire-surface-card) 78%, var(--aspire-color-primary) 22%);
+    --aspire-content-header-bg: linear-gradient(135deg, color-mix(in srgb, var(--aspire-color-primary) 10%, transparent) 0%, color-mix(in srgb, var(--aspire-accent-magenta) 5%, transparent) 100%);
+    --aspire-control-fill: color-mix(in srgb, var(--aspire-surface-card) 84%, var(--aspire-color-primary) 16%);
+    --aspire-control-fill-hover: color-mix(in srgb, var(--aspire-surface-card) 74%, var(--aspire-color-primary) 26%);
+    --aspire-control-border: var(--aspire-border-accent-muted);
+    --aspire-control-popup-fill: color-mix(in srgb, var(--aspire-surface-card) 92%, var(--aspire-color-primary) 8%);
+    --aspire-control-option-hover-fill: color-mix(in srgb, var(--aspire-surface-card) 82%, var(--aspire-color-primary) 18%);
+    --aspire-control-option-selected-fill: var(--aspire-selected-fill);
+    --aspire-messagebar-fill: linear-gradient(135deg, #302754 0%, #281F45 58%, #231D39 100%);
+    --aspire-messagebar-control-fill: color-mix(in srgb, var(--aspire-color-primary) 8%, transparent);
+    --aspire-splitter-divider-bg: var(--aspire-accent-gradient-directional);
+    --aspire-splitter-divider-opacity: 0.55;
+    --aspire-chart-background: #211F38;
+    --aspire-chart-grid-color: rgba(185, 170, 238, 0.14);
+    --aspire-chart-axis-color: rgba(255, 255, 255, 0.72);
+    --aspire-chart-series-1: #4DA3E8;
+    --aspire-chart-series-1-fill: rgba(77, 163, 232, 0.28);
+    --aspire-chart-series-2: #F97E8B;
+    --aspire-chart-series-2-fill: rgba(249, 126, 139, 0.22);
+    --aspire-chart-series-3: #9ED79E;
+    --aspire-chart-series-3-fill: rgba(158, 215, 158, 0.22);
+    --aspire-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 1px color-mix(in srgb, var(--aspire-color-secondary) 10%, transparent);
+    --aspire-elevated-card-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px color-mix(in srgb, var(--aspire-color-primary) 15%, transparent);
+    --aspire-dialog-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 1px color-mix(in srgb, var(--aspire-color-secondary) 15%, transparent);
+}
+
 * {
     scrollbar-color: var(--scrollbar-color) transparent;
+}
+
+html,
+body,
+fluent-design-system-provider,
+fluent-provider {
+    --body-font: 'Poppins', 'Aptos', system-ui, -apple-system, sans-serif !important;
+    font-family: var(--body-font);
+}
+
+fluent-button::part(control),
+fluent-anchor::part(control),
+fluent-message-bar::part(control),
+fluent-message-bar::part(base),
+.fluent-messagebar,
+.fluent-messagebar-message,
+.fluent-messagebar-message *,
+.col-title-text {
+    font-family: var(--body-font) !important;
 }
 
 .dialog-title-grid {
@@ -7,6 +193,8 @@
     grid-template-columns: auto 1fr auto;
     grid-template-areas: "dialog-icon dialog-title dialog-format";
     grid-column-gap: 10px;
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 600;
 }
 
 fluent-toolbar fluent-divider {
@@ -50,7 +238,7 @@ fluent-toolbar::part(end) {
 }
 
 :root {
-    --scrollbar-color: #8B8B8B;
+    --scrollbar-color: color-mix(in srgb, var(--aspire-color-secondary) 55%, transparent);
     --log-critical: #F8ECEB;
     --log-error: #F8ECEB;
     --log-warning: #FBF3DD;
@@ -64,12 +252,12 @@ fluent-toolbar::part(end) {
     --foreground-subtext-hover: #6C6C6C;
     --foreground-settings-text: var(--foreground-subtext-rest);
     --error-ui-foreground-color: #131313;
-    --error-ui-accent-foreground-color: #1d00d0;
+    --error-ui-accent-foreground-color: var(--aspire-color-purple);
     --reconnection-ui-bg: rgb(255, 255, 255);
     --error-counter-badge-foreground-color: var(--neutral-fill-rest);
     --kbd-background-color: var(--neutral-layer-4);
     --dialog-background-color: #ffffff;
-    --dialog-border-color: #e5e5e5;
+    --dialog-border-color: var(--aspire-border-subtle);
     --messagebar-success-background-color: #f1faf1;
     --messagebar-success-border-color: #9fd89f;
     --messagebar-error-background-color: #FDF3F4;
@@ -79,9 +267,9 @@ fluent-toolbar::part(end) {
     --messagebar-info-background-color: #f5f5f5;
     --messagebar-info-border-color: #d1d1d1;
     --chat-background-color: var(--neutral-layer-floating);
-    --chat-user-background-color: #f7f7f7;
+    --chat-user-background-color: #F7F5FC;
     --chat-codeblock-background-color: var(--neutral-fill-hover);
-    --table-header-border-color: var(--neutral-stroke-rest);
+    --table-header-border-color: var(--aspire-border-subtle);
     --table-body-border-color: #f2f2f2;
     --layout-toolbar-padding: calc(var(--design-unit) * 1.5px);
     --layout-left-padding: calc(var(--design-unit) * 4.5px);
@@ -92,7 +280,7 @@ fluent-toolbar::part(end) {
         we can default the datagrid hover color to that and just override it as
         necessary elsewhere (e.g. in the details view)
     */
-    --datagrid-hover-color: var(--neutral-layer-2-hover);
+    --datagrid-hover-color: var(--aspire-hover-fill);
     --property-grid-background-color: #fbfbfb;
     --property-grid-genai-dialog-background-color: #fbfbfb;
     /* highlight JS theme variables */
@@ -141,38 +329,38 @@ fluent-toolbar::part(end) {
 }
 
 [data-theme="dark"] {
-    --scrollbar-color: #9F9F9F;
+    --scrollbar-color: color-mix(in srgb, var(--aspire-color-secondary) 45%, transparent);
     --log-critical: #493634;
     --log-error: #493634;
     --log-warning: #3F3A2B;
-    --foreground-subtext-rest: #8D8D8D;
-    --foreground-subtext-hover: #A1A1A1;
-    --foreground-settings-text: #A8A8A8;
+    --foreground-subtext-rest: #A8A3C0;
+    --foreground-subtext-hover: #C4BFDB;
+    --foreground-settings-text: #B8B3D0;
     --error-ui-foreground-color: #000000;
-    --error-ui-accent-foreground-color: #512bd4;
+    --error-ui-accent-foreground-color: var(--aspire-color-secondary);
     --reconnection-ui-bg: #D6D6D6;
     --error-counter-badge-foreground-color: #ffffff;
     --kbd-background-color: var(--fill-color);
-    --dialog-background-color: #272727;
-    --dialog-border-color: #3d3d3d;
+    --dialog-background-color: var(--aspire-surface-card);
+    --dialog-border-color: var(--aspire-border-muted);
     --messagebar-success-background-color: #052505;
     --messagebar-success-border-color: #107C10;
     --messagebar-error-background-color: #3F1011;
     --messagebar-error-border-color: #D13438;
     --messagebar-warning-background-color: #411200;
     --messagebar-warning-border-color: #DA3B01;
-    --messagebar-info-background-color: #141414;
-    --messagebar-info-border-color: #666;
-    --chat-background-color: #212121;
-    --chat-user-background-color: #333;
-    --chat-codeblock-background-color: var(--neutral-layer-4);
-    --table-header-border-color: var(--neutral-stroke-rest);
-    --table-body-border-color: #474747;
+    --messagebar-info-background-color: #1A1930;
+    --messagebar-info-border-color: #4A4570;
+    --chat-background-color: #1A1930;
+    --chat-user-background-color: #272640;
+    --chat-codeblock-background-color: var(--aspire-color-black);
+    --table-header-border-color: var(--aspire-border-muted);
+    --table-body-border-color: #332F55;
     /* overrides of default fluentui-blazor styling */
     --error: #E10B11 !important;
     color-scheme: dark;
-    --property-grid-background-color: #333333;
-    --property-grid-genai-dialog-background-color: #383838;
+    --property-grid-background-color: #272640;
+    --property-grid-genai-dialog-background-color: #2D2B48;
     /* highlight JS theme variables */
     --hljs-default: #f8f8f2;
     --hljs-comment: #d4d0ab;
@@ -181,10 +369,10 @@ fluent-toolbar::part(end) {
     --hljs-attribute: gold;
     --hljs-string: #abe338;
     --hljs-section: #00e0e0;
-    --hljs-keyword: #dcc6e0;
+    --hljs-keyword: var(--aspire-color-muted);
     /* geni visualizer */
-    --main-container-background-color: #333333;
-    --main-sidebar-background-color: #272727;
+    --main-container-background-color: var(--aspire-surface-card);
+    --main-sidebar-background-color: var(--aspire-surface-nav);
     --events-background-color: var(--neutral-fill-layer-rest);
     --llm-background-color: #00666d;
     --llm-color: #a6e9ed;
@@ -231,6 +419,31 @@ fluent-toolbar::part(end) {
     color-scheme: light;
 }
 
+/* (Nav and focus styling moved to Modern UI Overhaul section below) */
+
+/* (Grid styling moved to Modern UI Overhaul section below) */
+
+.selected-row {
+    border-left: 0 !important;
+    background:
+        linear-gradient(var(--aspire-accent-magenta), var(--aspire-accent-magenta)) left 6px / 3px calc(100% - 12px) no-repeat,
+        linear-gradient(var(--aspire-selected-fill), var(--aspire-selected-fill));
+    background-color: var(--aspire-selected-fill);
+}
+
+.selected-row td,
+.selected-row th {
+    border-left: 0 !important;
+    border-inline-start: 0 !important;
+}
+
+[data-theme="dark"] .selected-row {
+    background:
+        linear-gradient(var(--aspire-accent-magenta), var(--aspire-accent-magenta)) left 6px / 3px calc(100% - 12px) no-repeat,
+        linear-gradient(var(--aspire-selected-fill), var(--aspire-selected-fill));
+    background-color: var(--aspire-selected-fill);
+}
+
 fluent-select.resource-list {
     /* overrides of default fluentui-blazor styling */
     --disabled-opacity: 0.7;
@@ -241,20 +454,7 @@ fluent-select.resource-list {
     --disabled-opacity: 0.85;
 }
 
-h1 {
-    font-size: var(--type-ramp-plus-4-font-size);
-    line-height: var(--type-ramp-plus-4-line-height);
-    margin-top: 0.25rem;
-    margin-bottom: 0.5rem;
-}
-
-#components-reconnect-modal {
-    background-color: var(--neutral-layer-floating) !important;
-}
-
-.components-rejoining-animation div {
-    border-color: var(--accent-fill-active) !important;
-}
+/* (h1 styling moved to Modern UI Overhaul section below) */
 
 @media (max-width: 768px) {
     fluent-toolbar[orientation=horizontal].main-toolbar {
@@ -318,13 +518,13 @@ h1 {
 }
 
 .custom-body-content {
-    margin-right: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .top-messagebar {
-    padding: calc(var(--design-unit) * 4px);
-    padding-top: calc(var(--design-unit) * 2px);
-    padding-bottom: 0 !important;
+    min-width: 0;
+    padding: 0;
     width: 100%;
 }
 
@@ -449,12 +649,12 @@ td .long-inner-content {
 .selected-row,
 .selected-row fluent-button[appearance=lightweight]:not(:hover)::part(control),
 .selected-row fluent-anchor[appearance=lightweight]:not(:hover)::part(control) {
-    background-color: var(--neutral-fill-secondary-rest); /* Same color as the menu hover */
+    background-color: var(--aspire-selected-fill);
 }
 
 .selected-row fluent-button[appearance=lightweight]:hover::part(control),
 .selected-row fluent-anchor[appearance=lightweight]:hover::part(control){
-    background-color: var(--neutral-fill-stealth-rest); /* Essentially inverts the hover compared to an unselected row */
+    background-color: var(--aspire-hover-fill-strong);
 }
 
 .severity-icon {
@@ -482,6 +682,18 @@ td .long-inner-content {
 
 split-panels::part(handle) {
     display: none;
+}
+
+split-panels::part(median) {
+    background: var(--aspire-splitter-divider-bg);
+    background-color: var(--aspire-splitter-divider-bg);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--aspire-color-primary) 18%, transparent);
+    opacity: var(--aspire-splitter-divider-opacity);
+}
+
+[data-theme="dark"] split-panels::part(median) {
+    background: var(--aspire-splitter-divider-bg);
+    background-color: var(--aspire-splitter-divider-bg);
 }
 
 div.error-counter-badge {
@@ -534,12 +746,14 @@ fluent-switch.table-switch::part(label) {
     overflow: auto;
     width: 100%;
     height: 100%;
+    min-height: 0;
     padding: calc(var(--design-unit) * 1px);
-    padding-top: 0;
+    padding-top: calc(var(--design-unit) * 1px);
+    --aspire-row-hover-fill: var(--aspire-hover-fill-strong);
 }
 
 .property-grid-container fluent-accordion {
-    gap: calc(var(--design-unit) * 2px);
+    gap: calc(var(--design-unit) * 1px);
     margin-bottom: calc(var(--design-unit) * 1px);
     --fill-color: var(--property-grid-background-color);
 }
@@ -549,12 +763,65 @@ fluent-switch.table-switch::part(label) {
 }
 
 .property-grid-container fluent-accordion .fluent-data-grid {
-    --datagrid-hover-color: var(--neutral-layer-1-hover);
+    --datagrid-hover-color: var(--aspire-hover-fill-strong);
+    border-radius: 0;
 }
 
 .property-grid-container fluent-accordion-item,
 .property-grid-container fluent-accordion-item::part(region) {
-    background-color: var(--property-grid-background-color);
+    background-color: var(--aspire-details-section-bg);
+}
+
+.property-grid-container fluent-accordion-item::part(heading) {
+    background: var(--aspire-details-section-header-bg);
+    background-color: var(--aspire-details-section-header-bg);
+    border-bottom: 1px solid var(--aspire-border-subtle);
+}
+
+.property-grid-container fluent-accordion-item:is([expanded], [aria-expanded="true"])::part(heading) {
+    background:
+        var(--aspire-accent-gradient-subtle) top left / 100% 2px no-repeat,
+        linear-gradient(var(--aspire-details-section-header-bg), var(--aspire-details-section-header-bg));
+    background-color: var(--aspire-details-section-header-bg);
+}
+
+.property-grid-container fluent-accordion-item::part(heading):hover {
+    background: var(--aspire-hover-fill-strong);
+    background-color: var(--aspire-hover-fill-strong);
+}
+
+.property-grid-container fluent-accordion-item:is([expanded], [aria-expanded="true"])::part(heading):hover {
+    background:
+        var(--aspire-accent-gradient-subtle) top left / 100% 2px no-repeat,
+        linear-gradient(var(--aspire-hover-fill-strong), var(--aspire-hover-fill-strong));
+    background-color: var(--aspire-hover-fill-strong);
+}
+
+.details-container > header {
+    background: var(--aspire-details-header-bg) !important;
+    background-color: var(--aspire-details-header-bg) !important;
+}
+
+.details-container > header > .details-header-title {
+    font-family: 'Poppins', var(--body-font) !important;
+    font-size: var(--type-ramp-base-font-size) !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em;
+    line-height: 22px;
+}
+
+.details-container > header fluent-button[appearance=stealth]::part(control) {
+    border-radius: var(--aspire-radius-section);
+}
+
+.details-container > header fluent-button[appearance=stealth]:not(:hover)::part(control) {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+.details-container > header fluent-button[appearance=stealth]:hover::part(control) {
+    background: var(--aspire-hover-fill-strong) !important;
+    background-color: var(--aspire-hover-fill-strong) !important;
 }
 
 /* This is a hack because we can't do a selector that selects inside of a ::part,
@@ -562,7 +829,8 @@ fluent-switch.table-switch::part(label) {
    So instead we just change the color token the non-hovered state uses.
 */
 .property-grid-container fluent-accordion-item::part(icon) {
-    --neutral-fill-stealth-rest-on-neutral-fill-layer-rest: var(--property-grid-background-color);
+    --neutral-fill-stealth-rest-on-neutral-fill-layer-rest: transparent;
+    --neutral-fill-stealth-hover-on-neutral-fill-layer-rest: var(--aspire-hover-fill-strong);
 }
 
 .property-grid-container fluent-accordion-item::part(region) {
@@ -573,7 +841,7 @@ fluent-switch.table-switch::part(label) {
 
 .property-grid-container fluent-accordion-item::part(heading-content) {
     font-weight: 600;
-    font-size: var(--type-ramp-plus-1-font-size);
+    font-size: var(--type-ramp-base-font-size);
 }
 
 .property-grid-container fluent-accordion .fluent-data-grid-row:last-of-type {
@@ -587,7 +855,7 @@ fluent-switch.table-switch::part(label) {
 
 .property-grid-container fluent-accordion .fluent-data-grid-row:is([row-type='header'],[row-type='sticky-header']) fluent-button[appearance=stealth]::part(control):hover,
 .property-grid-container fluent-accordion .fluent-data-grid-row:is([row-type='header'],[row-type='sticky-header']) fluent-button[appearance=lightweight]::part(control):hover {
-    background-color: var(--neutral-fill-stealth-hover-on-neutral-fill-layer-rest);
+    background-color: var(--aspire-hover-fill-strong);
 }
 
 /* Under the current dark theme, the fluent-badge background color was too dark on --neutral-layer-1 */
@@ -659,7 +927,8 @@ fluent-switch.table-switch::part(label) {
 
 .page-content-container {
     height: 100%;
-    overflow: auto;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .log-overflow {
@@ -783,14 +1052,21 @@ fluent-switch.table-switch::part(label) {
 }
 
 .action-divider {
-    display: inline;
+    display: block;
     height: 20px;
+    margin-inline: 2px;
 }
 
 .grid-action-container {
-    display: inline-flex;
-    column-gap: 4px;
+    display: flex;
+    column-gap: 6px;
     align-items: center;
+    min-height: 24px;
+}
+
+.grid-action-spacer {
+    flex: 0 0 24px;
+    height: 24px;
 }
 
 .empty-data::before {
@@ -799,6 +1075,13 @@ fluent-switch.table-switch::part(label) {
 
 .fluent-data-grid {
     height: auto !important; /* override height in table style attribute */
+    border-spacing: 0;
+    max-width: 100%;
+}
+
+/* Remove default Fluent row borders to use our own */
+.fluent-data-grid-row {
+    border: none !important;
 }
 
 .main-grid-expand-container {
@@ -964,4 +1247,930 @@ fluent-tooltip[anchor="dialog_close"] > div {
 
 fluent-dialog#chat-modal-dialog fluent-button[appearance=stealth]:not(:hover)::part(control) {
     background: var(--chat-background-color);
+}
+
+/* ============================================================
+   Aspire Brand - Modern UI Overhaul
+   Fresh, lightweight, rounded, aesthetic
+   ============================================================ */
+
+/* --- Global shape & motion --- */
+* {
+    scrollbar-width: thin;
+}
+
+fluent-button::part(control),
+fluent-anchor::part(control) {
+    border-radius: var(--aspire-radius-control);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+fluent-button[appearance=accent]::part(control) {
+    border-radius: 20px;
+    padding: 6px 20px;
+    font-weight: 600;
+    font-family: 'Poppins', var(--body-font);
+    letter-spacing: 0.01em;
+}
+
+/* --- Content area card treatment --- */
+.content-layout {
+    border-radius: 16px;
+    background: var(--aspire-surface-card);
+    box-sizing: border-box;
+    height: calc(100% - 32px);
+    margin: 16px 20px;
+    min-height: 0;
+    min-width: 0;
+    width: calc(100% - 40px);
+    box-shadow: var(--aspire-card-shadow);
+    border: 1px solid var(--aspire-border-subtle);
+    overflow: hidden;
+}
+
+[data-theme="dark"] .content-layout {
+    background: var(--aspire-surface-card) !important;
+    box-shadow: var(--aspire-card-shadow);
+}
+
+/* Force dark card bg on all inner grid/table/main elements */
+[data-theme="dark"] .content-layout main,
+[data-theme="dark"] .content-layout .fluent-data-grid,
+[data-theme="dark"] .content-layout table {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+/* --- Page header (h1) - distinctive and airy --- */
+h1 {
+    font-family: 'Poppins', var(--body-font);
+    font-size: var(--type-ramp-plus-4-font-size);
+    line-height: var(--type-ramp-plus-4-line-height);
+    font-weight: 700;
+    margin-top: 0.5rem;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.02em;
+    color: var(--aspire-color-black);
+}
+
+[data-theme="dark"] h1 {
+    color: var(--aspire-color-white);
+}
+
+/* --- Tab bar - floating pills style --- */
+fluent-tabs::part(tablist) {
+    border-bottom: none;
+    gap: 6px;
+    padding: 6px 8px;
+    background: transparent;
+}
+
+fluent-tab {
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 500;
+    font-size: 13px;
+    border-radius: var(--aspire-radius-pill);
+    overflow: hidden;
+    padding: 6px 16px;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+fluent-tab::part(content) {
+    padding: 4px 10px;
+}
+
+fluent-tab[aria-selected="true"] {
+    background: var(--aspire-hover-fill);
+}
+
+fluent-tab[aria-selected="true"]::after {
+    background: var(--aspire-accent-gradient-subtle);
+    border-radius: var(--aspire-radius-pill);
+    bottom: 3px;
+    content: "";
+    height: 2px;
+    left: 16px;
+    pointer-events: none;
+    position: absolute;
+    right: 16px;
+}
+
+fluent-tab[aria-selected="true"]::part(content) {
+    font-weight: 600;
+    color: var(--aspire-color-primary);
+}
+
+[data-theme="dark"] fluent-tab[aria-selected="true"]::part(content) {
+    color: var(--aspire-color-secondary);
+}
+
+fluent-tab:hover:not([aria-selected="true"]) {
+    background: var(--aspire-hover-fill);
+}
+
+/* --- Toolbar - clean, borderless --- */
+fluent-toolbar[orientation=horizontal] {
+    border-bottom: none;
+    padding: 8px 12px;
+    gap: 8px;
+    background: transparent !important;
+    background-color: transparent !important;
+    --neutral-fill-layer-rest: transparent;
+}
+
+/* --- Search box - pill shape --- */
+fluent-search::part(root) {
+    background: var(--aspire-control-fill) !important;
+    background-color: var(--aspire-control-fill) !important;
+    background-image: none !important;
+    border: 0 !important;
+    border-radius: var(--aspire-radius-pill);
+    box-shadow: inset 0 0 0 1px var(--aspire-control-border);
+    padding: 2px 8px;
+    transition: all 0.2s ease;
+}
+
+fluent-search:hover::part(root) {
+    background: var(--aspire-control-fill-hover) !important;
+    background-color: var(--aspire-control-fill-hover) !important;
+    background-image: none !important;
+    border: 0 !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aspire-color-secondary) 45%, transparent);
+}
+
+fluent-search:focus-within::part(root) {
+    background: var(--aspire-control-fill) !important;
+    background-color: var(--aspire-control-fill) !important;
+    background-image: none !important;
+    border: 0 !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aspire-color-primary) 55%, transparent);
+    outline: none !important;
+}
+
+fluent-search::part(control) {
+    border: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* --- Select dropdowns - rounded --- */
+fluent-select::part(control) {
+    background: var(--aspire-control-fill) !important;
+    background-color: var(--aspire-control-fill) !important;
+    border-color: var(--aspire-control-border) !important;
+    border-radius: var(--aspire-radius-control);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aspire-border-subtle) 60%, transparent);
+    transition: border-color 0.2s ease;
+}
+
+fluent-select:hover::part(control) {
+    background: var(--aspire-control-fill-hover) !important;
+    background-color: var(--aspire-control-fill-hover) !important;
+    border-color: var(--aspire-color-secondary) !important;
+}
+
+fluent-select::part(listbox) {
+    background: var(--aspire-control-popup-fill) !important;
+    background-color: var(--aspire-control-popup-fill) !important;
+    border-radius: var(--aspire-radius-card);
+    overflow: hidden;
+    padding: 4px;
+    box-shadow: var(--aspire-popup-shadow);
+    border: 1px solid var(--aspire-control-border);
+}
+
+[data-theme="dark"] fluent-select::part(control),
+[data-theme="dark"] fluent-select::part(selected-value),
+[data-theme="dark"] fluent-select::part(indicator),
+[data-theme="dark"] fluent-select::part(listbox) {
+    color: var(--aspire-color-white);
+}
+
+fluent-option {
+    background: var(--aspire-control-popup-fill);
+    border-radius: var(--aspire-radius-section);
+    color: inherit;
+    margin-block: 1px;
+}
+
+fluent-option::part(content) {
+    padding-inline: 10px;
+}
+
+fluent-option:hover {
+    background: var(--aspire-control-option-hover-fill);
+}
+
+fluent-option[selected],
+fluent-option[aria-selected="true"],
+fluent-option.selected {
+    background: var(--aspire-control-option-selected-fill);
+}
+
+[data-theme="dark"] fluent-option {
+    color: var(--aspire-color-white);
+}
+
+.aspire-menu-container {
+    background: var(--aspire-control-popup-fill) !important;
+    background-color: var(--aspire-control-popup-fill) !important;
+    border: 1px solid var(--aspire-control-border) !important;
+    border-radius: var(--aspire-radius-card) !important;
+    box-shadow: var(--aspire-popup-shadow) !important;
+    color: var(--neutral-foreground-rest) !important;
+    overflow: hidden;
+    padding: 4px !important;
+}
+
+.aspire-menu-container fluent-menu {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+    color: inherit !important;
+    min-width: 100%;
+}
+
+.aspire-menu-container fluent-menu-item {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+    border-radius: var(--aspire-radius-section);
+    color: inherit !important;
+    font-family: var(--body-font);
+    margin-block: 1px;
+}
+
+.aspire-menu-container fluent-menu-item:hover {
+    background: var(--aspire-control-option-hover-fill) !important;
+    background-color: var(--aspire-control-option-hover-fill) !important;
+}
+
+.aspire-menu-container fluent-menu-item::part(content),
+.aspire-menu-container fluent-menu-item::part(start),
+.aspire-menu-container fluent-menu-item::part(end) {
+    color: inherit !important;
+    font-family: var(--body-font);
+}
+
+/* --- Text fields - rounded --- */
+fluent-text-field::part(root) {
+    border-radius: var(--aspire-radius-control);
+}
+
+/* --- Data Grid - the showpiece --- */
+.fluent-data-grid {
+    border-radius: var(--aspire-radius-card);
+    overflow: hidden;
+    width: 100%;
+}
+
+/* Grid header row - clean and minimal */
+.fluent-data-grid-row[row-type='header'],
+.fluent-data-grid-row[row-type='sticky-header'] {
+    background: transparent !important;
+    background-color: transparent !important;
+    --neutral-fill-layer-rest: transparent;
+    --neutral-fill-secondary-rest: transparent;
+}
+
+.fluent-data-grid-row[row-type='header'] td,
+.fluent-data-grid-row[row-type='sticky-header'] td,
+.fluent-data-grid-row[row-type='header'] th,
+.fluent-data-grid-row[row-type='sticky-header'] th {
+    font-family: var(--body-font);
+    font-weight: 500;
+    font-size: 13px;
+    letter-spacing: 0;
+    color: var(--foreground-subtext-rest);
+    border-bottom: 1px solid var(--aspire-border-subtle) !important;
+    padding: 12px 16px !important;
+    background: var(--aspire-table-header-bg) !important;
+    background-color: var(--aspire-table-header-bg) !important;
+}
+
+.fluent-data-grid-row[row-type='header'] .col-title-text,
+.fluent-data-grid-row[row-type='sticky-header'] .col-title-text {
+    font-family: var(--body-font);
+}
+
+.fluent-data-grid-row[row-type='header'] .col-sort-button::part(control),
+.fluent-data-grid-row[row-type='sticky-header'] .col-sort-button::part(control) {
+    justify-content: flex-start;
+    padding-inline: 0 !important;
+}
+
+.fluent-data-grid-row[row-type='header'] .column-header:not(:first-of-type) .col-sort-button,
+.fluent-data-grid-row[row-type='sticky-header'] .column-header:not(:first-of-type) .col-sort-button {
+    margin-inline-start: -12px;
+}
+
+.fluent-data-grid-row[row-type='header'] .column-header:first-of-type .col-sort-button,
+.fluent-data-grid-row[row-type='sticky-header'] .column-header:first-of-type .col-sort-button {
+    margin-inline-start: 25px;
+}
+
+/* Also override on the grid table itself */
+.fluent-data-grid {
+    --neutral-fill-layer-rest: transparent;
+    --neutral-fill-secondary-rest: transparent;
+}
+
+/* Data rows - airy, modern font */
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) {
+    border-bottom: none !important;
+    transition: all 0.15s ease;
+}
+
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) td {
+    padding: 11px 16px !important;
+    border-bottom: 1px solid color-mix(in srgb, var(--aspire-border-subtle) 50%, transparent) !important;
+    font-family: 'Poppins', var(--body-font);
+    font-size: 13px;
+    line-height: 20px;
+    vertical-align: middle;
+}
+
+/* Hover - soft rounded highlight */
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover {
+    background-color: var(--aspire-row-hover-fill) !important;
+    border-radius: var(--aspire-radius-section);
+}
+
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover td {
+    border-bottom-color: transparent !important;
+}
+
+[data-theme="dark"] .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover {
+    background-color: var(--aspire-row-hover-fill) !important;
+}
+
+/* --- Links - brand-colored with smooth hover --- */
+fluent-anchor[appearance=lightweight]::part(control),
+fluent-button[appearance=lightweight]::part(control) {
+    color: var(--aspire-color-primary);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+[data-theme="dark"] fluent-anchor[appearance=lightweight]::part(control),
+[data-theme="dark"] fluent-button[appearance=lightweight]::part(control) {
+    color: var(--aspire-color-secondary);
+}
+
+fluent-anchor[appearance=lightweight]:hover::part(control),
+fluent-button[appearance=lightweight]:hover::part(control) {
+    color: var(--aspire-color-purple);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+[data-theme="dark"] fluent-anchor[appearance=lightweight]:hover::part(control),
+[data-theme="dark"] fluent-button[appearance=lightweight]:hover::part(control) {
+    color: var(--aspire-color-muted);
+}
+
+/* --- Badge/pill - fully rounded --- */
+fluent-badge::part(control) {
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    letter-spacing: 0.02em;
+}
+
+.trace-tag {
+    background-color: var(--aspire-trace-tag-fill) !important;
+    border: 1px solid var(--aspire-border-accent) !important;
+    border-radius: var(--aspire-radius-tag) !important;
+    color: var(--neutral-foreground-rest) !important;
+    font-weight: 600;
+    line-height: 18px;
+    padding: 3px 8px !important;
+}
+
+.trace-service-tag {
+    border-left-width: 14px !important;
+}
+
+fluent-progress-ring.duration-ring::part(background) {
+    stroke: var(--aspire-border-accent-muted) !important;
+}
+
+fluent-progress-ring.duration-ring::part(determinate) {
+    stroke: var(--aspire-color-secondary) !important;
+}
+
+.trace-duration {
+    color: var(--neutral-foreground-rest) !important;
+    font-weight: 600;
+    min-width: 4.5rem;
+}
+
+/* --- Accordion - card-like sections --- */
+.property-grid-container fluent-accordion-item {
+    border: 1px solid var(--aspire-border-subtle);
+    border-radius: var(--aspire-radius-section) !important;
+    overflow: hidden;
+    margin-bottom: calc(var(--design-unit) * 1px);
+}
+
+/* --- Dialog/Panel - rounded with depth --- */
+fluent-dialog::part(control) {
+    border-radius: 16px;
+    box-shadow: var(--aspire-dialog-shadow);
+}
+
+[data-theme="dark"] fluent-dialog::part(control) {
+    box-shadow: var(--aspire-dialog-shadow);
+}
+
+/* --- Tooltip - rounded --- */
+fluent-tooltip::part(tooltip) {
+    border-radius: var(--aspire-radius-control);
+    padding: 8px 14px;
+    font-size: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Message bar - modern rounded --- */
+.fluent-messagebar {
+    border-radius: var(--aspire-radius-card) !important;
+    margin: 8px 0;
+}
+
+/* --- Nav items - pill hover states --- */
+.fluent-appbar-item {
+    border-radius: var(--aspire-radius-panel);
+    margin: 2px 6px;
+    overflow: hidden;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.desktop-nav-menu .fluent-appbar-item:hover {
+    background: var(--aspire-pill-hover-fill) !important;
+    background-color: var(--aspire-pill-hover-fill) !important;
+}
+
+.desktop-nav-menu .fluent-appbar-item:has(a.active) {
+    background: var(--aspire-pill-selected-fill) !important;
+    background-color: var(--aspire-pill-selected-fill) !important;
+    box-shadow: inset 0 0 0 1px var(--aspire-pill-selected-border);
+}
+
+.desktop-nav-menu .fluent-appbar-item:has(a.active) svg :is(path, rect, circle, ellipse, polygon):not([fill="none"]) {
+    fill: var(--aspire-color-primary) !important;
+}
+
+.desktop-nav-menu .fluent-appbar-item:has(a.active) svg :is(path, rect, circle, ellipse, polygon)[stroke]:not([stroke="none"]) {
+    stroke: var(--aspire-color-primary) !important;
+}
+
+.desktop-nav-menu .fluent-appbar-item:has(a.active) a,
+.desktop-nav-menu .fluent-appbar-item:has(a.active) a::before,
+.desktop-nav-menu .fluent-appbar-item:has(a.active) a::after {
+    border-left: 0 !important;
+}
+
+.desktop-nav-menu .fluent-appbar-item:has(a.active) a::before {
+    content: none !important;
+    display: none !important;
+}
+
+[data-theme="dark"] .desktop-nav-menu .fluent-appbar-item:has(a.active) {
+    background: var(--aspire-pill-selected-fill) !important;
+    background-color: var(--aspire-pill-selected-fill) !important;
+    box-shadow: inset 0 0 0 1px var(--aspire-pill-selected-border);
+}
+
+[data-theme="dark"] .desktop-nav-menu .fluent-appbar-item:has(a.active) svg :is(path, rect, circle, ellipse, polygon):not([fill="none"]) {
+    fill: var(--aspire-color-secondary) !important;
+}
+
+[data-theme="dark"] .desktop-nav-menu .fluent-appbar-item:has(a.active) svg :is(path, rect, circle, ellipse, polygon)[stroke]:not([stroke="none"]) {
+    stroke: var(--aspire-color-secondary) !important;
+}
+
+/* --- Counter badge on nav - floating pill --- */
+.fluentui-counterbadge-container .fluentui-counterbadge {
+    border-radius: 20px;
+}
+
+/* --- Footer - subtle --- */
+.items-footer .result-count {
+    font-size: 12px;
+    color: var(--foreground-subtext-rest);
+    font-weight: 500;
+    font-family: 'Poppins', var(--body-font);
+}
+
+/* --- Empty state - centered, branded --- */
+.empty-content-row td {
+    text-align: center;
+    padding: 48px 24px !important;
+    color: var(--foreground-subtext-rest);
+    font-style: italic;
+}
+
+/* --- Checkbox & switch - rounded --- */
+fluent-checkbox::part(control) {
+    border-radius: 6px;
+}
+
+fluent-switch::part(switch) {
+    border-radius: 20px;
+}
+
+/* --- Stealth buttons (icon buttons in grid/toolbar) - circle on hover --- */
+.content-layout fluent-button[appearance=stealth]::part(control),
+fluent-toolbar fluent-button[appearance=stealth]::part(control) {
+    border-radius: 50%;
+}
+
+/* Icon-only controls should feel lightweight, not like dark Fluent pills. */
+.grid-action-container fluent-button[appearance=lightweight]::part(control),
+.grid-action-container fluent-button[appearance=stealth]::part(control),
+.aspire-menu-button-icon-only[appearance=lightweight]::part(control),
+.aspire-menu-button-icon-only[appearance=stealth]::part(control),
+.main-grid-expand-button::part(control),
+.content-header fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button)::part(control),
+.content-header fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=neutral]:not(.col-sort-button)::part(control),
+fluent-button#resourceFilterButton::part(control) {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    --neutral-fill-stealth-rest: transparent;
+    --neutral-fill-stealth-hover: var(--aspire-icon-button-hover-fill);
+    --neutral-fill-stealth-active: var(--aspire-icon-button-active-fill);
+    --neutral-fill-secondary-rest: transparent;
+}
+
+.grid-action-container fluent-button[appearance=lightweight]::part(control),
+.grid-action-container fluent-button[appearance=stealth]::part(control),
+.aspire-menu-button-icon-only[appearance=lightweight]::part(control),
+.aspire-menu-button-icon-only[appearance=stealth]::part(control) {
+    align-items: center;
+    display: flex;
+    height: 24px;
+    justify-content: center;
+    min-width: 24px;
+    padding: 0;
+    width: 24px;
+}
+
+.grid-action-container fluent-button[appearance=lightweight],
+.grid-action-container fluent-button[appearance=stealth],
+.aspire-menu-button-icon-only[appearance=lightweight],
+.aspire-menu-button-icon-only[appearance=stealth] {
+    height: 24px;
+    min-width: 24px;
+    width: 24px;
+}
+
+.grid-action-container fluent-button[appearance=lightweight]::part(content),
+.grid-action-container fluent-button[appearance=stealth]::part(content),
+.grid-action-container fluent-button[appearance=lightweight]::part(start),
+.grid-action-container fluent-button[appearance=stealth]::part(start),
+.aspire-menu-button-icon-only[appearance=lightweight]::part(content),
+.aspire-menu-button-icon-only[appearance=stealth]::part(content),
+.aspire-menu-button-icon-only[appearance=lightweight]::part(start),
+.aspire-menu-button-icon-only[appearance=stealth]::part(start) {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    margin: 0;
+}
+
+.grid-action-container fluent-icon {
+    display: flex;
+}
+
+.grid-action-container fluent-button[appearance=lightweight]::part(control),
+.grid-action-container fluent-button[appearance=stealth]::part(control),
+.aspire-menu-button-icon-only[appearance=lightweight]::part(control),
+.aspire-menu-button-icon-only[appearance=stealth]::part(control),
+.content-header fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button)::part(control),
+.content-header fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=neutral]:not(.col-sort-button)::part(control),
+fluent-button#resourceFilterButton::part(control) {
+    border-radius: var(--aspire-radius-control);
+}
+
+.main-grid-expand-button::part(control) {
+    border-radius: 50%;
+    min-width: 18px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+}
+
+fluent-button.grid-value-mask-button[appearance=lightweight] {
+    height: 24px;
+    min-width: 24px;
+    width: 24px;
+}
+
+fluent-button.grid-value-mask-button[appearance=lightweight]::part(control) {
+    align-items: center;
+    background: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    display: flex;
+    height: 24px;
+    justify-content: center;
+    min-width: 24px;
+    padding: 0;
+    width: 24px;
+}
+
+fluent-button.grid-value-mask-button[appearance=lightweight]:hover::part(control) {
+    background: var(--aspire-icon-button-hover-fill) !important;
+    background-color: var(--aspire-icon-button-hover-fill) !important;
+}
+
+.grid-action-container fluent-button[appearance=lightweight]:hover::part(control),
+.grid-action-container fluent-button[appearance=stealth]:hover::part(control),
+.aspire-menu-button-icon-only[appearance=lightweight]:hover::part(control),
+.aspire-menu-button-icon-only[appearance=stealth]:hover::part(control),
+.aspire-menu-button-icon-only[aria-expanded="true"]::part(control),
+.main-grid-expand-button:hover::part(control),
+.content-header fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button):hover::part(control),
+.content-header fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button):hover::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button):hover::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button):hover::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=neutral]:not(.col-sort-button):hover::part(control),
+fluent-button#resourceFilterButton:hover::part(control) {
+    background: var(--aspire-hover-fill-strong) !important;
+    background-color: var(--aspire-hover-fill-strong) !important;
+}
+
+[data-theme="light"] .grid-action-container fluent-button[appearance=lightweight]:hover::part(control),
+[data-theme="light"] .grid-action-container fluent-button[appearance=stealth]:hover::part(control),
+[data-theme="light"] .aspire-menu-button-icon-only[appearance=lightweight]:hover::part(control),
+[data-theme="light"] .aspire-menu-button-icon-only[appearance=stealth]:hover::part(control),
+[data-theme="light"] .aspire-menu-button-icon-only[aria-expanded="true"]::part(control),
+[data-theme="light"] .main-grid-expand-button:hover::part(control),
+[data-theme="light"] .content-header fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button):hover::part(control),
+[data-theme="light"] .content-header fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button):hover::part(control),
+[data-theme="light"] .content-layout fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button):hover::part(control),
+[data-theme="light"] .content-layout fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button):hover::part(control),
+[data-theme="light"] .content-layout fluent-toolbar fluent-button[appearance=neutral]:not(.col-sort-button):hover::part(control),
+[data-theme="light"] fluent-button#resourceFilterButton:hover::part(control) {
+    background: var(--aspire-hover-fill-strong) !important;
+    background-color: var(--aspire-hover-fill-strong) !important;
+}
+
+.selected-row .grid-action-container fluent-button[appearance=lightweight]:not(:hover)::part(control),
+.selected-row .grid-action-container fluent-button[appearance=stealth]:not(:hover)::part(control),
+.selected-row .aspire-menu-button-icon-only:not(:hover):not([aria-expanded="true"])::part(control),
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover .grid-action-container fluent-button[appearance=lightweight]:not(:hover)::part(control),
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover .grid-action-container fluent-button[appearance=stealth]:not(:hover)::part(control),
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover .aspire-menu-button-icon-only:not(:hover):not([aria-expanded="true"])::part(control) {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+/* Sortable grid headers use stealth buttons internally; keep them text-only. */
+.fluent-data-grid-row[row-type='header'] fluent-button.col-sort-button::part(control),
+.fluent-data-grid-row[row-type='sticky-header'] fluent-button.col-sort-button::part(control) {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-radius: 6px;
+    color: var(--foreground-subtext-rest);
+}
+
+/* --- Dividers - subtle --- */
+fluent-divider {
+    opacity: 0.5;
+}
+
+/* --- Resource filter chips area --- */
+.filter-group {
+    background: var(--aspire-hover-fill);
+    border-radius: var(--aspire-radius-card);
+    padding: 12px 16px;
+    margin: 8px 0;
+}
+
+.filter-group > legend {
+    font-size: var(--type-ramp-plus-2-font-size);
+    font-weight: 600;
+    font-family: 'Poppins', var(--body-font);
+}
+
+/* --- Smooth page transitions --- */
+.page-content-container {
+    animation: fadeSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- Header "Aspire" brand title --- */
+.layout > header fluent-anchor[appearance=stealth]::part(content) {
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 600;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+}
+
+/* --- Message bar - pill with subtle border --- */
+.messagebar-container {
+    background: var(--aspire-messagebar-strip-bg) !important;
+    min-height: 4px;
+    padding: 0 20px;
+    border-top: none !important;
+    border-left: none !important;
+}
+
+[data-theme="dark"] .messagebar-container {
+    background: var(--aspire-messagebar-strip-bg) !important;
+}
+
+.messagebar-container:not(:has(.fluent-messagebar, fluent-message-bar)) .top-messagebar {
+    display: none;
+}
+
+.messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
+    background: var(--aspire-messagebar-fill) !important;
+    padding: 8px 20px;
+}
+
+[data-theme="dark"] .messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
+    background: var(--aspire-messagebar-fill) !important;
+}
+
+.messagebar-container .fluent-messagebar {
+    border-radius: var(--aspire-radius-card);
+    box-sizing: border-box;
+    overflow: hidden;
+    width: 100%;
+}
+
+/* Override grey message bar backgrounds */
+fluent-message-bar,
+.fluent-messagebar {
+    --neutral-fill-layer-rest: transparent;
+    --neutral-fill-secondary-rest: transparent;
+    border-radius: var(--aspire-radius-card) !important;
+}
+
+[data-theme="dark"] fluent-message-bar,
+[data-theme="dark"] .fluent-messagebar {
+    background: var(--aspire-messagebar-control-fill) !important;
+    background-color: var(--aspire-messagebar-control-fill) !important;
+    border: 1px solid var(--aspire-border-muted) !important;
+}
+
+[data-theme="light"] fluent-message-bar,
+[data-theme="light"] .fluent-messagebar {
+    background: var(--aspire-messagebar-control-fill) !important;
+    background-color: var(--aspire-messagebar-control-fill) !important;
+    border: 1px solid var(--aspire-border-subtle) !important;
+}
+
+/* --- Page heading area - gradient background --- */
+.content-header {
+    padding: 24px 24px 16px;
+    background: var(--aspire-content-header-bg);
+    border-radius: 16px 16px 0 0;
+}
+
+[data-theme="dark"] .content-header {
+    background: var(--aspire-content-header-bg);
+}
+
+.content-header h1 {
+    margin-bottom: 0;
+}
+
+.content-header fluent-toolbar::part(positioning-region),
+.content-header fluent-toolbar::part(end) {
+    align-items: center;
+}
+
+/* --- Focus rings - rounded and brand-colored --- */
+fluent-button:focus-visible::part(control),
+fluent-anchor:focus-visible::part(control) {
+    outline: 2px solid var(--aspire-color-primary);
+    outline-offset: 2px;
+    border-radius: var(--aspire-radius-control);
+}
+
+fluent-text-field:focus-within::part(root) {
+    outline: 2px solid var(--aspire-color-primary);
+    outline-offset: 1px;
+}
+
+/* --- Dark mode glassmorphism on nav --- */
+[data-theme="dark"] .layout > .fluent-appbar {
+    background: rgba(26, 25, 48, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme="dark"] .layout > header {
+    background: rgba(26, 25, 48, 0.9);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+/* --- Subtle accent line below header in dark mode --- */
+[data-theme="dark"] .layout > header {
+    border-bottom: 1px solid var(--aspire-border-muted);
+}
+
+/* --- Body content container - proper background --- */
+.body-content {
+    background: var(--aspire-surface-page) !important;
+    background-color: var(--aspire-surface-page) !important;
+}
+
+[data-theme="dark"] .body-content,
+[data-theme="dark"] .custom-body-content {
+    background: var(--aspire-surface-page) !important;
+    background-color: var(--aspire-surface-page) !important;
+    --neutral-layer-2: var(--aspire-surface-page);
+}
+
+[data-theme="dark"] .layout-body-container {
+    background: var(--aspire-surface-page) !important;
+    background-color: var(--aspire-surface-page) !important;
+}
+
+[data-theme="light"] .body-content,
+[data-theme="light"] .custom-body-content {
+    background: #F8F7FC !important;
+    background-color: #F8F7FC !important;
+    --neutral-layer-2: #F8F7FC;
+}
+
+/* --- Info/metric cards - rounded --- */
+.metric-card,
+.resource-card {
+    border-radius: var(--aspire-radius-panel);
+    border: 1px solid var(--aspire-border-subtle);
+    overflow: hidden;
+}
+
+/* --- Smoother transitions on interactive elements --- */
+fluent-select::part(control),
+fluent-text-field::part(root),
+fluent-search::part(root),
+fluent-button::part(control) {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Column resize handles - invisible until directly used --- */
+.resize-handle,
+.col-resize-handle {
+    background: transparent !important;
+    border: 0 !important;
+    opacity: 0 !important;
+}
+
+.actual-resize-handle {
+    background: transparent !important;
+    border: 0 !important;
+    height: 26px !important;
+    opacity: 0 !important;
+    top: 10px !important;
+    transition: opacity 0.2s ease;
+}
+
+.actual-resize-handle:hover,
+.actual-resize-handle:focus-visible,
+.col-resize-handle:focus-visible,
+.col-resize-handle:hover {
+    opacity: 0.45 !important;
+}
+
+/* --- Property panel / detail view - softer --- */
+.property-grid-container {
+    border-radius: var(--aspire-radius-card);
+    overflow: hidden;
+}
+
+/* --- Log level indicators - pill badges --- */
+.severity-cell .fluent-badge,
+.severity-cell fluent-badge {
+    border-radius: 20px;
+    font-size: 10px;
+    padding: 2px 8px;
 }

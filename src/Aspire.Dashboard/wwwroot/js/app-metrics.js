@@ -25,7 +25,12 @@ export function initializeChart(id, traces, exemplarTrace, rangeStartTime, range
             name: name,
             text: traces[i].tooltips,
             hoverinfo: 'text',
-            stackgroup: "one"
+            stackgroup: "one",
+            line: {
+                color: themeColors.seriesColors[i % themeColors.seriesColors.length],
+                width: 2
+            },
+            fillcolor: themeColors.seriesFillColors[i % themeColors.seriesFillColors.length]
         };
         data.push(t);
     }
@@ -60,12 +65,18 @@ export function initializeChart(id, traces, exemplarTrace, rangeStartTime, range
             range: [rangeEndTime, rangeStartTime],
             fixedrange: true,
             tickformat: "%X",
-            color: themeColors.textColor
+            color: themeColors.axisColor,
+            gridcolor: themeColors.gridColor,
+            linecolor: themeColors.gridColor,
+            zerolinecolor: themeColors.gridColor
         },
         yaxis: {
             rangemode: "tozero",
             fixedrange: true,
-            color: themeColors.textColor
+            color: themeColors.axisColor,
+            gridcolor: themeColors.gridColor,
+            linecolor: themeColors.gridColor,
+            zerolinecolor: themeColors.gridColor
         },
         hovermode: "closest",
         showlegend: true,
@@ -182,7 +193,16 @@ export function updateChart(id, traces, exemplarTrace, rangeStartTime, rangeEndT
             range: [rangeEndTime, rangeStartTime],
             fixedrange: true,
             tickformat: "%X",
-            color: themeColors.textColor
+            color: themeColors.axisColor,
+            gridcolor: themeColors.gridColor,
+            linecolor: themeColors.gridColor,
+            zerolinecolor: themeColors.gridColor
+        },
+        yaxis: {
+            color: themeColors.axisColor,
+            gridcolor: themeColors.gridColor,
+            linecolor: themeColors.gridColor,
+            zerolinecolor: themeColors.gridColor
         }
     };
 
@@ -195,9 +215,21 @@ function getThemeColors() {
     // Get colors from the current light/dark theme.
     var style = getComputedStyle(document.body);
     return {
-        backgroundColor: style.getPropertyValue("--fill-color"),
+        backgroundColor: style.getPropertyValue("--aspire-chart-background").trim() || style.getPropertyValue("--fill-color"),
         textColor: style.getPropertyValue("--neutral-foreground-rest"),
-        pointColor: style.getPropertyValue("--accent-fill-rest")
+        axisColor: style.getPropertyValue("--aspire-chart-axis-color").trim() || style.getPropertyValue("--neutral-foreground-rest"),
+        gridColor: style.getPropertyValue("--aspire-chart-grid-color").trim() || style.getPropertyValue("--neutral-stroke-divider-rest"),
+        pointColor: style.getPropertyValue("--accent-fill-rest"),
+        seriesColors: [
+            style.getPropertyValue("--aspire-chart-series-1").trim(),
+            style.getPropertyValue("--aspire-chart-series-2").trim(),
+            style.getPropertyValue("--aspire-chart-series-3").trim()
+        ],
+        seriesFillColors: [
+            style.getPropertyValue("--aspire-chart-series-1-fill").trim(),
+            style.getPropertyValue("--aspire-chart-series-2-fill").trim(),
+            style.getPropertyValue("--aspire-chart-series-3-fill").trim()
+        ]
     };
 }
 

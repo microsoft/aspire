@@ -31,25 +31,29 @@
 .trace-tag {
     display: flex;
     align-items: center;
-    border: 1px solid rgb(217, 217, 217);
-    padding: 2px 7px;
+    border: 1px solid var(--aspire-border-accent);
+    padding: 3px 8px;
     font-size: 12px;
-    background-color: var(--neutral-fill-rest);
+    background-color: var(--aspire-trace-tag-fill);
     color: var(--neutral-foreground-rest);
+    border-radius: var(--aspire-radius-tag);
+    font-weight: 600;
+    line-height: 18px;
 }
 
 .trace-service-tag {
-    border-left-width: 15px;
+    border-left-width: 14px;
     margin-right: 7px;
 }
 
 ::deep fluent-progress-ring::part(background) {
-    stroke: var(--neutral-fill-input-alt-active);
+    stroke: var(--aspire-border-accent-muted);
 }
 
 ::deep fluent-progress-ring::part(determinate) {
     transition: unset;
     stroke-linecap: unset;
+    stroke: var(--aspire-color-secondary);
 }
 
 ::deep .duration-container {
@@ -63,5 +67,8 @@
 }
 
 ::deep .trace-duration {
+    color: var(--neutral-foreground-rest);
+    font-weight: 600;
+    min-width: 4.5rem;
     padding-left: 10px;
 }

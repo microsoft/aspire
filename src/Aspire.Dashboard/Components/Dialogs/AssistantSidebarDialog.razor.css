@@ -37,9 +37,9 @@
 
 ::deep.copilot-chat-container {
     width: 480px;
-    box-shadow: rgba(0, 0, 0, 0.133) 0px 1.6px 3.6px 0px, rgba(0, 0, 0, 0.11) 0px 0.3px 0.9px 0px;
+    box-shadow: -4px 0 16px rgba(116, 85, 221, 0.08), 0 0 4px rgba(0, 0, 0, 0.06);
     background-color: var(--chat-background-color);
-    border-left: 1px solid var(--neutral-stroke-rest);
+    border-left: 1px solid var(--aspire-border-subtle);
     position: absolute;
     z-index: 1000;
     right: 0;
@@ -94,6 +94,7 @@
 }
 
 ::deep.copilot-chat-header-title {
-    font-weight: 400;
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 600;
     font-size: var(--type-ramp-plus-1-font-size);
 }

@@ -12,7 +12,7 @@
     @foreach (var shortcutCategory in GetShortcutsByCategory())
     {
         <FluentGridItem xs="12" sm="6">
-            <FluentStack Orientation="Orientation.Vertical" VerticalGap="3" style="border-radius: 0.375rem; border-style: solid; border-width: 1px; border-color: var(--neutral-layer-4); padding: 11px;">
+            <FluentStack Orientation="Orientation.Vertical" VerticalGap="3" style="border-radius: 0.375rem; border-style: solid; border-width: 1px; border-color: var(--aspire-border-muted); padding: 11px;">
                 <h6 style="margin-bottom: 5px;">@shortcutCategory.Category</h6>
                 <FluentStack Orientation="Orientation.Vertical" VerticalGap="6">
                     @foreach (var shortcut in shortcutCategory.Shortcuts)

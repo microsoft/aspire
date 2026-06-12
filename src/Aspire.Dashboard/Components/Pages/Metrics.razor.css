@@ -40,6 +40,24 @@
     }
 }
 
+::deep .metrics-main-scroll {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+}
+
+::deep .metrics-splitter {
+    gap: 12px;
+}
+
+::deep .metrics-tree-panel {
+    background: color-mix(in srgb, var(--aspire-surface-card) 86%, var(--aspire-surface-page) 14%);
+    border: 1px solid var(--aspire-border-subtle);
+    border-radius: var(--aspire-radius-panel);
+    height: calc(100% - 2px);
+    overflow: hidden;
+}
+
 ::deep .metrics-chart-header {
     grid-area: header;
     overflow-x: hidden;
@@ -54,6 +72,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+::deep .metrics-chart-header p {
+    color: var(--foreground-subtext-rest);
+    line-height: 1.45;
+    max-width: 1200px;
 }
 
 ::deep .metrics-chart-container {
@@ -91,15 +117,57 @@
 
 ::deep .metrics-tree {
     min-width: auto;
-    margin-right: 3px;
+    --base-height-multiplier: 8;
+    height: 100%;
+    margin: 0;
+    overflow: auto;
+    padding: 8px 4px;
+}
+
+::deep .metrics-tree fluent-tree-item::part(positioning-region) {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--aspire-radius-control);
+    margin: 1px 4px;
+}
+
+::deep .metrics-tree fluent-tree-item::part(positioning-region):hover {
+    background: var(--aspire-control-option-hover-fill);
+    border-color: var(--aspire-border-subtle);
+}
+
+::deep .metrics-tree fluent-tree-item[selected]::part(positioning-region) {
+    background:
+        linear-gradient(90deg, var(--aspire-accent-magenta) 0 3px, transparent 3px),
+        var(--aspire-control-option-selected-fill);
+    border-color: var(--aspire-pill-selected-border);
+}
+
+::deep .metrics-tree fluent-tree-item .treeitem-text {
+    font-family: var(--body-font);
+    line-height: 20px;
+}
+
+::deep .metrics-tree > fluent-tree-item > .treeitem-text {
+    font-weight: 600;
+}
+
+::deep .metrics-tree fluent-tree-item.nested .treeitem-text {
+    font-weight: 500;
 }
 
 ::deep .metrics-content {
     /* Match left padding of the page header */
-    margin-left: calc(var(--design-unit)* 4.5px);
+    margin-left: calc(var(--design-unit) * 4.5px);
+    min-height: 100%;
 }
 
 ::deep .plotly-chart-container {
+    background: var(--aspire-chart-background);
+    border: 1px solid var(--aspire-border-subtle);
+    border-radius: var(--aspire-radius-panel);
+    box-shadow: var(--aspire-card-shadow);
+    overflow: hidden;
     width: 100%;
     max-width: 650px;
     aspect-ratio: 13 / 9;

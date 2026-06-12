@@ -1,5 +1,8 @@
 ::deep .unread-logs-errors-link {
-    vertical-align: super;
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 24px;
     --unread-logs-badge-color: #ffffff;
 }
 
@@ -19,14 +22,22 @@
 }
 
 ::deep .unread-logs-errors-link::part(control) {
-    margin-left: 5px;
+    align-items: center;
+    display: inline-flex;
+    height: 24px;
+    margin-left: 2px;
     padding: 0;
     flex-grow: 0;
     color: #ffffff;
 }
 
 ::deep .error-counter-badge {
-    padding: 1px;
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 20px;
+    min-width: 20px;
+    padding: 0;
 }
 
 /* Forces the grid to always take up the width of its rows,
@@ -48,11 +59,65 @@
     overflow-x: clip;
 }
 
-::deep .resources-name-container {
-    height: 24px;
-    display: inline-flex;
-    vertical-align: middle;
+::deep .resources-grid-container .main-grid .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) td.expand-col {
     align-items: center;
+    display: flex;
+}
+
+::deep .resources-name-container {
+    align-items: center;
+    display: flex;
+    flex: 1 1 auto;
+    height: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+::deep .resources-name-container .main-grid-expand-container {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 18px;
+    height: 24px;
+    justify-content: center;
+}
+
+::deep .resources-name-container .main-grid-expand-button {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+}
+
+::deep .resource-name-container,
+::deep .state-column-cell {
+    display: inline-flex;
+    align-items: center;
+    flex: 1 1 auto;
+    gap: 6px;
+    height: 24px;
+    max-width: 100%;
+    min-width: 0;
+    vertical-align: middle;
+}
+
+::deep .resource-icon,
+::deep .severity-icon,
+::deep .persistent-container-icon {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 16px;
+    justify-content: center;
+    margin-inline: 0;
+    width: 16px;
+}
+
+::deep .resource-name-text,
+::deep .state-column-cell > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 ::deep tr.resource-row > :first-child {
@@ -80,21 +145,95 @@
 }
 
 ::deep .resource-tabs fluent-tabs {
-    margin-left: calc(var(--design-unit) * 3px);
+    margin-left: 0;
+    padding: 10px 20px 8px;
+}
+
+::deep .resources-tab-header::part(tablist) {
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+}
+
+::deep .resources-tab-header::part(activeIndicator) {
+    display: none;
+}
+
+::deep .resources-tab-header fluent-tab {
+    border-radius: var(--aspire-radius-pill);
+    min-height: 36px;
+    padding: 6px 16px;
+}
+
+::deep .resources-tab-header fluent-tab[aria-selected="true"] {
+    background: var(--aspire-pill-selected-fill);
+    box-shadow: inset 0 0 0 1px var(--aspire-pill-selected-border);
+}
+
+::deep .resources-tab-header fluent-tab:hover:not([aria-selected="true"]) {
+    background: var(--aspire-pill-hover-fill);
 }
 
 ::deep .resources-grid-container {
     overflow: auto;
     grid-area: resources-tab-content;
+    min-height: 0;
+    min-width: 0;
 }
 
 ::deep .resource-tabs .resources-grid-container {
     margin-top: 10px;
 }
 
+::deep .url-overflow,
+::deep .url-link {
+    align-items: center;
+    display: inline-flex;
+    max-width: 100%;
+    min-width: 0;
+    vertical-align: middle;
+}
+
+::deep .resources-grid-container .main-grid .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) td.source-column {
+    align-items: center;
+    display: flex;
+}
+
+::deep .resources-grid-container .main-grid td.source-column .container {
+    width: 100%;
+}
+
+::deep .url-button::part(control) {
+    align-items: center;
+    display: inline-flex;
+    height: 24px;
+    justify-content: center;
+    line-height: 1;
+    min-width: 36px;
+    padding-inline: 10px;
+}
+
 ::deep .resource-graph-container {
     grid-area: resources-tab-content;
+    min-height: 0;
+    overflow: hidden;
     position: relative; /* So graph buttons are position inside the container */
+    --resource-graph-node-fill: var(--aspire-hover-fill-strong);
+    --resource-graph-node-border: var(--aspire-border-accent-muted);
+    --resource-graph-node-hover-fill: var(--aspire-control-fill-hover);
+    --resource-graph-node-selected-fill: var(--aspire-selected-fill);
+    --resource-graph-label-halo: color-mix(in srgb, var(--aspire-surface-card) 92%, transparent);
+    --resource-graph-link: var(--aspire-border-accent);
+    --resource-graph-control-bg: var(--aspire-control-fill-hover);
+    --resource-graph-control-hover-bg: var(--aspire-selected-fill);
+    --resource-graph-control-border: color-mix(in srgb, var(--aspire-border-muted) 70%, var(--aspire-color-secondary) 30%);
+    --resource-graph-control-icon: var(--aspire-color-secondary);
+}
+
+::deep .resource-graph {
+    display: block;
+    height: 100%;
+    width: 100%;
 }
 
 ::deep .resource-graph-controls {
@@ -103,6 +242,33 @@
     bottom: 30px;
     display: flex;
     column-gap: 10px;
+}
+
+::deep .resource-graph-controls fluent-button[appearance=stealth] {
+    height: 32px;
+    min-width: 32px;
+    width: 32px;
+}
+
+::deep .resource-graph-controls fluent-button[appearance=stealth]::part(control) {
+    background: var(--resource-graph-control-bg) !important;
+    background-color: var(--resource-graph-control-bg) !important;
+    border-color: var(--resource-graph-control-border) !important;
+    border-radius: 50%;
+    box-shadow: 0 6px 18px color-mix(in srgb, #000000 18%, transparent);
+    height: 32px;
+    min-width: 32px;
+    padding: 0;
+    width: 32px;
+}
+
+::deep .resource-graph-controls fluent-button[appearance=stealth]:hover::part(control) {
+    background: var(--resource-graph-control-hover-bg) !important;
+    background-color: var(--resource-graph-control-hover-bg) !important;
+}
+
+::deep .resource-graph-controls fluent-button svg {
+    fill: var(--resource-graph-control-icon) !important;
 }
 
 ::deep .resource-graph .texts {
@@ -115,7 +281,7 @@
 
 ::deep .resource-name {
     fill: var(--neutral-foreground-rest);
-    stroke: var(--fill-color);
+    stroke: var(--resource-graph-label-halo);
     font-size: 15px;
     text-anchor: middle;
     stroke-width: 0.5em;
@@ -124,12 +290,12 @@
 }
 
 ::deep .resource-node {
-    stroke: var(--fill-color);
-    fill: var(--fill-color);
+    stroke: var(--resource-graph-node-fill);
+    fill: var(--resource-graph-node-fill);
 }
 
 ::deep .resource-group-hover .resource-node {
-    fill: var(--neutral-fill-hover) !important;
+    fill: var(--resource-graph-node-hover-fill) !important;
 }
 
 ::deep .resource-group-selected .resource-scale {
@@ -137,11 +303,11 @@
 }
 
 ::deep .resource-group-selected .resource-node {
-    fill: var(--neutral-fill-secondary-rest) !important;
+    fill: var(--resource-graph-node-selected-fill) !important;
 }
 
 ::deep .resource-group-selected .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--resource-graph-control-icon);
 }
 
 ::deep .resource-group-highlight .resource-node {
@@ -149,15 +315,15 @@
 }
 
 ::deep .resource-group-highlight .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--resource-graph-control-icon);
 }
 
 ::deep .resource-group-hover .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--resource-graph-control-icon);
 }
 
 ::deep .resource-node-border {
-    stroke: var(--neutral-stroke-rest);
+    stroke: var(--resource-graph-node-border);
     stroke-width: 1;
     fill: transparent;
 }
@@ -173,7 +339,7 @@
 }
 
 ::deep .resource-link {
-    stroke: var(--neutral-stroke-rest);
+    stroke: var(--resource-graph-link);
     stroke-width: 1;
     marker-end: url(#arrow-normal);
 }

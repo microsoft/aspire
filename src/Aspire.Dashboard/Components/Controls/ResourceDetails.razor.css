@@ -4,10 +4,17 @@
     grid-template-areas:
         "toolbar"
         "main";
-    overflow: auto;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
     gap: calc(var(--design-unit) * 1px);
 }
 
 ::deep.resource-details-layout > fluent-toolbar {
     grid-area: toolbar;
+}
+
+::deep.resource-details-layout > .property-grid-container {
+    min-height: 0;
+    overflow: auto !important;
 }

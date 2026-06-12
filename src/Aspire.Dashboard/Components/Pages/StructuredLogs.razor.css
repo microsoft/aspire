@@ -32,6 +32,26 @@
     overflow: auto;
 }
 
+::deep .logs-grid-container .main-grid .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) td {
+    align-items: center;
+    display: flex;
+}
+
+::deep .logs-grid-container .main-grid td .container {
+    width: 100%;
+}
+
+::deep .logs-grid-container .main-grid td .severity-icon {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 16px;
+    justify-content: center;
+    margin-right: var(--inline-icon-margin);
+    vertical-align: middle;
+    width: 16px;
+}
+
 ::deep .wrap {
     text-wrap: wrap;
     white-space: pre-line;

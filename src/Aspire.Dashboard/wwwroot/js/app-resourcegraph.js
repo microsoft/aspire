@@ -170,11 +170,12 @@ class ResourceGraph {
     }
 
     resize() {
-        var container = document.querySelector(".resources-summary-layout");
+        var container = document.querySelector(".resource-graph-container:not([hidden])") ?? document.querySelector(".resources-summary-layout");
         if (container) {
             var width = container.clientWidth;
-            var height = Math.max(container.clientHeight - 50, 0);
-            this.svg.attr("viewBox", [-width / 2, -height / 2, width, height]);
+            var height = Math.max(container.clientHeight, 0);
+            var padding = 100;
+            this.svg.attr("viewBox", [-width / 2 - padding, -height / 2 - padding, width + padding * 2, height + padding * 2]);
         }
     }
 
@@ -292,6 +293,8 @@ class ResourceGraph {
     }
 
     updateResources(newResources) {
+        this.resize();
+
         // Check if the overall structure of the graph has changed. i.e. nodes or links have been added or removed.
         var hasStructureChanged = this.resourcesChanged(this.resources, newResources);
 

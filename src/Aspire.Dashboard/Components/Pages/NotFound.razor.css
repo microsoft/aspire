@@ -7,8 +7,14 @@
 
 .error-code {
     --error-code-font-size: 90px;
+    font-family: 'Poppins', var(--body-font);
     font-size: var(--error-code-font-size);
     line-height: var(--error-code-font-size);
+    font-weight: 700;
+    background: var(--aspire-gradient-purple-magenta);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .error-description {

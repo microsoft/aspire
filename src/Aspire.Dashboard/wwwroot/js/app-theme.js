@@ -140,15 +140,15 @@ function getBaseLayerLuminanceForTheme(theme) {
 }
 
 /**
- * Configures the accent color palette based on the .NET purple
+ * Configures the accent color palette based on the Aspire brand primary purple
  */
 function setAccentColor() {
     // Convert the base color ourselves to avoid pulling in the
     // @microsoft/fast-colors library just for one call to parseColorHexRGB
-    const baseColor = { // #512BD4
-        r: 0x51 / 255.0,
-        g: 0x2B / 255.0,
-        b: 0xD4 / 255.0
+    const baseColor = { // #7455DD - Aspire brand primary
+        r: 0x74 / 255.0,
+        g: 0x55 / 255.0,
+        b: 0xDD / 255.0
     };
 
     const accentBase = SwatchRGB.create(baseColor.r, baseColor.g, baseColor.b);
