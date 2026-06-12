@@ -66,11 +66,11 @@ jobs:
           MANUAL_RUN_ID: ${{ inputs.run_id }}
           MANUAL_DRY_RUN: ${{ inputs.dry_run }}
           # FORCE_RERUN_ALL: force-rerun EVERY failed CI job, bypassing the
-          # transient-failure classification, the retryable-job-count cap, and the open-PR
-          # gate. The attempt cap (up to 3 auto-reruns / 4 total attempts) is preserved.
-          # This is a for-now measure until CI auto-rerun patterns are improved; disable
-          # by setting this to 'false' (or removing it) on both jobs.
-          # See docs/ci/auto-rerun-transient-ci-failures.md.
+          # transient-failure classification and the retryable-job-count cap. The
+          # open-PR requirement and the attempt cap (up to 3 auto-reruns / 4 total
+          # attempts) are preserved. This is a for-now measure until CI auto-rerun
+          # patterns are improved; disable by setting this to 'false' (or removing it)
+          # on both jobs. See docs/ci/auto-rerun-transient-ci-failures.md.
           FORCE_RERUN_ALL: 'true'
         with:
           script: |
@@ -233,10 +233,10 @@ jobs:
             });
             core.setOutput('pull_request_numbers', JSON.stringify(pullRequestNumbers));
 
-            // FORCE_RERUN_ALL: in force mode, do not bail out when no PR is
-            // associated — still rerun the failed jobs. Outside force mode, keep the
-            // original behavior of skipping runs with no associated PR.
-            if (pullRequestNumbers.length === 0 && !forceRerunAll) {
+            // The open-PR requirement applies in all modes: skip runs with no
+            // associated PR. Force mode does not bypass this — there is no value in
+            // spending CI on a run that has no open PR behind it.
+            if (pullRequestNumbers.length === 0) {
               console.log('No associated pull request could be resolved for this workflow run. Skipping.');
               return;
             }
@@ -412,8 +412,9 @@ jobs:
           SOURCE_RUN_ATTEMPT: ${{ needs.analyze-transient-failures.outputs.source_run_attempt }}
           SOURCE_RUN_URL: ${{ needs.analyze-transient-failures.outputs.source_run_url }}
           TEST_PATTERN_MATCHED_TESTS: ${{ needs.analyze-transient-failures.outputs.test_pattern_matched_tests }}
-          # FORCE_RERUN_ALL: bypass the open-PR gate so closed/absent PRs do
-          # not block the rerun. Keep this in sync with the analyze step's FORCE_RERUN_ALL.
+          # FORCE_RERUN_ALL: drives the force-mode wording in the rerun summary and the
+          # PR comment (the jobs were rerun without transient-failure analysis). Keep
+          # this in sync with the analyze step's FORCE_RERUN_ALL.
           FORCE_RERUN_ALL: 'true'
         with:
           script: |

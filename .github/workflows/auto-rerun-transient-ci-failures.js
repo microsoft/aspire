@@ -6,11 +6,12 @@
 // makes the workflow rerun EVERY failed CI job for a run when enabled (via the YAML
 // `FORCE_RERUN_ALL` env var), bypassing:
 //   1. the 4-pass transient-failure classification (every non-ignored failed job
-//      becomes retryable),
-//   2. the retryable-job-count cap in computeRerunEligibility, and
-//   3. the open-PR gate in the YAML orchestration / rerunMatchedJobs.
-// It deliberately KEEPS the attempt cap (up to 3 auto-reruns / 4 total attempts),
-// the aggregator-job exclusion (ignoredJobs), and the failureConclusions filter.
+//      becomes retryable), and
+//   2. the retryable-job-count cap in computeRerunEligibility.
+// It deliberately KEEPS the open-PR requirement (reruns only fire for runs that have
+// a currently-open associated PR — there is no point spending CI on closed/merged
+// PRs), the attempt cap (up to 3 auto-reruns / 4 total attempts), the aggregator-job
+// exclusion (ignoredJobs), and the failureConclusions filter.
 // The transient-classification rules and the patterns config are left intact behind
 // this flag. `forceRerunAll` defaults to false everywhere so the existing unit tests
 // keep exercising the normal classification/eligibility behavior.
@@ -882,11 +883,10 @@ async function rerunMatchedJobs({
         pullRequestNumbers,
     });
 
-    // FORCE_RERUN_ALL: bypass the open-PR gate. Normally a rerun is
-    // skipped when every associated PR is closed; in force mode we rerun anyway. PR
-    // comments are still only posted to PRs that are currently open (closed PRs are
-    // not commented on). See the file-level comment for how to disable.
-    if (!forceRerunAll && pullRequestNumbers.length > 0 && openPullRequestNumbers.length === 0) {
+    // The open-PR gate applies in all modes (including force mode): a rerun is
+    // skipped when every associated PR is closed. There is no value in spending CI on
+    // a closed/merged PR, so force mode does NOT bypass this.
+    if (pullRequestNumbers.length > 0 && openPullRequestNumbers.length === 0) {
         const failedAttemptReference = buildWorkflowRunReference(sourceRunUrl, sourceRunAttempt);
         await summary
             .addHeading('Rerun skipped');

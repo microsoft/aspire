@@ -191,16 +191,16 @@ When a rerun is requested, GitHub reruns **all** failed jobs for that attempt �
 
 > **For-now behavior:** the workflow reruns every failed CI job, not just transient-looking ones. This stays in place until CI auto-rerun patterns are improved (e.g. agents curating the transient-failure rules). Disable it by flipping the flag (see below); the classification rules are kept intact behind it.
 
-The workflow currently runs in **force mode**, enabled by the `FORCE_RERUN_ALL: 'true'` environment variable set on both jobs in [`auto-rerun-transient-ci-failures.yml`](../../.github/workflows/auto-rerun-transient-ci-failures.yml). In force mode the workflow requests a rerun on **any** failed CI run for a PR, regardless of whether the failure looks transient.
+The workflow currently runs in **force mode**, enabled by the `FORCE_RERUN_ALL: 'true'` environment variable set on both jobs in [`auto-rerun-transient-ci-failures.yml`](../../.github/workflows/auto-rerun-transient-ci-failures.yml). In force mode the workflow requests a rerun on **any** failed CI run that has a currently-open associated PR, regardless of whether the failure looks transient.
 
 **Force mode bypasses:**
 
 1. **Transient-failure classification** — every failed (non-ignored) job is treated as retryable; the 4-pass analysis is skipped entirely.
 2. **The retryable-job-count cap** — the `≤ 5 retryable jobs` rail is not applied.
-3. **The open-PR gate** — the run is rerun even if no associated PR is currently open. PR comments are still posted only to associated PRs that are currently open; when every associated PR is closed, the rerun fires with no comment.
 
 **Force mode keeps:**
 
+- **The open-PR requirement** — a rerun only fires for a run that has a currently-open associated PR. Runs with no associated PR, or where every associated PR is closed/merged, are still skipped. There is no value in spending CI on an inactive PR, so force mode does not bypass this.
 - **The attempt cap** — reruns still only fire from source attempts 1–3 (up to 3 automatic reruns / 4 total attempts). This is unchanged.
 - **The aggregator-job exclusion** (`Final Results`, `Tests / Final Test Results`) and the `failureConclusions` filter — these define what counts as a failed CI job, not an eligibility rule.
 

@@ -789,10 +789,8 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.True(enabledCount >= 2, $"Expected FORCE_RERUN_ALL: 'true' on both jobs, found {enabledCount}.");
         Assert.DoesNotContain("FORCE_RERUN_ALL: 'false'", workflowText);
 
-        // The env var is parsed to a boolean and the open-PR no-association gate is
-        // bypassed in force mode.
+        // The env var is parsed to a boolean and threaded into the force-mode calls.
         Assert.Contains("const forceRerunAll = String(process.env.FORCE_RERUN_ALL).toLowerCase() === 'true';", workflowText);
-        Assert.Contains("pullRequestNumbers.length === 0 && !forceRerunAll", workflowText);
 
         // forceRerunAll is threaded into the analyze + eligibility + rerun calls.
         int threadedCount = workflowText.Split("forceRerunAll,").Length - 1;
@@ -1089,12 +1087,12 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Contains("All associated pull requests are closed. No jobs were rerun.", skippedRaw.Text);
     }
 
-    // FORCE_RERUN_ALL: falsifiable coverage for the open-PR-gate bypass.
-    // If the `!forceRerunAll &&` guard in rerunMatchedJobs is removed, this test fails
-    // because the rerun would be skipped. Remove with the rest of the force-mode plumbing.
+    // FORCE_RERUN_ALL: force mode must NOT bypass the open-PR gate. A closed associated
+    // PR is still skipped (no value in spending CI on a closed/merged PR). If the gate
+    // is ever re-bypassed in force mode, this test fails because the rerun POST fires.
     [Fact]
     [RequiresTools(["node"])]
-    public async Task ForceRerunAllRerunsEvenWhenAllAssociatedPullRequestsAreClosed()
+    public async Task ForceRerunAllStillSkipsRerunWhenAllAssociatedPullRequestsAreClosed()
     {
         RerunMatchedJobsResult result = await InvokeHarnessAsync<RerunMatchedJobsResult>(
             "rerunMatchedJobs",
@@ -1123,17 +1121,15 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 forceRerunAll = true
             });
 
-        Assert.Contains(
-            result.Requests,
-            r => r.Route == "POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs"
-                && r.Payload.GetProperty("run_id").GetInt32() == 123);
+        SummaryEvent skippedHeading = Assert.Single(result.Events, e => e.Type == "heading" && e.Text == "Rerun skipped");
+        Assert.Equal(1, skippedHeading.Level);
 
-        Assert.DoesNotContain(result.Events, e => e.Type == "heading" && e.Text == "Rerun skipped");
+        SummaryEvent skippedRaw = Assert.Single(result.Events, e => e.Type == "raw" && e.Text is not null && e.Text.Contains("All associated pull requests are closed."));
+        Assert.Contains("All associated pull requests are closed. No jobs were rerun.", skippedRaw.Text);
 
-        // The associated PR is closed, so force mode reruns but posts no comment.
         Assert.DoesNotContain(
             result.Requests,
-            r => r.Route == "POST /repos/{owner}/{repo}/issues/{issue_number}/comments");
+            r => r.Route == "POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs");
     }
 
     [Fact]
