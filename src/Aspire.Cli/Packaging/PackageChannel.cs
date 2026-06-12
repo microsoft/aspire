@@ -43,6 +43,24 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public bool ShouldPersistChannelName() =>
         Type is PackageChannelType.Explicit && !string.Equals(Name, PackageChannelNames.Stable, StringComparisons.ChannelName);
 
+    /// <summary>
+    /// Whether scaffolding (<c>aspire new</c>/<c>aspire init</c>) should drop a per-project
+    /// <c>NuGet.config</c> that pins Aspire packages to this channel's feed(s).
+    /// </summary>
+    /// <remarks>
+    /// Only channels that route Aspire packages to a <em>custom</em> feed need a per-project
+    /// <c>NuGet.config</c>. The <c>stable</c> channel maps everything to nuget.org — the ambient
+    /// default source — so emitting a <c>&lt;clear/&gt;</c>-based config would be redundant and,
+    /// worse, would wipe any additional feeds the user already relies on. Daily
+    /// (<c>dnceng/dotnet9</c>), staging (<c>darc-pub-microsoft-aspire-&lt;sha&gt;</c>), and
+    /// <c>pr-&lt;N&gt;</c>/local-hive channels all point at custom feeds, so their mappings must be
+    /// persisted for restore to succeed. This deliberately mirrors <see cref="ShouldPersistChannelName"/>:
+    /// the set of channels whose name we pin is exactly the set we drop a config for (those that
+    /// additionally carry feed mappings).
+    /// </remarks>
+    public bool ShouldCreateNuGetConfig() =>
+        ShouldPersistChannelName() && Mappings is { Length: > 0 };
+
     private static string ComputeSourceDetails(PackageMapping[]? mappings)
     {
         if (mappings is null)

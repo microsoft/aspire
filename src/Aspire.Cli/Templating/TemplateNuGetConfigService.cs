@@ -35,13 +35,10 @@ internal sealed class TemplateNuGetConfigService(
     /// <param name="cancellationToken">A cancellation token.</param>
     public async Task PromptToCreateOrUpdateNuGetConfigAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
     {
-        if (channel.Type is not PackageChannelType.Explicit)
-        {
-            return;
-        }
-
-        var mappings = channel.Mappings;
-        if (mappings is null || mappings.Length == 0)
+        // Only channels routing Aspire packages to a custom feed get a per-project NuGet.config.
+        // The `stable` channel (nuget.org) and Implicit channels are skipped so the project uses
+        // the ambient NuGet config; a <clear/>-based config would wipe the user's other feeds.
+        if (!channel.ShouldCreateNuGetConfig())
         {
             return;
         }
@@ -127,13 +124,9 @@ internal sealed class TemplateNuGetConfigService(
         var matchingChannel = channels.FirstOrDefault(c =>
             string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        if (matchingChannel is null || matchingChannel.Type is not PackageChannelType.Explicit)
-        {
-            return false;
-        }
-
-        var mappings = matchingChannel.Mappings;
-        if (mappings is null || mappings.Length == 0)
+        // ShouldCreateNuGetConfig also filters out `stable` and Implicit channels — those resolve
+        // from nuget.org and must not get a <clear/>-based config that would hide ambient feeds.
+        if (matchingChannel is null || !matchingChannel.ShouldCreateNuGetConfig())
         {
             return false;
         }

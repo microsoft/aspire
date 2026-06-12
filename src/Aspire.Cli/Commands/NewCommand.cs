@@ -426,9 +426,11 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                         return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
                     }
 
-                    // Only persist explicit channel names (e.g. local, daily) — implicit channels
-                    // (stable/nuget.org) should not be written so aspire add uses its default behavior.
-                    var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
+                    // Only persist channel names that should be pinned (e.g. local, daily,
+                    // staging, pr-<N>). The `stable` channel is excluded (ShouldPersistChannelName)
+                    // — its packages are on nuget.org, so leaving the project unpinned lets
+                    // `aspire add`/`aspire restore` use the ambient NuGet config.
+                    var channelName = selectedChannel.ShouldPersistChannelName() ? selectedChannel.Name : null;
 
                     return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
                 }
@@ -559,11 +561,15 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         var match = channels.FirstOrDefault(c =>
             string.Equals(c.Name, identity, StringComparisons.ChannelName));
 
-        // Only persist Explicit channel names — Implicit channels (the nuget.org fallback)
-        // are deliberately left unpinned so `aspire add` and later restores use ambient
-        // NuGet configuration. Mirrors the same rule applied at the end of
-        // ResolveCliTemplateVersionAsync.
-        return match is { Type: PackageChannelType.Explicit } ? match.Name : null;
+        // Only forward channel names that should be pinned (daily, staging, pr-<N>, local).
+        // `stable` is excluded (ShouldPersistChannelName): a stable CLI's packages are on
+        // nuget.org, so returning null lets DotNetTemplateFactory resolve the Implicit
+        // (nuget.org) channel and leaves the scaffolded project with no channel pin and no
+        // NuGet.config — `aspire add`/`aspire restore` then use the ambient NuGet config.
+        // Forwarding is only needed for non-stable identities (daily/pr/staging), whose
+        // packages live on a custom feed the Implicit channel would otherwise miss. Mirrors
+        // the same rule applied at the end of ResolveCliTemplateVersionAsync.
+        return match?.ShouldPersistChannelName() is true ? match.Name : null;
     }
 }
 
