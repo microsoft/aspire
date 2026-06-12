@@ -59,4 +59,5 @@
     <AspireTerminalHostDir>$(MSBuildThisFileDirectory)/artifacts/bin/Aspire.TerminalHost/$(Configuration)/net8.0/</AspireTerminalHostDir>
   </PropertyGroup>
 
+  <!-- ci-probe: no-op change to exercise the build-infra ALL backstop -->
 </Project>
