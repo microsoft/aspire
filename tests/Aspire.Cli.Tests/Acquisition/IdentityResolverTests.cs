@@ -155,6 +155,149 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         Assert.Equal(IdentitySource.Environment, resolved.Source);
     }
 
+    [Theory]
+    [InlineData("13.4.3")]
+    [InlineData("13.5.0-preview.1.26311.9")]
+    [InlineData("13.4.0+abcdef0")]
+    public void ResolveVersion_AcceptsValidSemVer(string version)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("VerValid", channel: "local", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: name => name == IdentityResolver.VersionEnvVar ? version : null);
+
+        var resolved = resolver.ResolveVersion();
+        Assert.Equal(version, resolved.Value);
+        Assert.Equal(IdentitySource.Environment, resolved.Source);
+    }
+
+    [Theory]
+    [InlineData("not-a-version")]
+    [InlineData("13.4")]
+    [InlineData("13.4.0.0")]
+    [InlineData("v13.4.0")]
+    public void ResolveVersion_FromEnv_FailsFast_WhenNotAVersion(string version)
+    {
+        // The whole point of this PR's hardening: a bad ASPIRE_CLI_VERSION must surface
+        // immediately with a message naming the env var, not silently corrupt downstream
+        // version-keyed decisions.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("VerBad", channel: "local", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: name => name == IdentityResolver.VersionEnvVar ? version : null);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => resolver.ResolveVersion());
+        Assert.Contains(IdentityResolver.VersionEnvVar, ex.Message);
+        Assert.Contains(version, ex.Message);
+    }
+
+    [Fact]
+    public void ResolveVersion_FromSidecar_FailsFast_WhenNotAVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","version":"garbage"}""");
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("VerScBad", channel: "local", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: _ => null);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => resolver.ResolveVersion());
+        Assert.Contains(InstallSidecarReader.SidecarFileName, ex.Message);
+        Assert.Contains("version", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("abcdef0")]
+    [InlineData("ABCDEF0123456789")]
+    [InlineData("0123456789012345678901234567890123456789")]
+    public void ResolveCommit_AcceptsHexSha(string commit)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("CommitOk", channel: "local", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: name => name == IdentityResolver.CommitEnvVar ? commit : null);
+
+        var resolved = resolver.ResolveCommit();
+        Assert.Equal(commit, resolved.Value);
+        Assert.Equal(IdentitySource.Environment, resolved.Source);
+    }
+
+    [Theory]
+    [InlineData("xyz1234")]        // non-hex characters
+    [InlineData("abc")]            // too short (< 7)
+    [InlineData("abcdef 0")]       // embedded space
+    public void ResolveCommit_FromEnv_FailsFast_WhenNotHex(string commit)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("CommitBad", channel: "local", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: name => name == IdentityResolver.CommitEnvVar ? commit : null);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => resolver.ResolveCommit());
+        Assert.Contains(IdentityResolver.CommitEnvVar, ex.Message);
+    }
+
+    [Theory]
+    [InlineData("http://127.0.0.1:5400/v3/index.json")]
+    [InlineData("https://api.nuget.org/v3/index.json")]
+    public void ResolveNuGetServiceIndexOverride_AcceptsAbsoluteHttpUrl(string url)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("NuGetOk", channel: "local", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? url : null);
+
+        var resolved = resolver.ResolveNuGetServiceIndexOverride();
+        Assert.Equal(url, resolved.Value);
+        Assert.Equal(IdentitySource.Environment, resolved.Source);
+    }
+
+    [Theory]
+    [InlineData("not a url")]
+    [InlineData("ftp://host/v3/index.json")]    // wrong scheme
+    [InlineData("/relative/v3/index.json")]     // not absolute
+    public void ResolveNuGetServiceIndexOverride_FromEnv_FailsFast_WhenNotHttpUrl(string url)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("NuGetBad", channel: "local", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? url : null);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => resolver.ResolveNuGetServiceIndexOverride());
+        Assert.Contains(IdentityResolver.NuGetServiceIndexEnvVar, ex.Message);
+    }
+
+    [Fact]
+    public void ResolveChannel_FromEnv_AcceptsBespokeLabel_WithoutValidation()
+    {
+        // Channel is intentionally NOT shape-validated from env/sidecar: bespoke labels like
+        // "pr-17580" are legitimate overrides. This pins that decision so a future "tighten
+        // validation" change can't silently break the override's primary use case.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("ChannelBespoke", channel: "stable", informationalVersion: "13.4.0+abc"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: name => name == IdentityResolver.ChannelEnvVar ? "totally-made-up" : null);
+
+        var resolved = resolver.ResolveChannel();
+        Assert.Equal("totally-made-up", resolved.Value);
+        Assert.Equal(IdentitySource.Environment, resolved.Source);
+    }
+
     [Fact]
     public void ResolveNuGetServiceIndexOverride_NullByDefault()
     {

@@ -344,12 +344,11 @@ public class Program
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
-        // Main's `IdentityChannelReader` is constructed in CliStartupContext so
-        // the channel can be logged at startup before DI is fully wired. This PR
-        // adds a richer `IIdentityResolver` that also handles sidecar/env
-        // overrides for version/commit/nuget service index. Both coexist:
-        // `IdentityChannelReader` continues to power the early startup log,
-        // while `IIdentityResolver` powers `CliExecutionContext` construction.
+        // Two identity readers coexist by design. `IdentityChannelReader` is constructed early in
+        // CliStartupContext so the channel can be logged at startup before DI is fully wired, and it
+        // continues to power that early startup log. `IIdentityResolver` is the richer reader that
+        // also resolves sidecar/env overrides for version, commit, and the NuGet service index; it
+        // powers `CliExecutionContext` construction.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
         builder.Services.AddSingleton<IIdentityResolver>(sp =>
         {

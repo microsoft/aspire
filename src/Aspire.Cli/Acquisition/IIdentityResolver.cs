@@ -28,9 +28,12 @@ internal enum IdentitySource
     AssemblyFallback,
 
     /// <summary>
-    /// Resolver had nothing to read — no env var, no sidecar field, no
-    /// assembly stamp — and used the terminal default. For channel this is
-    /// <c>local</c>. Other fields do not use this source today.
+    /// Resolver had nothing to read from any layer and used the terminal
+    /// default. For channel that default is <c>local</c>. For the optional
+    /// NuGet service-index and packages-directory overrides — which have no
+    /// assembly-baked equivalent — it is <see langword="null"/> (no override).
+    /// Version and commit never use this source: they always fall back to the
+    /// assembly informational version.
     /// </summary>
     TerminalDefault,
 }

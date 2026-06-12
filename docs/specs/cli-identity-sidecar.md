@@ -150,9 +150,17 @@ The existing `IIdentityChannelReader` interface widens to `IIdentityResolver` wi
 
 ### Validation
 
-Channel values are validated against the existing accepted shape: `stable`, `staging`, `daily`, `local`, or `pr-<N>` where `<N>` is one or more ASCII digits. Invalid values from any source (env, sidecar, assembly) fail fast at resolve time with a diagnostic naming the source, so a typo in `ASPIRE_CLI_CHANNEL` does not silently fall through to the next layer.
+Identity overrides come from developer-controlled inputs — an `ASPIRE_CLI_*` env var or a hand-authored `.aspire-install.json`. The resolver validates the **shape** of each typed field at resolve time so a typo fails fast with a diagnostic naming the source, rather than silently producing a bogus staging-feed name or an unrestorable `NuGet.config` URL:
 
-Version and commit are accepted as opaque strings — the CLI does not enforce SemVer shape on `version` or hex-shape on `commit`, because the override is explicitly for forcing the CLI to identify itself as something it is not (including malformed values, for negative-test scenarios).
+- **`version`** (`ASPIRE_CLI_VERSION` / sidecar) must parse as a strict SemVer 2.0 version (e.g. `13.4.3`, `13.5.0-preview.1.26311.9`, with optional `+build` metadata) — the same parser the rest of the CLI uses for package versions.
+- **`commit`** (`ASPIRE_CLI_COMMIT` / sidecar) must be a hexadecimal SHA of 7–64 characters, since its only behavioral use is deriving the `darc-pub-microsoft-aspire-<sha8>` staging-feed name.
+- **`nugetServiceIndexOverride`** (`ASPIRE_CLI_NUGET_SERVICE_INDEX` / sidecar) must be an absolute `http(s)` URL, because it is written verbatim into generated `NuGet.config` files as a v3 service index.
+
+**`channel` is deliberately not validated** when it comes from env or sidecar. Developer overrides and tests routinely use bespoke labels (e.g. `pr-17580`) that are not in the built-in set, and rejecting them would defeat the override's purpose. Only the assembly-baked channel — the one input we control end-to-end — is validated against the accepted shape (`stable`, `staging`, `daily`, `local`, or `pr-<N>` where `<N>` is one or more ASCII digits) by `IdentityChannelReader`; a malformed stamp falls through to the terminal default (`local`) rather than crashing the resolver.
+
+**`packages`** (`ASPIRE_CLI_PACKAGES` / sidecar) is validated where it is consumed: `PackagingService` fails fast if the directory is missing or if any `Aspire*` id appears with more than one version (see the cleanliness guardrail above).
+
+The assembly-baked fallback values for `version` / `commit` are trusted (Arcade stamps them) and are never routed through these checks.
 
 ## Developer workflows: `dotnet run`, `startvs`, `localhive`
 
@@ -361,8 +369,8 @@ The resolver and call-site migration land together; the test plan reflects that.
 
 - Matrix over (env var present/absent) × (sidecar present/absent) × (sidecar field present/absent) × (assembly stamp present/absent), for each of `channel` / `version` / `commit`.
 - Per-field source-tag correctness (`from-env` / `from-sidecar` / `from-assembly-fallback` / `defaulted-to-local`).
-- Invalid channel from env (e.g., `ASPIRE_CLI_CHANNEL=foo`) fails fast with a diagnostic naming the source — not silent fallback to the next layer.
-- Invalid channel from sidecar fails fast with a diagnostic naming the sidecar path.
+- Bespoke channel labels from env/sidecar (e.g., `ASPIRE_CLI_CHANNEL=pr-17580`) are accepted as-is — they are legitimate overrides, not validation failures; only the assembly-baked channel is shape-validated.
+- Invalid `version` / `commit` / `nugetServiceIndexOverride` from env or sidecar fails fast with a diagnostic naming the source (env var name or sidecar field) — not a silent fallback to the next layer.
 
 **Sidecar-layer tests** (`InstallSidecarReaderTests`):
 
