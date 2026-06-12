@@ -110,8 +110,8 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
     protected override async Task PrepareForPublishAsync(FileInfo appHostFile, CancellationToken cancellationToken)
         => await _cliManagedModuleGenerator.TryGenerateAsync(appHostFile, cancellationToken);
 
-    protected override void ConfigureAppHostInvocationOptions(ProcessInvocationOptions options)
-        => CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(options);
+    protected override void ConfigureAppHostInvocationOptions(FileInfo appHostFile, ProcessInvocationOptions options)
+        => CSharpCliManagedAppHostModuleGenerator.AddAppHostBuildProperties(appHostFile, options);
 
     protected override async Task<BundleLayoutLease?> ConfigureCliBundleEnvironmentForRunAsync(
         FileInfo appHostFile,

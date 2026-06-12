@@ -346,7 +346,7 @@ internal class DotNetAppHostProject : IAppHostProject
             StartDebugSession = context.StartDebugSession,
             Debug = context.Debug
         };
-        ConfigureAppHostInvocationOptions(runOptions);
+        ConfigureAppHostInvocationOptions(effectiveAppHostFile, runOptions);
 
         // The backchannel completion source is the contract with RunCommand
         // We signal this when the backchannel is ready, RunCommand uses it for UX
@@ -449,7 +449,7 @@ internal class DotNetAppHostProject : IAppHostProject
     protected virtual Task PrepareForPublishAsync(FileInfo appHostFile, CancellationToken cancellationToken)
         => Task.CompletedTask;
 
-    protected virtual void ConfigureAppHostInvocationOptions(ProcessInvocationOptions options)
+    protected virtual void ConfigureAppHostInvocationOptions(FileInfo appHostFile, ProcessInvocationOptions options)
     {
     }
 
@@ -548,7 +548,7 @@ internal class DotNetAppHostProject : IAppHostProject
             StandardOutputCallback = buildOutputCollector.AppendOutput,
             StandardErrorCallback = buildOutputCollector.AppendError,
         };
-        ConfigureAppHostInvocationOptions(buildOptions);
+        ConfigureAppHostInvocationOptions(effectiveAppHostFile, buildOptions);
 
         var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, context.NoRestore, buildOptions, context.WorkingDirectory, cancellationToken);
         buildActivity.SetAppHostBuildExitCode(buildExitCode);
@@ -1172,7 +1172,7 @@ internal class DotNetAppHostProject : IAppHostProject
                 StandardOutputCallback = buildOutputCollector.AppendOutput,
                 StandardErrorCallback = buildOutputCollector.AppendError,
             };
-            ConfigureAppHostInvocationOptions(buildOptions);
+            ConfigureAppHostInvocationOptions(effectiveAppHostFile, buildOptions);
 
             var buildExitCode = await AppHostHelper.BuildAppHostAsync(
                 _runner,
@@ -1209,7 +1209,7 @@ internal class DotNetAppHostProject : IAppHostProject
             NoLaunchProfile = true,
             StartDebugSession = context.StartDebugSession
         };
-        ConfigureAppHostInvocationOptions(runOptions);
+        ConfigureAppHostInvocationOptions(effectiveAppHostFile, runOptions);
 
         if (isSingleFileAppHost)
         {

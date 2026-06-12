@@ -23,6 +23,8 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
 {
     internal const string ModulesDirectoryName = "modules";
     internal const string ModuleProjectFileName = "Aspire.csproj";
+    internal const string AppHostBuildPropsFileName = "AppHost.Directory.Build.props";
+    internal const string AppHostBuildTargetsFileName = "AppHost.Directory.Build.targets";
     internal const string NuGetConfigFileName = "nuget.config";
     internal const string BuildPropertyName = "AspireCliManagedAppHostBuild";
 
@@ -51,6 +53,8 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         modulesDirectory.Create();
 
         var moduleProjectFile = new FileInfo(Path.Combine(modulesDirectory.FullName, ModuleProjectFileName));
+        var appHostBuildPropsFile = new FileInfo(Path.Combine(modulesDirectory.FullName, AppHostBuildPropsFileName));
+        var appHostBuildTargetsFile = new FileInfo(Path.Combine(modulesDirectory.FullName, AppHostBuildTargetsFileName));
         var nuGetConfigFile = new FileInfo(Path.Combine(modulesDirectory.FullName, NuGetConfigFileName));
         var legacyModuleTargetsFile = new FileInfo(Path.Combine(modulesDirectory.FullName, "Aspire.targets"));
 
@@ -81,6 +85,8 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
             ? restoreSources.AdditionalSources
             : [];
         await WriteModuleProjectFileAsync(moduleProjectFile, additionalSources, restoreSources.PackageSourceMappings is not null ? nuGetConfigFile : null, integrationRestoreDir, integrationReferences, repoRoot, cancellationToken).ConfigureAwait(false);
+        await WriteAppHostBuildPropsFileAsync(appHostBuildPropsFile, appHostFile, additionalSources, restoreSources.PackageSourceMappings is not null ? nuGetConfigFile : null, integrationReferences, repoRoot, cancellationToken).ConfigureAwait(false);
+        await WriteAppHostBuildTargetsFileAsync(appHostBuildTargetsFile, appHostFile, cancellationToken).ConfigureAwait(false);
         if (legacyModuleTargetsFile.Exists)
         {
             legacyModuleTargetsFile.Delete();
@@ -141,10 +147,143 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         await projectFile.ToXDocument().SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
     }
 
+    private static async Task WriteAppHostBuildPropsFileAsync(
+        FileInfo appHostBuildPropsFile,
+        FileInfo appHostFile,
+        IReadOnlyList<string> additionalSources,
+        FileInfo? restoreConfigFile,
+        IReadOnlyList<IntegrationReference> integrationReferences,
+        string? repoRoot,
+        CancellationToken cancellationToken)
+    {
+        var generatedProjectPath = Path.ChangeExtension(appHostFile.FullName, ".csproj");
+        var projectCondition = $"'$(MSBuildProjectFullPath)' == '{generatedProjectPath}'";
+        var appHostBuildDirectory = Path.Combine(appHostFile.Directory!.FullName, AspireJsonConfiguration.SettingsFolder, "build", "apphost");
+
+        var root = new XElement("Project");
+        var propertyGroup = new XElement("PropertyGroup", new XAttribute("Condition", projectCondition));
+        propertyGroup.Add(new XElement("BaseOutputPath", EnsureTrailingSlash(Path.Combine(appHostBuildDirectory, "bin"))));
+        propertyGroup.Add(new XElement("BaseIntermediateOutputPath", EnsureTrailingSlash(Path.Combine(appHostBuildDirectory, "obj"))));
+        propertyGroup.Add(new XElement("MSBuildProjectExtensionsPath", "$(BaseIntermediateOutputPath)"));
+
+        if (additionalSources.Count > 0)
+        {
+            propertyGroup.Add(new XElement("RestoreAdditionalProjectSources", string.Join(";", additionalSources)));
+        }
+
+        if (restoreConfigFile is not null)
+        {
+            propertyGroup.Add(new XElement("RestoreConfigFile", restoreConfigFile.FullName));
+        }
+
+        if (propertyGroup.HasElements)
+        {
+            root.Add(propertyGroup);
+        }
+
+        var projectFile = new CSharpProjectFile();
+        projectFile.AddIntegrationReferences(
+            integrationReferences,
+            repoRoot,
+            isAspireProjectResource: false,
+            referenceOutputAssembly: true);
+
+        if (projectFile.PackageReferences.Count > 0)
+        {
+            root.Add(new XElement("ItemGroup",
+                new XAttribute("Condition", projectCondition),
+                projectFile.PackageReferences.Select(CreatePackageReferenceElement)));
+        }
+
+        if (projectFile.ProjectReferences.Count > 0)
+        {
+            root.Add(new XElement("ItemGroup",
+                new XAttribute("Condition", projectCondition),
+                projectFile.ProjectReferences.Select(CreateProjectReferenceElement)));
+        }
+
+        await using var stream = appHostBuildPropsFile.Create();
+        await new XDocument(root).SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task WriteAppHostBuildTargetsFileAsync(
+        FileInfo appHostBuildTargetsFile,
+        FileInfo appHostFile,
+        CancellationToken cancellationToken)
+    {
+        var generatedProjectPath = Path.ChangeExtension(appHostFile.FullName, ".csproj");
+        var projectCondition = $"'$(MSBuildProjectFullPath)' == '{generatedProjectPath}'";
+
+        var root = new XElement("Project");
+        root.Add(new XElement("ItemGroup",
+            new XAttribute("Condition", projectCondition),
+            new XElement("ProjectReference",
+                new XAttribute("Update", "@(ProjectReference)"),
+                new XAttribute("GlobalPropertiesToRemove", "%(ProjectReference.GlobalPropertiesToRemove);DirectoryBuildPropsPath;DirectoryBuildTargetsPath"))));
+
+        await using var stream = appHostBuildTargetsFile.Create();
+        await new XDocument(root).SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
+    }
+
     internal static void AddBuildProperty(ProcessInvocationOptions options)
     {
         options.MSBuildProperties[BuildPropertyName] = "true";
         options.MSBuildProperties["JsonSerializerIsReflectionEnabledByDefault"] = "true";
     }
+
+    internal static void AddAppHostBuildProperties(FileInfo appHostFile, ProcessInvocationOptions options)
+    {
+        AddBuildProperty(options);
+        options.MSBuildProperties["DirectoryBuildPropsPath"] = GetAppHostBuildPropsFile(appHostFile).FullName;
+        options.MSBuildProperties["DirectoryBuildTargetsPath"] = GetAppHostBuildTargetsFile(appHostFile).FullName;
+    }
+
+    internal static FileInfo GetAppHostBuildPropsFile(FileInfo appHostFile)
+    {
+        var appHostDirectory = appHostFile.Directory ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' does not have a containing directory.");
+        return new FileInfo(Path.Combine(appHostDirectory.FullName, AspireJsonConfiguration.SettingsFolder, ModulesDirectoryName, AppHostBuildPropsFileName));
+    }
+
+    internal static FileInfo GetAppHostBuildTargetsFile(FileInfo appHostFile)
+    {
+        var appHostDirectory = appHostFile.Directory ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' does not have a containing directory.");
+        return new FileInfo(Path.Combine(appHostDirectory.FullName, AspireJsonConfiguration.SettingsFolder, ModulesDirectoryName, AppHostBuildTargetsFileName));
+    }
+
+    private static XElement CreatePackageReferenceElement(CSharpPackageReference packageReference)
+    {
+        var element = new XElement("PackageReference", new XAttribute("Include", packageReference.Name));
+
+        if (packageReference.Version is not null)
+        {
+            element.Add(new XAttribute("Version", packageReference.Version));
+        }
+
+        return element;
+    }
+
+    private static XElement CreateProjectReferenceElement(CSharpProjectReference projectReference)
+    {
+        var element = new XElement("ProjectReference", new XAttribute("Include", projectReference.ProjectPath));
+
+        AddBooleanElement(element, "IsAspireProjectResource", projectReference.IsAspireProjectResource);
+        AddBooleanElement(element, "ReferenceOutputAssembly", projectReference.ReferenceOutputAssembly);
+        AddBooleanElement(element, "Private", projectReference.Private);
+
+        return element;
+    }
+
+    private static void AddBooleanElement(XElement element, string name, bool? value)
+    {
+        if (value is not null)
+        {
+            element.Add(new XElement(name, value.Value ? "true" : "false"));
+        }
+    }
+
+    private static string EnsureTrailingSlash(string path)
+        => path.EndsWith(Path.DirectorySeparatorChar)
+            ? path
+            : path + Path.DirectorySeparatorChar;
 
 }

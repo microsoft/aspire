@@ -80,6 +80,42 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
             e.Attribute("BeforeTargets")?.Value == "Build;Publish" &&
             e.Attribute("Condition")?.Value == "'$(AspireCliManagedAppHostBuild)' != 'true'");
 
+        var appHostBuildPropsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.props");
+        var appHostBuildTargetsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.targets");
+        Assert.True(File.Exists(appHostBuildPropsPath));
+        Assert.True(File.Exists(appHostBuildTargetsPath));
+
+        var generatedAppHostProjectPath = Path.ChangeExtension(appHostFile.FullName, ".csproj");
+        var appHostBuildProps = XDocument.Load(appHostBuildPropsPath);
+        var appHostBuildTargets = XDocument.Load(appHostBuildTargetsPath);
+        var projectCondition = $"'$(MSBuildProjectFullPath)' == '{generatedAppHostProjectPath}'";
+        Assert.Null(appHostBuildProps.Root!.Attribute("Sdk"));
+        Assert.DoesNotContain(appHostBuildProps.Root!.Elements("Import"), e => e.Attribute("Project")?.Value?.Contains("Directory.Build.props", StringComparison.Ordinal) == true);
+
+        Assert.Null(appHostBuildTargets.Root!.Attribute("Sdk"));
+        Assert.Contains(appHostBuildTargets.Root.Elements("ItemGroup"), e =>
+            e.Attribute("Condition")?.Value == projectCondition &&
+            e.Element("ProjectReference") is { } projectReference &&
+            projectReference.Attribute("Update")?.Value == "@(ProjectReference)" &&
+            projectReference.Attribute("GlobalPropertiesToRemove")?.Value == "%(ProjectReference.GlobalPropertiesToRemove);DirectoryBuildPropsPath;DirectoryBuildTargetsPath");
+
+        var appHostPropertyGroup = appHostBuildProps.Root.Elements("PropertyGroup")
+            .Single(e => e.Attribute("Condition")?.Value == projectCondition);
+        Assert.Equal(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "build", "apphost", "bin") + Path.DirectorySeparatorChar,
+            appHostPropertyGroup.Element("BaseOutputPath")?.Value);
+        Assert.Equal(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "build", "apphost", "obj") + Path.DirectorySeparatorChar,
+            appHostPropertyGroup.Element("BaseIntermediateOutputPath")?.Value);
+        Assert.Equal("$(BaseIntermediateOutputPath)", appHostPropertyGroup.Element("MSBuildProjectExtensionsPath")?.Value);
+
+        Assert.Contains(appHostBuildProps.Descendants("PackageReference"), e =>
+            e.Attribute("Include")?.Value == "Example.Package" &&
+            e.Attribute("Version")?.Value == "1.2.3");
+        Assert.Contains(appHostBuildProps.Descendants("ProjectReference"), e =>
+            e.Attribute("Include")?.Value == projectReferenceFile.FullName &&
+            e.Element("ReferenceOutputAssembly")?.Value == "true");
+
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Directory.Build.props")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Directory.Build.targets")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Directory.Packages.props")));

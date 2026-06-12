@@ -199,9 +199,16 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(noRestore);
             Assert.Equal("true", options.MSBuildProperties[CSharpCliManagedAppHostModuleGenerator.BuildPropertyName]);
             var moduleProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj");
+            var appHostBuildPropsPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.props");
+            var appHostBuildTargetsPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.targets");
+            Assert.Equal(appHostBuildPropsPath, options.MSBuildProperties["DirectoryBuildPropsPath"]);
+            Assert.Equal(appHostBuildTargetsPath, options.MSBuildProperties["DirectoryBuildTargetsPath"]);
             Assert.True(File.Exists(moduleProjectPath));
+            Assert.True(File.Exists(appHostBuildPropsPath));
+            Assert.True(File.Exists(appHostBuildTargetsPath));
             Assert.False(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
             Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(moduleProjectPath));
+            Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(appHostBuildPropsPath));
             return 0;
         };
         runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
@@ -213,6 +220,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(noRestore);
             Assert.Empty(args);
             Assert.Equal("true", options.MSBuildProperties[CSharpCliManagedAppHostModuleGenerator.BuildPropertyName]);
+            Assert.Equal(
+                Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.props"),
+                options.MSBuildProperties["DirectoryBuildPropsPath"]);
+            Assert.Equal(
+                Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.targets"),
+                options.MSBuildProperties["DirectoryBuildTargetsPath"]);
             return Task.FromResult(0);
         };
 
@@ -365,7 +378,15 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(noRestore);
             Assert.Equal(["--operation", "publish", "--step", "publish"], args);
             Assert.Equal("true", options.MSBuildProperties[CSharpCliManagedAppHostModuleGenerator.BuildPropertyName]);
+            Assert.Equal(
+                Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.props"),
+                options.MSBuildProperties["DirectoryBuildPropsPath"]);
+            Assert.Equal(
+                Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.targets"),
+                options.MSBuildProperties["DirectoryBuildTargetsPath"]);
             Assert.True(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj")));
+            Assert.True(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.props")));
+            Assert.True(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.targets")));
             return Task.FromResult(0);
         };
 
