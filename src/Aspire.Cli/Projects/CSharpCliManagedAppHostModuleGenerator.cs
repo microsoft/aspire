@@ -58,7 +58,9 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         var integrationReferences = config
             .GetIntegrationReferences(DotNetBasedAppHostServerProject.DefaultSdkVersion, configDirectory.FullName)
             .ToList();
-        var restoreSources = await ResolveRestoreSourcesAsync(config.Channel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
+        var restoreSources = await new IntegrationRestoreSourceResolver(packagingService, logger)
+            .ResolveAsync(config.Channel, packageSourceOverride, cancellationToken)
+            .ConfigureAwait(false);
         if (restoreSources.PackageSourceMappings is not null)
         {
             using var temporaryConfig = await TemporaryNuGetConfig.CreateAsync(
@@ -75,7 +77,10 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         var integrationRestoreDir = Path.Combine(workingDirectory.FullName, IntegrationClosureRestorer.IntegrationRestoreFolderName);
         Directory.CreateDirectory(integrationRestoreDir);
 
-        await WriteModuleProjectFileAsync(moduleProjectFile, restoreSources.AdditionalSources, restoreSources.PackageSourceMappings is not null ? nuGetConfigFile : null, integrationRestoreDir, integrationReferences, repoRoot, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<string> additionalSources = restoreSources.PackageSourceMappings is null
+            ? restoreSources.AdditionalSources
+            : [];
+        await WriteModuleProjectFileAsync(moduleProjectFile, additionalSources, restoreSources.PackageSourceMappings is not null ? nuGetConfigFile : null, integrationRestoreDir, integrationReferences, repoRoot, cancellationToken).ConfigureAwait(false);
         if (legacyModuleTargetsFile.Exists)
         {
             legacyModuleTargetsFile.Delete();
@@ -97,103 +102,6 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
 
         logger.LogDebug("Generated CLI-managed C# AppHost module project at {ProjectPath}", moduleProjectFile.FullName);
         return moduleProjectFile;
-    }
-
-    private async Task<ModuleRestoreSources> ResolveRestoreSourcesAsync(string? configuredChannelName, string? packageSourceOverride, CancellationToken cancellationToken)
-    {
-        var additionalSources = new List<string>();
-        var safePackageSourceOverride = !string.IsNullOrWhiteSpace(packageSourceOverride) &&
-            !PackageSourceOverrideMappings.HasCredentialMaterial(packageSourceOverride)
-                ? packageSourceOverride
-                : null;
-        PackageMapping[]? packageSourceMappings = null;
-        var configureGlobalPackagesFolder = false;
-
-        ThrowIfStagingUnavailable(configuredChannelName);
-
-        // Match PrebuiltAppHostServer's project-reference closure restore behavior: when
-        // mappings can be persisted safely, RestoreConfigFile carries the source contract and
-        // RestoreAdditionalProjectSources stays empty so mapped Aspire feeds don't become
-        // co-eligible through both mechanisms.
-        if (!string.IsNullOrWhiteSpace(safePackageSourceOverride))
-        {
-            additionalSources.Add(safePackageSourceOverride);
-        }
-
-        if (!string.IsNullOrWhiteSpace(safePackageSourceOverride) &&
-            string.IsNullOrEmpty(configuredChannelName))
-        {
-            packageSourceMappings = PackageSourceOverrideMappings.Create(safePackageSourceOverride, requestedChannel: null);
-
-            return new ModuleRestoreSources([], packageSourceMappings, configureGlobalPackagesFolder);
-        }
-
-        try
-        {
-            var channels = await packagingService.GetChannelsAsync(cancellationToken, configuredChannelName).ConfigureAwait(false);
-            var hasOverride = !string.IsNullOrWhiteSpace(safePackageSourceOverride);
-            var matchedChannels = !string.IsNullOrEmpty(configuredChannelName)
-                ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase))
-                : !hasOverride
-                    ? channels.Where(c => c.Type == PackageChannelType.Explicit)
-                    : [];
-            var matchedChannel = !string.IsNullOrEmpty(configuredChannelName)
-                ? matchedChannels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase))
-                : null;
-
-            if (hasOverride)
-            {
-                packageSourceMappings = PackageSourceOverrideMappings.Create(safePackageSourceOverride!, matchedChannel);
-                configureGlobalPackagesFolder = matchedChannel?.ConfigureGlobalPackagesFolder == true;
-            }
-            else if (matchedChannel?.Mappings is { Length: > 0 } &&
-                !string.Equals(matchedChannel.Name, PackageChannelNames.Local, StringComparisons.ChannelName))
-            {
-                packageSourceMappings = matchedChannel.Mappings;
-                configureGlobalPackagesFolder = matchedChannel.ConfigureGlobalPackagesFolder;
-            }
-
-            foreach (var channel in matchedChannels)
-            {
-                if (channel.Mappings is null)
-                {
-                    continue;
-                }
-
-                foreach (var mapping in channel.Mappings)
-                {
-                    if (hasOverride && mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    if (!additionalSources.Contains(mapping.Source, StringComparer.OrdinalIgnoreCase))
-                    {
-                        additionalSources.Add(mapping.Source);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to resolve package channels while generating CLI-managed C# AppHost module.");
-        }
-
-        return new ModuleRestoreSources(packageSourceMappings is null ? additionalSources : [], packageSourceMappings, configureGlobalPackagesFolder);
-    }
-
-    private void ThrowIfStagingUnavailable(string? configuredChannelName)
-    {
-        if (!string.Equals(configuredChannelName, PackageChannelNames.Staging, StringComparisons.ChannelName))
-        {
-            return;
-        }
-
-        var reason = packagingService.GetStagingChannelUnavailableReason();
-        if (reason is not null)
-        {
-            throw new InvalidOperationException(reason);
-        }
     }
 
     private static async Task WriteModuleProjectFileAsync(
@@ -238,10 +146,5 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         options.MSBuildProperties[BuildPropertyName] = "true";
         options.MSBuildProperties["JsonSerializerIsReflectionEnabledByDefault"] = "true";
     }
-
-    private sealed record ModuleRestoreSources(
-        IReadOnlyList<string> AdditionalSources,
-        PackageMapping[]? PackageSourceMappings,
-        bool ConfigureGlobalPackagesFolder);
 
 }

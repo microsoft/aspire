@@ -1720,16 +1720,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferencesAndExplicitChannelButNoOverride_UsesAdditionalSourcesNotRestoreConfigFile()
+    public async Task PrepareAsync_WithProjectReferencesAndExplicitChannelButNoOverride_UsesRestoreConfigFile()
     {
-        // Regression for finding #1 of the 2026-05-19 post-merge review: a project-ref restore
-        // with an explicit channel pin (daily/staging/pr-*) and NO --source must not replace the
-        // user's ambient nuget.config via <RestoreConfigFile>. The channel sources flow through
-        // additively via <RestoreAdditionalProjectSources> so private/internal feeds the user
-        // has configured in nuget.config remain reachable for non-Aspire transitives.
+        // Keep the prebuilt project-ref integration restore path aligned with CLI-managed C#:
+        // explicit channel mappings flow through a generated RestoreConfigFile so both paths use
+        // the same package source mapping contract instead of source-list-only restore.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         XDocument? generatedProject = null;
+        XDocument? generatedRestoreConfig = null;
 
         var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(aspireConfigPath, """
@@ -1747,6 +1746,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             BuildAsyncCallback = (projectFilePath, _, _, _) =>
             {
                 generatedProject = XDocument.Load(projectFilePath.FullName);
+                var ns = generatedProject.Root!.GetDefaultNamespace();
+                var restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
+                if (!string.IsNullOrEmpty(restoreConfigFile))
+                {
+                    generatedRestoreConfig = XDocument.Load(restoreConfigFile);
+                }
                 WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
                 return 0;
             }
@@ -1794,11 +1799,16 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.NotNull(generatedProject);
 
             var ns = generatedProject!.Root!.GetDefaultNamespace();
-            Assert.Null(generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault());
+            var restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
+            Assert.False(string.IsNullOrEmpty(restoreConfigFile));
+            Assert.NotNull(generatedRestoreConfig);
 
-            var restoreSources = generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
-            Assert.NotNull(restoreSources);
-            Assert.Contains(channelSource, restoreSources!);
+            var packageSources = generatedRestoreConfig.Descendants("packageSources")
+                .Elements("add")
+                .Select(e => e.Attribute("value")?.Value)
+                .ToArray();
+            Assert.Contains(channelSource, packageSources);
+            Assert.Null(generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault());
 
             // Aspire package versions remain in their original (non-pinned) form when no override
             // is in play; the exact-version pinning only fires when a single source is selected.

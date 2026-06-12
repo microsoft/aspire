@@ -4,12 +4,14 @@
 using Aspire.Cli.Projects;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
+using System.Xml.Linq;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -268,6 +270,66 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task RunAsync_CliManagedSingleFileAppHostRegeneratesModuleNuGetConfigFromCurrentAspireConfig()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        var (packagingService, modulesDirectory, nuGetConfigPath, oldSource, currentSource) = await ArrangeCliManagedStaleChannelNuGetConfigAsync();
+
+        var runner = new TestDotNetCliRunner();
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.PackagingServiceFactory = _ => packagingService;
+        });
+
+        runner.BuildAsyncCallback = (_, _, _, _) =>
+        {
+            Assert.Equal("staging", packagingService.LastRequestedChannelName);
+            AssertRegeneratedModuleNuGetConfig(modulesDirectory, nuGetConfigPath, oldSource, currentSource);
+            return 0;
+        };
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
+        runner.RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => Task.FromResult(0);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RestoreAsync_CliManagedSingleFileAppHostRegeneratesModuleNuGetConfigFromCurrentAspireConfig()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        var (packagingService, modulesDirectory, nuGetConfigPath, oldSource, currentSource) = await ArrangeCliManagedStaleChannelNuGetConfigAsync();
+
+        var runner = new TestDotNetCliRunner();
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.PackagingServiceFactory = _ => packagingService;
+        });
+
+        runner.BuildAsyncCallback = (_, _, _, _) =>
+        {
+            Assert.Equal("staging", packagingService.LastRequestedChannelName);
+            AssertRegeneratedModuleNuGetConfig(modulesDirectory, nuGetConfigPath, oldSource, currentSource);
+            WriteEmptyIntegrationClosureFiles(appHostFile);
+            return 0;
+        };
+
+        var exitCode = await project.RestoreAsync(appHostFile, new OutputCollector(), CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
     public void CanHandle_CliManagedSingleFileAppHostCanBeEnabledFromAppHostConfig()
     {
         var appHostFile = CreateCliManagedSingleFileAppHost();
@@ -338,13 +400,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
             Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(moduleProjectPath));
 
-            var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
-            var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureRestorer.IntegrationRestoreFolderName);
-            Directory.CreateDirectory(restoreDir);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureSourcesFileName), string.Empty);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureMetadataFileName), string.Empty);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureTargetsFileName), string.Empty);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ProjectRefAssemblyNamesFileName), string.Empty);
+            WriteEmptyIntegrationClosureFiles(appHostFile);
             return 0;
         };
 
@@ -2010,6 +2066,86 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var provider = services.BuildServiceProvider();
         _serviceProviders.Add(provider);
         return provider.GetRequiredService<CliManagedDotNetAppHostProject>();
+    }
+
+    private async Task<(TestPackagingService PackagingService, string ModulesDirectory, string NuGetConfigPath, string OldSource, string CurrentSource)> ArrangeCliManagedStaleChannelNuGetConfigAsync()
+    {
+        const string oldSource = "https://example.invalid/daily/index.json";
+        const string currentSource = "https://example.invalid/staging/index.json";
+        WriteAspireConfigJson(_workspace.WorkspaceRoot.FullName, """
+            {
+              "channel": "staging",
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.1"
+              }
+            }
+            """);
+
+        var modulesDirectory = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules");
+        Directory.CreateDirectory(modulesDirectory);
+        var nuGetConfigPath = Path.Combine(modulesDirectory, "nuget.config");
+        await File.WriteAllTextAsync(nuGetConfigPath, $$"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="{{oldSource}}" value="{{oldSource}}" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="{{oldSource}}">
+                  <package pattern="Aspire*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var dailyChannel = PackageChannel.CreateExplicitChannel(
+                    "daily",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", oldSource)],
+                    new FakeNuGetPackageCache(),
+                    new TestFeatures());
+                var stagingChannel = PackageChannel.CreateExplicitChannel(
+                    "staging",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", currentSource)],
+                    new FakeNuGetPackageCache(),
+                    new TestFeatures());
+                return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel, stagingChannel]);
+            }
+        };
+
+        return (packagingService, modulesDirectory, nuGetConfigPath, oldSource, currentSource);
+    }
+
+    private static void AssertRegeneratedModuleNuGetConfig(string modulesDirectory, string nuGetConfigPath, string oldSource, string currentSource)
+    {
+        var moduleProjectPath = Path.Combine(modulesDirectory, "Aspire.csproj");
+        var moduleProject = XDocument.Load(moduleProjectPath);
+        Assert.Equal(nuGetConfigPath, moduleProject.Descendants("RestoreConfigFile").Single().Value);
+
+        var nuGetConfig = XDocument.Load(nuGetConfigPath);
+        var packageSources = nuGetConfig.Descendants("packageSources")
+            .Elements("add")
+            .Select(e => e.Attribute("value")?.Value)
+            .ToArray();
+        Assert.Contains(currentSource, packageSources);
+        Assert.DoesNotContain(oldSource, packageSources);
+    }
+
+    private static void WriteEmptyIntegrationClosureFiles(FileInfo appHostFile)
+    {
+        var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+        var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureRestorer.IntegrationRestoreFolderName);
+        Directory.CreateDirectory(restoreDir);
+        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureSourcesFileName), string.Empty);
+        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureMetadataFileName), string.Empty);
+        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureTargetsFileName), string.Empty);
+        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ProjectRefAssemblyNamesFileName), string.Empty);
     }
 
     private static void WriteAspireConfigJson(string directory, string content)
