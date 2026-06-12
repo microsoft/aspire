@@ -750,6 +750,13 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         return false;
     }
 
+    // Apply the same lightweight normalization to indexed document fields and incoming
+    // queries before tokenization/scoring. This deliberately handles the cases where the
+    // live docs and user input use different spellings for the same intent:
+    //   "What's new" -> "whats new"
+    //   "13.4" / "13-4" -> "134"
+    // That lets a query like "whats new 13.4" line up with both the page title and the
+    // aspire.dev slug "whats-new-in-aspire-134" without changing unrelated punctuation.
     private static string NormalizeSearchText(string text)
     {
         if (string.IsNullOrEmpty(text))
