@@ -187,9 +187,9 @@ The workflow is intentionally conservative. All of these conditions must be met 
 
 When a rerun is requested, GitHub reruns **all** failed jobs for that attempt — not just the matched ones. This is a GitHub API constraint (there is no API for atomically rerunning a subset of failed jobs). The matched-job count and safety rails are the eligibility gate; once eligible, the rerun covers the full failed set.
 
-## ⚠️ Temporary: force-rerun all failures (`FORCE_RERUN_ALL`)
+## Force-rerun all failures (`FORCE_RERUN_ALL`)
 
-> **This is a temporary, easily-revertible measure and must not stay on `main` long-term.**
+> **For-now behavior:** the workflow reruns every failed CI job, not just transient-looking ones. This stays in place until CI auto-rerun patterns are improved (e.g. agents curating the transient-failure rules). Disable it by flipping the flag (see below); the classification rules are kept intact behind it.
 
 The workflow currently runs in **force mode**, enabled by the `FORCE_RERUN_ALL: 'true'` environment variable set on both jobs in [`auto-rerun-transient-ci-failures.yml`](../../.github/workflows/auto-rerun-transient-ci-failures.yml). In force mode the workflow requests a rerun on **any** failed CI run for a PR, regardless of whether the failure looks transient.
 
@@ -204,9 +204,9 @@ The workflow currently runs in **force mode**, enabled by the `FORCE_RERUN_ALL: 
 - **The attempt cap** — reruns still only fire from source attempts 1–3 (up to 3 automatic reruns / 4 total attempts). This is unchanged.
 - **The aggregator-job exclusion** (`Final Results`, `Tests / Final Test Results`) and the `failureConclusions` filter — these define what counts as a failed CI job, not an eligibility rule.
 
-**How it is implemented:** the classification rules and [`eng/test-retry-patterns.json`](../../eng/test-retry-patterns.json) config are left fully intact. Force mode is gated behind an optional `forceRerunAll` parameter (default `false`) threaded through `analyzeFailedJobs`, `computeRerunEligibility`, `computeRerunExecutionEligibility`, and `rerunMatchedJobs` in the JS module, plus the `FORCE_RERUN_ALL` env var read in the YAML. With the default off, all normal behavior (and its tests) is preserved.
+The classification rules and [`eng/test-retry-patterns.json`](../../eng/test-retry-patterns.json) config are left fully intact; force mode is gated behind an optional `forceRerunAll` flag (default `false`), so the normal behavior is preserved when it is off.
 
-**To revert:** set `FORCE_RERUN_ALL: 'true'` to `'false'` (or remove the env var) on both jobs in the YAML. Ideally also remove the `forceRerunAll` plumbing and the force-mode tests.
+**To disable:** set `FORCE_RERUN_ALL: 'true'` to `'false'` (or remove the env var) on both jobs in the YAML.
 
 ### PR association
 

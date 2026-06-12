@@ -726,8 +726,8 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.False(rerunExecutionEligible);
     }
 
-    // TEMPORARY (FORCE_RERUN_ALL): these tests cover the temporary force-rerun mode.
-    // Remove them when the FORCE_RERUN_ALL plumbing is reverted.
+    // FORCE_RERUN_ALL: these tests cover the force-rerun mode.
+    // Remove them when the FORCE_RERUN_ALL plumbing is removed.
     [Fact]
     [RequiresTools(["node"])]
     public async Task ForceRerunAllMarksJobsThatWouldNormallyBeSkippedAsRetryable()
@@ -778,12 +778,12 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     }
 
     [Fact]
-    public async Task WorkflowYamlEnablesTemporaryForceRerunAllMode()
+    public async Task WorkflowYamlEnablesForceRerunAllMode()
     {
         string workflowText = await ReadRepoFileAsync(".github/workflows/auto-rerun-transient-ci-failures.yml");
 
         // Force mode must be enabled on BOTH jobs (analyze + rerun). A single occurrence
-        // would let a partial revert (flipping only one job) pass while leaving the
+        // would let a partial flip (toggling only one job) pass while leaving the
         // workflow in a confusing half-bypassed state.
         int enabledCount = workflowText.Split("FORCE_RERUN_ALL: 'true'").Length - 1;
         Assert.True(enabledCount >= 2, $"Expected FORCE_RERUN_ALL: 'true' on both jobs, found {enabledCount}.");
@@ -1089,8 +1089,8 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Contains("All associated pull requests are closed. No jobs were rerun.", skippedRaw.Text);
     }
 
-    // TEMPORARY (FORCE_RERUN_ALL): falsifiable coverage for the open-PR-gate bypass.
-    // If the `!forceRerunAll &&` guard in rerunMatchedJobs is reverted, this test fails
+    // FORCE_RERUN_ALL: falsifiable coverage for the open-PR-gate bypass.
+    // If the `!forceRerunAll &&` guard in rerunMatchedJobs is removed, this test fails
     // because the rerun would be skipped. Remove with the rest of the force-mode plumbing.
     [Fact]
     [RequiresTools(["node"])]
@@ -1109,7 +1109,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                         Id = 11,
                         Name = "Tests / One",
                         HtmlUrl = "https://github.com/microsoft/aspire/actions/runs/123/job/11",
-                        Reason = "Force-rerun mode (temporary): bypassing transient-failure analysis."
+                        Reason = "Force-rerun mode: bypassing transient-failure analysis."
                     }
                 },
                 pullRequestNumbers = new[] { 15110 },
