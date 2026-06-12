@@ -110,9 +110,9 @@ internal static partial class ProcessSignaler
             return true;
         }
 
-        // Truncate processStartTime to whole seconds before comparing. The expected start time
-        // is already at second granularity (passed as unix seconds via ToUnixTimeSeconds()),
-        // so sub-second precision on the OS-reported start time would cause false mismatches.
+        // Truncate both sides to whole seconds before comparing. The expected start time
+        // may already be at second granularity (e.g. from the orphan detector via ToUnixTimeSeconds()),
+        // and the OS-reported start time has sub-second precision that would cause false mismatches.
         var processStartTruncated = new DateTimeOffset(processStartTime).ToUnixTimeSeconds();
         var expectedSeconds = ((DateTimeOffset)expectedStartTime).ToUnixTimeSeconds();
 
