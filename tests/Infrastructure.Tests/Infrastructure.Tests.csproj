@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <!-- net10.0 (not DefaultTargetFramework=net8.0): references tools/SelectTests, which targets
+         net10.0 for its Microsoft.Build ProjectGraph dependency, and loads that graph at runtime. -->
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsTestProject>true</IsTestProject>

@@ -57,7 +57,6 @@ public sealed class SelectTestsCliTests
                     From: null,
                     To: null,
                     ChangedFilesPath: null,
-                    DotnetAffected: null,
                     SkipLayer1: false,
                     ForceAll: true,
                     Enforce: false,

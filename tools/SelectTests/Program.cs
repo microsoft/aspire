@@ -11,7 +11,7 @@ using Aspire.SelectTests;
 
 // Entry point for the selective-CI tool. Computes the subset of the test matrix (and the non-.NET
 // jobs) relevant to a PR's changed files, by unioning:
-//   Layer 1 — the MSBuild ProjectGraph reverse-dependency closure from `dotnet-affected`, and
+//   Layer 1 — the MSBuild ProjectGraph reverse-dependency closure (GraphAffectedProjects), and
 //   Layer 2 — the curated docs/ci/test-trigger-map.yml resolved by TestSelector.
 // It runs in audit mode: it writes the selection + a would-have-been-skipped summary, but emits
 // the full, unfiltered matrix unless --enforce is passed, so CI keeps running everything while the
@@ -49,14 +49,9 @@ var changedFilesOption = new Option<string?>("--changed-files")
     Description = "Path to a newline-delimited list of changed repo-relative paths (instead of --from/--to)."
 };
 
-var dotnetAffectedOption = new Option<string?>("--dotnet-affected")
-{
-    Description = "Path to a standalone dotnet-affected executable. Defaults to the local tool ('dotnet tool run dotnet-affected')."
-};
-
 var skipLayer1Option = new Option<bool>("--skip-layer1")
 {
-    Description = "Skip the dotnet-affected graph closure (Layer 2 / curated map only)."
+    Description = "Skip the Layer 1 graph closure (Layer 2 / curated map only)."
 };
 
 var forceAllOption = new Option<bool>("--force-all")
@@ -78,7 +73,7 @@ var rootCommand = new RootCommand("Select the relevant CI test subset for a PR's
 foreach (var option in new Option[]
 {
     repoRootOption, mapOption, matrixOption, fromOption, toOption, changedFilesOption,
-    dotnetAffectedOption, skipLayer1Option, forceAllOption, enforceOption, outputOption
+    skipLayer1Option, forceAllOption, enforceOption, outputOption
 })
 {
     rootCommand.Options.Add(option);
@@ -93,7 +88,6 @@ rootCommand.SetAction(parseResult =>
     var from = parseResult.GetValue(fromOption);
     var to = parseResult.GetValue(toOption);
     var changedFilesPath = parseResult.GetValue(changedFilesOption);
-    var dotnetAffected = parseResult.GetValue(dotnetAffectedOption);
     var skipLayer1 = parseResult.GetValue(skipLayer1Option);
     var forceAll = parseResult.GetValue(forceAllOption);
     var enforce = parseResult.GetValue(enforceOption);
@@ -101,7 +95,7 @@ rootCommand.SetAction(parseResult =>
 
     return Selection.Run(new RunOptions(
         repoRoot, mapPath, matrixPath, from, to, changedFilesPath,
-        dotnetAffected, skipLayer1, forceAll, enforce, output));
+        skipLayer1, forceAll, enforce, output));
 });
 
 return rootCommand.Parse(args).Invoke();
@@ -113,7 +107,6 @@ internal sealed record RunOptions(
     string? From,
     string? To,
     string? ChangedFilesPath,
-    string? DotnetAffected,
     bool SkipLayer1,
     bool ForceAll,
     bool Enforce,
@@ -195,9 +188,9 @@ internal static class Selection
         return stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
-    // Repo-relative, '/'-separated directories of every project in Aspire.slnx -- the universe
-    // dotnet-affected walks. The selector treats a changed file under one of these dirs as
-    // "Layer-1-owned" (attributed by the graph tool), so it never triggers the run-all fallback.
+    // Repo-relative, '/'-separated directories of every project in Aspire.slnx -- the universe the
+    // Layer 1 graph walks. The selector treats a changed file under one of these dirs as
+    // "Layer-1-owned" (attributed by the graph), so it never triggers the run-all fallback.
     private static IReadOnlyCollection<string> LoadProjectDirectories(string repoRoot)
     {
         var slnxPath = Path.Combine(repoRoot, "Aspire.slnx");
@@ -215,123 +208,33 @@ internal static class Selection
             .ToHashSet(StringComparer.Ordinal);
     }
 
-    // Layer 1: dotnet-affected builds the MSBuild ProjectGraph and reports every project hit by the
-    // diff — the union of *changed* (incl. foreign <Compile Include> consumers) and *affected*
-    // (downstream dependents). We return the full set of project names: the selector intersects the
-    // test projects into the matrix and matches the production projects against project_rules.
+    // Layer 1: build the MSBuild ProjectGraph from Aspire.slnx (HEAD-only) and report every project
+    // hit by the diff — the union of *changed* (incl. cross-project linked-file consumers) and
+    // *affected* (downstream dependents). We return the full set of project names: the selector
+    // intersects the test projects into the matrix and matches the production projects against
+    // project_rules. See GraphAffectedProjects for why this replaced dotnet-affected.
     private static IReadOnlyCollection<string> RunLayer1(RunOptions options)
     {
-        var outDir = Directory.CreateTempSubdirectory("aspire-affected");
         try
         {
-            // --filter-file-path scopes discovery to the solution; raw filesystem discovery crashes
-            // on the template placeholder projects. (The older --solution-path alias is obsolete.)
-            //
-            // NOTE: dotnet-affected reads file blobs at the --from commit through a libgit2-backed
-            // virtual filesystem to detect package/file changes. That read returns invalid content
-            // inside a git *worktree* (where .git is a file, not a directory), which makes the
-            // MSBuild evaluation of Arcade's directory-walking props throw. CI uses a normal
-            // checkout so --from/--to works there; in a local worktree use --skip-layer1.
-            var affectedArgs = new List<string>
-            {
-                "--repository-path", options.RepoRoot,
-                "--filter-file-path", "Aspire.slnx",
-                "--format", "json",
-                "--output-dir", outDir.FullName,
-                "--output-name", "affected",
-            };
-            if (options.From is not null)
-            {
-                affectedArgs.Add("--from");
-                affectedArgs.Add(options.From);
-            }
-            if (options.To is not null)
-            {
-                affectedArgs.Add("--to");
-                affectedArgs.Add(options.To);
-            }
+            // MSBuildLocator must register the SDK's MSBuild assemblies before any Microsoft.Build type
+            // is loaded. GraphAffectedProjects.Compute is the only thing that references the engine, and
+            // it is not JITted until the call below, so registering here (once) is in time.
+            GraphAffectedProjects.EnsureMSBuildRegistered();
 
-            // By default invoke the local tool from .config/dotnet-tools.json ('dotnet tool run
-            // dotnet-affected'), so CI just needs 'dotnet tool restore'. --dotnet-affected overrides
-            // with an explicit standalone executable (e.g. a global install).
-            string fileName;
-            List<string> args;
-            if (options.DotnetAffected is not null)
-            {
-                fileName = options.DotnetAffected;
-                args = affectedArgs;
-            }
-            else
-            {
-                fileName = "dotnet";
-                args = new List<string> { "tool", "run", "dotnet-affected" };
-                args.AddRange(affectedArgs);
-            }
-
-            // MSBuildLocator (inside dotnet-affected) resolves the SDK via DOTNET_ROOT; point it at
-            // the repo-local SDK so the graph evaluation matches the rest of CI.
-            var env = new Dictionary<string, string>();
-            var localSdk = Path.Combine(options.RepoRoot, ".dotnet");
-            if (Directory.Exists(localSdk))
-            {
-                env["DOTNET_ROOT"] = localSdk;
-                env["PATH"] = localSdk + Path.PathSeparator + (Environment.GetEnvironmentVariable("PATH") ?? "");
-            }
-
-            string stdout;
-            int exitCode;
-            string stderr;
-            try
-            {
-                stdout = RunProcess(fileName, args, options.RepoRoot, out exitCode, out stderr, env);
-            }
-            catch (Exception ex)
-            {
-                return Layer1Failed(options, $"could not start dotnet-affected: {ex.Message}");
-            }
-
-            if (exitCode != 0)
-            {
-                return Layer1Failed(options, $"dotnet-affected exited {exitCode}: {stderr}{stdout}");
-            }
-
-            // affected.json: [{ "Name": "...", "FilePath": "..." }]
-            var jsonPath = Path.Combine(outDir.FullName, "affected.json");
-            if (!File.Exists(jsonPath))
-            {
-                // dotnet-affected writes nothing when no project is affected.
-                return Array.Empty<string>();
-            }
-
-            using var doc = JsonDocument.Parse(File.ReadAllText(jsonPath));
-            return doc.RootElement.EnumerateArray()
-                .Select(e => e.TryGetProperty("Name", out var n) ? n.GetString() : null)
-                .Where(name => name is not null)
-                .Select(name => name!)
-                .ToHashSet(StringComparer.Ordinal);
+            return GraphAffectedProjects.Compute(options.RepoRoot, options.From, options.To, options.ChangedFilesPath);
         }
-        finally
+        catch (Exception ex)
         {
-            outDir.Delete(recursive: true);
+            return Layer1Failed(ex.Message);
         }
     }
 
-    // Enforcing mode must fail loudly if the graph closure is unavailable (under-selecting would
-    // silently skip real tests). Audit mode tolerates it: the curated map still selects and the
-    // full matrix runs anyway.
-    private static IReadOnlyCollection<string> Layer1Failed(RunOptions options, string detail)
-    {
-        if (options.Enforce)
-        {
-            throw new InvalidOperationException(
-                $"Layer 1 (dotnet-affected) failed and --enforce is set: {detail}");
-        }
-
-        Console.Error.WriteLine(
-            $"warning: skipping Layer 1 (graph closure): {detail}{Environment.NewLine}" +
-            "Ensure 'dotnet tool restore' ran (or pass --dotnet-affected) before enforcing.");
-        return Array.Empty<string>();
-    }
+    // Layer 1 is not optional: under-selecting would silently skip real tests. Any failure to compute
+    // the graph closure is fatal — surface it rather than masking it behind an empty (under-selecting)
+    // result.
+    private static IReadOnlyCollection<string> Layer1Failed(string detail) =>
+        throw new InvalidOperationException($"Layer 1 (affected-projects graph) failed: {detail}");
 
     private static void WriteMatrix(
         RunOptions options,
@@ -428,7 +331,7 @@ internal static class Selection
         sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {(options.Enforce ? "enforcing" : "audit (advisory: the full matrix + all jobs run regardless of the selection below)")}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- change source: {source}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- force-all (kill switch): {options.ForceAll}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- layer 1 (dotnet-affected): {(options.SkipLayer1 || options.ForceAll ? "skipped" : $"{layer1Affected.Count} affected project(s) (production + test)")}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- layer 1 (affected-projects graph): {(options.SkipLayer1 || options.ForceAll ? "skipped" : $"{layer1Affected.Count} affected project(s) (production + test)")}");
         sb.AppendLine();
 
         // The changed files that came in, so a reader can tell which inputs drove the selection.

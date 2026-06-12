@@ -24,7 +24,7 @@ public sealed record SelectorOptions(bool ForceAll = false);
 /// <param name="EscalationReason">When <see cref="SelectsAll"/> is true, a short human-readable reason.</param>
 /// <param name="UnmatchedFiles">
 /// Changed files that matched <em>no</em> curated map rule (Layer 2). After the trim, normal
-/// <c>src</c> files are expected here (Layer 1 / <c>dotnet-affected</c> owns the project closure),
+/// <c>src</c> files are expected here (Layer 1 / the affected-projects graph owns the project closure),
 /// so a consumer that wants the "neither layer" set subtracts the files Layer 1 attributed. The
 /// raw set is still the early-warning signal for a loose, non-project dependency that needs a
 /// curated rule.
@@ -39,7 +39,7 @@ public sealed record SelectionResult(
 /// <summary>
 /// Filters the full CI matrix down to the subset relevant to a PR's changed files, using the
 /// curated <c>docs/ci/test-trigger-map.yml</c> (Layer 2) unioned with a graph-derived affected set
-/// (Layer 1, e.g. from <c>dotnet-affected</c>, supplied to <see cref="Select"/>).
+/// (Layer 1, from <see cref="GraphAffectedProjects"/>, supplied to <see cref="Select"/>).
 /// </summary>
 /// <remarks>
 /// Behavior is specified by the acceptance tests in
@@ -56,8 +56,8 @@ public sealed class TestSelector
     /// <param name="allTestProjects">All matrix test project names — the universe an <c>ALL</c> selection expands to.</param>
     /// <param name="projectDirectories">
     /// Repo-relative, '/'-separated directories of every project in <c>Aspire.slnx</c> (the universe
-    /// <c>dotnet-affected</c> walks). Used to decide whether a changed file is "Layer-1-owned": a file
-    /// under one of these dirs is attributed by the graph tool, so it never triggers the run-all
+    /// the Layer 1 graph walks). Used to decide whether a changed file is "Layer-1-owned": a file
+    /// under one of these dirs is attributed by the graph, so it never triggers the run-all
     /// fallback. May be empty (then no file is treated as owned).
     /// </param>
     public TestSelector(
@@ -217,8 +217,8 @@ public sealed class TestSelector
             UnmatchedFiles: unmatchedFiles);
     }
 
-    // A changed file is "Layer-1-owned" when it lives under a project directory in Aspire.slnx --
-    // dotnet-affected then attributes it to that project, so it does not need the run-all fallback.
+    // A changed file is "Layer-1-owned" when it lives under a project directory in Aspire.slnx -- the
+    // Layer 1 graph then attributes it to that project, so it does not need the run-all fallback.
     private bool IsLayer1Owned(string file)
     {
         foreach (var dir in _projectDirectories)

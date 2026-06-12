@@ -88,6 +88,12 @@
     <!-- MSBuild dependencies -->
     <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="17.9.5" /> <!-- This should not be updated, so we support older VS versions -->
     <PackageVersion Include="Microsoft.IO.Redist" Version="6.1.3" /> <!-- Pinned transitive dependency to address vulnerability. This is a transitive dependency of Microsoft.Build.Utilities.Core -->
+    <!-- Used by tools/SelectTests (selective-CI Layer 1) to build the MSBuild ProjectGraph. Loaded
+         at runtime from the repo-local SDK via MSBuildLocator (ExcludeAssets=runtime), so these track
+         the SDK's MSBuild line (18.3.x for SDK 10.0.x); do not ship the assemblies. -->
+    <PackageVersion Include="Microsoft.Build" Version="18.3.3" />
+    <PackageVersion Include="Microsoft.Build.Framework" Version="18.3.3" />
+    <PackageVersion Include="Microsoft.Build.Locator" Version="1.9.1" />
     <!-- NuGet dependencies -->
     <PackageVersion Include="NuGet.Commands" Version="7.6.0" />
     <PackageVersion Include="NuGet.ProjectModel" Version="7.6.0" />

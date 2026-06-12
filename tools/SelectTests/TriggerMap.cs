@@ -30,7 +30,7 @@ internal sealed class TriggerMap
 
     // Five matchers exist; a section is a key only when the selector treats it differently.
     // The graph closure (ProjectReference, CPM, Directory.Build.*, foreign <Compile Include>) is
-    // computed at runtime by dotnet-affected (Layer 1), so those edges are intentionally absent.
+    // computed at runtime by the Layer 1 graph (GraphAffectedProjects), so those edges are intentionally absent.
     // affected_project_rules are distinct from path_rules because they key off the affected PROJECT
     // set (Layer 1) by project name, not off changed file paths.
 
@@ -119,7 +119,7 @@ internal sealed class TriggerMap
         return matcher.Match(new[] { path }).HasMatches;
     }
 
-    // Matches a project NAME (dotnet-affected's Name, == the .csproj base name) against a
+    // Matches a project NAME (the Layer 1 graph's affected name, == the .csproj base name) against a
     // project_rules pattern, supporting simple '*'/'?' wildcards (e.g. "Aspire.Hosting*" matches
     // every hosting project by name). This is over the project-NAME string space, not file paths,
     // so a project_rule survives a project moving directories and follows the graph's transitive

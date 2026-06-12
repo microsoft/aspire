@@ -95,15 +95,15 @@ jobs:
             args+=(--force-all)
           fi
 
-          # dotnet-affected (Layer 1 graph closure) ships as a local tool.
-          ./dotnet.sh tool restore
-
-          # SelectTests writes selected_matrix.json (full in audit, filtered in enforce), the run_*
-          # job booleans (to $GITHUB_OUTPUT), and the summary. The tool fails OPEN *by design* when it
-          # decides to (e.g. --force-all, or an unavailable diff base -> the full matrix + run-all), so
-          # a non-zero exit here means the selector itself crashed. Let that fail the step (and the
-          # run) rather than masking the bug behind a silent fallback; surfacing it is the whole point
-          # of the audit phase.
+          # SelectTests computes the Layer 1 affected-projects graph in-process from Aspire.slnx
+          # (Microsoft.Build, loaded from the repo-local SDK via MSBuildLocator -- no extra tool to
+          # restore). It writes selected_matrix.json (full in audit, filtered in enforce), the run_*
+          # job booleans (to $GITHUB_OUTPUT), and the summary. The tool selects the full matrix *by
+          # design* when it is told to (--force-all from the kill switch, or a non-PR event with no
+          # base), so a non-zero exit here means the selector itself crashed (incl. a Layer 1 graph
+          # failure, which is fatal -- under-selecting would silently skip tests). Let that fail the
+          # step (and the run) rather than masking the bug behind a silent fallback; surfacing it is
+          # the whole point of the audit phase.
           ./dotnet.sh run --project tools/SelectTests/SelectTests.csproj -- "${args[@]}"
 
       - name: Split matrix by dependency type
