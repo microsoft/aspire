@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The span detail pane is now properly cleared when navigating between traces in the dashboard. Previously, navigating away from a trace left the pane open showing a span from the old trace.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-06-12T07:34:42Z",
+  "lastMergedAt": "2026-06-12T07:34:42Z",
+  "name": "Fix trace detail span pane on navigation",
+  "owner": "JamesNK",
+  "prs": [
+    18146
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only fix for race condition in TerminalHostFailureDiagnosticServiceTests; not user-facing",
+  "mergedAt": "2026-06-12T11:46:56Z",
+  "number": 18151,
+  "runDate": "2026-06-12T13:01:56Z",
+  "status": "excluded",
+  "title": "Fix race condition in RepeatedFailureEvents_OnlyDiagnoseOnce test"
+}

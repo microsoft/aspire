@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Updates existing AKS docs navigation page; not documenting a new 13.5 milestone feature",
+  "mergedAt": "2026-06-12T08:17:35Z",
+  "number": 1249,
+  "runDate": "2026-06-12T13:01:56Z",
+  "status": "excluded",
+  "title": "Add AKS to Azure deployment docs"
+}

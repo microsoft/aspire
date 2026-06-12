@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard bug fix: closes span detail pane when navigating between traces",
+  "mergedAt": "2026-06-12T07:34:42Z",
+  "number": 18146,
+  "runDate": "2026-06-12T13:01:56Z",
+  "status": "included",
+  "title": "Fix trace detail span pane on navigation and improve stress/playground apps"
+}
