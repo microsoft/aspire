@@ -164,7 +164,7 @@ public static class MySqlBuilderExtensions
             }
             else
             {
-                logger.LogInformation("Executing custom creation script for database '{DatabaseName}':{NewLine}{Script}", sqlDatabase.DatabaseName, Environment.NewLine, scriptAnnotation.Script);
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
                 using var command = sqlConnection.CreateCommand();
                 command.CommandText = scriptAnnotation.Script;
                 var rowsAffected = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);

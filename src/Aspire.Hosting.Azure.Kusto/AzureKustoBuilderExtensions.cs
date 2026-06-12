@@ -294,7 +294,7 @@ public static class AzureKustoBuilderExtensions
         {
             if (hasCustomScript)
             {
-                logger.LogInformation("Executing custom creation script for database '{DatabaseName}':{NewLine}{Script}", databaseResource.DatabaseName, Environment.NewLine, script);
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", databaseResource.DatabaseName);
             }
 
             await AzureKustoEmulatorResiliencePipelines.Default.ExecuteAsync(async ct => await adminProvider.ExecuteControlCommandAsync(databaseResource.DatabaseName, script, crp).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);

@@ -320,7 +320,10 @@ public static partial class SqlServerBuilderExtensions
                     }
                 }
 
-                logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
+                if (batchNumber > 0)
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
+                }
             }
 
             logger.LogDebug("Database '{DatabaseName}' created successfully", sqlDatabase.DatabaseName);
@@ -332,7 +335,7 @@ public static partial class SqlServerBuilderExtensions
 
         async Task ExecuteBatchAsync(string batch, int batchNumber, int executionCount, CancellationToken cancellationToken)
         {
-            logger.LogInformation("Executing custom creation script batch {BatchNumber} for database '{DatabaseName}':{NewLine}{Batch}", batchNumber, sqlDatabase.DatabaseName, Environment.NewLine, batch);
+            logger.LogInformation("Executing custom creation script batch {BatchNumber} for database '{DatabaseName}'", batchNumber, sqlDatabase.DatabaseName);
 
             for (var i = 0; i < executionCount; i++)
             {

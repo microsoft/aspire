@@ -739,7 +739,7 @@ public static class PostgresBuilderExtensions
 
             if (scriptAnnotation?.Script is { } script)
             {
-                logger.LogInformation("Executing custom creation script for database '{DatabaseName}':{NewLine}{Script}", npgsqlDatabase.DatabaseName, Environment.NewLine, script);
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
             }
 
             var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
