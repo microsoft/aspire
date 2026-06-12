@@ -65,6 +65,12 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           MANUAL_RUN_ID: ${{ inputs.run_id }}
           MANUAL_DRY_RUN: ${{ inputs.dry_run }}
+          # TEMPORARY (FORCE_RERUN_ALL): force-rerun EVERY failed CI job, bypassing the
+          # transient-failure classification, the retryable-job-count cap, and the open-PR
+          # gate. The attempt cap (up to 3 auto-reruns / 4 total attempts) is preserved.
+          # Revert by setting this to 'false' (or removing it). Do not keep this enabled
+          # on main long-term. See docs/ci/auto-rerun-transient-ci-failures.md.
+          FORCE_RERUN_ALL: 'true'
         with:
           script: |
             const rerunWorkflow = require('./.github/workflows/auto-rerun-transient-ci-failures.js');
@@ -77,6 +83,8 @@ jobs:
             const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
             const maxRetryableJobs = rerunWorkflow.defaultMaxRetryableJobs;
             const maxJobLogInspectionBytes = 256 * 1024;
+            // TEMPORARY (FORCE_RERUN_ALL): see env comment above.
+            const forceRerunAll = String(process.env.FORCE_RERUN_ALL).toLowerCase() === 'true';
 
             async function paginate(route, parameters, selectItems) {
               const items = [];
@@ -224,7 +232,10 @@ jobs:
             });
             core.setOutput('pull_request_numbers', JSON.stringify(pullRequestNumbers));
 
-            if (pullRequestNumbers.length === 0) {
+            // TEMPORARY (FORCE_RERUN_ALL): in force mode, do not bail out when no PR is
+            // associated — still rerun the failed jobs. Outside force mode, keep the
+            // original behavior of skipping runs with no associated PR.
+            if (pullRequestNumbers.length === 0 && !forceRerunAll) {
               console.log('No associated pull request could be resolved for this workflow run. Skipping.');
               return;
             }
@@ -246,6 +257,7 @@ jobs:
               getJobLogTextForJob: async job => getJobLogText(job.id),
               maxRetryableJobs,
               retryPatternsConfig,
+              forceRerunAll,
             });
 
             // TRX-based analysis: check test output for transient patterns
@@ -341,12 +353,14 @@ jobs:
               retryableCount: retryableJobs.length,
               maxRetryableJobs,
               runAttempt,
+              forceRerunAll,
             });
             const rerunExecutionEligible = rerunWorkflow.computeRerunExecutionEligibility({
               dryRun,
               retryableCount: retryableJobs.length,
               maxRetryableJobs,
               runAttempt,
+              forceRerunAll,
             });
             core.setOutput('rerun_eligible', String(rerunEligible));
             core.setOutput('rerun_execution_eligible', String(rerunExecutionEligible));
@@ -396,6 +410,9 @@ jobs:
           SOURCE_RUN_ATTEMPT: ${{ needs.analyze-transient-failures.outputs.source_run_attempt }}
           SOURCE_RUN_URL: ${{ needs.analyze-transient-failures.outputs.source_run_url }}
           TEST_PATTERN_MATCHED_TESTS: ${{ needs.analyze-transient-failures.outputs.test_pattern_matched_tests }}
+          # TEMPORARY (FORCE_RERUN_ALL): bypass the open-PR gate so closed/absent PRs do
+          # not block the rerun. Keep this in sync with the analyze step's FORCE_RERUN_ALL.
+          FORCE_RERUN_ALL: 'true'
         with:
           script: |
             const rerunWorkflow = require('./.github/workflows/auto-rerun-transient-ci-failures.js');
@@ -407,6 +424,8 @@ jobs:
             const sourceRunAttempt = Number(process.env.SOURCE_RUN_ATTEMPT);
             const sourceRunUrl = process.env.SOURCE_RUN_URL;
             const testPatternMatchedTests = JSON.parse(process.env.TEST_PATTERN_MATCHED_TESTS || '[]');
+            // TEMPORARY (FORCE_RERUN_ALL): see env comment above.
+            const forceRerunAll = String(process.env.FORCE_RERUN_ALL).toLowerCase() === 'true';
 
             if (retryableJobs.length === 0) {
               console.log('No retryable jobs were provided to the rerun job.');
@@ -424,4 +443,5 @@ jobs:
               sourceRunAttempt,
               sourceRunUrl,
               testPatternMatchedTests,
+              forceRerunAll,
             });

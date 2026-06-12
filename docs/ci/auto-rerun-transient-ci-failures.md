@@ -21,7 +21,7 @@ CI run fails on PR
                ▼
 ┌──────────────────────────────────┐
 │  Safety rails                    │
-│  • ≤ 3 total attempts            │
+│  • attempts 1–3 → up to 3 reruns │
 │  • ≤ 5 retryable jobs (default)  │
 │  • PR must still be open         │
 └──────────────┬───────────────────┘
@@ -179,13 +179,34 @@ The workflow is intentionally conservative. All of these conditions must be met 
 
 | Rail | Detail |
 |------|--------|
-| **Attempt limit** | The source run must be on attempt ≤ 3 (allowing up to 2 automatic reruns, 3 total attempts). |
+| **Attempt limit** | The source run must be on attempt ≤ 3. Reruns are triggered from source attempts 1, 2, and 3, so a run gets up to 3 automatic reruns (4 total attempts) before the cap stops further reruns. |
 | **Retryable job cap** | At least 1 but no more than 5 retryable jobs (default). On attempts > 1, the cap is stricter: the count must be *strictly less than* 5. |
 | **Open PR** | At least one associated pull request must still be open. |
 | **Non-aggregator** | Aggregator jobs (`Final Results`, `Tests / Final Test Results`) are excluded from analysis. |
 | **Mixed-failure veto** | A job with both a test execution failure (`Run tests*`) and unrelated transient post-step noise is *not* retried on infrastructure grounds alone — the test execution failure must match a pattern (pass 3 or 4) to qualify. |
 
 When a rerun is requested, GitHub reruns **all** failed jobs for that attempt — not just the matched ones. This is a GitHub API constraint (there is no API for atomically rerunning a subset of failed jobs). The matched-job count and safety rails are the eligibility gate; once eligible, the rerun covers the full failed set.
+
+## ⚠️ Temporary: force-rerun all failures (`FORCE_RERUN_ALL`)
+
+> **This is a temporary, easily-revertible measure and must not stay on `main` long-term.**
+
+The workflow currently runs in **force mode**, enabled by the `FORCE_RERUN_ALL: 'true'` environment variable set on both jobs in [`auto-rerun-transient-ci-failures.yml`](../../.github/workflows/auto-rerun-transient-ci-failures.yml). In force mode the workflow requests a rerun on **any** failed CI run for a PR, regardless of whether the failure looks transient.
+
+**Force mode bypasses:**
+
+1. **Transient-failure classification** — every failed (non-ignored) job is treated as retryable; the 4-pass analysis is skipped entirely.
+2. **The retryable-job-count cap** — the `≤ 5 retryable jobs` rail is not applied.
+3. **The open-PR gate** — the run is rerun even if no associated PR is currently open (a PR comment is still posted when PR numbers are known).
+
+**Force mode keeps:**
+
+- **The attempt cap** — reruns still only fire from source attempts 1–3 (up to 3 automatic reruns / 4 total attempts). This is unchanged.
+- **The aggregator-job exclusion** (`Final Results`, `Tests / Final Test Results`) and the `failureConclusions` filter — these define what counts as a failed CI job, not an eligibility rule.
+
+**How it is implemented:** the classification rules and [`eng/test-retry-patterns.json`](../../eng/test-retry-patterns.json) config are left fully intact. Force mode is gated behind an optional `forceRerunAll` parameter (default `false`) threaded through `analyzeFailedJobs`, `computeRerunEligibility`, `computeRerunExecutionEligibility`, and `rerunMatchedJobs` in the JS module, plus the `FORCE_RERUN_ALL` env var read in the YAML. With the default off, all normal behavior (and its tests) is preserved.
+
+**To revert:** set `FORCE_RERUN_ALL: 'true'` to `'false'` (or remove the env var) on both jobs in the YAML. Ideally also remove the `forceRerunAll` plumbing and the force-mode tests.
 
 ### PR association
 

@@ -63,6 +63,7 @@ async function dispatch(operation, payload) {
                     },
                     maxRetryableJobs: payload.maxRetryableJobs,
                     retryPatternsConfig: payload.retryPatternsConfig ?? null,
+                    forceRerunAll: payload.forceRerunAll ?? false,
                 });
 
                 return { ...result, logRequestJobIds };

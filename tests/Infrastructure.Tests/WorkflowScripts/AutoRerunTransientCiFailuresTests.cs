@@ -726,6 +726,66 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.False(rerunExecutionEligible);
     }
 
+    // TEMPORARY (FORCE_RERUN_ALL): these tests cover the temporary force-rerun mode.
+    // Remove them when the FORCE_RERUN_ALL plumbing is reverted.
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ForceRerunAllMarksJobsThatWouldNormallyBeSkippedAsRetryable()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Run tests"]);
+
+        // A plain test execution failure with a generic annotation is normally skipped.
+        AnalyzeFailedJobsResult normal = await AnalyzeSingleJobAsync(job, "Process completed with exit code 1.");
+        Assert.Empty(normal.RetryableJobs);
+        Assert.Single(normal.SkippedJobs);
+
+        AnalyzeFailedJobsResult forced = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { [job.Id.ToString()] = "Process completed with exit code 1." },
+            forceRerunAll: true);
+
+        AnalyzedJob retryable = Assert.Single(forced.RetryableJobs);
+        Assert.Equal(job.Id, retryable.Id);
+        Assert.Empty(forced.SkippedJobs);
+        Assert.Contains("Force-rerun mode", retryable.Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ForceRerunAllBypassesTheJobCountCapButKeepsTheAttemptCap()
+    {
+        bool eligibleAboveCap = await InvokeHarnessAsync<bool>(
+            "computeRerunEligibility",
+            new
+            {
+                retryableCount = 10,
+                runAttempt = 1,
+                forceRerunAll = true
+            });
+
+        Assert.True(eligibleAboveCap);
+
+        bool eligiblePastAttemptCap = await InvokeHarnessAsync<bool>(
+            "computeRerunEligibility",
+            new
+            {
+                retryableCount = 10,
+                runAttempt = 4,
+                forceRerunAll = true
+            });
+
+        Assert.False(eligiblePastAttemptCap);
+    }
+
+    [Fact]
+    public async Task WorkflowYamlEnablesTemporaryForceRerunAllMode()
+    {
+        string workflowText = await ReadRepoFileAsync(".github/workflows/auto-rerun-transient-ci-failures.yml");
+
+        Assert.Contains("FORCE_RERUN_ALL: 'true'", workflowText);
+        Assert.Contains("forceRerunAll", workflowText);
+    }
+
     [Fact]
     public async Task RepresentativeWorkflowFixturesStayAlignedWithCurrentWorkflowDefinitions()
     {
@@ -2019,7 +2079,8 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Dictionary<string, string> annotationTextByJobId,
         Dictionary<string, string>? jobLogTextByJobId = null,
         int? maxRetryableJobs = null,
-        object? retryPatternsConfig = null)
+        object? retryPatternsConfig = null,
+        bool forceRerunAll = false)
         => InvokeHarnessAsync<AnalyzeFailedJobsResult>(
             "analyzeFailedJobs",
             new AnalyzeFailedJobsRequest
@@ -2028,7 +2089,8 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 AnnotationTextByJobId = annotationTextByJobId,
                 JobLogTextByJobId = jobLogTextByJobId,
                 MaxRetryableJobs = maxRetryableJobs,
-                RetryPatternsConfig = retryPatternsConfig
+                RetryPatternsConfig = retryPatternsConfig,
+                ForceRerunAll = forceRerunAll
             });
 
     private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
@@ -2088,6 +2150,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         public Dictionary<string, string>? JobLogTextByJobId { get; init; }
         public int? MaxRetryableJobs { get; init; }
         public object? RetryPatternsConfig { get; init; }
+        public bool ForceRerunAll { get; init; }
     }
 
     private sealed class AnalyzeFailedJobsResult
