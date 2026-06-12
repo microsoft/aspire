@@ -177,7 +177,21 @@ public class TerminalHostFailureDiagnosticServiceTests
         {
             await service.StartAsync(stopCts.Token).DefaultTimeout();
 
-            for (var i = 0; i < 3; i++)
+            // Publish the first failure event that triggers the diagnostic.
+            await notifications.PublishUpdateAsync(host, s => s with
+            {
+                State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, null),
+                IsHidden = true,
+            }).DefaultTimeout();
+
+            // Wait for the service to process the first event and unhide the host.
+            // This ensures the service has added the host to its diagnosed set before
+            // we publish repeated events that should be de-duped.
+            await WaitForUnhideAsync(notifications, host).DefaultTimeout();
+            await ReadLogsAsync(loggers, host, expected: 2).DefaultTimeout();
+
+            // Now publish repeated failures — these must be de-duped.
+            for (var i = 0; i < 2; i++)
             {
                 await notifications.PublishUpdateAsync(host, s => s with
                 {
@@ -185,9 +199,6 @@ public class TerminalHostFailureDiagnosticServiceTests
                     IsHidden = true,
                 }).DefaultTimeout();
             }
-
-            await WaitForUnhideAsync(notifications, host).DefaultTimeout();
-            await ReadLogsAsync(loggers, host, expected: 2).DefaultTimeout();
 
             // Give the service a tick to spuriously write more lines if the dedupe
             // logic is broken.
