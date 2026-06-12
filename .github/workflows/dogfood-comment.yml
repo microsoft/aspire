@@ -1,14 +1,9 @@
 name: Add Dogfooding Comment
 
 on:
-  # Use pull_request_target to run in the context of the base branch
-  # This allows commenting on PRs from forks
-  pull_request_target:
-    types: [opened, reopened, synchronize]
-    branches:
-      - 'main'
-      - 'release/**'
-  # Allow manual triggering
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -18,23 +13,85 @@ on:
 
 jobs:
   add-dogfood-comment:
-    # Only run on the dotnet org to avoid running on forks
-    if: ${{ github.repository_owner == 'microsoft' }}
+    # For workflow_run: only handle fork PRs (same-repo PRs get the comment
+    # inline in tests.yml right after build_packages).
+    # Also handle manual workflow_dispatch.
+    if: >-
+      github.repository_owner == 'microsoft' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.head_repository.full_name != github.repository))
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      actions: read
     steps:
+      - name: Determine PR number
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "number=$INPUT_PR_NUMBER" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Look up the PR associated with the workflow run's head commit.
+          # This works for both same-repo and fork PRs.
+          PR_NUMBER=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" \
+            --jq '.[0].number' 2>/dev/null || echo "")
+
+          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
+            echo "::notice::Could not determine PR number from workflow run"
+            exit 0
+          fi
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Check build_packages job succeeded
+        if: github.event_name == 'workflow_run' && steps.pr.outputs.number
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          BUILD_RESULT=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" \
+            --paginate --jq '.jobs[] | select(.name | test("Build packages")) | .conclusion' 2>/dev/null | head -1)
+
+          if [ "$BUILD_RESULT" != "success" ]; then
+            echo "::notice::Build packages did not succeed (result: ${BUILD_RESULT:-not found}), skipping dogfood comment"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Add dogfooding comment
+        if: steps.pr.outputs.number && steps.check.outputs.skip != 'true'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
         with:
           script: |
-            // Get PR number from either the PR event or manual input
-            const prNumber = context.payload.number || context.payload.inputs.pr_number;
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
             const bashScript = 'https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh';
             const psScript = 'https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1';
             
             // Unique marker to identify dogfooding comments
             const dogfoodMarker = '<!-- dogfood-pr -->';
+
+            // Skip if comment already exists
+            const comments = await github.rest.issues.listComments({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            if (comments.data.some(c => c.body.includes(dogfoodMarker))) {
+              core.info('Dogfood comment already exists, skipping');
+              return;
+            }
             
             const comment = `${dogfoodMarker}
             🚀 **Dogfood this PR with:**
@@ -50,29 +107,9 @@ jobs:
             iex "& { $(irm ${psScript}) } ${prNumber}"
             \`\`\``;
 
-            // Check for existing dogfooding comment
-            const comments = await github.rest.issues.listComments({
+            await github.rest.issues.createComment({
               issue_number: prNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
+              body: comment
             });
-
-            const existingComment = comments.data.find(comment => comment.body.includes(dogfoodMarker));
-
-            if (existingComment) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
-                comment_id: existingComment.id,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
-                issue_number: prNumber,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
