@@ -475,6 +475,12 @@ internal sealed class DashboardClient : IDashboardClient
                     // or ReconnectAsync disposing the same instance is safe.
                     delayCts.Dispose();
                 }
+
+                // Transition to Connecting so that SetConnectionState fires a new Disconnected
+                // event on the next failure. Without this, duplicate Disconnected transitions
+                // are suppressed and the retry button in ResourceServiceConnectionProvider
+                // never appears (it requires multiple disconnect events).
+                SetConnectionState(DashboardConnectionState.Connecting);
             }
 
             try
