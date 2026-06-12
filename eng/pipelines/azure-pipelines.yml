@@ -876,3 +876,57 @@ extends:
                         Write-Host "Resolved macOS npm validation artifact: $artifactName"
                         Write-Host "##vso[task.setvariable variable=NpmValidationArtifactName]$artifactName"
                       displayName: 🟣Resolve native macOS RID
+
+    # Fire-and-forget dispatch of validate-published-build.yml against the
+    # channel this build just published to (dev for main, staging for release/*
+    # + internal/release/*).
+    #
+    # Depends only on `build` because Arcade v3 publishing
+    # (enablePublishUsingPipelines: true on the build job) uploads native
+    # archives to ci.dot.net during the build stage itself, not as a separate
+    # post-build stage — `prepare_installers` validates against the same path
+    # and likewise only depends on `build`. Running in parallel with
+    # `prepare_installers` removes ~20–30 minutes of latency on the validation
+    # signal at no correctness cost.
+    #
+    # Fire-and-forget because this is informational signal, not a gate:
+    # blocking on a CLI E2E run susceptible to transient GH Actions/Docker
+    # flakiness would punish every production-branch build for noise unrelated
+    # to the build itself. Operators re-run from the GitHub Actions UI.
+    - stage: dispatch_validate_published_build
+      displayName: Dispatch Validate Published Build
+      dependsOn:
+        - build
+      variables:
+        # From the computeVersion step in build_sign_native.yml's Windows job.
+        - name: aspireVersion
+          value: $[ stageDependencies.build.Windows.outputs['computeVersion.aspireVersion'] ]
+        # main publishes to 'daily' (quality=dev) per build_sign_native.yml;
+        # release branches publish to 'staging'.
+        - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+          - name: validateQuality
+            value: dev
+        - ${{ else }}:
+          - name: validateQuality
+            value: staging
+        # Workflow ref tracks the branch we're building from so the dispatched
+        # workflow YAML matches the test source for that channel.
+        # AzDO `replace()` is a global substring replace, not a prefix strip;
+        # for the gated branches (main, release/X.Y, internal/release/X.Y) the
+        # behavior happens to coincide with prefix-only, producing release/X.Y
+        # for internal/release/X.Y mirrors (the public mirror name).
+        - name: validateWorkflowRef
+          value: ${{ replace(replace(variables['Build.SourceBranch'], 'refs/heads/', ''), 'internal/', '') }}
+      # _PackagesPublished=true gates on (non-PR + internal + production
+      # branch), which exactly covers builds that produce a channel upload.
+      condition: |
+        and(
+          in(dependencies.build.result, 'Succeeded', 'SucceededWithIssues'),
+          eq(variables['_PackagesPublished'], 'true')
+        )
+      jobs:
+        - template: /eng/pipelines/templates/dispatch-validate-published-build-job.yml@self
+          parameters:
+            quality: $(validateQuality)
+            version: $(aspireVersion)
+            ref: $(validateWorkflowRef)

@@ -17,6 +17,11 @@ on:
           - dev
           - staging
           - release
+      expectedVersion:
+        description: 'Optional: exact CLI version the channel must resolve to (asserted post-install). Leave empty to skip the version assertion.'
+        required: false
+        default: ''
+        type: string
 
   schedule:
     # Run daily at 6 AM UTC
@@ -75,6 +80,9 @@ jobs:
       - name: Run smoke tests against daily build
         env:
           ASPIRE_E2E_QUALITY: ${{ inputs.quality || 'dev' }}
+          # When non-empty, asserts `aspire --version` after install equals this
+          # value. Empty/whitespace is treated as "skip assertion".
+          ASPIRE_E2E_EXPECTED_VERSION: ${{ inputs.expectedVersion }}
           ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR: ${{ github.workspace }}/testresults/cli-versions
         run: |
           dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \

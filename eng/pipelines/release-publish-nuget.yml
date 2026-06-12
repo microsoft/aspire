@@ -11,6 +11,9 @@
 #    baseline PR) and waits for it to complete
 # 7. Uploads aspire-cli-* archives from the source build's BlobArtifacts
 #    onto the GitHub Release as the aspire-repo-bot
+# 8. Dispatches the validate-published-build GitHub Actions workflow
+#    (fire-and-forget) to run the CLI E2E suite against the just-published
+#    release CLI as a post-release smoke signal
 #
 # For full documentation, see: docs/release-process.md
 
@@ -98,6 +101,11 @@ parameters:
     type: boolean
     default: false
 
+  - name: SkipValidatePublishedBuild
+    displayName: '[Advanced] Skip dispatching validate-published-build.yml (re-run after success)'
+    type: boolean
+    default: false
+
   # Azure DevOps manual string parameters cannot be left blank. These defaults
   # must include the NPM_PUBLISH_REQUIRED_* aliases from common-variables.yml.
   - name: NpmPublishOwners
@@ -130,6 +138,15 @@ parameters:
     displayName: '[Advanced] Ref to dispatch release-github-tasks.yml from (workflow source only)'
     type: string
     default: 'main'
+
+  # Override for the ref the dispatched validate-published-build.yml workflow
+  # is loaded from. Defaults to empty → derive from the source build's release
+  # branch (with internal/ stripped to the public mirror name). Set to a topic
+  # branch to test workflow changes before they merge.
+  - name: ValidatePublishedBuildWorkflowRef
+    displayName: '[Advanced] Override ref to dispatch validate-published-build.yml from (empty = use release branch from source build)'
+    type: string
+    default: ''
 
 variables:
   - template: /eng/pipelines/common-variables.yml@self
@@ -349,8 +366,26 @@ extends:
 
                   Write-Host "✓ ReleaseVersionEffective: $effective"
                   Write-Host "##vso[task.setvariable variable=releaseVersionEffective;isOutput=true]$effective"
+
+                  # Derive the release branch from the source build resource.
+                  # Two consumers downstream:
+                  #   - DispatchGitHubTasksJob feeds it as release-github-tasks.yml's
+                  #     `release_branch` input → merge-back PR head branch
+                  #     (must exist on the public microsoft/aspire mirror, hence
+                  #     the `internal/` strip).
+                  #   - ValidatePublishedBuild defaults its workflow ref to this so
+                  #     the dispatched validate-published-build.yml is loaded from
+                  #     the release branch that produced the build.
+                  $sourceBranch = "$(resources.pipeline.aspire-build.sourceBranch)"
+                  $releaseBranch = ($sourceBranch -replace '^refs/heads/', '') -replace '^internal/', ''
+                  if ([string]::IsNullOrWhiteSpace($releaseBranch)) {
+                    Write-Error "Could not derive release branch from source build sourceBranch '$sourceBranch'."
+                    exit 1
+                  }
+                  Write-Host "✓ ReleaseBranchEffective: $releaseBranch (from source build sourceBranch=$sourceBranch)"
+                  Write-Host "##vso[task.setvariable variable=releaseBranchEffective;isOutput=true]$releaseBranch"
                 name: deriveReleaseVersion
-                displayName: 'Derive ReleaseVersion from source build tag'
+                displayName: 'Derive ReleaseVersion + ReleaseBranch from source build'
                 env:
                   SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
@@ -2313,8 +2348,13 @@ extends:
               image: windows.vs2026preview.scout.amd64
               os: windows
             variables:
-              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts stage).
+              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts
+              # stage). ReleaseBranchEffective is the canonical public-branch derivation
+              # (release/X.Y for both release/* and internal/release/* source builds —
+              # release-github-tasks.yml needs the public mirror name because the
+              # merge-back PR's head branch must exist on microsoft/aspire).
               ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+              ReleaseBranchEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseBranchEffective'] ]
             templateContext:
               # No ESRP publish in this job (dispatches a GitHub Actions workflow via GH App JWT
               # and polls for completion). Skip the auto-injected publish auth task.
@@ -2327,13 +2367,7 @@ extends:
                 fetchDepth: 1
 
               - powershell: |
-                  # Derive the GitHub workflow inputs from the source build resource.
-                  # sourceBranch is in refs/heads/<name> form; strip the prefix.
-                  $sourceBranch = "$(resources.pipeline.aspire-build.sourceBranch)"
-                  $releaseBranch = $sourceBranch -replace '^refs/heads/', ''
                   $commitSha = "$(resources.pipeline.aspire-build.sourceCommit)"
-
-                  Write-Host "Source branch: $sourceBranch -> release_branch: $releaseBranch"
                   Write-Host "Source commit: $commitSha"
 
                   if ([string]::IsNullOrWhiteSpace($commitSha) -or $commitSha.Length -ne 40) {
@@ -2341,55 +2375,34 @@ extends:
                     exit 1
                   }
 
-                  Write-Host "##vso[task.setvariable variable=ReleaseBranchDerived]$releaseBranch"
                   Write-Host "##vso[task.setvariable variable=CommitShaDerived]$commitSha"
-                displayName: 'Derive workflow inputs from source build'
+                displayName: 'Derive commit SHA from source build'
 
               # pwsh (not powershell): Get-AspireBotInstallationToken.ps1 uses
               # RSA.ImportFromPem, which is only available in .NET Core 3.0+ / .NET 5+.
               # The legacy `powershell:` shorthand runs Windows PowerShell 5.1 on
               # .NET Framework, which doesn't have that API and would fail at runtime.
-              - pwsh: |
-                  $inputs = @{
-                    release_version     = "$(ReleaseVersionEffective)"
-                    commit_sha          = "$(CommitShaDerived)"
-                    release_branch      = "$(ReleaseBranchDerived)"
-                    is_prerelease       = ([System.Convert]::ToBoolean("${{ parameters.IsPrerelease }}")).ToString().ToLowerInvariant()
-                    dry_run             = ([System.Convert]::ToBoolean("${{ parameters.DryRun }}")).ToString().ToLowerInvariant()
+              - template: /eng/pipelines/templates/dispatch-github-workflow-steps.yml@self
+                parameters:
+                  workflowFile: release-github-tasks.yml
+                  workflowRef: '${{ parameters.GitHubTasksWorkflowRef }}'
+                  noWait: false
+                  dispatchStepDisplayName: 'Dispatch release-github-tasks and wait'
+                  inputs:
+                    release_version: $(ReleaseVersionEffective)
+                    commit_sha: $(CommitShaDerived)
+                    release_branch: $(ReleaseBranchEffective)
+                    is_prerelease: ${{ lower(parameters.IsPrerelease) }}
+                    dry_run: ${{ lower(parameters.DryRun) }}
                     # The AzDO pipeline owns idempotency for the *AzDO* side via its
                     # own Skip* parameters. The GH workflow skip_* flags stay at
                     # their defaults (false). If a GH-side step needs to be
                     # skipped, the release manager can run the workflow manually
                     # after setting SkipGitHubTasks=true on the AzDO re-run.
-                    skip_tagging        = "false"
-                    skip_github_release = "false"
-                    skip_merge_pr       = "false"
-                    skip_baseline_pr    = "false"
-                  }
-
-                  & "$(Build.SourcesDirectory)/eng/pipelines/scripts/dispatch-release-github-tasks.ps1" `
-                    -AppId         "$env:ASPIRE_BOT_APP_ID" `
-                    -PrivateKeyPem "$env:ASPIRE_BOT_PRIVATE_KEY" `
-                    -Owner         'microsoft' `
-                    -Repo          'aspire' `
-                    -WorkflowFile  'release-github-tasks.yml' `
-                    -Ref           '${{ parameters.GitHubTasksWorkflowRef }}' `
-                    -Inputs        $inputs
-                displayName: 'Dispatch release-github-tasks and wait'
-                env:
-                  # Secrets must be mapped explicitly into env so PowerShell can
-                  # read them; AzDO doesn't expose secret variables to scripts
-                  # by default.
-                  ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
-                  ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
-
-              - powershell: |
-                  Write-Host ""
-                  Write-Host "Dispatched run: $env:DISPATCHED_RUN_URL"
-                displayName: 'Print dispatched run URL'
-                condition: always()
-                env:
-                  DISPATCHED_RUN_URL: $(DispatchedRunUrl)
+                    skip_tagging: 'false'
+                    skip_github_release: 'false'
+                    skip_merge_pr: 'false'
+                    skip_baseline_pr: 'false'
 
           # Upload aspire-cli-* archives from the signed source build's
           # BlobArtifacts onto the GitHub release. Depends on the dispatch
@@ -2589,3 +2602,52 @@ extends:
                     --channel stable \
                     --validation-mode LiveRelease
                 displayName: '🟣Validate cask against live GitHub release'
+
+      # ===== STAGE 4: VALIDATE PUBLISHED BUILD =====
+      # Fire-and-forget dispatch of validate-published-build.yml against the
+      # actually-published release CLI (quality=release,
+      # version=$(ReleaseVersionEffective)) as a post-release smoke signal.
+      # Operators re-run from the GitHub Actions UI on failure (the workflow
+      # opens a tracking issue too).
+      - stage: ValidatePublishedBuild
+        displayName: 'Dispatch Published Build Validation'
+        # Depend on Release, not GitHubTasks: the precondition is "packages
+        # reached NuGet.org and the channel pointer got promoted"
+        # (Release-stage responsibilities), not "GitHub release exists"
+        # (GitHubTasks). PrepareArtifacts is named explicitly so the dispatch
+        # can resolve stageDependencies.PrepareArtifacts.* output variables —
+        # AzDO only exposes stageDependencies for stages listed directly.
+        dependsOn:
+          - Release
+          - PrepareArtifacts
+        # 'Skipped' on Release lets the partial-rerun path work (operator sets
+        # SkipNuGetPublish=true + SkipChannelPromotion=true because they already
+        # succeeded). PrepareArtifacts must actually have succeeded — its
+        # output variables feed the dispatch, and an upstream-cascaded skip
+        # would leave them unset.
+        condition: |
+          and(
+            in(dependencies.PrepareArtifacts.result, 'Succeeded', 'SucceededWithIssues'),
+            in(dependencies.Release.result, 'Succeeded', 'SucceededWithIssues', 'Skipped'),
+            eq('${{ parameters.SkipValidatePublishedBuild }}', 'false')
+          )
+        variables:
+          - name: ReleaseVersionEffective
+            value: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+          - name: ReleaseBranchEffective
+            value: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseBranchEffective'] ]
+          # ValidatePublishedBuildWorkflowRef override wins if set; otherwise
+          # the dispatched workflow loads from the release branch so the
+          # workflow YAML matches the release branch's test source.
+          - name: ValidatePublishedBuildWorkflowRefEffective
+            ${{ if ne(parameters.ValidatePublishedBuildWorkflowRef, '') }}:
+              value: ${{ parameters.ValidatePublishedBuildWorkflowRef }}
+            ${{ else }}:
+              value: $(ReleaseBranchEffective)
+        jobs:
+          - template: /eng/pipelines/templates/dispatch-validate-published-build-job.yml@self
+            parameters:
+              quality: release
+              version: $(ReleaseVersionEffective)
+              ref: $(ValidatePublishedBuildWorkflowRefEffective)
+

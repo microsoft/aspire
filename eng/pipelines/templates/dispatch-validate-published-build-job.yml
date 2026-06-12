@@ -1,0 +1,54 @@
+# Single-job template that dispatches the validate-published-build GitHub
+# Actions workflow (fire-and-forget). Used by both release-publish-nuget.yml
+# (quality=release) and azure-pipelines.yml (quality=dev|staging) for uniform
+# dispatch shape across release and build pipelines.
+#
+# Not wrapped in Arcade's jobs.yml: a single pwsh dispatch step produces no
+# artifacts that benefit from Arcade's telemetry/SBOM/publishing injection.
+
+parameters:
+  # dev / staging / release (matches validate-published-build.yml's `quality`
+  # choices). Not enforced as a template `values:` constraint because callers
+  # often pass a $(...) macro that's only resolved at runtime.
+  - name: quality
+    type: string
+
+  # Forwarded to the GitHub workflow's `version` input. Typically a $(...)
+  # macro: $(aspireVersion) in the main build pipeline,
+  # $(ReleaseVersionEffective) in the release pipeline.
+  - name: version
+    type: string
+
+  # Git ref the dispatched validate-published-build.yml is loaded from. This
+  # is the *workflow source*, not what's being validated (version drives that).
+  - name: ref
+    type: string
+    default: main
+
+jobs:
+  - job: DispatchValidatePublishedBuild
+    displayName: 'Dispatch validate-published-build (fire-and-forget)'
+    timeoutInMinutes: 15
+    pool:
+      name: NetCore1ESPool-Internal
+      image: windows.vs2026preview.scout.amd64
+      os: windows
+    variables:
+      # Bot creds for the aspire-repo-bot GitHub App. Harmless to re-include
+      # when the caller already has the group at pipeline scope; essential in
+      # pipelines that don't.
+      - group: Aspire-Release-Secrets
+    steps:
+      - checkout: self
+        displayName: 'Checkout repo (for dispatch script)'
+        fetchDepth: 1
+
+      - template: /eng/pipelines/templates/dispatch-github-workflow-steps.yml@self
+        parameters:
+          workflowFile: validate-published-build.yml
+          workflowRef: ${{ parameters.ref }}
+          noWait: true
+          dispatchStepDisplayName: 'Dispatch validate-published-build (quality=${{ parameters.quality }})'
+          inputs:
+            quality: ${{ parameters.quality }}
+            version: ${{ parameters.version }}

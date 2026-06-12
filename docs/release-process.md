@@ -17,6 +17,7 @@ The Aspire release process uses two main automation components:
    - Optionally publishes the signed VS Code extension to the Visual Studio Marketplace.
    - Dispatches the GitHub Actions workflow below as the `aspire-repo-bot` GitHub App and waits for it to complete.
    - Uploads `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the GitHub Release as the `aspire-repo-bot`.
+   - Fire-and-forget dispatches `validate-published-build.yml` to run the CLI E2E suite against the just-published release CLI as a post-release smoke signal (does not gate the release; on failure, opens a tracking issue keyed by version+quality).
 2. **GitHub Actions workflow** (`.github/workflows/release-github-tasks.yml`)
    - Creates Git tags.
    - Creates GitHub Releases.
@@ -98,17 +99,19 @@ Before starting a release:
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow. | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading `aspire-cli-*` assets to the GitHub release. | `false` |
    | `SkipHomebrewValidation` | Set `true` if re-running after a successful Homebrew cask validation against the live GitHub release. | `false` |
+   | `SkipValidatePublishedBuild` | Set `true` to skip dispatching the post-release `validate-published-build.yml` CLI E2E smoke run. | `false` |
    | `SkipVSCodeExtensionPublish` | Set `false` to publish the signed `aspire-vscode-extension` artifact to the Visual Studio Marketplace. | `true` |
    | `NpmPublishOwners` | Optional comma-separated ESRP owner aliases or emails. Leave empty for the repo default; overrides must still include the required owner aliases from `eng/pipelines/common-variables.yml`. | empty |
    | `NpmPublishApprovers` | Optional comma-separated ESRP approver aliases or emails. Leave empty for the repo default; overrides must still include the required approver aliases from `eng/pipelines/common-variables.yml` and must not overlap owners. | empty |
    | `NpmRegistryPropagationDelayMinutes` | Delay between npm RID package and pointer package submissions. | `10` |
    | `AllowNpmLatestDistTagMove` | Emergency override for intentionally moving npm `latest` to an older stable version. Older servicing releases should normally use `SkipNpmPublish=true`. | `false` |
    | `GitHubTasksWorkflowRef` | Ref to load `release-github-tasks.yml` from when dispatching. Only affects the workflow source; the release branch and commit are passed via inputs. Override only when testing pipeline changes on a topic branch. | `main` |
+   | `ValidatePublishedBuildWorkflowRef` | Ref to load `validate-published-build.yml` from when dispatching. Leave empty to use the source build's release branch (so workflow YAML matches the release-branch test source). Override only when testing workflow changes on a topic branch. | empty (= source branch) |
 
 4. Select the **Resources** button in the bottom right, then select the source build from the `aspire-build` dropdown.
    - The picker shows all recent builds from the `microsoft-aspire` pipeline regardless of branch. Pick the build that corresponds to the release branch and version you intend to ship.
    - Each build's tags are shown alongside its number. Verify the `release-version - X.Y.Z` tag matches the version you intend to ship before clicking **Run**. If the tag is missing, either re-run the source build after the tag-emitting change in `azure-pipelines.yml` is on that release branch or pass an explicit `ReleaseVersion` override.
-5. Click **Run** and monitor the pipeline. The final stage (`GitHubTasks`) dispatches `release-github-tasks.yml`, waits for it to complete, uploads the `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the newly-created GitHub release, and validates the Homebrew cask against that live release. The AzDO pipeline only succeeds if the enabled GitHub tasks, asset upload, and Homebrew validation succeed.
+5. Click **Run** and monitor the pipeline. The `GitHubTasks` stage dispatches `release-github-tasks.yml`, waits for it to complete, uploads the `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the newly-created GitHub release, and validates the Homebrew cask against that live release. The AzDO pipeline only succeeds if the enabled GitHub tasks, asset upload, and Homebrew validation succeed. After `GitHubTasks` succeeds, the `ValidatePublishedBuild` stage fire-and-forget dispatches `validate-published-build.yml` against `quality=release` and the just-published version; the AzDO pipeline does not wait on or fail because of the dispatched run (failures open a tracking issue keyed by version+quality).
 6. Verify packages appear on NuGet.org and npm, and verify that the `aspire-cli-*` archives are attached to the GitHub release.
 
 To publish only the VS Code extension after merging an extension release PR, run the same `release-publish-nuget` pipeline, select the signed source build from that merge, and set:
@@ -127,6 +130,7 @@ To publish only the VS Code extension after merging an extension release PR, run
 | `SkipHomebrewValidation` | `true` |
 | `SkipGitHubTasks` | `true` |
 | `SkipReleaseAssets` | `true` |
+| `SkipValidatePublishedBuild` | `true` |
 | `SkipVSCodeExtensionPublish` | `false` |
 
 > **Stable vs. pre-release source build:** For a stable release (`IsPrerelease=false`), use the `microsoft-aspire` build that ran automatically on merge. For a pre-release (`IsPrerelease=true`), that automatic build is stable-only and cannot be used — manually queue the `microsoft-aspire` pipeline on the merge commit with `Package VS Code Extension as Pre-Release=true`, wait for it to finish, and select that build instead. The publish job fails if the VSIX's embedded pre-release flag does not match `IsPrerelease`.

@@ -1,0 +1,273 @@
+# Validates an Aspire CLI build after it has been published to a public channel.
+#
+# Dispatched (fire-and-forget) from the AzDO build/release pipelines (see
+# eng/pipelines/templates/dispatch-validate-published-build-job.yml). Splits
+# every CLI E2E test class into its own job so the shape matches PR validation.
+#
+# `version` is asserted post-install — `aspire --version` must equal it after
+# the channel install — so a stale channel pointer fails the workflow loudly
+# instead of silently testing yesterday's build.
+name: Validate Published Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      quality:
+        description: 'Install quality to validate (dev, staging, release)'
+        required: false
+        default: 'staging'
+        type: choice
+        options:
+          - dev
+          - staging
+          - release
+      version:
+        description: 'Exact Aspire CLI version to validate'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  setup_cli_e2e_tests:
+    name: Setup CLI E2E test matrix
+    runs-on: ubuntu-latest
+    outputs:
+      cli_e2e_matrix: ${{ steps.filter_cli_e2e.outputs.cli_e2e_matrix }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/enumerate-tests
+        id: generate_tests_matrix
+        with:
+          buildArgs: '/p:IncludeCliE2ETests=true /p:SkipTests=false'
+
+      - name: Filter CLI E2E test matrix
+        id: filter_cli_e2e
+        shell: pwsh
+        env:
+          ALL_TESTS: ${{ steps.generate_tests_matrix.outputs.all_tests }}
+        run: |
+          $allTests = $env:ALL_TESTS | ConvertFrom-Json
+          $cliE2ETests = @($allTests.include | Where-Object {
+            $_.projectName -eq 'Aspire.Cli.EndToEnd.Tests' -and $_.type -eq 'class'
+          })
+
+          if ($cliE2ETests.Count -eq 0) {
+            Write-Error "No Aspire.Cli.EndToEnd.Tests class entries were found in the generated test matrix."
+            exit 1
+          }
+
+          $matrix = ConvertTo-Json @{ include = @($cliE2ETests) } -Compress -Depth 10
+          "cli_e2e_matrix=$matrix" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+  build_cli_e2e_image:
+    name: Build CLI E2E Docker image
+    uses: ./.github/workflows/build-cli-e2e-image.yml
+    needs: setup_cli_e2e_tests
+    with:
+      includePolyglotImages: true
+
+  validate-published-build:
+    name: ${{ matrix.shortname }} (${{ inputs.quality || 'staging' }})
+    needs: [setup_cli_e2e_tests, build_cli_e2e_image]
+    if: ${{ fromJson(needs.setup_cli_e2e_tests.outputs.cli_e2e_matrix).include[0] != null }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup_cli_e2e_tests.outputs.cli_e2e_matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: ./restore.sh
+
+      - name: Verify Docker is running
+        run: docker info
+
+      - name: Download prebuilt CLI E2E Docker image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-e2e-dotnet-image
+          path: ${{ github.workspace }}/cli-e2e-image
+
+      - name: Download prebuilt CLI E2E polyglot Docker image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-e2e-polyglot-image
+          path: ${{ github.workspace }}/cli-e2e-image
+
+      - name: Download prebuilt CLI E2E Java Docker image
+        if: ${{ contains(matrix.shortname, 'Java') }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-e2e-polyglot-java-image
+          path: ${{ github.workspace }}/cli-e2e-image
+
+      - name: Load prebuilt CLI E2E Docker images
+        shell: bash
+        run: |
+          set -euo pipefail
+          eng/scripts/load-cli-e2e-images.sh \
+            --image-dir "${{ github.workspace }}/cli-e2e-image" \
+            --require-dotnet true \
+            --require-polyglot true \
+            --require-java "${{ contains(matrix.shortname, 'Java') }}"
+
+      - name: Build E2E test project
+        run: dotnet build tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj
+
+      - name: Run CLI E2E tests against published build
+        # Install via the channel (ASPIRE_E2E_QUALITY) rather than by version so
+        # the tests exercise the same channel-resolution path real users hit.
+        # ASPIRE_E2E_EXPECTED_VERSION drives the post-install `aspire --version`
+        # assertion that catches stale channel pointers.
+        env:
+          ASPIRE_E2E_QUALITY: ${{ inputs.quality }}
+          ASPIRE_E2E_EXPECTED_VERSION: ${{ inputs.version }}
+          ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR: ${{ github.workspace }}/testresults/cli-versions
+          TEST_CLASS: ${{ matrix.classname }}
+          TRX_FILE_NAME: ${{ matrix.shortname }}.trx
+        run: |
+          dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+            --no-build \
+            -- \
+            --ignore-exit-code 8 \
+            --report-trx \
+            --report-trx-filename "$TRX_FILE_NAME" \
+            --results-directory ${{ github.workspace }}/testresults \
+            --filter-class "$TEST_CLASS" \
+            --filter-not-trait "quarantined=true" \
+            --filter-not-trait "outerloop=true" \
+            --hangdump --hangdump-type none --hangdump-timeout 15m
+
+      - name: Upload logs and test results
+        id: upload-logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: validate-published-build-${{ inputs.quality || 'staging' }}-${{ matrix.shortname }}
+          path: |
+            testresults/**
+            **/TestResults/**/*.log
+          if-no-files-found: ignore
+
+      - name: Generate test results summary
+        if: always()
+        continue-on-error: true
+        env:
+          TEST_RESULTS_ARTIFACT_URL: ${{ steps.upload-logs.outputs.artifact-url }}
+        run: |
+          if [ -d "${{ github.workspace }}/testresults" ]; then
+            summary_args=(
+              run
+              --project
+              "${{ github.workspace }}/tools/GenerateTestSummary/GenerateTestSummary.csproj"
+              --
+              "${{ github.workspace }}/testresults"
+            )
+
+            artifact_url="${TEST_RESULTS_ARTIFACT_URL:-}"
+            if [ -n "$artifact_url" ]; then
+              summary_args+=("-u" "$artifact_url")
+            fi
+
+            dotnet "${summary_args[@]}"
+          fi
+
+      - name: Add Aspire CLI version summary
+        if: always()
+        continue-on-error: true
+        run: |
+          versions_dir="${{ github.workspace }}/testresults/cli-versions"
+
+          {
+            echo ""
+            echo "## Aspire CLI versions installed"
+            echo ""
+
+            if compgen -G "$versions_dir/*.env" > /dev/null; then
+              for version_file in "$versions_dir"/*.env; do
+                echo "- \`$(basename "$version_file" .env)\`"
+                sed 's/^/  - /' "$version_file"
+              done
+            else
+              echo "No Aspire CLI version records were produced."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Create or update a tracking issue when validation fails or hangs.
+  # validate-published-build is dispatched fire-and-forget from the AzDO
+  # pipelines, so without this nobody sees failures unless they're watching
+  # the Actions UI. Dedup by (version, quality) — re-dispatches against the
+  # same broken build accumulate as comments on one issue.
+  create-issue-on-failure:
+    name: Create Issue on Failure
+    needs: [validate-published-build]
+    runs-on: ubuntu-latest
+    # cancelled() catches per-leg timeouts (timeout-minutes: 60) and GHA
+    # infra cancellations.
+    if: ${{ failure() || cancelled() }}
+    permissions:
+      issues: write
+    steps:
+      - name: Create or comment on tracking issue
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          QUALITY: ${{ inputs.quality }}
+          VERSION: ${{ inputs.version }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { createOrCommentOnFailureIssue } = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/create-failure-tracking-issue.js`);
+
+            const quality = process.env.QUALITY;
+            const version = process.env.VERSION;
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            // Title is the dedup key. Format must stay stable so re-dispatches
+            // for the same (version, quality) attach to the same tracking issue.
+            const title = `[Validate Published Build] ${version} (${quality}) failed`;
+            const body = [
+              '## Published Build Validation Failure',
+              '',
+              `The \`validate-published-build\` workflow failed for **${quality}** at version **${version}**.`,
+              '',
+              `**Workflow run:** ${runUrl}`,
+              '',
+              'This usually means one of:',
+              '- The channel pointer (`aka.ms/dotnet/.../{quality}`) resolved to a different build than expected.',
+              '- The published archive is missing or corrupted on ci.dot.net.',
+              '- A genuine CLI regression in the published build.',
+              '',
+              '### Next Steps',
+              '1. Open the workflow run above and inspect failing test classes.',
+              `2. Confirm \`aka.ms/dotnet/.../${quality}\` resolves to \`${version}\` (mismatch = stale channel pointer).`,
+              '3. If the channel pointer is correct, treat as a CLI regression in the published build.',
+              '',
+              'This issue was automatically created by the validate-published-build workflow.'
+            ].join('\n');
+
+            await createOrCommentOnFailureIssue({
+              github,
+              core,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['area-cli', 'failing-test'],
+              runUrl,
+            });

@@ -979,6 +979,214 @@ public class CliInstallStrategyTests
         Assert.Equal(CliInstallMode.Preinstalled, strategy.Mode);
     }
 
+    [Fact]
+    public void Detect_AppliesExpectedVersionOverride_OnQualityStrategy()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", "staging"),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_EXPECTED_VERSION", "13.4.5"),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.InstallScript, strategy.Mode);
+        Assert.Equal(CliInstallQuality.Staging, strategy.Quality);
+        Assert.Equal("13.4.5", strategy.ExpectedVersion);
+    }
+
+    [Fact]
+    public void Detect_AppliesExpectedVersionOverride_OnVersionStrategy()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", "13.4.5"),
+            ("ASPIRE_E2E_EXPECTED_VERSION", "13.4.6"),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        // FromVersion does not set ExpectedVersion, so the override takes effect.
+        // (The two values diverging is artificial — exercises the override path
+        // without depending on whether they happen to match.)
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal("13.4.5", strategy.Version);
+        Assert.Equal("13.4.6", strategy.ExpectedVersion);
+    }
+
+    [Fact]
+    public void Detect_DoesNotOverrideExpectedVersionFromDeterministicMode()
+    {
+        // DotnetTool with an explicit ASPIRE_E2E_VERSION already sets ExpectedVersion
+        // deterministically. The override env var must NOT clobber that — the explicit
+        // selector wins.
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", "13.4.5"),
+            ("ASPIRE_E2E_EXPECTED_VERSION", "99.99.99"),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.Equal("13.4.5", strategy.ExpectedVersion);
+    }
+
+    [Fact]
+    public void Detect_IgnoresEmptyExpectedVersion()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", "staging"),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_EXPECTED_VERSION", ""),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallQuality.Staging, strategy.Quality);
+        Assert.Null(strategy.ExpectedVersion);
+    }
+
+    [Fact]
+    public void WithExpectedVersion_ReturnsCopyWithExpectedVersionSet()
+    {
+        var original = CliInstallStrategy.FromQuality(CliInstallQuality.Staging);
+        Assert.Null(original.ExpectedVersion);
+
+        var withExpected = original.WithExpectedVersion("13.4.5");
+
+        Assert.Equal("13.4.5", withExpected.ExpectedVersion);
+        Assert.Equal(CliInstallMode.InstallScript, withExpected.Mode);
+        Assert.Equal(CliInstallQuality.Staging, withExpected.Quality);
+        // Original is unmutated.
+        Assert.Null(original.ExpectedVersion);
+    }
+
+    [Fact]
+    public void WithExpectedVersion_RejectsEmptyString()
+    {
+        var strategy = CliInstallStrategy.FromQuality(CliInstallQuality.Staging);
+        Assert.Throws<ArgumentException>(() => strategy.WithExpectedVersion(""));
+    }
+
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    [InlineData("   \r\n  ")]
+    public void WithExpectedVersion_RejectsWhitespace(string whitespace)
+    {
+        var strategy = CliInstallStrategy.FromQuality(CliInstallQuality.Staging);
+        Assert.Throws<ArgumentException>(() => strategy.WithExpectedVersion(whitespace));
+    }
+
+    [Theory]
+    [InlineData("13.4.5; rm -rf /")]
+    [InlineData("13.4.5 && echo pwned")]
+    [InlineData("$(whoami)")]
+    [InlineData("13.4.5\"")]
+    [InlineData("13.4 5")]
+    public void WithExpectedVersion_RejectsInvalidVersionFormat(string invalidVersion)
+    {
+        var strategy = CliInstallStrategy.FromQuality(CliInstallQuality.Staging);
+        Assert.Throws<ArgumentException>(() => strategy.WithExpectedVersion(invalidVersion));
+    }
+
+    [Fact]
+    public void Detect_IgnoresWhitespaceExpectedVersion()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", "staging"),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_EXPECTED_VERSION", "   "),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallQuality.Staging, strategy.Quality);
+        Assert.Null(strategy.ExpectedVersion);
+    }
+
+    [Fact]
+    public void Detect_TrimsExpectedVersionOverride()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", "staging"),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_EXPECTED_VERSION", "  13.4.5  "),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal("13.4.5", strategy.ExpectedVersion);
+    }
+
+    [Fact]
+    public void Detect_RejectsInvalidExpectedVersionOverride()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", "staging"),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_EXPECTED_VERSION", "13.4.5; rm -rf /"),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        Assert.Throws<ArgumentException>(() => CliInstallStrategy.Detect());
+    }
+
     private static EnvironmentVariableScope WithCleanCliE2ETestEnvironment(params (string Name, string? Value)[] variables)
     {
         (string Name, string? Value)[] defaults =
