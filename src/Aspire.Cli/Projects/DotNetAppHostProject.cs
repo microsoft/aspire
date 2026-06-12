@@ -42,6 +42,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly Program.CliLoggingOptions _loggingOptions;
     private readonly IAppHostInfoResolver _appHostInfoResolver;
     private readonly IConfigurationService _configurationService;
+    private readonly CliExecutionContext _executionContext;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
@@ -71,6 +72,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         Program.CliLoggingOptions loggingOptions,
         IAppHostInfoResolver appHostInfoResolver,
         IConfigurationService configurationService,
+        CliExecutionContext executionContext,
         TimeProvider? timeProvider = null)
     {
         _runner = runner;
@@ -87,6 +89,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _loggingOptions = loggingOptions;
         _appHostInfoResolver = appHostInfoResolver;
         _configurationService = configurationService;
+        _executionContext = executionContext;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -522,7 +525,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     {
         if (isSingleFileAppHost)
         {
-            return (true, VersionHelper.GetDefaultTemplateVersion());
+            // A single-file apphost pins its Aspire.Hosting version to whatever the CLI ships,
+            // so this reports the CLI's identity version (honoring ASPIRE_CLI_VERSION / sidecar
+            // overrides) rather than the physical assembly version.
+            return (true, _executionContext.IdentityVersion);
         }
 
         using var compatibilityActivity = _profilingTelemetry.StartAppHostCheckCompatibility();

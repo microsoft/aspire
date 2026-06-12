@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Reflection;
 using System.Security;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
@@ -143,18 +142,18 @@ internal class PackagingService : IPackagingService
         WarnIfStagingDiagnosticOverridesActive();
 
         var nugetOrg = NuGetOrgUrl;
-        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _features, _logger);
+        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _features, _logger, currentCliVersion: _executionContext.IdentitySdkVersion);
 
         var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
         {
             new PackageMapping(PackageMapping.AllPackages, nugetOrg)
-        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: _logger);
+        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: _logger, currentCliVersion: _executionContext.IdentitySdkVersion);
 
         var dailyChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, new[]
         {
             new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"),
             new PackageMapping(PackageMapping.AllPackages, nugetOrg)
-        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", logger: _logger);
+        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", logger: _logger, currentCliVersion: _executionContext.IdentitySdkVersion);
 
         var prPackageChannels = new List<PackageChannel>();
 
@@ -267,7 +266,7 @@ internal class PackagingService : IPackagingService
         {
             new PackageMapping("Aspire*", packagesPath),
             new PackageMapping(PackageMapping.AllPackages, NuGetOrgUrl)
-        }, _nuGetPackageCache, _features, pinnedVersion: pinnedVersion, logger: _logger);
+        }, _nuGetPackageCache, _features, pinnedVersion: pinnedVersion, logger: _logger, currentCliVersion: _executionContext.IdentitySdkVersion);
     }
 
     internal static DirectoryInfo? TryResolvePrInstallPackagesDirectory(string? processPath, string identityChannel)
@@ -312,44 +311,20 @@ internal class PackagingService : IPackagingService
         return packagesDirectory.Exists ? packagesDirectory : null;
     }
 
-    // Returns true when the running CLI's version is stable-shaped (no semver prerelease tag).
-    // Used by the staging-channel synthesis to route stabilizing builds to the SHA-derived darc
-    // feed instead of the shared dotnet9 daily feed. Falls back to false on any error so we
-    // preserve the historical Both/shared-feed behavior rather than silently misrouting.
-    private static bool IsStableShapedCliVersionFromAssembly()
+    // Returns true when the running CLI's identity version is stable-shaped (no semver prerelease
+    // tag). Used by the staging-channel synthesis to route stabilizing builds to the SHA-derived
+    // darc feed instead of the shared dotnet9 daily feed. Reads CliExecutionContext.IdentitySdkVersion
+    // so ASPIRE_CLI_VERSION / sidecar overrides drive the routing, not the physical binary version.
+    private bool IsStableShapedCliVersionFromIdentity()
     {
-        try
-        {
-            var version = VersionHelper.GetDefaultSdkVersion();
-            return !string.IsNullOrEmpty(version) && !version.Contains('-');
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    // Reads the running CLI assembly's AssemblyInformationalVersion, which carries the +<commitHash>
-    // build metadata used to derive the SHA-specific darc-pub-microsoft-aspire-<hash> staging feed.
-    // Returns null on any error so callers degrade gracefully (no derived feed) rather than throwing.
-    private static string? GetCliInformationalVersionFromAssembly()
-    {
-        try
-        {
-            return Assembly.GetExecutingAssembly()
-                .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
-                .OfType<AssemblyInformationalVersionAttribute>()
-                .FirstOrDefault()?.InformationalVersion;
-        }
-        catch
-        {
-            return null;
-        }
+        var version = _executionContext.IdentitySdkVersion;
+        return !string.IsNullOrEmpty(version) && !version.Contains('-');
     }
 
     // Default version-shape predicate. Honors the overrideCliInformationalVersion diagnostic
     // override (so a locally built CLI can present as stable- or prerelease-shaped for staging
-    // validation) before falling back to the real assembly version.
+    // validation) before falling back to the resolved identity version (which already reflects
+    // ASPIRE_CLI_VERSION / the install sidecar).
     private bool IsStableShapedCliVersionDefault()
     {
         var overrideVersion = _configuration[OverrideCliInformationalVersionConfigKey];
@@ -362,12 +337,15 @@ internal class PackagingService : IPackagingService
             return !StripBuildMetadata(overrideVersion).Contains('-');
         }
 
-        return IsStableShapedCliVersionFromAssembly();
+        return IsStableShapedCliVersionFromIdentity();
     }
 
     // Default informational-version provider. Honors the overrideCliInformationalVersion diagnostic
     // override (so the SHA-specific darc feed can be derived deterministically from a locally built
-    // CLI) before falling back to the real assembly informational version.
+    // CLI) before falling back to the resolved identity. IdentityVersion carries the version without
+    // build metadata and IdentityCommit carries the +<sha>; they are recombined here so the
+    // staging-feed SHA derivation honors ASPIRE_CLI_VERSION / ASPIRE_CLI_COMMIT / the install sidecar
+    // rather than reading the physical assembly informational version.
     private string? GetCliInformationalVersionDefault()
     {
         var overrideVersion = _configuration[OverrideCliInformationalVersionConfigKey];
@@ -376,7 +354,9 @@ internal class PackagingService : IPackagingService
             return overrideVersion;
         }
 
-        return GetCliInformationalVersionFromAssembly();
+        var version = _executionContext.IdentityVersion;
+        var commit = _executionContext.IdentityCommit;
+        return string.IsNullOrEmpty(commit) ? version : $"{version}+{commit}";
     }
 
     private static string StripBuildMetadata(string version)
@@ -481,7 +461,7 @@ internal class PackagingService : IPackagingService
         {
             new PackageMapping("Aspire*", stagingFeedUrl),
             new PackageMapping(PackageMapping.AllPackages, NuGetOrgUrl)
-        }, _nuGetPackageCache, _features, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: _logger);
+        }, _nuGetPackageCache, _features, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: _logger, currentCliVersion: _executionContext.IdentitySdkVersion);
 
         // Surface the resolved staging routing so users can see what `--channel staging` actually
         // picked (the "show what was resolved" suggestion from the issue RCA). Pinned version is
@@ -599,13 +579,32 @@ internal class PackagingService : IPackagingService
             return "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
         }
 
-        // Derive the SHA-specific staging feed from the CLI's own commit hash, carried in the
-        // AssemblyInformationalVersion build metadata after '+'. Example informational version:
-        //   13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12
+        // Derive the SHA-specific staging feed from the CLI's own commit. The commit comes from
+        // CliExecutionContext.IdentityCommit (ASPIRE_CLI_COMMIT → install sidecar → assembly build
+        // metadata), so a locally built CLI emulating an official build derives the same feed. The
+        // injectable provider is still consulted first so tests can pin a deterministic
+        // informational version (the test-host assembly version is non-deterministic). Example:
+        //   informational "13.4.0-preview.1.26280.6+abcdef12...." or IdentityCommit "abcdef12...."
         // yields the feed:
         //   https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json
-        var informationalVersion = _cliInformationalVersionProvider();
+        var commitHash = ExtractCommitFromInformationalVersion(_cliInformationalVersionProvider())
+            ?? (string.IsNullOrEmpty(_executionContext.IdentityCommit) ? null : _executionContext.IdentityCommit);
 
+        if (string.IsNullOrEmpty(commitHash))
+        {
+            return null;
+        }
+
+        var truncatedHash = commitHash.Length >= 8 ? commitHash[..8] : commitHash;
+
+        return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
+    }
+
+    // Extracts the commit hash from the build-metadata suffix of an informational version, e.g.
+    //   "13.4.0-preview.1.26280.6+abcdef1234..." -> "abcdef1234..."
+    // Returns null when there is no usable "+<sha>" suffix.
+    private static string? ExtractCommitFromInformationalVersion(string? informationalVersion)
+    {
         if (informationalVersion is null)
         {
             return null;
@@ -617,10 +616,7 @@ internal class PackagingService : IPackagingService
             return null;
         }
 
-        var commitHash = informationalVersion[(plusIndex + 1)..];
-        var truncatedHash = commitHash.Length >= 8 ? commitHash[..8] : commitHash;
-
-        return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
+        return informationalVersion[(plusIndex + 1)..];
     }
 
     private PackageChannelQuality GetStagingQuality(PackageChannelQuality defaultQuality)
@@ -650,10 +646,10 @@ internal class PackagingService : IPackagingService
             return null;
         }
 
-        // Get the CLI's own version and strip build metadata (+hash)
-        var cliVersion = Utils.VersionHelper.GetDefaultTemplateVersion();
-        var plusIndex = cliVersion.IndexOf('+');
-        return plusIndex >= 0 ? cliVersion[..plusIndex] : cliVersion;
+        // Pin to the running CLI's identity version (honors ASPIRE_CLI_VERSION / the install
+        // sidecar / the overrideCliInformationalVersion diagnostic), stripped of build metadata.
+        var informationalVersion = _cliInformationalVersionProvider();
+        return string.IsNullOrEmpty(informationalVersion) ? null : StripBuildMetadata(informationalVersion);
     }
 
     // Local hive channels point at a flat directory of .nupkg files instead of a searchable feed.

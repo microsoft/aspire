@@ -438,6 +438,7 @@ internal sealed class AddCommand : BaseCommand
         if (VersionHelper.TryGetCurrentCliVersionMatch(
             prChannelPackageVersions,
             p => p.Package.Version,
+            ExecutionContext.IdentitySdkVersion,
             out var cliVersionPackage,
             channelName: null,
             hasPrHives: ExecutionContext.GetHiveCount() > 0))

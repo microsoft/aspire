@@ -14,13 +14,19 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Packaging;
 
-internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, string? currentCliVersion = null)
 {
     // Threaded so the local-folder integration listing can honor the same
     // ShowDeprecatedPackages flag that NuGetPackageCache honors on the feed-based path.
     // Without this, flipping the flag silently has no effect on local hive / PR hive listings
     // (https://github.com/microsoft/aspire/issues — divergence between two paths through the same intent).
     private readonly IFeatures _features = features;
+
+    // The running CLI's identity SDK version (CliExecutionContext.IdentitySdkVersion), threaded in
+    // by PackagingService so the template-package filter below honors ASPIRE_CLI_VERSION / sidecar
+    // overrides. Null when a channel is constructed directly (e.g. in tests) without identity, in
+    // which case the filter falls back to the assembly version.
+    private readonly string? _currentCliVersion = currentCliVersion;
 
     private const string GuestAppHostSdkPackageId = "Aspire.Hosting";
 
@@ -87,7 +93,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. Keep the current CLI/SDK version so shipped CLIs can resolve their
         // matching template package from daily/staging feeds, then filter out the remaining noise.
-        var currentCliVersion = VersionHelper.GetDefaultSdkVersion();
+        // Falls back to the assembly version only when no identity was threaded in (direct construction);
+        // production channels created by PackagingService always supply CliExecutionContext.IdentitySdkVersion.
+        var currentCliVersion = _currentCliVersion ?? VersionHelper.GetDefaultSdkVersion();
         var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
         {
             { Quality: PackageChannelQuality.Both } => true,
@@ -398,7 +406,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .SelectMany(mapping => CreateScopedMappings(mapping, requestedPackageIds, logger))
             .ToArray();
 
-        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, _features, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger);
+        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, _features, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger, _currentCliVersion);
     }
 
     private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds, ILogger? logger)
@@ -562,18 +570,18 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, string? currentCliVersion = null)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger);
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger, currentCliVersion);
     }
 
-    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null)
+    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null, string? currentCliVersion = null)
     {
         // The reason that PackageChannelQuality.Both is because there are situations like
         // in community toolkit where there is a newer beta version available for a package
         // in the case of implicit feeds we want to be able to show that, along side the stable
         // version. Not really an issue for template selection though (unless we start allowing)
         // for broader templating options.
-        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger: logger);
+        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger: logger, currentCliVersion: currentCliVersion);
     }
 }

@@ -115,8 +115,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return configuredVersion;
         }
 
-        _logger.LogDebug("Using default SDK version: {Version}", DotNetBasedAppHostServerProject.DefaultSdkVersion);
-        return DotNetBasedAppHostServerProject.DefaultSdkVersion;
+        var defaultSdkVersion = _executionContext.IdentitySdkVersion;
+        _logger.LogDebug("Using default SDK version: {Version}", defaultSdkVersion);
+        return defaultSdkVersion;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1629,7 +1630,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return;
             }
 
-            var cliVersion = VersionHelper.GetDefaultSdkVersion();
+            var cliVersion = _executionContext.IdentitySdkVersion;
             if (!IsKnownIncompatibleSkew(cliVersion, configuredSdkVersion))
             {
                 return;

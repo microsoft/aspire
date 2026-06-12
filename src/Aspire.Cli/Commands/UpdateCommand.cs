@@ -427,7 +427,7 @@ internal sealed class UpdateCommand : BaseCommand
 
         var targetSdkVersion = await GetLatestGuestSdkVersionAsync(channel, projectDirectory, cancellationToken);
         if (targetSdkVersion is null ||
-            !SemVersion.TryParse(VersionHelper.GetDefaultSdkVersion(), SemVersionStyles.Strict, out var currentCliVersion) ||
+            !SemVersion.TryParse(ExecutionContext.IdentitySdkVersion, SemVersionStyles.Strict, out var currentCliVersion) ||
             SemVersion.PrecedenceComparer.Compare(targetSdkVersion, currentCliVersion) <= 0)
         {
             return null;

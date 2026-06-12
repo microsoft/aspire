@@ -169,11 +169,12 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return selected.LanguageId;
     }
 
-    private static NuGetPackage? TryGetCurrentCliTemplateVersionPackage(PackageChannel selectedChannel, NuGetPackage[] packages, bool hasPrHives)
+    private static NuGetPackage? TryGetCurrentCliTemplateVersionPackage(PackageChannel selectedChannel, NuGetPackage[] packages, bool hasPrHives, string cliSdkVersion)
     {
         if (VersionHelper.TryGetCurrentCliVersionMatch(
             packages,
             p => p.Version,
+            cliSdkVersion,
             out var cliVersionPackage,
             channelName: selectedChannel.Name,
             hasPrHives: hasPrHives))
@@ -204,7 +205,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return new NuGetPackage
             {
                 Id = TemplateNuGetConfigService.TemplatesPackageName,
-                Version = VersionHelper.GetDefaultSdkVersion(),
+                Version = cliSdkVersion,
                 Source = selectedChannel.SourceDetails
             };
         }
@@ -414,7 +415,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                         .ToArray();
                     var hasPrHives = ExecutionContext.GetHiveCount() > 0;
 
-                    var package = TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives);
+                    var package = TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives, ExecutionContext.IdentitySdkVersion);
 
                     package ??= packages
                         .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)

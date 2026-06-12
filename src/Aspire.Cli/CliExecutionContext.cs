@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using Aspire.Cli.Resources;
+using Aspire.Shared;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local", DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local", DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
@@ -41,21 +43,58 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// <summary>
     /// Gets the running CLI's informational version string (for example
     /// <c>13.4.0-preview.1.25366.3</c>), as resolved by
-    /// <see cref="Acquisition.IIdentityResolver"/>. Falls back to the assembly's
-    /// <see cref="System.Reflection.AssemblyInformationalVersionAttribute"/>
-    /// when neither <c>ASPIRE_CLI_VERSION</c> nor the <c>version</c> field of
-    /// <c>.aspire-install.json</c> is set. May be <see langword="null"/> in
-    /// tests that construct the context directly without populating identity.
+    /// <see cref="Acquisition.IIdentityResolver"/>. This is the value every
+    /// identity-sensitive version decision must read instead of going to the
+    /// assembly directly, so that <c>ASPIRE_CLI_VERSION</c> / the
+    /// <c>version</c> field of <c>.aspire-install.json</c> are honored.
     /// </summary>
-    public string? IdentityVersion { get; } = identityVersion;
+    /// <remarks>
+    /// In production the resolver always supplies a value (env → sidecar →
+    /// assembly fallback), so this is non-null. When the context is constructed
+    /// directly in tests without an explicit <c>identityVersion</c>, it falls
+    /// back to the assembly's
+    /// <see cref="System.Reflection.AssemblyInformationalVersionAttribute"/> —
+    /// matching the legacy <c>VersionHelper.GetDefaultTemplateVersion()</c>
+    /// behavior so existing tests continue to observe the assembly version.
+    /// </remarks>
+    public string IdentityVersion { get; } = identityVersion
+        ?? PackageUpdateHelpers.GetCurrentAssemblyVersion()
+        ?? throw new InvalidOperationException(ErrorStrings.UnableToRetrieveAssemblyVersion);
+
+    /// <summary>
+    /// Gets the running CLI's identity version with any build-metadata suffix
+    /// (the <c>+&lt;sha&gt;</c> portion) stripped, e.g.
+    /// <c>13.4.0-preview.1.25366.3+abc123</c> → <c>13.4.0-preview.1.25366.3</c>.
+    /// This is the SDK / bundled-package version: the CLI version is the SDK
+    /// version, so the bundled server and packages must match. Identity-sensitive
+    /// SDK-version decisions read this instead of
+    /// <c>VersionHelper.GetDefaultSdkVersion()</c>.
+    /// </summary>
+    public string IdentitySdkVersion => StripBuildMetadata(IdentityVersion);
 
     /// <summary>
     /// Gets the running CLI's source-revision commit (the <c>+&lt;sha&gt;</c>
     /// suffix of <see cref="System.Reflection.AssemblyInformationalVersionAttribute"/>
-    /// when no override is in effect). Empty when neither an override nor the
-    /// assembly informational version carries a commit suffix.
+    /// when no override is in effect), as resolved by
+    /// <see cref="Acquisition.IIdentityResolver"/>. Identity-sensitive commit
+    /// decisions (for example the staging darc feed name) read this instead of
+    /// parsing the assembly informational version directly. Empty when neither
+    /// an override nor the assembly informational version carries a commit
+    /// suffix.
     /// </summary>
     public string? IdentityCommit { get; } = identityCommit;
+
+    /// <summary>
+    /// Gets a value indicating whether at least one identity field
+    /// (<see cref="IdentityChannel"/>, <see cref="IdentityVersion"/> or
+    /// <see cref="IdentityCommit"/>) was sourced from an <c>ASPIRE_CLI_*</c>
+    /// environment variable or the install sidecar rather than the assembly's
+    /// build-time stamp. When <see langword="true"/> the CLI is emulating a
+    /// build it is not, so a startup notice is surfaced (see
+    /// <c>Program.DisplayFirstTimeUseNoticeIfNeededAsync</c>) and tooling can
+    /// flag the run as diagnostic. See <c>docs/specs/cli-identity-sidecar.md</c>.
+    /// </summary>
+    public bool IdentityOverridden { get; } = identityOverridden;
 
     /// <summary>
     /// Optional replacement for the canonical
@@ -176,5 +215,19 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
         }
 
         return HivesDirectory.GetDirectories().Length;
+    }
+
+    /// <summary>
+    /// Strips the build-metadata suffix (everything from the first <c>+</c>)
+    /// from an informational version string. SemVer build metadata is not part
+    /// of version-equality comparisons, so SDK / package version decisions
+    /// compare against the metadata-free form.
+    /// </summary>
+    private static string StripBuildMetadata(string version)
+    {
+        // AssemblyInformationalVersion shape: "13.4.0-preview.1.25366.3+abc123".
+        // The "+<sha>" build metadata is optional; some build configurations omit it.
+        var plusIndex = version.IndexOf('+');
+        return plusIndex > 0 ? version[..plusIndex] : version;
     }
 }

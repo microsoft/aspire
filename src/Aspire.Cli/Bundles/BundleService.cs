@@ -730,6 +730,10 @@ internal sealed class BundleService(
     /// </summary>
     internal static string GetCurrentVersion(string? processPath = null)
     {
+        // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+        // this fingerprints the single-file bundle's OWN binary so re-extraction is triggered
+        // when the installed bundle changes. It describes the file on disk, not the emulated
+        // ASPIRE_CLI_VERSION identity, so it must read the assembly version directly.
         var version = VersionHelper.GetDefaultTemplateVersion();
         processPath ??= Environment.ProcessPath;
 

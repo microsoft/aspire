@@ -227,6 +227,9 @@ internal sealed class IdentityResolver : IIdentityResolver
 
     private (string Version, string Commit) LoadAssemblyVersionAndCommit()
     {
+        // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+        // this IS the assembly-fallback source for the identity system itself — the value used
+        // when no ASPIRE_CLI_VERSION / sidecar override is present. It must read the assembly.
         // AssemblyInformationalVersion shape: "13.4.0-preview.1.25366.3+abcdef..."
         // The '+sha' suffix is optional (some build configurations omit it).
         var informational = AssemblyVersionHelper.GetInformationalVersion(_assembly);

@@ -2,6 +2,18 @@
 
 > Pairs with `docs/specs/install-routes.md` (sidecar physical contract) and is part of the broader packaging-service rethink tracked by [#17580](https://github.com/microsoft/aspire/issues/17580). Lifts the version-on-context work tracked by [#17750](https://github.com/microsoft/aspire/issues/17750).
 
+## Implementation status
+
+Tracked in PR [#18087](https://github.com/microsoft/aspire/pull/18087). The resolver, the full call-site migration, and the regression guardrail have **landed together** as the spec requires.
+
+- **Resolver + `CliExecutionContext`.** `IIdentityResolver` (`IdentityResolver`) composes env var → sidecar → assembly fallback per field. `CliExecutionContext` exposes `IdentityChannel`, `IdentityVersion`, `IdentityCommit`, plus two derived members beyond the original shape below: `IdentitySdkVersion` (`IdentityVersion` with `+build` metadata stripped — absorbs the old `VersionHelper.GetDefaultSdkVersion()` logic) and `IdentityOverridden` (true when any field came from env or sidecar, used to drive the startup notice).
+- **Call-site migration — complete.** Every identity-conditional decision now reads `CliExecutionContext` (`PackagingService` staging feed/version, `PackageChannel` template filter, `New`/`Add`/`Update` commands, `TemplateNuGetConfigService`, `InitCommand`/`ScaffoldingService` version stamping, `GuestAppHostProject` skew warning, `ExtensionRpcTarget`, SDK/skills generation). Physical-binary reads stay on the assembly and are annotated `// physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md)`.
+- **Regression guardrail — landed.** The grep test ships as `tests/Aspire.Cli.Tests/IdentityCallSiteGuardrailTests.cs` (the `IdentityCallSiteAuditTests` named in the test plan). It scans `src/Aspire.Cli/` for physical version reads, enforces a file-level allow-list, and a companion test fails if the allow-list goes stale.
+- **Telemetry split — done.** Binary `cli.version` / `cli.build_id` are kept; `identity.version` / `identity.channel` (and `identity.commit` when non-empty) are emitted alongside.
+- **`--version` — overridden.** A custom version action (`Commands/IdentityVersionAction.cs`) prints `IdentityVersion`, so emulated runs report the emulated version. The non-override output is byte-identical to the System.CommandLine default.
+- **Startup override notice — added.** When `IdentityOverridden` and output is human-readable, a yellow notice on stderr makes a diagnostic run impossible to mistake for a real one.
+- **`aspire doctor` — physical by design.** Doctor reports the *physical* install truth (like `--self`); emulation is surfaced by the startup notice rather than rewiring doctor's assembly-backed channel read (which `DoctorCommandTests` pin). `InstallationDiscovery` and `AspireVersionCheck.TryReadIdentityChannel` are annotated accordingly.
+
 ## Goal
 
 Stop encoding the CLI's **identity** — its channel, its version, and its commit — inside the executable, and resolve it at runtime from the install-route sidecar (`.aspire-install.json`) with environment-variable overrides. One binary, many identities.
@@ -354,7 +366,7 @@ The resolver and call-site migration land together; the test plan reflects that.
 - AppHost spawn under parent override — assert env vars are stripped from the child unless the opt-in mechanism is set.
 - A negative test: parent sets `ASPIRE_CLI_CHANNEL=staging`, runs `aspire doctor`, every peer row shows its own identity.
 
-**Call-site migration test** (`IdentityCallSiteAuditTests`):
+**Call-site migration test** (`IdentityCallSiteGuardrailTests`):
 
 - Grep `src/Aspire.Cli/**/*.cs` for direct uses of `AssemblyInformationalVersionAttribute`, `[AssemblyMetadata(...)]` reads, `VersionHelper.GetDefaultTemplateVersion()`, `VersionHelper.GetDefaultSdkVersion()`.
 - Assert each hit is in the resolver implementation, the dotnet-tool first-run materializer, the telemetry binary-version emitter, or an explicit allow-list of bundled-package-compat sites annotated with a "physical-binary-version-by-design" comment pointing at this spec.

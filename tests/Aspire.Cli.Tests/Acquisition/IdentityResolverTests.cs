@@ -209,6 +209,69 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void BuildCliExecutionContext_FlagsIdentityOverridden_WhenEnvVersionSupplied()
+    {
+        // ASPIRE_CLI_VERSION emulation must light up the override notice and feed IdentityVersion.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("EnvVersionOverride", channel: "local", informationalVersion: "13.5.0-dev+local"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: name => name == IdentityResolver.VersionEnvVar ? "13.4.2" : null);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: workspace.WorkspaceRoot.FullName,
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "cli.log"),
+            identityResolver: resolver);
+
+        Assert.True(context.IdentityOverridden);
+        Assert.Equal("13.4.2", context.IdentityVersion);
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_FlagsIdentityOverridden_WhenSidecarChannelSupplied()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("SidecarChannelOverride", channel: "local", informationalVersion: "13.5.0-dev+local"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: _ => null);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: workspace.WorkspaceRoot.FullName,
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "cli.log"),
+            identityResolver: resolver);
+
+        Assert.True(context.IdentityOverridden);
+        Assert.Equal("staging", context.IdentityChannel);
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_DoesNotFlagIdentityOverridden_WhenAssemblyOnly()
+    {
+        // No env vars and no sidecar — a real install reads its own assembly stamp, so the
+        // notice must stay silent.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            BuildAssembly("AssemblyOnly", channel: "daily", informationalVersion: "13.5.0-preview.1.25366.3+abcdef0"),
+            workspace.WorkspaceRoot.FullName,
+            envReader: _ => null);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: workspace.WorkspaceRoot.FullName,
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "cli.log"),
+            identityResolver: resolver);
+
+        Assert.False(context.IdentityOverridden);
+    }
+
+    [Fact]
     public void IdentityEnvVarNames_ContainsAllFourOverrides()
     {
         // The strip-list used by PeerInstallProbe / ProcessExecutionFactory must

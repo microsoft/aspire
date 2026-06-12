@@ -440,7 +440,7 @@ internal class ConsoleInteractionService : IInteractionService
 
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion)
     {
-        var cliInformationalVersion = VersionHelper.GetDefaultTemplateVersion();
+        var cliInformationalVersion = _executionContext.IdentityVersion;
 
         DisplayError(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading);
         MessageConsole.WriteLine();

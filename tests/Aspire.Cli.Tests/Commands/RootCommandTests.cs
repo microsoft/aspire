@@ -13,6 +13,54 @@ namespace Aspire.Cli.Tests.Commands;
 public class RootCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task RootCommandVersionOption_PrintsIdentityVersion_WhenIdentityOverridden()
+    {
+        // Emulates `ASPIRE_CLI_VERSION=13.4.2` so `--version` must report the identity version,
+        // not the assembly's build-time stamp.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityVersion: "13.4.2",
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--version");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("13.4.2", output.ToString().Trim());
+    }
+
+    [Fact]
+    public async Task RootCommandVersionShortAlias_PrintsIdentityVersion_WhenIdentityOverridden()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityVersion: "13.4.2",
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("-v");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("13.4.2", output.ToString().Trim());
+    }
+
+    [Fact]
     public async Task RootCommandWithHelpArgumentReturnsZero()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

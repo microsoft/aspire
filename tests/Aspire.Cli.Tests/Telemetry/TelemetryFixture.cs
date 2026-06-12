@@ -29,7 +29,8 @@ internal sealed class TelemetryFixture : IDisposable
         ICIEnvironmentDetector? ciEnvironmentDetector = null,
         ICodingAgentDetector? codingAgentDetector = null,
         ILogger<AspireCliTelemetry>? logger = null,
-        ActivitySamplingResult sampleResult = ActivitySamplingResult.AllDataAndRecorded)
+        ActivitySamplingResult sampleResult = ActivitySamplingResult.AllDataAndRecorded,
+        CliExecutionContext? executionContext = null)
     {
         ReportedSourceName = $"Test.{Path.GetRandomFileName()}";
         DiagnosticsSourceName = $"Test.{Path.GetRandomFileName()}";
@@ -47,7 +48,7 @@ internal sealed class TelemetryFixture : IDisposable
         codingAgentDetector ??= new TestCodingAgentDetector();
         logger ??= NullLogger<AspireCliTelemetry>.Instance;
 
-        Telemetry = new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, ReportedSourceName, DiagnosticsSourceName);
+        Telemetry = new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, ReportedSourceName, DiagnosticsSourceName, executionContext);
         Telemetry.InitializeAsync().GetAwaiter().GetResult();
     }
 

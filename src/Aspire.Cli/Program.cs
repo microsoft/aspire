@@ -661,10 +661,16 @@ public class Program
         var packagesDirectory = GetPackagesDirectory(processPath);
         var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
 
-        var channel = identityResolver.ResolveChannel().Value;
-        var version = identityResolver.ResolveVersion().Value;
-        var commit = identityResolver.ResolveCommit().Value;
+        var channel = identityResolver.ResolveChannel();
+        var version = identityResolver.ResolveVersion();
+        var commit = identityResolver.ResolveCommit();
         var nugetOverride = identityResolver.ResolveNuGetServiceIndexOverride().Value;
+
+        // The CLI is "emulating" another build whenever any identity field was supplied by an
+        // ASPIRE_CLI_* env var or the install sidecar rather than the assembly's build-time stamp.
+        // This drives the startup override notice so a diagnostic run is never mistaken for a real one.
+        static bool IsOverride(IdentitySource source) => source is IdentitySource.Environment or IdentitySource.Sidecar;
+        var identityOverridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source);
 
         return new CliExecutionContext(
             workingDirectory,
@@ -675,11 +681,12 @@ public class Program
             logFilePath,
             debugMode,
             packagesDirectory: packagesDirectory,
-            identityChannel: channel,
+            identityChannel: channel.Value,
             aspireHomeDirectory: aspireHomeDirectory,
-            identityVersion: version,
-            identityCommit: commit,
-            nugetServiceIndexOverride: nugetOverride);
+            identityVersion: version.Value,
+            identityCommit: commit.Value,
+            nugetServiceIndexOverride: nugetOverride,
+            identityOverridden: identityOverridden);
     }
 
     private static DirectoryInfo GetCacheDirectory(string? processPath = null)
@@ -782,6 +789,24 @@ public class Program
             {
                 sentinel.CreateIfNotExists();
             }
+        }
+
+        // Surface a notice whenever the CLI is emulating another build via ASPIRE_CLI_* env vars
+        // or the install sidecar, so a diagnostic run is never mistaken for a real installed build.
+        // This is independent of first-run/banner state but is suppressed for machine-readable
+        // output so structured payloads stay clean. Written to stderr for the same reason.
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        if (executionContext.IdentityOverridden && !isMachineReadableOutput)
+        {
+            var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
+            var notice = string.Format(
+                CultureInfo.CurrentCulture,
+                RootCommandStrings.IdentityOverrideNotice,
+                executionContext.IdentityChannel,
+                executionContext.IdentityVersion);
+            consoleEnvironment.Error.WriteLine();
+            consoleEnvironment.Error.MarkupLine($"[yellow]{notice.EscapeMarkup()}[/]");
+            consoleEnvironment.Error.WriteLine();
         }
     }
 

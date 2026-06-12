@@ -270,6 +270,7 @@ internal sealed class TemplateNuGetConfigService(
         if (VersionHelper.TryGetCurrentCliVersionMatch(
             orderedPackagesFromChannels,
             p => p.Package.Version,
+            executionContext.IdentitySdkVersion,
             out var cliVersionMatch,
             channelName: query.RequestedChannel,
             hasPrHives: hasPrHives))
