@@ -13,7 +13,7 @@ inputs:
   restore:
     required: false
     default: 'true'
-    description: 'Whether to set up .NET and restore the class-mode split test projects. Set false when the caller has already restored in the same job.'
+    description: 'Whether to set up .NET, bootstrap the Arcade toolset, and restore the class-mode split test projects. Set false when the caller has already restored in the same job.'
   beforeBuildPropsPath:
     required: false
     default: ''
@@ -57,7 +57,21 @@ runs:
       run: |
         find artifacts -name '*.tests-metadata.json' -delete 2>/dev/null || true
         find artifacts -name '*.tests-partitions.json' -delete 2>/dev/null || true
-        rm -f artifacts/canonical-test-matrix.json artifacts/ClassModeTestProjects.props
+        rm -f artifacts/canonical-test-matrix.json artifacts/ClassModeTestProjects.props artifacts/ToolsetBootstrap.props
+
+    - name: Bootstrap Arcade toolset
+      if: ${{ inputs.restore == 'true' }}
+      shell: bash
+      run: |
+        mkdir -p artifacts
+        cat > artifacts/ToolsetBootstrap.props <<'EOF'
+        <Project>
+          <ItemGroup>
+            <OverrideProjectToBuild Include="$(RepoRoot)tools/ExtractTestPartitions/ExtractTestPartitions.csproj" />
+          </ItemGroup>
+        </Project>
+        EOF
+        ./restore.sh /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/ToolsetBootstrap.props
 
     - name: Generate metadata and source partitions
       shell: bash
