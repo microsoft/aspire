@@ -1,0 +1,136 @@
+# Validate the Homebrew cask against a freshly-published Aspire release.
+#
+# Runs the full upstream-equivalent cask validation (`brew audit --cask
+# --online --signing` + a real `brew install`/`brew uninstall` cycle)
+# against the cask file generated from the just-published release's
+# aspire-cli-osx-* archives. This is the same validation that used to
+# run as HomebrewValidateJob inside eng/pipelines/release-publish-nuget.yml.
+# It was moved out because the AzDO release pipeline now creates the
+# GitHub release as a draft (to be compatible with GitHub's immutable
+# releases — see docs/release-process.md), and draft assets are not
+# served from the public github.com/.../releases/download/v<version>/...
+# URL that `brew audit --online` and `brew install` need. The validation
+# therefore has to wait until the release manager publishes the draft.
+#
+# Trigger semantics: `release: [released]` fires when a non-draft,
+# non-prerelease release is published — i.e. exactly the moment the
+# asset URLs become reachable. Prereleases are explicitly skipped via
+# the `if:` guard since the Homebrew cask we ship is stable-only.
+#
+# History: when changing this workflow, please ping @radical (Ankit) for
+# review — he set up the original HomebrewValidateJob in the AzDO
+# pipeline and knows the cross-channel implications best.
+
+name: Validate Homebrew Cask against released GitHub Release
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version to validate (e.g. 13.4.3). Required for manual runs.'
+        required: true
+        type: string
+
+# Avoid double-validating the same tag if both the `release: released`
+# event and a manual workflow_dispatch fire near each other.
+concurrency:
+  group: homebrew-validate-${{ github.event.release.tag_name || github.event.inputs.release_version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate cask against live release
+    # `release: released` only fires on stable, non-draft, non-prerelease
+    # releases, but check explicitly anyway because workflow_dispatch can
+    # be aimed at any version. We also gate on the repo to make sure forks
+    # don't try to validate against microsoft/aspire releases.
+    if: >-
+      github.repository == 'microsoft/aspire'
+      && (
+        (github.event_name == 'release' && github.event.release.prerelease == false && github.event.release.draft == false)
+        || github.event_name == 'workflow_dispatch'
+      )
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Resolve release version
+        id: resolve
+        env:
+          EVENT_VERSION: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ github.event.inputs.release_version }}
+        run: |
+          set -euo pipefail
+
+          # release.tag_name comes in as "vX.Y.Z" for our tags; the
+          # workflow_dispatch input is supplied without the leading "v"
+          # (matching docs/release-process.md). Normalize to bare X.Y.Z.
+          if [[ -n "${EVENT_VERSION:-}" ]]; then
+            version="${EVENT_VERSION#v}"
+          else
+            version="${INPUT_VERSION#v}"
+          fi
+
+          if [[ -z "$version" ]]; then
+            echo "::error::Could not determine release version from event or inputs"
+            exit 1
+          fi
+
+          # Aspire's tags are vMAJOR.MINOR.PATCH for stable. The Homebrew
+          # cask we ship targets stable only — refuse anything else.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version '$version' does not match X.Y.Z (stable). Homebrew validation is stable-only."
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved release version: $version"
+
+      - name: Generate cask file for released version
+        id: cask
+        run: |
+          set -euo pipefail
+          version="${{ steps.resolve.outputs.version }}"
+          out_dir="$RUNNER_TEMP/homebrew-cask"
+          mkdir -p "$out_dir"
+
+          # generate-cask.sh computes SHA256s by downloading the
+          # aspire-cli-osx-{arm64,x64}-<version>.tar.gz tarballs from the
+          # public github.com/.../releases/download/v<version>/... URL,
+          # then renders eng/homebrew/aspire.rb.template with the
+          # resulting hashes. This depends on the release assets being
+          # public, which is why this workflow runs on release: [released]
+          # rather than [created]/[published-on-a-draft].
+          #
+          # NOTE (@radical, please review): the old AzDO HomebrewValidateJob
+          # consumed the cask file emitted by the source build directly
+          # (download artifact: homebrew-cask-stable). This workflow
+          # regenerates the cask from scratch instead, which means
+          # generate-cask.sh becomes the de-facto source of truth for the
+          # cask shape. If the source build ever customizes the cask
+          # template (custom test do block, per-build tweaks), the
+          # validation here will silently diverge from what ships. See
+          # eng/homebrew/README.md for the trade-off and aspire#18068
+          # for the discussion that introduced this change.
+          eng/homebrew/generate-cask.sh \
+            --version "$version" \
+            --output "$out_dir/aspire.rb"
+
+          echo "cask_file=$out_dir/aspire.rb" >> "$GITHUB_OUTPUT"
+
+      - name: Validate cask against live GitHub release
+        run: |
+          set -euo pipefail
+          eng/homebrew/validate-cask-artifact.sh \
+            --cask-file "${{ steps.cask.outputs.cask_file }}" \
+            --channel stable \
+            --validation-mode LiveRelease

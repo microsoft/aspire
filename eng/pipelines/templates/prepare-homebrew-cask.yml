@@ -45,8 +45,9 @@ steps:
       # prepare-cask-artifact.sh defaults to LiveArchives mode, which is what
       # source-build prep needs — the cask URL points at a github.com release
       # that doesn't exist yet at prep time. The full LiveRelease audit + real
-      # brew install runs later in release-publish-nuget.yml's
-      # HomebrewValidateJob, against the cask emitted by this prep stage.
+      # brew install runs later in the homebrew-validate-release.yml GitHub
+      # workflow, which fires on release: [released] after the release manager
+      # publishes the draft GitHub release.
       args=(
         --version "$(CliVersion)"
         --channel "$(HomebrewChannel)"

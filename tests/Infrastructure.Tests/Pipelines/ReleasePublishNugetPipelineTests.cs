@@ -80,7 +80,7 @@ public sealed class ReleasePublishNugetPipelineTests
         //   2) templateContext.mb.publish.feedSource: <dnceng mirror>  (for the publishing job)
         // Both must be present in this pipeline:
         //   - non-publishing jobs (PrepareJob, WinGetJob, DispatchGitHubTasksJob,
-        //     PublishReleaseAssetsJob, HomebrewValidateJob) -> enabled: false
+        //     PublishReleaseAssetsJob) -> enabled: false
         //   - ReleaseJob (the only job that actually publishes) -> feedSource = dnceng mirror
         Assert.Contains("enabled: false", pipeline);
         Assert.Contains(

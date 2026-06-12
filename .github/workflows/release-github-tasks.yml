@@ -278,11 +278,13 @@ jobs:
         run: |
           # Write a short placeholder. The real release notes are generated
           # asynchronously by the release-notes-generate agentic workflow,
-          # which fires on the `release: [released]` event once `gh release
-          # create` below publishes the release, and edits this body in
-          # place.
+          # which fires on the `release: [created]` event once `gh release
+          # create --draft` below creates the draft release, and edits this
+          # body in place while the release is still a draft. The release
+          # manager publishes the draft as a final manual step once both
+          # the notes and the CLI assets are attached.
           cat << EOF > release_notes.md
-          *Release notes are being generated automatically and will be added to this release shortly. If they haven't appeared within a few hours, ping the Aspire team.*
+          *This release is currently a draft. Release notes are being generated automatically and CLI assets are being uploaded — both will appear here within a few minutes. Once everything looks correct, the release manager will publish the draft. If notes or assets are missing after ~30 minutes, ping the Aspire team.*
 
           ---
           *Full commit: [${{ inputs.commit_sha }}](https://github.com/${{ github.repository }}/commit/${{ inputs.commit_sha }})*
@@ -290,10 +292,10 @@ jobs:
 
           echo "Placeholder release notes generated"
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (draft)
         if: inputs.skip_github_release != true && steps.check-release.outputs.release_exists != 'true'
         env:
-          # Use the App token here so the `release: released` event is
+          # Use the App token here so the `release: created` event is
           # authored by aspire-repo-bot and downstream workflows
           # (release-notes-generate.lock.yml) get triggered. Events fired by
           # GITHUB_TOKEN intentionally do NOT trigger other workflows.
@@ -306,12 +308,21 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
           fi
 
+          # IMPORTANT: We always create the release as a draft. Immutable
+          # releases (https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)
+          # lock assets and the tag at publish time, so every mutation
+          # (release-notes-generate agentic workflow rewriting the body,
+          # PublishReleaseAssetsJob uploading aspire-cli-* archives) must
+          # happen before publish. A human publishes the draft as the final
+          # step after reviewing it — see docs/release-process.md "Publish
+          # the draft release" for the procedure.
           if [ "$DRY_RUN" == "true" ]; then
-            echo "🔍 [DRY RUN] Would create GitHub Release:"
+            echo "🔍 [DRY RUN] Would create DRAFT GitHub Release:"
             echo "   Tag: $TAG_NAME"
             echo "   Title: Aspire ${{ inputs.release_version }}"
             echo "   Target: ${{ inputs.commit_sha }}"
             echo "   Prerelease: ${{ inputs.is_prerelease }}"
+            echo "   Draft: true"
             echo ""
             echo "   Release notes content:"
             echo "   ─────────────────────────────────────"
@@ -319,12 +330,14 @@ jobs:
             echo "   ─────────────────────────────────────"
           else
             gh release create "$TAG_NAME" \
+              --draft \
               --title "Aspire ${{ inputs.release_version }}" \
               --notes-file release_notes.md \
               --target "${{ inputs.commit_sha }}" \
               $PRERELEASE_FLAG
 
-            echo "✓ Created GitHub Release: $TAG_NAME"
+            echo "✓ Created DRAFT GitHub Release: $TAG_NAME"
+            echo "  Release manager must publish the draft manually after notes + assets are attached."
           fi
 
   # ----------------------------------------------------------------------------
@@ -610,9 +623,32 @@ jobs:
 
           | Job | Result |
           |-----|--------|
-          | Release Tasks (tag + GitHub release) | ${RELEASE_STATUS} |
+          | Release Tasks (tag + draft GitHub release) | ${RELEASE_STATUS} |
           | Create Merge-Back PR | ${MERGE_STATUS} |
           | Create Baseline Version PR | ${BASELINE_STATUS} |
+
+          ## ⚠️ Manual step required — publish the draft release
+
+          The GitHub release was created as a **draft** so the release-notes-generate
+          agentic workflow can rewrite its body and the AzDO pipeline's
+          PublishReleaseAssetsJob can attach the \`aspire-cli-*\` archives before
+          publish. This is required for compatibility with GitHub's
+          [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases),
+          which lock assets and the tag at publish time.
+
+          The release manager must, after both notes and assets are in place:
+
+          1. Open the [Releases page](https://github.com/${{ github.repository }}/releases)
+             and find the draft for \`v${{ inputs.release_version }}\` at the
+             top (drafts are assigned a random \`untagged-<hash>\` URL by
+             GitHub, so there is no stable deep link until publish).
+          2. Confirm the auto-generated release notes look correct.
+          3. Confirm the \`aspire-cli-*\` archives are attached.
+          4. Click **Publish release**.
+
+          Publishing the draft fires \`release: [published]\` and (for stable releases)
+          \`release: [released]\`, which triggers downstream workflows such as
+          \`release-update-support-mdx\` and \`homebrew-validate-release\`.
 
           ## Details
           - **Tag**: v${{ inputs.release_version }}
@@ -626,6 +662,6 @@ jobs:
           - **Skip Baseline PR**: ${{ inputs.skip_baseline_pr }}
 
           ## Links
-          - [Release](https://github.com/${{ github.repository }}/releases/tag/v${{ inputs.release_version }})
+          - [Releases page](https://github.com/${{ github.repository }}/releases)
           - [Tag](https://github.com/${{ github.repository }}/tree/v${{ inputs.release_version }})
           EOF
