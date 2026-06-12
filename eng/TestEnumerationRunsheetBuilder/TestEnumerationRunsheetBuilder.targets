@@ -74,7 +74,7 @@
     <MSBuild Projects="$(MSBuildProjectFullPath)"
              Properties="GenerateCIPartitions=true;BuildOs=$(BuildOs)"
              Targets="Build;GenerateTestPartitionsForCI"
-             Condition="'$(SplitTestsOnCI)' == 'true' and !Exists('$(_SourcePartitionsJsonPath)')" />
+             Condition="'$(SplitTestsOnCI)' == 'true' and '$(TestEnumerationMetadataOnly)' != 'true' and !Exists('$(_SourcePartitionsJsonPath)')" />
 
     <!-- Write .tests-metadata.json file -->
     <PropertyGroup>
