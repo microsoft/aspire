@@ -99,6 +99,80 @@ Confirm the emulation took effect: `aspire --version` prints the emulated versio
 emulation banner appears on stderr. (Note: `aspire doctor` reports some fields from the
 physical binary by design — see the spec.)
 
+## Helper scripts (bundled with this skill)
+
+Two scripts live next to this `SKILL.md` (each with a `.sh` and a `.ps1` variant). Always
+prefer them over hand-typing versions — the daily/staging feeds are unsorted and interleave
+old `9.x` builds, so eyeballing "the latest" is error-prone.
+
+### `get-aspire-channel-version.{sh,ps1}` — resolve the version to emulate
+
+Maps a channel to the exact feed the CLI's built-in package channels resolve `Aspire*` from
+(see `src/Aspire.Cli/Packaging/PackagingService.cs`), queries it anonymously, and prints **only**
+the latest version to stdout (diagnostics go to stderr), so it pipes cleanly into
+`ASPIRE_CLI_VERSION`:
+
+```bash
+.agents/skills/cli-channel-debugging/get-aspire-channel-version.sh stable     # -> 13.4.3 (nuget.org)
+.agents/skills/cli-channel-debugging/get-aspire-channel-version.sh daily      # -> 13.5.0-preview.1.NNNNN.N (dnceng/dotnet9)
+.agents/skills/cli-channel-debugging/get-aspire-channel-version.sh staging --commit <sha>   # darc-pub-microsoft-aspire-<sha8>
+
+export ASPIRE_CLI_VERSION="$(.agents/skills/cli-channel-debugging/get-aspire-channel-version.sh daily)"
+```
+
+Options: `--package <id>` (default `Aspire.Hosting.AppHost`, present on all three feeds and
+versioned identically to the product), `--stable-only` (daily/staging → stable-shaped only),
+`--prerelease` (stable → allow prereleases). Staging requires `--commit`; note darc feeds are
+per-RC-build and may have been garbage-collected for older commits (clean `404` = no such feed).
+
+### `emulate-aspire-cli.{sh,ps1}` — one-line scenario setup (SOURCE it)
+
+Sets the `ASPIRE_CLI_*` env vars and defines an `aspire` function pointing at this repo's built
+CLI. For `stable`/`daily`/`staging` it auto-resolves the version via the resolver above. It
+**must be sourced** (bash/zsh) or **dot-sourced** (pwsh) so the env + function persist:
+
+```bash
+# bash / zsh — builds the CLI, resolves the latest daily version, defines `aspire`
+source .agents/skills/cli-channel-debugging/emulate-aspire-cli.sh daily
+aspire --version            # confirms the emulation banner + version
+```
+
+```pwsh
+. .agents/skills/cli-channel-debugging/emulate-aspire-cli.ps1 staging -Commit <sha>
+aspire --version
+```
+
+Options: `--version <v>` / `-Version` (pin instead of auto-resolving; required for `local`/`pr-<N>`),
+`--commit` / `-Commit`, `--packages <dir>` / `-Packages` (sets `ASPIRE_CLI_PACKAGES`), `--config`
+/ `-Config` (`Debug`|`Release`, default `Debug`), `--no-build` / `-NoBuild` (use an existing binary).
+
+## Driving a scenario from a Terminal canvas (Copilot app)
+
+When running inside the Copilot app, give the user a live, reusable shell per scenario by
+opening a **Terminal canvas** rather than only running one-off `bash` tool commands. The flow:
+
+1. **State the scenario + knobs in chat** (mandatory rule above) and, for feed-backed channels,
+   resolve the real version first with `get-aspire-channel-version.sh` so the title and env are
+   accurate.
+2. Build the CLI once (`dotnet build src/Aspire.Cli/Aspire.Cli.csproj -p:SkipNativeBuild=true`),
+   or let `emulate-aspire-cli.sh` build it.
+3. `open_canvas` with `canvasId: "terminal"` and a descriptive `title` (e.g.
+   `aspire (emulating daily 13.5.0-preview.1.NNNNN.N)`); pick a stable `instanceId` per scenario
+   so re-opening focuses the same panel. Open a **separate** instance per identity so the user
+   can keep, say, a `stable` and a `daily` terminal side by side.
+4. Drive it with the `send_terminal_input` action (input must be an **object**, e.g.
+   `{"input": "aspire --version"}`; a trailing Enter is added by default). The fastest setup is a
+   single `source .agents/skills/cli-channel-debugging/emulate-aspire-cli.sh <channel>` line;
+   otherwise send the `export ASPIRE_CLI_*` lines and the `aspire() { dotnet "<dll>" "$@"; }`
+   function definition individually.
+5. Verify with `aspire --version`. `read_terminal_output` may be unavailable in some app
+   contexts ("Terminal not found or not running"); when it is, confirm the emulation
+   independently by running the same env + built `aspire.dll` through a normal `bash` tool call
+   and checking the banner + version match — the canvas keystrokes are still delivered for the
+   user.
+
+Reuse `instanceId`s across turns so "the daily terminal" stays the same panel the user is looking at.
+
 ## The scenario matrix
 
 | # | Scenario | Identity | `Aspire*` package source | How |
@@ -157,15 +231,19 @@ identity channel matches. (See `docs/dogfooding-pull-requests.md` and `eng/scrip
 ### Scenario 4 — Latest daily, local CLI
 
 ```bash
+# Fast path: resolves the real latest daily version, builds, defines `aspire`.
+source .agents/skills/cli-channel-debugging/emulate-aspire-cli.sh daily
+
+# Manual equivalent:
 ASPIRE_CLI_CHANNEL=daily \
-ASPIRE_CLI_VERSION=<daily-version> \
-ASPIRE_CLI_COMMIT=<daily-sha> \
+ASPIRE_CLI_VERSION="$(.agents/skills/cli-channel-debugging/get-aspire-channel-version.sh daily)" \
   dotnet run --project src/Aspire.Cli -- <cmd>
 ```
 
 The `daily` channel maps `Aspire*` to the dnceng `dotnet9` feed. Use the **real** daily version
-and commit of the build you're emulating so version pins and the skew warning match what users
-saw.
+of the build you're emulating (the resolver gives it to you) so version pins and the skew
+warning match what users saw. `ASPIRE_CLI_COMMIT` is optional here — daily resolves from the
+shared feed, not a SHA-specific darc feed.
 
 ### Scenarios 5 & 6 — Staging (unstable vs stable version)
 
@@ -189,11 +267,15 @@ the legacy config keys — see `docs/cli-staging-validation.md`.
 ### Scenario 7 — Released build repro
 
 ```bash
+# Fast path: resolves the latest stable on nuget.org (override with --version for an older release).
+source .agents/skills/cli-channel-debugging/emulate-aspire-cli.sh stable
+
+# Manual / pin a specific release:
 ASPIRE_CLI_CHANNEL=stable ASPIRE_CLI_VERSION=13.4.2 dotnet run --project src/Aspire.Cli -- <cmd>
 ```
 
 The `stable` channel maps `Aspire*` to nuget.org. Use the exact released version the bug was
-reported against.
+reported against (`get-aspire-channel-version.sh stable` gives the current latest).
 
 ### Scenario 7b — Released repro with a fix spanning CLI **and** hosting packages
 
@@ -238,6 +320,8 @@ each `Aspire*` id has exactly one version. The directory must also exist (missin
 
 ## References (don't duplicate — link to these)
 
+- `get-aspire-channel-version.{sh,ps1}` + `emulate-aspire-cli.{sh,ps1}` (next to this file) —
+  resolve the version to emulate and one-line scenario setup; see "Helper scripts" above.
 - `docs/specs/cli-identity-sidecar.md` — identity resolution design, sidecar schema, the full
   list of `ASPIRE_CLI_*` overrides including `ASPIRE_CLI_PACKAGES`.
 - `docs/cli-staging-validation.md` — staging/stable feed routing and the `debug-staging.sh` /
