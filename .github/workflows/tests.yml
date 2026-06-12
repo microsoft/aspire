@@ -36,11 +36,12 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Set up .NET Core
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
-        with:
-          global-json-file: ${{ github.workspace }}/global.json
-
+      # No actions/setup-dotnet here on purpose. global.json declares tools.runtimes, so Arcade's
+      # InitializeDotNetCli (eng/common/tools.sh) always installs the SDK + runtime toolsets into the
+      # repo-local .dotnet and never reuses a system SDK on PATH. restore.sh therefore provisions
+      # everything this job needs; a setup-dotnet step would just download the SDK a second time into
+      # a location nothing reads. (run-tests.yml keeps setup-dotnet only for tests that run outside
+      # the repo, gated on requiresNugets.)
       - name: Restore
         shell: bash
         run: ./restore.sh
