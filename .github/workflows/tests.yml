@@ -36,24 +36,16 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: ./.github/actions/enumerate-tests
-        id: generate_tests_matrix
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }}'
+          global-json-file: ${{ github.workspace }}/global.json
 
-      # The expanded matrix can exceed 128KB. It MUST reach the bash step below via a file, not an
-      # environment variable: a single env string over Linux's MAX_ARG_STRLEN (~128KB) makes the
-      # step's execve("/usr/bin/bash") fail with E2BIG ("Argument list too long"). pwsh writes its
-      # run-script to a file, so interpolating the (trusted, build-generated) matrix into a literal
-      # here-string here keeps it out of the environment entirely.
-      - name: Write test matrix to file
-        shell: pwsh
-        run: |
-          @'
-          ${{ steps.generate_tests_matrix.outputs.all_tests }}
-          '@.Trim() | Set-Content -Path "${{ github.workspace }}/all_tests.json" -Encoding utf8 -NoNewline
+      - name: Restore
+        shell: bash
+        run: ./restore.sh
 
-      - name: Select relevant tests (audit)
+      - name: Select relevant tests
         id: select_tests
         shell: bash
         # Untrusted PR fields (body) are passed via env, never interpolated into the script body, to
@@ -63,24 +55,29 @@ jobs:
           HAS_RUN_ALL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'run-all-tests') }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.sha }}
-          # The ONE audit/enforce knob. 'false' (audit): the selector returns run-all -- the full
-          # matrix + run_* = true, plus the advisory "what enforcing would run" summary. Flip to
-          # 'true' to enforce (selective matrix + selective run_*) once the audit data looks safe.
-          ENFORCE_SELECTION: 'false'
+          # Absolute path so eng/Build.props ($(BeforeBuildPropsPath)) resolves it regardless of cwd.
+          # Under artifacts/ (gitignored) so it is not picked up as a source change.
+          BEFORE_BUILD_PROPS: ${{ github.workspace }}/artifacts/BeforeBuildProps.props
+          # The ONE audit/enforce knob. 'false' (audit): no restriction props are written, so the
+          # enumerate-tests step below builds the FULL matrix and run_* are all true; the advisory
+          # summary still reports what enforcing would have skipped. 'true' (enforce): a non-ALL
+          # selection writes BeforeBuildProps.props so enumerate-tests enumerates ONLY the selected
+          # projects, and run_* gate the non-.NET jobs.
+          ENFORCE_SELECTION: 'true'
         run: |
           set -euo pipefail
 
-          args=(--repo-root . --matrix all_tests.json --output selected_matrix.json)
+          args=(--repo-root . --before-build-props "$BEFORE_BUILD_PROPS")
           [ "$ENFORCE_SELECTION" = "true" ] && args+=(--enforce)
 
           # Kill switch: a [full ci] token in the PR body or the run-all-tests label forces everything.
           if printf '%s' "$PR_BODY" | grep -qiF '[full ci]' || [ "$HAS_RUN_ALL_LABEL" = "true" ]; then
             args+=(--force-all)
           elif [ -n "$PR_BASE_SHA" ]; then
-            # Pull requests diff base..head. The enumerate-tests checkout is shallow, so fetch the
-            # base commit. If it can't be made available we FAIL rather than fall back to --force-all:
-            # base.sha is always reachable on origin, so a failure here is a real problem (a bad fetch
-            # or a rewritten base), and masking it with run-all would teach the audit nothing.
+            # Pull requests diff base..head. This job's checkout is shallow, so fetch the base commit.
+            # If it can't be made available we FAIL rather than fall back to --force-all: base.sha is
+            # always reachable on origin, so a failure here is a real problem (a bad fetch or a
+            # rewritten base), and masking it with run-all would teach the audit nothing.
             if ! git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"; then
               echo "::error::Failed to fetch PR base commit $PR_BASE_SHA; cannot compute the changed-file diff." >&2
               exit 1
@@ -95,22 +92,46 @@ jobs:
             args+=(--force-all)
           fi
 
-          # SelectTests computes the Layer 1 affected-projects graph in-process from Aspire.slnx
-          # (Microsoft.Build, loaded from the repo-local SDK via MSBuildLocator -- no extra tool to
-          # restore). It writes selected_matrix.json (full in audit, filtered in enforce), the run_*
-          # job booleans (to $GITHUB_OUTPUT), and the summary. The tool selects the full matrix *by
-          # design* when it is told to (--force-all from the kill switch, or a non-PR event with no
-          # base), so a non-zero exit here means the selector itself crashed (incl. a Layer 1 graph
-          # failure, which is fatal -- under-selecting would silently skip tests). Let that fail the
-          # step (and the run) rather than masking the bug behind a silent fallback; surfacing it is
-          # the whole point of the audit phase.
+          # SelectTests runs BEFORE enumerate-tests. It computes the Layer 1 affected-projects graph
+          # in-process from Aspire.slnx (Microsoft.Build via MSBuildLocator -- needs the restore
+          # above) and, when enforcing a non-ALL selection, writes the OverrideProjectToBuild props at
+          # $BEFORE_BUILD_PROPS (consumed by the enumerate-tests step's beforeBuildPropsPath). It also
+          # writes the run_* job booleans and before_build_props (to $GITHUB_OUTPUT) and the summary.
+          # The tool selects ALL *by design* when told to (--force-all from the kill switch, or a
+          # non-PR event with no base), so a non-zero exit means the selector itself crashed (incl. a
+          # fatal Layer 1 graph failure -- under-selecting would silently skip tests). Let that fail
+          # the run rather than mask the bug behind a silent fallback.
           ./dotnet.sh run --project tools/SelectTests/SelectTests.csproj -- "${args[@]}"
+
+      # enumerate-tests reuses this job's checkout + restore (checkout/restore=false) so the props
+      # file the selector wrote survives -- a fresh checkout would git-clean it away. When a
+      # restriction was written, beforeBuildPropsPath points enumerate at the selected subset; in
+      # audit mode before_build_props is empty and enumerate builds the full matrix.
+      - uses: ./.github/actions/enumerate-tests
+        id: generate_tests_matrix
+        with:
+          buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }}'
+          checkout: 'false'
+          restore: 'false'
+          beforeBuildPropsPath: ${{ steps.select_tests.outputs.before_build_props }}
+
+      # The expanded matrix can exceed 128KB. It MUST reach the bash step below via a file, not an
+      # environment variable: a single env string over Linux's MAX_ARG_STRLEN (~128KB) makes the
+      # step's execve("/usr/bin/bash") fail with E2BIG ("Argument list too long"). pwsh writes its
+      # run-script to a file, so interpolating the (trusted, build-generated) matrix into a literal
+      # here-string here keeps it out of the environment entirely.
+      - name: Write test matrix to file
+        shell: pwsh
+        run: |
+          @'
+          ${{ steps.generate_tests_matrix.outputs.all_tests }}
+          '@.Trim() | Set-Content -Path "${{ github.workspace }}/all_tests.json" -Encoding utf8 -NoNewline
 
       - name: Split matrix by dependency type
         id: split_matrix
         shell: pwsh
         run: |
-          $matrix = Get-Content -Raw "${{ github.workspace }}/selected_matrix.json"
+          $matrix = Get-Content -Raw "${{ github.workspace }}/all_tests.json"
           $splitScript = "${{ github.workspace }}/eng/scripts/split-test-matrix-by-deps.ps1"
           & $splitScript -AllTestsMatrix $matrix -OutputToGitHubEnv
 

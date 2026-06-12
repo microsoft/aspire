@@ -8,7 +8,7 @@ using Xunit;
 namespace Infrastructure.Tests.TestTriggerMap;
 
 /// <summary>
-/// Keeps the curated <c>docs/ci/test-trigger-map.yml</c> honest against repo reality.
+/// Keeps the curated <c>eng/test-trigger-map.yml</c> honest against repo reality.
 /// The map is hand-maintained, so these tests fail loudly when a project/job is renamed
 /// or removed, when a curated path is typo'd, or when a new source project is added that
 /// no rule maps to.

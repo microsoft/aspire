@@ -8,7 +8,7 @@ using YamlDotNet.Serialization.NamingConventions;
 namespace Infrastructure.Tests.TestTriggerMap;
 
 /// <summary>
-/// Strongly-typed view of <c>docs/ci/test-trigger-map.yml</c>. The map is curated by hand,
+/// Strongly-typed view of <c>eng/test-trigger-map.yml</c>. The map is curated by hand,
 /// so the verifier tests in <see cref="TestTriggerMapTests"/> load this model and assert it
 /// stays consistent with repo reality (referenced projects/jobs exist, every source project
 /// is reachable by some rule, etc.).
@@ -122,7 +122,7 @@ public sealed class TestTriggerMap
 
     public static TestTriggerMap Load(string repoRoot)
     {
-        var path = Path.Combine(repoRoot, "docs", "ci", "test-trigger-map.yml");
+        var path = Path.Combine(repoRoot, "eng", "test-trigger-map.yml");
         var yaml = File.ReadAllText(path);
         var deserializer = new DeserializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)

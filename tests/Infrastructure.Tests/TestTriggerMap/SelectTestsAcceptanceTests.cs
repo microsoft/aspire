@@ -11,7 +11,7 @@ namespace Infrastructure.Tests.TestTriggerMap;
 /// small SYNTHETIC maps (a temp <c>map.yml</c> + a fake matrix + fake project dirs), so they assert
 /// the resolution mechanisms — conventions, overrides, ignore, Layer-1 attribution, the run-all
 /// fallback, derived targets, and group expansion — without coupling to the contents of the real
-/// <c>docs/ci/test-trigger-map.yml</c>. A thin set of real-map invariant smokes (computed from the
+/// <c>eng/test-trigger-map.yml</c>. A thin set of real-map invariant smokes (computed from the
 /// filesystem, never hardcoding project names) lives at the end; structural invariants of the real
 /// map are covered by <see cref="TestTriggerMapTests"/>.
 /// </summary>
@@ -606,7 +606,7 @@ public sealed class SelectTestsAcceptanceTests
     [Fact]
     public void RealMapLoadsAndConventionSelectsAComponentsTestWithoutSelectingAll()
     {
-        var mapPath = Path.Combine(RepoRoot.Path, "docs", "ci", "test-trigger-map.yml");
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "test-trigger-map.yml");
         var matrix = EnumerateMatrixTestProjects();
         var projectDirs = LoadProjectDirectories();
         var selector = new TestSelector(mapPath, matrix, projectDirs);

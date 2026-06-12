@@ -6,6 +6,18 @@ inputs:
     type: string
     default: ''
     description: 'Additional MSBuild arguments passed to the test matrix generation step (e.g., /p:IncludeTemplateTests=true /p:OnlyDeploymentTests=true)'
+  checkout:
+    required: false
+    default: 'true'
+    description: 'Whether to check out the repo. Set false when the caller has already checked out (e.g. a prior select-tests step in the same job whose working tree must be preserved).'
+  restore:
+    required: false
+    default: 'true'
+    description: 'Whether to set up .NET and run ./restore.sh. Set false when the caller has already restored in the same job.'
+  beforeBuildPropsPath:
+    required: false
+    default: ''
+    description: 'Path to an OverrideProjectToBuild props file (imported by eng/Build.props via $(BeforeBuildPropsPath)) that restricts the -test build, and thus the enumeration, to a subset of test projects. Empty enumerates everything.'
 
 # Output format: JSON with structure {"include": [{...}, ...]}
 # Each entry contains:
@@ -31,14 +43,17 @@ runs:
   using: "composite"
   steps:
     - name: Checkout code
+      if: ${{ inputs.checkout == 'true' }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Set up .NET Core
+      if: ${{ inputs.restore == 'true' }}
       uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
       with:
         global-json-file: ${{ github.workspace }}/global.json
 
     - name: Restore
+      if: ${{ inputs.restore == 'true' }}
       shell: bash
       run: ./restore.sh
 
@@ -46,6 +61,8 @@ runs:
       shell: bash
       run: dotnet build tools/ExtractTestPartitions/ExtractTestPartitions.csproj -c Release --nologo -v quiet
 
+    # When beforeBuildPropsPath is set, eng/Build.props imports it and its OverrideProjectToBuild
+    # items REPLACE the default test set, so the -test build enumerates only the selected projects.
     - name: Generate canonical test matrix
       shell: bash
       run: >
@@ -53,6 +70,7 @@ runs:
         /p:TestRunnerName=TestEnumerationRunsheetBuilder
         /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json
         /p:GenerateCIPartitions=true
+        ${{ inputs.beforeBuildPropsPath != '' && format('/p:BeforeBuildPropsPath={0}', inputs.beforeBuildPropsPath) || '' }}
         /bl
         ${{ inputs.buildArgs }}
 

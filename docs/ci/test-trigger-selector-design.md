@@ -7,12 +7,15 @@ matrix.
 Companion documents:
 
 - [`test-trigger-map.md`](./test-trigger-map.md) — the descriptive path → target map.
-- [`test-trigger-map.yml`](./test-trigger-map.yml) — its machine-readable form.
+- [`eng/test-trigger-map.yml`](../../eng/test-trigger-map.yml) — its machine-readable form.
 
-**Status: wired in audit mode.** `tests.yml`'s `setup_for_tests` runs
-`SelectTests` and emits the advisory summary, but it runs in audit mode
-(`ENFORCE_SELECTION: 'false'`), so the selector returns run-all and the full
-matrix and all jobs still run.
+**Status: enforcing.** `tests.yml`'s `setup_for_tests` runs `SelectTests`
+*before* `enumerate-tests`. When `ENFORCE_SELECTION: 'true'` and the selection is
+not ALL, the selector writes an `OverrideProjectToBuild` props file so
+`enumerate-tests` builds and enumerates only the selected projects; in audit mode
+(`ENFORCE_SELECTION: 'false'`) it writes no props and `enumerate-tests` produces
+the full matrix unchanged while the summary still reports what enforcing would
+have skipped.
 
 Audit mode does not soften Layer 1 failures. If the affected-projects graph
 cannot be computed, `SelectTests` fails the step because under-selecting would
@@ -25,7 +28,9 @@ Input: the list of files changed in a PR. Output:
 - the subset of `test:<Project>` entries to run, and
 - which non-.NET jobs to trigger (`job:polyglot`, `job:extension-e2e`, …).
 
-Filter the existing full matrix down — do **not** rebuild it.
+Select *before* enumeration: pick the affected test projects, then have
+`enumerate-tests` build/shard only those — do **not** enumerate the full matrix
+and filter it after.
 
 ## Why not just consume `test-trigger-map.yml`?
 
@@ -192,22 +197,28 @@ These are sourced from the corresponding sections of `test-trigger-map.yml`.
 
 ## The tool (`tools/SelectTests`)
 
-`SelectTests` is a small C# console tool, run after `enumerate-tests` and before
-the matrix split.
+`SelectTests` is a small C# console tool, run *before* `enumerate-tests`. It
+decides which test projects are affected; `enumerate-tests` then builds and
+shards only those.
 
 Main options:
 
 - `--repo-root`: repository root, defaulting to the current directory.
-- `--map`: curated map path, defaulting to `docs/ci/test-trigger-map.yml`.
-- `--matrix`: the `enumerate-tests` all-tests JSON.
+- `--map`: curated map path, defaulting to `eng/test-trigger-map.yml`.
 - `--from` / `--to`: git refs for the PR diff.
 - `--changed-files`: newline-delimited changed file list, instead of
   `--from` / `--to`.
 - `--skip-layer1`: skip the graph closure for explicit diagnostics.
-- `--force-all`: kill switch; force the full matrix.
-- `--enforce`: emit the filtered matrix. Without this, audit mode emits the full
-  matrix.
-- `--output`: matrix output path, defaulting to stdout.
+- `--force-all`: kill switch; force ALL.
+- `--enforce`: write the restriction props for a non-ALL selection. Without this
+  (audit), no props are written and `enumerate-tests` runs the full matrix.
+- `--before-build-props`: path for the `OverrideProjectToBuild` props file
+  (consumed by `enumerate-tests` via `BeforeBuildPropsPath`).
+
+The test-project universe (the set an `ALL` selection expands to, and the
+existence guard) is the `tests/<Name>/<Name>.csproj` projects ending in `.Tests`
+in `Aspire.slnx` — derived directly from the slnx because the selector runs
+before any matrix exists.
 
 Flow:
 
@@ -220,29 +231,32 @@ Flow:
 5. Apply `derived_targets` to a cycle-safe fixpoint.
 6. Escalate to `ALL` for a kill switch, an `ALL` path rule, or an unattributed
    `src/**` file that is not under a project directory in `Aspire.slnx`.
-7. Emit the filtered matrix and per-job booleans in enforce mode, or run-all
-   outputs in audit mode.
+7. Emit the per-job booleans, and — in enforce mode for a non-ALL selection —
+   the `OverrideProjectToBuild` props restricting the downstream build.
 
 Selection only decides *which* projects survive. OS expansion, timeouts,
 `requiresNugets` / `requiresCliArchive` flags, and the matrix split stay owned
-by the existing scripts.
+by the existing scripts (downstream of `enumerate-tests`).
 
 ## Pipeline integration
 
 The flow in `tests.yml`'s `setup_for_tests` job:
 
 ```text
-enumerate-tests (action)
-  -> all_tests JSON {"include":[...]}
-  -> SelectTests (--from base --to head; reads all_tests + curated map;
-                  computes Layer 1 in process)
-  -> selected_matrix.json + run_* outputs + audit summary
+checkout -> restore
+  -> SelectTests (--from base --to head; curated map + Layer 1 in process)
+       -> run_* outputs + summary
+       -> (enforce && !ALL) BeforeBuildProps.props (OverrideProjectToBuild)
+  -> enumerate-tests (action; checkout/restore reused; beforeBuildPropsPath)
+       -> all_tests JSON {"include":[...]} (only the selected projects in enforce)
   -> split-test-matrix-by-deps.ps1
   -> run-tests.yml (per-dependency matrices)
 ```
 
-`SelectTests` runs as one step after `enumerate-tests` and before the split. The
-split, per-OS/per-dependency bucketing, and `run-tests.yml` are unchanged.
+`SelectTests` runs first; `enumerate-tests` reuses the job's checkout+restore
+(`checkout: 'false'`, `restore: 'false'`) so the props file survives — a fresh
+checkout's `git clean` would otherwise remove it. The split, per-OS/per-dependency
+bucketing, and `run-tests.yml` are unchanged.
 
 The `run_*` step outputs become `setup_for_tests` job outputs that gate every
 non-.NET job, such as `polyglot_validation`, `typescript_sdk_tests`,
@@ -250,8 +264,9 @@ non-.NET job, such as `polyglot_validation`, `typescript_sdk_tests`,
 the WinGet/Homebrew installer-prepare jobs.
 
 The .NET test jobs need no `run_*` gate: they are already gated by their matrix
-bucket being empty once `SelectTests` filters the matrix. Base builds stay
-ungated because they are upstream `needs:` that run whenever a dependent runs.
+bucket being empty once `enumerate-tests` produces only the selected projects.
+Base builds stay ungated because they are upstream `needs:` that run whenever a
+dependent runs.
 
 The extension-unit jobs (`extension_tests_win` / `extension_bootstrap_linux`)
 gate on `run_extension_unit` **or** `run_extension_e2e`, because
@@ -259,9 +274,9 @@ gate on `run_extension_unit` **or** `run_extension_e2e`, because
 via need-propagation.
 
 **Audit vs. enforce is a single knob in the `select_tests` step:
-`ENFORCE_SELECTION`.** Audit (`'false'`, no `--enforce`) returns the full matrix
-plus `run_* = true`, with the advisory summary showing what enforcing would
-select.
+`ENFORCE_SELECTION`.** Audit (`'false'`, no `--enforce`) writes no restriction
+props, so `enumerate-tests` builds the full matrix and `run_*` are all true, with
+the advisory summary showing what enforcing would select.
 
 Flipping `ENFORCE_SELECTION` to `'true'` makes the same selector return the
 selective matrix and selective `run_*` outputs. The downstream gates do not need

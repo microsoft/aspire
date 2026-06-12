@@ -80,6 +80,8 @@ ignore:
   - src/Components/Common/**                            # link-compiled into many components; Layer 1 covers
   - src/Vendoring/OpenTelemetry.Instrumentation.*/**    # glob-compiled into the Redis/Kafka components; Layer 1 covers
   - src/Vendoring/OpenTelemetry.Shared/**               # compiled by nothing (each instrumentation dir has its own Shared/); inert
+  - "**/*.md"                                            # documentation; never gates a test (Layer 1 still owns any README it actually packs/builds)
+  - eng/test-trigger-map.yml                             # this map itself; consumed at selection time, it changes no test code
 
 # Path rules: a glob set -> a target set. One mechanism; the comment headers below are organization
 # only. targets may be test: / job: / a GROUP name / ALL.

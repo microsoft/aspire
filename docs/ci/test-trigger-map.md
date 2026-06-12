@@ -4,8 +4,8 @@ A map of **repo path → CI targets that must run** when a matching file changes
 covering the .NET test projects and the validation/polyglot jobs in
 [`tests.yml`](../../.github/workflows/tests.yml).
 
-The machine-readable form lives next to this doc:
-[`test-trigger-map.yml`](./test-trigger-map.yml). The tool that consumes it and
+The machine-readable form lives at
+[`eng/test-trigger-map.yml`](../../eng/test-trigger-map.yml). The tool that consumes it and
 the rollout plan are in
 [`test-trigger-selector-design.md`](./test-trigger-selector-design.md).
 

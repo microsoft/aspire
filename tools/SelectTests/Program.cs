@@ -5,17 +5,17 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Aspire.SelectTests;
 
-// Entry point for the selective-CI tool. Computes the subset of the test matrix (and the non-.NET
-// jobs) relevant to a PR's changed files, by unioning:
+// Entry point for the selective-CI tool. Runs BEFORE enumerate-tests and computes the subset of
+// test projects (and the non-.NET jobs) relevant to a PR's changed files, by unioning:
 //   Layer 1 — the MSBuild ProjectGraph reverse-dependency closure (GraphAffectedProjects), and
-//   Layer 2 — the curated docs/ci/test-trigger-map.yml resolved by TestSelector.
-// It runs in audit mode: it writes the selection + a would-have-been-skipped summary, but emits
-// the full, unfiltered matrix unless --enforce is passed, so CI keeps running everything while the
-// map's accuracy is validated. See docs/ci/test-trigger-selector-design.md.
+//   Layer 2 — the curated eng/test-trigger-map.yml resolved by TestSelector.
+// With --enforce and a non-ALL selection it writes an OverrideProjectToBuild props file
+// (--before-build-props) so the subsequent enumerate-tests `-test` build enumerates ONLY the
+// selected projects. In audit mode (no --enforce) it writes the run_* job booleans and an advisory
+// "would-have-been-skipped" summary but no props, so enumerate-tests runs the full matrix unchanged.
+// See docs/ci/test-trigger-selector-design.md.
 
 var repoRootOption = new Option<string>("--repo-root")
 {
@@ -25,13 +25,7 @@ var repoRootOption = new Option<string>("--repo-root")
 
 var mapOption = new Option<string?>("--map")
 {
-    Description = "Path to docs/ci/test-trigger-map.yml. Defaults to <repo-root>/docs/ci/test-trigger-map.yml."
-};
-
-var matrixOption = new Option<string>("--matrix")
-{
-    Description = "Path to the enumerate-tests all_tests JSON ({\"include\":[...]}).",
-    Required = true
+    Description = "Path to eng/test-trigger-map.yml. Defaults to <repo-root>/eng/test-trigger-map.yml."
 };
 
 var fromOption = new Option<string?>("--from")
@@ -61,19 +55,22 @@ var forceAllOption = new Option<bool>("--force-all")
 
 var enforceOption = new Option<bool>("--enforce")
 {
-    Description = "Emit the filtered matrix. Without this (audit mode), the full matrix is emitted unchanged."
+    Description = "Restrict the build to the selected projects (writes --before-build-props). Without this " +
+                  "(audit mode), no props are written and enumerate-tests runs the full matrix unchanged."
 };
 
-var outputOption = new Option<string?>("--output")
+var beforeBuildPropsOption = new Option<string?>("--before-build-props")
 {
-    Description = "Where to write the (possibly filtered) matrix JSON. Defaults to stdout."
+    Description = "Where to write the OverrideProjectToBuild props consumed by eng/Build.props " +
+                  "($(BeforeBuildPropsPath)). Written only with --enforce and a non-ALL selection; " +
+                  "otherwise nothing is written so enumerate-tests enumerates everything."
 };
 
 var rootCommand = new RootCommand("Select the relevant CI test subset for a PR's changed files.");
 foreach (var option in new Option[]
 {
-    repoRootOption, mapOption, matrixOption, fromOption, toOption, changedFilesOption,
-    skipLayer1Option, forceAllOption, enforceOption, outputOption
+    repoRootOption, mapOption, fromOption, toOption, changedFilesOption,
+    skipLayer1Option, forceAllOption, enforceOption, beforeBuildPropsOption
 })
 {
     rootCommand.Options.Add(option);
@@ -83,19 +80,18 @@ rootCommand.SetAction(parseResult =>
 {
     var repoRoot = Path.GetFullPath(parseResult.GetValue(repoRootOption)!);
     var mapPath = parseResult.GetValue(mapOption)
-        ?? Path.Combine(repoRoot, "docs", "ci", "test-trigger-map.yml");
-    var matrixPath = parseResult.GetValue(matrixOption)!;
+        ?? Path.Combine(repoRoot, "eng", "test-trigger-map.yml");
     var from = parseResult.GetValue(fromOption);
     var to = parseResult.GetValue(toOption);
     var changedFilesPath = parseResult.GetValue(changedFilesOption);
     var skipLayer1 = parseResult.GetValue(skipLayer1Option);
     var forceAll = parseResult.GetValue(forceAllOption);
     var enforce = parseResult.GetValue(enforceOption);
-    var output = parseResult.GetValue(outputOption);
+    var beforeBuildProps = parseResult.GetValue(beforeBuildPropsOption);
 
     return Selection.Run(new RunOptions(
-        repoRoot, mapPath, matrixPath, from, to, changedFilesPath,
-        skipLayer1, forceAll, enforce, output));
+        repoRoot, mapPath, from, to, changedFilesPath,
+        skipLayer1, forceAll, enforce, beforeBuildProps));
 });
 
 return rootCommand.Parse(args).Invoke();
@@ -103,36 +99,31 @@ return rootCommand.Parse(args).Invoke();
 internal sealed record RunOptions(
     string RepoRoot,
     string MapPath,
-    string MatrixPath,
     string? From,
     string? To,
     string? ChangedFilesPath,
     bool SkipLayer1,
     bool ForceAll,
     bool Enforce,
-    string? Output);
+    string? BeforeBuildProps);
 
 internal static class Selection
 {
     public static int Run(RunOptions options)
     {
-        var matrix = JsonNode.Parse(File.ReadAllText(options.MatrixPath))
-            ?? throw new InvalidOperationException($"Matrix file '{options.MatrixPath}' is empty.");
-        var includeEntries = (matrix["include"] as JsonArray)
-            ?? throw new InvalidOperationException("Matrix JSON has no 'include' array.");
+        // The universe an ALL selection expands to, and the existence guard for test: targets and
+        // Layer 1 affected test projects: the test projects in Aspire.slnx (tests/<Name>/<Name>.csproj
+        // with a .Tests suffix). Derived from the slnx -- NOT from an enumerated matrix -- because the
+        // selector now runs BEFORE enumerate-tests. Maps each test project name to its repo-relative
+        // .csproj path so a selected name can be written as an OverrideProjectToBuild item.
+        var testProjectsByName = LoadTestProjects(options.RepoRoot);
+        var allTestProjects = testProjectsByName.Keys.ToHashSet(StringComparer.Ordinal);
 
-        // The matrix projectName values are the universe an ALL selection expands to.
-        var allTestProjects = includeEntries
-            .Select(e => (string?)e?["projectName"])
-            .Where(name => !string.IsNullOrEmpty(name))
-            .Select(name => name!)
-            .ToHashSet(StringComparer.Ordinal);
-
-        // Under --force-all the selector returns the full matrix regardless of the diff (see below),
-        // so skip resolving changed files and the Layer 1 graph closure entirely. Resolving them is
-        // not just wasted work: --force-all is the path taken when there is no usable diff base (or
-        // the [full ci] kill switch fired), so ResolveChangedFiles would otherwise throw for lack of
-        // a --from/--changed-files input.
+        // Under --force-all the selector returns ALL regardless of the diff (see below), so skip
+        // resolving changed files and the Layer 1 graph closure entirely. Resolving them is not just
+        // wasted work: --force-all is the path taken when there is no usable diff base (or the
+        // [full ci] kill switch fired), so ResolveChangedFiles would otherwise throw for lack of a
+        // --from/--changed-files input.
         var changedFiles = options.ForceAll
             ? Array.Empty<string>()
             : ResolveChangedFiles(options);
@@ -149,11 +140,104 @@ internal static class Selection
         WriteSummary(options, result, allTestProjects, changedFiles, layer1Affected);
         WriteJobBooleans(options, result);
 
-        // Audit mode (default): keep running the full matrix while the map is validated.
-        var emitFiltered = options.Enforce && !result.SelectsAll;
-        WriteMatrix(options, matrix, includeEntries, result, emitFiltered);
+        // Enforce + a non-ALL selection: restrict the downstream enumerate-tests build to the selected
+        // test projects via an OverrideProjectToBuild props file. In audit mode, or when the selection
+        // is ALL, write nothing so enumerate-tests enumerates the full matrix unchanged.
+        var restrictBuild = options.Enforce && !result.SelectsAll && options.BeforeBuildProps is not null;
+        if (restrictBuild)
+        {
+            WriteBeforeBuildProps(options.BeforeBuildProps!, result.TestProjects, testProjectsByName);
+        }
+
+        // Tell the workflow whether a restriction props file was written (and where). Empty means
+        // "enumerate everything" -- the workflow then omits /p:BeforeBuildPropsPath.
+        WriteGitHubOutput("before_build_props", restrictBuild ? options.BeforeBuildProps! : "");
 
         return 0;
+    }
+
+    // Repo-relative, '/'-separated paths of the test projects in Aspire.slnx, keyed by project name
+    // (the .csproj base name == the matrix projectName == the map's test: target). The universe is
+    // the tests/<Name>/<Name>.csproj projects whose name ends in ".Tests"; the other tests/ projects
+    // (Aspire.TestUtilities, TestingAppHost1, testproject, ...) are shared fixtures/helpers, not test
+    // projects, and are excluded so they are never selected or enumerated on their own.
+    private static IReadOnlyDictionary<string, string> LoadTestProjects(string repoRoot)
+    {
+        var slnxPath = Path.Combine(repoRoot, "Aspire.slnx");
+        if (!File.Exists(slnxPath))
+        {
+            throw new InvalidOperationException($"Aspire.slnx was not found under repository root: {repoRoot}");
+        }
+
+        var slnx = File.ReadAllText(slnxPath);
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        // <Project Path="tests/Foo.Tests/Foo.Tests.csproj" /> -- normalize separators, keep tests/ + .Tests.
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(slnx, "Path=\"([^\"]+\\.csproj)\""))
+        {
+            var relPath = m.Groups[1].Value.Replace('\\', '/');
+            if (!relPath.StartsWith("tests/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var name = Path.GetFileNameWithoutExtension(relPath);
+            if (name.EndsWith(".Tests", StringComparison.Ordinal))
+            {
+                map[name] = relPath;
+            }
+        }
+
+        return map;
+    }
+
+    // Writes the MSBuild props file that eng/Build.props imports via $(BeforeBuildPropsPath): an
+    // OverrideProjectToBuild item per selected test project, which REPLACES the default ProjectToBuild
+    // set so the `-test` build (and thus the canonical test-matrix enumeration) covers only these.
+    // Same shape as eng/scripts/generate-specialized-test-projects-list.sh emits for quarantine/outerloop.
+    private static void WriteBeforeBuildProps(
+        string path,
+        IReadOnlySet<string> selectedTestProjects,
+        IReadOnlyDictionary<string, string> testProjectsByName)
+    {
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("<Project>");
+        sb.AppendLine("  <ItemGroup>");
+        foreach (var name in selectedTestProjects.OrderBy(n => n, StringComparer.Ordinal))
+        {
+            // A selected name not in the slnx test-project set is not a buildable test project (e.g. a
+            // production project name from project_rules); it contributes no OverrideProjectToBuild item.
+            if (testProjectsByName.TryGetValue(name, out var relPath))
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"    <OverrideProjectToBuild Include=\"$(RepoRoot){relPath}\" />");
+            }
+        }
+        sb.AppendLine("  </ItemGroup>");
+        sb.AppendLine("</Project>");
+
+        File.WriteAllText(path, sb.ToString());
+    }
+
+    // Appends a single key=value line to $GITHUB_OUTPUT (when set), so the workflow can read it as a
+    // step output. Falls back to stderr for local runs.
+    private static void WriteGitHubOutput(string key, string value)
+    {
+        var githubOutput = Environment.GetEnvironmentVariable("GITHUB_OUTPUT");
+        var line = $"{key}={value}";
+        if (githubOutput is not null)
+        {
+            File.AppendAllLines(githubOutput, new[] { line });
+        }
+        else
+        {
+            Console.Error.WriteLine(line);
+        }
     }
 
     // Layer 2 needs the actual changed file paths (it glob-matches them), independent of the
@@ -236,49 +320,11 @@ internal static class Selection
     private static IReadOnlyCollection<string> Layer1Failed(string detail) =>
         throw new InvalidOperationException($"Layer 1 (affected-projects graph) failed: {detail}");
 
-    private static void WriteMatrix(
-        RunOptions options,
-        JsonNode matrix,
-        JsonArray includeEntries,
-        SelectionResult result,
-        bool emitFiltered)
-    {
-        JsonNode outputMatrix;
-        if (!emitFiltered)
-        {
-            outputMatrix = matrix;
-        }
-        else
-        {
-            var filtered = new JsonArray();
-            foreach (var entry in includeEntries.ToList())
-            {
-                var name = (string?)entry?["projectName"];
-                if (name is not null && result.TestProjects.Contains(name))
-                {
-                    // Detach from the source array before re-parenting into the filtered one.
-                    filtered.Add(entry!.DeepClone());
-                }
-            }
-            outputMatrix = new JsonObject { ["include"] = filtered };
-        }
-
-        var json = outputMatrix.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
-        if (options.Output is null)
-        {
-            Console.WriteLine(json);
-        }
-        else
-        {
-            File.WriteAllText(options.Output, json);
-        }
-    }
-
     // Per-job booleans for the if: conditions gating the non-.NET jobs. job:extension-e2e ->
     // run_extension_e2e, etc. Emitted for every job the map knows, so unselected ones are 'false'.
-    // In audit mode (default) every boolean is forced 'true' to match the full matrix that
-    // WriteMatrix emits: audit computes and reports the real selection (see WriteSummary) but then
-    // runs everything, so the non-.NET jobs must not be gated off either.
+    // In audit mode (default) every boolean is forced 'true' because enumerate-tests still runs the
+    // full matrix: audit computes and reports the real selection (see WriteSummary) but runs
+    // everything, so the non-.NET jobs must not be gated off either.
     private static void WriteJobBooleans(RunOptions options, SelectionResult result)
     {
         var githubOutput = Environment.GetEnvironmentVariable("GITHUB_OUTPUT");
