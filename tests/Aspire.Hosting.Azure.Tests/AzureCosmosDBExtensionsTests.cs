@@ -14,6 +14,7 @@ using Aspire.Hosting.Utils;
 using Azure.Provisioning.CosmosDB;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -1129,6 +1130,102 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
 
         Assert.Equal("localhost", client.Endpoint.Host);
         Assert.Equal(8081, client.Endpoint.Port);
+    }
+
+    [Fact]
+    public void RunAsEmulatorInPublishModeIsNoOp()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator(e => e.WithDataVolume());
+
+        // In publish mode RunAsEmulator returns before configuring any local container.
+        Assert.False(cosmos.Resource.IsEmulator);
+        Assert.DoesNotContain(cosmos.Resource.Annotations, a => a is ContainerImageAnnotation);
+        Assert.DoesNotContain(cosmos.Resource.Annotations, a => a is EmulatorResourceAnnotation);
+        Assert.DoesNotContain(cosmos.Resource.Annotations, a => a is ContainerMountAnnotation);
+    }
+
+    [Fact]
+    public void RunAsPreviewEmulatorInPublishModeIsNoOp()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator(e => e.WithDataVolume());
+
+        Assert.False(cosmos.Resource.IsEmulator);
+        Assert.DoesNotContain(cosmos.Resource.Annotations, a => a is ContainerImageAnnotation);
+        Assert.DoesNotContain(cosmos.Resource.Annotations, a => a is EmulatorResourceAnnotation);
+        Assert.DoesNotContain(cosmos.Resource.Annotations, a => a is ContainerMountAnnotation);
+    }
+
+    [Fact]
+    public async Task RunAsEmulatorHealthCheckThrowsBeforeCosmosClientInitialized()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
+
+        using var app = builder.Build();
+
+        // The classic emulator registers a health check whose CosmosClient factory throws until the
+        // connection string is available. The factory runs when the check is resolved, so running it
+        // before that surfaces the guard.
+        var healthCheckService = app.Services.GetRequiredService<HealthCheckService>();
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => healthCheckService.CheckHealthAsync(r => r.Name == "cosmos_check", CancellationToken.None));
+
+        Assert.Equal("CosmosClient is not initialized.", ex.Message);
+    }
+
+    [Fact]
+    public async Task RunAsPreviewEmulatorMarksHealthEndpointUrlAsDetailsOnly()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator();
+
+        var urls = new List<ResourceUrlAnnotation>
+        {
+            new() { Url = "http://localhost:8080", Endpoint = cosmos.GetEndpoint("emulatorhealth") }
+        };
+        var context = new ResourceUrlsCallbackContext(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            cosmos.Resource,
+            urls);
+
+        foreach (var callback in cosmos.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
+        {
+            await callback.Callback(context);
+        }
+
+        var healthUrl = Assert.Single(urls, u => u.Endpoint?.EndpointName == "emulatorhealth");
+        Assert.Equal(UrlDisplayLocation.DetailsOnly, healthUrl.DisplayLocation);
+    }
+
+    [Fact]
+    public async Task WithDataExplorerSetsDataExplorerDisplayText()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator(e => e.WithDataExplorer());
+
+        var urls = new List<ResourceUrlAnnotation>
+        {
+            new() { Url = "http://localhost:1234", Endpoint = cosmos.GetEndpoint("data-explorer") }
+        };
+        var context = new ResourceUrlsCallbackContext(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            cosmos.Resource,
+            urls);
+
+        foreach (var callback in cosmos.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
+        {
+            await callback.Callback(context);
+        }
+
+        var explorerUrl = Assert.Single(urls, u => u.Endpoint?.EndpointName == "data-explorer");
+        Assert.Equal("Data Explorer", explorerUrl.DisplayText);
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
