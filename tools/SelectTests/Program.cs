@@ -273,8 +273,13 @@ internal static class Selection
 
         // git emits forward-slash, repo-relative paths on every OS, which is exactly what the map
         // globs expect. `<from> <to>` diffs the two refs; omitting <to> diffs against the work tree.
+        // --no-renames decomposes a rename into a delete (old path) + add (new path) so BOTH sides
+        // are glob-matched. Without it, git's default rename detection reports only the destination,
+        // so a file moved OUT of a mapped directory (e.g. eng/clipack/foo -> eng/elsewhere) would hide
+        // the old path and silently skip that directory's mapped tests. Layer 1 captures both sides via
+        // -M; this keeps Layer 2 consistent.
         var range = options.To is null ? new[] { options.From } : new[] { options.From, options.To };
-        var args = new List<string> { "diff", "--name-only" };
+        var args = new List<string> { "diff", "--name-only", "--no-renames" };
         args.AddRange(range);
 
         var stdout = RunProcess("git", args, options.RepoRoot, out var exitCode, out var stderr);

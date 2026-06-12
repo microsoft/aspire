@@ -315,6 +315,34 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    // P1-6c. A rename must attribute BOTH sides so a file moved OUT of a mapped directory still runs
+    // that directory's tests. git's default rename detection reports only the destination, hiding the
+    // old path; the selector passes --no-renames so the diff decomposes into delete(old)+add(new).
+    // Here other.txt (-> Aspire.Cli.Tests) is renamed to renamed.txt: the deletion of other.txt must
+    // still select Aspire.Cli.Tests. Failure mode: dropping --no-renames makes git hide other.txt, so
+    // the rule never fires and the move silently skips its tests in enforce mode.
+    [Fact]
+    public void RenameOutOfMappedPathStillSelectsItsTests()
+    {
+        WithGitRepo((repoRoot, output) =>
+        {
+            WriteFile(repoRoot, "Aspire.slnx", Slnx);
+            WriteFile(repoRoot, "map.yml", Map);
+            WriteFile(repoRoot, "other.txt", "v0");
+            GitCommitAll(repoRoot, "base");
+            var baseSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            RunGit(repoRoot, "mv", "other.txt", "renamed.txt");
+            GitCommitAll(repoRoot, "rename other.txt out of its mapped path");
+            var headSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
+            Selection.Run(Options(repoRoot, propsPath, from: baseSha, to: headSha, skipLayer1: true, enforce: true));
+
+            Assert.Contains("Aspire.Cli.Tests", File.ReadAllText(propsPath));
+        });
+    }
+
     // P1-7. --changed-files trims surrounding whitespace and drops blank lines before glob matching.
     // A regression that fed padded/blank paths to the globber would match nothing — " trigger.txt "
     // does not glob-equal "trigger.txt" — so the surrounding-whitespace line below must still select
