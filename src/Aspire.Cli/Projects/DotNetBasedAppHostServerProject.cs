@@ -185,7 +185,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             isAspireProjectResource: false,
             referenceOutputAssembly: false,
             privateReference: false);
-        projectFile.AddRepositoryProjectReferenceIfExists(_repoRoot, "Aspire.Hosting.RemoteHost");
+        projectFile.AddRepositoryProjectReferenceIfExists(
+            _repoRoot,
+            "Aspire.Hosting.RemoteHost",
+            isAspireProjectResource: false);
 
         // Disable Aspire SDK code generation
         projectFile.Targets.Add(new XElement("Target", new XAttribute("Name", "_CSharpWriteHostProjectMetadataSources")));
@@ -270,25 +273,26 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var configuredChannelName = requestedChannel
             ?? AspireConfigFile.Load(_appPath)?.Channel
             ?? AspireJsonConfiguration.Load(_appPath)?.Channel;
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
 
         // Resolve channel sources and add them via RestoreAdditionalProjectSources
         // This is additive — it preserves the user's nuget.config and adds channel-specific sources
         var channelSources = new List<string>();
-        var matchedChannels = !string.IsNullOrEmpty(configuredChannelName)
-            ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase))
-            : channels.Where(c => c.Type == PackageChannelType.Explicit);
-
-        foreach (var ch in matchedChannels)
+        if (!string.IsNullOrEmpty(configuredChannelName))
         {
-            channelName ??= ch.Name;
-            if (ch.Mappings is not null)
+            var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
+            var matchedChannels = channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase));
+
+            foreach (var ch in matchedChannels)
             {
-                foreach (var mapping in ch.Mappings)
+                channelName ??= ch.Name;
+                if (ch.Mappings is not null)
                 {
-                    if (!channelSources.Contains(mapping.Source, StringComparer.OrdinalIgnoreCase))
+                    foreach (var mapping in ch.Mappings)
                     {
-                        channelSources.Add(mapping.Source);
+                        if (!channelSources.Contains(mapping.Source, StringComparer.OrdinalIgnoreCase))
+                        {
+                            channelSources.Add(mapping.Source);
+                        }
                     }
                 }
             }

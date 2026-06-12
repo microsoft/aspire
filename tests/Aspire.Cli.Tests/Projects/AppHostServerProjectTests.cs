@@ -185,6 +185,30 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task CreateProjectFiles_AddsRemoteHostAsCompileReference()
+    {
+        var remoteHostProjectDirectory = _workspace.WorkspaceRoot
+            .CreateSubdirectory("src")
+            .CreateSubdirectory("Aspire.Hosting.RemoteHost");
+        var remoteHostProjectPath = Path.Combine(remoteHostProjectDirectory.FullName, "Aspire.Hosting.RemoteHost.csproj");
+        await File.WriteAllTextAsync(remoteHostProjectPath, """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        var project = CreateProject();
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync([]).DefaultTimeout();
+
+        var doc = XDocument.Load(projectPath);
+        var remoteHostReference = doc.Descendants("ProjectReference")
+            .SingleOrDefault(e => string.Equals(e.Attribute("Include")?.Value, remoteHostProjectPath, StringComparison.Ordinal));
+
+        Assert.NotNull(remoteHostReference);
+        Assert.Equal("false", remoteHostReference.Element("IsAspireProjectResource")?.Value);
+        Assert.Null(remoteHostReference.Element("ReferenceOutputAssembly"));
+        Assert.Null(remoteHostReference.Element("Private"));
+    }
+
+    [Fact]
     public async Task CreateProjectFiles_CopiesAppSettingsToOutput()
     {
         // Arrange
@@ -519,6 +543,31 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
         Assert.NotNull(restoreSources);
         Assert.Equal(channelFeed, restoreSources);
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_WithoutChannelOrSourceOverride_DoesNotInjectRestoreSources()
+    {
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Channels should not be resolved.")
+        };
+
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
+
+        var (projectFilePath, _) = await project.CreateProjectFilesAsync([]).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        Assert.Null(projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault());
     }
 
     private static void DumpDirectoryTree(string path, ITestOutputHelper output, string indent = "")
