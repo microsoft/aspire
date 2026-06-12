@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Hosting.Utils;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Mcp.Tools;
@@ -59,11 +60,11 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
         string resolvedPath;
         if (Path.IsPathRooted(appHostPath))
         {
-            resolvedPath = Path.GetFullPath(appHostPath);
+            resolvedPath = PathNormalizer.ResolveToFilesystemPath(appHostPath);
         }
         else
         {
-            resolvedPath = Path.GetFullPath(Path.Combine(executionContext.WorkingDirectory.FullName, appHostPath));
+            resolvedPath = PathNormalizer.ResolveToFilesystemPath(Path.Combine(executionContext.WorkingDirectory.FullName, appHostPath));
         }
 
         // Check if there's a running AppHost with this path
@@ -74,7 +75,7 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                 {
                     return false;
                 }
-                var candidatePath = Path.GetFullPath(c.AppHostInfo.AppHostPath);
+                var candidatePath = PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath);
                 return string.Equals(candidatePath, resolvedPath, StringComparison.OrdinalIgnoreCase);
             });
 

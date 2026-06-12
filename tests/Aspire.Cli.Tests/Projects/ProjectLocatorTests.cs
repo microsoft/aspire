@@ -15,6 +15,7 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -1390,7 +1391,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(projectFile, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(projectFile, returnedProjectFile);
+        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(projectFile.FullName), returnedProjectFile!.FullName);
     }
 
     [Fact]
@@ -1423,6 +1424,35 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(result.SelectedProjectFile);
         Assert.Equal(onDiskProjectFile.FullName, result.SelectedProjectFile!.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileResultUsesFilesystemPathForExplicitSymlinkedPath()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix symlink canonicalization is covered by this test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("RealAppHost");
+        var onDiskProjectFile = new FileInfo(Path.Combine(realDirectory.FullName, "RealAppHost.csproj"));
+        await File.WriteAllTextAsync(onDiskProjectFile.FullName, "Not a real project file.");
+
+        var linkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "LinkedAppHost");
+        TryCreateSymlink(linkDirectory, realDirectory.FullName, isDirectory: true);
+
+        var linkedProjectFile = new FileInfo(Path.Combine(linkDirectory, onDiskProjectFile.Name));
+        Assert.True(linkedProjectFile.Exists);
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            linkedProjectFile,
+            MultipleAppHostProjectsFoundBehavior.Throw,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result.SelectedProjectFile);
+        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(onDiskProjectFile.FullName), result.SelectedProjectFile!.FullName);
     }
 
     [Fact]
@@ -1469,7 +1499,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(appHostFile, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, returnedProjectFile!.FullName);
+        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName), returnedProjectFile!.FullName);
 
         var updatedConfig = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
         Assert.Equal("apphost.mts", updatedConfig?.AppHost?.Path);
@@ -1959,7 +1989,7 @@ builder.Build().Run();");
 
         var result = await projectLocator.UseOrFindAppHostProjectFileAsync(appHostFile, createSettingsFile: true, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, result!.FullName);
+        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName), result!.FullName);
     }
 
     [Fact]
@@ -4185,5 +4215,28 @@ builder.Build().Run();");
             appHostCandidateFinder,
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
             configuration ?? new ConfigurationBuilder().Build());
+    }
+
+    private static void TryCreateSymlink(string linkPath, string targetPath, bool isDirectory)
+    {
+        try
+        {
+            if (isDirectory)
+            {
+                Directory.CreateSymbolicLink(linkPath, targetPath);
+            }
+            else
+            {
+                File.CreateSymbolicLink(linkPath, targetPath);
+            }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Assert.Skip($"Symbolic link creation failed in this environment: {ex.Message}");
+        }
     }
 }

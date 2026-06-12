@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Tests.TestServices;
 
@@ -71,7 +72,7 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
             {
                 var selectedConnection = connections.FirstOrDefault(c =>
                     c.AppHostInfo?.AppHostPath != null &&
-                    string.Equals(Path.GetFullPath(c.AppHostInfo.AppHostPath), Path.GetFullPath(SelectedAppHostPath), StringComparison.OrdinalIgnoreCase));
+                    string.Equals(PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath), PathNormalizer.ResolveToFilesystemPath(SelectedAppHostPath), StringComparison.OrdinalIgnoreCase));
 
                 if (selectedConnection != null)
                 {
@@ -110,8 +111,8 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
         }
 
         // Normalize the paths for comparison
-        var normalizedWorkingDirectory = Path.GetFullPath(workingDirectory);
-        var normalizedAppHostPath = Path.GetFullPath(appHostPath);
+        var normalizedWorkingDirectory = PathNormalizer.ResolveToFilesystemPath(workingDirectory);
+        var normalizedAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostPath);
 
         // Check if the AppHost path is within the working directory
         var relativePath = Path.GetRelativePath(normalizedWorkingDirectory, normalizedAppHostPath);
