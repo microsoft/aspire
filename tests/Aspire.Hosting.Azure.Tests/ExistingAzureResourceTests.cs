@@ -500,7 +500,49 @@ public class ExistingAzureResourceTests
 
         await Verify(manifest.ToString(), "json")
             .AppendContentAsFile(bicep, "bicep");
-            
+             
+    }
+
+    [Fact]
+    public async Task SupportsExistingServiceBusWithResourceGroupAndSubscriptionInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var existingResourceName = builder.AddParameter("existingResourceName");
+        var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
+        var existingSubscriptionId = builder.AddParameter("existingSubscriptionId");
+        var serviceBus = builder.AddAzureServiceBus("messaging")
+            .RunAsExistingInResourceGroup(existingResourceName, existingResourceGroupName, existingSubscriptionId);
+        serviceBus.AddServiceBusQueue("queue");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Null(serviceBus.Resource.GetDeploymentTargetAnnotation());
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        Assert.False(existingAzureResourceAnnotation.IsTenantScope);
+        Assert.NotNull(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.NotNull(existingAzureResourceAnnotation.Subscription);
+    }
+
+    [Fact]
+    public async Task SupportsExistingServiceBusWithTenantScopeInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var existingResourceName = builder.AddParameter("existingResourceName");
+        var serviceBus = builder.AddAzureServiceBus("messaging")
+            .RunAsExistingInTenant(existingResourceName);
+        serviceBus.AddServiceBusQueue("queue");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Null(serviceBus.Resource.GetDeploymentTargetAnnotation());
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        Assert.True(existingAzureResourceAnnotation.IsTenantScope);
+        Assert.Null(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Null(existingAzureResourceAnnotation.Subscription);
     }
 
     [Fact]
