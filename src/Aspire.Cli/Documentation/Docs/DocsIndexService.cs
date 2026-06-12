@@ -821,6 +821,12 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     /// first word-boundary match, adding a capped repeated-occurrence bonus, and multiplying
     /// the token's contribution by its IDF weight so rarer query terms count more.
     /// </summary>
+    // This is docs-search-specific instead of using LexicalScoring.ScoreField because docs
+    // search needs per-token weights. For example, in "whats new 13.4", "new" appears in
+    // many docs and should barely move ranking, while "134" is rare and should count more.
+    // In "service discovery", a word-boundary match for "discovery" should count more than
+    // a substring match inside another word; exact whole-phrase bonuses are added by the
+    // ScoreDocument caller for titles, summaries, and headings.
     private static float ScoreField(string lowerText, string[] queryTokens, float[] queryTokenWeights)
     {
         if (string.IsNullOrEmpty(lowerText))
