@@ -469,6 +469,13 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         return weights;
     }
 
+    // ScoreDocument combines two kinds of evidence:
+    //   1. Identity signals (slug + H1 title): strong proof that this is the page the user meant.
+    //   2. Context signals (summary + best matching section): useful supporting evidence, but
+    //      noisier because broad docs and release notes mention many unrelated terms.
+    // Field weights make matches in titles/headings/summaries count more than body text, IDF
+    // makes rarer query terms count more than common terms, and exact phrase bonuses help pages
+    // with the whole query in a title/heading beat pages with scattered incidental matches.
     private static (float Score, string? MatchedSection) ScoreDocument(
         IndexedDocument doc,
         string[] queryTokens,
@@ -495,7 +502,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
                 ScorePhraseMatch(doc.SummaryLower, queryAsPhrase, SummaryPhraseBonus);
         }
 
-        // Score each section (H2/H3 headings + content)
+        // Score every section, but only add the best one to the document score. This gives
+        // the result a useful MatchedSection without letting a long page win just because it
+        // has many sections that each contain a small incidental match.
         for (var i = 0; i < doc.Sections.Count; i++)
         {
             var section = doc.Sections[i];
