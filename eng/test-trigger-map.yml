@@ -116,6 +116,8 @@ path_rules:
       - tests/Shared/**
       - .github/actions/enumerate-tests/**
       - eng/scripts/split-test-matrix-by-deps.ps1
+      - eng/scripts/build-test-matrix.ps1   # canonical-matrix builder; a bug skews every PR's matrix -> err toward ALL (also runs its BuildTestMatrixTests verifier)
+      - eng/scripts/expand-test-matrix-github.ps1   # GitHub matrix expansion; a bug skews every PR's matrix -> err toward ALL (also runs its ExpandTestMatrixGitHubTests verifier)
       - eng/scripts/write-class-mode-test-props.ps1   # enumerate-tests class-mode restriction; a bug skews every PR's matrix -> err toward ALL (also runs its WriteClassModeTestPropsTests verifier)
       - eng/scripts/scan-test-partitions-from-source.ps1   # source partition discovery in the runsheet builder; a bug skews every split project's enumeration -> err toward ALL
       - eng/TestEnumerationRunsheetBuilder/**
@@ -238,6 +240,12 @@ path_rules:
       - eng/scripts/pack-cli-npm-package.ps1
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
     reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse this script
+  - paths:
+      - eng/scripts/download-native-archives.ps1
+      - eng/scripts/stage-native-cli-tool-packages.ps1
+      - eng/scripts/validate-npm-package-signatures.ps1
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests/PowerShellScripts validates these CLI-archive/npm packaging scripts (DownloadNativeArchivesTests, StageNativeCliToolPackagesTests, ValidateNpmPackageSignaturesTests); the build jobs that run them are unconditional needs, so the unit verifier is the trigger that must fire
   - paths:
       - eng/winget/**
     targets: [test:Aspire.Acquisition.Tests, job:winget-installer]
