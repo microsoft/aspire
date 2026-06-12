@@ -737,7 +737,7 @@ public static class PostgresBuilderExtensions
             var commandText = scriptAnnotation?.Script ?? $"CREATE DATABASE {quotedDatabaseIdentifier}";
             command.CommandText = commandText;
 
-            if (scriptAnnotation?.Script is { } script)
+            if (scriptAnnotation?.Script is not null)
             {
                 logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
             }
