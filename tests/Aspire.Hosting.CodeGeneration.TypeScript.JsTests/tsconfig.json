@@ -10,12 +10,12 @@
     "sourceMap": true,
     "types": ["node"],
     "paths": {
-      "@aspire/transport": ["../../src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/transport.ts"],
-      "@aspire/base": ["../../src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/base.ts"]
+      "@aspire/transport": ["../../src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/transport.mts"],
+      "@aspire/base": ["../../src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/base.mts"]
     }
   },
   "include": [
     "tests/**/*.ts",
-    "../../src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/**/*.ts"
+    "../../src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/**/*.mts"
   ]
 }

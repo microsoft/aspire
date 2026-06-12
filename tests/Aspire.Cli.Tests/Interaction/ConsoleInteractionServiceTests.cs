@@ -28,7 +28,7 @@ public class ConsoleInteractionServiceTests
     {
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console);
-        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
     }
 
     [Fact]
@@ -426,6 +426,70 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public async Task ShowStatusAsync_FallbackPath_DoesNotLeaveInStatusFlagSet()
+    {
+        // Regression test: when ShowStatusAsync takes the fallback path due to debug/non-interactive
+        // mode or empty status text, the _inStatus flag must not be set to 1 (and left there).
+        // Previously the CompareExchange ran first in the || chain, so the swap happened before the
+        // other conditions short-circuited, leaving _inStatus=1 with no try/finally to reset it.
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        // Debug mode forces the fallback path even though host environment supports interactive output.
+        var executionContext = CreateExecutionContext(debugMode: true);
+        var interactionService = CreateInteractionService(console, executionContext);
+
+        await interactionService.ShowStatusAsync("Working...", () => Task.FromResult(0)).DefaultTimeout();
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    [Fact]
+    public async Task ShowStatusAsync_FallbackPathWithEmptyText_DoesNotLeaveInStatusFlagSet()
+    {
+        // Regression test: empty status text triggers the fallback path. The flag must not be left set.
+        var interactionService = CreateInteractionService(AnsiConsole.Console);
+
+        await interactionService.ShowStatusAsync(string.Empty, () => Task.FromResult(0)).DefaultTimeout();
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    [Fact]
+    public async Task ShowDynamicStatusAsync_FallbackPath_DoesNotLeaveInStatusFlagSet()
+    {
+        var executionContext = CreateExecutionContext(debugMode: true);
+        var interactionService = CreateInteractionService(AnsiConsole.Console, executionContext);
+
+        await interactionService.ShowDynamicStatusAsync<int>("Working...", _ => Task.FromResult(0)).DefaultTimeout();
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    [Fact]
+    public void ShowStatus_FallbackPath_DoesNotLeaveInStatusFlagSet()
+    {
+        var executionContext = CreateExecutionContext(debugMode: true);
+        var interactionService = CreateInteractionService(AnsiConsole.Console, executionContext);
+
+        interactionService.ShowStatus("Working...", () => { });
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    private static int GetInStatus(ConsoleInteractionService service)
+    {
+        var field = typeof(ConsoleInteractionService).GetField("_inStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        return (int)field!.GetValue(service)!;
+    }
+
+    [Fact]
     public void DisplayIncompatibleVersionError_WithMarkupCharactersInVersion_DoesNotThrow()
     {
         // Arrange
@@ -449,6 +513,90 @@ public class ConsoleInteractionServiceTests
         var outputString = output.ToString();
         Assert.Contains("capability [Prod]", outputString);
         Assert.Contains("9.0.0-preview.1 [rc]", outputString);
+    }
+
+    private static (ConsoleInteractionService InteractionService, StringBuilder Output) CreateInteractionServiceWithOutputCapture()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        // Use a wide profile so assertions on full message text aren't broken by line wrapping.
+        console.Profile.Width = 512;
+
+        return (CreateInteractionService(console), output);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_AppHostOlderThanCli_SuggestsUpdatingAppHost()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - hosting version is older than any CLI version.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "0.1.0");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleUpdateAppHost, outputString);
+        Assert.Contains("aspire update", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_CliOlderThanAppHost_SuggestsUpdatingCli()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - hosting version is newer than any CLI version.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "999.0.0");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleUpdateCli, outputString);
+        Assert.Contains("To update, run:", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_SameVersion_ShowsGenericMessageWithoutUpdateCommand()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - same version on both sides (incompatible for another reason, e.g. a capability).
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, VersionHelper.GetDefaultTemplateVersion());
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading, outputString);
+        Assert.DoesNotContain("To update, run:", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_UnparseableVersion_ShowsGenericMessage()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - the caller passes the required capability when no version is available.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "baseline.v2");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading, outputString);
+        Assert.DoesNotContain("To update, run:", outputString);
     }
 
     [Fact]
@@ -630,7 +778,7 @@ public class ConsoleInteractionServiceTests
 
         var executionContext = CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
-        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
 
         // Console defaults to Standard (stdout), but errors should still go to stderr
         interactionService.DisplayError("Something went wrong");
@@ -659,7 +807,7 @@ public class ConsoleInteractionServiceTests
 
         var executionContext = CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
-        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
 
         interactionService.DisplayMessage(KnownEmojis.Information, "Status update");
 
@@ -1390,6 +1538,67 @@ public class ConsoleInteractionServiceTests
         Assert.Contains("alpha", outputString);
         Assert.Contains("beta", outputString);
         Assert.Contains("gamma", outputString);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionsAsync_NonInteractive_CliProvidedInvalidValue_OmitsItemsOutsideBindingChoices()
+    {
+        // The visible multi-select prompt may include UX-only entries (e.g. a "Configure MCP server"
+        // applicator) that share the prompt with the real catalog but must not be addressable from
+        // the --option value. Callers narrow non-interactive validation via the bindingChoices subset;
+        // entries outside that subset must not leak into the "Available values" rejection message.
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var visibleChoices = new[] { "alpha", "beta", "ux-only-entry" };
+        var bindingChoices = new[] { "alpha", "beta" };
+
+        var option = new System.CommandLine.Option<string?>("--items");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("--items invalid");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        await Assert.ThrowsAsync<NonInteractiveException>(() =>
+            interactionService.PromptForSelectionsAsync("Select:", visibleChoices, x => x, binding: binding, bindingChoices: bindingChoices, cancellationToken: CancellationToken.None));
+
+        var outputString = output.ToString();
+        Assert.Contains("alpha", outputString);
+        Assert.Contains("beta", outputString);
+        Assert.DoesNotContain("ux-only-entry", outputString);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionsAsync_NonInteractive_CliProvidedInvalidValue_StripsSpectreMarkupFromChoiceLabels()
+    {
+        // Choice formatters sometimes return Spectre.Console markup (e.g. "[bold]Label[/]") so the
+        // interactive multi-select can render styled text. The non-interactive rejection message is
+        // plain text, so those tokens must be stripped rather than printed verbatim — otherwise a
+        // user who mistypes --option sees `[bold]Label[/]` in the "Available values" list.
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var choices = new[] { "alpha", "beta" };
+
+        var option = new System.CommandLine.Option<string?>("--items");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("--items invalid");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        await Assert.ThrowsAsync<NonInteractiveException>(() =>
+            interactionService.PromptForSelectionsAsync(
+                "Select:",
+                choices,
+                x => $"[bold]{x}[/] [dim](styled)[/]",
+                binding: binding,
+                cancellationToken: CancellationToken.None));
+
+        var outputString = output.ToString();
+        Assert.Contains("alpha", outputString);
+        Assert.Contains("beta", outputString);
+        Assert.Contains("(styled)", outputString);
+        Assert.DoesNotContain("[bold]", outputString);
+        Assert.DoesNotContain("[/]", outputString);
+        Assert.DoesNotContain("[dim]", outputString);
     }
 
     [Fact]

@@ -208,7 +208,11 @@ internal sealed class TemplateNuGetConfigService(
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.
-        var hasPrHives = query.IncludePrHives && executionContext.GetHiveCount() > 0;
+        // PR dogfood installs can discover a matching local-build channel outside the default
+        // hives directory, so also treat an installed local-build source as a hive signal.
+        var hasPrHives = query.IncludePrHives &&
+            (executionContext.GetHiveCount() > 0 ||
+                allChannels.Any(static c => c.Type is PackageChannelType.Explicit && HasInstalledLocalBuildPackageSource(c)));
 
         IEnumerable<PackageChannel> channels;
         if (!string.IsNullOrEmpty(query.RequestedChannel))
@@ -290,6 +294,16 @@ internal sealed class TemplateNuGetConfigService(
 
         var prompted = await templateVersionPrompter.PromptForTemplatesVersionAsync(orderedPackagesFromChannels, cancellationToken);
         return new TemplatePackageSelection(prompted.Package, prompted.Channel);
+    }
+
+    private static bool HasInstalledLocalBuildPackageSource(PackageChannel channel)
+    {
+        return VersionHelper.IsLocalBuildChannel(channel.Name) &&
+            channel.Mappings?.Any(static mapping =>
+                mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
+                mapping.PackageFilter != PackageMapping.AllPackages &&
+                !UrlHelper.IsHttpUrl(mapping.Source) &&
+                Directory.Exists(mapping.Source)) == true;
     }
 
     /// <summary>

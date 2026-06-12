@@ -8,7 +8,10 @@ namespace Aspire.Hosting;
 
 internal static class AzureContainerAppPolyglotCustomization
 {
-    [AspireExport("configureContainerAppScale", MethodName = "configureScale", Description = "Configures supported Azure Container App scale settings.")]
+    /// <summary>
+    /// Configures supported Azure Container App scale settings.
+    /// </summary>
+    [AspireExport("configureContainerAppScale", MethodName = "configureScale")]
     internal static void ConfigureScale(ContainerApp containerApp, AzureContainerAppScaleConfig scale)
     {
         ArgumentNullException.ThrowIfNull(containerApp);

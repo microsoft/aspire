@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace Aspire.Shared.Model.Serialization;
 
@@ -10,6 +10,8 @@ namespace Aspire.Shared.Model.Serialization;
 /// Represents a resource in JSON format.
 /// This is a shared representation used by both the Dashboard and CLI.
 /// </summary>
+// `aspire describe --format json` uses this shape and the nested resource shapes below;
+// keep docs/specs/cli-output-formats.md in sync when changing them.
 internal sealed class ResourceJson
 {
     /// <summary>
@@ -235,10 +237,32 @@ internal sealed class ResourceCommandJson
     public string? Visibility { get; set; }
 
     /// <summary>
+    /// The state of the command (e.g., "Enabled", "Disabled", "Hidden").
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? State { get; set; }
+
+    /// <summary>
+    /// The sort order of the command for display purposes.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? SortOrder { get; set; }
+
+    /// <summary>
     /// The ordered inputs that describe the invocation arguments accepted by the command.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ResourceCommandArgumentJson[]? ArgumentInputs { get; set; }
+}
+
+/// <summary>
+/// Constants for resource command state values in serialized resource JSON.
+/// </summary>
+internal static class KnownCommandState
+{
+    public const string Enabled = "Enabled";
+    public const string Disabled = "Disabled";
+    public const string Hidden = "Hidden";
 }
 
 /// <summary>
@@ -311,4 +335,30 @@ internal sealed class ResourceCommandArgumentJson
     /// The maximum length for text inputs.
     /// </summary>
     public int? MaxLength { get; set; }
+
+    /// <summary>
+    /// Dynamic input loading metadata.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceCommandArgumentDynamicLoadingJson? DynamicLoading { get; set; }
+}
+
+/// <summary>
+/// Represents dynamic loading metadata for a command invocation argument input in JSON format.
+/// Keep this contract in sync with the VS Code extension's ResourceCommandArgumentDynamicLoadingJson
+/// in extension/src/views/AppHostDataRepository.ts.
+/// </summary>
+internal sealed class ResourceCommandArgumentDynamicLoadingJson
+{
+    /// <summary>
+    /// Whether the input should always load when prompting starts.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AlwaysLoadOnStart { get; set; }
+
+    /// <summary>
+    /// Input names that trigger reloading when their values change.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? DependsOnInputs { get; set; }
 }

@@ -13,7 +13,7 @@ public sealed class ArgumentEvaluator
         var executionContext = new DistributedApplicationExecutionContext(
             new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
             {
-                ServiceProvider = serviceProvider,
+                Services = serviceProvider,
             });
 
         var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)

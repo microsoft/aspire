@@ -63,6 +63,37 @@ class CancellationToken {
     private volatile boolean cancelled = false;
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
 
+    // Remote token id supplied by the AppHost when this token is materialized for a
+    // callback argument. Null for locally-created tokens. Retained so cancellation can
+    // be correlated back to the AppHost if needed.
+    private final String remoteTokenId;
+
+    CancellationToken() {
+        this.remoteTokenId = null;
+    }
+
+    private CancellationToken(String remoteTokenId) {
+        this.remoteTokenId = remoteTokenId;
+    }
+
+    /**
+     * Materializes a cancellation token from a transport value sent by the AppHost.
+     * When the AppHost invokes a callback that accepts a CancellationToken it passes a
+     * remote token id (a string); generated code calls this to turn that wire value into
+     * a CancellationToken instance. Mirrors the TypeScript/Go SDK behavior.
+     */
+    static CancellationToken fromValue(Object value) {
+        if (value instanceof CancellationToken token) {
+            return token;
+        }
+        if (value instanceof String tokenId) {
+            return new CancellationToken(tokenId);
+        }
+        return new CancellationToken();
+    }
+
+    String getRemoteTokenId() { return remoteTokenId; }
+
     void cancel() {
         cancelled = true;
         for (Runnable listener : listeners) {
@@ -166,7 +197,7 @@ class AspireClient {
         
         Map<String, Object> params = new HashMap<>();
         params.put("capabilityId", capabilityId);
-        params.put("args", args);
+        params.put("args", marshalTransportValue(args));
 
         Map<String, Object> request = new HashMap<>();
         request.put("jsonrpc", "2.0");
@@ -183,6 +214,45 @@ class AspireClient {
             handleDisconnect();
             throw new RuntimeException("Failed to invoke capability: " + e.getMessage(), e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object marshalTransportValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof Function<?, ?> function) {
+            Function<Object, Object> typedFunction = (Function<Object, Object>) function;
+            return registerCallback(args -> typedFunction.apply(args.length > 0 ? args[0] : null));
+        }
+
+        Object serialized = serializeValue(value);
+        if (serialized instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) serialized;
+            Map<String, Object> result = new HashMap<>();
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                result.put(entry.getKey(), marshalTransportValue(entry.getValue()));
+            }
+            return result;
+        }
+        if (serialized instanceof List) {
+            List<Object> list = (List<Object>) serialized;
+            List<Object> result = new ArrayList<>();
+            for (Object item : list) {
+                result.add(marshalTransportValue(item));
+            }
+            return result;
+        }
+        if (serialized instanceof Object[] array) {
+            List<Object> result = new ArrayList<>();
+            for (Object item : array) {
+                result.add(marshalTransportValue(item));
+            }
+            return result;
+        }
+
+        return serialized;
     }
 
     public void authenticate(String token) {

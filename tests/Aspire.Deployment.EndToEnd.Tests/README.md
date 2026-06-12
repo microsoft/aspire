@@ -158,13 +158,38 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── AzureServiceBusDeploymentTests.cs      # Azure Service Bus resource
 ├── AzureStorageDeploymentTests.cs         # Azure Storage resource
 ├── PythonFastApiDeploymentTests.cs        # Python FastAPI to Azure Container Apps
+├── TypeScriptAzureContainerAppJobDeploymentTests.cs # TypeScript AppHost ACA jobs
 ├── xunit.runner.json                  # Test runner config
 └── README.md                          # This file
 ```
 
+## TypeScript deployment coverage
+
+TypeScript AppHost publish APIs are first type-checked in `tests/PolyglotAppHosts/**/TypeScript/apphost.ts`. The deployment E2E tests below provide the smaller set of real Azure validations used to catch target-specific deployment regressions.
+
+| TypeScript publish pattern | Polyglot coverage | Real deployment coverage | Notes |
+|----------------------------|-------------------|--------------------------|-------|
+| Azure Container Apps environment + standard app resources | `tests/PolyglotAppHosts/Aspire.Hosting.Azure.AppContainers/TypeScript/apphost.ts` | `TypeScriptExpressDeploymentTests.DeployTypeScriptExpressTemplateToAzureContainerApps` | Verifies the TypeScript Express/React template deploys to Azure Container Apps and serves traffic. |
+| JavaScript app publishing to Azure Container Apps | `tests/PolyglotAppHosts/Aspire.Hosting.JavaScript/TypeScript/apphost.ts` | `TypeScriptJavaScriptHostingDeploymentTests.DeployTypeScriptStaticWebsiteWithNodeApiToAzureContainerApps` | Verifies `publishAsStaticWebsite` with a Node API target from a TypeScript AppHost. |
+| Azure Container App jobs | `tests/PolyglotAppHosts/Aspire.Hosting.Azure.AppContainers/TypeScript/apphost.ts` | `TypeScriptAzureContainerAppJobDeploymentTests.DeployTypeScriptContainerAppJobsToAzureContainerApps` | Verifies manual and scheduled Container App Job resources are deployed with the expected trigger configuration. |
+| Azure infrastructure dependencies used from TypeScript | `tests/PolyglotAppHosts/Aspire.Hosting.Azure.Sql/TypeScript/apphost.ts` and Azure support package apphosts | `TypeScriptVnetSqlServerInfraDeploymentTests.DeployTypeScriptVnetSqlServerInfrastructure` | Verifies Azure SQL Server, VNet, private endpoint, and deployment-script subnet wiring from TypeScript. |
+| Azure Kubernetes Environment gateway and cert-manager | `tests/PolyglotAppHosts/Aspire.Hosting.Kubernetes/TypeScript/apphost.ts` | `AksAzureKubernetesEnvironmentCertManagerTypeScriptDeploymentTests.DeployTypeScriptApiWithCertManagerToAzureKubernetesEnvironment` | Verifies AKS provisioning, AGC gateway routing, cert-manager issuer configuration, and HTTPS traffic from TypeScript. |
+| Kubernetes service and custom manifest publishing | `tests/PolyglotAppHosts/Aspire.Hosting.Kubernetes/TypeScript/apphost.ts` | `AksAzureKubernetesEnvironmentCertManagerTypeScriptDeploymentTests.DeployTypeScriptApiWithCertManagerToAzureKubernetesEnvironment` | The TypeScript AKS test also deploys a Redis service via `publishAsKubernetesService` and verifies a custom ConfigMap manifest. |
+
+### Intentional TypeScript deployment gaps
+
+The following TypeScript publish paths remain type-checked by the polyglot apphosts but are not each covered by a dedicated real deployment test:
+
+| Gap | Rationale |
+|-----|-----------|
+| Azure Container Apps custom domain and certificate binding | The TypeScript AppContainers polyglot apphost validates the exported shape, while real custom-domain deployment requires owned DNS and certificate setup that would make the deployment test tenant-specific and difficult to clean up reliably. |
+| Starting and asserting Azure Container App job executions | The real deployment test validates the deployed job resources and trigger configuration. It does not start jobs because the current coverage goal is deployment-shape validation and scheduled jobs are not practical to wait for deterministically. |
+| Every Kubernetes custom resource shape accepted by `addManifest` | The real TypeScript AKS test validates that custom manifests are emitted and applied using a core `ConfigMap`. CRD-backed examples such as KEDA `ScaledObject` stay in polyglot type-check coverage because installing every CRD would substantially increase runtime and failure modes. |
+| Docker Compose, Dockerfile, App Service, YARP, Entity Framework migration, and Foundry publish APIs from TypeScript | These APIs are type-checked in their package-specific TypeScript polyglot apphosts. Real deployment coverage is either target-specific outside Azure deployment E2E, already covered through C# scenarios, or would require additional external services and quotas not justified for the TypeScript smoke matrix. |
+
 ## Writing New Tests
 
-See the [Deployment E2E Testing Skill](../../.github/skills/deployment-e2e-testing/SKILL.md) for detailed patterns and guidance.
+See the [Deployment E2E Testing Skill](../../.agents/skills/deployment-e2e-testing/SKILL.md) for detailed patterns and guidance.
 
 Basic test structure:
 

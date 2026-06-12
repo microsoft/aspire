@@ -4,7 +4,7 @@
   QualifiedMethodName: withRedisSpecific,
   Description: Redis-specific configuration,
   Documentation: {
-    Summary: Pattern 3: Tests concrete type with inheritance. This targets TestRedisResource directly (extends ContainerResource). Should expand to TestRedisResource AND any types that inherit from it.
+    Summary: Redis-specific configuration
   },
   IsObsolete: false,
   Parameters: [

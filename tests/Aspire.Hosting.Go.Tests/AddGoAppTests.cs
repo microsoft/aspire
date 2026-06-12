@@ -6,7 +6,10 @@
 #pragma warning disable ASPIRECOMMAND001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using System.Text.Json;
 
 namespace Aspire.Hosting.Go.Tests;
 
@@ -353,6 +356,120 @@ public class AddGoAppTests
             }
             """;
         Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public void WithDelveServer_RemovesVSCodeDebuggingAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithDelveServer(port: 2345);
+
+        Assert.DoesNotContain(app.Resource.Annotations, annotation => annotation is SupportsDebuggingAnnotation);
+    }
+
+    // ---- VS Code debugging --------------------------------------------------
+
+    [Fact]
+    public void WithVSCodeDebugging_PopulatesGoLaunchConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var sourceDir = new TestTempDirectory();
+        var packageDirectory = Path.Combine(sourceDir.Path, "cmd", "server");
+
+        var app = builder.AddGoApp("api", sourceDir.Path,
+            packagePath: "./cmd/server",
+            buildTags: ["integration"],
+            gcFlags: "all=-N -l",
+            raceDetector: true);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(app.Resource);
+
+        Assert.Equal("go", launchConfig.Type);
+        Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
+        Assert.Equal(packageDirectory, launchConfig.Program);
+        Assert.Equal(sourceDir.Path, launchConfig.WorkingDirectory);
+        Assert.Equal("-race -tags='integration' -gcflags='all=-N -l'", launchConfig.BuildFlags);
+    }
+
+    [Fact]
+    public void WithVSCodeDebugging_OmitsBuildFlagsWhenNoneConfigured()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var sourceDir = new TestTempDirectory();
+
+        var app = builder.AddGoApp("api", sourceDir.Path);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(app.Resource);
+
+        Assert.Null(launchConfig.BuildFlags);
+    }
+
+    [Fact]
+    public async Task WithVSCodeDebugging_RemovesGoToolArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var sourceDir = new TestTempDirectory();
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = ["go"]
+        };
+
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(runSessionInfo);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+
+        var app = builder.AddGoApp("api", sourceDir.Path,
+                packagePath: "./cmd/server",
+                buildTags: ["integration"],
+                ldFlags: "-X main.version=1.0.0",
+                gcFlags: "all=-N -l",
+                raceDetector: true)
+            .WithAppArgs("--config", "prod.yaml");
+
+        var application = builder.Build();
+
+        var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Collection(commandArguments,
+            arg => Assert.Equal("--config", arg),
+            arg => Assert.Equal("prod.yaml", arg));
+    }
+
+    [Fact]
+    public async Task WithVSCodeDebugging_DoesNotRemoveGoToolArguments_WhenGoLaunchConfigurationUnsupported()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var sourceDir = new TestTempDirectory();
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = ["python"]
+        };
+
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(runSessionInfo);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+
+        var app = builder.AddGoApp("api", sourceDir.Path,
+                packagePath: "./cmd/server",
+                buildTags: ["integration"],
+                raceDetector: true)
+            .WithAppArgs("--config", "prod.yaml");
+
+        var application = builder.Build();
+
+        var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Collection(commandArguments,
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("-race", arg),
+            arg => Assert.Equal("-tags=integration", arg),
+            arg => Assert.Equal("./cmd/server", arg),
+            arg => Assert.Equal("--config", arg),
+            arg => Assert.Equal("prod.yaml", arg));
     }
 
     // ---- Manifest: WithDelveServer with build flags -----------------------
@@ -880,6 +997,19 @@ public class AddGoAppTests
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
 
         await Verify(content);
+    }
+
+    private static GoLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    {
+        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+
+        var exe = Executable.Create("test", "go");
+        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<GoLaunchConfiguration>(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigs));
+        return Assert.Single(launchConfigs);
     }
 
     private sealed class GoFilesContainer(string name, string command, string workingDirectory)

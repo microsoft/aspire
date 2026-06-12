@@ -29,6 +29,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     private readonly DistributedApplicationOptions _distributedApplicationOptions;
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly Locations _locations;
+    private readonly IAspireStore _aspireStore;
     private readonly ILogger<ExecutableCreator> _logger;
     private readonly DcpAppResourceStore _appResources;
 
@@ -39,6 +40,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         DistributedApplicationOptions distributedApplicationOptions,
         DistributedApplicationExecutionContext executionContext,
         Locations locations,
+        IAspireStore aspireStore,
         ILogger<ExecutableCreator> logger,
         DcpAppResourceStore appResources)
     {
@@ -48,6 +50,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         _distributedApplicationOptions = distributedApplicationOptions;
         _executionContext = executionContext;
         _locations = locations;
+        _aspireStore = aspireStore;
         _logger = logger;
         _appResources = appResources;
     }
@@ -61,8 +64,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
     public bool IsReadyToCreate(RenderedModelResource<Executable> resource, EmptyCreationContext context)
     {
-        var explicitStartup = resource.ModelResource.TryGetAnnotationsOfType<ExplicitStartupAnnotation>(out _);
-        return !explicitStartup;
+        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
     }
 
     public async Task CreateObjectAsync(RenderedModelResource<Executable> er, EmptyCreationContext context, ILogger resourceLogger, IDcpObjectFactory factory, CancellationToken cancellationToken)
@@ -105,9 +107,50 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
 
+        // Configure the per-replica terminal spec if the resource has a TerminalAnnotation.
+        // Each replica gets its own DCP UDS producer endpoint from the layout so the
+        // terminal host can multiplex viewers per (resource, replica).
+        //
+        // PTY allocation is implemented by DCP across all three desktop platforms:
+        //   * Windows  - ConPTY (the Win32 pseudo-console API; per-replica named pipe
+        //                bridged into a Unix domain socket facade on the DCP side).
+        //   * Linux    - Unix98 master/slave pair via /dev/ptmx + grantpt/unlockpt.
+        //   * macOS    - Same Unix98 surface, with the Darwin posix_openpt path.
+        // Container PTYs (interactive `docker exec`-style sessions) are not yet
+        // wired through this annotation — tracked as a follow-up. If the running
+        // DCP build pre-dates terminal allocation on this host (e.g. an older
+        // bundled DCP that ships with Aspire), the executable fails to start
+        // with termpty.ErrTerminalNotSupported surfaced through the reconciler.
+        if (er.ModelResource.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
+        {
+            var terminalAnnotation = terminalAnnotations.FirstOrDefault();
+            if (terminalAnnotation is not null)
+            {
+                if (TryGetReplicaIndex(exe, out var replicaIndex)
+                    && replicaIndex >= 0
+                    && replicaIndex < terminalAnnotation.TerminalHosts.Count)
+                {
+                    spec.Terminal = new TerminalSpec
+                    {
+                        UdsPath = terminalAnnotation.TerminalHosts[replicaIndex].Layout.ProducerUdsPath,
+                        // The Aspire terminal host owns the listener at UdsPath; DCP must dial it.
+                        SocketMode = "connect",
+                        Cols = terminalAnnotation.Options.Columns,
+                        Rows = terminalAnnotation.Options.Rows
+                    };
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Could not determine a producer UDS path for replica of resource '{ResourceName}'; terminal will not be attached for this replica.",
+                        er.ModelResource.Name);
+                }
+            }
+        }
+
         if (configuration.Exception is not null)
         {
-            throw new FailedToApplyEnvironmentException();
+            throw new FailedToApplyEnvironmentException($"Failed to apply configuration to executable {er.ModelResource.Name}", configuration.Exception);
         }
 
         // Invoke the debug configuration callback now that endpoints are allocated.
@@ -157,7 +200,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 exe.Spec.WorkingDirectory = Path.GetDirectoryName(projectMetadata.ProjectPath);
 
                 exe.Annotate(CustomResource.OtelServiceNameAnnotation, project.Name);
-                exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, exeInstance.Suffix);
+                exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, project.GetOtelServiceInstanceId(exeInstance));
                 exe.Annotate(CustomResource.ResourceNameAnnotation, project.Name);
                 exe.Annotate(CustomResource.ResourceReplicaCount, replicas.ToString(CultureInfo.InvariantCulture));
                 exe.Annotate(CustomResource.ResourceReplicaIndex, i.ToString(CultureInfo.InvariantCulture));
@@ -167,8 +210,15 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 var projectArgs = new List<string>();
 
                 var isInDebugSession = !string.IsNullOrEmpty(_configuration[DcpExecutor.DebugSessionPortVar]);
+                var persistent = project.GetLifetimeType() == Lifetime.Persistent;
+                exe.Spec.Persistent = persistent;
+                if (persistent)
+                {
+                    ApplyMonitorProcess(project, exe.Spec);
+                }
 
-                if (project.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation))
+                SupportsDebuggingAnnotation? supportsDebuggingAnnotation = null;
+                if (!persistent && project.SupportsDebugging(_configuration, out supportsDebuggingAnnotation))
                 {
                     exe.Spec.ExecutionType = ExecutionType.IDE;
                     exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
@@ -181,8 +231,30 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     // Non-project launch types (e.g. azure-functions) have their launch configuration
                     // applied later in CreateExecutableAsync() after endpoints are allocated,
                     // unless the IDE didn't send DEBUG_SESSION_INFO (handled by the fallback branch below).
+
+                    // File-based apps (.cs files) are not supported by all IDEs (e.g. Visual Studio
+                    // returns 500 for them). Populate fallback process args so that when the IDE
+                    // rejects the launch request and DCP falls back to ExecutionType.Process, the
+                    // executable starts with the correct `dotnet run --file` arguments.
+                    if (projectMetadata.IsFileBasedApp)
+                    {
+                        projectArgs.Add("run");
+                        projectArgs.Add("--file");
+                        projectArgs.Add(projectMetadata.ProjectPath);
+                        projectArgs.Add("--no-cache");
+                        if (projectMetadata.SuppressBuild)
+                        {
+                            projectArgs.Add("--no-build");
+                        }
+                        projectArgs.Add("--no-launch-profile");
+
+                        if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
+                        {
+                            projectArgs.AddRange(new[] { "--configuration", _distributedApplicationOptions.Configuration });
+                        }
+                    }
                 }
-                else if (ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation))
+                else if (!persistent && ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation))
                 {
                     // Fall back to IDE execution with a standard ProjectLaunchConfiguration when:
                     // 1. No SupportsDebuggingAnnotation exists (e.g. AddResource-based ProjectResource
@@ -247,6 +319,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
                 exe.SetAnnotationAsObjectList(CustomResource.ResourceProjectArgsAnnotation, projectArgs);
 
+                if (project.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+                {
+                    exe.Spec.Start = false;
+                }
+
                 var exeAppResource = new RenderedModelResource<Executable>(project, exe);
                 DcpModelUtilities.AddServicesProducedInfo(exeAppResource, _appResources.Get());
                 _appResources.Add(exeAppResource);
@@ -269,10 +346,23 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             // The working directory is always relative to the app host project directory (if it exists).
             exe.Spec.WorkingDirectory = executable.WorkingDirectory;
             exe.Annotate(CustomResource.OtelServiceNameAnnotation, executable.Name);
-            exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, exeInstance.Suffix);
+            exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, executable.GetOtelServiceInstanceId(exeInstance));
             exe.Annotate(CustomResource.ResourceNameAnnotation, executable.Name);
+            // Plain executables are always single-replica today, but the terminal wire-up
+            // (and any other replica-aware downstream logic) needs both annotations to be
+            // present. Without them WithTerminal() can't resolve the producer UDS for the
+            // replica and silently falls back to a no-op.
+            exe.Annotate(CustomResource.ResourceReplicaCount, "1");
+            exe.Annotate(CustomResource.ResourceReplicaIndex, "0");
 
-            if (executable.SupportsDebugging(_configuration, out _))
+            var persistent = executable.GetLifetimeType() == Lifetime.Persistent;
+            if (persistent)
+            {
+                exe.Spec.Persistent = true;
+                ApplyMonitorProcess(executable, exe.Spec);
+            }
+
+            if (!persistent && executable.SupportsDebugging(_configuration, out _))
             {
                 // Just mark as IDE execution here - the actual launch configuration callback
                 // will be invoked in CreateExecutableAsync after endpoints are allocated.
@@ -284,6 +374,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 exe.Spec.ExecutionType = ExecutionType.Process;
             }
 
+            if (executable.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+            {
+                exe.Spec.Start = false;
+            }
+
             DcpExecutor.SetInitialResourceState(executable, exe);
 
             var exeAppResource = new RenderedModelResource<Executable>(executable, exe);
@@ -292,12 +387,20 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
     }
 
+    private static void ApplyMonitorProcess(IResource resource, ExecutableSpec spec)
+    {
+        if (resource.TryGetParentProcessLifetime(out var parentProcessId, out var parentProcessTimestamp))
+        {
+            spec.MonitorPid = parentProcessId;
+            spec.MonitorTimestamp = parentProcessTimestamp;
+        }
+    }
+
     private async Task<ExecutableConfiguration> BuildExecutableConfiguration(RenderedModelResource<Executable> er, ILogger resourceLogger, CancellationToken cancellationToken)
     {
         var exe = (Executable)er.DcpResource;
 
-        // Build the base paths for certificate output in the DCP session directory.
-        var certificatesRootDir = Path.Join(_locations.DcpSessionDir, exe.Metadata.Name);
+        var certificatesRootDir = GetCertificatesRootDirectory(er, exe);
         var bundleOutputPath = Path.Join(certificatesRootDir, "cert.pem");
         var customBundleOutputPath = Path.Join(certificatesRootDir, "bundles");
         var certificatesOutputPath = Path.Join(certificatesRootDir, "certs");
@@ -403,6 +506,16 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         return (configuration, pemCertificates);
+    }
+
+    private string GetCertificatesRootDirectory(RenderedModelResource<Executable> er, Executable exe)
+    {
+        if (er.ModelResource.GetLifetimeType() == Lifetime.Persistent)
+        {
+            return Path.Join(_aspireStore.BasePath, "dcp", "executables", exe.Metadata.Name, "certificates");
+        }
+
+        return Path.Join(_locations.DcpSessionDir, exe.Metadata.Name);
     }
 
     private static List<LaunchArgument> BuildLaunchArgs(RenderedModelResource<Executable> er, ExecutableSpec spec, IEnumerable<(string Value, bool IsSensitive)> appHostArgs, int executableArgumentStartIndex)
@@ -515,4 +628,20 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     }
 
     private sealed record LaunchArgument(string Value, bool IsSensitive, bool Executable, bool Display, int? EffectiveArgumentIndex);
+
+    private static bool TryGetReplicaIndex(Executable exe, out int replicaIndex)
+    {
+        replicaIndex = -1;
+        if (exe.Metadata.Annotations is not { } annotations)
+        {
+            return false;
+        }
+
+        if (!annotations.TryGetValue(CustomResource.ResourceReplicaIndex, out var value))
+        {
+            return false;
+        }
+
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaIndex);
+    }
 }

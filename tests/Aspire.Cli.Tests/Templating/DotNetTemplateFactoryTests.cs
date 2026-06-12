@@ -31,7 +31,7 @@ public class DotNetTemplateFactoryTests
     }
 
     private static PackageChannel CreateExplicitChannel(PackageMapping[] mappings) =>
-        PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+        PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
 
     private static async Task WriteNuGetConfigAsync(DirectoryInfo dir, string content)
     {
@@ -218,7 +218,7 @@ public class DotNetTemplateFactoryTests
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
-        var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache());
+        var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
 
         // Act
         await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
@@ -374,7 +374,7 @@ public class DotNetTemplateFactoryTests
         public Task<T> PromptForSelectionAsync<T>(string prompt, IEnumerable<T> choices, Func<T, string> displaySelector, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
 
-        public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+        public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
 
         public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
@@ -387,6 +387,9 @@ public class DotNetTemplateFactoryTests
             => throw new NotImplementedException();
 
         public Task<TResult> ShowStatusAsync<TResult>(string message, Func<Task<TResult>> work, KnownEmoji? emoji = null, bool allowMarkup = false)
+            => throw new NotImplementedException();
+
+        public Task<TResult> ShowDynamicStatusAsync<TResult>(string initialStatusText, Func<Action<string>, Task<TResult>> action, KnownEmoji? emoji = null)
             => throw new NotImplementedException();
 
         public Task ShowStatusAsync(string message, Func<Task> work)
@@ -445,10 +448,13 @@ public class DotNetTemplateFactoryTests
         public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, ProcessInvocationOptions options, CancellationToken cancellationToken)
+        public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, string[] targets, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<int> RunAsync(FileInfo projectFile, bool watch, bool noBuild, bool noRestore, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken)
+            => throw new NotImplementedException();
+
+        public Task<int> RunAppHostCommandAsync(FileInfo projectFile, string command, DirectoryInfo workingDirectory, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken)
@@ -473,7 +479,7 @@ public class DotNetTemplateFactoryTests
         public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default)
+        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
             => throw new NotImplementedException();
 
         public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)

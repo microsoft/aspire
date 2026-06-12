@@ -75,7 +75,7 @@ with create_builder() as builder:
     func_tool = project.add_function_tool("func-tool", "myFunc", "{}")
 
     # Prompt Agent
-    _prompt_agent = project.add_prompt_agent(chat, "prompt-agent")
+    _prompt_agent = project.add_prompt_agent("prompt-agent", chat)
     _prompt_agent.with_tool(code_interpreter)
     _prompt_agent.with_tool(file_search)
     _prompt_agent.with_tool(web_search)
@@ -123,7 +123,7 @@ server.listen(port, '127.0.0.1');
 """
         ])
 
-    hosted_agent.publish_as_hosted_agent(project=project)
+    hosted_agent.as_hosted_agent(project=project)
 
     api = builder.add_container("api", "nginx")
     foundry.with_container_registry_role_assignments(registry)

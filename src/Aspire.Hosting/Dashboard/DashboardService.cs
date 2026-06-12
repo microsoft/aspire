@@ -161,7 +161,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         }
     }
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     private static Aspire.DashboardService.Proto.V1.MessageIntent MapMessageIntent(Aspire.Hosting.MessageIntent? intent)
     {
         if (intent is null)
@@ -251,8 +250,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     public override async Task WatchResources(
         WatchResourcesRequest request,

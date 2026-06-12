@@ -22,6 +22,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly string _socketPath;
     private readonly ProfilingTelemetry.ActivityScope _activity;
     private readonly ProfilingTelemetry? _profilingTelemetry;
+    private readonly IDisposable? _projectLifetime;
     private IAppHostRpcClient? _rpcClient;
     private bool _disposed;
 
@@ -32,7 +33,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         string authenticationToken,
         ILogger logger,
         ProfilingTelemetry.ActivityScope activity = default,
-        ProfilingTelemetry? profilingTelemetry = null)
+        ProfilingTelemetry? profilingTelemetry = null,
+        IDisposable? projectLifetime = null)
     {
         _serverProcess = serverProcess;
         _output = output;
@@ -41,6 +43,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _logger = logger;
         _activity = activity;
         _profilingTelemetry = profilingTelemetry;
+        _projectLifetime = projectLifetime;
     }
 
     /// <inheritdoc />
@@ -109,6 +112,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         {
             activity.SetError(ex.Message);
             activity.Dispose();
+            (appHostServerProject as IDisposable)?.Dispose();
             throw;
         }
 
@@ -122,7 +126,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             authenticationToken,
             logger,
             activity,
-            profilingTelemetry);
+            profilingTelemetry,
+            appHostServerProject as IDisposable);
     }
 
     /// <inheritdoc />
@@ -130,7 +135,34 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     {
         ObjectDisposedException.ThrowIf(_disposed, nameof(AppHostServerSession));
 
-        return _rpcClient ??= await AppHostRpcClient.ConnectAsync(_socketPath, _authenticationToken, _profilingTelemetry, cancellationToken);
+        if (_rpcClient is not null)
+        {
+            return _rpcClient;
+        }
+
+        // ConnectAsync already retries until the RPC socket is available. Race it against the
+        // server process lifetime instead of sleeping first, so fast startups connect immediately
+        // and failed server launches surface as soon as the process exits.
+        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var connectTask = AppHostRpcClient.ConnectAsync(_socketPath, _authenticationToken, _profilingTelemetry, connectCts.Token);
+        var processExitTask = _serverProcess.WaitForExitAsync(connectCts.Token);
+        var completedTask = await Task.WhenAny(connectTask, processExitTask).ConfigureAwait(false);
+
+        if (completedTask == connectTask)
+        {
+            // Stop the process-exit watcher once the RPC connection wins the race.
+            connectCts.Cancel();
+            ObserveFaultedTask(processExitTask);
+            _rpcClient = await connectTask.ConfigureAwait(false);
+            return _rpcClient;
+        }
+
+        await processExitTask.ConfigureAwait(false);
+        // Stop the retrying connection attempt once the server has exited, then observe any
+        // cancellation/failure it reports so the losing task cannot raise an unobserved exception.
+        connectCts.Cancel();
+        ObserveFaultedTask(connectTask);
+        throw new InvalidOperationException($"AppHost server process exited before the RPC connection could be established. Exit code: {_serverProcess.ExitCode}.");
     }
 
     /// <inheritdoc />
@@ -168,7 +200,17 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         }
 
         _serverProcess.Dispose();
+        _projectLifetime?.Dispose();
         _activity.Dispose();
+    }
+
+    private static void ObserveFaultedTask(Task task)
+    {
+        _ = task.ContinueWith(
+            completedTask => _ = completedTask.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 }
 
@@ -203,9 +245,21 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         var appHostServerProject = await _projectFactory.CreateAsync(appHostPath, cancellationToken);
 
         // Prepare the server (create files + build for dev mode, restore packages for prebuilt mode)
-        var prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken: cancellationToken);
+        AppHostServerPrepareResult prepareResult;
+        try
+        {
+            prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            (appHostServerProject as IDisposable)?.Dispose();
+            throw;
+        }
+
         if (!prepareResult.Success)
         {
+            (appHostServerProject as IDisposable)?.Dispose();
+
             return new AppHostServerSessionResult(
                 Success: false,
                 Session: null,

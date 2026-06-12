@@ -4,10 +4,7 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -18,6 +15,8 @@ internal sealed class StartCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly AppHostLauncher _appHostLauncher;
     private readonly IConfiguration _configuration;
 
@@ -27,15 +26,11 @@ internal sealed class StartCommand : BaseCommand
     };
 
     public StartCommand(
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
         AppHostLauncher appHostLauncher,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        CommonCommandServices services)
         : base("start", StartCommandStrings.Description,
-               features, updateNotifier, executionContext, interactionService, telemetry)
+               services)
     {
         _appHostLauncher = appHostLauncher;
         _configuration = configuration;
@@ -131,12 +126,18 @@ internal sealed class StartCommand : BaseCommand
             additionalArgs.Add("--no-build");
         }
 
+        if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
+        }
+
         return await _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,
             format,
             isolated,
             isExtensionHost,
             waitForDebugger,
+            timeoutSeconds,
             globalArgs,
             additionalArgs,
             stopAfterLaunchDelay,

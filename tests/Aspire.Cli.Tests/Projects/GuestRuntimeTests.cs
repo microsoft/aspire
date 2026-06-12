@@ -55,6 +55,24 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         };
     }
 
+    private static RuntimeSpec CreateTypeScriptRuntimeSpec()
+    {
+        return CreateTestSpec(
+            execute: new CommandSpec
+            {
+                Command = "npx",
+                Args = ["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"]
+            },
+            preExecute:
+            [
+                new CommandSpec
+                {
+                    Command = "npx",
+                    Args = ["--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"]
+                }
+            ]);
+    }
+
     [Fact]
     public void Language_ReturnsSpecLanguage()
     {
@@ -161,6 +179,30 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         Assert.Equal("typecheck-cmd", launcher.Calls[0].Command);
         Assert.Equal(["--project", directory.FullName], launcher.Calls[0].Args);
         Assert.Equal("run-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task RunAsync_NoBuildSkipsTypeScriptTscAndRunsAppHost()
+    {
+        var spec = CreateTypeScriptRuntimeSpec();
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        var (exitCode, _) = await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            CancellationToken.None,
+            noBuild: true);
+
+        Assert.Equal(0, exitCode);
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("npx", call.Command);
+        Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName], call.Args);
     }
 
     [Fact]
@@ -346,7 +388,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal("publish-cmd", launcher.LastCommand);
         Assert.Contains(launcher.LastArgs, a => a.Contains("--output") && a.Contains("/out"));
@@ -367,11 +409,71 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal(2, launcher.Calls.Count);
         Assert.Equal("typecheck-cmd", launcher.Calls[0].Command);
         Assert.Equal("publish-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task PublishAsync_CallsAfterAppHostLaunchedAfterPreExecute()
+    {
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
+            publishExecute: new CommandSpec { Command = "publish-cmd", Args = ["{appHostFile}", "{args}"] },
+            preExecute:
+            [
+                new CommandSpec { Command = "typecheck-cmd", Args = ["--project", "{appHostDir}"] }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+        var afterAppHostLaunchedCalls = 0;
+
+        await runtime.PublishAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            ["--output", "/out"],
+            launcher,
+            afterAppHostLaunchedAsync: () =>
+            {
+                afterAppHostLaunchedCalls++;
+                Assert.Equal(2, launcher.Calls.Count);
+                Assert.Equal("publish-cmd", launcher.Calls[1].Command);
+                return Task.CompletedTask;
+            },
+            cancellationToken: CancellationToken.None);
+
+        Assert.Equal(1, afterAppHostLaunchedCalls);
+        Assert.Equal(2, launcher.Calls.Count);
+        Assert.Equal("publish-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task PublishAsync_NoBuildSkipsTypeScriptTscAndRunsAppHost()
+    {
+        var spec = CreateTypeScriptRuntimeSpec();
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        var (exitCode, _) = await runtime.PublishAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            ["--operation", "publish"],
+            launcher,
+            noBuild: true,
+            cancellationToken: CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("npx", call.Command);
+        Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName, "--operation", "publish"], call.Args);
     }
 
     [Fact]
@@ -383,7 +485,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), null, launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), null, launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal("run-cmd", launcher.LastCommand);
     }
@@ -479,7 +581,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--extra", "arg"], launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--extra", "arg"], launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal(appHostFile.FullName, launcher.LastArgs[0]);
         Assert.Equal("--extra", launcher.LastArgs[1]);
@@ -703,6 +805,68 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         Assert.Contains(activity.Events, @event => @event.Name == ProfilingTelemetry.Events.GuestProcessStarted);
         Assert.Contains(activity.Events, @event => @event.Name == ProfilingTelemetry.Events.GuestFirstStdout);
         Assert.Contains(activity.Events, @event => @event.Name == ProfilingTelemetry.Events.GuestProcessExited);
+    }
+
+    [Fact]
+    public async Task ProcessGuestLauncher_KillsProcessAndReturnsOnCancellation()
+    {
+        // Regression coverage for the AppHost system teardown path: when the AppHost server's
+        // backchannel fails or the user cancels the run, GuestAppHostProject cancels a CTS that's
+        // passed to this launcher. The launcher must kill the guest process tree (rather than
+        // leaving it running) and drain output, otherwise pendingRun never completes and the CLI
+        // appears to hang while it waits for the AppHost system to exit.
+        var launcher = new ProcessGuestLauncher(
+            "test",
+            _loggerFactory.CreateLogger<ProcessGuestLauncher>());
+
+        // Use a long-running cross-platform command. We pick something the OS resolves through PATH
+        // so the launcher's CommandPathResolver succeeds without any fake.
+        string command;
+        string[] args;
+        if (OperatingSystem.IsWindows())
+        {
+            // ping with a long count keeps the process alive for ~60 seconds; the kill needs to
+            // actually terminate the process tree (cmd.exe -> ping.exe) for this to return.
+            command = "cmd.exe";
+            args = ["/c", "ping", "-n", "60", "127.0.0.1"];
+        }
+        else
+        {
+            command = "sleep";
+            args = ["60"];
+        }
+
+        using var cts = new CancellationTokenSource();
+        var launchTask = launcher.LaunchAsync(
+            command,
+            args,
+            new DirectoryInfo(Path.GetTempPath()),
+            new Dictionary<string, string>(),
+            cts.Token);
+
+        // Give the process a moment to actually start before cancelling so we exercise the
+        // kill-after-running path, not the cancel-before-start short-circuit.
+        await Task.Delay(500);
+
+        var stopwatch = Stopwatch.StartNew();
+        cts.Cancel();
+
+        var (exitCode, _) = await launchTask;
+        stopwatch.Stop();
+
+        // The killed process should report a non-zero exit code. Different platforms report this
+        // differently (SIGKILL maps to 137 on Linux/macOS; cmd.exe and ping return their own
+        // process-tree-termination codes on Windows), so we only assert "not zero".
+        Assert.NotEqual(0, exitCode);
+
+        // Most importantly, the launcher must return quickly after cancellation. Before this fix
+        // it just propagated the OperationCanceledException without killing the process, so the
+        // caller-owned `using var process = new Process { ... }` only disposed the handle - the
+        // OS process kept running until the underlying command finished on its own. We give a
+        // generous slack here so the test isn't flaky under load, but it should still be well
+        // under the 60s the command would run for if not killed.
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(15),
+            $"Expected ProcessGuestLauncher to return within 15s of cancellation but it took {stopwatch.Elapsed}.");
     }
 
     [Fact]

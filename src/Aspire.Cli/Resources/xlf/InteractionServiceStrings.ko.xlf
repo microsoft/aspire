@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the AppHost was lost: {0}.</source>
+        <source>The connection to the AppHost was lost: {0}</source>
         <target state="needs-review-translation">앱 호스트에 대한 연결이 끊어졌습니다. {0}.</target>
         <note />
       </trans-unit>
@@ -17,19 +17,29 @@
         <target state="needs-review-translation">AppHost 버전이 호환되지 않습니다. AppHost 또는 Aspire CLI를 업그레이드해 주세요.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateAppHost">
+        <source>The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</source>
+        <target state="new">The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateCli">
+        <source>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</source>
+        <target state="new">The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostShutDown">
         <source>The application shut down.</source>
         <target state="new">The application shut down.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
-        <source>Aspire CLI Version</source>
-        <target state="translated">Aspire CLI 버전</target>
+        <source>Aspire CLI version</source>
+        <target state="needs-review-translation">Aspire CLI 버전</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
-        <source>Aspire.Hosting Version</source>
-        <target state="translated">Aspire.Hosting 버전</target>
+        <source>Aspire.Hosting version</source>
+        <target state="needs-review-translation">Aspire.Hosting 버전</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
@@ -73,7 +83,7 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
         <target state="needs-review-translation">앱 호스트에 연결하는 동안 오류가 발생했습니다. 앱 호스트가 사용 가능하기 전에 충돌했을 수 있음: {0}.</target>
         <note />
       </trans-unit>
@@ -163,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
-        <source>Required Capability</source>
-        <target state="translated">필수 기능</target>
+        <source>Required capability</source>
+        <target state="needs-review-translation">필수 기능</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">

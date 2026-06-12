@@ -26,7 +26,7 @@ public class NuGetConfigMergerTests
         return new FileInfo(path);
     }
 
-    private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+    private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
 
     [Fact]
     public async Task CreateOrUpdateAsync_CreatesConfigFromMappings_WhenNoExistingConfig()
@@ -191,7 +191,7 @@ public class NuGetConfigMergerTests
             new PackageMapping("Aspire.*", stableSource)
         };
 
-        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));

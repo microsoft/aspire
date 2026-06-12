@@ -27,6 +27,11 @@
         <target state="new">Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChannelSuffixFormat">
+        <source> (channel: {0})</source>
+        <target state="new"> (channel: {0})</target>
+        <note>{0} is the Aspire channel name (e.g., "stable", "staging", "daily", "local", "pr-1234"). Appended to CLI / AppHost version messages.</note>
+      </trans-unit>
       <trans-unit id="CheckingPrerequisites">
         <source>Checking Aspire environment...</source>
         <target state="translated">正在检查 Aspire 环境...</target>
@@ -50,6 +55,31 @@
       <trans-unit id="CliVersionUpdateCheckFailedMessage">
         <source>Could not check for Aspire CLI updates</source>
         <target state="new">Could not check for Aspire CLI updates</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnChannel">
+        <source>Channel</source>
+        <target state="new">Channel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnPath">
+        <source>Path</source>
+        <target state="new">Path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnPathStatus">
+        <source>PATH status</source>
+        <target state="new">PATH status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnRoute">
+        <source>Route</source>
+        <target state="new">Route</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnVersion">
+        <source>Version</source>
+        <target state="new">Version</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerCategoryHeader">
@@ -167,6 +197,16 @@
         <target state="translated">Aspire 环境检查</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderInstallations">
+        <source>Aspire CLI Installations</source>
+        <target state="new">Aspire CLI Installations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InstallationDiscoveryFailedReason">
+        <source>Install discovery failed. See the Aspire CLI logs for details.</source>
+        <target state="new">Install discovery failed. See the Aspire CLI logs for details.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">将结果输出为 JSON g格式以便工具集成</target>
@@ -181,6 +221,41 @@
         <source>Summary: {0} passed, {1} warnings, {2} failed</source>
         <target state="translated">摘要: {0} 通过,{1} 警告， {2} 失败</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ValueCurrentMarker">
+        <source>(current)</source>
+        <target state="new">(current)</target>
+        <note>Suffix appended to the running CLI's path so the user can identify which install is themselves.</note>
+      </trans-unit>
+      <trans-unit id="ValueNotProbed">
+        <source>(not probed)</source>
+        <target state="new">(not probed)</target>
+        <note>Placeholder shown in the table when an install was found but not asked to self-describe (e.g., trust gate).</note>
+      </trans-unit>
+      <trans-unit id="ValuePathActive">
+        <source>active</source>
+        <target state="new">active</target>
+        <note>Shown when an install is the first Aspire CLI resolved from PATH.</note>
+      </trans-unit>
+      <trans-unit id="ValuePathNotOnPath">
+        <source>not on PATH</source>
+        <target state="new">not on PATH</target>
+        <note>Shown when an install was not discovered from PATH.</note>
+      </trans-unit>
+      <trans-unit id="ValuePathShadowed">
+        <source>shadowed</source>
+        <target state="new">shadowed</target>
+        <note>Shown when an install is on PATH but an earlier Aspire CLI entry shadows it.</note>
+      </trans-unit>
+      <trans-unit id="ValueProbeFailed">
+        <source>(probe failed)</source>
+        <target state="new">(probe failed)</target>
+        <note>Placeholder shown in the table when an install was probed but did not return usable data.</note>
+      </trans-unit>
+      <trans-unit id="ValueUnknown">
+        <source>(unknown)</source>
+        <target state="new">(unknown)</target>
+        <note>Placeholder shown in the table when a field could not be determined for a discovered install.</note>
       </trans-unit>
       <trans-unit id="VersionUnknown">
         <source>unknown</source>

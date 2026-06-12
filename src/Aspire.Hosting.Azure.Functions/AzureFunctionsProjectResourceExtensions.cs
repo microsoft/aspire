@@ -78,6 +78,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// <param name="name">The name to be associated with the Azure Functions project. This name will be used for service discovery when referenced in a dependency.</param>
     /// <param name="projectPath">The path to the Azure Functions project file.</param>
     /// <returns>An <see cref="IResourceBuilder{AzureFunctionsProjectResource}"/> for the added Azure Functions project resource.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This overload of the <see cref="AddAzureFunctionsProject(IDistributedApplicationBuilder, string, string)"/> method adds an Azure Functions project to the application
@@ -116,7 +117,8 @@ public static class AzureFunctionsProjectResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds an Azure Functions project to the distributed application")]
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<AzureFunctionsProjectResource> AddAzureFunctionsProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -316,7 +318,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// <param name="builder">The resource builder for the Azure Functions project resource.</param>
     /// <param name="storage">The resource builder for the Azure Storage resource to be used as host storage.</param>
     /// <returns>The resource builder for the Azure Functions project resource, configured with the specified host storage.</returns>
-    [AspireExport(Description = "Configures the Azure Functions project to use specified Azure Storage as host storage")]
+    [AspireExport]
     public static IResourceBuilder<AzureFunctionsProjectResource> WithHostStorage(this IResourceBuilder<AzureFunctionsProjectResource> builder, IResourceBuilder<AzureStorageResource> storage)
     {
         ArgumentNullException.ThrowIfNull(builder);

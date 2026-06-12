@@ -98,7 +98,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 6: Create a dedicated .NET hosted agent project
-            // PublishAsHostedAgent requires a proper agent application, not a standard apiservice.
+            // WithComputeEnvironment requires a proper agent application, not a standard apiservice.
             output.WriteLine("Step 6: Creating .NET hosted agent project...");
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var hostedAgentDir = Path.Combine(projectDir, "DotNetHostedAgent");
@@ -106,70 +106,104 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
 
             Directory.CreateDirectory(hostedAgentDir);
 
-            // Write minimal hosted agent .csproj
-            // The project is created outside the repo, so it has no central package management.
-            // Explicit versions are required, matching those from the playground DotNetHostedAgent.
+            // Write minimal hosted agent .csproj.
+            // The package set and explicit versions below must stay in sync with
+            // playground/FoundryAgents/DotNetHostedAgent/DotNetHostedAgent.csproj.
+            // This project is materialized at test runtime outside the repo, so it does not
+            // participate in central package management; the playground's `VersionOverride`
+            // values become explicit `Version` values here. Update both files together.
             File.WriteAllText(Path.Combine(hostedAgentDir, "DotNetHostedAgent.csproj"), """
-                <Project Sdk="Microsoft.NET.Sdk">
+                <Project Sdk="Microsoft.NET.Sdk.Web">
                   <PropertyGroup>
-                    <OutputType>Exe</OutputType>
                     <TargetFramework>net10.0</TargetFramework>
                     <Nullable>enable</Nullable>
                     <ImplicitUsings>enable</ImplicitUsings>
-                    <EnablePreviewFeatures>true</EnablePreviewFeatures>
+                    <!-- Suppress experimental API warnings from Agent Framework Foundry packages -->
+                    <NoWarn>$(NoWarn);OPENAI001;MAIF001</NoWarn>
                   </PropertyGroup>
                   <ItemGroup>
-                    <PackageReference Include="Azure.AI.AgentServer.AgentFramework" Version="1.0.0-beta.11" />
-                    <PackageReference Include="Azure.AI.Projects" Version="1.2.0-beta.4" />
-                    <PackageReference Include="Azure.AI.OpenAI" Version="2.5.0-beta.1" />
-                    <PackageReference Include="Azure.Identity" Version="1.18.0" />
-                    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.1.0" />
-                    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.0" />
-                    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.0" />
+                    <PackageReference Include="Azure.AI.Projects" Version="2.1.0-beta.1" />
+                    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+                    <PackageReference Include="Microsoft.Agents.AI.Foundry.Hosting" Version="1.4.0-preview.260505.1" />
+                    <PackageReference Include="Microsoft.Extensions.AI" Version="10.5.0" />
+                    <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
                   </ItemGroup>
                 </Project>
                 """);
 
-            // Write minimal hosted agent Program.cs
-            // This follows the same pattern as the playground DotNetHostedAgent:
-            // reads ConnectionStrings__chat, creates an AI agent, and runs on DEFAULT_AD_PORT.
+            // Write minimal hosted agent Program.cs.
+            // Mirrors playground/FoundryAgents/DotNetHostedAgent/Program.cs: reads the
+            // Foundry project + chat connection strings, builds an AIProjectClient-backed
+            // AIAgent, and hosts it as a Foundry Responses endpoint on DEFAULT_AD_PORT.
             File.WriteAllText(Path.Combine(hostedAgentDir, "Program.cs"), """
                 using System.ComponentModel;
                 using System.Data.Common;
-                using Azure.AI.AgentServer.AgentFramework.Extensions;
-                using Azure.AI.OpenAI;
+                using Azure.AI.Projects;
                 using Azure.Identity;
                 using Microsoft.Agents.AI;
+                using Microsoft.Agents.AI.Foundry.Hosting;
                 using Microsoft.Extensions.AI;
+
+                string projectConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__projmyproject")
+                    ?? throw new InvalidOperationException("ConnectionStrings__projmyproject is not set.");
 
                 string chatConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__chat")
                     ?? throw new InvalidOperationException("ConnectionStrings__chat is not set.");
 
-                DbConnectionStringBuilder chatConnectionBuilder = new()
+                DbConnectionStringBuilder projectConnectionBuilder = new() { ConnectionString = projectConnectionString };
+                DbConnectionStringBuilder chatConnectionBuilder = new() { ConnectionString = chatConnectionString };
+
+                string projectEndpoint = GetRequiredConnectionValue(projectConnectionBuilder, "Endpoint");
+                string deploymentName = GetRequiredConnectionValue(chatConnectionBuilder, "Deployment");
+
+                if (!Uri.TryCreate(projectEndpoint, UriKind.Absolute, out Uri? projectUri) || projectUri is null)
                 {
-                    ConnectionString = chatConnectionString,
-                };
-
-                string endpoint = chatConnectionBuilder.TryGetValue("Endpoint", out object? epValue) ? epValue?.ToString()! : throw new InvalidOperationException("Missing Endpoint.");
-                string deploymentName = chatConnectionBuilder.TryGetValue("Deployment", out object? dnValue) ? dnValue?.ToString()! : throw new InvalidOperationException("Missing Deployment.");
-
-                Uri openAiEndpoint = new(endpoint);
+                    throw new InvalidOperationException("ConnectionStrings__projmyproject contains an invalid Endpoint value.");
+                }
 
                 [Description("Get a weather forecast")]
                 string GetWeatherForecast() => "Sunny, 25°C";
 
                 DefaultAzureCredential credential = new();
 
-                IChatClient chatClient = new AzureOpenAIClient(openAiEndpoint, credential)
-                    .GetChatClient(deploymentName)
-                    .AsIChatClient();
+                AIAgent agent = new AIProjectClient(projectUri, credential)
+                    .AsAIAgent(
+                        model: deploymentName,
+                        name: "WeatherAgent",
+                        instructions: "You are the Weather Intelligence Agent.",
+                        tools: [AIFunctionFactory.Create(GetWeatherForecast)]);
 
-                AIAgent agent = chatClient.AsAIAgent(
-                    name: "WeatherAgent",
-                    instructions: "You are the Weather Intelligence Agent.",
-                    tools: [AIFunctionFactory.Create(GetWeatherForecast)]);
+                // Bind to the port allocated by Aspire via the DEFAULT_AD_PORT environment variable.
+                string port = Environment.GetEnvironmentVariable("DEFAULT_AD_PORT") ?? "8088";
 
-                await agent.RunAIAgentAsync(telemetrySourceName: "Agents");
+                var builder = WebApplication.CreateBuilder(args);
+                builder.WebHost.UseUrls($"http://+:{port}");
+                builder.Services.AddFoundryResponses(agent);
+
+                var app = builder.Build();
+
+                app.MapFoundryResponses();
+                app.MapGet("/liveness", () => Results.Ok("Healthy"));
+                app.MapGet("/readiness", () => Results.Ok("Ready"));
+
+                app.Run();
+
+                static string GetRequiredConnectionValue(DbConnectionStringBuilder connectionBuilder, string key)
+                {
+                    if (!connectionBuilder.TryGetValue(key, out object? rawValue) || rawValue is null)
+                    {
+                        throw new InvalidOperationException($"Connection string is missing '{key}'.");
+                    }
+
+                    string? value = rawValue.ToString();
+
+                    if (string.IsNullOrWhiteSpace(value))
+                    {
+                        throw new InvalidOperationException($"Connection string has an empty '{key}' value.");
+                    }
+
+                    return value;
+                }
                 """);
 
             // Write Dockerfile for the hosted agent
@@ -210,7 +244,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
 
                 builder.AddProject<Projects.DotNetHostedAgent>("dotnet-hosted-agent")
                     .WithReference(chat).WaitFor(chat)
-                    .PublishAsHostedAgent(foundryProject);
+                    .AsHostedAgent(foundryProject);
 
                 builder.Build().Run();
                 """);

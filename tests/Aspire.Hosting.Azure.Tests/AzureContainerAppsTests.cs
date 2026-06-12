@@ -10,6 +10,7 @@
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
+using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
@@ -18,6 +19,7 @@ using Azure.Provisioning.KeyVault;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -117,6 +119,59 @@ public class AzureContainerAppsTests
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var acaEnv = builder.AddAzureContainerAppEnvironment("env");
+
+        var project = builder.AddFoundry("foundry")
+            .AddProject("project");
+
+        // The agent app is deployed to the Foundry project compute environment via AsHostedAgent.
+        var agent = builder.AddProject<Project>("agent", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+        agent.AsHostedAgent(project);
+
+        // The web app is deployed to Azure Container Apps and references the Foundry hosted agent.
+        // The ACA publisher must delegate endpoint resolution to the Foundry compute environment
+        // rather than looking the agent up in its own endpoint map. See issue #17749.
+        // WithReference(agent) exercises the bare EndpointReference branch; the explicit
+        // Property(Url) environment variable exercises the EndpointReferenceExpression branch.
+        var web = builder.AddProject<Project>("web", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(acaEnv)
+            .WithReference(agent)
+            .WithEnvironment("AGENT_URL", agent.GetEndpoint("http").Property(EndpointProperty.Url));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        SetFoundryProjectOutputs(project.Resource);
+
+        var target = web.Resource.GetDeploymentTargetAnnotation();
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
+    {
+        project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
+        project.ProvisioningTaskCompletionSource?.TrySetResult();
     }
 
     [Fact]
@@ -2645,5 +2700,45 @@ public class AzureContainerAppsTests
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WithDashboardControlsDashboardUrlPrintStep(bool enableDashboard)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .WithDashboard(enableDashboard);
+
+        using var app = builder.Build();
+
+        var steps = await CreateStepsAsync(app, env.Resource);
+        var hasPrintDashboardUrlStep = steps.Any(s => s.Name == "print-dashboard-url-env");
+
+        Assert.Equal(enableDashboard, hasPrintDashboardUrlStep);
+    }
+
+    private static async Task<List<PipelineStep>> CreateStepsAsync(DistributedApplication app, AzureContainerAppEnvironmentResource resource)
+    {
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        var results = new List<PipelineStep>();
+        foreach (var annotation in resource.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            results.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = resource
+            }));
+        }
+
+        return results;
     }
 }

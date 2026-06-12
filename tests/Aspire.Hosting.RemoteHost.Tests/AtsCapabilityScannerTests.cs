@@ -165,6 +165,21 @@ public class AtsCapabilityScannerTests
         Assert.Equal(AtsTypeCategory.Array, enumerableReturnCapability.ReturnType.Category);
     }
 
+    [Fact]
+    public void ScanAssembly_UnionCapability_CollectsEnumTypesFromUnionMembers()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/testUnionEnumParameter", StringComparison.Ordinal));
+        var parameter = Assert.Single(capability.Parameters);
+
+        Assert.Equal(AtsTypeCategory.Union, parameter.Type?.Category);
+        Assert.Contains(parameter.Type!.UnionTypes!, type => type.ClrType == typeof(TestUnionEnum));
+        Assert.Contains(parameter.Type.UnionTypes!, type => type.TypeId == AtsConstants.String);
+        Assert.Contains(result.EnumTypes, type => type.ClrType == typeof(TestUnionEnum));
+    }
+
     #endregion
 
     #region DeriveMethodName Tests
@@ -259,6 +274,8 @@ public class AtsCapabilityScannerTests
             "Aspire.Hosting/getLoggerFactory",
             "Aspire.Hosting/createLogger",
             "Aspire.Hosting/getResourceLoggerService",
+            "Aspire.Hosting/getResourceCommandService",
+            "Aspire.Hosting/executeResourceCommand",
             "Aspire.Hosting/getResourceNotificationService",
             "Aspire.Hosting/getDistributedApplicationModel",
             "Aspire.Hosting/getResources",
@@ -275,6 +292,31 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_HostingAssembly_ExportsResourceCommandWithResourceUnionAndArguments()
+    {
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/executeResourceCommand");
+
+        Assert.Equal("executeCommandAsync", capability.MethodName);
+        Assert.Equal("resourceCommandService", capability.TargetParameterName);
+        Assert.Equal(4, capability.Parameters.Count);
+
+        var resourceParameter = capability.Parameters[0];
+        Assert.Equal("resource", resourceParameter.Name);
+        Assert.Equal(AtsTypeCategory.Union, resourceParameter.Type?.Category);
+        Assert.Contains(resourceParameter.Type!.UnionTypes!, type => type.TypeId == "string");
+        Assert.Contains(resourceParameter.Type.UnionTypes!, type => type.TypeId == "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource");
+
+        var argumentsParameter = capability.Parameters.Single(parameter => parameter.Name == "arguments");
+        Assert.True(argumentsParameter.IsOptional);
+        Assert.Equal(AtsTypeCategory.Dict, argumentsParameter.Type?.Category);
+        Assert.True(argumentsParameter.Type?.IsReadOnly);
+    }
+
+    [Fact]
     public void ScanAssembly_HostingAssembly_ExportsExpectedHandleTypesAndInstanceMembers()
     {
         var hostingAssembly = typeof(DistributedApplication).Assembly;
@@ -285,6 +327,7 @@ public class AtsCapabilityScannerTests
             "IConfigurationSection",
             "ILogger",
             "ILoggerFactory",
+            "ResourceCommandService",
             "DistributedApplicationModel",
             "IDistributedApplicationEventing",
             "BeforeStartEvent",
@@ -336,16 +379,37 @@ public class AtsCapabilityScannerTests
 
         var dto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(HttpCommandExportOptions)));
         Assert.Equal(nameof(HttpCommandExportOptions), dto.Name);
+        var commandOptionsProperty = Assert.Single(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandOptions));
+        Assert.True(commandOptionsProperty.IsOptional);
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.EndpointName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.MethodName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.ResultMode));
+        var prepareRequestProperty = Assert.Single(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.PrepareRequest));
+        Assert.True(prepareRequestProperty.IsCallback);
+        Assert.True(prepareRequestProperty.IsOptional);
+
+        var callbackParameter = Assert.Single(prepareRequestProperty.CallbackParameters!);
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(HttpCommandPrepareRequestContext)), callbackParameter.Type.TypeId);
+        Assert.Equal(AtsTypeCategory.Handle, callbackParameter.Type.Category);
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(HttpCommandRequestExportData)), prepareRequestProperty.CallbackReturnType?.TypeId);
+        Assert.Equal(AtsTypeCategory.Dto, prepareRequestProperty.CallbackReturnType?.Category);
+
         Assert.DoesNotContain(dto.Properties, p => p.Name == "Parameter");
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.HttpClientName));
-        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.PrepareRequest));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.Method));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.EndpointSelector));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.GetCommandResult));
+
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting/withHttpCommandPrepareRequest");
+
+        var requestDataDto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(HttpCommandRequestExportData)));
+        Assert.Equal(nameof(HttpCommandRequestExportData), requestDataDto.Name);
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.MethodName));
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.Headers));
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.Content));
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.ContentType));
     }
 
     [Fact]
@@ -365,6 +429,33 @@ public class AtsCapabilityScannerTests
         Assert.DoesNotContain(result.Diagnostics,
             d => d.Message.Contains(nameof(DerivedExportedProperties), StringComparison.Ordinal)
                 && d.Message.Contains("has collisions", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ScanAssembly_ExposeProperties_DoesNotGenerateSettersForInitOnlyProperties()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+        var capabilityPrefix = "Aspire.Hosting.RemoteHost.Tests/InitOnlyExportedProperties.";
+
+        var nameGetter = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "name");
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, nameGetter.CapabilityKind);
+        Assert.Equal(AtsConstants.String, nameGetter.ReturnType.TypeId);
+
+        var descriptionGetter = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "description");
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, descriptionGetter.CapabilityKind);
+        Assert.Equal(AtsConstants.String, descriptionGetter.ReturnType.TypeId);
+        Assert.True(descriptionGetter.ReturnType.IsNullable);
+
+        var mutableSetter = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "setMutableLabel");
+        Assert.Equal(AtsCapabilityKind.PropertySetter, mutableSetter.CapabilityKind);
+
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "setName");
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "setDescription");
     }
 
     [Fact]
@@ -528,6 +619,34 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_GetOnlyMutableCollectionDtoProperties_EmitWarnings()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("Add an init accessor", StringComparison.Ordinal)
+            && diagnostic.Location == $"{typeof(GetOnlyCollectionDto).FullName}.{nameof(GetOnlyCollectionDto.Items)}");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("Add an init accessor", StringComparison.Ordinal)
+            && diagnostic.Location == $"{typeof(GetOnlyCollectionDto).FullName}.{nameof(GetOnlyCollectionDto.Metadata)}");
+    }
+
+    [Fact]
+    public void ScanAssembly_InitDtoProperties_AreOptionalUnlessRequired()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+        var dto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(InitPropertiesDto)));
+
+        Assert.True(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.DisplayName)).IsOptional);
+        Assert.True(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.Items)).IsOptional);
+        Assert.True(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.Metadata)).IsOptional);
+        Assert.False(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.RequiredDisplayName)).IsOptional);
+        Assert.False(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.RequiredItems)).IsOptional);
+    }
+
+    [Fact]
     public void ScanAssembly_ExportedDtoValueWithIgnoredMutableProperty_IsIncluded()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
@@ -591,6 +710,19 @@ public class AtsCapabilityScannerTests
             && diagnostic.Location == "ConflictingValues.PrefixConflictingExportedValues.Node.Child");
     }
 
+    [Fact]
+    public void ScanAssembly_DescriptionFallback_PopulatesDocumentationSummaryWhenXmlDocsArePartial()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/descriptionFallback", StringComparison.Ordinal));
+
+        Assert.Equal("Uses the description as fallback documentation.", capability.Description);
+        Assert.Equal("Uses the description as fallback documentation.", capability.Documentation?.Summary);
+        Assert.Equal("The fallback value.", Assert.Single(capability.Parameters).Documentation?.Summary);
+    }
+
     #endregion
 
     #region Test Types
@@ -605,6 +737,12 @@ public class AtsCapabilityScannerTests
     private sealed class ShadowedEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
 
     private sealed class OtherEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
+
+    private enum TestUnionEnum
+    {
+        First,
+        Second
+    }
 
     [AspireDto]
     private sealed class NullableScalarDto
@@ -628,6 +766,16 @@ public class AtsCapabilityScannerTests
     private sealed class DerivedExportedProperties : BaseExportedProperties
     {
         public string Framework { get; } = "";
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    private sealed class InitOnlyExportedProperties
+    {
+        public required string Name { get; init; }
+
+        public string? Description { get; init; }
+
+        public string MutableLabel { get; set; } = "";
     }
 
     public sealed class AssemblyLevelExportedTestType
@@ -657,6 +805,21 @@ public class AtsCapabilityScannerTests
         {
             _ = callback;
             return builder;
+        }
+
+        [AspireExport]
+        public static void TestUnionEnumParameter(IDistributedApplicationBuilder builder, [AspireUnion(typeof(TestUnionEnum), typeof(string))] object value)
+        {
+            _ = builder;
+            _ = value;
+        }
+
+        /// <param name="value">The fallback value.</param>
+        [AspireExport("descriptionFallback", Description = "Uses the description as fallback documentation.")]
+        public static void DescriptionFallback(IDistributedApplicationBuilder builder, string value)
+        {
+            _ = builder;
+            _ = value;
         }
 
         [AspireExport("shadowedExporter")]
@@ -692,6 +855,28 @@ public class AtsCapabilityScannerTests
     private sealed class InvalidExportedDto
     {
         public List<string> Items { get; set; } = [];
+    }
+
+    [AspireDto]
+    private sealed class GetOnlyCollectionDto
+    {
+        public List<string> Items { get; } = [];
+
+        public Dictionary<string, string> Metadata { get; } = [];
+    }
+
+    [AspireDto]
+    private sealed class InitPropertiesDto
+    {
+        public string DisplayName { get; init; } = "";
+
+        public List<string> Items { get; init; } = [];
+
+        public Dictionary<string, string> Metadata { get; init; } = [];
+
+        public required string RequiredDisplayName { get; init; }
+
+        public required List<string> RequiredItems { get; init; }
     }
 
     private static class IgnoredPropertyExportedValues

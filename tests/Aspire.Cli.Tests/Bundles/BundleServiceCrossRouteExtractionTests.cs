@@ -2,20 +2,23 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Bundles;
 
 /// <summary>
-/// Verifies <see cref="BundleService.ComputeDefaultExtractDir(string, Microsoft.Extensions.Logging.ILogger?)"/> against
+/// Verifies <see cref="BundleService.ComputeDefaultExtractDir(string)"/> against
 /// every (source × prefix shape) combination the supported install routes produce.
 /// The matrix locks in the contract: the reader walks the sidecar's
 /// <c>source</c> field — and nothing else — to decide between
 /// <c>binaryDir</c> (winget / brew / dotnet-tool) and the parent of
-/// <c>binaryDir</c> (script / pr). Missing, invalid, or unknown sidecars fall
-/// through to the parent-of-binary heuristic.
+/// <c>binaryDir</c> (script / pr / localhive). Missing, invalid, or unknown sidecars fall
+/// through to the default Aspire home.
 /// </summary>
 public class BundleServiceCrossRouteExtractionTests
 {
+    private const string DefaultAspireHome = "<default-aspire-home>";
+
     // The inline-data paths use forward slashes for source-readability; the test
     // method converts them to platform-native separators before constructing
     // absolute paths under the temp root.
@@ -35,24 +38,26 @@ public class BundleServiceCrossRouteExtractionTests
     [InlineData("script", ".aspire/bin/aspire", ".aspire")]
     // 5) PR-script canonical: per-PR dogfood prefix.
     [InlineData("pr", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817")]
-    // 6) Cross-route smuggle case: a brew-source sidecar dropped into a
+    // 6) localhive canonical: local dev hive with the same bin layout as script.
+    [InlineData("localhive", ".aspire/local/bin/aspire", ".aspire/local")]
+    // 7) Cross-route smuggle case: a brew-source sidecar dropped into a
     //    script-layout prefix MUST resolve to binaryDir per the switch — the
     //    reader is honest about whatever the producer put on disk. When the
     //    producer side correctly suppresses the smuggled sidecar, this row's
     //    input condition never arises in practice; the test verifies the
     //    reader's behavior is well-defined and consistent for all inputs.
     [InlineData("brew", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817/bin")]
-    // 7) script source dropped at a flat-cellar layout (misuse, but defined):
+    // 8) script source dropped at a flat-cellar layout (misuse, but defined):
     //    script maps to parent-of-binary, so the result is one level above the
     //    cask version dir. Not a real install pattern; locks in determinism.
     [InlineData("script", "Caskroom/aspire/13.2.0/aspire", "Caskroom/aspire")]
-    // 8) No sidecar at all: fallback heuristic = parent of binaryDir.
-    [InlineData(null, ".aspire/bin/aspire", ".aspire")]
-    // 9) Sidecar with invalid JSON: parser throws, treated as no sidecar.
-    [InlineData("__invalid__", ".aspire/bin/aspire", ".aspire")]
-    // 10) Sidecar with an unknown source value: switch default arm, same as
-    //     missing sidecar — parent-of-binary.
-    [InlineData("github-actions", ".aspire/bin/aspire", ".aspire")]
+    // 9) No sidecar at all: fallback to default Aspire home.
+    [InlineData(null, ".aspire/bin/aspire", DefaultAspireHome)]
+    // 10) Sidecar with invalid JSON: parser throws, treated as no sidecar.
+    [InlineData("__invalid__", ".aspire/bin/aspire", DefaultAspireHome)]
+    // 11) Sidecar with an unknown source value: switch default arm, same as
+    //     missing sidecar — default Aspire home.
+    [InlineData("github-actions", ".aspire/bin/aspire", DefaultAspireHome)]
     public void ComputeDefaultExtractDir_RouteAndPrefixCombinations_ProduceExpectedExtractDir(
         string? sourceField,
         string relativeProcessPath,
@@ -77,7 +82,9 @@ public class BundleServiceCrossRouteExtractionTests
                 File.WriteAllText(sidecarPath, content);
             }
 
-            var expected = Path.Combine(root, ToNativePath(relativeExpectedExtractDir));
+            var expected = relativeExpectedExtractDir == DefaultAspireHome
+                ? CliPathHelper.GetDefaultAspireHomeDirectory()
+                : Path.Combine(root, ToNativePath(relativeExpectedExtractDir));
 
             var actual = BundleService.ComputeDefaultExtractDir(processPath);
 

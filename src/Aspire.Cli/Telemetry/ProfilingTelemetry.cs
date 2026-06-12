@@ -47,6 +47,14 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     {
         public const string Command = "aspire/cli/command";
         public const string Process = "aspire/cli/process";
+        public const string AddCommand = "aspire/cli/add";
+        public const string AddFindAppHost = "aspire/cli/add.find_apphost";
+        public const string AddGetConfiguredChannel = "aspire/cli/add.get_configured_channel";
+        public const string AddSearchPackages = "aspire/cli/add.search_packages";
+        public const string AddSelectPackage = "aspire/cli/add.select_package";
+        public const string AddSelectPackagePrompt = "aspire/cli/add.select_package.prompt";
+        public const string AddStopExistingInstance = "aspire/cli/add.stop_existing_instance";
+        public const string AddPackage = "aspire/cli/add.package";
         public const string RunCommand = "aspire/cli/run";
         public const string LsCommand = "aspire/cli/ls";
         public const string LsFindAppHosts = "aspire/cli/ls.find_apphosts";
@@ -162,6 +170,17 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string LsOutputFormat = "aspire.cli.ls.output_format";
         public const string ProcessCommandArgs = "process.command_args";
         public const string ProcessCommandArgsCount = "process.command_args.count";
+        public const string AddIntegrationName = "aspire.cli.add.integration.name";
+        public const string AddVersionSpecified = "aspire.cli.add.version_specified";
+        public const string AddSourceSpecified = "aspire.cli.add.source_specified";
+        public const string AddConfiguredChannel = "aspire.cli.add.configured_channel";
+        public const string AddPackageSearchResultCount = "aspire.cli.add.package.search_result_count";
+        public const string AddPackageMatchCount = "aspire.cli.add.package.match_count";
+        public const string AddPackageMatchKind = "aspire.cli.add.package.match_kind";
+        public const string AddPackageId = "aspire.cli.add.package.id";
+        public const string AddPackageVersion = "aspire.cli.add.package.version";
+        public const string AddPackageChannel = "aspire.cli.add.package.channel";
+        public const string AddPackageSuccess = "aspire.cli.add.package.success";
     }
 
     /// <summary>
@@ -223,6 +242,9 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string GuestCommandPhaseExecute = "execute";
         public const string GuestCommandPhaseWatchExecute = "watch_execute";
         public const string GuestCommandPhasePublishExecute = "publish_execute";
+        public const string AddPackageMatchKindExact = "exact";
+        public const string AddPackageMatchKindFuzzy = "fuzzy";
+        public const string AddPackageMatchKindNone = "none";
     }
 
     public bool IsEnabled => IsProfilingEnabled(configuration);
@@ -452,6 +474,57 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     {
         var activity = StartActivity(Activities.RunAppHostFindAppHost);
         activity.SetAppHostProjectFileSpecified(passedAppHostProjectFile is not null);
+        return activity;
+    }
+
+    internal ActivityScope StartAddCommand(string? integrationName, string? version, string? source, FileInfo? passedAppHostProjectFile)
+    {
+        var activity = StartActivity(Activities.AddCommand, startWithRemoteParent: true);
+        activity.SetAddInvocation(integrationName, version, source, passedAppHostProjectFile);
+        return activity;
+    }
+
+    internal ActivityScope StartAddFindAppHost(FileInfo? passedAppHostProjectFile)
+    {
+        var activity = StartActivity(Activities.AddFindAppHost);
+        activity.SetAppHostProjectFileSpecified(passedAppHostProjectFile is not null);
+        return activity;
+    }
+
+    internal ActivityScope StartAddGetConfiguredChannel()
+    {
+        return StartActivity(Activities.AddGetConfiguredChannel);
+    }
+
+    internal ActivityScope StartAddSearchPackages(string? configuredChannel)
+    {
+        var activity = StartActivity(Activities.AddSearchPackages);
+        activity.SetAddConfiguredChannel(configuredChannel);
+        return activity;
+    }
+
+    internal ActivityScope StartAddSelectPackage(string? integrationName, string? version)
+    {
+        var activity = StartActivity(Activities.AddSelectPackage);
+        activity.SetAddPackageSelectionRequest(integrationName, version);
+        return activity;
+    }
+
+    internal ActivityScope StartAddSelectPackagePrompt()
+    {
+        return StartActivity(Activities.AddSelectPackagePrompt);
+    }
+
+    internal ActivityScope StartAddStopExistingInstance()
+    {
+        return StartActivity(Activities.AddStopExistingInstance);
+    }
+
+    internal ActivityScope StartAddPackage(string packageId, string packageVersion, string? source)
+    {
+        var activity = StartActivity(Activities.AddPackage);
+        activity.SetAddPackage(packageId, packageVersion);
+        activity.SetAddSourceSpecified(!string.IsNullOrEmpty(source));
         return activity;
     }
 
@@ -823,6 +896,46 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public void SetAppHostBackchannelConnected(bool connected) => SetTag(Tags.AppHostBackchannelConnected, connected);
 
         public void SetAppHostBuildSuccess(bool buildSuccess) => SetTag(Tags.AppHostBuildSuccess, buildSuccess);
+
+        public void SetAddConfiguredChannel(string? configuredChannel) => SetTag(Tags.AddConfiguredChannel, configuredChannel);
+
+        public void SetAddInvocation(string? integrationName, string? version, string? source, FileInfo? passedAppHostProjectFile)
+        {
+            SetTag(Tags.AddIntegrationName, integrationName);
+            SetTag(Tags.AddVersionSpecified, !string.IsNullOrEmpty(version));
+            SetTag(Tags.AddSourceSpecified, !string.IsNullOrEmpty(source));
+            SetAppHostProjectFileSpecified(passedAppHostProjectFile is not null);
+        }
+
+        public void SetAddPackage(string packageId, string packageVersion)
+        {
+            SetTag(Tags.AddPackageId, packageId);
+            SetTag(Tags.AddPackageVersion, packageVersion);
+        }
+
+        public void SetAddPackageSelectionRequest(string? integrationName, string? version)
+        {
+            SetTag(Tags.AddIntegrationName, integrationName);
+            SetTag(Tags.AddVersionSpecified, !string.IsNullOrEmpty(version));
+        }
+
+        public void SetAddPackageMatch(int count, string matchKind)
+        {
+            SetTag(Tags.AddPackageMatchCount, count);
+            SetTag(Tags.AddPackageMatchKind, matchKind);
+        }
+
+        public void SetAddPackageSearchResultCount(int count) => SetTag(Tags.AddPackageSearchResultCount, count);
+
+        public void SetAddPackageSuccess(bool success) => SetTag(Tags.AddPackageSuccess, success);
+
+        public void SetAddSourceSpecified(bool sourceSpecified) => SetTag(Tags.AddSourceSpecified, sourceSpecified);
+
+        public void SetAddSelectedPackage(string packageId, string packageVersion, string channelName)
+        {
+            SetAddPackage(packageId, packageVersion);
+            SetTag(Tags.AddPackageChannel, channelName);
+        }
 
         public void SetAppHostBuildExitCode(int exitCode)
         {

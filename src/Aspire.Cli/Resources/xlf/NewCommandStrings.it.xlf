@@ -12,6 +12,16 @@
         <target state="translated">Canale da usare per i modelli (stabile, temporaneo, giornaliero)</target>
         <note />
       </trans-unit>
+      <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
+        <source>Directly in the selected folder</source>
+        <target state="new">Directly in the selected folder</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CreateProjectNameSubdirectoryChoice">
+        <source>In a subdirectory named '{0}' in the selected folder</source>
+        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
         <target state="needs-review-translation">Creare un nuovo progetto Aspire.</target>
@@ -90,6 +100,11 @@
       <trans-unit id="SelectATemplateVersion">
         <source>Select a template version:</source>
         <target state="translated">Selezionare una versione di modello:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectProjectCreationLocation">
+        <source>Where do you want the project to be created?</source>
+        <target state="new">Where do you want the project to be created?</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">

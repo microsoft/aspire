@@ -79,8 +79,7 @@ public sealed class ResourceMenuBuilder
         Func<ResourceViewModel, CommandViewModel, bool> isCommandExecuting,
         bool showViewDetails,
         bool showConsoleLogsItem,
-        bool showUrls,
-        bool showStartCommand = true)
+        bool showUrls)
     {
         if (showViewDetails)
         {
@@ -166,7 +165,7 @@ public sealed class ResourceMenuBuilder
 
         AddTelemetryMenuItems(menuItems, resource, resourceByName);
 
-        AddCommandMenuItems(menuItems, resource, commandSelected, isCommandExecuting, showStartCommand);
+        AddCommandMenuItems(menuItems, resource, commandSelected, isCommandExecuting);
 
         if (showUrls)
         {
@@ -283,10 +282,9 @@ public sealed class ResourceMenuBuilder
         }
     }
 
-    private void AddCommandMenuItems(List<MenuButtonItem> menuItems, ResourceViewModel resource, EventCallback<CommandViewModel> commandSelected, Func<ResourceViewModel, CommandViewModel, bool> isCommandExecuting, bool showStartCommand)
+    private void AddCommandMenuItems(List<MenuButtonItem> menuItems, ResourceViewModel resource, EventCallback<CommandViewModel> commandSelected, Func<ResourceViewModel, CommandViewModel, bool> isCommandExecuting)
     {
         var menuCommands = resource.Commands
-                    .Where(c => showStartCommand || !c.Name.Equals(CommandViewModel.StartCommand, StringComparisons.CommandName))
                     .Where(c => c.State != CommandViewModelState.Hidden)
                     .ToList();
 

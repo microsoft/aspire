@@ -15,8 +15,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Backchannel;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe command argument metadata in tests.
-
 [Trait("Partition", "4")]
 public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 {
@@ -225,7 +223,13 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                                 new("mode", "Secondary")
                             ],
                             Disabled = true,
-                            MaxLength = 128
+                            MaxLength = 128,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                AlwaysLoadOnStart = true,
+                                DependsOnInputs = ["browser"],
+                                LoadCallback = _ => Task.CompletedTask
+                            }
                         }
                     ],
                     Visibility = ResourceCommandVisibility.Api
@@ -308,6 +312,9 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal("Secondary", argumentInput.Options!["mode"]);
         Assert.True(argumentInput.Disabled);
         Assert.Equal(128, argumentInput.MaxLength);
+        Assert.NotNull(argumentInput.DynamicLoading);
+        Assert.True(argumentInput.DynamicLoading.AlwaysLoadOnStart);
+        Assert.Equal("browser", Assert.Single(argumentInput.DynamicLoading.DependsOnInputs!));
         Assert.Equal(nameof(ResourceCommandVisibility.Api), startCommand.Visibility);
         Assert.Contains(snapshot.Commands, c => c.Name == "stop" && c.DisplayName == "Stop" && c.Description == "Stop the resource" && c.State == "Disabled");
         Assert.Contains(snapshot.Commands, c => c.Name == "restart" && c.DisplayName == "Restart" && c.Description == null && c.State == "Hidden");
@@ -320,6 +327,127 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Null(sensitiveValue);
 
         await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task WaitForResourceAsync_ReturnsFailureWhenResourceHasErrorStateStyle()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("storage"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Failed to Provision Roles", KnownResourceStateStyles.Error)
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.WaitForResourceAsync(new WaitForResourceRequest
+        {
+            ResourceName = custom.Resource.Name,
+            Status = "up",
+            TimeoutSeconds = 30
+        }).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(result.TimedOut);
+        Assert.Equal("Failed to Provision Roles", result.State);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_MapsNonStringPropertiesAsStringsForLegacyCallers()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            Properties =
+            [
+                new ResourcePropertySnapshot("number", 42),
+                new ResourcePropertySnapshot("flag", true),
+                new ResourcePropertySnapshot("list", new[] { "one", "two" }),
+                new ResourcePropertySnapshot("ConnectionString", "secret-value") { IsSensitive = true }
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result);
+        Assert.Equal("42", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["number"]).GetValue<string>());
+        Assert.Equal(bool.TrueString, Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["flag"]).GetValue<string>());
+        Assert.Equal("one,two", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["list"]).GetValue<string>());
+        Assert.Null(snapshot.Properties["ConnectionString"]);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+    }
+
+    [Fact]
+    public async Task GetResourcesAsync_MapsNonStringPropertiesAsJsonForV3Callers()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            Properties =
+            [
+                new ResourcePropertySnapshot("number", 42),
+                new ResourcePropertySnapshot("flag", true),
+                new ResourcePropertySnapshot("list", new[] { "one", "two" }),
+                new ResourcePropertySnapshot("ConnectionString", "secret-value") { IsSensitive = true }
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.GetResourcesAsync(new GetResourcesRequest
+        {
+            ClientCapabilities = [AuxiliaryBackchannelCapabilities.V3]
+        }).DefaultTimeout();
+
+        var snapshot = Assert.Single(response.Resources);
+        Assert.Equal(42, Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["number"]).GetValue<int>());
+        Assert.True(Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["flag"]).GetValue<bool>());
+        var list = Assert.IsAssignableFrom<JsonArray>(snapshot.Properties["list"]);
+        Assert.Collection(
+            list,
+            value => Assert.Equal("one", value?.GetValue<string>()),
+            value => Assert.Equal("two", value?.GetValue<string>()));
+        Assert.Null(snapshot.Properties["ConnectionString"]);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]
@@ -1303,6 +1431,150 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExecuteResourceCommandAsync_ReturnsLoadedArgumentInputsWhenRequested()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "configure",
+            displayName: "Configure",
+            executeCommand: _ => Task.FromResult(CommandResults.Success()),
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "browser",
+                        InputType = InputType.Choice,
+                        Required = true,
+                        Options =
+                        [
+                            new("Chrome", "Chrome")
+                        ]
+                    },
+                    new InteractionInput
+                    {
+                        Name = "profile",
+                        InputType = InputType.Choice,
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            DependsOnInputs = ["browser"],
+                            LoadCallback = context =>
+                            {
+                                context.Input.Options =
+                                [
+                                    new($"{context.AllInputs.GetString("browser")}-Default", "Default profile")
+                                ];
+                                return Task.CompletedTask;
+                            }
+                        }
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "configure",
+            ValidateOnly = true,
+            ReturnArgumentInputs = true,
+            Arguments = JsonSerializer.SerializeToNode(new { browser = "Chrome" })
+        }).DefaultTimeout();
+
+        Assert.True(response.Success);
+        var profileInput = Assert.Single(response.ArgumentInputs!, input => input.Name == "profile");
+        Assert.Equal("Chrome-Default", Assert.Single(profileInput.Options!).Key);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_AllowsArgumentsEnabledByDynamicLoading()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "configure",
+            displayName: "Configure",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "category",
+                        InputType = InputType.Choice,
+                        Required = true,
+                        Options =
+                        [
+                            new("fruit", "Fruit")
+                        ]
+                    },
+                    new InteractionInput
+                    {
+                        Name = "item",
+                        InputType = InputType.Choice,
+                        Required = true,
+                        Disabled = true,
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            DependsOnInputs = ["category"],
+                            LoadCallback = context =>
+                            {
+                                context.Input.Disabled = context.AllInputs.GetString("category") is not "fruit";
+                                context.Input.Options =
+                                [
+                                    new("banana", "Banana")
+                                ];
+                                return Task.CompletedTask;
+                            }
+                        }
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "configure",
+            Arguments = JsonSerializer.SerializeToNode(new { category = "fruit", item = "banana" })
+        }).DefaultTimeout();
+
+        Assert.True(response.Success, response.Message);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("banana", capturedArguments.GetString("item"));
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task ExecuteResourceCommandAsync_TooManyJsonArrayArguments_ReturnsFailure()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
@@ -1464,6 +1736,30 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetDashboardUrlsAsync_ReturnsUnhealthy_WhenDashboardResourceIsAbsent()
+    {
+        // When the dashboard is disabled, there is no dashboard resource in the app model.
+        // The method must return promptly rather than waiting forever for a resource event
+        // that will never arrive.
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = true,
+            outputHelper);
+
+        using var app = builder.Build();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetDashboardUrlsAsync().DefaultTimeout();
+
+        Assert.False(result.DashboardHealthy);
+        Assert.Null(result.BaseUrlWithLoginToken);
+    }
+
+    [Fact]
     public async Task WaitForResourceAsync_ReturnsNotFound_WhenResourceDoesNotExist()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
@@ -1594,4 +1890,3 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001

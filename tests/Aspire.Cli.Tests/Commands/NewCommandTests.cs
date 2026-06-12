@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Xml.Linq;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
@@ -318,8 +319,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
                     
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache);
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
                     
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
                 };
@@ -396,7 +397,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
                     };
                     
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache);
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
                 };
                 
@@ -473,7 +474,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
                     };
 
-                    var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache);
+                    var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([prChannel]);
                 };
 
@@ -718,9 +719,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Contains(packageSources.Elements("clear"), _ => true);
         Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == PackageSourceOverrideMappings.NuGetOrgSource);
+        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == PackageSources.NuGetOrg);
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
-        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, PackageSourceOverrideMappings.NuGetOrgSource));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, PackageSources.NuGetOrg));
     }
 
     private static string[] GetPackagePatternsForSource(XDocument doc, string source)
@@ -910,7 +911,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             ScaffoldAsyncCallback = (context, cancellationToken) =>
             {
                 scaffoldedLanguageId = context.Language.LanguageId.Value;
-                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.mts"), "// test apphost");
                 return Task.FromResult(true);
             }
         });
@@ -927,7 +928,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain((KnownTemplateId.TypeScriptEmptyAppHost, "Empty (TypeScript AppHost)"), promptedTemplates);
         Assert.DoesNotContain((KnownTemplateId.JavaEmptyAppHost, "Empty (Java AppHost)"), promptedTemplates);
         Assert.Contains((KnownTemplateId.TypeScriptStarter, "Starter App (Express/React, TypeScript AppHost)"), promptedTemplates);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.ts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.mts")));
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "aspire.config.json")));
     }
 
@@ -1167,7 +1168,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             ScaffoldAsyncCallback = (context, cancellationToken) =>
             {
                 scaffoldedLanguageId = context.Language.LanguageId.Value;
-                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.mts"), "// test apphost");
                 return Task.FromResult(true);
             }
         });
@@ -1179,11 +1180,11 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(KnownLanguageId.TypeScript, scaffoldedLanguageId);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.ts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.mts")));
     }
 
     [Theory]
-    [InlineData("typescript", null, "apphost.ts")]
+    [InlineData("typescript", null, "apphost.mts")]
     [InlineData("java", "experimentalPolyglot:java", "AppHost.java")]
     [InlineData("python", "experimentalPolyglot:python", "apphost.py")]
     [InlineData("go", "experimentalPolyglot:go", "apphost.go")]
@@ -1303,7 +1304,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             ScaffoldAsyncCallback = (context, _) =>
             {
-                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.mts"), "// test apphost");
                 return Task.FromResult(true);
             }
         });
@@ -1410,7 +1411,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandWithCSharpEmptyTemplateAndPlainLocalhostEmitsAppHostRunJsonMatchingAspireConfigJson()
+    public async Task NewCommandWithCSharpEmptyTemplateEmitsAppHostRunJsonAndAspireConfigJsonWithoutDuplicateProfiles()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -1433,10 +1434,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var aspireConfig = await File.ReadAllTextAsync(aspireConfigPath);
         var appHostRunJson = await File.ReadAllTextAsync(appHostRunJsonPath);
 
+        // Launch profile shape (applicationUrl / commandName / environmentVariables) must live in
+        // apphost.run.json so that `dotnet run apphost.cs` and the C# Dev Kit can pick it up.
         Assert.Contains("://localhost:", appHostRunJson);
         Assert.Contains("\"commandName\": \"Project\"", appHostRunJson);
 
-        AssertHttpsApplicationUrlMatches(aspireConfig, appHostRunJson);
+        // aspire.config.json must NOT carry a duplicated `profiles` block — that content belongs to
+        // apphost.run.json only. See https://github.com/microsoft/aspire/issues/17660.
+        AssertAspireConfigHasNoProfiles(aspireConfig);
     }
 
     [Fact]
@@ -1466,26 +1471,23 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("testapp.dev.localhost", appHostRunJson);
         Assert.DoesNotContain("://localhost", appHostRunJson);
 
-        AssertHttpsApplicationUrlMatches(aspireConfig, appHostRunJson);
+        // aspire.config.json must NOT carry a duplicated `profiles` block — that content belongs to
+        // apphost.run.json only. See https://github.com/microsoft/aspire/issues/17660.
+        AssertAspireConfigHasNoProfiles(aspireConfig);
     }
 
-    private static void AssertHttpsApplicationUrlMatches(string aspireConfigJson, string appHostRunJson)
+    private static void AssertAspireConfigHasNoProfiles(string aspireConfigJson)
     {
         using var aspireDoc = System.Text.Json.JsonDocument.Parse(aspireConfigJson);
-        using var runDoc = System.Text.Json.JsonDocument.Parse(appHostRunJson);
+        Assert.False(
+            aspireDoc.RootElement.TryGetProperty("profiles", out _),
+            "aspire.config.json must not contain a 'profiles' block for the empty C# template; profiles live in apphost.run.json.");
 
-        var aspireHttpsUrl = aspireDoc.RootElement
-            .GetProperty("profiles")
-            .GetProperty("https")
-            .GetProperty("applicationUrl")
-            .GetString();
-        var runHttpsUrl = runDoc.RootElement
-            .GetProperty("profiles")
-            .GetProperty("https")
-            .GetProperty("applicationUrl")
-            .GetString();
-
-        Assert.Equal(aspireHttpsUrl, runHttpsUrl);
+        // Pin the expected minimal shape: aspire.config.json for the C# Empty template should only
+        // identify the AppHost file. See https://github.com/microsoft/aspire/issues/17660.
+        Assert.True(aspireDoc.RootElement.TryGetProperty("appHost", out var appHost), "aspire.config.json is missing the required 'appHost' object.");
+        Assert.True(appHost.TryGetProperty("path", out var path), "aspire.config.json#appHost is missing the 'path' property.");
+        Assert.Equal("apphost.cs", path.GetString());
     }
 
     [Fact]
@@ -1531,11 +1533,20 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(localhostPrompted);
 
-        var runProfilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", "aspire.config.json");
-        Assert.True(File.Exists(runProfilePath));
-        var runProfile = await File.ReadAllTextAsync(runProfilePath);
-        Assert.Contains("testapp.dev.localhost", runProfile);
-        Assert.DoesNotContain("://localhost", runProfile);
+        var outputRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+
+        var aspireConfigPath = Path.Combine(outputRoot, "aspire.config.json");
+        Assert.True(File.Exists(aspireConfigPath));
+        var aspireConfig = await File.ReadAllTextAsync(aspireConfigPath);
+        // aspire.config.json must NOT contain the localhost-TLD URLs — those belong in
+        // apphost.run.json. See https://github.com/microsoft/aspire/issues/17660.
+        Assert.DoesNotContain("testapp.dev.localhost", aspireConfig);
+
+        var appHostRunJsonPath = Path.Combine(outputRoot, "apphost.run.json");
+        Assert.True(File.Exists(appHostRunJsonPath));
+        var appHostRunJson = await File.ReadAllTextAsync(appHostRunJsonPath);
+        Assert.Contains("testapp.dev.localhost", appHostRunJson);
+        Assert.DoesNotContain("://localhost", appHostRunJson);
     }
 
     [Fact]
@@ -1585,7 +1596,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
 
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache);
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
                 };
 
@@ -1704,7 +1715,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 await File.WriteAllTextAsync(Path.Combine(context.TargetDirectory.FullName, "aspire.config.json"), """
                     {
                       "appHost": {
-                        "path": "apphost.ts",
+                        "path": "apphost.mts",
                         "language": "typescript/nodejs"
                       },
                       "profiles": {
@@ -1782,7 +1793,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         }
                     };
 
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -1795,8 +1806,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             channelSeenByProject = config?.Channel;
             sdkVersionSeenByProject = config?.SdkVersion;
 
-            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, ".modules"));
-            File.WriteAllText(Path.Combine(modulesDir.FullName, "aspire.ts"), "// generated sdk");
+            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, LanguageInfo.GeneratedFolderName));
+            File.WriteAllText(Path.Combine(modulesDir.FullName, "aspire.mts"), "// generated sdk");
 
             return Task.FromResult(true);
         }));
@@ -1810,8 +1821,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(buildAndGenerateCalled);
         Assert.Equal("daily", channelSeenByProject);
-        Assert.Equal("9.2.0", sdkVersionSeenByProject);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".modules", "aspire.ts")));
+        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), sdkVersionSeenByProject);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", LanguageInfo.GeneratedFolderName, "aspire.mts")));
     }
 
     [Fact]
@@ -1857,7 +1868,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         }
                     };
 
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -1908,7 +1919,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                         }
                     };
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -1916,7 +1927,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var projectFactory = new TestTypeScriptStarterProjectFactory((directory, cancellationToken, _) =>
         {
-            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, ".modules"));
+            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, ".aspire", "modules"));
             File.WriteAllText(Path.Combine(modulesDir.FullName, "aspire.ts"), "// generated sdk");
             return Task.FromResult(true);
         });
@@ -2004,7 +2015,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                         }
                     };
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -2559,6 +2570,317 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandInExtensionModeAppendsProjectNameToCliTemplateOutputPath()
+    {
+        const string projectName = "MyFirstApp";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        DirectoryInfo? capturedTargetDirectory = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "baseline.v1"),
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathCallback = (_) =>
+                    Path.Combine(workspace.WorkspaceRoot.FullName, "source");
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                capturedTargetDirectory = context.TargetDirectory;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedTargetDirectory);
+        var expectedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "source", projectName);
+        Assert.Equal(expectedPath, capturedTargetDirectory.FullName);
+        Assert.True(File.Exists(Path.Combine(expectedPath, "apphost.ts")));
+    }
+
+    [Fact]
+    public async Task NewCommandInExtensionModeValidatesAdjustedCliTemplateOutputPath()
+    {
+        const string projectName = "MyFirstApp";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var selectedParent = workspace.CreateDirectory("source");
+        File.WriteAllText(Path.Combine(selectedParent.FullName, "existing.txt"), "existing content");
+
+        DirectoryInfo? capturedTargetDirectory = null;
+        var selectedParentWasValidated = false;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "baseline.v1"),
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathWithValidatorCallback = (_, validator) =>
+                {
+                    Assert.NotNull(validator);
+                    var validationResult = validator(selectedParent.FullName);
+                    selectedParentWasValidated = true;
+                    Assert.True(validationResult.Successful, validationResult.Message);
+                    return selectedParent.FullName;
+                };
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                capturedTargetDirectory = context.TargetDirectory;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(selectedParentWasValidated);
+        Assert.NotNull(capturedTargetDirectory);
+        var expectedPath = Path.Combine(selectedParent.FullName, projectName);
+        Assert.Equal(expectedPath, capturedTargetDirectory.FullName);
+        Assert.True(File.Exists(Path.Combine(expectedPath, "apphost.ts")));
+    }
+
+    [Fact]
+    public async Task NewCommandInExtensionModePromptsBeforeFolderPickerForCliTemplateSubdirectory()
+    {
+        const string projectName = "MyFirstApp";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var selectedParent = workspace.CreateDirectory("source");
+        DirectoryInfo? capturedTargetDirectory = null;
+        var selectionPrompted = false;
+        const string expectedPrompt = "Where do you want the project to be created?";
+        var expectedSubdirectoryChoice = $"In a subdirectory named '{projectName}' in the selected folder";
+        const string expectedDirectChoice = "Directly in the selected folder";
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
+            {
+                ConfirmCallback = (_, defaultValue) => defaultValue,
+                SelectionCallback = (promptText, choices) =>
+                {
+                    Assert.Equal(expectedPrompt, promptText);
+                    Assert.Equal([expectedSubdirectoryChoice, expectedDirectChoice], choices);
+                    selectionPrompted = true;
+                    return expectedSubdirectoryChoice;
+                }
+            };
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "baseline.v1"),
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathCallback = (_) =>
+                {
+                    Assert.True(selectionPrompted);
+                    return selectedParent.FullName;
+                };
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                capturedTargetDirectory = context.TargetDirectory;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(selectionPrompted);
+        Assert.NotNull(capturedTargetDirectory);
+        var expectedPath = Path.Combine(selectedParent.FullName, projectName);
+        Assert.Equal(expectedPath, capturedTargetDirectory.FullName);
+        Assert.True(File.Exists(Path.Combine(expectedPath, "apphost.ts")));
+    }
+
+    [Fact]
+    public async Task NewCommandInExtensionModeUsesSelectedCliTemplateOutputPathWhenSubdirectoryDeclined()
+    {
+        const string projectName = "MyFirstApp";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var selectedOutputPath = workspace.CreateDirectory("source");
+        DirectoryInfo? capturedTargetDirectory = null;
+        var selectionPrompted = false;
+        const string expectedPrompt = "Where do you want the project to be created?";
+        var expectedSubdirectoryChoice = $"In a subdirectory named '{projectName}' in the selected folder";
+        const string expectedDirectChoice = "Directly in the selected folder";
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
+            {
+                ConfirmCallback = (_, defaultValue) => defaultValue,
+                SelectionCallback = (promptText, choices) =>
+                {
+                    Assert.Equal(expectedPrompt, promptText);
+                    Assert.Equal([expectedSubdirectoryChoice, expectedDirectChoice], choices);
+                    selectionPrompted = true;
+                    return expectedDirectChoice;
+                }
+            };
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "baseline.v1"),
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathCallback = (_) =>
+                    selectedOutputPath.FullName;
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                capturedTargetDirectory = context.TargetDirectory;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(selectionPrompted);
+        Assert.NotNull(capturedTargetDirectory);
+        Assert.Equal(selectedOutputPath.FullName, capturedTargetDirectory.FullName);
+        Assert.True(File.Exists(Path.Combine(selectedOutputPath.FullName, "apphost.ts")));
+        Assert.False(File.Exists(Path.Combine(selectedOutputPath.FullName, projectName, "apphost.ts")));
+    }
+
+    [Fact]
+    public async Task NewCommandInExtensionModeDoesNotDoubleAppendProjectNameToCliTemplateOutputPath()
+    {
+        const string projectName = "MyFirstApp";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        DirectoryInfo? capturedTargetDirectory = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "baseline.v1"),
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathCallback = (_) =>
+                    Path.Combine(workspace.WorkspaceRoot.FullName, "source", projectName);
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                capturedTargetDirectory = context.TargetDirectory;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedTargetDirectory);
+        var expectedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "source", projectName);
+        Assert.Equal(expectedPath, capturedTargetDirectory.FullName);
+        Assert.True(File.Exists(Path.Combine(expectedPath, "apphost.ts")));
+    }
+
+    [Fact]
     public async Task NewCommandNonInteractive_SuppressAgentInitTrue_SkipsAgentInit()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2580,7 +2902,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Agent init should not have run — no skill files should exist
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", "aspire", "SKILL.md");
+        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
         Assert.False(File.Exists(skillPath));
     }
 
@@ -2606,8 +2928,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Agent init should have run — default skill files should exist
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", "aspire", "SKILL.md");
+        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
         Assert.True(File.Exists(skillPath));
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
+        Assert.False(File.Exists(aspireifySkillPath));
     }
 
     [Fact]
@@ -2632,8 +2956,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Default is to run agent init
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", "aspire", "SKILL.md");
+        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
         Assert.True(File.Exists(skillPath));
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
+        Assert.False(File.Exists(aspireifySkillPath));
     }
 
     [Fact]
@@ -2823,7 +3149,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
                         throw new NuGetPackageCacheException("Package search failed: simulated network failure")
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])

@@ -4,11 +4,9 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Certificates;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Commands;
 
@@ -19,13 +17,12 @@ internal sealed class CertificatesTrustCommand : BaseCommand
 {
     private readonly ICertificateService _certificateService;
 
-    public CertificatesTrustCommand(ICertificateService certificateService, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-        : base("trust", CertificatesCommandStrings.TrustDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+    public CertificatesTrustCommand(ICertificateService certificateService,
+        CommonCommandServices services)
+        : base("trust", CertificatesCommandStrings.TrustDescription, services)
     {
         _certificateService = certificateService;
     }
-
-    protected override bool UpdateNotificationsEnabled => false;
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -35,7 +32,15 @@ internal sealed class CertificatesTrustCommand : BaseCommand
 
         if (result.Success)
         {
-            InteractionService.DisplaySuccess(CertificatesCommandStrings.TrustSuccess);
+            if (result.ResultCode == EnsureCertificateResult.PartiallyFailedToTrustTheCertificate)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustPartialSuccess);
+            }
+            else
+            {
+                InteractionService.DisplaySuccess(CertificatesCommandStrings.TrustSuccess);
+            }
+
             return CommandResult.Success();
         }
 

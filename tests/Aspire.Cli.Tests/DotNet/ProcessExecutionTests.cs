@@ -147,6 +147,34 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         Assert.Equal("value-399", values[399].GetString());
     }
 
+    [Fact]
+    public async Task WaitForExitAsync_KillsProcessWhenCanceled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
+        var startInfo = CreateStartInfo(scriptFile);
+        var process = new Process
+        {
+            StartInfo = startInfo
+        };
+
+        using var execution = new ProcessExecution(
+            process,
+            NullLogger.Instance,
+            new ProcessInvocationOptions());
+
+        Assert.True(execution.Start());
+
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
+        await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(process.HasExited);
+    }
+
     private static string CreateJsonPayload(int lineCount)
     {
         var builder = new StringBuilder();
@@ -214,6 +242,35 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
                 "echo ready" + Environment.NewLine +
                 "sleep 6" + Environment.NewLine +
                 $"cat \"{outputFile.FullName}\"" + Environment.NewLine;
+            await File.WriteAllTextAsync(scriptFile.FullName, content);
+
+            File.SetUnixFileMode(
+                scriptFile.FullName,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+
+            return scriptFile;
+        }
+    }
+
+    private static async Task<FileInfo> CreateLongRunningScriptAsync(DirectoryInfo workspaceRoot)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "long-running.cmd"));
+            var content =
+                "@echo off" + Environment.NewLine +
+                "powershell -NoProfile -Command \"Start-Sleep -Seconds 60\"" + Environment.NewLine;
+            await File.WriteAllTextAsync(scriptFile.FullName, content);
+            return scriptFile;
+        }
+        else
+        {
+            var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "long-running.sh"));
+            var content =
+                "#!/usr/bin/env bash" + Environment.NewLine +
+                "sleep 60" + Environment.NewLine;
             await File.WriteAllTextAsync(scriptFile.FullName, content);
 
             File.SetUnixFileMode(

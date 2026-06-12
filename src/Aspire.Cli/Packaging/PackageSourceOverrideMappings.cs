@@ -5,8 +5,6 @@ namespace Aspire.Cli.Packaging;
 
 internal static class PackageSourceOverrideMappings
 {
-    internal const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
-
     public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
@@ -35,7 +33,7 @@ internal static class PackageSourceOverrideMappings
 
         if (!mappings.Any(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))
         {
-            mappings.Add(new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource));
+            mappings.Add(new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg));
         }
 
         return [.. mappings.DistinctBy(static mapping => $"{mapping.PackageFilter}\0{mapping.Source}")];

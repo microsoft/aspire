@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Telemetry;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
+[Collection(ProfilingTelemetryTestCollection.Name)]
 public class ProfilingTelemetryTests
 {
     [Fact]
@@ -45,8 +47,8 @@ public class ProfilingTelemetryTests
     [Fact]
     public void ProcessSpansUseConsistentExecutableAndArgumentTags()
     {
-        var startedActivities = new List<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
+        var startedActivities = new ConcurrentQueue<Activity>();
+        using var listener = CreateProfilingActivityListener(startedActivities.Enqueue);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
@@ -71,8 +73,9 @@ public class ProfilingTelemetryTests
         {
         }
 
+        var sessionActivities = GetSessionActivities(startedActivities, "session-1");
         Assert.Collection(
-            startedActivities,
+            sessionActivities,
             spawnActivity =>
             {
                 Assert.Equal(ProfilingTelemetry.Activities.Process, spawnActivity.OperationName);
@@ -112,11 +115,134 @@ public class ProfilingTelemetryTests
     }
 
     [Fact]
+    public void StartAddCommand_CreatesAddSpecificSpans()
+    {
+        var startedActivities = new ConcurrentQueue<Activity>();
+        using var listener = CreateProfilingActivityListener(startedActivities.Enqueue);
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        var appHostProjectFile = new FileInfo(Path.Combine("AppHost", "AppHost.csproj"));
+
+        using (var addActivity = profilingTelemetry.StartAddCommand("redis", "13.4.0", "nuget-source", appHostProjectFile))
+        {
+            using (var findAppHostActivity = profilingTelemetry.StartAddFindAppHost(appHostProjectFile))
+            {
+                findAppHostActivity.SetAppHostCandidateCount(1);
+            }
+
+            using (var configuredChannelActivity = profilingTelemetry.StartAddGetConfiguredChannel())
+            {
+                configuredChannelActivity.SetAddConfiguredChannel("daily");
+            }
+
+            using (var searchPackagesActivity = profilingTelemetry.StartAddSearchPackages("daily"))
+            {
+                searchPackagesActivity.SetAddPackageSearchResultCount(42);
+            }
+
+            using (var selectPackageActivity = profilingTelemetry.StartAddSelectPackage("redis", "13.4.0"))
+            {
+                selectPackageActivity.SetAddPackageMatch(1, ProfilingTelemetry.Values.AddPackageMatchKindExact);
+                selectPackageActivity.SetAddSelectedPackage("Aspire.Hosting.Redis", "13.4.0", "daily");
+            }
+
+            using (profilingTelemetry.StartAddSelectPackagePrompt())
+            {
+            }
+
+            using (var stopRunningInstanceActivity = profilingTelemetry.StartAddStopExistingInstance())
+            {
+                stopRunningInstanceActivity.SetAppHostRunningInstanceResult("NoInstanceFound");
+            }
+
+            using (var addPackageActivity = profilingTelemetry.StartAddPackage("Aspire.Hosting.Redis", "13.4.0", "nuget-source"))
+            {
+                addPackageActivity.SetAddPackageSuccess(true);
+            }
+
+            addActivity.SetAppHostCandidateCount(1);
+            addActivity.SetAppHostLanguage("csharp");
+            addActivity.SetAddPackageSearchResultCount(42);
+            addActivity.SetAddSelectedPackage("Aspire.Hosting.Redis", "13.4.0", "daily");
+        }
+
+        var sessionActivities = GetSessionActivities(startedActivities, "session-1");
+        Assert.Collection(
+            sessionActivities,
+            addActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.AddCommand, addActivity.OperationName);
+                Assert.Equal("redis", addActivity.GetTagItem(ProfilingTelemetry.Tags.AddIntegrationName));
+                Assert.Equal(true, addActivity.GetTagItem(ProfilingTelemetry.Tags.AddVersionSpecified));
+                Assert.Equal(true, addActivity.GetTagItem(ProfilingTelemetry.Tags.AddSourceSpecified));
+                Assert.Equal(true, addActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostProjectFileSpecified));
+                Assert.Equal(1, addActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostCandidateCount));
+                Assert.Equal("csharp", addActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostLanguage));
+                Assert.Equal(42, addActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageSearchResultCount));
+                Assert.Equal("Aspire.Hosting.Redis", addActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageId));
+                Assert.Equal("13.4.0", addActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageVersion));
+                Assert.Equal("daily", addActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageChannel));
+            },
+            findAppHostActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.AddFindAppHost, findAppHostActivity.OperationName);
+                Assert.Equal(true, findAppHostActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostProjectFileSpecified));
+                Assert.Equal(1, findAppHostActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostCandidateCount));
+            },
+            configuredChannelActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.AddGetConfiguredChannel, configuredChannelActivity.OperationName);
+                Assert.Equal("daily", configuredChannelActivity.GetTagItem(ProfilingTelemetry.Tags.AddConfiguredChannel));
+            },
+            searchPackagesActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.AddSearchPackages, searchPackagesActivity.OperationName);
+                Assert.Equal("daily", searchPackagesActivity.GetTagItem(ProfilingTelemetry.Tags.AddConfiguredChannel));
+                Assert.Equal(42, searchPackagesActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageSearchResultCount));
+            },
+            selectPackageActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.AddSelectPackage, selectPackageActivity.OperationName);
+                Assert.Equal("redis", selectPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddIntegrationName));
+                Assert.Equal(true, selectPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddVersionSpecified));
+                Assert.Equal(1, selectPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageMatchCount));
+                Assert.Equal(ProfilingTelemetry.Values.AddPackageMatchKindExact, selectPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageMatchKind));
+                Assert.Equal("Aspire.Hosting.Redis", selectPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageId));
+                Assert.Equal("13.4.0", selectPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageVersion));
+                Assert.Equal("daily", selectPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageChannel));
+            },
+            promptActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.AddSelectPackagePrompt, promptActivity.OperationName);
+            },
+            stopRunningInstanceActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.AddStopExistingInstance, stopRunningInstanceActivity.OperationName);
+                Assert.Equal("NoInstanceFound", stopRunningInstanceActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostRunningInstanceResult));
+            },
+            addPackageActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.AddPackage, addPackageActivity.OperationName);
+                Assert.Equal("Aspire.Hosting.Redis", addPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageId));
+                Assert.Equal("13.4.0", addPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageVersion));
+                Assert.Equal(true, addPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddSourceSpecified));
+                Assert.Equal(true, addPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageSuccess));
+            });
+
+        Assert.All(sessionActivities, activity =>
+        {
+            Assert.Equal("session-1", activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
+            Assert.Equal("session-1", activity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
+        });
+    }
+
+    [Fact]
     public void ProfilingSpansReuseSessionFromAmbientActivityBaggage()
     {
-        var startedActivities = new List<Activity>();
+        var startedActivities = new ConcurrentQueue<Activity>();
         using var parentListener = CreateActivityListener("test-parent", _ => { });
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
+        using var listener = CreateProfilingActivityListener(startedActivities.Enqueue);
         using var parentSource = new ActivitySource("test-parent");
         using var parentActivity = parentSource.StartActivity("parent");
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
@@ -133,8 +259,9 @@ public class ProfilingTelemetryTests
         {
         }
 
-        Assert.Equal(2, startedActivities.Count);
-        Assert.All(startedActivities, activity =>
+        var sessionActivities = GetSessionActivities(startedActivities, "session-1");
+        Assert.Equal(2, sessionActivities.Length);
+        Assert.All(sessionActivities, activity =>
         {
             Assert.Equal("session-1", activity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
             Assert.Equal("session-1", activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
@@ -144,10 +271,10 @@ public class ProfilingTelemetryTests
     [Fact]
     public void ProfilingSpansStoreGeneratedSessionOnAmbientAncestorsForSiblings()
     {
-        var startedActivities = new List<Activity>();
+        var startedActivities = new ConcurrentQueue<Activity>();
         using var parentListener = CreateActivityListener("test-parent", _ => { });
         using var diagnosticListener = CreateActivityListener("test-diagnostic", _ => { });
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
+        using var listener = CreateProfilingActivityListener(startedActivities.Enqueue);
         using var parentSource = new ActivitySource("test-parent");
         using var diagnosticSource = new ActivitySource("test-diagnostic");
         using var parentActivity = parentSource.StartActivity("parent");
@@ -166,10 +293,11 @@ public class ProfilingTelemetryTests
         {
         }
 
-        Assert.Equal(2, startedActivities.Count);
         var sessionId = parentActivity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId);
         Assert.NotNull(sessionId);
-        Assert.All(startedActivities, activity =>
+        var sessionActivities = GetSessionActivities(startedActivities, sessionId);
+        Assert.Equal(2, sessionActivities.Length);
+        Assert.All(sessionActivities, activity =>
         {
             Assert.Equal(sessionId, activity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
             Assert.Equal(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
@@ -196,6 +324,11 @@ public class ProfilingTelemetryTests
         return CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activityStarted);
     }
 
+    private static Activity[] GetSessionActivities(IEnumerable<Activity> activities, string sessionId)
+    {
+        return [.. activities.Where(activity => Equals(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId)))];
+    }
+
     private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStarted)
     {
         var listener = new ActivityListener
@@ -214,4 +347,13 @@ public class ProfilingTelemetryTests
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
     }
+}
+
+/// <summary>
+/// Disables parallel execution for tests that install process-wide activity listeners.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class ProfilingTelemetryTestCollection
+{
+    public const string Name = "ProfilingTelemetryTests";
 }

@@ -28,6 +28,17 @@ public sealed class AzureStorageDeploymentTests(ITestOutputHelper output)
         await DeployAzureStorageResourceCore(cancellationToken);
     }
 
+    [Fact]
+    public async Task DeployStarterWithSharedAzureStorageReferences()
+    {
+        using var cts = new CancellationTokenSource(s_testTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cts.Token, TestContext.Current.CancellationToken);
+        var cancellationToken = linkedCts.Token;
+
+        await DeployStarterWithSharedAzureStorageReferencesCore(cancellationToken);
+    }
+
     private async Task DeployAzureStorageResourceCore(CancellationToken cancellationToken)
     {
         // Validate prerequisites
@@ -178,6 +189,165 @@ builder.Build().Run();
         finally
         {
             // Always attempt to clean up the resource group
+            output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
+            await CleanupResourceGroupAsync(resourceGroupName);
+        }
+    }
+
+    private async Task DeployStarterWithSharedAzureStorageReferencesCore(CancellationToken cancellationToken)
+    {
+        var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
+        if (string.IsNullOrEmpty(subscriptionId))
+        {
+            Assert.Skip("Azure subscription not configured. Set ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION.");
+        }
+
+        if (!AzureAuthenticationHelpers.IsAzureAuthAvailable())
+        {
+            if (DeploymentE2ETestHelpers.IsRunningInCI)
+            {
+                Assert.Fail("Azure authentication not available in CI. Check OIDC configuration.");
+            }
+            else
+            {
+                Assert.Skip("Azure authentication not available. Run 'az login' to authenticate.");
+            }
+        }
+
+        var workspace = TemporaryWorkspace.Create(output);
+        var startTime = DateTime.UtcNow;
+        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("storage-shared");
+        var projectName = "StorageShared";
+
+        output.WriteLine($"Test: {nameof(DeployStarterWithSharedAzureStorageReferences)}");
+        output.WriteLine($"Project Name: {projectName}");
+        output.WriteLine($"Resource Group: {resourceGroupName}");
+        output.WriteLine($"Subscription: {subscriptionId[..8]}...");
+        output.WriteLine($"Workspace: {workspace.WorkspaceRoot.FullName}");
+
+        try
+        {
+            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
+            var pendingRun = terminal.RunAsync(cancellationToken);
+
+            var counter = new SequenceCounter();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+            output.WriteLine("Step 1: Preparing environment...");
+            await auto.PrepareEnvironmentAsync(workspace, counter);
+
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
+
+            output.WriteLine("Step 3: Creating starter project...");
+            await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
+
+            output.WriteLine("Step 4: Navigating to project directory...");
+            await auto.TypeAsync($"cd {projectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            output.WriteLine("Step 5a: Adding Azure Container Apps hosting package...");
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter);
+
+            output.WriteLine("Step 5b: Adding Azure Storage hosting package...");
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Storage");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter);
+
+            var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+            var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
+            var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
+
+            output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
+
+            var content = File.ReadAllText(appHostFilePath);
+
+            content = content.Replace(
+                "var builder = DistributedApplication.CreateBuilder(args);",
+                """
+var builder = DistributedApplication.CreateBuilder(args);
+
+var storage = builder.AddAzureStorage("storage");
+var blobs = storage.AddBlobs("blobs");
+""");
+
+            content = content.Replace(
+                $"var apiService = builder.AddProject<Projects.{projectName}_ApiService>(\"apiservice\")",
+                $"var apiService = builder.AddProject<Projects.{projectName}_ApiService>(\"apiservice\")\n    .WithReference(blobs)");
+
+            content = content.Replace(
+                ".WithReference(apiService)",
+                """
+.WithReference(apiService)
+    .WithReference(blobs)
+""");
+
+            var buildRunPattern = "builder.Build().Run();";
+            var replacement = """
+// Add Azure Container App Environment for managed identity support
+builder.AddAzureContainerAppEnvironment("infra");
+
+builder.Build().Run();
+""";
+
+            content = content.Replace(buildRunPattern, replacement);
+            File.WriteAllText(appHostFilePath, content);
+
+            output.WriteLine($"Modified AppHost.cs with shared Azure Storage references at: {appHostFilePath}");
+            output.WriteLine($"New content:\n{content}");
+
+            output.WriteLine("Step 6: Navigating to AppHost directory...");
+            await auto.TypeAsync($"cd {projectName}.AppHost");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            output.WriteLine("Step 7: Starting Azure deployment...");
+            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.EnterAsync();
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(25));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            output.WriteLine("Step 8: Verifying Azure Storage account...");
+            await auto.TypeAsync($"az storage account list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
+            output.WriteLine("Step 9: Destroying Azure deployment...");
+            await auto.AspireDestroyAsync(counter);
+
+            await auto.TypeAsync("exit");
+            await auto.EnterAsync();
+
+            await pendingRun;
+
+            var duration = DateTime.UtcNow - startTime;
+            output.WriteLine($"Deployment completed in {duration}");
+
+            DeploymentReporter.ReportDeploymentSuccess(
+                nameof(DeployStarterWithSharedAzureStorageReferences),
+                resourceGroupName,
+                new Dictionary<string, string>(),
+                duration);
+        }
+        catch (Exception ex)
+        {
+            output.WriteLine($"Test failed: {ex.Message}");
+
+            DeploymentReporter.ReportDeploymentFailure(
+                nameof(DeployStarterWithSharedAzureStorageReferences),
+                resourceGroupName,
+                ex.Message);
+
+            throw;
+        }
+        finally
+        {
             output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
             await CleanupResourceGroupAsync(resourceGroupName);
         }

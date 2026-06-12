@@ -16,7 +16,7 @@ public static class ExecutionConfigurationBuilderExtensions
     /// </summary>
     /// <param name="builder">The builder to add the configuration gatherer to.</param>
     /// <returns>The builder with the configuration gatherer added.</returns>
-    [AspireExport(Description = "Adds an arguments configuration gatherer")]
+    [AspireExport]
     public static IExecutionConfigurationBuilder WithArgumentsConfig(this IExecutionConfigurationBuilder builder)
     {
         return builder.AddExecutionConfigurationGatherer(new ArgumentsExecutionConfigurationGatherer());
@@ -27,7 +27,7 @@ public static class ExecutionConfigurationBuilderExtensions
     /// </summary>
     /// <param name="builder">The builder to add the configuration gatherer to.</param>
     /// <returns>The builder with the configuration gatherer added.</returns>
-    [AspireExport(Description = "Adds an environment variables configuration gatherer")]
+    [AspireExport]
     public static IExecutionConfigurationBuilder WithEnvironmentVariablesConfig(this IExecutionConfigurationBuilder builder)
     {
         return builder.AddExecutionConfigurationGatherer(new EnvironmentVariablesExecutionConfigurationGatherer());
@@ -40,7 +40,7 @@ public static class ExecutionConfigurationBuilderExtensions
     /// <param name="configContextFactory">A factory function to create the configuration context.</param>
     /// <returns>The builder with the configuration gatherer added.</returns>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Adds a certificate trust configuration gatherer")]
+    [AspireExport]
     public static IExecutionConfigurationBuilder WithCertificateTrustConfig(this IExecutionConfigurationBuilder builder, Func<CertificateTrustScope, CertificateTrustExecutionConfigurationContext> configContextFactory)
     {
         return builder.AddExecutionConfigurationGatherer(new CertificateTrustExecutionConfigurationGatherer(configContextFactory));

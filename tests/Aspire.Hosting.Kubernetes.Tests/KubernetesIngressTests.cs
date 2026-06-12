@@ -8,7 +8,7 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 public class KubernetesIngressTests
 {
     [Fact]
-    public async Task AddIngress_WithRoute_GeneratesIngressYaml()
+    public async Task AddIngress_WithPath_GeneratesIngressYaml()
     {
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
@@ -21,7 +21,7 @@ public class KubernetesIngressTests
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
 
-        ingress.WithRoute("/api", api.GetEndpoint("http"));
+        ingress.WithPath("/api", api.GetEndpoint("http"));
 
         var app = builder.Build();
         app.Run();
@@ -40,7 +40,7 @@ public class KubernetesIngressTests
     }
 
     [Fact]
-    public async Task AddIngress_WithHostRoute_GeneratesHostRule()
+    public async Task AddIngress_WithHostAndPath_GeneratesHostRule()
     {
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
@@ -52,7 +52,7 @@ public class KubernetesIngressTests
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
 
-        ingress.WithRoute("api.example.com", "/", api.GetEndpoint("http"));
+        ingress.WithPath("api.example.com", "/", api.GetEndpoint("http"));
 
         var app = builder.Build();
         app.Run();
@@ -63,6 +63,90 @@ public class KubernetesIngressTests
         var content = await File.ReadAllTextAsync(ingressPath);
         Assert.Contains("api.example.com", content);
         Assert.Contains("path: \"/\"", content);
+    }
+
+    [Fact]
+    public async Task AddIngress_WithIngressClassParameter_GeneratesHelmReferenceAndPlaceholder()
+    {
+        // Regression test: using a ParameterResource with the WithIngressClass overload
+        // previously rendered the literal format string ("{0}") into ingressClassName
+        // when the parameter had no value available at publish time. The fix substitutes a
+        // Helm template expression and captures the parameter so the deploy-time values
+        // override file (and chart values.yaml placeholder) include the entry.
+        using var tempDir = new TestTempDirectory();
+        // Pipeline:ClearCache=true prevents loading of leaked deployment state from
+        // ~/.aspire/deployments/<sha>/<env>.json (which would otherwise auto-resolve
+        // parameters from prior test runs and bypass the MissingParameterValueException path).
+        var builder = TestDistributedApplicationBuilder.Create(
+            "AppHost:Operation=publish",
+            $"Pipeline:OutputPath={tempDir.Path}",
+            "Pipeline:LogLevel=information",
+            "Pipeline:Step=publish",
+            "Pipeline:ClearCache=true");
+
+        // Use a unique parameter name per test run to defeat any persistent state file lookup.
+        var parameterName = $"ingressclass{Guid.NewGuid():N}";
+        var ingressClass = builder.AddParameter(parameterName);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var ingress = k8s.AddIngress("public")
+            .WithIngressClass(ingressClass);
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        ingress.WithPath("/api", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        app.Run();
+
+        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        Assert.True(File.Exists(ingressPath), $"Expected ingress YAML at {ingressPath}");
+
+        var content = await File.ReadAllTextAsync(ingressPath);
+        Assert.DoesNotContain("\"{0}\"", content);
+        Assert.Contains($"{{{{ .Values.parameters.public.{parameterName} }}}}", content);
+
+        var valuesPath = Path.Combine(tempDir.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath), $"Expected values.yaml at {valuesPath}");
+
+        var values = await File.ReadAllTextAsync(valuesPath);
+        // Expect a placeholder entry under parameters: public: <parameterName>: so consumers
+        // of the published Helm chart can fill it in (and `helm template` won't substitute <no value>).
+        Assert.Matches(
+            new System.Text.RegularExpressions.Regex(@"parameters:\s*[\r\n]+\s*public:\s*[\r\n]+\s*" + System.Text.RegularExpressions.Regex.Escape(parameterName) + @"\s*:"),
+            values);
+    }
+
+    [Fact]
+    public async Task AddIngress_WithIngressClassParameter_WithDefaultValue_ResolvesAtPublish()
+    {
+        // When a parameter has a publish-time default, the resolved value should be inlined
+        // into the manifest rather than rendered as a Helm template reference.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var ingressClass = builder.AddParameter("ingressclass", "nginx", publishValueAsDefault: true);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var ingress = k8s.AddIngress("public")
+            .WithIngressClass(ingressClass);
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        ingress.WithPath("/api", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        app.Run();
+
+        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var content = await File.ReadAllTextAsync(ingressPath);
+
+        Assert.Contains("ingressClassName: \"nginx\"", content);
+        Assert.DoesNotContain("{{ .Values", content);
     }
 
     [Fact]
@@ -79,7 +163,7 @@ public class KubernetesIngressTests
             .WithExternalHttpEndpoints();
 
         ingress
-            .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
+            .WithPath("api.example.com", "/", api.GetEndpoint("http"))
             .WithHostname("api.example.com").WithTls("my-tls-secret");
 
         var app = builder.Build();
@@ -107,7 +191,7 @@ public class KubernetesIngressTests
             .WithExternalHttpEndpoints();
 
         ingress
-            .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
+            .WithPath("api.example.com", "/", api.GetEndpoint("http"))
             .WithTls("my-tls-secret")
             .WithHostname("api.example.com");
 
@@ -124,7 +208,7 @@ public class KubernetesIngressTests
     }
 
     [Fact]
-    public async Task AddIngress_WithMultipleRoutes_GroupsByHost()
+    public async Task AddIngress_WithMultiplePaths_GroupsByHost()
     {
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
@@ -140,9 +224,9 @@ public class KubernetesIngressTests
             .WithHttpEndpoint(targetPort: 80)
             .WithExternalHttpEndpoints();
 
-        // Two routes on the same host
-        ingress.WithRoute("example.com", "/api", api.GetEndpoint("http"));
-        ingress.WithRoute("example.com", "/", web.GetEndpoint("http"));
+        // Two paths on the same host
+        ingress.WithPath("example.com", "/api", api.GetEndpoint("http"));
+        ingress.WithPath("example.com", "/", web.GetEndpoint("http"));
 
         var app = builder.Build();
         app.Run();
@@ -170,7 +254,7 @@ public class KubernetesIngressTests
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
 
-        ingress.WithRoute("/", api.GetEndpoint("http"));
+        ingress.WithPath("/", api.GetEndpoint("http"));
 
         var app = builder.Build();
         app.Run();
@@ -194,7 +278,7 @@ public class KubernetesIngressTests
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
 
-        ingress.WithRoute("/exact", api.GetEndpoint("http"), IngressPathType.Exact);
+        ingress.WithPath("/exact", api.GetEndpoint("http"), IngressPathType.Exact);
 
         var app = builder.Build();
         app.Run();
@@ -206,7 +290,7 @@ public class KubernetesIngressTests
     }
 
     [Fact]
-    public async Task AddIngress_NoRoutes_DoesNotGenerateYaml()
+    public async Task AddIngress_NoPaths_DoesNotGenerateYaml()
     {
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
@@ -270,8 +354,8 @@ public class KubernetesIngressTests
             .WithHttpEndpoint(targetPort: 9090)
             .WithExternalHttpEndpoints();
 
-        publicIngress.WithRoute("/", api.GetEndpoint("http"));
-        internalIngress.WithRoute("/admin", admin.GetEndpoint("http"));
+        publicIngress.WithPath("/", api.GetEndpoint("http"));
+        internalIngress.WithPath("/admin", admin.GetEndpoint("http"));
 
         var app = builder.Build();
         app.Run();
@@ -303,7 +387,7 @@ public class KubernetesIngressTests
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
 
-        // TLS host + default backend but NO explicit route for the TLS host.
+        // TLS host + default backend but NO explicit path for the TLS host.
         // The ingress should auto-generate a rule for the TLS host.
         ingress
             .WithDefaultBackend(web.GetEndpoint("http"))
@@ -326,7 +410,7 @@ public class KubernetesIngressTests
     }
 
     [Fact]
-    public async Task AddIngress_TlsWithExplicitRoute_DoesNotDuplicate()
+    public async Task AddIngress_TlsWithExplicitPath_DoesNotDuplicate()
     {
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
@@ -338,9 +422,9 @@ public class KubernetesIngressTests
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
 
-        // Explicit route for the TLS host ΓÇö should NOT auto-generate another one
+        // Explicit path for the TLS host -- should NOT auto-generate another one
         ingress
-            .WithRoute("app.example.com", "/", web.GetEndpoint("http"))
+            .WithPath("app.example.com", "/", web.GetEndpoint("http"))
             .WithDefaultBackend(web.GetEndpoint("http"))
             .WithHostname("app.example.com").WithTls("my-tls-secret");
 
@@ -357,7 +441,7 @@ public class KubernetesIngressTests
     }
 
     [Fact]
-    public void WithRoute_InvalidPath_Throws()
+    public void WithPath_InvalidPath_Throws()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
@@ -367,7 +451,7 @@ public class KubernetesIngressTests
             .WithHttpEndpoint(targetPort: 8080);
 
         Assert.Throws<ArgumentException>(() =>
-            ingress.WithRoute("no-leading-slash", api.GetEndpoint("http")));
+            ingress.WithPath("no-leading-slash", api.GetEndpoint("http")));
     }
 
     [Fact]
@@ -395,7 +479,7 @@ public class KubernetesIngressTests
     }
 
     [Fact]
-    public void AddIngress_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
+    public void AddIngress_WithPath_NonExternalEndpoint_ThrowsOnPublish()
     {
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
@@ -408,7 +492,7 @@ public class KubernetesIngressTests
         var api = builder.AddContainer("myapi", "nginx")
             .WithHttpEndpoint(targetPort: 8080);
 
-        ingress.WithRoute("/", api.GetEndpoint("http"));
+        ingress.WithPath("/", api.GetEndpoint("http"));
 
         var app = builder.Build();
         var aggregate = Assert.Throws<AggregateException>(app.Run);
@@ -443,7 +527,7 @@ public class KubernetesIngressTests
     }
 
     [Fact]
-    public async Task AddIngress_WithRoute_ExternalEndpoint_Succeeds()
+    public async Task AddIngress_WithPath_ExternalEndpoint_Succeeds()
     {
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
@@ -451,12 +535,12 @@ public class KubernetesIngressTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
 
-        // WithExternalHttpEndpoints applied AFTER WithRoute to demonstrate that
+        // WithExternalHttpEndpoints applied AFTER WithPath to demonstrate that
         // authoring order does not matter: validation runs at publish time.
         var api = builder.AddContainer("myapi", "nginx")
             .WithHttpEndpoint(targetPort: 8080);
 
-        ingress.WithRoute("/", api.GetEndpoint("http"));
+        ingress.WithPath("/", api.GetEndpoint("http"));
 
         api.WithExternalHttpEndpoints();
 

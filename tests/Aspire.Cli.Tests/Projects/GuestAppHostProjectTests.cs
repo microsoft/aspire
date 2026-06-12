@@ -9,6 +9,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -543,6 +544,24 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Equal("Testing", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
+    [Fact]
+    public void ConvertGeneratedFilesForLegacyTypeScriptAppHost_UsesTsFilesAndJsSpecifiers()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["aspire.mts"] = "import { refExpr } from './base.mjs';\n// aspire.mts",
+            ["base.mts"] = "export type { MarshalledHandle } from './transport.mjs';\n// base.mts",
+            ["transport.mts"] = "// transport.mts"
+        };
+
+        var convertedFiles = GuestAppHostProject.ConvertGeneratedFilesForLegacyTypeScriptAppHost(files);
+
+        Assert.Equal(["aspire.ts", "base.ts", "transport.ts"], convertedFiles.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("import { refExpr } from './base.js';\n// aspire.ts", convertedFiles["aspire.ts"]);
+        Assert.Equal("export type { MarshalledHandle } from './transport.js';\n// base.ts", convertedFiles["base.ts"]);
+        Assert.Equal("// transport.ts", convertedFiles["transport.ts"]);
+    }
+
     /// <summary>
     /// Regression test for issue #17077: <c>aspire update</c> must not leave
     /// <c>aspire.config.json</c> advanced to newer package versions when guest SDK
@@ -577,7 +596,7 @@ public class GuestAppHostProjectTests : IDisposable
                 ])
         };
 
-        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
 
         var interactionService = new TestInteractionService
         {
@@ -649,6 +668,30 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
+    public async Task FindAndStopRunningInstanceAsync_CleansUpDeadPidSocketAndReturnsNoRunningInstance()
+    {
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (appPath, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(appPath))
+        };
+
+        var project = CreateGuestAppHostProject(appHostServerProjectFactory: factory);
+        var socketPath = CreateMatchingSocketFile(_workspace.WorkspaceRoot.FullName, int.MaxValue - 1);
+
+        var result = await project.FindAndStopRunningInstanceAsync(
+            new FileInfo(appHostPath),
+            _workspace.WorkspaceRoot,
+            CancellationToken.None);
+
+        Assert.Equal(RunningInstanceResult.NoRunningInstance, result);
+        Assert.False(File.Exists(socketPath));
+    }
+
+    [Fact]
     public async Task UpdatePackagesAsync_ExplicitStableChannel_WhenRegenerationFails_DoesNotMutateConfig()
     {
         var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
@@ -676,7 +719,8 @@ public class GuestAppHostProjectTests : IDisposable
             PackageChannelNames.Stable,
             PackageChannelQuality.Both,
             [new PackageMapping("Aspire.*", "stable")],
-            stableCache);
+            stableCache,
+            features: new TestFeatures());
 
         var interactionService = new TestInteractionService
         {
@@ -730,7 +774,8 @@ public class GuestAppHostProjectTests : IDisposable
             PackageChannelNames.Staging,
             PackageChannelQuality.Both,
             [new PackageMapping("Aspire*", "staging")],
-            stagingCache);
+            stagingCache,
+            features: new TestFeatures());
 
         var interactionService = new TestInteractionService
         {
@@ -758,7 +803,7 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
-    public async Task UpdatePackagesAsync_ExplicitStableChannel_PersistsStableChannelWhenProjectIsUpToDate()
+    public async Task UpdatePackagesAsync_ExplicitStableChannel_DoesNotPersistStableChannelWhenProjectIsUpToDate()
     {
         var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(configPath, """
@@ -785,7 +830,8 @@ public class GuestAppHostProjectTests : IDisposable
             PackageChannelNames.Stable,
             PackageChannelQuality.Both,
             [new PackageMapping("Aspire.*", "stable")],
-            stableCache);
+            stableCache,
+            features: new TestFeatures());
 
         var project = CreateGuestAppHostProject();
 
@@ -799,10 +845,10 @@ public class GuestAppHostProjectTests : IDisposable
 
         var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
 
-        Assert.True(result.UpdatesApplied);
+        Assert.False(result.UpdatesApplied);
         var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
         Assert.NotNull(reloaded);
-        Assert.Equal(PackageChannelNames.Stable, reloaded.Channel);
+        Assert.Equal(PackageChannelNames.Staging, reloaded.Channel);
         Assert.Equal("2.0.0", reloaded.SdkVersion);
         Assert.Equal("2.0.0", reloaded.Packages?["Aspire.Hosting"]);
     }
@@ -880,6 +926,20 @@ public class GuestAppHostProjectTests : IDisposable
 
     private GuestAppHostProject CreateGuestAppHostProject()
         => CreateGuestAppHostProject(interactionService: null, identityChannel: "local");
+
+    private string CreateMatchingSocketFile(string appHostPath, int pid)
+    {
+        var backchannelsDir = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
+        Directory.CreateDirectory(backchannelsDir);
+
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, _workspace.WorkspaceRoot.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var socketPath = Path.Combine(
+            backchannelsDir,
+            $"{appHostId}a1b2C3d4.{pid.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        File.WriteAllText(socketPath, "");
+        return socketPath;
+    }
 
     private GuestAppHostProject CreateGuestAppHostProject(
         TestInteractionService? interactionService = null,

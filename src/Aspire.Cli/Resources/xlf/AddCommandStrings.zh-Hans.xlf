@@ -102,6 +102,11 @@
         <target state="translated">没有与搜索词“{0}”匹配的包。正在显示所有可用包。</target>
         <note>{0} is the search term provided by the user.</note>
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresExactPackageMatch">
+        <source>No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</source>
+        <target state="new">No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</target>
+        <note>{0} is the integration name provided by the user.</note>
+      </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
         <source>The package {0}::{1} was added successfully.</source>
         <target state="translated">已成功添加包 {0}::{1}。</target>

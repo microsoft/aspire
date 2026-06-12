@@ -4,11 +4,9 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -29,22 +27,16 @@ internal sealed class DocsListCommand : BaseCommand
     };
 
     public DocsListCommand(
-        IInteractionService interactionService,
         IDocsIndexService docsIndexService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
-        ILogger<DocsListCommand> logger)
-        : base("list", DocsCommandStrings.ListDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<DocsListCommand> logger,
+        CommonCommandServices services)
+        : base("list", DocsCommandStrings.ListDescription, services)
     {
         _docsIndexService = docsIndexService;
         _logger = logger;
 
         Options.Add(s_formatOption);
     }
-
-    protected override bool UpdateNotificationsEnabled => false;
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {

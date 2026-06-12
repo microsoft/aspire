@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Runtime.Loader;
+using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -43,6 +44,8 @@ internal sealed class AssemblyLoader
             string.IsNullOrWhiteSpace(libsPath) ? "<none>" : libsPath,
             string.IsNullOrWhiteSpace(probeManifestPath) ? "<none>" : probeManifestPath);
 
+        WarnIfSharedAssemblyMismatch(libsPath, logger);
+
         _assemblies = new Lazy<IReadOnlyList<Assembly>>(
             () => LoadAssemblies(_assemblyNamesToLoad.Value, _loadContext, logger));
     }
@@ -64,6 +67,54 @@ internal sealed class AssemblyLoader
             activity.SetError(ex);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Snapshots the currently loaded ATS integration assemblies as
+    /// <see cref="CodeGenerationLoadedAssemblyInfo"/> records suitable for inclusion in a
+    /// diagnostic payload. Returns an empty list when no assemblies have been loaded yet so the
+    /// caller can include the result unconditionally.
+    /// </summary>
+    /// <remarks>
+    /// This intentionally avoids forcing <see cref="GetAssemblies"/> to run if it hasn't already,
+    /// because we want to capture the actual state at the moment a failure occurred rather than
+    /// triggering the load (which may itself throw).
+    /// </remarks>
+    public IReadOnlyList<CodeGenerationLoadedAssemblyInfo> GetLoadedAssemblyDiagnostics()
+    {
+        var infos = new List<CodeGenerationLoadedAssemblyInfo>();
+        if (!_assemblies.IsValueCreated)
+        {
+            return infos;
+        }
+
+        foreach (var assembly in _assemblies.Value)
+        {
+            infos.Add(CreateAssemblyInfo(assembly));
+        }
+
+        return infos;
+    }
+
+    private static CodeGenerationLoadedAssemblyInfo CreateAssemblyInfo(Assembly assembly)
+    {
+        var name = assembly.GetName();
+        string? location;
+        try
+        {
+            location = string.IsNullOrEmpty(assembly.Location) ? null : assembly.Location;
+        }
+        catch
+        {
+            location = null;
+        }
+
+        return new CodeGenerationLoadedAssemblyInfo
+        {
+            Name = name.Name ?? assembly.FullName ?? "<unknown>",
+            InformationalVersion = CodeGenerationDiagnosticBuilder.GetInformationalVersion(assembly),
+            Location = location
+        };
     }
 
     internal static IReadOnlyList<string> GetAssemblyNamesToLoad(
@@ -167,6 +218,80 @@ internal sealed class AssemblyLoader
         }
 
         return assemblies;
+    }
+
+    /// <summary>
+    /// Warns when a shared assembly (one that <see cref="IntegrationLoadContext"/> intentionally
+    /// resolves through the default <see cref="AssemblyLoadContext"/>) exists in the integration
+    /// libs directory at a different identity than what the default context provides.
+    /// </summary>
+    /// <remarks>
+    /// This is a defense against a real failure mode: when the bundled <c>Aspire.TypeSystem</c>
+    /// (compiled into the apphost server's single-file executable) and the libs copy
+    /// (restored alongside <c>Aspire.Hosting.*.dll</c>) report different assembly versions or MVIDs,
+    /// integration assemblies that reference the libs copy will fail to bind their type
+    /// references through the default context. The resulting <see cref="ReflectionTypeLoadException"/>
+    /// would otherwise be swallowed silently and surface only as a downstream "no code generator
+    /// found" / "no language support found" error with no actionable diagnostic.
+    /// </remarks>
+    private static void WarnIfSharedAssemblyMismatch(string? integrationLibsPath, ILogger logger)
+    {
+        if (string.IsNullOrWhiteSpace(integrationLibsPath) || !Directory.Exists(integrationLibsPath))
+        {
+            return;
+        }
+
+        foreach (var sharedName in IntegrationLoadContext.GetSharedAssemblyNames())
+        {
+            var libsPath = Path.Combine(integrationLibsPath, sharedName + ".dll");
+            if (!File.Exists(libsPath))
+            {
+                continue;
+            }
+
+            AssemblyName? probedName;
+            try
+            {
+                probedName = AssemblyName.GetAssemblyName(libsPath);
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Could not read assembly identity from {Path}", libsPath);
+                continue;
+            }
+
+            var defaultAsm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(
+                assembly => string.Equals(assembly.GetName().Name, sharedName, StringComparison.OrdinalIgnoreCase));
+            if (defaultAsm is null)
+            {
+                logger.LogDebug("Default context does not currently provide '{AssemblyName}'", sharedName);
+                continue;
+            }
+
+            var defaultName = defaultAsm.GetName();
+            var defaultMvid = defaultAsm.ManifestModule.ModuleVersionId;
+
+            if (defaultName.Version != probedName.Version)
+            {
+                logger.LogWarning(
+                    "Shared assembly '{AssemblyName}' version mismatch: bundled={BundledVersion}, libs={LibsVersion} ({LibsPath}). " +
+                    "Integration assemblies referencing this assembly from the libs directory will fail to bind their type " +
+                    "references through the default load context, which causes integrations to be silently skipped during type discovery. " +
+                    "This typically indicates the apphost server bundle and the restored integration packages were produced by " +
+                    "different build configurations.",
+                    sharedName,
+                    defaultName.Version,
+                    probedName.Version,
+                    libsPath);
+                continue;
+            }
+
+            // Same version, but different MVID (compiled from different sources) is also a binary-incompatibility risk.
+            // We can't read the probed MVID without loading the assembly, which we deliberately don't do here.
+            // Logging the bundled MVID at Debug helps correlate with any subsequent ReflectionTypeLoadException.
+            logger.LogDebug("Shared assembly '{AssemblyName}' identity matches: Version={Version}, BundledMvid={Mvid}",
+                sharedName, defaultName.Version, defaultMvid);
+        }
     }
 
     private static Assembly LoadAssembly(IntegrationLoadContext loadContext, string name)

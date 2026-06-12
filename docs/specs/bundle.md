@@ -297,6 +297,7 @@ The parent directory check supports the installed layout where the CLI binary li
 | `ASPIRE_DCP_PATH` | DCP binaries location | `/opt/aspire/dcp` |
 | `ASPIRE_DASHBOARD_PATH` | Path used by Aspire.Hosting to locate the dashboard binary (now points to `aspire-managed`) | `/opt/aspire/managed/aspire-managed` |
 | `ASPIRE_MANAGED_PATH` | CLI-only path for the `aspire-managed` binary | `/opt/aspire/managed/aspire-managed` |
+| `ASPIRE_HOME` | Default Aspire state root and fallback bundle extraction root when no install-route sidecar selects an install-owned location | `/home/user/.aspire` |
 | `ASPIRE_INTEGRATION_LIBS_PATH` | Path to copied project-reference integration DLLs for aspire-server assembly resolution | `/home/user/myapp/.aspire/integrations/apphosts/app-hash/project-layouts/items/fingerprint/libs` |
 | `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` | Path to the NuGet package probe manifest for package-backed integration assemblies | `/home/user/myapp/.aspire/integrations/package-restore/hash/integration-package-probe-manifest.json` |
 | `ASPIRE_USE_GLOBAL_DOTNET` | Force SDK mode | `true` |

@@ -5,9 +5,10 @@ set -euo pipefail
 # This script is intended for dogfooding builds before they are published to Homebrew/homebrew-cask.
 #
 # Usage:
-#   ./dogfood.sh                  # Auto-detects cask file in the same directory
-#   ./dogfood.sh aspire.rb        # Explicit cask file path
-#   ./dogfood.sh --uninstall      # Uninstall a previously dogfooded cask
+#   ./dogfood.sh                             # Auto-detects cask file and adjacent archives
+#   ./dogfood.sh --archive-root ../artifacts # Installs from downloaded native archive artifacts
+#   ./dogfood.sh aspire.rb                   # Explicit cask file path
+#   ./dogfood.sh --uninstall                 # Uninstall a previously dogfooded cask
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TAP_NAME="local/aspire-dogfood"
@@ -22,13 +23,15 @@ Arguments:
   CASK_FILE               Path to the .rb cask file (default: auto-detect in script directory)
 
 Options:
+  --archive-root PATH     Root directory containing downloaded aspire-cli-osx-* archives
   --uninstall             Uninstall a previously dogfooded cask and remove the local tap
   --help                  Show this help message
 
 Examples:
-  $(basename "$0")                         # Auto-detect and install
-  $(basename "$0") ./aspire.rb             # Install from specific cask file
-  $(basename "$0") --uninstall             # Clean up dogfood install
+  $(basename "$0")                                   # Auto-detect cask and adjacent archives
+  $(basename "$0") --archive-root ../native-archives # Install from downloaded archive artifacts
+  $(basename "$0") ./aspire.rb                       # Install from specific cask file
+  $(basename "$0") --uninstall                       # Clean up dogfood install
 EOF
   exit 0
 }
@@ -59,11 +62,113 @@ uninstall() {
   exit 0
 }
 
+read_cask_version() {
+  local caskFile="$1"
+  awk -F'"' '/^[[:space:]]*version[[:space:]]+"/ { print $2; exit }' "$caskFile"
+}
+
+find_archive_if_present() {
+  local archiveRoot="$1"
+  local archiveName="$2"
+
+  find "$archiveRoot" -type f -name "$archiveName" -print -quit 2>/dev/null || true
+}
+
+find_archive() {
+  local archiveRoot="$1"
+  local archiveName="$2"
+  local matches=()
+  local match
+
+  while IFS= read -r match; do
+    matches+=("$match")
+  done < <(find "$archiveRoot" -type f -name "$archiveName" -print | LC_ALL=C sort)
+
+  if [[ "${#matches[@]}" -eq 0 ]]; then
+    echo "Error: Could not find $archiveName under $archiveRoot" >&2
+    exit 1
+  fi
+
+  if [[ "${#matches[@]}" -gt 1 ]]; then
+    echo "Error: Found multiple $archiveName archives under $archiveRoot:" >&2
+    printf '  %s\n' "${matches[@]}" >&2
+    exit 1
+  fi
+
+  printf '%s' "${matches[0]}"
+}
+
+detect_archive_root() {
+  local version="$1"
+  local candidate
+
+  for candidate in "$SCRIPT_DIR" "$SCRIPT_DIR/.."; do
+    if [[ -f "$(find_archive_if_present "$candidate" "aspire-cli-osx-arm64-$version.tar.gz")" &&
+          -f "$(find_archive_if_present "$candidate" "aspire-cli-osx-x64-$version.tar.gz")" ]]; then
+      printf '%s' "$(cd "$candidate" && pwd)"
+      return
+    fi
+  done
+}
+
+rewrite_cask_for_local_archives() {
+  local caskFile="$1"
+  local archiveRoot="$2"
+  local localArchiveDir="$3"
+  local version="$4"
+
+  local armArchive
+  local x64Archive
+  armArchive="$(find_archive "$archiveRoot" "aspire-cli-osx-arm64-$version.tar.gz")"
+  x64Archive="$(find_archive "$archiveRoot" "aspire-cli-osx-x64-$version.tar.gz")"
+
+  mkdir -p "$localArchiveDir"
+  cp "$armArchive" "$localArchiveDir/aspire-cli-osx-arm64-$version.tar.gz"
+  cp "$x64Archive" "$localArchiveDir/aspire-cli-osx-x64-$version.tar.gz"
+
+  local localUrlPrefix="file://$localArchiveDir"
+
+  ruby - "$caskFile" "$localUrlPrefix" <<'RUBY'
+cask_path = ARGV[0]
+local_url_prefix = ARGV[1]
+lines = File.readlines(cask_path, chomp: true)
+rewritten = []
+
+# The cask has a 2-line url stanza:
+#   url "https://github.com/microsoft/aspire/...",
+#       verified: "github.com/microsoft/aspire/"
+# For dogfood install, replace the url with a file:// path and drop the
+# trailing verified line. file:// URLs are exempt from `audit_missing_verified`
+# (brew's `file_url?` short-circuits the check), and dogfood.sh only runs
+# `brew install` — not `brew audit` — so audit_no_match never fires either.
+i = 0
+while i < lines.length
+  line = lines[i]
+  stripped = line.strip
+  if stripped.start_with?('url "https://github.com/microsoft/aspire/releases/download/')
+    rewritten << "  url \"#{local_url_prefix}/aspire-cli-osx-\#{arch}-\#{version}.tar.gz\""
+    i += 1
+    if i < lines.length && lines[i].strip.start_with?('verified:')
+      i += 1
+    end
+    next
+  end
+
+  rewritten << line
+  i += 1
+end
+
+File.write(cask_path, rewritten.join("\n") + "\n")
+RUBY
+}
+
 CASK_FILE=""
+ARCHIVE_ROOT=""
 UNINSTALL=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --archive-root) ARCHIVE_ROOT="$2"; shift 2 ;;
     --uninstall)  UNINSTALL=true; shift ;;
     --help)       usage ;;
     -*)           echo "Unknown option: $1"; usage ;;
@@ -149,6 +254,24 @@ tapCaskDir="$tapRoot/Casks"
 mkdir -p "$tapCaskDir"
 cp "$CASK_FILE" "$tapCaskDir/$CASK_FILENAME"
 
+caskVersion="$(read_cask_version "$CASK_FILE")"
+if [[ -z "$caskVersion" ]]; then
+  echo "Error: Could not read cask version from $CASK_FILE"
+  exit 1
+fi
+
+if [[ -z "$ARCHIVE_ROOT" ]]; then
+  ARCHIVE_ROOT="$(detect_archive_root "$caskVersion")"
+fi
+
+if [[ -n "$ARCHIVE_ROOT" ]]; then
+  ARCHIVE_ROOT="$(cd "$ARCHIVE_ROOT" && pwd)"
+  echo "Using local native archive artifacts from: $ARCHIVE_ROOT"
+  rewrite_cask_for_local_archives "$tapCaskDir/$CASK_FILENAME" "$ARCHIVE_ROOT" "$tapRoot/LocalArtifacts" "$caskVersion"
+else
+  echo "No local native archive artifacts found; installing with URLs from the cask."
+fi
+
 # Install
 echo ""
 echo "Installing $CASK_NAME from local tap..."
@@ -156,17 +279,51 @@ echo "Installing $CASK_NAME from local tap..."
 # the cask file is picked up, causing a "cask unavailable" error.
 HOMEBREW_NO_AUTO_UPDATE=1 brew install --cask "$TAP_NAME/$CASK_NAME"
 
+caskRoot="$(brew --prefix)/Caskroom/$CASK_NAME/$caskVersion"
+if [[ -d "$caskRoot" ]] && xattr -p com.apple.quarantine "$caskRoot/aspire" &>/dev/null; then
+  # Local PR artifacts are unsigned ad-hoc signed binaries. Homebrew correctly
+  # quarantines cask downloads, but macOS kills these dogfood binaries before
+  # the CLI can print its version. Remove quarantine only from this local
+  # dogfood install after Homebrew has finished installing it.
+  xattr -dr com.apple.quarantine "$caskRoot"
+fi
+
 # Verify
 echo ""
-if command -v aspire &>/dev/null; then
-  echo "Installed successfully!"
-  echo "  Path:    $(command -v aspire)"
-  aspireVersion="$(aspire --version 2>&1)" || true
-  echo "  Version: $aspireVersion"
-else
-  echo "Warning: aspire command not found in PATH after install."
-  echo "You may need to restart your shell or add the install location to your PATH."
+if ! command -v aspire &>/dev/null; then
+  echo "Error: aspire command not found in PATH after install." >&2
+  echo "You may need to restart your shell or add the install location to your PATH." >&2
+  exit 1
 fi
+
+# Shadow check — Homebrew symlinks cask binaries into $(brew --prefix)/bin/, so
+# the freshly-installed aspire must resolve under the brew prefix. An older
+# aspire earlier on PATH (e.g. a dotnet-tool install, or a script install under
+# ~/.aspire/bin) would otherwise silently shadow the cask and let this script
+# report "Installed successfully!" against the wrong binary, defeating the
+# whole point of the dogfood. The WinGet dogfood (eng/winget/dogfood.ps1) has
+# the equivalent check via Find-AspireBinaryOnPath -ExpectedVersion.
+# Skipped under ASPIRE_TEST_MODE because the test mock brew puts its fake
+# aspire alongside the mock brew binary, not under $(brew --prefix)/bin/.
+if [[ "${ASPIRE_TEST_MODE:-}" != "true" ]]; then
+  aspirePath="$(command -v aspire)"
+  brewPrefix="$(brew --prefix)"
+  if [[ "$aspirePath" != "$brewPrefix"/* ]]; then
+    echo "Error: 'aspire' resolved to '$aspirePath', not under the Homebrew prefix '$brewPrefix'." >&2
+    echo "An older aspire earlier on PATH is shadowing the Homebrew cask install." >&2
+    echo "Either reorder PATH so '$brewPrefix/bin' wins, or uninstall the older copy." >&2
+    exit 1
+  fi
+fi
+
+echo "Installed successfully!"
+echo "  Path:    $(command -v aspire)"
+if ! aspireVersion="$(aspire --version 2>&1)"; then
+  echo "Error: aspire --version failed after install:" >&2
+  echo "$aspireVersion" >&2
+  exit 1
+fi
+echo "  Version: $aspireVersion"
 
 echo ""
 echo "To uninstall: $(basename "$0") --uninstall"

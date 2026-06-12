@@ -14,13 +14,14 @@ namespace Aspire.Hosting.Kubernetes;
 /// <remarks>
 /// <para>
 /// Create a gateway using <see cref="KubernetesGatewayExtensions.AddGateway"/> and configure
-/// routes using <see cref="KubernetesGatewayExtensions.WithRoute(IResourceBuilder{KubernetesGatewayResource}, string, EndpointReference, IngressPathType)"/>.
+/// routes using <see cref="KubernetesGatewayExtensions.WithRoute(IResourceBuilder{KubernetesGatewayResource}, string, EndpointReference, GatewayPathMatchType)"/>.
 /// </para>
 /// <para>
 /// At publish time, the gateway generates a <c>gateway.networking.k8s.io/v1 Gateway</c> resource
 /// with auto-inferred listeners and one or more <c>HTTPRoute</c> resources in the Helm chart output.
 /// </para>
 /// </remarks>
+/// <ats-remarks />
 /// <example>
 /// <code>
 /// var k8s = builder.AddKubernetesEnvironment("k8s");
@@ -88,8 +89,35 @@ public class KubernetesGatewayResource(
 internal sealed record GatewayRouteConfig(
     string? Host,
     string Path,
-    IngressPathType PathType,
+    GatewayPathMatchType PathType,
     EndpointReference Endpoint);
+
+/// <summary>
+/// Specifies the type of path matching used in a Kubernetes Gateway API <c>HTTPRoute</c> rule.
+/// The values map directly to the <c>matches[].path.type</c> field defined by the Gateway API
+/// (see <see href="https://gateway-api.sigs.k8s.io/api-types/httproute/#path"/>) and are distinct
+/// from the Ingress-flavoured <see cref="IngressPathType"/> because the two specs use different
+/// vocabularies (Ingress: <c>Prefix</c>, Gateway: <c>PathPrefix</c>).
+/// </summary>
+public enum GatewayPathMatchType
+{
+    /// <summary>
+    /// Matches based on a URL path prefix split by <c>/</c>. Equivalent to the Gateway API
+    /// <c>PathPrefix</c> match type.
+    /// </summary>
+    PathPrefix,
+
+    /// <summary>
+    /// Matches the URL path exactly and with case sensitivity.
+    /// </summary>
+    Exact,
+
+    /// <summary>
+    /// Matches the URL path against an implementation-defined regular expression. Support is
+    /// optional in the Gateway API spec; check your controller's documentation before using it.
+    /// </summary>
+    RegularExpression
+}
 
 /// <summary>
 /// Stores TLS configuration for a <see cref="KubernetesGatewayResource"/>.

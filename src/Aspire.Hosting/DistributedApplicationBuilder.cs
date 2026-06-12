@@ -254,7 +254,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var appHostFilePath = options.AppHostFilePath;
 
         var assemblyMetadata = AppHostAssembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
-        var aspireDir = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
+        var aspireDir = ResolveAspireStorePath(assemblyMetadata, AppHostDirectory);
 
         ConfigurePipelineOptions(options);
 
@@ -362,11 +362,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
         _innerBuilder.Services.AddSingleton<ParameterProcessor>();
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<IDistributedApplicationEventing>(Eventing);
         _innerBuilder.Services.AddSingleton<LocaleOverrideContext>();
         _innerBuilder.Services.AddHealthChecks();
@@ -478,7 +476,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 _innerBuilder.Services.AddSingleton<IDashboardEndpointProvider, HostDashboardEndpointProvider>();
                 _innerBuilder.Services.AddEventingSubscriber<DashboardEventHandlers>();
                 _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<DashboardOptions>, ConfigureDefaultDashboardOptions>());
-                _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>());
             }
 
             if (options.EnableResourceLogging)
@@ -501,6 +498,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddSingleton<IRequiredCommandValidator, RequiredCommandValidator>();
 #pragma warning restore ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
+
+            // Terminal host binary path resolution (WithTerminal)
+            _innerBuilder.Services.TryAddEventingSubscriber<TerminalHostEventingSubscriber>();
+
+            // Terminal host failure diagnostics (WithTerminal): unhides the failed host
+            // resource and writes an actionable diagnostic to its console log when a
+            // terminal host transitions to a terminal-failure state. Most common cause is
+            // a CLI/AppHost version mismatch (old bundled aspire-managed without the
+            // 'terminalhost' subcommand). See TerminalHostFailureDiagnosticService.
+            _innerBuilder.Services.AddHostedService<TerminalHostFailureDiagnosticService>();
         }
 
         ConfigureProfilingTelemetry();
@@ -513,6 +520,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
+            _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
             _innerBuilder.Services.AddSingleton<ExecutableCreator>();
             _innerBuilder.Services.AddSingleton<ContainerCreator>();
             _innerBuilder.Services.AddSingleton<DcpExecutor>();
@@ -803,7 +811,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         var application = new DistributedApplication(_innerBuilder.Build());
 
-        _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
+        _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
 
         LogAppBuilt(application);
         ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);
@@ -993,4 +1001,19 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// <returns>The metadata value if found; otherwise, null.</returns>
     private static string? GetMetadataValue(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string key) =>
         assemblyMetadata?.FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase))?.Value;
+
+    private static string ResolveAspireStorePath(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string appHostDirectory)
+    {
+        var baseIntermediateOutputPath = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
+        if (!string.IsNullOrEmpty(baseIntermediateOutputPath))
+        {
+            return baseIntermediateOutputPath;
+        }
+
+        // File-based and dynamically loaded AppHosts do not have the MSBuild intermediate output
+        // metadata that normal project AppHosts get. Use the AppHost directory as the root so
+        // IAspireStore resolves to the workspace-local .aspire folder instead of creating a
+        // .NET-style obj directory for non-.NET AppHosts.
+        return Path.GetFullPath(appHostDirectory);
+    }
 }

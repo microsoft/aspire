@@ -1,15 +1,15 @@
-# Aspire.Hosting.Yarp library
+# YARP hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a YARP reverse proxy instance.
+Use this integration to model, configure, and orchestrate a YARP reverse proxy instance in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire YARP Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Yarp` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Yarp
+```bash
+aspire add Aspire.Hosting.Yarp
 ```
 
 ## Usage examples
@@ -64,15 +64,18 @@ YARP can serve static files alongside proxied routes. There are two approaches:
 builder.AddYarp("static")
        .WithStaticFiles("../static");
 ```
-This will copy files into the container use container files in run mode, and use a bind mount in publish mode.
+This bind mounts files in run mode and copies them into the generated container image in publish mode.
 
 #### Copy files via Docker
 
-You can also use a docker file to copy static assets into the yarp container: e.g.
+You can also use a Dockerfile to copy static assets into the YARP container. Pass the YARP base image used by your deployment as `YARP_BASE_IMAGE` when building the image:
 ```C#
+var yarpBaseImage = builder.AddParameter("yarp-base-image");
+
 builder.AddYarp("frontend")
        .WithStaticFiles()
-       .WithDockerFile("../npmapp");
+       .WithDockerfile("../npmapp")
+       .WithBuildArg("YARP_BASE_IMAGE", yarpBaseImage);
 ```
 
 ```Dockerfile
@@ -83,8 +86,9 @@ COPY . .
 RUN npm install
 RUN npm run build
 
-# Stage 2: Copy static files to YARP container
-FROM mcr.microsoft.com/dotnet/nightly/yarp:2.3.0-preview.4 AS yarp
+# Stage 2: Copy static files into the YARP base image used by your deployment
+ARG YARP_BASE_IMAGE
+FROM ${YARP_BASE_IMAGE} AS yarp
 WORKDIR /app
 COPY --from=builder /app/dist ./wwwroot
 ```
@@ -176,9 +180,10 @@ builder.AddYarp("gateway")
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/reverse-proxies/yarp/
 * [YARP documentation](https://microsoft.github.io/reverse-proxy/)
 * [Aspire documentation](https://aspire.dev/)
-* [YARP integration in Aspire](https://aspire.dev/integrations/reverse-proxies/yarp/)
 * [Service Discovery in Aspire](https://aspire.dev/fundamentals/service-discovery/)
 
 ## Feedback & contributing

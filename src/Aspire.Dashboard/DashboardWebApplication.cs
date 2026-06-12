@@ -23,6 +23,7 @@ using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.Authentication;
@@ -63,6 +64,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     public const int ExitCodeAddressInUse = DashboardExitCodes.AddressInUse;
 
     private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
+    private const string DashboardHttpAuthCookieName = ".Aspire.Dashboard.Auth.Http";
     private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
     private readonly WebApplication _app;
     private readonly ILogger<DashboardWebApplication> _logger;
@@ -337,6 +339,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddSingleton<IKnownPropertyLookup, KnownPropertyLookup>();
 
+        // Resolves per-replica HMP v1 producer streams server-side from the live
+        // resource snapshot stream. Default impl looks up by display name and
+        // replica index in IDashboardClient and connects to the consumer UDS
+        // path the AppHost stamped onto the snapshot.
+        builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver, Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver>();
+
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
@@ -461,6 +469,13 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             _app.UseCors();
         }
 
+        // Use Forwarded Headers middleware if configured. This must run before token validation because sign-in cookie
+        // behavior depends on the normalized request scheme.
+        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
+        {
+            _app.UseForwardedHeaders();
+        }
+
         _app.UseMiddleware<ValidateTokenMiddleware>();
 
         // Configure the HTTP request pipeline.
@@ -497,18 +512,16 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             }
         });
 
-        // Use Forwarded Headers middleware if configured.
-        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
-        {
-            _app.UseForwardedHeaders();
-        }
-
         _app.UseAuthorization();
 
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
         _app.UseAntiforgery();
+        _app.UseWebSockets();
 
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+
+        // Terminal WebSocket proxy
+        _app.MapTerminalWebSocket();
 
         // OTLP HTTP services.
         _app.MapHttpOtlpApi(dashboardOptions.Otlp);
@@ -798,6 +811,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 authentication.AddCookie(options =>
                 {
                     options.Cookie.Name = DashboardAuthCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
                 });
 
                 authentication.AddOpenIdConnect(options =>
@@ -857,6 +871,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                         return Task.CompletedTask;
                     };
                     options.Cookie.Name = DashboardAuthCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
                 });
                 break;
             case FrontendAuthMode.Unsecured:
@@ -949,7 +964,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            // Include the full exception (type, stack trace, inner exceptions)
+            // so that a "dashboard silently died" report has enough breadcrumbs
+            // to find the root cause from the AppHost log alone, without
+            // requiring a debugger attach.
             Console.Error.WriteLine($"Error: {ex.Message}");
+            Console.Error.WriteLine(ex.ToString());
             return ExitCodeUnexpectedError;
         }
     }

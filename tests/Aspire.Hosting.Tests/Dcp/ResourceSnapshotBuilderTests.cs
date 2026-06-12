@@ -48,6 +48,66 @@ public class ResourceSnapshotBuilderTests
         Assert.Equal(["-port", DcpTemplateArgument], GetEnumerablePropertyValue<string>(snapshot, KnownProperties.Resource.AppArgs).ToArray());
     }
 
+    [Fact]
+    public void ExplicitStartExecutableSnapshotWithUnknownStateIsNotStarted()
+    {
+        var executable = Executable.Create("exe", "pwsh");
+        executable.Spec.Start = false;
+        executable.Status = new ExecutableStatus
+        {
+            State = ExecutableState.Unknown
+        };
+
+        var snapshot = CreateSnapshotBuilder().ToSnapshot(executable, CreatePreviousSnapshot());
+
+        Assert.Equal(KnownResourceStates.NotStarted, snapshot.State?.Text);
+    }
+
+    [Fact]
+    public void ExplicitStartExecutableStatusWithUnknownStateIsNotStarted()
+    {
+        var executable = Executable.Create("exe", "pwsh");
+        executable.Spec.Start = false;
+        executable.Status = new ExecutableStatus
+        {
+            State = ExecutableState.Unknown
+        };
+
+        var status = DcpResourceWatcher.GetResourceStatus(executable);
+
+        Assert.Equal(KnownResourceStates.NotStarted, status.State);
+    }
+
+    [Fact]
+    public void ExplicitStartExecutableSnapshotWithEmptyStateIsNotStarted()
+    {
+        var executable = Executable.Create("exe", "pwsh");
+        executable.Spec.Start = false;
+        executable.Status = new ExecutableStatus
+        {
+            State = ""
+        };
+
+        var snapshot = CreateSnapshotBuilder().ToSnapshot(executable, CreatePreviousSnapshot());
+
+        Assert.Equal(KnownResourceStates.NotStarted, snapshot.State?.Text);
+    }
+
+    [Fact]
+    public void ExplicitStartExecutableStatusWithEmptyStateIsNotStarted()
+    {
+        var executable = Executable.Create("exe", "pwsh");
+        executable.Spec.Start = false;
+        executable.Status = new ExecutableStatus
+        {
+            State = ""
+        };
+
+        var status = DcpResourceWatcher.GetResourceStatus(executable);
+
+        Assert.Equal(KnownResourceStates.NotStarted, status.State);
+    }
+
     private static Executable CreateExecutable(AppLaunchArgumentAnnotation[] launchArgumentAnnotations, IReadOnlyList<string> effectiveArgs)
     {
         var executable = Executable.Create("exe", "pwsh");

@@ -357,25 +357,14 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             await _contentLayout.CloseMobileToolbarAsync();
         }
 
-        var title = entry is not null ? FilterLoc[nameof(StructuredFiltering.DialogTitleEditFilter)] : FilterLoc[nameof(StructuredFiltering.DialogTitleAddFilter)];
-        var parameters = new DialogParameters
-        {
-            OnDialogResult = DialogService.CreateDialogCallback(this, HandleFilterDialog),
-            Title = title,
-            Alignment = HorizontalAlignment.Right,
-            PrimaryAction = null,
-            SecondaryAction = null,
-            Width = ViewportInformation.IsDesktop ? "450px" : "100%"
-        };
-        var data = new FilterDialogViewModel
-        {
-            Filter = entry,
-            PropertyKeys = TelemetryRepository.GetLogPropertyKeys(PageViewModel.SelectedResource.Id?.GetResourceKey()),
-            KnownKeys = KnownStructuredLogFields.AllFields,
-            GetFieldValues = TelemetryRepository.GetLogsFieldValues
-        };
-
-        await DialogService.ShowPanelAsync<FilterDialog>(data, parameters);
+        await FilterHelpers.OpenFilterAsync(
+            entry,
+            DialogService,
+            DialogService.CreateDialogCallback(this, HandleFilterDialog),
+            propertyKeys: TelemetryRepository.GetLogPropertyKeys(PageViewModel.SelectedResource.Id?.GetResourceKey()),
+            knownKeys: KnownStructuredLogFields.AllFields,
+            getFieldValues: TelemetryRepository.GetLogsFieldValues,
+            FilterLoc);
     }
 
     private async Task HandleFilterDialog(DialogResult result)
@@ -433,13 +422,13 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private List<MenuButtonItem> GetFilterMenuItems()
     {
-        return this.GetFilterMenuItems(
+        return FilterHelpers.GetFilterMenuItems(
             ViewModel.Filters,
             ViewModel.ClearFilters,
             OpenFilterAsync,
+            afterChangeAsync: () => this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false),
             FilterLoc,
-            DialogsLoc,
-            _contentLayout);
+            DialogsLoc);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

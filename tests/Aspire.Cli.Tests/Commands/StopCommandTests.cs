@@ -290,6 +290,33 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.All(stopAppHostActivities, activity => Assert.Equal(CliExitCodes.Success, activity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode)));
     }
 
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("stop --all")]
+    public async Task StopCommand_NoRunningAppHosts_ReturnsSuccess(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var displayedMessage = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Equal(SharedCommandStrings.AppHostNotRunning, displayedMessage.Message);
+    }
+
     private static TestAppHostAuxiliaryBackchannel CreateConnection(string appHostPath, int processId, bool isInScope = true)
     {
         return new TestAppHostAuxiliaryBackchannel

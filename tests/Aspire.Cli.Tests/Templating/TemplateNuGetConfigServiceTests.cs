@@ -60,7 +60,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         var doc = XDocument.Load(Path.Combine(outputDirectory.FullName, "nuget.config"));
         Assert.Contains(doc.Root!.Element("packageSources")!.Elements("clear"), _ => true);
         Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
-        Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == PackageSourceOverrideMappings.NuGetOrgSource);
+        Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == PackageSources.NuGetOrg);
         Assert.DoesNotContain(doc.Descendants("add"), e => (string?)e.Attribute("value") == "https://private.example/v3/index.json");
         Assert.Null(doc.Root!.Element("disabledPackageSources"));
         Assert.Null(doc.Root!.Element("packageSourceCredentials"));
@@ -89,7 +89,8 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                         new PackageMapping("CommunityToolkit*", communitySource),
                         new PackageMapping(PackageMapping.AllPackages, fallbackSource),
                     ],
-                    new FakeNuGetPackageCache());
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures());
                 return Task.FromResult<IEnumerable<PackageChannel>>([channel]);
             }
         };
@@ -102,7 +103,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(["CommunityToolkit*"], GetPackagePatternsForSource(doc, communitySource));
         Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, fallbackSource));
         Assert.Empty(GetPackagePatternsForSource(doc, channelAspireSource));
-        Assert.Empty(GetPackagePatternsForSource(doc, PackageSourceOverrideMappings.NuGetOrgSource));
+        Assert.Empty(GetPackagePatternsForSource(doc, PackageSources.NuGetOrg));
     }
 
     [Fact]
@@ -225,7 +226,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                 var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache
                 {
                     GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult(Enumerable.Empty<Aspire.Shared.NuGetPackageCli>())
-                });
+                }, new TestFeatures());
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
             }
         };
@@ -258,7 +259,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache());
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
             }
         };
@@ -285,7 +286,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache());
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
                 var stableCh = PackageChannel.CreateExplicitChannel(
                     "stable",
                     PackageChannelQuality.Both,
@@ -296,7 +297,8 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                         [
                             new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "13.3.0", Source = "stable-src" }
                         ])
-                    });
+                    },
+                    features: new TestFeatures());
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, stableCh]);
             }
         };
@@ -326,7 +328,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache());
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
             }
         };
@@ -387,12 +389,13 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     [
                         new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "1.0.0", Source = "implicit-src" }
                     ])
-                });
+                }, new TestFeatures());
                 var hiveCh = PackageChannel.CreateExplicitChannel(
                     "pr-12345",
                     PackageChannelQuality.Both,
                     [new PackageMapping("Aspire*", "pr-src")],
                     new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
                     pinnedVersion: "2.0.0");
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, hiveCh]);
             }

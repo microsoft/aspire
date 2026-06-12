@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
@@ -24,7 +25,7 @@ namespace Aspire.Cli.Projects;
 /// This is used when running in bundle mode (without .NET SDK) to avoid
 /// dynamic project generation and building.
 /// </summary>
-internal sealed class PrebuiltAppHostServer : IAppHostServerProject
+internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 {
     internal const string ClosureMetadataFileName = "closure-metadata.txt";
     internal const string ClosureSourcesFileName = "closure-sources.txt";
@@ -44,6 +45,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     private readonly IPackagingService _packagingService;
     private readonly CliExecutionContext _executionContext;
     private readonly ILogger _logger;
+    private readonly BundleLayoutLease? _layoutLease;
     private readonly string _workingDirectory;
     private readonly string _projectReferencePrepareLockPath;
     private readonly AppHostServerProjectLayoutStore _projectLayoutStore;
@@ -65,6 +67,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     /// <param name="packagingService">The packaging service for channel resolution.</param>
     /// <param name="executionContext">The CLI execution context providing identity channel information.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
+    /// <param name="layoutLease">The active bundle layout lease, if this server is running from a versioned bundle.</param>
     public PrebuiltAppHostServer(
         string appPath,
         string socketPath,
@@ -74,7 +77,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         IDotNetSdkInstaller sdkInstaller,
         IPackagingService packagingService,
         CliExecutionContext executionContext,
-        ILogger logger)
+        ILogger logger,
+        BundleLayoutLease? layoutLease = null)
     {
         _appDirectoryPath = Path.GetFullPath(appPath);
         _socketPath = socketPath;
@@ -85,6 +89,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         _packagingService = packagingService;
         _executionContext = executionContext;
         _logger = logger;
+        _layoutLease = layoutLease;
 
         // Create a working directory for this app host session
         var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appDirectoryPath));
@@ -632,9 +637,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             // --source argument list must agree so non-Aspire transitives have the same
             // catch-all source in both views.
             if (hasOverride && !matchedChannelHasAllPackagesMapping &&
-                !sources.Contains(PackageSourceOverrideMappings.NuGetOrgSource, StringComparer.OrdinalIgnoreCase))
+                !sources.Contains(PackageSources.NuGetOrg, StringComparer.OrdinalIgnoreCase))
             {
-                sources.Add(PackageSourceOverrideMappings.NuGetOrgSource);
+                sources.Add(PackageSources.NuGetOrg);
             }
         }
         catch (Exception ex)
@@ -684,7 +689,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
             return await TemporaryNuGetConfig.CreateAsync(
                 PackageSourceOverrideMappings.Create(packageSourceOverride, matchedChannel),
-                configureGlobalPackagesFolder);
+                configureGlobalPackagesFolder,
+                configureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(packageSourceOverride) : null);
         }
 
         if (string.IsNullOrEmpty(requestedChannel))
@@ -740,7 +746,69 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         // restore honors the channel's package source mappings. Let IO/XML failures
         // surface instead of silently falling back to the caller's unmapped sources,
         // which could otherwise restore from an unintended feed.
-        return await TemporaryNuGetConfig.CreateAsync(channel.Mappings, channel.ConfigureGlobalPackagesFolder);
+        return await TemporaryNuGetConfig.CreateAsync(
+            channel.Mappings,
+            channel.ConfigureGlobalPackagesFolder,
+            channel.ConfigureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(GetPrimaryFeedUrl(channel.Mappings)) : null);
+    }
+
+    /// <summary>
+    /// Returns the absolute <c>globalPackagesFolder</c> path to write into a temporary NuGet.config
+    /// when the resolved channel asks for per-build cache isolation (today: <c>staging</c>).
+    /// </summary>
+    /// <remarks>
+    /// The default <see cref="NuGetConfigMerger.DefaultGlobalPackagesFolderValue"/> is a relative
+    /// <c>.nugetpackages</c> path that NuGet resolves next to the nuget.config it came from. For
+    /// the <see cref="NuGetConfigMerger"/> workspace-merge flow that's fine — the merged config is
+    /// persistent. For <see cref="PrebuiltAppHostServer"/>'s <see cref="TemporaryNuGetConfig"/>
+    /// the config file lives in a Directory.CreateTempSubdirectory("aspire-nuget-config") folder
+    /// that <see cref="TemporaryNuGetConfig.Dispose"/> recursively deletes after restore. NuGet
+    /// would have just populated <c>&lt;temp&gt;/.nugetpackages/&lt;id&gt;/&lt;version&gt;/</c>
+    /// with the staging assemblies, <see cref="NuGet.BundleNuGetService"/> would have baked those
+    /// paths into <c>integration-package-probe-manifest.json</c>, and aspire-managed would then
+    /// try to load assemblies the dispose just removed — observed as a hang during DI / assembly
+    /// loading on macOS osx-arm64 polyglot staging builds. Anchoring the override at a stable
+    /// per-build location keeps the cached packages alive for as long as any manifest references
+    /// them.
+    ///
+    /// The cache lives under <see cref="CliExecutionContext.AspireHomeDirectory"/> (i.e. the
+    /// <c>ASPIRE_HOME</c> override when set, otherwise <c>~/.aspire</c>) rather than under
+    /// <see cref="_workingDirectory"/> so that two AppHosts running on the same machine against
+    /// the same staging build can share a single restore — the unit of cache isolation here is
+    /// the staging build, not the individual restore command.
+    ///
+    /// The cache subdirectory is keyed by a truncated hash of the resolved feed URL (first 8
+    /// hex chars of <see cref="System.IO.Hashing.XxHash3"/> over the trimmed/lower-cased URL).
+    /// Two staging builds of the same release branch — which share the same stable-shaped semver
+    /// (e.g. <c>13.4.0</c>) but ship from different darc feeds — therefore each get their own
+    /// cache. A user pointing the same CLI at multiple <c>overrideStagingFeed</c> values during
+    /// dev/test also gets a distinct cache per feed, instead of one bucket silently shared across
+    /// feeds. NuGet identifies packages by <c>(id, version)</c> only, so without that per-feed
+    /// key the second feed's restore would silently reuse the first feed's now-stale
+    /// <c>13.4.0</c> assemblies. When <paramref name="feedUrl"/> is null or empty (defensive —
+    /// both call sites currently always pass a real URL) the key falls back to <c>"default"</c>
+    /// so the path is still well-formed.
+    /// </remarks>
+    private string ResolveStableGlobalPackagesFolder(string? feedUrl)
+    {
+        var cacheKey = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl) ?? "default";
+        return Path.Combine(
+            CliPathHelper.GetStagingNuGetPackagesDirectory(_executionContext.AspireHomeDirectory),
+            cacheKey);
+    }
+
+    /// <summary>
+    /// Returns the URL we use as the cache-key input when materializing a temp nuget.config from
+    /// a <see cref="PackageChannel"/>. Prefers the explicit <c>Aspire*</c> mapping (the staging
+    /// channel's primary feed and the one whose restored assemblies actually need cache
+    /// isolation), falling back to the first mapping for forward compatibility with channel
+    /// shapes we don't yet emit.
+    /// </summary>
+    private static string GetPrimaryFeedUrl(PackageMapping[] mappings)
+    {
+        var aspire = mappings.FirstOrDefault(m =>
+            string.Equals(m.PackageFilter, "Aspire*", StringComparison.OrdinalIgnoreCase));
+        return aspire?.Source ?? mappings[0].Source;
     }
 
     private async Task<string?> ResolveLocalPackageSourceOverrideAsync(string? requestedChannel, CancellationToken cancellationToken)
@@ -856,7 +924,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
+                // Promoted from LogTrace to LogDebug so that apphost-server stdout reaches the
+                // CLI's on-disk log under the default file-logger filter (Debug). Previously
+                // these lines were dropped entirely, which made apphost-side warnings
+                // (for example, "LoaderExceptions" from the type-discovery path) invisible to
+                // anyone diagnosing a "no code generator found" / "no language support found"
+                // error. See https://github.com/microsoft/aspire/issues/16729.
+                _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
                 outputCollector.AppendOutput(e.Data);
             }
         };
@@ -864,7 +938,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
+                // Promoted from LogTrace to LogInformation so that apphost-server stderr is
+                // visible at the default console log level (Information). Stderr is reserved
+                // for genuine problems in well-behaved server processes, so surfacing it
+                // by default is appropriate. See https://github.com/microsoft/aspire/issues/16729.
+                _logger.LogInformation("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
                 outputCollector.AppendError(e.Data);
             }
         };
@@ -958,6 +1036,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             }
         }
 
+        _layoutLease?.AddEnvironment(startInfo);
+
         if (debug)
         {
             startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
@@ -971,6 +1051,12 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
     /// <inheritdoc />
     public string GetInstanceIdentifier() => _appDirectoryPath;
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _layoutLease?.Dispose();
+    }
 
     /// <summary>
     /// Reads the project reference assembly names written by the MSBuild target during build.

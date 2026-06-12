@@ -2,17 +2,25 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Layout;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Mcp;
+using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class AppHostServerSessionTests
+public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task Start_DoesNotMutateCallerEnvironmentVariables()
@@ -104,6 +112,86 @@ public class AppHostServerSessionTests
         Assert.NotEqual(parentActivity.Id, receivedEnvironmentVariables[ProfilingTelemetry.EnvironmentVariables.TraceParent]);
     }
 
+    [Fact]
+    public async Task GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout()
+    {
+        var project = new RecordingAppHostServerProject();
+
+        await using var session = AppHostServerSession.Start(
+            project,
+            environmentVariables: null,
+            debug: false,
+            NullLogger<AppHostServerSession>.Instance);
+
+        var stopwatch = Stopwatch.StartNew();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => session.GetRpcClientAsync(TestContext.Current.CancellationToken)).DefaultTimeout();
+        stopwatch.Stop();
+
+        Assert.Equal("AppHost server process exited before the RPC connection could be established. Exit code: 0.", exception.Message);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
+            $"Expected RPC connection to fail promptly after the server process exited, but it took {stopwatch.Elapsed}.");
+    }
+
+    [Fact]
+    public async Task CreateAsync_DisposesProjectWhenPrepareFails()
+    {
+        var project = new FakeFailingAppHostServerProject(Directory.GetCurrentDirectory());
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (_, _) => Task.FromResult<IAppHostServerProject>(project)
+        };
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration());
+        var sessionFactory = new AppHostServerSessionFactory(
+            projectFactory,
+            NullLogger<AppHostServerSession>.Instance,
+            profilingTelemetry);
+
+        var result = await sessionFactory.CreateAsync(
+            project.AppDirectoryPath,
+            "13.4.0",
+            [],
+            launchSettingsEnvVars: null,
+            debug: false,
+            CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.True(project.Disposed);
+    }
+
+    [Fact]
+    public void CreatePrebuiltAppHostServer_DisposesLayoutLeaseWhenConstructorFails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = workspace.CreateDirectory("apphost").FullName;
+        var integrationCachePathBlockedByFile = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations");
+        File.WriteAllText(integrationCachePathBlockedByFile, string.Empty);
+
+        var versionDirectory = workspace.CreateDirectory("version");
+        var versionLease = BundleVersionLease.Acquire(versionDirectory.FullName, "test", "apphost-server");
+        var layoutLease = new BundleLayoutLease(
+            new LayoutConfiguration(),
+            versionLease);
+        var factory = CreateAppHostServerProjectFactory();
+
+        Assert.True(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
+
+        try
+        {
+            Assert.ThrowsAny<IOException>(() => factory.CreatePrebuiltAppHostServer(
+                appPath,
+                "test.sock",
+                new LayoutConfiguration(),
+                layoutLease));
+
+            Assert.False(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
+        }
+        finally
+        {
+            layoutLease.Dispose();
+        }
+    }
+
     private static ActivityListener CreateActivityListener(string sourceName)
     {
         var listener = new ActivityListener
@@ -120,6 +208,26 @@ public class AppHostServerSessionTests
         return new ConfigurationBuilder()
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
+    }
+
+    private static AppHostServerProjectFactory CreateAppHostServerProjectFactory()
+    {
+        var executionContext = TestExecutionContextFactory.CreateTestContext();
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            executionContext,
+            NullLogger<BundleNuGetService>.Instance);
+
+        return new AppHostServerProjectFactory(
+            new TestDotNetCliRunner(),
+            MockPackagingServiceFactory.Create(),
+            new NullBundleService(),
+            nugetService,
+            new TestDotNetSdkInstaller(),
+            executionContext,
+            NullLoggerFactory.Instance);
     }
 
     private sealed class RecordingAppHostServerProject : IAppHostServerProject

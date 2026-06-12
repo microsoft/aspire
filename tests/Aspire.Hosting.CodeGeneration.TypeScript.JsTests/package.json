@@ -12,7 +12,7 @@
     "eslint": "^10.0.3",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.57.1",
-    "vitest": "^3.2.1",
+    "vitest": "^4.1.0",
     "vscode-jsonrpc": "^8.2.0"
   },
   "overrides": {

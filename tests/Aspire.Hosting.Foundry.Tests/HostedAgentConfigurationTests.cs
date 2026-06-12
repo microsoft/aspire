@@ -99,6 +99,21 @@ public class HostedAgentConfigurationTests
     }
 
     [Fact]
+    public void ToProjectsAgentVersionCreationOptions_ThrowsForReservedEnvironmentVariableNames()
+    {
+        var config = new HostedAgentConfiguration("myimage:latest");
+        config.EnvironmentVariables["PORT"] = "8000";
+        config.EnvironmentVariables["AGENT_NAME"] = "agent";
+        config.EnvironmentVariables["FOUNDRY_MODE"] = "hosted";
+
+        var ex = Assert.Throws<DistributedApplicationException>(() => config.ToProjectsAgentVersionCreationOptions("target"));
+
+        Assert.Equal(
+            "Foundry hosted agent for target resource 'target' contains environment variable names that are reserved by Foundry Hosted Agents. Reserved name(s): 'AGENT_NAME', 'FOUNDRY_MODE', 'PORT'",
+            ex.Message);
+    }
+
+    [Fact]
     public void DefaultMetadata_ContainsDeployedByAndOn()
     {
         var config = new HostedAgentConfiguration("myimage:latest");

@@ -15,6 +15,7 @@ Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesNodePoolResource
 Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesResource [ExposeProperties]
 
 # Enum Types
+enum:Aspire.Hosting.Kubernetes.GatewayPathMatchType = PathPrefix | Exact | RegularExpression
 enum:Aspire.Hosting.Kubernetes.IngressPathType = Prefix | Exact | ImplementationSpecific
 
 # Capabilities
@@ -65,8 +66,8 @@ Aspire.Hosting.Kubernetes/withGatewayClass(className: string) -> Aspire.Hosting.
 Aspire.Hosting.Kubernetes/withGatewayClassParam(className: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
 Aspire.Hosting.Kubernetes/withGatewayHostname(hostname: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
 Aspire.Hosting.Kubernetes/withGatewayHostnameParam(hostname: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
-Aspire.Hosting.Kubernetes/withGatewayHostRoute(host: string, path: string, endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, pathType?: enum:Aspire.Hosting.Kubernetes.IngressPathType) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
-Aspire.Hosting.Kubernetes/withGatewayPathRoute(path: string, endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, pathType?: enum:Aspire.Hosting.Kubernetes.IngressPathType) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
+Aspire.Hosting.Kubernetes/withGatewayHostRoute(host: string, path: string, endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, pathType?: enum:Aspire.Hosting.Kubernetes.GatewayPathMatchType) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
+Aspire.Hosting.Kubernetes/withGatewayPathRoute(path: string, endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, pathType?: enum:Aspire.Hosting.Kubernetes.GatewayPathMatchType) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
 Aspire.Hosting.Kubernetes/withGatewayTls(secretName: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
 Aspire.Hosting.Kubernetes/withGatewayTlsAuto() -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
 Aspire.Hosting.Kubernetes/withGatewayTlsIssuer(issuer: Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.CertManagerIssuerResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
@@ -82,10 +83,10 @@ Aspire.Hosting.Kubernetes/withIngressAnnotation(key: string, value: string) -> A
 Aspire.Hosting.Kubernetes/withIngressAnnotationParam(key: string, value: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Kubernetes/withIngressClass(className: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Kubernetes/withIngressClassParam(className: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
+Aspire.Hosting.Kubernetes/withIngressHostAndPath(host: string, path: string, endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, pathType?: enum:Aspire.Hosting.Kubernetes.IngressPathType) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Kubernetes/withIngressHostname(hostname: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Kubernetes/withIngressHostnameParam(hostname: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
-Aspire.Hosting.Kubernetes/withIngressHostRoute(host: string, path: string, endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, pathType?: enum:Aspire.Hosting.Kubernetes.IngressPathType) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
-Aspire.Hosting.Kubernetes/withIngressPathRoute(path: string, endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, pathType?: enum:Aspire.Hosting.Kubernetes.IngressPathType) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
+Aspire.Hosting.Kubernetes/withIngressPath(path: string, endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, pathType?: enum:Aspire.Hosting.Kubernetes.IngressPathType) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Kubernetes/withIngressTls(secretName: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Kubernetes/withIngressTlsAuto() -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Kubernetes/withIngressTlsParam(secretName: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource

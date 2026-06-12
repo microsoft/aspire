@@ -4,7 +4,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to exercise resource command arguments.
 #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
 
 internal static class CommandResources
@@ -877,7 +876,7 @@ internal static class CommandResources
                 displayName: "Stop all resources",
                 executeCommand: async (c) =>
                 {
-                    await ExecuteCommandForAllResourcesAsync(c.ServiceProvider, KnownResourceCommands.StopCommand, c.CancellationToken);
+                    await ExecuteCommandForAllResourcesAsync(c.Services, KnownResourceCommands.StopCommand, c.CancellationToken);
                     return CommandResults.Success();
                 },
                 commandOptions: new() { IconName = "Stop", IconVariant = IconVariant.Filled })
@@ -886,7 +885,7 @@ internal static class CommandResources
                 displayName: "Start all resources",
                 executeCommand: async (c) =>
                 {
-                    await ExecuteCommandForAllResourcesAsync(c.ServiceProvider, KnownResourceCommands.StartCommand, c.CancellationToken);
+                    await ExecuteCommandForAllResourcesAsync(c.Services, KnownResourceCommands.StartCommand, c.CancellationToken);
                     return CommandResults.Success();
                 },
                 commandOptions: new() { IconName = "Play", IconVariant = IconVariant.Filled });
@@ -1173,4 +1172,4 @@ internal static class CommandResources
 }
 
 #pragma warning restore ASPIREPROCESSCOMMAND001
-#pragma warning restore ASPIREINTERACTION001
+

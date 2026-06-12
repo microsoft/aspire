@@ -94,51 +94,25 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
             workspace: workspace,
             testName: testName);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-        var testBodyFailed = false;
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        try
-        {
-            await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-            await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-            await auto.AspireNewAsync(projectName, counter, template: template);
-            configureProject(Path.Combine(workspace.WorkspaceRoot.FullName, projectName));
+        await auto.AspireNewAsync(projectName, counter, template: template);
+        configureProject(Path.Combine(workspace.WorkspaceRoot.FullName, projectName));
 
-            await AssertAspireCommandOutputAsync(
-                auto,
-                counter,
-                projectName,
-                command,
-                expectedExitCode,
-                outputExpectation,
-                recordingPath,
-                timeout);
-        }
-        catch
-        {
-            testBodyFailed = true;
-            throw;
-        }
-        finally
-        {
-            try
-            {
-                await auto.TypeAsync("exit");
-                await auto.EnterAsync();
-                await pendingRun;
-            }
-            catch
-            {
-                if (!testBodyFailed)
-                {
-                    throw;
-                }
-            }
-        }
+        await AssertAspireCommandOutputAsync(
+            auto,
+            counter,
+            projectName,
+            command,
+            expectedExitCode,
+            outputExpectation,
+            recordingPath,
+            timeout);
     }
 
     private static async Task AssertAspireCommandOutputAsync(
@@ -224,7 +198,7 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
     private static readonly CommandOutputExpectation s_typeScriptRunOutputExpectation = new(
         RequiredText:
         [
-            "apphost.ts(1,15): error TS1109: Expression expected.",
+            "apphost.mts(1,15): error TS1109: Expression expected.",
             "The TypeScript (Node.js) apphost failed."
         ],
         ForbiddenText:
@@ -238,7 +212,7 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
         [
             RunCommandStrings.FailedToStartAppHost,
             RunCommandStrings.RecentAppHostStartupOutput,
-            "apphost.ts(1,15): error TS1109: Expression expected.",
+            "apphost.mts(1,15): error TS1109: Expression expected.",
             "AppHost process exited with code 2."
         ],
         ForbiddenText:
@@ -286,7 +260,7 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
 
     private static void WriteBrokenTypeScriptAppHost(string projectDirectory)
     {
-        File.WriteAllText(Path.Combine(projectDirectory, "apphost.ts"), "const value = ;");
+        File.WriteAllText(Path.Combine(projectDirectory, "apphost.mts"), "const value = ;");
     }
 
     private sealed record CommandOutputExpectation(string[] RequiredText, string[] ForbiddenText)

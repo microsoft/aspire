@@ -27,7 +27,7 @@ func main() {
 	builder.AddSqlServer("sql-custom-pass", &aspire.AddSqlServerOptions{Password: &customPassword})
 
 	sqlChained := builder.AddSqlServer("sql-chained")
-	sqlChained.WithLifetime(aspire.ContainerLifetimePersistent)
+	sqlChained.WithPersistentLifetime()
 	sqlChained.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("sql-chained-data")})
 	sqlChained.WithHostPort(12433)
 

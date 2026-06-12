@@ -19,6 +19,9 @@ public partial class NotificationEntryComponent : ComponentBase
     [CascadingParameter]
     public FluentDialog Dialog { get; set; } = default!;
 
+    [Inject]
+    public required IServiceProvider Services { get; init; }
+
     private string IntentClass => Entry.Intent switch
     {
         MessageIntent.Success => "intent-success",
@@ -55,7 +58,7 @@ public partial class NotificationEntryComponent : ComponentBase
             try
             {
                 Dialog.Hide();
-                await primaryAction.OnClick();
+                await primaryAction.OnClick(Services);
             }
             finally
             {

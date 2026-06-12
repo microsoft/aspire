@@ -246,6 +246,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.ErrorTextWriter = errorWriter;
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -266,6 +267,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -300,6 +302,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.ErrorTextWriter = errorWriter;
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -432,8 +435,11 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task Banner_DisplayedWithExplicitBannerFlag_InNonInteractiveEnvironment()
+    public async Task Banner_NotDisplayedWithExplicitBannerFlag_InNonInteractiveEnvironment()
     {
+        // Even when --banner is explicitly passed, the banner should NOT display in a
+        // non-interactive environment because Spectre.Console's Live display requires
+        // valid console handles (e.g., stdout must not be redirected).
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = true }; // Not first run
         var bannerService = new TestBannerService();
@@ -448,7 +454,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.Banner]);
 
-        Assert.True(bannerService.WasBannerDisplayed);
+        Assert.False(bannerService.WasBannerDisplayed);
     }
 
     [Fact]

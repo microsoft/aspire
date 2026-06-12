@@ -96,12 +96,27 @@ with create_builder() as builder:
     container.with_otlp_exporter(protocol="HttpJson")
     # addDockerfile
     docker_container = builder.add_dockerfile("resource", ".")
+    dockerfile_factory = lambda factory_context: """FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+WORKDIR /app
+ENTRYPOINT ["dotnet", "App.dll"]"""
+    docker_factory_container = builder.add_dockerfile_factory("dockerfactoryapp", ".", dockerfile_factory, stage="runtime")
     docker_builder_container = builder.add_dockerfile_builder("builder-resource", ".", configure_dockerfile_builder, stage="runtime")
     docker_container.with_dockerfile_builder(".", configure_dockerfile_builder, stage="runtime")
+    docker_factory_container.with_dockerfile_factory(".", dockerfile_factory, stage="runtime")
     # addExecutable (pre-existing)
     exe = builder.add_executable("resource", "echo", ".", [])
     # addProject (pre-existing)
     project = builder.add_project("resource", ".", launch_profile_or_options="default")
+    project.with_endpoints_in_env(["https"])
+
+    def custom_health_check():
+        return {
+            "Status": "Healthy",
+            "Description": "custom health check",
+            "Data": {"custom": "value"},
+        }
+
+    builder.add_health_check("custom_check", custom_health_check)
     # addCSharpApp
     csharp_app = builder.add_c_sharp_app("resource", ".")
     # addRedis
@@ -125,6 +140,38 @@ with create_builder() as builder:
     )
     # withDockerfileBaseImage
     container.with_dockerfile_base_image()
+    # withContainerFiles
+    container.with_container_files(
+        "/usr/lib/aspire/container-files",
+        ".",
+        options={
+            "DefaultOwner": 1000,
+            "DefaultGroup": 1000,
+            "Umask": 0o022,
+        },
+    )
+
+    # withContainerFilesCallback — build entries dynamically via the context factory methods
+    def container_files_callback(files_ctx, files_cancellation_token):
+        files_services = files_ctx.services
+        files_logger_factory = files_services.get_logger_factory()
+        files_logger = files_logger_factory.create_logger("ValidationAppHost.ContainerFilesCallback")
+        files_logger.log_information("ContainerFilesCallback services")
+        app_config = files_ctx.create_file("app.conf", contents="key=value", mode=0o644)
+        nested_config = files_ctx.create_file("nested.conf", contents="nested=true")
+        conf_dir = files_ctx.create_dir("conf.d", [nested_config], mode=0o755)
+        cert = files_ctx.create_certificate_file("server.pem", contents="-----BEGIN CERTIFICATE-----")
+        return [app_config, conf_dir, cert]
+
+    container.with_container_files_callback(
+        "/usr/lib/aspire/container-files",
+        container_files_callback,
+        options={
+            "DefaultOwner": 1000,
+            "DefaultGroup": 1000,
+            "Umask": 0o022,
+        },
+    )
     # withImageRegistry
     container.with_image_registry("docker.io")
     # ===================================================================
@@ -142,6 +189,7 @@ with create_builder() as builder:
     built_connection_string.with_connection_property_value("Key", "Value")
     container.with_reference(endpoint)
     container.with_reference("https://example.com/", name="external-uri")
+    external_service = builder.add_external_service("external-service", "https://example.com")
     built_connection_string.with_connection_property("Host", expr)
     built_connection_string.with_connection_property("Mode", "Development")
     vnet = builder.add_azure_virtual_network("vnet", address_prefix="10.0.0.0/16")
@@ -178,6 +226,9 @@ with create_builder() as builder:
         tagged_steps = list(config_pipeline.steps_by_tag(WellKnownPipelineTags.BuildCompute))
         _step_name = all_steps[0].name
         _description = all_steps[0].description
+        _depends_on_steps = all_steps[0].depends_on_steps
+        _required_by_steps = tagged_steps[0].required_by_steps
+        _tags = tagged_steps[0].tags
         all_steps[0].add_tag("validated")
         all_steps[0].depends_on("restore")
         tagged_steps[0].required_by(WellKnownPipelineSteps.Publish)
@@ -196,6 +247,8 @@ with create_builder() as builder:
     # withEnvironment - connection string resource
     container.with_environment("MY_CONN", env_connection_string)
     container.with_environment("MY_EXPR_CONN", expression_connection_string)
+    # withEnvironment - external service resource
+    container.with_environment("MY_EXTERNAL_SERVICE", external_service)
     container.with_env_callback(configure_environment_callback)
     container.with_args_callback(configure_args_callback)
     container.with_urls_callback(configure_urls_callback)
@@ -238,6 +291,16 @@ with create_builder() as builder:
     container.with_mcp_server()
     # withRequiredCommand
     container.with_required_command("docker")
+
+    def required_command_validation(validation_ctx):
+        _validation_resolved_path = validation_ctx.resolved_path
+        validation_services = validation_ctx.services
+        validation_logger_factory = validation_services.get_logger_factory()
+        validation_logger = validation_logger_factory.create_logger("ValidationAppHost.RequiredCommandValidation")
+        validation_logger.log_information("RequiredCommandValidation services")
+        return validation_ctx.success()
+
+    container.with_required_command_validation("docker", required_command_validation)
     # withToolIgnoreExistingFeeds
     tool.with_tool_ignore_existing_feeds()
     # withToolIgnoreFailedSources
@@ -279,6 +342,7 @@ with create_builder() as builder:
     builder_execution_context = builder.execution_context
     execution_context_service_provider = builder_execution_context.service_provider
     _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
+    resource_command_service = execution_context_service_provider.get_resource_command_service()
 
     def configure_eventing_subscriber(registration_context):
         _subscriber_execution_context = registration_context.execution_context
@@ -387,10 +451,241 @@ with create_builder() as builder:
     container.with_url("http://localhost")
     # withUrl - ReferenceExpression
     container.with_url(ReferenceExpression.format_string("http://localhost"))
+    # withHealthCheck
+    container.with_health_check("custom_check")
     # withHttpHealthCheck
     container.with_http_health_check()
     # withCommand
-    container.with_command("command", "Command", lambda *_args, **_kwargs: {"success": True})
+    def update_command_state(ctx):
+        snapshot = ctx.resource_snapshot
+        update_state_services = ctx.services
+        update_state_logger_factory = update_state_services.get_logger_factory()
+        update_state_logger = update_state_logger_factory.create_logger("ValidationAppHost.UpdateCommandState")
+        update_state_logger.log_information("UpdateCommandState services")
+        return "Enabled" if snapshot.get("HealthStatus") == "Healthy" else "Disabled"
+
+    def echo_command(ctx):
+        message = ctx.arguments.value("message")
+        echo_services = ctx.services
+        echo_logger_factory = echo_services.get_logger_factory()
+        echo_logger = echo_logger_factory.create_logger("ValidationAppHost.EchoCommand")
+        echo_logger.log_information("Echo command services")
+        return {"success": message == "hello"}
+
+    def validate_command_arguments(ctx):
+        validation_services = ctx.services
+        validation_logger_factory = validation_services.get_logger_factory()
+        validation_logger = validation_logger_factory.create_logger("ValidationAppHost.ValidateCommandArguments")
+        validation_logger.log_information("Validate command arguments services")
+        return None
+
+    container.with_command(
+        "noop",
+        "Noop",
+        lambda *_args, **_kwargs: {"success": True},
+        command_options={"UpdateState": update_command_state}
+    )
+
+    def restart_command(_ctx):
+        return resource_command_service.execute_command(container, "echo", arguments={"message": "hello"})
+
+    container.with_command(
+        "echo",
+        "Echo",
+        echo_command,
+        command_options={"Arguments": [{"Name": "message", "InputType": "Text", "Required": True}], "ValidateArguments": validate_command_arguments}
+    )
+    container.with_command("restart", "Restart", restart_command)
+
+    def https_endpoints_update(https_ctx):
+        _https_resource = https_ctx.resource
+        _https_model = https_ctx.model
+        https_services = https_ctx.services
+        https_logger_factory = https_services.get_logger_factory()
+        https_logger = https_logger_factory.create_logger("ValidationAppHost.HttpsEndpointsUpdate")
+        https_logger.log_information("HttpsEndpointsUpdate services")
+
+    def https_certificate_configuration(cert_ctx):
+        _cert_resource = cert_ctx.resource
+        certificate_path = cert_ctx.certificate_path
+        key_path = cert_ctx.key_path
+        cert_ctx.arguments.add("--certificate")
+        cert_ctx.arguments.add(certificate_path)
+        cert_ctx.arguments.add("--key")
+        cert_ctx.arguments.add(key_path)
+        cert_ctx.env.set("Kestrel__Certificates__Path", certificate_path)
+        cert_ctx.env.set("Kestrel__Certificates__KeyPath", key_path)
+
+    container.with_https_certificate_config(https_certificate_configuration)
+
+    container.subscribe_https_endpoints_update(https_endpoints_update)
+
+    def container_build_options(build_ctx):
+        build_ctx.destination = "Registry"
+        build_ctx.image_format = "Oci"
+        build_ctx.target_platform = "LinuxAmd64"
+        build_ctx.output_path = "./artifacts/container-image"
+        build_ctx.local_image_name = "validation-image"
+        build_ctx.local_image_tag = "latest"
+        _build_resource = build_ctx.resource
+        _build_execution_context = build_ctx.execution_context
+        build_services = build_ctx.services
+        build_logger_factory = build_services.get_logger_factory()
+        build_logger = build_logger_factory.create_logger("ValidationAppHost.ContainerBuildOptions")
+        build_logger.log_information("ContainerBuildOptions services")
+
+    container.with_container_build_options(container_build_options)
+
+    # Test bench for the polyglot IInteractionService API: prompts for a region, then dynamically
+    # loads the available zones for that region into a second choice input. Reached via the command's
+    # service provider (services.get_interaction_service()), which only prompts when the
+    # interaction service is available (the interactive dashboard path).
+    def pick_zone_command(ctx):
+        interaction_service = ctx.services.get_interaction_service()
+        if not interaction_service.is_available():
+            return {"success": True, "message": "Interaction service is not available."}
+
+        region_input = interaction_service.create_choice_input(
+            "region",
+            choices=[{"Value": "us", "Label": "United States"}, {"Value": "eu", "Label": "Europe"}]
+        )
+
+        def load_zones(load_context):
+            region = load_context.inputs().value("region")
+            zones = ([{"Value": "eu-west", "Label": "EU West"}, {"Value": "eu-north", "Label": "EU North"}]
+                     if region == "eu"
+                     else [{"Value": "us-east", "Label": "US East"}, {"Value": "us-west", "Label": "US West"}])
+            load_context.input().set_choice_options(zones)
+
+        zone_input = interaction_service.create_choice_input("zone").with_dynamic_loading(load_zones)
+
+        result = interaction_service.prompt_inputs(
+            "Pick a zone",
+            "Choose a region, then pick a zone from the dynamically loaded options.",
+            [region_input, zone_input]
+        )
+        canceled = result.canceled()
+        return {"success": not canceled, "canceled": canceled}
+
+    container.with_command("pick-zone", "Pick Zone", pick_zone_command)
+    # Exhaustive coverage of the remaining IInteractionService surface so every newly added member is
+    # exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
+    # the dynamic-loading context accessors/setters, and the option/result DTO fields.
+    def interaction_showcase_command(ctx):
+        interaction_service = ctx.services.get_interaction_service()
+        if not interaction_service.is_available():
+            return {"success": True, "message": "Interaction service is not available."}
+
+        confirmation = interaction_service.prompt_confirmation(
+            "Confirm",
+            "Proceed?",
+            options={
+                "PrimaryButtonText": "Yes",
+                "SecondaryButtonText": "No",
+                "ShowSecondaryButton": True,
+                "ShowDismiss": True,
+                "EnableMessageMarkdown": True,
+                "Intent": "Confirmation",
+            }
+        )
+
+        message_box = interaction_service.prompt_message_box(
+            "Notice",
+            "Read this.",
+            options={"PrimaryButtonText": "OK", "Intent": "Information"}
+        )
+
+        notification = interaction_service.prompt_notification(
+            "Heads up",
+            "Something happened.",
+            options={
+                "Intent": "Warning",
+                "LinkText": "Learn more",
+                "LinkUrl": "https://aspire.dev",
+                "ShowDismiss": True,
+            }
+        )
+
+        text_input = interaction_service.create_text_input(
+            "name",
+            options={
+                "Label": "Name",
+                "Description": "Your **name**",
+                "EnableDescriptionMarkdown": True,
+                "Required": True,
+                "Placeholder": "Jane Doe",
+                "Value": "Jane",
+                "MaxLength": 64,
+                "Disabled": False,
+            }
+        )
+        secret_input = interaction_service.create_secret_input("password", options={"Required": True})
+        boolean_input = interaction_service.create_boolean_input("enabled", options={"Value": "true"})
+        number_input = interaction_service.create_number_input("count", options={"Value": "1"})
+        choice_input = interaction_service.create_choice_input(
+            "color",
+            choices=[{"Value": "r", "Label": "Red"}, {"Value": "g", "Label": "Green"}],
+            options={"AllowCustomChoice": True}
+        )
+        preset_input = interaction_service.create_text_input("greeting").with_value("hello")
+        size_input = interaction_service.create_choice_input("size").with_choice_options([{"Value": "s", "Label": "Small"}, {"Value": "l", "Label": "Large"}])
+
+        def load_shade(load_context):
+            input = load_context.input()
+            input_name = input.get_name()
+            color = load_context.inputs().value("color")
+            input.set_choice_options(
+                [{"Value": "crimson", "Label": "Crimson"}, {"Value": "scarlet", "Label": "Scarlet"}]
+                if color == "r"
+                else [{"Value": "lime", "Label": "Lime"}, {"Value": "forest", "Label": "Forest"}]
+            )
+            input.set_value(input_name)
+
+        dependent_input = interaction_service.create_choice_input("shade").with_dynamic_loading(
+            load_shade,
+            options={"AlwaysLoadOnStart": True, "DependsOnInputs": ["color"]}
+        )
+
+        def validate_solo(validation_context):
+            if not validation_context.inputs().value("solo"):
+                validation_context.add_validation_error("solo", "A value is required.")
+
+        single = interaction_service.prompt_input(
+            "Single input",
+            "Enter a value.",
+            interaction_service.create_text_input("solo"),
+            options={"PrimaryButtonText": "Save", "ValidationCallback": validate_solo},
+        )
+
+        def validate_form(validation_context):
+            if validation_context.inputs().value("name") == "bad":
+                validation_context.add_validation_error("name", "Name cannot be 'bad'.")
+
+        multi = interaction_service.prompt_inputs(
+            "Multiple inputs",
+            "Fill out the form.",
+            [text_input, secret_input, boolean_input, number_input, choice_input, preset_input, size_input, dependent_input],
+            options={"PrimaryButtonText": "Submit", "EnableMessageMarkdown": True, "ValidationCallback": validate_form},
+        )
+
+        selected_color = multi.inputs().value("color")
+        solo_value = (single.get("Input") or {}).get("Value")
+
+        multi_canceled = multi.canceled()
+        success = (not confirmation.get("Canceled", False)
+                   and confirmation.get("Value", False)
+                   and not message_box.get("Canceled", False)
+                   and not notification.get("Canceled", False)
+                   and not single.get("Canceled", False)
+                   and not multi_canceled)
+
+        return {
+            "success": bool(success),
+            "canceled": multi_canceled,
+            "message": f"color={selected_color or ''} solo={solo_value or ''}",
+        }
+
+    container.with_command("interaction-showcase", "Interaction Showcase", interaction_showcase_command)
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})

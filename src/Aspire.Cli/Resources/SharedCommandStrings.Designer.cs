@@ -111,21 +111,33 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string LsStreamOptionDescription {
+            get {
+                return ResourceManager.GetString("LsStreamOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string LsStreamRequiresJson {
+            get {
+                return ResourceManager.GetString("LsStreamRequiresJson", resourceCulture);
+            }
+        }
+
         internal static string LsNoCandidateAppHostsFound {
             get {
                 return ResourceManager.GetString("LsNoCandidateAppHostsFound", resourceCulture);
             }
         }
 
-        internal static string HeaderPath {
+        internal static string LsSearchingForAppHostsStatus {
             get {
-                return ResourceManager.GetString("HeaderPath", resourceCulture);
+                return ResourceManager.GetString("LsSearchingForAppHostsStatus", resourceCulture);
             }
         }
 
-        internal static string HeaderRelativePath {
+        internal static string HeaderPath {
             get {
-                return ResourceManager.GetString("HeaderRelativePath", resourceCulture);
+                return ResourceManager.GetString("HeaderPath", resourceCulture);
             }
         }
 

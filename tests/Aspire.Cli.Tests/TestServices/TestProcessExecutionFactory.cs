@@ -31,6 +31,8 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
     /// </summary>
     public Action<string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions>? AssertionCallback { get; set; }
 
+    public Action<string, string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions>? FileNameAssertionCallback { get; set; }
+
     /// <summary>
     /// Gets or sets a callback that is invoked for each execution attempt, receiving the attempt number (1-based)
     /// and options, and returning the exit code and optional stdout content.
@@ -82,6 +84,7 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
 
         // Invoke assertion callback if set
         AssertionCallback?.Invoke(args, env, workingDirectory, options);
+        FileNameAssertionCallback?.Invoke(fileName, args, env, workingDirectory, options);
 
         if (CreateExecutionWithFileNameCallback is not null)
         {
@@ -236,6 +239,36 @@ internal static class DotNetCliRunnerTestHelper
         var executionFactory = new TestProcessExecutionFactory
         {
             AssertionCallback = assertionCallback,
+            DefaultExitCode = exitCode
+        };
+        var resolvedConfiguration = configuration ?? serviceProvider.GetRequiredService<IConfiguration>();
+
+        return new DotNetCliRunner(
+            logger ?? serviceProvider.GetRequiredService<ILogger<DotNetCliRunner>>(),
+            serviceProvider,
+            telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
+            serviceProvider.GetRequiredService<ProfilingTelemetry>(),
+            resolvedConfiguration,
+            diskCache ?? new NullDiskCache(),
+            serviceProvider.GetRequiredService<IFeatures>(),
+            serviceProvider.GetRequiredService<IInteractionService>(),
+            executionContext,
+            executionFactory);
+    }
+
+    public static DotNetCliRunner Create(
+        IServiceProvider serviceProvider,
+        CliExecutionContext executionContext,
+        Action<string, string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions> assertionCallback,
+        int exitCode = 0,
+        ILogger<DotNetCliRunner>? logger = null,
+        AspireCliTelemetry? telemetry = null,
+        IConfiguration? configuration = null,
+        IDiskCache? diskCache = null)
+    {
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            FileNameAssertionCallback = assertionCallback,
             DefaultExitCode = exitCode
         };
         var resolvedConfiguration = configuration ?? serviceProvider.GetRequiredService<IConfiguration>();

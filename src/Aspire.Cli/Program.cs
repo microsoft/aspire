@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.CopilotCli;
 using Aspire.Cli.Agents.OpenCode;
@@ -17,18 +18,16 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
-using Aspire.Cli.Secrets;
-using Aspire.Cli.Documentation.ApiDocs;
-using Microsoft.AspNetCore.Certificates.Generation;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
-using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
@@ -36,12 +35,14 @@ using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -56,9 +57,9 @@ public class Program
 {
     internal const string RootLoggerName = "Aspire.Cli";
 
-    private static string GetUsersAspirePath()
+    private static string GetUsersAspirePath(string? processPath = null)
     {
-        return CliPathHelper.GetAspireHomeDirectory();
+        return CliPathHelper.GetAspireHomeDirectory(processPath ?? Environment.ProcessPath);
     }
 
     /// <summary>
@@ -79,7 +80,10 @@ public class Program
         IStartupErrorWriter ErrorWriter,
         ILoggerFactory LoggerFactory,
         FileLoggerProvider FileLoggerProvider,
-        ILogger Logger) : IDisposable
+        ConsoleLogBufferContext LogBufferContext,
+        ILogger Logger,
+        ConsoleCancellationManager CancellationManager,
+        IdentityChannelReader IdentityChannelReader) : IDisposable
     {
         public void Dispose()
         {
@@ -93,7 +97,7 @@ public class Program
     /// Parses logging options from command-line arguments.
     /// Returns all logging configuration including log level, debug mode, and file paths.
     /// </summary>
-    internal static CliLoggingOptions ParseLoggingOptions(string[]? args)
+    internal static CliLoggingOptions ParseLoggingOptions(string[]? args, string? processPath = null)
     {
         LogLevel? logLevel = null;
         var debugMode = false;
@@ -123,7 +127,7 @@ public class Program
             }
         }
 
-        var logsDirectory = Path.Combine(GetUsersAspirePath(), "logs");
+        var logsDirectory = Path.Combine(GetUsersAspirePath(processPath), "logs");
         var logFilePath = ParseLogFileOption(args) ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
 
         return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath);
@@ -210,14 +214,12 @@ public class Program
     /// and MCP console logging based on command-line arguments.
     /// </summary>
     /// <returns>A tuple containing the configured <see cref="ILoggerFactory"/> and the <see cref="FileLoggerProvider"/> used for file logging.</returns>
-    internal static (ILoggerFactory LoggerFactory, FileLoggerProvider FileLoggerProvider) CreateLoggerFactory(string[] args, CliLoggingOptions loggingOptions, IStartupErrorWriter errorWriter)
+    internal static (ILoggerFactory LoggerFactory, FileLoggerProvider FileLoggerProvider) CreateLoggerFactory(string[] args, CliLoggingOptions loggingOptions, IStartupErrorWriter errorWriter, ConsoleLogBufferContext logBufferContext)
     {
         var consoleLogLevel = loggingOptions.ConsoleLogLevel;
 
         var isMcpStartCommand = args?.Length >= 2 &&
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
-
-        var extensionEndpoint = Environment.GetEnvironmentVariable(KnownConfigNames.ExtensionEndpoint);
 
         // Create file logger provider from pre-computed path info
         var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, errorWriter);
@@ -251,11 +253,15 @@ public class Program
                 builder.AddFilter<FileLoggerProvider>("Aspire.Cli.Certificates.NativeCertificateToolRunner", LogLevel.Information);
             }
 
-            // Configure console logging based on --verbosity or --debug
-            if (consoleLogLevel is not null && !isMcpStartCommand && extensionEndpoint is null)
+            // Configure console logging based on --verbosity or --debug.
+            // When the CLI is hosted by the VS Code extension, stderr is captured line-by-line
+            // and surfaced in the Debug Console, so debug logs still need to flow to stderr there;
+            // suppressing them only because an extension endpoint is present meant that
+            // `--debug` produced no visible output under F5, even though it works in a terminal.
+            if (consoleLogLevel is not null && !isMcpStartCommand)
             {
                 // Use custom Spectre Console logger for clean debug output to stderr
-                builder.AddProvider(new SpectreConsoleLoggerProvider(Console.Error));
+                builder.AddProvider(new SpectreConsoleLoggerProvider(Console.Error, logBufferContext));
             }
 
             // For MCP start command, configure console logger to route all logs to stderr
@@ -300,7 +306,7 @@ public class Program
         var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, startupContext.Logger);
+        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile);
 
         TrySetLocaleOverride(LocaleHelpers.GetLocaleOverride(builder.Configuration), startupContext.Logger, startupContext.ErrorWriter);
         WarnIfGlobalSettingsContainAppHostPath(globalSettingsFile, startupContext.ErrorWriter);
@@ -318,8 +324,14 @@ public class Program
         builder.Services.AddSingleton<ILoggerFactory>(startupContext.LoggerFactory);
         builder.Services.TryAddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
+        // Register the cancellation manager so commands can observe forced-termination signals
+        builder.Services.AddSingleton(startupContext.CancellationManager);
+
         // Register file logger provider for components that write directly to the log file
         builder.Services.AddSingleton(startupContext.FileLoggerProvider);
+
+        // Register the log buffer context so the interaction service can pause logging during prompts
+        builder.Services.AddSingleton(startupContext.LogBufferContext);
 
         // Register logging options so components can read the user's chosen log level
         builder.Services.AddSingleton(startupContext.LoggingOptions);
@@ -332,7 +344,7 @@ public class Program
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
-        builder.Services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
+        builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
         if (OperatingSystem.IsWindows())
         {
             builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
@@ -345,7 +357,10 @@ public class Program
         builder.Services.AddSingleton(sp =>
         {
             var channelReader = sp.GetRequiredService<IIdentityChannelReader>();
-            var channel = channelReader.ReadChannel();
+            if (!channelReader.TryReadChannel(out var channel, out var error))
+            {
+                throw new InvalidOperationException(error);
+            }
             return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath, channel);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
@@ -385,6 +400,8 @@ public class Program
 
         builder.Services.AddTransient<IDotNetCliRunner, DotNetCliRunner>();
         builder.Services.AddSingleton<IDiskCache, DiskCache>();
+        builder.Services.AddSingleton<IAppHostInfoDiskCache, AppHostInfoDiskCache>();
+        builder.Services.AddSingleton<IAppHostInfoResolver, AppHostInfoResolver>();
         builder.Services.AddSingleton<IDotNetSdkInstaller, DotNetSdkInstaller>();
         builder.Services.AddTransient<IAppHostCliBackchannel, AppHostCliBackchannel>();
 
@@ -410,6 +427,13 @@ public class Program
         builder.Services.AddSingleton<ICliUpdateNotifier, CliUpdateNotifier>();
         builder.Services.AddSingleton<IPackagingService, PackagingService>();
         builder.Services.AddSingleton<IBundlePayloadProvider, EmbeddedBundlePayloadProvider>();
+        builder.Services.AddSingleton<IInstallSidecarReader, InstallSidecarReader>();
+        builder.Services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
+        builder.Services.AddSingleton<IInstallationCandidateSource, PathInstallationCandidateSource>();
+        builder.Services.AddSingleton<IInstallationCandidateSource, ReleasePrefixInstallationCandidateSource>();
+        builder.Services.AddSingleton<IInstallationCandidateSource, DogfoodInstallationCandidateSource>();
+        builder.Services.AddSingleton<IInstallationCandidateSource, DotnetToolStoreInstallationCandidateSource>();
+        builder.Services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
         builder.Services.AddSingleton<IBundleService, BundleService>();
         builder.Services.AddSingleton<ProfileCaptureService>();
         builder.Services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
@@ -449,6 +473,9 @@ public class Program
         // Npm and Playwright CLI operations.
         builder.Services.AddSingleton<Aspire.Cli.Npm.INpmRunner, Aspire.Cli.Npm.NpmRunner>();
         builder.Services.AddHttpClient<Aspire.Cli.Npm.INpmProvenanceChecker, Aspire.Cli.Npm.SigstoreNpmProvenanceChecker>();
+        builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
+        builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
+        builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.IPlaywrightCliRunner, Aspire.Cli.Agents.Playwright.PlaywrightCliRunner>();
         builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.PlaywrightCliInstaller>();
 
@@ -496,6 +523,7 @@ public class Program
         builder.Services.AddSingleton<IMcpTransportFactory, StdioMcpTransportFactory>();
 
         // Commands.
+        builder.Services.AddSingleton<CommonCommandServices>();
         builder.Services.AddTransient<AppHostLauncher>();
         builder.Services.AddTransient<NewCommand>();
         builder.Services.AddTransient<InitCommand>();
@@ -512,6 +540,9 @@ public class Program
         builder.Services.AddTransient<IntegrationCommand>();
         builder.Services.AddTransient<IntegrationListCommand>();
         builder.Services.AddTransient<IntegrationSearchCommand>();
+        builder.Services.AddTransient<TerminalCommand>();
+        builder.Services.AddTransient<TerminalAttachCommand>();
+        builder.Services.AddTransient<TerminalPsCommand>();
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
@@ -569,40 +600,41 @@ public class Program
         return app;
     }
 
-    private static DirectoryInfo GetHivesDirectory()
+    private static DirectoryInfo GetHivesDirectory(string? processPath = null)
     {
-        var homeDirectory = GetUsersAspirePath();
+        var homeDirectory = GetUsersAspirePath(processPath);
         var hivesDirectory = Path.Combine(homeDirectory, "hives");
         return new DirectoryInfo(hivesDirectory);
     }
 
-    private static DirectoryInfo GetSdksDirectory()
+    private static DirectoryInfo GetSdksDirectory(string? processPath = null)
     {
-        var homeDirectory = GetUsersAspirePath();
+        var homeDirectory = GetUsersAspirePath(processPath);
         var sdksPath = Path.Combine(homeDirectory, "sdks");
         return new DirectoryInfo(sdksPath);
     }
 
-    private static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, string channel)
+    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, string channel, string? processPath = null)
     {
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDirectory = GetHivesDirectory();
-        var cacheDirectory = GetCacheDirectory();
-        var sdksDirectory = GetSdksDirectory();
-        var packagesDirectory = GetPackagesDirectory();
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel);
+        var hivesDirectory = GetHivesDirectory(processPath);
+        var cacheDirectory = GetCacheDirectory(processPath);
+        var sdksDirectory = GetSdksDirectory(processPath);
+        var packagesDirectory = GetPackagesDirectory(processPath);
+        var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel, aspireHomeDirectory: aspireHomeDirectory);
     }
 
-    private static DirectoryInfo GetCacheDirectory()
+    private static DirectoryInfo GetCacheDirectory(string? processPath = null)
     {
-        var homeDirectory = GetUsersAspirePath();
+        var homeDirectory = GetUsersAspirePath(processPath);
         var cacheDirectoryPath = Path.Combine(homeDirectory, "cache");
         return new DirectoryInfo(cacheDirectoryPath);
     }
 
-    private static DirectoryInfo GetPackagesDirectory()
+    private static DirectoryInfo GetPackagesDirectory(string? processPath = null)
     {
-        var homeDirectory = GetUsersAspirePath();
+        var homeDirectory = GetUsersAspirePath(processPath);
         var packagesDirectoryPath = Path.Combine(homeDirectory, "packages");
         return new DirectoryInfo(packagesDirectoryPath);
     }
@@ -646,7 +678,11 @@ public class Program
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var isInformationalCommand = args.Any(a => CommonOptionNames.InformationalOptionNames.Contains(a));
-        var noLogo = args.Any(a => a == CommonOptionNames.NoLogo) || configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false) || isInformationalCommand;
+        var isMachineReadableOutput = HasMachineReadableOutputFormat(args);
+        var noLogo = args.Any(a => a == CommonOptionNames.NoLogo)
+            || configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false)
+            || isInformationalCommand
+            || isMachineReadableOutput;
         var showBanner = args.Any(a => a == CommonOptionNames.Banner);
 
         var sentinel = serviceProvider.GetRequiredService<IFirstTimeUseNoticeSentinel>();
@@ -654,8 +690,10 @@ public class Program
 
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
 
-        // Show banner if explicitly requested OR on first run (unless suppressed by noLogo or non-interactive output)
-        if (showBanner || (isFirstRun && !noLogo && hostEnvironment.SupportsInteractiveOutput))
+        // Show banner if explicitly requested OR on first run (unless suppressed by noLogo).
+        // Always require interactive output support — the animated banner uses Spectre.Console's Live display
+        // which manipulates the cursor and fails when console handles are invalid (e.g., stdout is redirected).
+        if ((showBanner || (isFirstRun && !noLogo)) && hostEnvironment.SupportsInteractiveOutput)
         {
             var bannerService = serviceProvider.GetRequiredService<IBannerService>();
             await bannerService.DisplayBannerAsync(cancellationToken);
@@ -678,12 +716,41 @@ public class Program
             }
 
             // Don't persist the sentinel for informational commands (--version, --help, etc.)
-            // so the first-run experience is shown on the next real command invocation.
-            if (!isInformationalCommand)
+            // or for machine-readable invocations (--format json, including the hidden
+            // `doctor --self --format json` peer probe). Otherwise an automation invocation
+            // or peer probe — which deliberately suppressed the user-facing notice — would
+            // silently consume the first-run slot, and the next interactive invocation by
+            // the same user would never see the telemetry notice.
+            if (!isInformationalCommand && !isMachineReadableOutput)
             {
                 sentinel.CreateIfNotExists();
             }
         }
+    }
+
+    // Machine-readable output flags should never have welcome/telemetry text
+    // interleaved with the structured payload. Today the only such flag is
+    // `--format json` (consumed by `aspire doctor`); extend this scan if new
+    // options are added.
+    private static bool HasMachineReadableOutputFormat(string[] args)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (arg.Equals("--format", StringComparison.OrdinalIgnoreCase)
+                && i + 1 < args.Length
+                && args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static IAnsiConsole BuildAnsiConsole(IServiceProvider serviceProvider, TextWriter writer)
@@ -743,12 +810,24 @@ public class Program
 
         var loggingOptions = ParseLoggingOptions(args);
         var errorWriter = new StartupErrorWriter(loggingOptions.LogFilePath);
-        var (loggerFactory, fileLoggerProvider) = CreateLoggerFactory(args, loggingOptions, errorWriter);
+        var logBufferContext = new ConsoleLogBufferContext();
+        var (loggerFactory, fileLoggerProvider) = CreateLoggerFactory(args, loggingOptions, errorWriter, logBufferContext);
         var logger = loggerFactory.CreateLogger(RootLoggerName);
-        using var startupContext = new CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logger);
+        cancellationManager.SetLogger(logger);
+        var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
+        using var startupContext = new CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, logger, cancellationManager, identityChannelReader);
 
         logger.LogInformation("Aspire CLI version: {Version}", AspireCliTelemetry.GetCliVersion());
         logger.LogInformation("Aspire CLI build ID: {BuildId}", AspireCliTelemetry.GetCliBuildId());
+        logger.LogInformation("Aspire CLI path: {CliPath}", Environment.ProcessPath);
+        if (identityChannelReader.TryReadChannel(out var channel, out var channelError))
+        {
+            logger.LogInformation("Aspire CLI channel: {Channel}", channel);
+        }
+        else
+        {
+            logger.LogWarning("Failed to resolve CLI channel: {Error}", channelError);
+        }
         logger.LogInformation("Working directory: {WorkingDirectory}", Environment.CurrentDirectory);
         // Logging the log file path is useful so that when console logging is enabled (for example with --log-level debug),
         // the path is written to the console logger (stderr) for easier discovery.
@@ -836,19 +915,7 @@ public class Program
                     }
 
                     // Parse commandline and invoke the handler.
-                    var handlerTask = parseResult.InvokeAsync(invokeConfig, cancellationManager.Token);
-                    cancellationManager.SetStartedHandler(handlerTask);
-
-                    // Wait for either the handler to complete or a termination signal to trigger cancellation and timeout.
-                    var firstCompletedTask = await Task.WhenAny(handlerTask, cancellationManager.ProcessTerminationCompletionSource.Task);
-                    if (firstCompletedTask != handlerTask)
-                    {
-                        // The termination signal triggered cancellation and the timeout has completed. Kill the process.
-                        // handlerTask is not awaited because the process is shutting down and we assume the task is hung.
-                        logger.LogWarning("Timeout waiting for cancellation from termination signal.");
-                    }
-
-                    exitCode = await firstCompletedTask; // return the result or propagate the exception
+                    exitCode = await parseResult.InvokeAsync(invokeConfig, cancellationManager.Token).ConfigureAwait(false);
 
                     // Set telemetry tags based on how the command completed.
                     profileCommandActivity.SetProcessExitCode(exitCode);
@@ -865,12 +932,9 @@ public class Program
                 // Log exit code for debugging
                 logger.LogInformation("Exit code: {ExitCode}", exitCode);
             }
-            catch (OperationCanceledException ex) when (cancellationManager.IsCancellationRequested || ex is ExtensionOperationCanceledException)
-            {
-                exitCode = CliExitCodes.Cancelled;
-            }
             catch (Exception ex)
             {
+                // Should never get here because RootCommand's handler should catch all exceptions, but log just in case.
                 exitCode = CliExitCodes.InvalidCommand;
 
                 logger.LogError(ex, "An unexpected error occurred.");
@@ -954,10 +1018,12 @@ public class Program
                 var executionContext = provider.GetRequiredService<CliExecutionContext>();
                 var hostEnvironment = provider.GetRequiredService<ICliHostEnvironment>();
                 var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory);
+                var logBufferCtx = provider.GetRequiredService<ConsoleLogBufferContext>();
+                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferCtx);
                 return new ExtensionInteractionService(consoleInteractionService,
                     provider.GetRequiredService<IExtensionBackchannel>(),
-                    extensionPromptEnabled);
+                    extensionPromptEnabled,
+                    logger: provider.GetRequiredService<ILogger<ExtensionInteractionService>>());
             });
         }
         else
@@ -968,7 +1034,8 @@ public class Program
                 var executionContext = provider.GetRequiredService<CliExecutionContext>();
                 var hostEnvironment = provider.GetRequiredService<ICliHostEnvironment>();
                 var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-                return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory);
+                var logBufferCtx = provider.GetRequiredService<ConsoleLogBufferContext>();
+                return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferCtx);
             });
         }
     }

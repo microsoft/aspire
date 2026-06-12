@@ -11,9 +11,9 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class KubernetesDeployTestHelpers
 {
-    private static string KindVersion => Environment.GetEnvironmentVariable("KIND_VERSION") ?? "v0.31.0";
-    private static string HelmVersion => Environment.GetEnvironmentVariable("HELM_VERSION") ?? "v3.17.3";
-    private static string KubectlVersion => Environment.GetEnvironmentVariable("KUBECTL_VERSION") ?? "v1.34.3";
+    private static string KindVersion => KubernetesE2EVersions.KindVersion;
+    private static string HelmVersion => KubernetesE2EVersions.HelmVersion;
+    private static string KubectlVersion => KubernetesE2EVersions.KubectlVersion;
 
     /// <summary>
     /// Generates a unique KinD cluster name (max 32 chars).
@@ -250,7 +250,7 @@ internal static class KubernetesDeployTestHelpers
         {
             await auto.TypeAsync($"dotnet add {projectName}.ApiService package {package} --prerelease");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
         }
 
         // Step 5: Inject custom AppHost.cs and ApiService/Program.cs into the template-created project

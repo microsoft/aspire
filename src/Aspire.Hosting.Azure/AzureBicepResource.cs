@@ -14,7 +14,6 @@ using Aspire.Hosting.Azure.Utils;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Azure;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -272,15 +271,29 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         if (Scope is not null)
         {
             context.Writer.WriteStartObject("scope");
-            var resourceGroup = Scope.ResourceGroup switch
+            WriteScopeValue(context, "resourceGroup", Scope.ResourceGroup);
+            WriteScopeValue(context, "subscription", Scope.Subscription);
+            if (Scope.IsTenantScope)
             {
-                IManifestExpressionProvider output => output.ValueExpression,
-                object obj => obj.ToString(),
-                null => ""
-            };
-            context.Writer.WriteString("resourceGroup", resourceGroup);
+                context.Writer.WriteString("tenant", "current");
+            }
             context.Writer.WriteEndObject();
         }
+    }
+
+    private static void WriteScopeValue(ManifestPublishingContext context, string propertyName, object? scopeValue)
+    {
+        if (scopeValue is null)
+        {
+            return;
+        }
+
+        var value = scopeValue switch
+        {
+            IManifestExpressionProvider output => output.ValueExpression,
+            object obj => obj.ToString(),
+        };
+        context.Writer.WriteString(propertyName, value);
     }
 
     /// <summary>
@@ -306,7 +319,6 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         }
 
         var bicepProvisioner = context.Services.GetRequiredService<IBicepProvisioner>();
-        var configuration = context.Services.GetRequiredService<IConfiguration>();
 
         // Find the AzureEnvironmentResource from the application model
         var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault();
@@ -326,7 +338,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
             try
             {
                 if (await bicepProvisioner.ConfigureResourceAsync(
-                    configuration, resource, context.CancellationToken).ConfigureAwait(false))
+                    resource, context.CancellationToken).ConfigureAwait(false))
                 {
                     resource.ProvisioningTaskCompletionSource?.TrySetResult();
                     await resourceTask.CompleteAsync(

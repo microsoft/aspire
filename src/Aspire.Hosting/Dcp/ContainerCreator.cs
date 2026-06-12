@@ -112,7 +112,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         if (!containerResources.Any()) { return; }
 
         var network = ContainerNetwork.Create(KnownNetworkIdentifiers.DefaultAspireContainerNetwork.Value);
-        if (containerResources.Any(cr => cr.GetContainerLifetimeType() == ContainerLifetime.Persistent))
+        if (containerResources.Any(cr => cr.GetLifetimeType() == Lifetime.Persistent))
         {
             network.Spec.Persistent = true;
             network.Spec.NetworkName = $"{DcpExecutor.DefaultAspirePersistentNetworkName}-{_nameGenerator.GetProjectHashSuffix()}";
@@ -152,9 +152,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
             ctr.Spec.ContainerName = containerObjectInstance.Name;
 
-            if (container.GetContainerLifetimeType() == ContainerLifetime.Persistent)
+            if (container.GetLifetimeType() == Lifetime.Persistent)
             {
                 ctr.Spec.Persistent = true;
+                ApplyMonitorProcess(container, ctr.Spec);
             }
 
             if (container.TryGetContainerImagePullPolicy(out var pullPolicy))
@@ -171,7 +172,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
             ctr.Annotate(CustomResource.ResourceNameAnnotation, container.Name);
             ctr.Annotate(CustomResource.OtelServiceNameAnnotation, container.Name);
-            ctr.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, containerObjectInstance.Suffix);
+            ctr.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, container.GetOtelServiceInstanceId(containerObjectInstance));
             DcpExecutor.SetInitialResourceState(container, ctr);
 
             var aanns = container.Annotations.OfType<ContainerNetworkAliasAnnotation>().ToImmutableArray();
@@ -204,6 +205,15 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
 
         return result;
+    }
+
+    private static void ApplyMonitorProcess(IResource resource, ContainerSpec spec)
+    {
+        if (resource.TryGetParentProcessLifetime(out var parentProcessId, out var parentProcessTimestamp))
+        {
+            spec.MonitorPid = parentProcessId;
+            spec.MonitorTimestamp = parentProcessTimestamp;
+        }
     }
 
     private void ValidateContainerTunnelContainerNameConflicts(IEnumerable<IResource> modelContainerResources)
@@ -241,9 +251,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
     public bool IsReadyToCreate(RenderedModelResource<Container> resource, ContainerCreationContext cctx)
     {
-        // Containers are always "created" (submitted to DCP), they just get Spec.Start = false initially
-        // if explicit startup is used.
-        return true;
+        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
     }
 
     public async Task CreateObjectAsync(RenderedModelResource<Container> cr, ContainerCreationContext cctx, ILogger logger, IDcpObjectFactory factory, CancellationToken cancellationToken)
@@ -278,7 +286,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 workingDirectory: containerExecutable.WorkingDirectory);
 
             containerExec.Annotate(CustomResource.OtelServiceNameAnnotation, containerExecutable.Name);
-            containerExec.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, exeInstance.Suffix);
+            containerExec.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, containerExecutable.GetOtelServiceInstanceId(exeInstance));
             containerExec.Annotate(CustomResource.ResourceNameAnnotation, containerExecutable.Name);
             DcpExecutor.SetInitialResourceState(containerExecutable, containerExec);
 
@@ -294,14 +302,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         var dcpContainer = cr.DcpResource;
         var modelContainer = cr.ModelResource;
 
-        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext.ServiceProvider, cToken).ConfigureAwait(false);
+        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext, logger, cToken).ConfigureAwait(false);
 
         var spec = dcpContainer.Spec;
-
-        if (cr.ServicesProduced.Count > 0)
-        {
-            spec.Ports = BuildContainerPorts(cr);
-        }
 
         spec.VolumeMounts = BuildContainerMounts(cr.ModelResource);
 
@@ -313,9 +316,17 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         spec.RunArgs = runArgs;
 
         var (configuration, pemCertificates, createFiles) = await BuildContainerConfiguration(cr, logger, cToken).ConfigureAwait(false);
+
         if (configuration.Exception is not null)
         {
             throw new FailedToApplyEnvironmentException($"Failed to apply configuration to container {cr.ModelResource.Name}", configuration.Exception);
+        }
+
+        // Environment callbacks can resolve proxyless endpoint ports and commit a fallback host port,
+        // so build ports afterward.
+        if (cr.ServicesProduced.Count > 0)
+        {
+            spec.Ports = BuildContainerPorts(cr);
         }
 
         var args = configuration.Arguments.ToList();
@@ -340,6 +351,38 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             spec.Command = containerResource.Entrypoint;
         }
         spec.PemCertificates = pemCertificates;
+
+        // Configure the terminal spec if the resource has a TerminalAnnotation.
+        // Containers are always single-replica, so we use the host at index 0
+        // (TerminalAnnotation always has at least one entry). PTY allocation
+        // is implemented by DCP for Windows (ConPTY), Linux, and macOS
+        // (Unix98 /dev/ptmx); the container runtime CLI's `attach` command
+        // is what actually gets PTY-attached, so behaviour is uniform across
+        // hosts that support docker/podman.
+        if (modelContainer.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
+        {
+            var terminalAnnotation = terminalAnnotations.FirstOrDefault();
+            if (terminalAnnotation is not null)
+            {
+                if (terminalAnnotation.TerminalHosts.Count > 0)
+                {
+                    spec.Terminal = new TerminalSpec
+                    {
+                        UdsPath = terminalAnnotation.TerminalHosts[0].Layout.ProducerUdsPath,
+                        // The Aspire terminal host owns the listener at UdsPath; DCP must dial it.
+                        SocketMode = "connect",
+                        Cols = terminalAnnotation.Options.Columns,
+                        Rows = terminalAnnotation.Options.Rows
+                    };
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Could not determine a producer UDS path for container resource '{ResourceName}'; terminal will not be attached.",
+                        modelContainer.Name);
+                }
+            }
+        }
 
         var dcpInfo = await _dcpDependencyCheckService.GetDcpInfoAsync(cancellationToken: cToken).ConfigureAwait(false);
         if (dcpInfo is not null)
@@ -824,7 +867,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     new()
                     {
                         Model = context.Resource,
-                        ServiceProvider = _executionContext.ServiceProvider,
+                        Services = _executionContext.Services,
                         HttpsCertificateContext = context.HttpsCertificateContext,
                     },
                     cancellationToken).ConfigureAwait(false);
@@ -874,11 +917,11 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         return (runArgs, failedToApplyArgs);
     }
 
-    private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, DistributedApplicationExecutionContext executionContext, ILogger logger, CancellationToken cancellationToken)
     {
         if (modelContainerResource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault() is { } dockerfileBuildAnnotation)
         {
-            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, serviceProvider, cancellationToken).ConfigureAwait(false);
+            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.Services, cancellationToken).ConfigureAwait(false);
 
             var dcpBuildArgs = new List<EnvVar>();
 
@@ -925,8 +968,44 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 Args = dcpBuildArgs,
                 Secrets = dcpBuildSecrets
             };
+
+#pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
+            var buildOptionsContext = await modelContainerResource.ProcessContainerBuildOptionsCallbackAsync(
+                executionContext.Services,
+                logger,
+                executionContext,
+                cancellationToken).ConfigureAwait(false);
+
+            if (buildOptionsContext.TargetPlatform is { } targetPlatform)
+            {
+                dcpContainerResource.Spec.Build.Platform = ToDcpPlatformString(targetPlatform);
+            }
+#pragma warning restore ASPIREPIPELINES003
         }
     }
+
+    // Maps the publishing-side ContainerTargetPlatform enum to DCP-native ContainerPlatform string
+    // constants. The publishing type is fully qualified so the DCP layer doesn't carry a
+    // `using Aspire.Hosting.Publishing` directive.
+#pragma warning disable ASPIREPIPELINES003 // ContainerTargetPlatform is experimental.
+    private static string ToDcpPlatformString(Publishing.ContainerTargetPlatform platform)
+    {
+        var parts = new List<string>();
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxAmd64)) { parts.Add(ContainerPlatform.LinuxAmd64); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxArm64)) { parts.Add(ContainerPlatform.LinuxArm64); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxArm)) { parts.Add(ContainerPlatform.LinuxArm); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.Linux386)) { parts.Add(ContainerPlatform.Linux386); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.WindowsAmd64)) { parts.Add(ContainerPlatform.WindowsAmd64); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.WindowsArm64)) { parts.Add(ContainerPlatform.WindowsArm64); }
+
+        if (parts.Count == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(platform), platform, "Unknown container target platform");
+        }
+
+        return string.Join(",", parts);
+    }
+#pragma warning restore ASPIREPIPELINES003
 
     private static List<ContainerPortSpec> BuildContainerPorts(RenderedModelResource<Container> cr)
     {
@@ -941,12 +1020,13 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 ContainerPort = ea.TargetPort,
             };
 
-            if (!ea.IsProxied && ea.Port is int)
+            if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
             {
-                portSpec.HostPort = ea.Port;
+                sp.Service.Spec.Port ??= hostPort;
+                portSpec.HostPort = hostPort;
             }
 
-            switch (sp.EndpointAnnotation.Protocol)
+            switch (ea.Protocol)
             {
                 case ProtocolType.Tcp:
                     portSpec.Protocol = PortProtocol.TCP;
@@ -956,9 +1036,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     break;
             }
 
-            if (sp.EndpointAnnotation.TargetHost != KnownHostNames.Localhost)
+            if (ea.TargetHost != KnownHostNames.Localhost)
             {
-                portSpec.HostIP = sp.EndpointAnnotation.TargetHost;
+                portSpec.HostIP = ea.TargetHost;
             }
 
             ports.Add(portSpec);
