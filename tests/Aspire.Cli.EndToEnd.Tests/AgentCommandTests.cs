@@ -434,3 +434,5 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.RunCommandAsync($"export aspireSkillsVersion={AspireCliShellCommandHelpers.QuoteBashArg(aspireSkillsVersion)}", counter, TimeSpan.FromSeconds(30));
     }
 }
+
+// ci-probe: no-op to select Aspire.Cli.EndToEnd.Tests (requires_cli_archive bucket).
