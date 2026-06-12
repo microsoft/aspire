@@ -103,15 +103,21 @@ internal static partial class ProcessSignaler
         }
     }
 
-    private static bool AreClose(DateTimeOffset? expectedStartTime, DateTime processStartTime, TimeSpan? tolerance = default)
+    internal static bool AreClose(DateTimeOffset? expectedStartTime, DateTime processStartTime, TimeSpan? tolerance = default)
     {
         if (expectedStartTime is null)
         {
             return true;
         }
 
+        // Truncate processStartTime to whole seconds before comparing. The expected start time
+        // is already at second granularity (passed as unix seconds via ToUnixTimeSeconds()),
+        // so sub-second precision on the OS-reported start time would cause false mismatches.
+        var processStartTruncated = new DateTimeOffset(processStartTime).ToUnixTimeSeconds();
+        var expectedSeconds = ((DateTimeOffset)expectedStartTime).ToUnixTimeSeconds();
+
         tolerance ??= TimeSpan.FromSeconds(1);
-        return ((DateTimeOffset)expectedStartTime - new DateTimeOffset(processStartTime)).Duration() <= tolerance;
+        return Math.Abs(expectedSeconds - processStartTruncated) <= (long)tolerance.Value.TotalSeconds;
     }
 
     private const int SigTerm = 15;
