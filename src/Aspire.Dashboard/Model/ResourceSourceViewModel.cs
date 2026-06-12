@@ -70,9 +70,9 @@ internal sealed record ResourceSourceViewModel(string value, List<LaunchArgument
                 //    the effective value differs from the app arg yet must still be masked at the same position.
                 //  - Otherwise (sensitive args present but the counts don't align), fall back to the app-args path
                 //    below, which masks correctly using the app-arg alignment (showing unresolved template text).
-                var hasSensitivity = resourceViewModel.TryGetAppArgsSensitivity(out var effectiveArgsSensitivity);
+                var hasSensitivity = resourceViewModel.TryGetAppArgsSensitivity(out var appArgsSensitivity);
 
-                if (!hasSensitivity || !effectiveArgsSensitivity.Contains(true))
+                if (!hasSensitivity || !appArgsSensitivity.Contains(true))
                 {
                     var effectiveArgumentList = effectiveArguments.Select(arg => new LaunchArgument(arg, IsShown: true)).ToList();
                     var effectiveArgsString = string.Join(" ", effectiveArguments);
@@ -80,10 +80,10 @@ internal sealed record ResourceSourceViewModel(string value, List<LaunchArgument
                     return new CommandLineInfo(Arguments: effectiveArgumentList, ArgumentsString: effectiveArgsString, TooltipString: effectiveArgsString);
                 }
 
-                if (effectiveArgsSensitivity.Length == effectiveArguments.Length)
+                if (appArgsSensitivity.Length == effectiveArguments.Length)
                 {
                     var maskedArguments = effectiveArguments
-                        .Select((arg, i) => new LaunchArgument(arg, IsShown: !effectiveArgsSensitivity[i]))
+                        .Select((arg, i) => new LaunchArgument(arg, IsShown: !appArgsSensitivity[i]))
                         .ToList();
 
                     return new CommandLineInfo(
