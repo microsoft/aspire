@@ -41,9 +41,14 @@ jobs:
         with:
           global-json-file: ${{ github.workspace }}/global.json
 
-      - name: Restore
+      # [EXPERIMENT] Minimal SDK bootstrap instead of the full ./restore.sh. dotnet.sh ->
+      # InitializeDotNetCli installs only the SDK into .dotnet (no runtime toolsets, no project
+      # restore). SelectTests then builds its MSBuild ProjectGraph over Aspire.slnx on this SDK
+      # (MSBuild SDKs auto-resolve). This run validates the pivotal assumption that selection does
+      # NOT need the repo restored. Enumerate does its own restore below (restore: 'true').
+      - name: Install SDK (minimal)
         shell: bash
-        run: ./restore.sh
+        run: ./dotnet.sh --version
 
       - name: Select relevant tests
         id: select_tests
@@ -112,7 +117,10 @@ jobs:
         with:
           buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }}'
           checkout: 'false'
-          restore: 'false'
+          # [EXPERIMENT] The job no longer does a full restore (only a minimal SDK bootstrap above),
+          # so enumerate must restore. For ALL this is a full restore; the follow-up will restrict it
+          # to the selected projects (BeforeBuildPropsPath) so selective PRs restore only what they run.
+          restore: 'true'
           beforeBuildPropsPath: ${{ steps.select_tests.outputs.before_build_props }}
 
       # The expanded matrix can exceed 128KB. It MUST reach the bash step below via a file, not an
