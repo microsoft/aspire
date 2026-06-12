@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Microsoft.Build.Framework;
 
 namespace Aspire.Hosting.Tasks;
@@ -10,6 +11,12 @@ namespace Aspire.Hosting.Tasks;
 /// </summary>
 public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
 {
+    private const string BundleDirectoryName = "bundle";
+    private const string VersionsDirectoryName = "versions";
+    private const string InstallSidecarFileName = ".aspire-install.json";
+    private const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
+    private const int MaxInstallSidecarBytes = 64 * 1024;
+
     /// <summary>
     /// Optional path to an Aspire CLI bundle or layout directory.
     /// </summary>
@@ -154,23 +161,42 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             : ["aspire"];
     }
 
-    private static bool TryResolveFromCliPath(string cliPath, out BundleResolution resolution)
+    private static bool TryResolveFromCliPath(string cliPath, out BundleResolution resolution, bool includeDefaultAspireHomeFallback = true)
     {
         resolution = default!;
 
-        var cliDirectory = Path.GetDirectoryName(Path.GetFullPath(cliPath));
-        if (string.IsNullOrEmpty(cliDirectory))
+        var candidateCliPaths = EnumerateCandidateCliPaths(Path.GetFullPath(cliPath));
+        foreach (var candidateCliPath in candidateCliPaths)
         {
-            return false;
+            var cliDirectory = Path.GetDirectoryName(candidateCliPath);
+            if (string.IsNullOrEmpty(cliDirectory))
+            {
+                continue;
+            }
+
+            foreach (var layoutPath in EnumerateLayoutPathsForCliDirectory(cliDirectory))
+            {
+                if (TryResolveFromLayoutPath(layoutPath, out resolution))
+                {
+                    return true;
+                }
+            }
+
+            foreach (var dotnetToolCliPath in EnumerateDotNetToolStoreCliPaths(cliDirectory))
+            {
+                if (TryResolveFromCliPath(dotnetToolCliPath, out resolution, includeDefaultAspireHomeFallback: false))
+                {
+                    return true;
+                }
+            }
         }
 
-        if (TryResolveFromLayoutPath(cliDirectory, out resolution))
+        if (includeDefaultAspireHomeFallback && TryResolveFromLayoutPath(GetDefaultAspireHomeDirectory(), out resolution))
         {
             return true;
         }
 
-        var parentDirectory = Path.GetDirectoryName(cliDirectory);
-        return !string.IsNullOrEmpty(parentDirectory) && TryResolveFromLayoutPath(parentDirectory, out resolution);
+        return false;
     }
 
     private static bool TryResolveFromLayoutPath(string layoutPath, out BundleResolution resolution)
@@ -181,7 +207,12 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             return true;
         }
 
-        return TryResolveBundleRoot(Path.Combine(fullPath, "bundle"), out resolution);
+        if (TryResolveBundleRoot(Path.Combine(fullPath, BundleDirectoryName), out resolution))
+        {
+            return true;
+        }
+
+        return TryResolveVersionedBundleRoot(fullPath, out resolution);
     }
 
     private static bool TryResolveBundleRoot(string bundleRoot, out BundleResolution resolution)
@@ -211,6 +242,184 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     }
 
     private static bool IsWindows() => Path.DirectorySeparatorChar == '\\';
+
+    private static IEnumerable<string> EnumerateCandidateCliPaths(string cliPath)
+    {
+        var seenPaths = new HashSet<string>(GetPathComparer());
+
+        if (seenPaths.Add(cliPath))
+        {
+            yield return cliPath;
+        }
+
+        var resolvedCliPath = ResolveSymlinkOrOriginalPath(cliPath);
+        if (seenPaths.Add(resolvedCliPath))
+        {
+            yield return resolvedCliPath;
+        }
+    }
+
+    private static IEnumerable<string> EnumerateLayoutPathsForCliDirectory(string cliDirectory)
+    {
+        var seenPaths = new HashSet<string>(GetPathComparer());
+
+        foreach (var layoutPath in EnumerateLayoutPathsForCliDirectoryCore(cliDirectory))
+        {
+            if (!string.IsNullOrEmpty(layoutPath) && seenPaths.Add(layoutPath))
+            {
+                yield return layoutPath;
+            }
+        }
+    }
+
+    private static IEnumerable<string?> EnumerateLayoutPathsForCliDirectoryCore(string cliDirectory)
+    {
+        yield return cliDirectory;
+
+        // Install-route sidecars are written as:
+        //   { "source": "winget" }
+        // Known package-manager routes extract beside the binary and script/localhive
+        // routes extract under the parent prefix. Sidecar-less/unknown routes fall
+        // back to ASPIRE_HOME after any dotnet-tool store payload has been probed.
+        yield return TryReadInstallSource(cliDirectory) switch
+        {
+            "winget" or "brew" or "dotnet-tool" => cliDirectory,
+            "script" or "pr" or "localhive" => Path.GetDirectoryName(cliDirectory) ?? cliDirectory,
+            _ => null,
+        };
+
+        yield return Path.GetDirectoryName(cliDirectory);
+    }
+
+    private static IEnumerable<string> EnumerateDotNetToolStoreCliPaths(string cliDirectory)
+    {
+        var storeRoot = Path.Combine(cliDirectory, ".store", "aspire.cli");
+        if (!Directory.Exists(storeRoot))
+        {
+            yield break;
+        }
+
+        foreach (var executableName in GetNativeAspireExecutableNames())
+        {
+            foreach (var candidate in EnumerateFiles(storeRoot, executableName))
+            {
+                yield return candidate;
+            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateFiles(string path, string searchPattern)
+    {
+        try
+        {
+            return Directory.GetFiles(path, searchPattern, SearchOption.AllDirectories);
+        }
+        catch (Exception ex) when (IsPathDiscoveryException(ex))
+        {
+            return [];
+        }
+    }
+
+    private static string[] GetNativeAspireExecutableNames()
+    {
+        return IsWindows()
+            ? ["aspire.exe"]
+            : ["aspire"];
+    }
+
+    private static bool TryResolveVersionedBundleRoot(string layoutPath, out BundleResolution resolution)
+    {
+        var versionsRoot = Path.Combine(layoutPath, VersionsDirectoryName);
+        if (Directory.Exists(versionsRoot))
+        {
+            foreach (var versionDirectory in EnumerateDirectories(versionsRoot))
+            {
+                if (TryResolveBundleRoot(versionDirectory, out resolution))
+                {
+                    return true;
+                }
+            }
+        }
+
+        resolution = default!;
+        return false;
+    }
+
+    private static IEnumerable<string> EnumerateDirectories(string path)
+    {
+        try
+        {
+            return Directory.GetDirectories(path);
+        }
+        catch (Exception ex) when (IsPathDiscoveryException(ex))
+        {
+            return [];
+        }
+    }
+
+    private static string? TryReadInstallSource(string cliDirectory)
+    {
+        var sidecarPath = Path.Combine(cliDirectory, InstallSidecarFileName);
+        if (!File.Exists(sidecarPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (new FileInfo(sidecarPath).Length > MaxInstallSidecarBytes)
+            {
+                return null;
+            }
+
+            var sidecar = File.ReadAllText(sidecarPath);
+            var sourceMatch = Regex.Match(sidecar, @"""source""\s*:\s*""(?<source>[^""]*)""");
+            return sourceMatch.Success ? sourceMatch.Groups["source"].Value : null;
+        }
+        catch (Exception ex) when (IsPathDiscoveryException(ex))
+        {
+            return null;
+        }
+    }
+
+    private static string GetDefaultAspireHomeDirectory()
+    {
+        var aspireHome = Environment.GetEnvironmentVariable(AspireHomeEnvironmentVariable);
+        return string.IsNullOrWhiteSpace(aspireHome)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire")
+            : aspireHome;
+    }
+
+    private static StringComparer GetPathComparer()
+    {
+        return IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+    }
+
+    private static string ResolveSymlinkOrOriginalPath(string path)
+    {
+#if NET8_0_OR_GREATER
+        try
+        {
+            return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
+        }
+        catch (Exception ex) when (IsPathDiscoveryException(ex))
+        {
+            return path;
+        }
+#else
+        return path;
+#endif
+    }
+
+    private static bool IsPathDiscoveryException(Exception ex)
+    {
+        return ex is IOException
+            or UnauthorizedAccessException
+            or ArgumentException
+            or NotSupportedException
+            or PathTooLongException
+            or System.Security.SecurityException;
+    }
 
     private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath)
     {

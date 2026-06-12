@@ -149,6 +149,12 @@ namespace Projects%3B
     <Warning Code="ASPIRE001" Text="The '$(Language)' language isn't fully supported by Aspire - some code generation targets will not run, so will require manual authoring." HelpLink="https://aka.ms/aspire/diagnostics/aspire001" />
   </Target>
 
+  <Target Name="_WarnOnAspireCliBundleDisabled" BeforeTargets="PrepareForBuild" Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'false'">
+    <Warning Code="ASPIRE010"
+             Text="$(MSBuildProjectName) is configured with AspireUseCliBundle=false. Some Aspire features may not work when the Aspire CLI bundle is not being used."
+             HelpLink="https://aka.ms/aspire/diagnostics/aspire010" />
+  </Target>
+
   <!--
   Validates that all the ProjectReferences of an Aspire AppHost project are executables and
   informs the developer to set 'IsAspireProjectResource=false' if they really intended on ProjectReferencing a library.
@@ -208,7 +214,7 @@ namespace Projects%3B
     </PropertyGroup>
 
     <PropertyGroup>
-      <_AspireCliBundleNotFoundError>$(MSBuildProjectName) is configured with AspireUseCliBundle=true, but the Aspire CLI bundle could not be resolved. Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.</_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError>$(MSBuildProjectName) is configured to use the Aspire CLI bundle, but the bundle could not be resolved. Some new Aspire features require the Aspire CLI to be installed. Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.</_AspireCliBundleNotFoundError>
     </PropertyGroup>
 
     <Error Code="ASPIRE009"

@@ -154,6 +154,8 @@ public class MSBuildTests
         <Project>
           <PropertyGroup>
             <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
+            <AspireUseCliBundle>false</AspireUseCliBundle>
+            <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
           </PropertyGroup>
 
           <Import Project="{repoRoot}\src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.props" />
@@ -221,27 +223,27 @@ public class MSBuildTests
             """);
     }
 
-    private static string BuildProject(string workingDirectory)
+    private static string BuildProject(string workingDirectory, IDictionary<string, string>? environment = null)
     {
-        var result = BuildProjectCore(workingDirectory);
+        var result = BuildProjectCore(workingDirectory, environment);
 
         Assert.True(result.ExitCode == 0, $"Build failed: {Environment.NewLine}{result.Output}");
 
         return result.Output;
     }
 
-    private static string BuildProjectWithFailure(string workingDirectory)
+    private static string BuildProjectWithFailure(string workingDirectory, IDictionary<string, string>? environment = null)
     {
-        var result = BuildProjectCore(workingDirectory);
+        var result = BuildProjectCore(workingDirectory, environment);
 
         Assert.NotEqual(0, result.ExitCode);
 
         return result.Output;
     }
 
-    private static (int ExitCode, string Output) BuildProjectCore(string workingDirectory)
+    private static (int ExitCode, string Output) BuildProjectCore(string workingDirectory, IDictionary<string, string>? environment = null)
     {
-        return RunDotNet(workingDirectory, "build --disable-build-servers", timeoutMilliseconds: 180_000);
+        return RunDotNet(workingDirectory, "build --disable-build-servers", timeoutMilliseconds: 180_000, environment);
     }
 
     private static string PackProject(string projectFile, string outputDirectory, string packageId)
@@ -276,7 +278,7 @@ public class MSBuildTests
         return version!;
     }
 
-    private static (int ExitCode, string Output) RunDotNet(string workingDirectory, string arguments, int timeoutMilliseconds)
+    private static (int ExitCode, string Output) RunDotNet(string workingDirectory, string arguments, int timeoutMilliseconds, IDictionary<string, string>? environment = null)
     {
         var output = new StringBuilder();
         var outputDone = new ManualResetEvent(false);
@@ -289,6 +291,13 @@ public class MSBuildTests
             CreateNoWindow = true,
             WorkingDirectory = workingDirectory
         };
+        if (environment is not null)
+        {
+            foreach (var (key, value) in environment)
+            {
+                process.StartInfo.Environment[key] = value;
+            }
+        }
         process.OutputDataReceived += (sender, e) =>
         {
             if (e.Data == null)
@@ -310,15 +319,94 @@ public class MSBuildTests
     }
 
     [Fact]
-    public async Task CliBundleOptInResolvesExplicitBundlePath()
+    public async Task CliBundleDefaultResolvesExplicitBundlePath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var tempDirectory = new TestTempDirectory();
 
         var bundle = CreateFakeCliBundle(tempDirectory.Path);
-        var appHostDirectory = CreateSdkBundleOptInAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
             $"""
               <AspireCliBundlePath>{bundle.LayoutRoot}</AspireCliBundlePath>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        BuildProject(appHostDirectory);
+
+        var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
+        Assert.Equal(bundle.DcpDir, resolvedPaths[0]);
+        Assert.Equal(bundle.ManagedDir, resolvedPaths[1]);
+        Assert.Equal(bundle.ManagedPath, resolvedPaths[2]);
+    }
+
+    [Fact]
+    public void CliBundleOptOutEmitsWarning()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var tempDirectory = new TestTempDirectory();
+
+        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+            """
+              <AspireUseCliBundle>false</AspireUseCliBundle>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        var output = BuildProject(appHostDirectory);
+
+        Assert.Contains("warning ASPIRE010", output);
+        Assert.Contains("Some Aspire features may not work when the Aspire CLI bundle is not being used", output);
+    }
+
+    [Fact]
+    public async Task CliBundleDefaultResolvesAspireHomeBundleForSidecarlessCli()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var tempDirectory = new TestTempDirectory();
+
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "bin"));
+        var fakeCliPath = CreateFakeAspireCli(fakeCliDirectory.FullName);
+        var bundle = CreateFakeCliBundle(Path.Combine(tempDirectory.Path, "aspire-home"));
+        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+            $"""
+              <AspireCliPath>{fakeCliPath}</AspireCliPath>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        BuildProject(appHostDirectory, new Dictionary<string, string> { ["ASPIRE_HOME"] = bundle.LayoutRoot });
+
+        var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
+        Assert.Equal(bundle.DcpDir, resolvedPaths[0]);
+        Assert.Equal(bundle.ManagedDir, resolvedPaths[1]);
+        Assert.Equal(bundle.ManagedPath, resolvedPaths[2]);
+    }
+
+    [Fact]
+    public async Task CliBundleDefaultResolvesDotNetToolStoreBundleFromShimPath()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var tempDirectory = new TestTempDirectory();
+
+        var toolsDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, ".dotnet", "tools"));
+        var shimPath = CreateFakeAspireCli(toolsDirectory.FullName);
+        var nativeCliDirectory = Directory.CreateDirectory(Path.Combine(
+            toolsDirectory.FullName,
+            ".store",
+            "aspire.cli",
+            "13.4.0",
+            OperatingSystem.IsWindows() ? "aspire.cli.win-x64" : "aspire.cli.linux-x64",
+            "13.4.0",
+            "tools",
+            "net10.0",
+            OperatingSystem.IsWindows() ? "win-x64" : "linux-x64"));
+        _ = CreateFakeAspireCli(nativeCliDirectory.FullName);
+        File.WriteAllText(Path.Combine(nativeCliDirectory.FullName, ".aspire-install.json"), """{"source":"dotnet-tool"}""");
+        var bundle = CreateFakeCliBundleAtLayoutRoot(nativeCliDirectory.FullName);
+        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+            $"""
+              <AspireCliPath>{shimPath}</AspireCliPath>
             """);
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
@@ -343,7 +431,7 @@ public class MSBuildTests
         Directory.CreateDirectory(repoDcpDir);
         Directory.CreateDirectory(repoDashboardDir);
 
-        var appHostDirectory = CreateSdkBundleOptInAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
             $"""
               <DcpDir>{repoDcpDir}</DcpDir>
               <AspireDashboardDir>{repoDashboardDir}</AspireDashboardDir>
@@ -366,7 +454,7 @@ public class MSBuildTests
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var tempDirectory = new TestTempDirectory();
 
-        var appHostDirectory = CreateSdkBundleOptInAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
             $"""
               <AspireCliBundlePath>{Path.Combine(tempDirectory.Path, "missing-bundle")}</AspireCliBundlePath>
             """);
@@ -376,7 +464,8 @@ public class MSBuildTests
         var output = BuildProjectWithFailure(appHostDirectory);
 
         Assert.Contains("ASPIRE009", output);
-        Assert.Contains("Aspire CLI bundle could not be resolved", output);
+        Assert.Contains("the bundle could not be resolved", output);
+        Assert.Contains("Some new Aspire features require the Aspire CLI to be installed", output);
         Assert.Contains("https://get.aspire.dev", output);
         Assert.DoesNotContain("DCP path could not be resolved", output);
     }
@@ -389,7 +478,7 @@ public class MSBuildTests
 
         CreateAppProject(tempDirectory.Path, "App");
         var bundle = CreateFakeCliBundle(tempDirectory.Path);
-        var appHostDirectory = CreateSdkBundleOptInAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
             $"""
               <AspireCliBundlePath>{bundle.LayoutRoot}</AspireCliBundlePath>
             """,
@@ -407,7 +496,7 @@ public class MSBuildTests
         Assert.Contains("class App : global::Aspire.Hosting.IProjectMetadata", appMetadata);
     }
 
-    private static string CreateSdkBundleOptInAppHostProject(string basePath, string repoRoot, string additionalProperties, string additionalProjectReferences = "")
+    private static string CreateSdkBundleAppHostProject(string basePath, string repoRoot, string additionalProperties, string additionalProjectReferences = "")
     {
         var appHostDirectory = Path.Combine(basePath, "AppHost");
         Directory.CreateDirectory(appHostDirectory);
@@ -423,7 +512,6 @@ public class MSBuildTests
                 <Nullable>enable</Nullable>
                 <IsAspireHost>true</IsAspireHost>
                 <AspireHostingSDKVersion>9.0.0</AspireHostingSDKVersion>
-                <AspireUseCliBundle>true</AspireUseCliBundle>
                 <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
                 <_AspireUseTaskHostFactory>true</_AspireUseTaskHostFactory>
             {additionalProperties}
@@ -485,7 +573,11 @@ public class MSBuildTests
 
     private static (string LayoutRoot, string DcpDir, string ManagedDir, string ManagedPath) CreateFakeCliBundle(string basePath)
     {
-        var layoutRoot = Path.Combine(basePath, "layout");
+        return CreateFakeCliBundleAtLayoutRoot(Path.Combine(basePath, "layout"));
+    }
+
+    private static (string LayoutRoot, string DcpDir, string ManagedDir, string ManagedPath) CreateFakeCliBundleAtLayoutRoot(string layoutRoot)
+    {
         var bundleRoot = Path.Combine(layoutRoot, "bundle");
         var dcpDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, "dcp"));
         var managedDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, "managed"));
@@ -497,6 +589,13 @@ public class MSBuildTests
         File.WriteAllText(managedPath, "");
 
         return (layoutRoot, dcpDir, managedDir, managedPath);
+    }
+
+    private static string CreateFakeAspireCli(string directory)
+    {
+        var cliPath = Path.Combine(directory, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(cliPath, "");
+        return cliPath;
     }
 
     private static string EnsureTrailingSeparator(string path)
