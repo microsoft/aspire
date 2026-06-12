@@ -267,7 +267,13 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         var documentCount = documents.Count;
         foreach (var (token, count) in documentFrequency)
         {
-            // Use the smoothed BM25-style IDF shape:
+            // In plain terms, IDF is a rarity multiplier. A term that appears in
+            // nearly every doc, like "new" or "azure", should not move the ranking
+            // much by itself. A rarer term, like "addredis" or "134", is stronger
+            // evidence that a document is the one the user meant.
+            //
+            // The formula below is the smoothed BM25-style way to turn that rarity
+            // into a small positive weight:
             //   log(1 + (N - df + 0.5) / (df + 0.5))
             // where N is the number of indexed docs and df is the number of docs that contain
             // the token. The 0.5 terms keep very small corpora from producing extreme weights,
