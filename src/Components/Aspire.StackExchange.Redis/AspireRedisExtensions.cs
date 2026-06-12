@@ -279,3 +279,5 @@ public static class AspireRedisExtensions
         public override bool AbortOnConnectFail => false;
     }
 }
+
+// ci-probe: no-op change to exercise the selective test selector (Layer 1 narrowing).
