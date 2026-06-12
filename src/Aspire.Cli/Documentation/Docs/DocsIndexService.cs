@@ -721,6 +721,10 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         return token is "what" && ContainsWordBoundaryMatch(textSpan, "whats");
     }
 
+    // Search every occurrence of the token and accept only lexical word-boundary matches.
+    // For release-note identity checks this keeps "go" matching "Go updates" while rejecting
+    // the substring inside "changelog", so short feature names do not accidentally make a
+    // changelog page look like an explicit release-note query.
     private static bool ContainsWordBoundaryMatch(ReadOnlySpan<char> textSpan, string token)
     {
         var startIndex = 0;
