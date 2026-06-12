@@ -1097,7 +1097,9 @@ internal class DotNetAppHostProject : IAppHostProject
         env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:22086";
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Ensures the .NET Aspire SDK workload is installed.
+    /// </summary>
     protected async Task<bool> EnsureSdkInstalledAsync(CancellationToken cancellationToken)
         => await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, _telemetry, cancellationToken: cancellationToken);
 
