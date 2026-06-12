@@ -14,7 +14,6 @@
     <AspireProjectOrPackageReference Include="Aspire.Microsoft.Azure.Cosmos" />
     <AspireProjectOrPackageReference Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" />
     <AspireProjectOrPackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
-    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" />
     <!-- Npgsql EF needs to match the same major version as the underlying Npgsql assemblies. -->
     <!-- This is to override CentralPackageTransitivePinningEnabled -->
     <PackageReference Include="Npgsql.DependencyInjection" VersionOverride="$(Npgsql8Version)" />
