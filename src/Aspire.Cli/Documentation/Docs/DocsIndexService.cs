@@ -797,7 +797,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
            char.IsDigit(text[index + 1]);
 
     /// <summary>
-    /// Scores how well a normalized field matches the query tokens.
+    /// Scores one normalized field by finding each query token as a substring, rewarding the
+    /// first word-boundary match, adding a capped repeated-occurrence bonus, and multiplying
+    /// the token's contribution by its IDF weight so rarer query terms count more.
     /// </summary>
     private static float ScoreField(string lowerText, string[] queryTokens, float[] queryTokenWeights)
     {
