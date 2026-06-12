@@ -244,10 +244,19 @@ public static class AzureCosmosExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var dataPath = builder.Resource.InnerResource.IsVNextEmulator ? "/data" : "/tmp/cosmos/appdata";
+        var isVNext = builder.Resource.InnerResource.IsVNextEmulator;
 
-        return builder.WithEnvironment("AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE", "true")
-            .WithVolume(name ?? VolumeNameGenerator.Generate(builder, "data"), dataPath, isReadOnly: false);
+        // The vNext (Linux-based) emulator persists to /data and turns on persistence implicitly when a
+        // volume is mounted there; it does not read AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE (that
+        // variable is only honored by the classic emulator, which persists to /tmp/cosmos/appdata).
+        var dataPath = isVNext ? "/data" : "/tmp/cosmos/appdata";
+
+        if (!isVNext)
+        {
+            builder.WithEnvironment("AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE", "true");
+        }
+
+        return builder.WithVolume(name ?? VolumeNameGenerator.Generate(builder, "data"), dataPath, isReadOnly: false);
     }
 
     /// <summary>
@@ -449,6 +458,10 @@ public static class AzureCosmosExtensions
         {
             throw new NotSupportedException($"The Data Explorer endpoint is only available when using the Linux-based (vNext) Azure Cosmos DB emulator. Call '{nameof(RunAsPreviewEmulator)}' instead.");
         }
+
+        // The vNext image enables the Data Explorer by default, but set ENABLE_EXPLORER explicitly so that
+        // exposing this endpoint does not silently depend on the image's default remaining "true".
+        builder.WithEnvironment("ENABLE_EXPLORER", "true");
 
         var result = builder.WithEndpoint(endpointName: KnownUrls.DataExplorer.EndpointName, endpoint =>
             {
