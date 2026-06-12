@@ -111,7 +111,7 @@
     The output is platform-agnostic and can be consumed by GitHub Actions, Azure DevOps, etc.
     Each platform has its own expansion script to transform the canonical format.
   -->
-  <Target Name="_GenerateCanonicalMatrixJson" BeforeTargets="Test" Condition=" '$(TestRunnerName)' == 'TestEnumerationRunsheetBuilder' and '$(MSBuildProjectName)' != '' and !$(MSBuildProjectName.EndsWith('.Tests')) ">
+  <Target Name="_GenerateCanonicalMatrixJson" BeforeTargets="Test" Condition=" '$(TestRunnerName)' == 'TestEnumerationRunsheetBuilder' and '$(SkipGenerateCanonicalTestMatrix)' != 'true' and '$(MSBuildProjectName)' != '' and !$(MSBuildProjectName.EndsWith('.Tests')) ">
     <Error Condition="'$(TestMatrixOutputPath)' == ''"
            Text="TestMatrixOutputPath must be specified when using TestEnumerationRunsheetBuilder" />
 
