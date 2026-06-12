@@ -154,9 +154,10 @@ public static class AzureCosmosExtensions
 
             // The vNext image enables the Data Explorer by default (ENABLE_EXPLORER=true). That runs an
             // otherwise-unused Node process and, because the emulator's readiness probe is
-            // "ready = postgres && gateway && (explorer || !ENABLE_EXPLORER)", it makes /ready wait on the
-            // explorer even when it is never exposed. Disable it by default; WithDataExplorer re-enables it
-            // later through configureContainer (environment callbacks are last-write-wins).
+            // "ready = postgres && gateway && (explorer || !ENABLE_EXPLORER)" (the vNext emulator uses
+            // PostgreSQL internally as its storage engine), it makes /ready wait on the explorer even when
+            // it is never exposed. Disable it by default; WithDataExplorer re-enables it later through
+            // configureContainer (environment callbacks are last-write-wins).
             emulatorSurrogateBuilder.WithEnvironment("ENABLE_EXPLORER", "false");
 
             // VNext cosmosdb sets a default CERT_SECRET environment variable for the default emulator certificate and we can't

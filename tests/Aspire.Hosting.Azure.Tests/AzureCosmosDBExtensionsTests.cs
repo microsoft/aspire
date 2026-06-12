@@ -957,6 +957,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
                            .RunAsPreviewEmulator(e => e.WithDataExplorer(9999));
 
         var endpoint = Assert.Single(cosmos.Resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "data-explorer");
+        // 1234 is the vNext emulator's fixed internal Data Explorer port; the host port (9999) is configurable.
         Assert.Equal(1234, endpoint.TargetPort);
         Assert.Equal(9999, endpoint.Port);
 
@@ -1065,6 +1066,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
                            .RunAsPreviewEmulator(e => e.WithDataExplorer());
 
         var endpoint = Assert.Single(cosmos.Resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "data-explorer");
+        // 1234 is the vNext emulator's fixed internal Data Explorer port; no host port is bound by default.
         Assert.Equal(1234, endpoint.TargetPort);
         Assert.Null(endpoint.Port);
     }
