@@ -116,6 +116,8 @@ path_rules:
       - tests/Shared/**
       - .github/actions/enumerate-tests/**
       - eng/scripts/split-test-matrix-by-deps.ps1
+      - eng/scripts/write-class-mode-test-props.ps1   # enumerate-tests class-mode restriction; a bug skews every PR's matrix -> err toward ALL (also runs its WriteClassModeTestPropsTests verifier)
+      - eng/scripts/scan-test-partitions-from-source.ps1   # source partition discovery in the runsheet builder; a bug skews every split project's enumeration -> err toward ALL
       - eng/TestEnumerationRunsheetBuilder/**
       - eng/testing/CITestsProperties.props
       - .github/workflows/tests.yml
