@@ -105,3 +105,5 @@ export function getRunSessionInfo(): RunSessionInfo {
         supported_launch_configurations: getSupportedCapabilities()
     };
 }
+
+// ci-probe: no-op change to exercise Layer 2 extension job routing.
