@@ -384,6 +384,11 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         ];
     }
 
+    // SearchAsync calls this for every positive-scoring document. Keep `results` sorted and
+    // capped to topK as we scan so we never allocate/sort every matching document. A small
+    // sorted list is intentional here: the CLI default is topK = 10, so linear insertion is
+    // simple, preserves final score order and stable tie-breaking, and avoids the extra final
+    // sort a heap/priority queue would need. If topK ever becomes large, revisit this.
     private static void AddTopResult(List<SearchCandidate> results, SearchCandidate candidate, int topK)
     {
         var insertIndex = 0;
