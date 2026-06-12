@@ -12,7 +12,7 @@ public class ProcessSignalerTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(0, true)]       // Exact match
     [InlineData(0.8, true)]     // Sub-second difference within same second after truncation
-    [InlineData(1.2, true)]     // Sub-second precision causes truncation to cross a second boundary (the flaky test scenario)
+    [InlineData(1.2, true)]
     [InlineData(1, true)]       // Exactly 1 second apart (within tolerance)
     [InlineData(3, false)]      // 3 seconds apart (PID reuse)
     [InlineData(-0.5, true)]    // Negative sub-second difference
