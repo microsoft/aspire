@@ -782,8 +782,21 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     {
         string workflowText = await ReadRepoFileAsync(".github/workflows/auto-rerun-transient-ci-failures.yml");
 
-        Assert.Contains("FORCE_RERUN_ALL: 'true'", workflowText);
-        Assert.Contains("forceRerunAll", workflowText);
+        // Force mode must be enabled on BOTH jobs (analyze + rerun). A single occurrence
+        // would let a partial revert (flipping only one job) pass while leaving the
+        // workflow in a confusing half-bypassed state.
+        int enabledCount = workflowText.Split("FORCE_RERUN_ALL: 'true'").Length - 1;
+        Assert.True(enabledCount >= 2, $"Expected FORCE_RERUN_ALL: 'true' on both jobs, found {enabledCount}.");
+        Assert.DoesNotContain("FORCE_RERUN_ALL: 'false'", workflowText);
+
+        // The env var is parsed to a boolean and the open-PR no-association gate is
+        // bypassed in force mode.
+        Assert.Contains("const forceRerunAll = String(process.env.FORCE_RERUN_ALL).toLowerCase() === 'true';", workflowText);
+        Assert.Contains("pullRequestNumbers.length === 0 && !forceRerunAll", workflowText);
+
+        // forceRerunAll is threaded into the analyze + eligibility + rerun calls.
+        int threadedCount = workflowText.Split("forceRerunAll,").Length - 1;
+        Assert.True(threadedCount >= 4, $"Expected forceRerunAll threaded into the JS calls, found {threadedCount}.");
     }
 
     [Fact]
@@ -1074,6 +1087,53 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         SummaryEvent skippedRaw = Assert.Single(result.Events, e => e.Type == "raw" && e.Text is not null && e.Text.Contains("All associated pull requests are closed."));
         Assert.Contains("All associated pull requests are closed. No jobs were rerun.", skippedRaw.Text);
+    }
+
+    // TEMPORARY (FORCE_RERUN_ALL): falsifiable coverage for the open-PR-gate bypass.
+    // If the `!forceRerunAll &&` guard in rerunMatchedJobs is reverted, this test fails
+    // because the rerun would be skipped. Remove with the rest of the force-mode plumbing.
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ForceRerunAllRerunsEvenWhenAllAssociatedPullRequestsAreClosed()
+    {
+        RerunMatchedJobsResult result = await InvokeHarnessAsync<RerunMatchedJobsResult>(
+            "rerunMatchedJobs",
+            new
+            {
+                owner = "dotnet",
+                repo = "aspire",
+                retryableJobs = new[]
+                {
+                    new RetryableJobInput
+                    {
+                        Id = 11,
+                        Name = "Tests / One",
+                        HtmlUrl = "https://github.com/microsoft/aspire/actions/runs/123/job/11",
+                        Reason = "Force-rerun mode (temporary): bypassing transient-failure analysis."
+                    }
+                },
+                pullRequestNumbers = new[] { 15110 },
+                issueStatesByNumber = new Dictionary<string, string>
+                {
+                    ["15110"] = "closed"
+                },
+                sourceRunId = 123,
+                sourceRunAttempt = 1,
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123",
+                forceRerunAll = true
+            });
+
+        Assert.Contains(
+            result.Requests,
+            r => r.Route == "POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs"
+                && r.Payload.GetProperty("run_id").GetInt32() == 123);
+
+        Assert.DoesNotContain(result.Events, e => e.Type == "heading" && e.Text == "Rerun skipped");
+
+        // The associated PR is closed, so force mode reruns but posts no comment.
+        Assert.DoesNotContain(
+            result.Requests,
+            r => r.Route == "POST /repos/{owner}/{repo}/issues/{issue_number}/comments");
     }
 
     [Fact]

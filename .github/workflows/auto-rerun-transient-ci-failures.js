@@ -640,6 +640,7 @@ async function writeAnalysisSummary({
     sourceRunUrl,
     sourceRunAttempt,
     testPatternMatchedTests = [],
+    forceRerunAll = false,
 }) {
     const analyzedRunReference = buildSummaryReference(
         buildWorkflowRunAttemptUrl(sourceRunUrl, sourceRunAttempt),
@@ -648,13 +649,22 @@ async function writeAnalysisSummary({
             : 'workflow run'
     );
     const outcome = rerunEligible ? 'Rerun eligible' : 'Rerun skipped';
+    // TEMPORARY (FORCE_RERUN_ALL): in force mode the jobs were not classified as
+    // retry-safe (analysis was bypassed) and the job-count cap does not apply, so use
+    // wording that does not claim a transient-failure match. See the file-level comment.
     const outcomeDetails = rerunEligible
-        ? dryRun
-            ? `Matched ${retryableJobs.length} retry-safe job${retryableJobs.length === 1 ? '' : 's'} that would be rerun if dry run were disabled.`
-            : `Matched ${retryableJobs.length} retry-safe job${retryableJobs.length === 1 ? '' : 's'} for rerun.`
+        ? forceRerunAll
+            ? dryRun
+                ? `Force-rerun mode (temporary): ${retryableJobs.length} failed job${retryableJobs.length === 1 ? '' : 's'} would be rerun if dry run were disabled (transient-failure analysis bypassed).`
+                : `Force-rerun mode (temporary): re-running ${retryableJobs.length} failed job${retryableJobs.length === 1 ? '' : 's'} (transient-failure analysis bypassed).`
+            : dryRun
+                ? `Matched ${retryableJobs.length} retry-safe job${retryableJobs.length === 1 ? '' : 's'} that would be rerun if dry run were disabled.`
+                : `Matched ${retryableJobs.length} retry-safe job${retryableJobs.length === 1 ? '' : 's'} for rerun.`
         : retryableJobs.length === 0
-            ? 'No retry-safe jobs were found in the analyzed run.'
-            : retryableJobs.length > maxRetryableJobs
+            ? forceRerunAll
+                ? 'No failed jobs were found in the analyzed run.'
+                : 'No retry-safe jobs were found in the analyzed run.'
+            : (!forceRerunAll && retryableJobs.length > maxRetryableJobs)
                 ? `Matched ${retryableJobs.length} jobs, which exceeds the cap of ${maxRetryableJobs}.`
                 : 'The analyzed run did not satisfy the workflow safety rails for reruns.';
     const summaryRows = [
@@ -784,11 +794,21 @@ function buildPullRequestCommentBody({
     rerunAttemptUrl,
     retryableJobs,
     testPatternMatchedTests = [],
+    forceRerunAll = false,
 }) {
+    // TEMPORARY (FORCE_RERUN_ALL): in force mode the jobs were rerun without
+    // transient-failure analysis, so the comment must not claim they "matched the
+    // retry-safe transient failure rules." See the file-level comment.
+    const introLine = forceRerunAll
+        ? `Re-running the failed jobs in the CI workflow for this pull request. Force-rerun mode (temporary) is enabled, so all ${retryableJobs.length} failed job${retryableJobs.length === 1 ? '' : 's'} from ${formatMarkdownLink('the CI run attempt', failedAttemptUrl)} ${retryableJobs.length === 1 ? 'is' : 'are'} being rerun without transient-failure analysis.`
+        : `Re-running the failed jobs in the CI workflow for this pull request because ${retryableJobs.length} job${retryableJobs.length === 1 ? ' was' : 's were'} identified as retry-safe transient failures in ${formatMarkdownLink('the CI run attempt', failedAttemptUrl)}.`;
+    const jobListLine = forceRerunAll
+        ? 'The job links below point to the failed attempt jobs that will be rerun.'
+        : 'The job links below point to the failed attempt jobs that matched the retry-safe transient failure rules.';
     const lines = [
-        `Re-running the failed jobs in the CI workflow for this pull request because ${retryableJobs.length} job${retryableJobs.length === 1 ? ' was' : 's were'} identified as retry-safe transient failures in ${formatMarkdownLink('the CI run attempt', failedAttemptUrl)}.`,
+        introLine,
         `GitHub was asked to rerun all failed jobs for that attempt, and the rerun is being tracked in ${formatMarkdownLink('the rerun attempt', rerunAttemptUrl)}.`,
-        'The job links below point to the failed attempt jobs that matched the retry-safe transient failure rules.',
+        jobListLine,
         '',
         ...retryableJobs.map(job => {
             const jobReference = job.htmlUrl
@@ -863,9 +883,9 @@ async function rerunMatchedJobs({
     });
 
     // TEMPORARY (FORCE_RERUN_ALL): bypass the open-PR gate. Normally a rerun is
-    // skipped when every associated PR is closed; in force mode we rerun anyway and
-    // still post a comment on any PR numbers we know about. See the file-level
-    // comment for the revert procedure.
+    // skipped when every associated PR is closed; in force mode we rerun anyway. PR
+    // comments are still only posted to PRs that are currently open (closed PRs are
+    // not commented on). See the file-level comment for the revert procedure.
     if (!forceRerunAll && pullRequestNumbers.length > 0 && openPullRequestNumbers.length === 0) {
         const failedAttemptReference = buildWorkflowRunReference(sourceRunUrl, sourceRunAttempt);
         await summary
@@ -921,6 +941,7 @@ async function rerunMatchedJobs({
                 rerunAttemptUrl: rerunAttemptReference.url,
                 retryableJobs,
                 testPatternMatchedTests,
+                forceRerunAll,
             }),
         });
     }

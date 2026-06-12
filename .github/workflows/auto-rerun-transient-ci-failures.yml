@@ -380,6 +380,7 @@ jobs:
               sourceRunUrl,
               sourceRunAttempt: runAttempt,
               testPatternMatchedTests,
+              forceRerunAll,
             });
 
             if (retryableJobs.length === 0) {

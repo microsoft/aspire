@@ -197,7 +197,7 @@ The workflow currently runs in **force mode**, enabled by the `FORCE_RERUN_ALL: 
 
 1. **Transient-failure classification** — every failed (non-ignored) job is treated as retryable; the 4-pass analysis is skipped entirely.
 2. **The retryable-job-count cap** — the `≤ 5 retryable jobs` rail is not applied.
-3. **The open-PR gate** — the run is rerun even if no associated PR is currently open (a PR comment is still posted when PR numbers are known).
+3. **The open-PR gate** — the run is rerun even if no associated PR is currently open. PR comments are still posted only to associated PRs that are currently open; when every associated PR is closed, the rerun fires with no comment.
 
 **Force mode keeps:**
 
