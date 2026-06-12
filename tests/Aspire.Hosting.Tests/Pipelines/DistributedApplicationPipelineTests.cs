@@ -2097,6 +2097,117 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ExecuteAsync_WithDeployStep_RunsDeployPrereqBeforeBuildPrereqDependents()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Deploy).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        var pipeline = new DistributedApplicationPipeline();
+        var deployPrereqDependencyCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "deploy-prereq-dependency",
+            Action = async _ =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+                deployPrereqDependencyCompleted.SetResult();
+            },
+            RequiredBySteps = [WellKnownPipelineSteps.DeployPrereq]
+        });
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "build-resource",
+            Action = _ =>
+            {
+                if (!deployPrereqDependencyCompleted.Task.IsCompletedSuccessfully)
+                {
+                    throw new InvalidOperationException("Build step ran before deploy prereq.");
+                }
+
+                return Task.CompletedTask;
+            },
+            DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
+            RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+        });
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "push-resource",
+            Action = _ =>
+            {
+                if (!deployPrereqDependencyCompleted.Task.IsCompletedSuccessfully)
+                {
+                    throw new InvalidOperationException("Push step ran before deploy prereq.");
+                }
+
+                return Task.CompletedTask;
+            },
+            DependsOnSteps = [WellKnownPipelineSteps.PushPrereq],
+            RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+        });
+
+        var context = CreateDeployingContext(builder.Build());
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+    }
+
+    [Fact]
+    public void ComputeTargetStepDependencies_ForDeploy_DoesNotMutateSourceSteps()
+    {
+        var deployStep = new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.Deploy,
+            Action = _ => Task.CompletedTask,
+            DependsOnSteps = ["build-resource", "push-resource"]
+        };
+        var deployPrereqStep = new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.DeployPrereq,
+            Action = _ => Task.CompletedTask
+        };
+        var buildPrereqStep = new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.BuildPrereq,
+            Action = _ => Task.CompletedTask
+        };
+        var pushPrereqStep = new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.PushPrereq,
+            Action = _ => Task.CompletedTask
+        };
+        var buildResourceStep = new PipelineStep
+        {
+            Name = "build-resource",
+            Action = _ => Task.CompletedTask,
+            DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq]
+        };
+        var pushResourceStep = new PipelineStep
+        {
+            Name = "push-resource",
+            Action = _ => Task.CompletedTask,
+            DependsOnSteps = [WellKnownPipelineSteps.PushPrereq]
+        };
+
+        var stepsByName = new[]
+        {
+            deployStep,
+            deployPrereqStep,
+            buildPrereqStep,
+            pushPrereqStep,
+            buildResourceStep,
+            pushResourceStep
+        }.ToDictionary(step => step.Name, StringComparer.Ordinal);
+
+        var targetSteps = DistributedApplicationPipeline.ComputeTargetStepDependencies(deployStep, stepsByName);
+
+        Assert.Contains(targetSteps, step => step.Name == WellKnownPipelineSteps.DeployPrereq);
+        Assert.DoesNotContain(WellKnownPipelineSteps.DeployPrereq, buildPrereqStep.DependsOnSteps);
+        Assert.DoesNotContain(WellKnownPipelineSteps.DeployPrereq, pushPrereqStep.DependsOnSteps);
+    }
+
+    [Fact]
     public async Task FilterStepsForExecution_WithRequiredBy_IncludesTransitiveDependencies()
     {
         // Arrange

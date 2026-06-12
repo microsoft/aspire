@@ -700,10 +700,59 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Compute transitive dependencies of the target step (includes the target step itself)
         // Since RequiredBy relationships have been normalized to DependsOn,
         // this automatically includes all steps that the target depends on
-        var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
+        var stepsToExecute = ComputeTargetStepDependencies(targetStep, allStepsByName);
 
         var filteredStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
         return (stepsToExecute, filteredStepsByName);
+    }
+
+    internal static List<PipelineStep> ComputeTargetStepDependencies(
+        PipelineStep targetStep,
+        Dictionary<string, PipelineStep> stepsByName)
+    {
+        if (!string.Equals(targetStep.Name, WellKnownPipelineSteps.Deploy, StringComparison.Ordinal))
+        {
+            return ComputeTransitiveDependencies(targetStep, stepsByName);
+        }
+
+        var scopedStepsByName = stepsByName.ToDictionary(
+            step => step.Key,
+            step => step.Value.Clone(),
+            StringComparer.Ordinal);
+
+        if (!scopedStepsByName.TryGetValue(targetStep.Name, out var scopedTargetStep))
+        {
+            return ComputeTransitiveDependencies(targetStep, stepsByName);
+        }
+
+        AddDeployTargetDependencies(scopedStepsByName);
+
+        return ComputeTransitiveDependencies(scopedTargetStep, scopedStepsByName);
+    }
+
+    private static void AddDeployTargetDependencies(Dictionary<string, PipelineStep> stepsByName)
+    {
+        // Deploy prereq configures deployment-scoped resource annotations, such as the default
+        // image tag. Build and push prereq steps read resource annotations, so serialize those
+        // phases to avoid racing a resource annotation mutation with annotation enumeration.
+        AddDependencyIfBothStepsExist(stepsByName, WellKnownPipelineSteps.BuildPrereq, WellKnownPipelineSteps.DeployPrereq);
+        AddDependencyIfBothStepsExist(stepsByName, WellKnownPipelineSteps.PushPrereq, WellKnownPipelineSteps.DeployPrereq);
+    }
+
+    private static void AddDependencyIfBothStepsExist(
+        Dictionary<string, PipelineStep> stepsByName,
+        string stepName,
+        string dependencyName)
+    {
+        if (!stepsByName.TryGetValue(stepName, out var step) || !stepsByName.ContainsKey(dependencyName))
+        {
+            return;
+        }
+
+        if (!step.DependsOnSteps.Contains(dependencyName))
+        {
+            step.DependsOnSteps.Add(dependencyName);
+        }
     }
 
     internal static List<PipelineStep> ComputeTransitiveDependencies(
