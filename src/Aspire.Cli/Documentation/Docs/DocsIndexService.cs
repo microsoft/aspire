@@ -644,6 +644,11 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             return false;
         }
 
+        // Single-token queries like "new", "whats", or "what" are not specific enough
+        // to prove the user wants a release-note page. They only become release-note
+        // identity signals when paired with more context, such as "whats new 13.4".
+        // Otherwise a broad release-note page could avoid the context penalty for a
+        // generic query and outrank a dedicated doc that happens to contain the term.
         if (queryTokens.Length is 1 && IsReleaseNotesGenericToken(queryTokens[0]))
         {
             return false;
