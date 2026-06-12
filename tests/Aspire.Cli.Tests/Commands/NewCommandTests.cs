@@ -987,7 +987,11 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(outputPath, "apphost.cs")));
         Assert.Contains("#:project .aspire/modules/Aspire.csproj", File.ReadAllText(Path.Combine(outputPath, "apphost.cs")));
-        Assert.True(File.Exists(Path.Combine(outputPath, "aspire.config.json")));
+        var aspireConfigPath = Path.Combine(outputPath, "aspire.config.json");
+        Assert.True(File.Exists(aspireConfigPath));
+        using var aspireConfig = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(aspireConfigPath));
+        Assert.True(aspireConfig.RootElement.TryGetProperty("features", out var features));
+        Assert.True(features.GetProperty(KnownFeatures.CSharpCliManagedAppHostEnabled).GetBoolean());
         Assert.False(File.Exists(Path.Combine(outputPath, "apphost.run.json")));
         Assert.False(File.Exists(Path.Combine(outputPath, "AppHost.csproj")));
     }

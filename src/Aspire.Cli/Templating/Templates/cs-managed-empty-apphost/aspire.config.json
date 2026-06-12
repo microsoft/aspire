@@ -2,6 +2,9 @@
   "appHost": {
     "path": "apphost.cs"
   },
+  "features": {
+    "csharpCliManagedAppHostEnabled": true
+  },
   "profiles": {
     "https": {
       "applicationUrl": "https://{{hostName}}:{{httpsPort}};http://{{hostName}}:{{httpPort}}",
