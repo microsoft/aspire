@@ -1,12 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.ServiceClient;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Layout;
 
-public sealed partial class ResourceServiceConnectionProvider : ComponentBase, IAsyncDisposable
+public sealed class ResourceServiceConnectionProvider : ComponentBase, IAsyncDisposable
 {
     private const int MaxAttemptsBeforeShowingRetry = 5;
 
