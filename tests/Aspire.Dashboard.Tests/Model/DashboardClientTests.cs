@@ -334,8 +334,41 @@ public sealed class DashboardClientTests
         Assert.Equal(1, eventCount);
     }
 
+    [Fact]
+    public async Task WatchWithRecovery_RepeatedFailures_FiresMultipleDisconnectedEvents()
+    {
+        await using var instance = CreateResourceServiceClient();
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnWatchResources = true });
+
+        IDashboardClient client = instance;
+        var disconnectedCount = 0;
+        var disconnectedSemaphore = new SemaphoreSlim(0);
+        client.ConnectionStateChanged += state =>
+        {
+            if (state == DashboardConnectionState.Disconnected)
+            {
+                Interlocked.Increment(ref disconnectedCount);
+                disconnectedSemaphore.Release();
+            }
+        };
+
+        // Trigger the connection. ConnectWithRetryAsync succeeds, then WatchResources starts failing.
+        await instance.WhenConnected.DefaultTimeout();
+
+        // Wait for at least 3 Disconnected events to prove each retry fires a new event.
+        // Without the Connecting transition between retries, only 1 Disconnected event would fire.
+        for (var i = 0; i < 3; i++)
+        {
+            await disconnectedSemaphore.WaitAsync(TimeSpan.FromSeconds(30)).DefaultTimeout();
+        }
+
+        Assert.True(disconnectedCount >= 3, $"Expected at least 3 Disconnected events but got {disconnectedCount}.");
+    }
+
     private sealed class MockDashboardServiceClient : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient
     {
+        public bool FailOnWatchResources { get; init; }
+
         public override AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate> WatchInteractions(CallOptions options)
         {
             return new AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate>(
@@ -362,12 +395,26 @@ public sealed class DashboardClientTests
 
         public override AsyncServerStreamingCall<WatchResourcesUpdate> WatchResources(WatchResourcesRequest request, CallOptions options)
         {
+            var reader = FailOnWatchResources
+                ? (IAsyncStreamReader<WatchResourcesUpdate>)new FailingAsyncStreamReader<WatchResourcesUpdate>()
+                : new AsyncStreamReader<WatchResourcesUpdate>();
+
             return new AsyncServerStreamingCall<WatchResourcesUpdate>(
-                new AsyncStreamReader<WatchResourcesUpdate>(),
+                reader,
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
                 () => { });
+        }
+    }
+
+    private sealed class FailingAsyncStreamReader<T> : IAsyncStreamReader<T>
+    {
+        public T Current { get; } = default!;
+
+        public Task<bool> MoveNext(CancellationToken cancellationToken)
+        {
+            throw new RpcException(new Status(StatusCode.Unavailable, "Service unavailable"));
         }
     }
 
