@@ -208,6 +208,14 @@ internal static class Selection
 
         var sb = new StringBuilder();
         sb.AppendLine("<Project>");
+        // RestrictProjectToBuild tells eng/Build.props to replace the default ProjectToBuild with the
+        // override below EVEN WHEN it is empty (a valid 0-test selection, e.g. an extension-only or
+        // polyglot-only change whose only targets are non-.NET jobs). Without this marker, Build.props
+        // applies the override only when '@(OverrideProjectToBuild)' != '', so an empty selection would
+        // fall through to the full default ProjectToBuild and enumerate every test project.
+        sb.AppendLine("  <PropertyGroup>");
+        sb.AppendLine("    <RestrictProjectToBuild>true</RestrictProjectToBuild>");
+        sb.AppendLine("  </PropertyGroup>");
         sb.AppendLine("  <ItemGroup>");
         foreach (var name in selectedTestProjects.OrderBy(n => n, StringComparer.Ordinal))
         {

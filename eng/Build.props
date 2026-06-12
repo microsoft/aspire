@@ -98,8 +98,15 @@
     <ProjectToBuild Include="@(_NativeProjectToBuild->Exists())" />
   </ItemGroup>
 
-  <!-- Override ProjectToBuild items if specified -->
-  <ItemGroup Condition="'@(OverrideProjectToBuild)' != ''">
+  <!-- Override ProjectToBuild items if specified.
+       RestrictProjectToBuild is the explicit "restrict the build to the override set, even if that set
+       is empty" signal written by tools/SelectTests for a valid 0-test selective-CI selection (an
+       extension-only / polyglot-only change targets non-.NET jobs and no test projects). An empty
+       @(OverrideProjectToBuild) on its own is indistinguishable from "no override", so without this
+       property an empty selection would fall through to the full default set and enumerate everything.
+       The other producers (eng/scripts/generate-specialized-test-projects-list.sh and
+       write-class-mode-test-props.ps1) always emit a non-empty list and keep working via the item check. -->
+  <ItemGroup Condition="'@(OverrideProjectToBuild)' != '' or '$(RestrictProjectToBuild)' == 'true'">
     <ProjectToBuild Remove="@(ProjectToBuild)" />
 
     <ProjectToBuild Include="@(OverrideProjectToBuild)" />

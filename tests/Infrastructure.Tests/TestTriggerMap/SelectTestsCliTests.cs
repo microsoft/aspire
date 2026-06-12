@@ -314,6 +314,9 @@ public sealed class SelectTestsCliTests
             var props = File.ReadAllText(propsPath);
             Assert.Contains("<ItemGroup>", props);
             Assert.DoesNotContain("OverrideProjectToBuild", props);
+            // The empty selection must still carry the explicit restrict marker so eng/Build.props
+            // clears ProjectToBuild (enumerates zero) instead of falling back to the full default set.
+            Assert.Contains("<RestrictProjectToBuild>true</RestrictProjectToBuild>", props);
         });
     }
 
