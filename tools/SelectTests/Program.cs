@@ -140,10 +140,16 @@ internal static class Selection
         WriteSummary(options, result, allTestProjects, changedFiles, layer1Affected);
         WriteJobBooleans(options, result);
 
-        // Enforce + a non-ALL selection: restrict the downstream enumerate-tests build to the selected
-        // test projects via an OverrideProjectToBuild props file. In audit mode, or when the selection
-        // is ALL, write nothing so enumerate-tests enumerates the full matrix unchanged.
-        var restrictBuild = options.Enforce && !result.SelectsAll && options.BeforeBuildProps is not null;
+        // Enforce + a non-ALL selection restricts the downstream enumerate-tests build to the selected
+        // test projects via an OverrideProjectToBuild props file. A selection with ZERO buildable test
+        // projects (e.g. an extension-only / polyglot-only change whose only targets are non-.NET jobs)
+        // must NOT write an empty restriction: an empty ProjectToBuild makes the enumerate build fall
+        // back to the whole solution (and fail on non-test tooling projects). Instead we signal
+        // has_dotnet_tests=false so tests.yml skips enumerate-tests entirely and emits an empty matrix;
+        // the selected Layer 2 jobs still run via the run_* booleans. In audit mode, or when the
+        // selection is ALL, write nothing so enumerate-tests enumerates the full matrix unchanged.
+        var buildableSelected = result.TestProjects.Count(testProjectsByName.ContainsKey);
+        var restrictBuild = options.Enforce && !result.SelectsAll && options.BeforeBuildProps is not null && buildableSelected > 0;
         if (restrictBuild)
         {
             WriteBeforeBuildProps(options.BeforeBuildProps!, result.TestProjects, testProjectsByName);
@@ -152,6 +158,13 @@ internal static class Selection
         // Tell the workflow whether a restriction props file was written (and where). Empty means
         // "enumerate everything" -- the workflow then omits /p:BeforeBuildPropsPath.
         WriteGitHubOutput("before_build_props", restrictBuild ? options.BeforeBuildProps! : "");
+
+        // has_dotnet_tests is false only for an enforcing, non-ALL selection that selects no buildable
+        // test project. tests.yml gates enumerate-tests on it: false skips the build and yields an empty
+        // .NET test matrix (no test shards run) while the run_* job booleans still gate the non-.NET
+        // jobs. ALL and audit always enumerate the full matrix.
+        var hasDotnetTests = !options.Enforce || result.SelectsAll || buildableSelected > 0;
+        WriteGitHubOutput("has_dotnet_tests", hasDotnetTests ? "true" : "false");
 
         return 0;
     }
@@ -208,14 +221,6 @@ internal static class Selection
 
         var sb = new StringBuilder();
         sb.AppendLine("<Project>");
-        // RestrictProjectToBuild tells eng/Build.props to replace the default ProjectToBuild with the
-        // override below EVEN WHEN it is empty (a valid 0-test selection, e.g. an extension-only or
-        // polyglot-only change whose only targets are non-.NET jobs). Without this marker, Build.props
-        // applies the override only when '@(OverrideProjectToBuild)' != '', so an empty selection would
-        // fall through to the full default ProjectToBuild and enumerate every test project.
-        sb.AppendLine("  <PropertyGroup>");
-        sb.AppendLine("    <RestrictProjectToBuild>true</RestrictProjectToBuild>");
-        sb.AppendLine("  </PropertyGroup>");
         sb.AppendLine("  <ItemGroup>");
         foreach (var name in selectedTestProjects.OrderBy(n => n, StringComparer.Ordinal))
         {

@@ -90,6 +90,8 @@ public sealed class SelectTestsCliTests
 
             Assert.Equal(0, exitCode);
             Assert.Equal(propsPath, output()["before_build_props"]);
+            // A non-empty selection enumerates its subset, so the .NET matrix is built.
+            Assert.Equal("true", output()["has_dotnet_tests"]);
 
             var props = File.ReadAllText(propsPath);
             Assert.Contains("<OverrideProjectToBuild Include=\"$(RepoRoot)tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj\" />", props);
@@ -296,12 +298,13 @@ public sealed class SelectTestsCliTests
     }
 
     // P1-8. A docs-only PR (a changed file that is outside src/**, not ignored, and matched by no
-    // rule) selects NOTHING. Under --enforce that writes an OverrideProjectToBuild props with an empty
-    // ItemGroup, so the downstream -test build enumerates zero projects — the intended selective-CI
-    // outcome (tests.yml then runs no test work). Pin it so a future change can't quietly turn
-    // "select nothing" into "select everything" and erase the savings.
+    // rule) selects NOTHING. Under --enforce that is the "no .NET tests" case: SelectTests writes no
+    // restriction props and signals has_dotnet_tests=false, so tests.yml skips enumerate-tests and
+    // emits an empty matrix. (An empty OverrideProjectToBuild would instead make the build fall back to
+    // the whole solution and fail.) Pin it so a future change can't turn "select nothing" into "build
+    // everything", and so the non-.NET-job-only path keeps skipping the .NET matrix.
     [Fact]
-    public void EnforceEmptySelectionWritesEmptyOverride()
+    public void EnforceEmptySelectionSignalsNoDotnetTests()
     {
         RunInTempRepo((repoRoot, propsPath, output) =>
         {
@@ -309,14 +312,9 @@ public sealed class SelectTestsCliTests
 
             Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
 
-            Assert.True(File.Exists(propsPath));
-            Assert.Equal(propsPath, output()["before_build_props"]);
-            var props = File.ReadAllText(propsPath);
-            Assert.Contains("<ItemGroup>", props);
-            Assert.DoesNotContain("OverrideProjectToBuild", props);
-            // The empty selection must still carry the explicit restrict marker so eng/Build.props
-            // clears ProjectToBuild (enumerates zero) instead of falling back to the full default set.
-            Assert.Contains("<RestrictProjectToBuild>true</RestrictProjectToBuild>", props);
+            Assert.Equal("false", output()["has_dotnet_tests"]);
+            Assert.Equal("", output()["before_build_props"]);
+            Assert.False(File.Exists(propsPath));
         });
     }
 

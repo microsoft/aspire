@@ -173,8 +173,15 @@ jobs:
       # file the selector wrote survives -- a fresh checkout would git-clean it away. When a
       # restriction was written, beforeBuildPropsPath points enumerate at the selected subset; in
       # audit mode before_build_props is empty and enumerate builds the full matrix.
+      #
+      # Skipped entirely when the selection has no .NET test projects (has_dotnet_tests=false, e.g. an
+      # extension-only / polyglot-only change whose only targets are non-.NET jobs). An empty selection
+      # cannot be expressed as an empty ProjectToBuild -- that makes the enumerate build fall back to the
+      # whole solution and fail on non-test tooling projects -- so we skip the build and let the matrix
+      # default to empty below; the selected run_* jobs still run.
       - uses: ./.github/actions/enumerate-tests
         id: generate_tests_matrix
+        if: ${{ steps.select_tests.outputs.has_dotnet_tests != 'false' }}
         with:
           buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }}'
           checkout: 'false'
@@ -196,9 +203,13 @@ jobs:
       - name: Write test matrix to file
         shell: pwsh
         run: |
-          @'
+          $m = @'
           ${{ steps.generate_tests_matrix.outputs.all_tests }}
-          '@.Trim() | Set-Content -Path "${{ github.workspace }}/all_tests.json" -Encoding utf8 -NoNewline
+          '@.Trim()
+          # enumerate-tests is skipped for a no-.NET-tests selection, leaving all_tests empty; default to
+          # an empty matrix so the split step and the downstream `include[0] != null` guards see zero.
+          if ([string]::IsNullOrWhiteSpace($m)) { $m = '{"include":[]}' }
+          $m | Set-Content -Path "${{ github.workspace }}/all_tests.json" -Encoding utf8 -NoNewline
 
       - name: Split matrix by dependency type
         id: split_matrix
