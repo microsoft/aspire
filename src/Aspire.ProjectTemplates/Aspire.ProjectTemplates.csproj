@@ -151,4 +151,5 @@
 
   </Target>
 
+  <!-- ci-probe: no-op to select Aspire.Templates.Tests (requires_nugets bucket) -->
 </Project>
