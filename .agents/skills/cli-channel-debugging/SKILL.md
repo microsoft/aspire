@@ -99,6 +99,16 @@ Confirm the emulation took effect: `aspire --version` prints the emulated versio
 emulation banner appears on stderr. (Note: `aspire doctor` reports some fields from the
 physical binary by design — see the spec.)
 
+> **Polyglot channel resolution from a source build.** When you run a source (DEBUG) build from
+> inside the Aspire repo, `AspireRepositoryDetector` can match the repo's `Aspire.slnx` (it falls
+> back to the CLI binary's `Environment.ProcessPath`, not the apphost's location). For a polyglot
+> (TypeScript/Python) apphost that would force "project-reference mode" and short-circuit channel
+> resolution, so `aspire add` would silently resolve **stable nuget.org** packages instead of the
+> emulated channel's feed. To keep emulation faithful, `GuestAppHostProject.IsUsingProjectReferences`
+> now returns `false` whenever an `ASPIRE_CLI_*` identity override is active — so setting any
+> identity env var makes the source build resolve packages exactly like the installed CLI it is
+> emulating. (A real installed CLI is unaffected: Release builds only honor `ASPIRE_REPO_ROOT`.)
+
 ## Helper scripts (bundled with this skill)
 
 Two scripts live next to this `SKILL.md` (each with a `.sh` and a `.ps1` variant). Always

@@ -16,10 +16,22 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// override environment variables to make the locally built CLI <em>emulate the latest staging
 /// ("rc/daily") build</em>. They are the counterpart to <see cref="EmulatedReleasedBuildTests"/> and
 /// prove the stable-vs-staging differentiation: whereas a stable build resolves <c>Aspire.*</c> from
-/// nuget.org and drops no feed pin, a staging build resolves them from its SHA-specific darc feed and
-/// therefore <em>must</em> drop a <c>NuGet.config</c> mapping <c>Aspire*</c> to
-/// <c>darc-pub-microsoft-aspire-&lt;sha8&gt;</c>. Validating this locally — without producing a real
-/// official build — is the core promise of the CLI identity sidecar.
+/// nuget.org and drops no feed pin, a staging build resolves them from its SHA-specific darc feed.
+///
+/// This class is the <b>staging</b> row of the AppHost-language × channel-emulation matrix, with one
+/// test per AppHost language. The two languages behave <em>differently</em> here, which is exactly why
+/// each is exercised independently:
+/// <list type="bullet">
+/// <item><b>C#</b>: the AppHost is a real csproj restored by MSBuild, which needs the feed configured
+/// locally, so <c>aspire new</c> <b>must</b> drop a <c>NuGet.config</c> mapping <c>Aspire*</c> to
+/// <c>darc-pub-microsoft-aspire-&lt;sha8&gt;</c>.</item>
+/// <item><b>TypeScript</b>: the AppHost is scaffolded by the CLI itself (which resolves
+/// <c>Aspire.*</c> from the channel feed when it generates <c>.aspire/modules</c>), so <b>no</b>
+/// <c>NuGet.config</c> is dropped — the same as the stable case. This asymmetry has bitten us before,
+/// so the test pins it.</item>
+/// </list>
+/// Validating this locally — without producing a real official build — is the core promise of the CLI
+/// identity sidecar.
 ///
 /// Each test class runs as a separate CI job for parallelization.
 /// </summary>
@@ -84,6 +96,86 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
         // proving the dropped feed pin is functional (not just well-formed).
         await auto.RunCommandAsync($"cd {projectName}/{projectName}.AppHost", counter);
         await AddIntegrationInteractivelyAsync(auto, counter, "redis");
+    }
+
+    /// <summary>
+    /// SCENARIO: a published <b>staging ("rc/daily")</b> build of the CLI, scaffolding the TypeScript
+    /// <c>aspire-ts-starter</c> (Express/React) template.
+    ///
+    /// This is the TypeScript half of the staging row and the cell that proves the C#/TypeScript
+    /// divergence: unlike the C# staging case
+    /// (<see cref="EmulatedStagingIdentityScaffoldsCSharpStarterWithDarcFeedNuGetConfig"/>), the TS
+    /// AppHost is scaffolded by the CLI itself rather than restored by MSBuild, so it does <b>not</b>
+    /// get a project-local <c>NuGet.config</c> even on a custom-feed channel. This test emulates the
+    /// latest staging build, scaffolds the TS starter, and asserts: (1) <b>no</b> <c>NuGet.config</c>
+    /// is dropped, (2) the SDK version recorded in <c>aspire.config.json</c> equals the emulated
+    /// staging version (the darc feed carries exactly that version), and (3) <c>aspire add</c> still
+    /// resolves the integration from the staging darc feed <em>without</em> a project-local config —
+    /// proving the CLI's own channel-feed resolution, not a dropped file, drives TS package access.
+    /// </summary>
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task EmulatedStagingIdentityScaffoldsTypeScriptStarterWithoutNuGetConfig()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+
+        var staging = await CliE2ETestHelpers.TryGetLatestStagingBuildAsync(output.WriteLine, TestContext.Current.CancellationToken);
+        Assert.SkipWhen(staging is null, "Could not discover the latest staging Aspire build (network unavailable, GitHub rate-limited, or no recent darc feed). Pin via ASPIRE_E2E_STAGING_VERSION/ASPIRE_E2E_STAGING_COMMIT to force.");
+        output.WriteLine($"Emulating latest staging Aspire identity: version={staging!.Version}, commit={staging.Commit} (feed darc-pub-microsoft-aspire-{staging.ShortCommit}).");
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await ApplyEmulatedStagingIdentityAsync(auto, counter, staging);
+
+        const string projectName = "EmulatedStagingTsStarter";
+        await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.ExpressReact);
+
+        var projectDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, projectName));
+        var configPath = Path.Combine(projectDir.FullName, "aspire.config.json");
+
+        // The C#/TS divergence: the TS template path never drops a NuGet.config (the CLI resolves
+        // Aspire.* from the channel feed itself when generating .aspire/modules), so even on the
+        // custom-feed staging channel there must be no project-local feed pin.
+        AssertNoNuGetConfig(projectDir);
+
+        // The staging darc feed carries exactly one version, so the SDK version recorded in
+        // aspire.config.json must equal the emulated staging version exactly (unlike the stable case,
+        // where a later patch could be resolved).
+        var sdkVersion = GetSdkVersionFromAspireConfig(configPath);
+        output.WriteLine($"Generated TypeScript SDK version: {sdkVersion}");
+        Assert.Equal(staging.Version, sdkVersion);
+
+        // `aspire add` must resolve the integration from the staging darc feed and complete, proving
+        // the CLI's internal channel-feed resolution works for TS without a project-local NuGet.config.
+        // Use `valkey` rather than `redis`: the interactive picker filters by substring and selects the
+        // first match, and "redis" matches `azure-redis` (Aspire.Hosting.Azure.Redis) ahead of
+        // `redis` — whereas "valkey" uniquely matches Aspire.Hosting.Valkey, so the assertion below
+        // targets a deterministic package id.
+        await auto.RunCommandAsync($"cd {projectName}", counter);
+        await AddIntegrationInteractivelyAsync(auto, counter, "valkey");
+
+        // REGRESSION GUARD: "added successfully" alone is insufficient here — the stable Valkey package
+        // (13.4.3) also resolves fine from nuget.org, so a regression that ignored the pinned staging
+        // channel would still report success while silently adding the wrong version. The polyglot path
+        // has no project-local NuGet.config to constrain resolution; it relies entirely on the
+        // configured channel (aspire.config.json `channel: staging`) being honored by `aspire add`. The
+        // added version is recorded under `packages.<id>` in aspire.config.json, so assert it equals the
+        // emulated staging version (the darc feed carries exactly that version) and is NOT the stable
+        // nuget.org version. See the polyglot manifestation tracked by
+        // https://github.com/microsoft/aspire/issues/18114.
+        var addedValkeyVersion = GetPackageVersionFromAspireConfig(configPath, "Aspire.Hosting.Valkey");
+        output.WriteLine($"aspire add valkey resolved version: {addedValkeyVersion}");
+        Assert.Equal(staging.Version, addedValkeyVersion);
     }
 
     /// <summary>
@@ -206,5 +298,76 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
         return match.Success
             ? match.Groups["version"].Value
             : throw new InvalidOperationException($"Could not find an Aspire.AppHost.Sdk reference in {csprojPath}.");
+    }
+
+    /// <summary>
+    /// Reads the <c>sdk.version</c> recorded in a TypeScript starter's <c>aspire.config.json</c> (the
+    /// TS AppHost stores its SDK version there rather than in a csproj).
+    /// </summary>
+    private static string GetSdkVersionFromAspireConfig(string configPath)
+    {
+        if (!File.Exists(configPath))
+        {
+            throw new FileNotFoundException($"Expected aspire.config.json to exist: {configPath}", configPath);
+        }
+
+        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(configPath));
+        if (document.RootElement.TryGetProperty("sdk", out var sdk) &&
+            sdk.ValueKind == System.Text.Json.JsonValueKind.Object &&
+            sdk.TryGetProperty("version", out var version) &&
+            version.ValueKind == System.Text.Json.JsonValueKind.String &&
+            version.GetString() is { Length: > 0 } sdkVersion)
+        {
+            return sdkVersion;
+        }
+
+        throw new InvalidOperationException($"Could not find sdk.version in {configPath}.");
+    }
+
+    /// <summary>
+    /// Reads the version recorded for <paramref name="packageId"/> under the <c>packages</c> map of a
+    /// TypeScript starter's <c>aspire.config.json</c>. The polyglot AppHost persists each added
+    /// integration's resolved version there (e.g. <c>"Aspire.Hosting.Redis": "13.4.4"</c>), which lets
+    /// the staging test assert that <c>aspire add</c> honored the pinned channel's feed rather than
+    /// silently resolving the stable nuget.org version.
+    /// </summary>
+    private static string GetPackageVersionFromAspireConfig(string configPath, string packageId)
+    {
+        if (!File.Exists(configPath))
+        {
+            throw new FileNotFoundException($"Expected aspire.config.json to exist: {configPath}", configPath);
+        }
+
+        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(configPath));
+        if (document.RootElement.TryGetProperty("packages", out var packages) &&
+            packages.ValueKind == System.Text.Json.JsonValueKind.Object &&
+            packages.TryGetProperty(packageId, out var version) &&
+            version.ValueKind == System.Text.Json.JsonValueKind.String &&
+            version.GetString() is { Length: > 0 } packageVersion)
+        {
+            return packageVersion;
+        }
+
+        throw new InvalidOperationException($"Could not find packages.{packageId} in {configPath}.");
+    }
+
+    /// <summary>
+    /// Asserts that <c>aspire new</c> dropped no <c>NuGet.config</c> anywhere under the project. Used by
+    /// the TypeScript staging case, where — unlike C# — the CLI never writes a project-local feed pin.
+    /// </summary>
+    private static void AssertNoNuGetConfig(DirectoryInfo projectDir)
+    {
+        // Match by file name with a case-insensitive comparison rather than relying on the glob
+        // matcher, whose case sensitivity differs across host operating systems (the workspace is read
+        // from the host: case-insensitive on macOS/Windows, case-sensitive on Linux CI).
+        var nuGetConfigs = projectDir
+            .EnumerateFiles("*", SearchOption.AllDirectories)
+            .Where(f => string.Equals(f.Name, "NuGet.config", StringComparison.OrdinalIgnoreCase))
+            .Select(f => f.FullName)
+            .ToList();
+
+        Assert.True(
+            nuGetConfigs.Count == 0,
+            $"The TypeScript template must not drop a NuGet.config (the CLI resolves Aspire.* from the channel feed itself). Found: {string.Join(", ", nuGetConfigs)}");
     }
 }

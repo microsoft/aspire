@@ -19,6 +19,12 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// so a shipped release (or staging build) can be reproduced locally without rebuilding or
 /// reinstalling — the core promise of the CLI identity sidecar.
 ///
+/// This class is the <b>stable</b> row of the AppHost-language × channel-emulation matrix, with one
+/// test per AppHost language (C# and TypeScript). The <b>staging</b> row lives in
+/// <see cref="EmulatedStagingBuildTests"/>. We deliberately keep a separate test per language rather
+/// than collapsing them: C# and TypeScript AppHosts scaffold through different code paths and have
+/// diverged in behavior before, so each cell of the matrix must be exercised independently.
+///
 /// Each test class runs as a separate CI job for parallelization.
 /// </summary>
 public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
@@ -84,15 +90,19 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
     /// SCENARIO: a shipped <b>stable / GA release</b> build of the CLI, scaffolding the TypeScript
     /// <c>aspire-ts-starter</c> (Express/React) template.
     ///
-    /// The TypeScript starter records its SDK version in <c>aspire.config.json</c> rather than a
-    /// csproj. This test emulates the latest released identity and asserts the pinned version is
-    /// <b>stable-shaped</b> (no pre-release/build-metadata suffix) — proving the emulated stable
-    /// <em>channel</em>, not the local build's own pre-release stamp, drove template resolution. It
-    /// complements the C# starter test by covering the polyglot template's distinct config surface.
+    /// This is the TypeScript half of the stable row of the language × channel matrix; it mirrors the
+    /// C# stable test (<see cref="EmulatedStableIdentityScaffoldsCSharpStarterWithoutNuGetConfig"/>)
+    /// because the C# and TypeScript AppHosts go through <em>different</em> scaffolding code paths and
+    /// have historically diverged. Like the C# case it asserts that no <c>NuGet.config</c> feed pin is
+    /// dropped (a stable build's packages live on nuget.org). It additionally asserts that the SDK
+    /// version recorded in <c>aspire.config.json</c> (where the TS template stores it, rather than a
+    /// csproj) is <b>stable-shaped</b> — proving the emulated stable <em>channel</em>, not the local
+    /// build's own pre-release stamp, drove template resolution. The exact version is not asserted
+    /// because the stable channel can resolve a later patch than the discovered template version.
     /// </summary>
     [CaptureWorkspaceOnFailure]
     [Fact]
-    public async Task EmulatedStableIdentityScaffoldsTypeScriptStarter()
+    public async Task EmulatedStableIdentityScaffoldsTypeScriptStarterWithoutNuGetConfig()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -119,6 +129,11 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
 
         var projectDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, projectName));
         var configPath = Path.Combine(projectDir.FullName, "aspire.config.json");
+
+        // Like the C# stable case, a stable build's packages all live on nuget.org, so the CLI must
+        // not pin a custom feed via NuGet.config. Asserting this for the TS path too is the point of
+        // the matrix: C# and TypeScript scaffold through different code and have diverged before.
+        AssertNoNuGetConfig(projectDir);
 
         // The TypeScript starter records its SDK version in aspire.config.json. Under stable
         // emulation it must be stable-shaped — without the override it would inherit the build's
