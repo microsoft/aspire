@@ -46,7 +46,7 @@ public sealed class AzureResourceScopeDeploymentTests(ITestOutputHelper output)
             }
         }
 
-        var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.Create(output);
         var startTime = DateTime.UtcNow;
         var deploymentResourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("scope-deploy");
         var existingResourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("scope-existing");

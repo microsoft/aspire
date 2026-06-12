@@ -331,17 +331,14 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task SetScopeAsync_SetsResourceGroupFromScope()
     {
-        // Arrange
         using var builder = TestDistributedApplicationBuilder.Create();
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         bicep.Scope = new("test-rg");
-        
+
         var scope = new JsonObject();
 
-        // Act
         await BicepUtilities.SetScopeAsync(scope, bicep);
 
-        // Assert
         Assert.Single(scope);
         Assert.Equal("test-rg", scope["resourceGroup"]?.ToString());
     }
@@ -414,17 +411,13 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task SetScopeAsync_SetsNullWhenNoScope()
     {
-        // Arrange
         using var builder = TestDistributedApplicationBuilder.Create();
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
-        // No scope set
-        
+
         var scope = new JsonObject();
 
-        // Act
         await BicepUtilities.SetScopeAsync(scope, bicep);
 
-        // Assert
         Assert.Single(scope);
         Assert.Null(scope["resourceGroup"]?.AsValue().GetValue<object>());
     }
@@ -432,25 +425,21 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task GetCurrentChecksumAsync_ReturnsNullForMissingParameters()
     {
-        // Arrange
         using var builder = TestDistributedApplicationBuilder.Create();
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         var config = new ConfigurationBuilder().Build();
 
-        // Act
         var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, config);
 
-        // Assert
         Assert.Null(result);
     }
 
     [Fact]
     public async Task GetCurrentChecksumAsync_ReturnsNullForInvalidJson()
     {
-        // Arrange
         using var builder = TestDistributedApplicationBuilder.Create();
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
-        
+
         var configurationBuilder = new ConfigurationBuilder();
         configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -458,26 +447,23 @@ public class BicepUtilitiesTests
         });
         var config = configurationBuilder.Build();
 
-        // Act
         var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, config);
 
-        // Assert
         Assert.Null(result);
     }
 
     [Fact]
     public async Task GetCurrentChecksumAsync_ReturnsValidChecksumForValidParameters()
     {
-        // Arrange
         using var builder = TestDistributedApplicationBuilder.Create();
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         bicep.Parameters["param1"] = "value1";
-        
+
         var parameters = new JsonObject
         {
             ["param1"] = new JsonObject { ["value"] = "value1" }
         };
-        
+
         var configurationBuilder = new ConfigurationBuilder();
         configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -485,10 +471,8 @@ public class BicepUtilitiesTests
         });
         var config = configurationBuilder.Build();
 
-        // Act
         var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, config);
 
-        // Assert
         Assert.NotNull(result);
         Assert.NotEmpty(result);
     }

@@ -1098,8 +1098,14 @@ public class AtsTypeScriptCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
         var aspireTs = files["aspire.mts"];
 
+        Assert.Contains("runAsExistingInResourceGroup", aspireTs);
+        Assert.Contains("publishAsExistingInResourceGroup", aspireTs);
         Assert.Contains("asExistingInResourceGroup", aspireTs);
+        Assert.Contains("runAsExistingInSubscription", aspireTs);
+        Assert.Contains("publishAsExistingInSubscription", aspireTs);
         Assert.Contains("asExistingInSubscription", aspireTs);
+        Assert.Contains("runAsExistingInTenant", aspireTs);
+        Assert.Contains("publishAsExistingInTenant", aspireTs);
         Assert.Contains("asExistingInTenant", aspireTs);
     }
 
