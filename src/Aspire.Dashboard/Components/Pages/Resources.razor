@@ -129,7 +129,7 @@
                                     </FluentTab>
                                 </FluentTabs>
                             }
-                            <div @ref="_resourcesGridContainer" id="@ScrollContainerId" class="resources-grid-container" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]" hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
+                            <div id="@ScrollContainerId" class="resources-grid-container" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]" hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
                                 <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                                     <FluentDataGrid @ref="_dataGrid"
                                                     ColumnResizeLabels="@_resizeLabels"
@@ -152,12 +152,15 @@
                                                     OnRowClick="@(r => r.ExecuteOnDefault(d => ShowResourceDetailsAsync(d.Resource, focusElementId: ScrollContainerId)))"
                                                     Class="main-grid enable-row-click">
                                         <ChildContent>
+                                            @* FluentDataGrid rows activate on Enter/NumpadEnter from Blazor keydown handlers.
+                                               Stop Blazor keydown propagation from nested controls so keyboard activation doesn't
+                                               also open resource details. Browser-native keyboard behavior still runs on the control. *@
                                             <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Sortable="true" SortBy="@_nameSort" Tooltip="true" TooltipText="@(c => $"{c.Resource.ResourceType}: {GetResourceName(c.Resource)}")" Class="expand-col">
                                                 @{
                                                     var indent = context.Depth * 16;
                                                 }
                                                 <span class="resources-name-container" style="margin-left: @(indent)px;">
-                                                    <span @onclick:stopPropagation="true" class="main-grid-expand-container @(context.IsCollapsed ? "main-grid-collapsed" : "main-grid-expanded")">
+                                                    <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" class="main-grid-expand-container @(context.IsCollapsed ? "main-grid-collapsed" : "main-grid-expanded")">
                                                         @if (context.Children.Count > 0)
                                                         {
                                                             <FluentButton aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="Appearance.Lightweight" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
@@ -194,11 +197,12 @@
                                                     <GridValue Value="@paramValue.Value"
                                                                ValueDescription="@ControlsStringsLoc[nameof(ControlsStrings.PropertyGridValueColumnHeader)]"
                                                                EnableMasking="@paramValue.IsSensitive"
-                                                               IsMasked="@paramValue.IsSensitive" />
+                                                               IsMasked="@paramValue.IsSensitive"
+                                                               StopClickPropagation="true" />
                                                 }
                                                 else if (paramValue.IsUnresolved)
                                                 {
-                                                    <span class="cellText" @onclick:stopPropagation="true">
+                                                    <span class="cellText" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
                                                         <ParameterValueDisplay Resource="context.Resource"
                                                                                OnExecuteCommandAsync="ExecuteResourceCommandAsync"
                                                                                IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
@@ -215,7 +219,7 @@
                                                                    DisplayedUrls="GetDisplayedUrls(context.Resource)" />
                                             </AspireTemplateColumn>
                                             <AspireTemplateColumn ColumnId="@ActionsColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesActionsColumnHeader)]" Class="no-ellipsis">
-                                                <div class="grid-action-container" @onclick:stopPropagation="true">
+                                                <div class="grid-action-container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
                                                     <ResourceActions CommandSelected="async (command) => await ExecuteResourceCommandAsync(context.Resource, command)"
                                                                      IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))"
                                                                      OnViewDetails="@((focusElementId) => ShowResourceDetailsAsync(context.Resource, focusElementId))"

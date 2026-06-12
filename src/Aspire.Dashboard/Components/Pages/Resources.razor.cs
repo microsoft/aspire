@@ -120,14 +120,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private string? _elementIdBeforeDetailsViewOpened;
     private string? _pendingFocusElementId;
     private FluentDataGrid<ResourceGridViewModel> _dataGrid = null!;
-    private ElementReference _resourcesGridContainer;
     private GridColumnManager _manager = null!;
     private int _maxHighlightedCount;
     private readonly List<MenuButtonItem> _resourcesMenuItems = new();
     private DotNetObjectReference<ResourcesInterop>? _resourcesInteropReference;
     private IJSObjectReference? _jsModule;
-    private IJSObjectReference? _resourcesPageModule;
-    private IJSObjectReference? _resourcesGridKeyboardActivation;
     private bool _graphInitialized;
     private AspirePageContentLayout? _contentLayout;
     private TotalItemsFooter _totalItemsFooter = default!;
@@ -386,12 +383,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
-        {
-            _resourcesPageModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Pages/Resources.razor.js");
-            _resourcesGridKeyboardActivation = await _resourcesPageModule.InvokeAsync<IJSObjectReference>("initializeResourcesGridKeyboardActivation", _resourcesGridContainer);
-        }
-
         // Check to see whether max item count should be set on every render.
         // This is required because the data grid's virtualize component can be recreated on data change.
         if (_dataGrid != null && FluentDataGridHelper<ResourceGridViewModel>.TrySetMaxItemCount(_dataGrid, 10_000))
@@ -1019,30 +1010,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         _cts.Cancel();
         _logsSubscription?.Dispose();
         TelemetryContext.Dispose();
-        await DisposeResourcesGridKeyboardActivationAsync();
-        await JSInteropHelpers.SafeDisposeAsync(_resourcesPageModule);
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
 
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
-    }
-
-    private async Task DisposeResourcesGridKeyboardActivationAsync()
-    {
-        if (_resourcesGridKeyboardActivation is null)
-        {
-            return;
-        }
-
-        try
-        {
-            await _resourcesGridKeyboardActivation.InvokeVoidAsync("dispose");
-        }
-        catch (JSDisconnectedException)
-        {
-            // This can happen when the browser has already disconnected during teardown.
-        }
-
-        await JSInteropHelpers.SafeDisposeAsync(_resourcesGridKeyboardActivation);
     }
 
     private async Task ContextMenuClosed(Microsoft.AspNetCore.Components.Web.MouseEventArgs args)

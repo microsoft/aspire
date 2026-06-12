@@ -68,6 +68,10 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
             var anchor = Anchor;
             _registeredAnchorId = anchor;
             _menuReference ??= DotNetObjectReference.Create(this);
+            // Fluent UI's menu keyboard helper currently listens from the popup element after the
+            // fluent-menu web component can stop bubbling Tab events. Use Aspire's capture-phase
+            // mitigation until Fluent UI exposes equivalent behavior we can adopt directly.
+            // See: https://github.com/microsoft/fluentui-blazor/blob/49346cfc358677b46bc7737aa2db1a548202dd6f/src/Core/Components/AnchoredRegion/FluentAnchoredRegion.razor.js
             await JS.InvokeVoidAsync("initializeAspirePopupKeyboardNavigation", anchor, _menuId, _menuReference, new { tabExitsAlways = true });
         }
     }

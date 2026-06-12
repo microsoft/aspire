@@ -2,22 +2,26 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Bunit;
 using ProtobufValue = Google.Protobuf.WellKnownTypes.Value;
+using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
+using TelemetryTestHelpers = Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
@@ -420,7 +424,7 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public void ResourcesGrid_InitializesScopedKeyboardActivationHandler()
+    public void ResourcesGrid_DoesNotInitializeScopedKeyboardActivationHandler()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var initialResources = new List<ResourceViewModel>
@@ -436,308 +440,32 @@ public partial class ResourcesTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
-        cut.WaitForAssertion(() => Assert.Contains(JSInterop.Invocations, i => i.Identifier == "initializeResourcesGridKeyboardActivation"));
-
-        var invocation = Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeResourcesGridKeyboardActivation");
-        Assert.IsType<ElementReference>(invocation.Arguments[0]);
+        cut.WaitForAssertion(() => Assert.DoesNotContain(JSInterop.Invocations, i => i.Identifier == "initializeResourcesGridKeyboardActivation"));
         Assert.Contains("resources-grid-container", cut.Markup);
     }
 
     [Fact]
-    public async Task ResourcesGridKeyboardActivationScript_StopsOnlyInteractiveActivationKeys()
+    public void UnreadLogErrorsBadge_StopsKeyboardPropagation()
     {
-        var scriptPath = GetResourcesPageScriptPath();
-        var script = """
-            import { readFileSync } from 'node:fs';
-            import assert from 'node:assert/strict';
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentAnchor(this);
 
-            const source = readFileSync(process.argv[2], 'utf8');
-            const resourcesModule = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        AddErrorLog(telemetryRepository, resourceName: "Resource1");
+        var unviewedErrorCounts = telemetryRepository.GetResourceUnviewedErrorLogsCount();
+        var resourceKey = Assert.Single(unviewedErrorCounts.Keys);
+        var resource = CreateResource(resourceKey.GetCompositeName(), "Type1", "Running", null);
+        Assert.NotNull(telemetryRepository.GetResourceByCompositeName(resource.Name));
 
-            function createKeydownEvent(key, options = {}) {
-                return {
-                    key,
-                    altKey: options.altKey ?? false,
-                    ctrlKey: options.ctrlKey ?? false,
-                    metaKey: options.metaKey ?? false,
-                    shiftKey: options.shiftKey ?? false,
-                    target: options.target,
-                    stopped: false,
-                    stopPropagation() {
-                        this.stopped = true;
-                    },
-                    composedPath() {
-                        const path = [];
-                        let current = this.target;
-                        while (current) {
-                            path.push(current);
-                            current = current.parentElement;
-                        }
-
-                        return path;
-                    }
-                };
-            }
-
-            class FakeElement {
-                children = [];
-                listeners = new Map();
-                parentElement = null;
-
-                constructor(tagName, attributes = {}) {
-                    this.tagName = tagName.toUpperCase();
-                    this.attributes = new Map(Object.entries(attributes));
-                }
-
-                appendChild(child) {
-                    child.parentElement = this;
-                    this.children.push(child);
-                }
-
-                removeChild(child) {
-                    this.children = this.children.filter(c => c !== child);
-                    child.parentElement = null;
-                }
-
-                contains(element) {
-                    let current = element;
-                    while (current) {
-                        if (current === this) {
-                            return true;
-                        }
-
-                        current = current.parentElement;
-                    }
-
-                    return false;
-                }
-
-                matches(selector) {
-                    return selector
-                        .split(',')
-                        .some(s => this.matchesSingleSelector(s.trim()));
-                }
-
-                matchesSingleSelector(selector) {
-                    if (selector === 'a[href]') {
-                        return this.tagName === 'A' && this.attributes.has('href');
-                    }
-
-                    const roleMatch = selector.match(/^\[role="(.+)"\]$/);
-                    if (roleMatch) {
-                        return this.attributes.get('role') === roleMatch[1];
-                    }
-
-                    return this.tagName.toLowerCase() === selector;
-                }
-
-                closest(selector) {
-                    let current = this;
-                    while (current) {
-                        if (current.matches(selector)) {
-                            return current;
-                        }
-
-                        current = current.parentElement;
-                    }
-
-                    return null;
-                }
-
-                addEventListener(type, listener) {
-                    const listeners = this.listeners.get(type) ?? [];
-                    listeners.push(listener);
-                    this.listeners.set(type, listeners);
-                }
-
-                removeEventListener(type, listener) {
-                    const listeners = this.listeners.get(type) ?? [];
-                    this.listeners.set(type, listeners.filter(l => l !== listener));
-                }
-
-                dispatchKeydown(key, options = {}) {
-                    const event = createKeydownEvent(key, { ...options, target: options.target ?? this });
-                    for (const listener of this.listeners.get('keydown') ?? []) {
-                        listener(event);
-                    }
-
-                    return event.stopped;
-                }
-
-                dispatchFocusIn(options = {}) {
-                    const event = createKeydownEvent('FocusIn', { ...options, target: options.target ?? this });
-                    for (const listener of this.listeners.get('focusin') ?? []) {
-                        listener(event);
-                    }
-                }
-            }
-
-            globalThis.Element = FakeElement;
-
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter')), true);
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent(' ')), false);
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Spacebar')), false);
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Tab')), false);
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('ArrowDown')), false);
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Escape')), false);
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter', { ctrlKey: true })), false);
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter', { altKey: true })), false);
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter', { metaKey: true })), false);
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter', { shiftKey: true })), false);
-
-            const grid = new FakeElement('div');
-            const button = new FakeElement('button');
-            const text = new FakeElement('span');
-            grid.appendChild(button);
-            grid.appendChild(text);
-            const registration = resourcesModule.initializeResourcesGridKeyboardActivation(grid);
-
-            let buttonKeydownCount = 0;
-            button.addEventListener('keydown', () => buttonKeydownCount++);
-
-            grid.dispatchFocusIn({ target: button });
-            assert.equal(button.dispatchKeydown('Enter'), true);
-            assert.equal(buttonKeydownCount, 1);
-            assert.equal(button.dispatchKeydown('Enter', { ctrlKey: true }), false);
-            assert.equal(button.dispatchKeydown(' '), false);
-            assert.equal(button.dispatchKeydown('ArrowDown'), false);
-            assert.equal(button.dispatchKeydown('Tab'), false);
-
-            grid.dispatchFocusIn({ target: text });
-            assert.equal(text.dispatchKeydown('Enter'), false);
-
-            const anchor = new FakeElement('a', { href: '#' });
-            grid.appendChild(anchor);
-            grid.dispatchFocusIn({ target: anchor });
-            assert.equal(anchor.dispatchKeydown('Enter'), true);
-
-            grid.dispatchFocusIn({ target: text });
-            assert.equal(grid.dispatchKeydown('Enter', { target: anchor }), false);
-            registration.dispose();
-
-            assert.equal(anchor.dispatchKeydown('Enter'), false);
-            """;
-
-        await RunNodeScriptAsync(script, scriptPath);
-    }
-
-    private static string GetResourcesPageScriptPath()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
+        var cut = RenderComponent<UnreadLogErrorsBadge>(builder =>
         {
-            var scriptPath = Path.Combine(directory.FullName, "src", "Aspire.Dashboard", "Components", "Pages", "Resources.razor.js");
-            if (File.Exists(scriptPath))
-            {
-                return scriptPath;
-            }
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.UnviewedErrorCounts, unviewedErrorCounts);
+        });
 
-            directory = directory.Parent;
-        }
-
-        Assert.Skip("Resources.razor.js is required to run the Resources grid keyboard activation JavaScript test.");
-        return string.Empty;
-    }
-
-    private static async Task RunNodeScriptAsync(string script, string scriptPath)
-    {
-        await SkipIfNodeUnavailableAsync();
-
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "node",
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false
-            }
-        };
-        process.StartInfo.ArgumentList.Add("--input-type=module");
-        process.StartInfo.ArgumentList.Add("-");
-        process.StartInfo.ArgumentList.Add(scriptPath);
-
-        process.Start();
-
-        await process.StandardInput.WriteAsync(script);
-        process.StandardInput.Close();
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        var waitTask = process.WaitForExitAsync();
-
-        if (await Task.WhenAny(waitTask, Task.Delay(TimeSpan.FromSeconds(30))) != waitTask)
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException("Timed out waiting for the Resources grid keyboard activation JavaScript test to complete.");
-        }
-
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-
-        Assert.True(process.ExitCode == 0, $"""
-            node exited with code {process.ExitCode}.
-
-            stdout:
-            {stdout}
-
-            stderr:
-            {stderr}
-            """);
-    }
-
-    private static async Task SkipIfNodeUnavailableAsync()
-    {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "node",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false
-            }
-        };
-        process.StartInfo.ArgumentList.Add("--version");
-
-        try
-        {
-            process.Start();
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or FileNotFoundException)
-        {
-            Assert.Skip("Node.js is required to run the Resources grid keyboard activation JavaScript test.");
-            return;
-        }
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        var waitTask = process.WaitForExitAsync();
-
-        if (await Task.WhenAny(waitTask, Task.Delay(TimeSpan.FromSeconds(10))) != waitTask)
-        {
-            process.Kill(entireProcessTree: true);
-            Assert.Skip("Node.js is required to run the Resources grid keyboard activation JavaScript test, but `node --version` did not complete.");
-            return;
-        }
-
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-
-        if (process.ExitCode != 0)
-        {
-            Assert.Skip($"""
-                Node.js is required to run the Resources grid keyboard activation JavaScript test, but `node --version` exited with code {process.ExitCode}.
-
-                stdout:
-                {stdout}
-
-                stderr:
-                {stderr}
-                """);
-        }
+        var badge = cut.Find(".unread-logs-errors-link");
+        Assert.Contains("onkeydown:stoppropagation", badge.OuterHtml, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ResourceViewModel CreateResource(
@@ -773,6 +501,34 @@ public partial class ResourcesTests : DashboardTestContext
             Commands = [],
             IsHidden = isHidden,
         };
+    }
+
+    private static void AddErrorLog(TelemetryRepository repository, string resourceName)
+    {
+        var addContext = new AddContext();
+        var logs = new RepeatedField<ResourceLogs>();
+        logs.Add(new ResourceLogs
+        {
+            Resource = TelemetryTestHelpers.CreateResource(name: resourceName, instanceId: resourceName),
+            ScopeLogs =
+            {
+                new ScopeLogs
+                {
+                    Scope = TelemetryTestHelpers.CreateScope("TestLogger"),
+                    LogRecords =
+                    {
+                        TelemetryTestHelpers.CreateLogRecord(
+                            time: DateTime.UtcNow,
+                            message: "Error",
+                            severity: SeverityNumber.Error)
+                    }
+                }
+            }
+        });
+
+        repository.AddLogs(addContext, logs);
+
+        Assert.Equal(0, addContext.FailureCount);
     }
 
     [Fact]
@@ -1008,6 +764,35 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal("my-secret-value", resource.Properties[KnownProperties.Parameter.Value].Value.StringValue);
         Assert.True(resource.Properties[KnownProperties.Parameter.Value].IsValueSensitive);
         Assert.Equal("success", resource.StateStyle);
+    }
+
+    [Fact]
+    public void ParametersView_UrlValueStopsClickPropagation()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parameterProperties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty
+            .Add(KnownProperties.Parameter.Value, new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                ProtobufValue.ForString("https://example.com"),
+                isValueSensitive: false,
+                knownProperty: null,
+                priority: 0));
+
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null, properties: parameterProperties),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        var setCellTextClickHandler = JSInterop.SetupVoid("setCellTextClickHandler", _ => true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourcesUrl(view: "Parameters"));
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() => Assert.Single(setCellTextClickHandler.Invocations));
     }
 
     [Fact]
