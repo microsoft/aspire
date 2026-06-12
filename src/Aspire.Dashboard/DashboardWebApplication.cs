@@ -531,27 +531,29 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await next(context).ConfigureAwait(false);
         });
 
-        // Error mode middleware: redirect browser navigation to the error page and reject every other
-        // non-asset request until the user explicitly dismisses the configuration errors.
-        _app.Use(async (context, next) =>
+        var errorMode = _app.Services.GetRequiredService<DashboardErrorMode>();
+        if (errorMode.IsErrorMode)
         {
-            var errorMode = context.RequestServices.GetRequiredService<DashboardErrorMode>();
-
-            if (!errorMode.ShouldBlock || IsErrorModeAllowedRequest(context.Request.Path))
+            // Error mode middleware: redirect browser navigation to the error page and reject every other
+            // non-asset request until the user explicitly dismisses the configuration errors.
+            _app.Use(async (context, next) =>
             {
-                await next(context).ConfigureAwait(false);
-                return;
-            }
+                if (!errorMode.ShouldBlock || IsErrorModeAllowedRequest(context.Request.Path))
+                {
+                    await next(context).ConfigureAwait(false);
+                    return;
+                }
 
-            if (IsHtmlNavigationRequest(context.Request))
-            {
-                context.Response.Redirect("/errormode");
-                return;
-            }
+                if (IsHtmlNavigationRequest(context.Request))
+                {
+                    context.Response.Redirect("/errormode");
+                    return;
+                }
 
-            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-            await context.Response.WriteAsync("Dashboard is in error mode due to configuration errors.").ConfigureAwait(false);
-        });
+                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                await context.Response.WriteAsync("Dashboard is in error mode due to configuration errors.").ConfigureAwait(false);
+            });
+        }
 
         if (!string.IsNullOrEmpty(parsedDashboardOptions.Otlp.Cors.AllowedOrigins))
         {
