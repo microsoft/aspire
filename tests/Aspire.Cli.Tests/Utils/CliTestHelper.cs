@@ -183,6 +183,7 @@ internal static class CliTestHelper
         services.AddSingleton<ICSharpCliManagedAppHostModuleGenerator, CSharpCliManagedAppHostModuleGenerator>();
         services.AddSingleton<IIntegrationClosureRestorer, IntegrationClosureRestorer>();
         services.AddSingleton<DotNetAppHostProject>();
+        services.AddSingleton<CliManagedDotNetAppHostProject>();
         services.AddSingleton<Func<LanguageInfo, GuestAppHostProject>>(sp =>
         {
             return language => ActivatorUtilities.CreateInstance<GuestAppHostProject>(sp, language);

@@ -186,7 +186,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             """);
 
         var runner = new TestDotNetCliRunner();
-        var project = CreateDotNetAppHostProject(runner, configureServices: options =>
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
         {
             options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
         });
@@ -242,7 +242,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             """);
 
         var runner = new TestDotNetCliRunner();
-        var project = CreateDotNetAppHostProject(runner);
+        var project = CreateCliManagedDotNetAppHostProject(runner);
 
         runner.BuildAsyncCallback = (_, _, _, _) => 0;
         runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
@@ -279,7 +279,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             }
             """);
 
-        var project = CreateDotNetAppHostProject(new TestDotNetCliRunner());
+        var project = CreateCliManagedDotNetAppHostProject(new TestDotNetCliRunner());
 
         Assert.True(project.CanHandle(appHostFile));
     }
@@ -289,7 +289,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     {
         var appHostFile = CreateCliManagedSingleFileAppHost();
         var runner = new TestDotNetCliRunner();
-        var project = CreateDotNetAppHostProject(runner, configureServices: options =>
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
         {
             options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
         });
@@ -323,7 +323,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     {
         var appHostFile = CreateCliManagedSingleFileAppHost();
         var runner = new TestDotNetCliRunner();
-        var project = CreateDotNetAppHostProject(runner, configureServices: options =>
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
         {
             options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
         });
@@ -1986,6 +1986,30 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var provider = services.BuildServiceProvider();
         _serviceProviders.Add(provider);
         return provider.GetRequiredService<DotNetAppHostProject>();
+    }
+
+    private CliManagedDotNetAppHostProject CreateCliManagedDotNetAppHostProject(
+        TestDotNetCliRunner runner,
+        LayoutConfiguration? layout = null,
+        Action<CliServiceCollectionTestOptions>? configureServices = null)
+    {
+        var services = CliTestHelper.CreateServiceCollection(_workspace, outputHelper, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => runner;
+            if (layout is not null)
+            {
+                options.BundleServiceFactory = _ => new TestBundleService(isBundle: true)
+                {
+                    Layout = layout
+                };
+            }
+
+            configureServices?.Invoke(options);
+        });
+
+        var provider = services.BuildServiceProvider();
+        _serviceProviders.Add(provider);
+        return provider.GetRequiredService<CliManagedDotNetAppHostProject>();
     }
 
     private static void WriteAspireConfigJson(string directory, string content)

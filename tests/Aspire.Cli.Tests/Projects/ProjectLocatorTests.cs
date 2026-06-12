@@ -1397,6 +1397,9 @@ builder.Build().Run();");
             public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken)
                 => throw new NotImplementedException();
 
+            public Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken)
+                => Task.FromResult(CliExitCodes.Success);
+
             public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
                 => throw new NotImplementedException();
 

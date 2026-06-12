@@ -187,6 +187,9 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
                 ? _factory.RunAsyncCallback(context, cancellationToken)
                 : throw new NotImplementedException();
 
+        public Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken)
+            => Task.FromResult(CliExitCodes.Success);
+
         public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 

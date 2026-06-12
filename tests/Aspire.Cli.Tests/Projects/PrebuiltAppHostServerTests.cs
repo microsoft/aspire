@@ -59,6 +59,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var projectElements = doc.Descendants("ProjectReference").ToList();
         Assert.Single(projectElements);
         Assert.Equal("/path/to/MyIntegration.csproj", projectElements[0].Attribute("Include")?.Value);
+        Assert.Equal("false", projectElements[0].Element("IsAspireProjectResource")?.Value);
+        Assert.Equal("true", projectElements[0].Element("ReferenceOutputAssembly")?.Value);
+        Assert.Null(projectElements[0].Element("Private"));
 
         Assert.Empty(doc.Descendants("PackageReference"));
     }
@@ -144,8 +147,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var doc = XDocument.Parse(xml);
 
         var ns = doc.Root!.GetDefaultNamespace();
+        Assert.Equal("false", doc.Descendants(ns + "EnableDefaultItems").FirstOrDefault()?.Value);
         Assert.Equal("false", doc.Descendants(ns + "EnableNETAnalyzers").FirstOrDefault()?.Value);
         Assert.Equal("false", doc.Descendants(ns + "GenerateDocumentationFile").FirstOrDefault()?.Value);
+        Assert.Equal("false", doc.Descendants(ns + "IsPackable").FirstOrDefault()?.Value);
+        Assert.Equal("false", doc.Descendants(ns + "IsPublishable").FirstOrDefault()?.Value);
         Assert.Equal("false", doc.Descendants(ns + "ProduceReferenceAssembly").FirstOrDefault()?.Value);
     }
 

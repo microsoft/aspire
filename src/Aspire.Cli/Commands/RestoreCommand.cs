@@ -5,7 +5,6 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -28,13 +27,8 @@ internal sealed class RestoreCommand : BaseCommand
     private readonly IProjectLocator _projectLocator;
     private readonly IAppHostProjectFactory _projectFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
-    private readonly IDotNetCliRunner _runner;
-    private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly IInteractionService _interactionService;
     private readonly ILogger<RestoreCommand> _logger;
-    private readonly ICSharpCliManagedAppHostModuleGenerator _cliManagedModuleGenerator;
-    private readonly IIntegrationClosureRestorer _integrationClosureRestorer;
-    private readonly IFeatures _features;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
 
@@ -42,24 +36,15 @@ internal sealed class RestoreCommand : BaseCommand
         IProjectLocator projectLocator,
         IAppHostProjectFactory projectFactory,
         ILanguageDiscovery languageDiscovery,
-        IDotNetCliRunner runner,
-        IDotNetSdkInstaller sdkInstaller,
         ILogger<RestoreCommand> logger,
-        ICSharpCliManagedAppHostModuleGenerator cliManagedModuleGenerator,
-        IIntegrationClosureRestorer integrationClosureRestorer,
         CommonCommandServices services)
         : base("restore", RestoreCommandStrings.Description, services)
     {
         _projectLocator = projectLocator;
         _projectFactory = projectFactory;
         _languageDiscovery = languageDiscovery;
-        _runner = runner;
-        _sdkInstaller = sdkInstaller;
         _interactionService = services.InteractionService;
         _logger = logger;
-        _cliManagedModuleGenerator = cliManagedModuleGenerator;
-        _integrationClosureRestorer = integrationClosureRestorer;
-        _features = services.Features;
 
         Options.Add(s_appHostOption);
     }
@@ -129,90 +114,29 @@ internal sealed class RestoreCommand : BaseCommand
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject, RestoreCommandStrings.UnrecognizedAppHostType);
             }
 
-            if (project is DotNetAppHostProject)
+            var directory = effectiveAppHostFile.Directory!;
+            _logger.LogDebug("Restoring {Language} AppHost {AppHost} in {Directory}", project.DisplayName, effectiveAppHostFile.FullName, directory.FullName);
+
+            var outputCollector = new OutputCollector();
+            var restoreExitCode = await _interactionService.ShowStatusAsync(
+                RestoreCommandStrings.RestoringSdkCode,
+                async () => await project.RestoreAsync(effectiveAppHostFile, outputCollector, cancellationToken),
+                emoji: KnownEmojis.Gear);
+
+            if (restoreExitCode == 0)
             {
-                if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, InteractionService, Telemetry, cancellationToken: cancellationToken))
-                {
-                    return CommandResult.Failure(CliExitCodes.SdkNotInstalled);
-                }
-
-                var appHostDirectory = effectiveAppHostFile.Directory!;
-                _logger.LogDebug("Restoring packages for {AppHost} in {Directory}", effectiveAppHostFile.FullName, appHostDirectory.FullName);
-
-                // For CLI-managed file-based AppHosts, route restore through IntegrationClosureRestorer
-                // so the integration closure cache under .aspire/integrations/apphosts/<hash>/ is
-                // materialized with a probe manifest the runtime AppHost can consume. This mirrors
-                // the PrebuiltAppHostServer restore path used for polyglot AppHosts.
-                if (DotNetAppHostProject.IsCliManagedSingleFileAppHost(effectiveAppHostFile, _features))
-                {
-                    // Wire the module build output through an OutputCollector so the user sees
-                    // diagnostics (NU1101 for a missing package, NU1605 for downgrades, etc.) inline
-                    // when restore fails, instead of only "See logs at ...". Mirrors how AddCommand
-                    // surfaces failures via DisplayLines on the captured output.
-                    var buildOutputCollector = new OutputCollector();
-                    var buildOptions = new ProcessInvocationOptions
-                    {
-                        StandardOutputCallback = buildOutputCollector.AppendOutput,
-                        StandardErrorCallback = buildOutputCollector.AppendError,
-                    };
-
-                    var layout = await _interactionService.ShowStatusAsync(
-                        RestoreCommandStrings.RestoringSdkCode,
-                        async () => await _integrationClosureRestorer.RestoreAsync(
-                            effectiveAppHostFile,
-                            new IntegrationClosureRestoreOptions { BuildInvocationOptions = buildOptions },
-                            cancellationToken),
-                        emoji: KnownEmojis.Gear);
-
-                    if (layout is null)
-                    {
-                        _interactionService.DisplayLines(buildOutputCollector.GetLines());
-                        return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
-                    }
-
-                    _interactionService.DisplaySuccess(
-                        string.Format(CultureInfo.CurrentCulture, RestoreCommandStrings.RestoreSucceeded, effectiveAppHostFile.Name));
-                    return CommandResult.Success();
-                }
-
-                await _cliManagedModuleGenerator.TryGenerateAsync(effectiveAppHostFile, cancellationToken);
-
-                var restoreExitCode = await _interactionService.ShowStatusAsync(
-                    RestoreCommandStrings.RestoringSdkCode,
-                    async () => await _runner.RestoreAsync(effectiveAppHostFile, new ProcessInvocationOptions(), cancellationToken),
-                    emoji: KnownEmojis.Gear);
-
-                if (restoreExitCode == 0)
-                {
-                    _interactionService.DisplaySuccess(
-                        string.Format(CultureInfo.CurrentCulture, RestoreCommandStrings.RestoreSucceeded, effectiveAppHostFile.Name));
-                    return CommandResult.Success();
-                }
-
-                return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
+                _interactionService.DisplaySuccess(
+                    string.Format(CultureInfo.CurrentCulture, RestoreCommandStrings.RestoreSucceeded, effectiveAppHostFile.Name));
+                return CommandResult.Success();
             }
 
-            if (project is GuestAppHostProject guestProject)
+            var outputLines = outputCollector.GetLines().ToArray();
+            if (outputLines.Length > 0)
             {
-                var directory = effectiveAppHostFile.Directory!;
-                _logger.LogDebug("Restoring SDK code for {AppHost} in {Directory}", effectiveAppHostFile.FullName, directory.FullName);
-
-                var success = await _interactionService.ShowStatusAsync(
-                    RestoreCommandStrings.RestoringSdkCode,
-                    async () => await guestProject.BuildAndGenerateSdkAsync(directory, cancellationToken: cancellationToken),
-                    emoji: KnownEmojis.Gear);
-
-                if (success)
-                {
-                    _interactionService.DisplaySuccess(
-                        string.Format(CultureInfo.CurrentCulture, RestoreCommandStrings.RestoreSucceeded, effectiveAppHostFile.Name));
-                    return CommandResult.Success();
-                }
-
-                return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
+                _interactionService.DisplayLines(outputLines);
             }
 
-            return CommandResult.Failure(CliExitCodes.FailedToFindProject, RestoreCommandStrings.UnrecognizedAppHostType);
+            return CommandResult.Failure(restoreExitCode);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

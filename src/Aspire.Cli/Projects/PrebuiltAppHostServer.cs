@@ -3,9 +3,6 @@
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text;
-using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -86,11 +83,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         _logger = logger;
         _layoutLease = layoutLease;
 
-        // Create a working directory for this app host session
-        var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appDirectoryPath));
-        var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
-        var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(new DirectoryInfo(_appDirectoryPath));
-        _workingDirectory = Path.Combine(integrationCacheDirectory.FullName, "apphosts", pathDir);
+        _workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(new DirectoryInfo(_appDirectoryPath)).FullName;
         Directory.CreateDirectory(_workingDirectory);
         _projectReferencePrepareLockPath = Path.Combine(_workingDirectory, "project-layouts", "prepare.lock");
         _projectLayoutStore = new AppHostServerProjectLayoutStore(_workingDirectory, _logger);
@@ -411,61 +404,38 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         bool useExactPackageVersions = false,
         string? restoreConfigFile = null)
     {
-        var propertyGroup = new XElement("PropertyGroup",
-            new XElement("TargetFramework", DotNetBasedAppHostServerProject.TargetFramework),
-            new XElement("EnableDefaultItems", "false"),
-            new XElement("EnableNETAnalyzers", "false"),
-            new XElement("GenerateDocumentationFile", "false"));
-
-        IntegrationClosureBuilder.AddClosureProperties(propertyGroup, restoreDir);
-
+        IEnumerable<string>? restoreAdditionalSources = additionalSources;
         if (!string.IsNullOrWhiteSpace(restoreConfigFile))
         {
             // RestoreAdditionalProjectSources can add feeds, but it cannot carry package source
             // mappings. Use the temp NuGet.config so Aspire* packages stay pinned to the
             // explicit source while non-Aspire dependencies can use fallback sources.
-            propertyGroup.Add(new XElement("RestoreConfigFile", restoreConfigFile));
+            restoreAdditionalSources = null;
         }
-        // Add channel sources without replacing the user's nuget.config.
-        else if (additionalSources is not null)
+
+        var projectFile = IntegrationClosureBuilder.CreateClosureProjectFile(
+            restoreDir,
+            restoreAdditionalSources,
+            restoreConfigFile);
+
+        foreach (var packageReference in packageRefs)
         {
-            var sourceList = string.Join(";", additionalSources);
-            if (sourceList.Length > 0)
+            if (packageReference.Version is null)
             {
-                propertyGroup.Add(new XElement("RestoreAdditionalProjectSources", sourceList));
+                throw new InvalidOperationException($"Package reference '{packageReference.Name}' is missing a version.");
             }
+
+            projectFile.PackageReferences.Add(new CSharpPackageReference(
+                packageReference.Name,
+                GetRestoreVersion(packageReference.Name, packageReference.Version, useExactPackageVersions)));
         }
 
-        var doc = new XDocument(
-            new XElement("Project",
-                new XAttribute("Sdk", "Microsoft.NET.Sdk"),
-                propertyGroup));
+        projectFile.ProjectReferences.AddRange(projectRefs.Select(p => new CSharpProjectReference(
+            p.ProjectPath!,
+            IsAspireProjectResource: false,
+            ReferenceOutputAssembly: true)));
 
-        if (packageRefs.Count > 0)
-        {
-            doc.Root!.Add(new XElement("ItemGroup",
-                packageRefs.Select(p =>
-                {
-                    if (p.Version is null)
-                    {
-                        throw new InvalidOperationException($"Package reference '{p.Name}' is missing a version.");
-                    }
-                    return new XElement("PackageReference",
-                        new XAttribute("Include", p.Name),
-                        new XAttribute("Version", GetRestoreVersion(p.Name, p.Version, useExactPackageVersions)));
-                })));
-        }
-
-        if (projectRefs.Count > 0)
-        {
-            doc.Root!.Add(new XElement("ItemGroup",
-                projectRefs.Select(p => new XElement("ProjectReference",
-                    new XAttribute("Include", p.ProjectPath!)))));
-        }
-
-        IntegrationClosureBuilder.AddClosureTargets(doc.Root!);
-
-        return doc.ToString();
+        return projectFile.ToXDocument().ToString();
     }
 
     /// <summary>

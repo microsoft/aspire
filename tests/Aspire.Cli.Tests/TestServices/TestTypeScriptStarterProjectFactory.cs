@@ -73,6 +73,11 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
         throw new NotImplementedException();
     }
 
+    public Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(CliExitCodes.Success);
+    }
+
     public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();

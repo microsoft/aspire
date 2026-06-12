@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Hashing;
+using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -10,9 +13,9 @@ namespace Aspire.Cli.Projects;
 /// <summary>
 /// Shared MSBuild-side closure contract used by both the polyglot
 /// <see cref="PrebuiltAppHostServer"/> and the CLI-managed
-/// <see cref="IntegrationClosureRestorer"/>. Owns the file-name constants,
-/// the project-file XML emission (properties + AfterBuild targets), and the
-/// post-build closure file reader.
+/// <see cref="IntegrationClosureRestorer"/>. Owns the cache-directory layout,
+/// file-name constants, project-file XML emission (properties + AfterBuild targets),
+/// and the post-build closure file reader.
 /// </summary>
 /// <remarks>
 /// The MSBuild contract is intentionally narrow: a small set of <c>AspireClosure*File</c>
@@ -31,40 +34,50 @@ internal static class IntegrationClosureBuilder
     internal const string ProjectAssetsFileName = "project.assets.json";
 
     /// <summary>
-    /// Adds the <c>AspireClosure*File</c> path properties pointing at the closure files this
-    /// restorer reads after build, plus <c>CopyLocalLockFileAssemblies=true</c> so the closure
-    /// captures the transitive package DLL set, and <c>ProduceReferenceAssembly=false</c> so
-    /// reference-assembly outputs don't pollute the closure.
+    /// Creates the common closure project document shared by generated integration projects.
     /// </summary>
-    public static void AddClosureProperties(XElement propertyGroup, string restoreDir)
+    public static CSharpProjectFile CreateClosureProjectFile(
+        string restoreDir,
+        IEnumerable<string>? additionalSources = null,
+        string? restoreConfigFile = null)
     {
-        ArgumentNullException.ThrowIfNull(propertyGroup);
         ArgumentException.ThrowIfNullOrEmpty(restoreDir);
 
-        propertyGroup.Add(
-            new XElement("CopyLocalLockFileAssemblies", "true"),
-            new XElement("ProduceReferenceAssembly", "false"),
-            new XElement("AspireClosureMetadataFile", Path.Combine(restoreDir, ClosureMetadataFileName)),
-            new XElement("AspireClosureSourcesFile", Path.Combine(restoreDir, ClosureSourcesFileName)),
-            new XElement("AspireClosureTargetsFile", Path.Combine(restoreDir, ClosureTargetsFileName)),
-            new XElement("AspireProjectRefAssemblyNamesFile", Path.Combine(restoreDir, ProjectRefAssemblyNamesFileName)));
-    }
+        var projectFile = new CSharpProjectFile();
 
-    /// <summary>
-    /// Adds the <c>_WriteAspireClosureManifest</c> and <c>_WriteAspireProjectRefAssemblyNames</c>
-    /// MSBuild targets to the project. These run <c>AfterTargets=Build</c> and emit the closure
-    /// files <see cref="ReadClosureManifestAsync"/> then post-processes.
-    /// </summary>
-    /// <remarks>
-    /// The targets are conditioned on the <c>AspireClosure*File</c> properties being set so they
-    /// stay inert when imported into a project that doesn't opt in (e.g. the file-based AppHost
-    /// being run via <c>dotnet run apphost.cs</c> with no CLI involvement).
-    /// </remarks>
-    public static void AddClosureTargets(XElement projectRoot)
-    {
-        ArgumentNullException.ThrowIfNull(projectRoot);
+        // Generated project defaults.
+        projectFile.AddProperty("TargetFramework", DotNetBasedAppHostServerProject.TargetFramework);
+        projectFile.AddProperty("EnableDefaultItems", "false");
+        projectFile.AddProperty("EnableNETAnalyzers", "false");
+        projectFile.AddProperty("GenerateDocumentationFile", "false");
+        projectFile.AddProperty("IsPackable", "false");
+        projectFile.AddProperty("IsPublishable", "false");
 
-        projectRoot.Add(
+        // Closure output properties consumed by the post-build reader.
+        projectFile.AddProperty("CopyLocalLockFileAssemblies", "true");
+        projectFile.AddProperty("ProduceReferenceAssembly", "false");
+        projectFile.AddProperty("AspireClosureMetadataFile", Path.Combine(restoreDir, ClosureMetadataFileName));
+        projectFile.AddProperty("AspireClosureSourcesFile", Path.Combine(restoreDir, ClosureSourcesFileName));
+        projectFile.AddProperty("AspireClosureTargetsFile", Path.Combine(restoreDir, ClosureTargetsFileName));
+        projectFile.AddProperty("AspireProjectRefAssemblyNamesFile", Path.Combine(restoreDir, ProjectRefAssemblyNamesFileName));
+
+        // Restore source/config overrides from the caller.
+        if (additionalSources is not null)
+        {
+            var sourceList = string.Join(";", additionalSources);
+            if (sourceList.Length > 0)
+            {
+                projectFile.AddProperty("RestoreAdditionalProjectSources", sourceList);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(restoreConfigFile))
+        {
+            projectFile.AddProperty("RestoreConfigFile", restoreConfigFile);
+        }
+
+        // Closure targets shared by the CLI-managed module and polyglot server synthetic projects.
+        projectFile.Targets.Add(
             new XElement("Target",
                 new XAttribute("Name", "_WriteAspireProjectRefAssemblyNames"),
                 new XAttribute("AfterTargets", "Build"),
@@ -75,7 +88,7 @@ internal static class IntegrationClosureBuilder
                     new XAttribute("Overwrite", "true"),
                     new XAttribute("WriteOnlyWhenDifferent", "true"))));
 
-        projectRoot.Add(
+        projectFile.Targets.Add(
             new XElement("Target",
                 new XAttribute("Name", "_WriteAspireClosureManifest"),
                 new XAttribute("AfterTargets", "Build"),
@@ -96,6 +109,25 @@ internal static class IntegrationClosureBuilder
                     new XAttribute("Lines", "@(ReferenceCopyLocalPaths->'%(DestinationSubDirectory)%(Filename)%(Extension)')"),
                     new XAttribute("Overwrite", "true"),
                     new XAttribute("WriteOnlyWhenDifferent", "true"))));
+
+        return projectFile;
+    }
+
+    /// <summary>
+    /// Computes the per-AppHost cache directory under <c>.aspire/integrations/apphosts/</c>.
+    /// </summary>
+    public static DirectoryInfo GetAppHostIntegrationCacheDirectory(DirectoryInfo appHostDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(appHostDirectory);
+
+        var appHostFullPath = Path.GetFullPath(appHostDirectory.FullName);
+        var normalizedAppHostDirectory = new DirectoryInfo(appHostFullPath);
+        var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(normalizedAppHostDirectory);
+        var hash = XxHash3.Hash(Encoding.UTF8.GetBytes(appHostFullPath));
+        var hashFragment = Convert.ToHexString(hash)[..12].ToLowerInvariant();
+        var path = Path.Combine(integrationCacheDirectory.FullName, "apphosts", hashFragment);
+
+        return new DirectoryInfo(path);
     }
 
     /// <summary>

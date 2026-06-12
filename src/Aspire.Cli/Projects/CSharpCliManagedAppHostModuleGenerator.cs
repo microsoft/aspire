@@ -18,7 +18,6 @@ internal interface ICSharpCliManagedAppHostModuleGenerator
 }
 
 internal sealed class CSharpCliManagedAppHostModuleGenerator(
-    IFeatures features,
     IPackagingService packagingService,
     ILogger<CSharpCliManagedAppHostModuleGenerator> logger) : ICSharpCliManagedAppHostModuleGenerator
 {
@@ -29,11 +28,6 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
 
     public async Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, CancellationToken cancellationToken)
     {
-        if (!DotNetAppHostProject.IsCliManagedSingleFileAppHost(appHostFile, features))
-        {
-            return null;
-        }
-
         var appHostDirectory = appHostFile.Directory;
         if (appHostDirectory is null)
         {
@@ -47,11 +41,6 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
 
     public async Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, AspireConfigFile config, DirectoryInfo configDirectory, string? packageSourceOverride, CancellationToken cancellationToken)
     {
-        if (!DotNetAppHostProject.IsCliManagedSingleFileAppHost(appHostFile, features))
-        {
-            return null;
-        }
-
         var appHostDirectory = appHostFile.Directory;
         if (appHostDirectory is null)
         {
@@ -120,29 +109,41 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         PackageMapping[]? packageSourceMappings = null;
         var configureGlobalPackagesFolder = false;
 
-        // Match DotNetBasedAppHostServerProject: source overrides are a best-effort first
-        // source for SDK-driven restore. Match PrebuiltAppHostServer's package-source-mapping
-        // behavior when it is safe to persist a generated nuget.config under .aspire/modules.
+        ThrowIfStagingUnavailable(configuredChannelName);
+
+        // Match PrebuiltAppHostServer's project-reference closure restore behavior: when
+        // mappings can be persisted safely, RestoreConfigFile carries the source contract and
+        // RestoreAdditionalProjectSources stays empty so mapped Aspire feeds don't become
+        // co-eligible through both mechanisms.
         if (!string.IsNullOrWhiteSpace(safePackageSourceOverride))
         {
             additionalSources.Add(safePackageSourceOverride);
         }
 
+        if (!string.IsNullOrWhiteSpace(safePackageSourceOverride) &&
+            string.IsNullOrEmpty(configuredChannelName))
+        {
+            packageSourceMappings = PackageSourceOverrideMappings.Create(safePackageSourceOverride, requestedChannel: null);
+
+            return new ModuleRestoreSources([], packageSourceMappings, configureGlobalPackagesFolder);
+        }
+
         try
         {
             var channels = await packagingService.GetChannelsAsync(cancellationToken, configuredChannelName).ConfigureAwait(false);
+            var hasOverride = !string.IsNullOrWhiteSpace(safePackageSourceOverride);
             var matchedChannels = !string.IsNullOrEmpty(configuredChannelName)
                 ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase))
-                : string.IsNullOrWhiteSpace(safePackageSourceOverride)
+                : !hasOverride
                     ? channels.Where(c => c.Type == PackageChannelType.Explicit)
                     : [];
             var matchedChannel = !string.IsNullOrEmpty(configuredChannelName)
                 ? matchedChannels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase))
                 : null;
 
-            if (!string.IsNullOrWhiteSpace(safePackageSourceOverride))
+            if (hasOverride)
             {
-                packageSourceMappings = PackageSourceOverrideMappings.Create(safePackageSourceOverride, matchedChannel);
+                packageSourceMappings = PackageSourceOverrideMappings.Create(safePackageSourceOverride!, matchedChannel);
                 configureGlobalPackagesFolder = matchedChannel?.ConfigureGlobalPackagesFolder == true;
             }
             else if (matchedChannel?.Mappings is { Length: > 0 } &&
@@ -161,6 +162,11 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
 
                 foreach (var mapping in channel.Mappings)
                 {
+                    if (hasOverride && mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     if (!additionalSources.Contains(mapping.Source, StringComparer.OrdinalIgnoreCase))
                     {
                         additionalSources.Add(mapping.Source);
@@ -173,7 +179,21 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
             logger.LogWarning(ex, "Failed to resolve package channels while generating CLI-managed C# AppHost module.");
         }
 
-        return new ModuleRestoreSources(additionalSources, packageSourceMappings, configureGlobalPackagesFolder);
+        return new ModuleRestoreSources(packageSourceMappings is null ? additionalSources : [], packageSourceMappings, configureGlobalPackagesFolder);
+    }
+
+    private void ThrowIfStagingUnavailable(string? configuredChannelName)
+    {
+        if (!string.Equals(configuredChannelName, PackageChannelNames.Staging, StringComparisons.ChannelName))
+        {
+            return;
+        }
+
+        var reason = packagingService.GetStagingChannelUnavailableReason();
+        if (reason is not null)
+        {
+            throw new InvalidOperationException(reason);
+        }
     }
 
     private static async Task WriteModuleProjectFileAsync(
@@ -185,68 +205,32 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         string? repoRoot,
         CancellationToken cancellationToken)
     {
-        var propertyGroup = new XElement("PropertyGroup",
-            new XElement("TargetFramework", DotNetBasedAppHostServerProject.TargetFramework),
-            new XElement("EnableDefaultItems", "false"),
-            new XElement("ImplicitUsings", "enable"),
-            new XElement("Nullable", "enable"),
-            new XElement("IsPackable", "false"),
-            new XElement("IsPublishable", "false"));
+        var projectFile = IntegrationClosureBuilder.CreateClosureProjectFile(
+            integrationRestoreDir,
+            additionalSources,
+            restoreConfigFile?.FullName);
 
-        // The closure-manifest properties point into .aspire/integrations/apphosts/<hash>/integration-restore/,
-        // mirroring the PrebuiltAppHostServer cache layout. AfterBuild targets
-        // write the closure files to those paths so IntegrationClosureRestorer can read them and emit
-        // the probe manifest the runtime AppHost consumes.
-        IntegrationClosureRestorer.AddClosureProperties(propertyGroup, integrationRestoreDir);
+        projectFile.AddIntegrationReferences(
+            integrationReferences,
+            repoRoot,
+            isAspireProjectResource: false,
+            referenceOutputAssembly: true);
+        projectFile.AddRepositoryProjectReferenceIfExists(
+            repoRoot,
+            "Aspire.Dashboard",
+            isAspireProjectResource: false,
+            referenceOutputAssembly: false,
+            privateReference: false);
 
-        if (additionalSources.Count > 0)
-        {
-            propertyGroup.Add(new XElement("RestoreAdditionalProjectSources", string.Join(";", additionalSources)));
-        }
-        if (restoreConfigFile is not null)
-        {
-            propertyGroup.Add(new XElement("RestoreConfigFile", restoreConfigFile.FullName));
-        }
-
-        var doc = new XDocument(
-            new XElement("Project",
-                new XAttribute("Sdk", "Microsoft.NET.Sdk"),
-                propertyGroup));
-
-        var itemGroup = new XElement("ItemGroup");
-        // privateProjectReferences:false: this module exists specifically to harvest the
-        // integration closure via ReferenceCopyLocalPaths. Setting Private=false would drop
-        // in-repo project-ref output assemblies (e.g. Aspire.Hosting.Redis from src/) from
-        // the closure files and leave the runtime AppHost unable to load them.
-        var resolvedReferences = CSharpIntegrationProjectReferences.Resolve(integrationReferences, repoRoot, privateProjectReferences: false);
-        itemGroup.Add(resolvedReferences.ProjectReferences);
-        itemGroup.Add(resolvedReferences.PackageReferences);
-        if (TryGetRepositoryProject(repoRoot, "Aspire.Dashboard", out var dashboardProjectPath))
-        {
-            itemGroup.Add(CreateBuildOnlyProjectReferenceElement(dashboardProjectPath));
-        }
-
-        if (itemGroup.HasElements)
-        {
-            doc.Root!.Add(itemGroup);
-        }
-
-        doc.Root!.Add(
+        projectFile.Targets.Add(
             new XElement("Target",
                 new XAttribute("Name", "FailDirectDotnetForCliManagedAppHost"),
                 new XAttribute("BeforeTargets", "Build;Publish"),
                 new XAttribute("Condition", $"'$({BuildPropertyName})' != 'true'"),
                 new XElement("Error", new XAttribute("Text", "This AppHost is managed by the Aspire CLI. Use 'aspire run', 'aspire restore', or 'aspire publish' instead of direct dotnet commands."))));
 
-        // Emit the same closure-writing MSBuild targets the polyglot PrebuiltAppHostServer uses
-        // for its synthetic IntegrationRestore.csproj. The CLI builds Aspire.csproj with
-        // AspireCliManagedAppHostBuild=true; these targets then write the closure file set into
-        // .aspire/integrations/apphosts/<hash>/integration-restore/ so IntegrationClosureRestorer
-        // can post-process them into a stable libs layout + IntegrationPackageProbeManifest.
-        IntegrationClosureRestorer.AddClosureTargets(doc.Root!);
-
         await using var stream = moduleProjectFile.Create();
-        await doc.SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
+        await projectFile.ToXDocument().SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);
     }
 
     internal static void AddBuildProperty(ProcessInvocationOptions options)
@@ -260,30 +244,4 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         PackageMapping[]? PackageSourceMappings,
         bool ConfigureGlobalPackagesFolder);
 
-    private static bool TryGetRepositoryProject(string? repoRoot, string projectName, out string projectPath)
-    {
-        projectPath = null!;
-        if (repoRoot is null)
-        {
-            return false;
-        }
-
-        var candidatePath = Path.Combine(repoRoot, "src", projectName, $"{projectName}.csproj");
-        if (!File.Exists(candidatePath))
-        {
-            return false;
-        }
-
-        projectPath = candidatePath;
-        return true;
-    }
-
-    private static XElement CreateBuildOnlyProjectReferenceElement(string projectPath)
-    {
-        return new XElement("ProjectReference",
-            new XAttribute("Include", projectPath),
-            new XElement("IsAspireProjectResource", "false"),
-            new XElement("ReferenceOutputAssembly", "false"),
-            new XElement("Private", "false"));
-    }
 }

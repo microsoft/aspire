@@ -206,6 +206,15 @@ internal interface IAppHostProject
     Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Restores the AppHost project.
+    /// </summary>
+    /// <param name="appHostFile">The AppHost file to restore.</param>
+    /// <param name="outputCollector">The command-owned output collector for capturing stdout/stderr during restore.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The exit code from restoring the AppHost.</returns>
+    Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Publishes the AppHost project.
     /// </summary>
     /// <param name="context">The context containing all information needed to publish the AppHost.</param>

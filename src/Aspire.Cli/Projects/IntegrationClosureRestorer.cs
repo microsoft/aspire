@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Security.Cryptography;
-using System.Text;
-using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Utils;
@@ -25,10 +22,10 @@ internal interface IIntegrationClosureRestorer
     /// <summary>
     /// Builds the CLI-managed AppHost's integration module project and emits the closure layout
     /// (project libs + probe manifest) under <c>.aspire/integrations/apphosts/&lt;hash&gt;/</c>.
-    /// Returns the resolved layout when generation/build succeeded, or <see langword="null"/>
+    /// Returns <see langword="true"/> when generation/build succeeded, or <see langword="false"/>
     /// when the AppHost is not a CLI-managed file-based AppHost.
     /// </summary>
-    Task<IntegrationClosureLayout?> RestoreAsync(FileInfo appHostFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken);
+    Task<bool> RestoreAsync(FileInfo appHostFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken);
 
     /// <summary>
     /// Returns the integration closure layout for the given CLI-managed AppHost when a probe
@@ -42,10 +39,14 @@ internal sealed record IntegrationClosureRestoreOptions(bool BuildModule = true,
 {
     /// <summary>
     /// Optional caller-supplied invocation options to merge into the build of the integration
-    /// module. Used by callers like `aspire add` to attach output collectors so build failures
-    /// surface in the command output.
+    /// module. Used by callers that need process options beyond output capture.
     /// </summary>
     public ProcessInvocationOptions? BuildInvocationOptions { get; init; }
+
+    /// <summary>
+    /// Optional caller-owned output collector for capturing the integration module build output.
+    /// </summary>
+    public OutputCollector? BuildOutputCollector { get; init; }
 }
 
 internal sealed record IntegrationClosureLayout(
@@ -67,7 +68,7 @@ internal sealed class IntegrationClosureRestorer(
     internal const string ClosureTargetsFileName = IntegrationClosureBuilder.ClosureTargetsFileName;
     internal const string ProjectRefAssemblyNamesFileName = IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName;
 
-    public async Task<IntegrationClosureLayout?> RestoreAsync(FileInfo appHostFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken)
+    public async Task<bool> RestoreAsync(FileInfo appHostFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken)
     {
         // Honor the caller-supplied PackageSourceOverride during module regeneration so that
         // workflows like `aspire add --source <feed>` keep their additional feed wired into the
@@ -92,7 +93,7 @@ internal sealed class IntegrationClosureRestorer(
 
         if (moduleProjectFile is null)
         {
-            return null;
+            return false;
         }
 
         return await RestoreCoreAsync(appHostFile, moduleProjectFile, options, cancellationToken).ConfigureAwait(false);
@@ -123,7 +124,7 @@ internal sealed class IntegrationClosureRestorer(
             integrationLibsPath);
     }
 
-    private async Task<IntegrationClosureLayout?> RestoreCoreAsync(
+    private async Task<bool> RestoreCoreAsync(
         FileInfo appHostFile,
         FileInfo moduleProjectFile,
         IntegrationClosureRestoreOptions options,
@@ -136,6 +137,23 @@ internal sealed class IntegrationClosureRestorer(
         if (options.BuildModule)
         {
             var buildOptions = options.BuildInvocationOptions ?? new ProcessInvocationOptions();
+            if (options.BuildOutputCollector is { } buildOutputCollector)
+            {
+                var existingStandardOutputCallback = buildOptions.StandardOutputCallback;
+                var existingStandardErrorCallback = buildOptions.StandardErrorCallback;
+
+                buildOptions.StandardOutputCallback = line =>
+                {
+                    existingStandardOutputCallback?.Invoke(line);
+                    buildOutputCollector.AppendOutput(line);
+                };
+                buildOptions.StandardErrorCallback = line =>
+                {
+                    existingStandardErrorCallback?.Invoke(line);
+                    buildOutputCollector.AppendError(line);
+                };
+            }
+
             CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(buildOptions);
             OutputCollector? localCollector = null;
             if (buildOptions.StandardOutputCallback is null && buildOptions.StandardErrorCallback is null)
@@ -157,14 +175,14 @@ internal sealed class IntegrationClosureRestorer(
                 {
                     logger.LogError("Failed to build CLI-managed AppHost integration module (exit code {ExitCode}).", exitCode);
                 }
-                return null;
+                return false;
             }
         }
 
         var closureManifest = await ReadClosureManifestAsync(restoreDir, moduleProjectFile, cancellationToken).ConfigureAwait(false);
         if (closureManifest is null)
         {
-            return null;
+            return false;
         }
 
         string? probeManifestPath = null;
@@ -192,11 +210,7 @@ internal sealed class IntegrationClosureRestorer(
         // having to re-read the closure manifest.
         await PersistStateAsync(workingDirectory.FullName, integrationLibsPath, cancellationToken).ConfigureAwait(false);
 
-        // ProbeManifestPath is nullable: only set it when a manifest was actually written so
-        // downstream wiring won't point ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH at a non-existent
-        // file (which happens when an AppHost has only project-ref integrations and no
-        // package-backed ones).
-        return new IntegrationClosureLayout(workingDirectory, probeManifestPath, integrationLibsPath);
+        return true;
     }
 
     private async Task<AppHostServerClosureManifest?> ReadClosureManifestAsync(string restoreDir, FileInfo moduleProjectFile, CancellationToken cancellationToken)
@@ -251,7 +265,7 @@ internal sealed class IntegrationClosureRestorer(
 
     /// <summary>
     /// Computes the per-AppHost cache directory under <c>.aspire/integrations/apphosts/</c>. The
-    /// directory name is a 12-character SHA-256 prefix of the AppHost directory path so different
+    /// directory name is a stable 12-character hash of the AppHost directory path so different
     /// AppHosts in the same workspace get separate caches and so the same AppHost reuses its cache
     /// across CLI runs. Mirrors <see cref="PrebuiltAppHostServer"/>'s working-directory layout so
     /// the on-disk shape is identical between polyglot and CLI-managed C# modes.
@@ -264,7 +278,7 @@ internal sealed class IntegrationClosureRestorer(
             return null;
         }
 
-        return new DirectoryInfo(ComputeWorkingDirectoryPath(appHostDirectory));
+        return IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostDirectory);
     }
 
     internal static DirectoryInfo GetOrCreateWorkingDirectory(FileInfo appHostFile)
@@ -272,18 +286,9 @@ internal sealed class IntegrationClosureRestorer(
         var appHostDirectory = appHostFile.Directory
             ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' has no parent directory.");
 
-        var path = ComputeWorkingDirectoryPath(appHostDirectory);
-        Directory.CreateDirectory(path);
-        return new DirectoryInfo(path);
-    }
-
-    internal static string ComputeWorkingDirectoryPath(DirectoryInfo appHostDirectory)
-    {
-        var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(appHostDirectory);
-        var appHostFullPath = appHostDirectory.FullName;
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(appHostFullPath));
-        var hashFragment = Convert.ToHexString(hash)[..12].ToLowerInvariant();
-        return Path.Combine(integrationCacheDirectory.FullName, "apphosts", hashFragment);
+        var workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostDirectory);
+        Directory.CreateDirectory(workingDirectory.FullName);
+        return workingDirectory;
     }
 
     private const string LibsPathStateFileName = "integration-libs-path.txt";
@@ -321,20 +326,4 @@ internal sealed class IntegrationClosureRestorer(
             return null;
         }
     }
-
-    // ─── Project-file closure target helpers ─────────────────────────────────────
-
-    /// <summary>
-    /// Convenience wrapper around <see cref="IntegrationClosureBuilder.AddClosureProperties"/>.
-    /// Kept for the module generator's existing call site; new callers should prefer
-    /// <see cref="IntegrationClosureBuilder"/> directly.
-    /// </summary>
-    public static void AddClosureProperties(XElement propertyGroup, string restoreDir)
-        => IntegrationClosureBuilder.AddClosureProperties(propertyGroup, restoreDir);
-
-    /// <summary>
-    /// Convenience wrapper around <see cref="IntegrationClosureBuilder.AddClosureTargets"/>.
-    /// </summary>
-    public static void AddClosureTargets(XElement projectRoot)
-        => IntegrationClosureBuilder.AddClosureTargets(projectRoot);
 }

@@ -161,6 +161,30 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task CreateProjectFiles_AddsDashboardAsBuildOnlyReference()
+    {
+        var dashboardProjectDirectory = _workspace.WorkspaceRoot
+            .CreateSubdirectory("src")
+            .CreateSubdirectory("Aspire.Dashboard");
+        var dashboardProjectPath = Path.Combine(dashboardProjectDirectory.FullName, "Aspire.Dashboard.csproj");
+        await File.WriteAllTextAsync(dashboardProjectPath, """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        var project = CreateProject();
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync([]).DefaultTimeout();
+
+        var doc = XDocument.Load(projectPath);
+        var dashboardReference = doc.Descendants("ProjectReference")
+            .SingleOrDefault(e => string.Equals(e.Attribute("Include")?.Value, dashboardProjectPath, StringComparison.Ordinal));
+
+        Assert.NotNull(dashboardReference);
+        Assert.Equal("false", dashboardReference.Element("IsAspireProjectResource")?.Value);
+        Assert.Equal("false", dashboardReference.Element("ReferenceOutputAssembly")?.Value);
+        Assert.Equal("false", dashboardReference.Element("Private")?.Value);
+    }
+
+    [Fact]
     public async Task CreateProjectFiles_CopiesAppSettingsToOutput()
     {
         // Arrange
