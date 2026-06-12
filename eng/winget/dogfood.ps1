@@ -729,3 +729,5 @@ Write-Host "Installed successfully!"
 
 Write-Host ""
 Write-Host "To uninstall: .\dogfood.ps1 -Uninstall"
+
+# ci-probe: no-op winget change (combined with a non-skip file so CI is not skipped).

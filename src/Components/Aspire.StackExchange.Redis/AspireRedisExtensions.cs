@@ -279,3 +279,5 @@ public static class AspireRedisExtensions
         public override bool AbortOnConnectFail => false;
     }
 }
+
+// ci-probe: non-skip source change so prepare_for_ci does not skip the workflow.

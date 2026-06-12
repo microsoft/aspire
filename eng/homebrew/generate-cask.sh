@@ -186,3 +186,5 @@ echo "Next steps:"
 echo "  1. Validate syntax: ruby -c \"$OUTPUT\""
 echo "  2. Audit cask:      brew audit --cask aspire (after installing to a local tap)"
 echo "  3. Test install:    brew install --cask \"$OUTPUT\""
+
+# ci-probe: no-op homebrew change.
