@@ -217,26 +217,30 @@ public static class AzureCosmosExtensions
         }
 
         return builder;
+    }
 
-        static CosmosClient CreateCosmosClient(string connectionString)
+    // Creates a CosmosClient from a connection string or an absolute account endpoint URI.
+    // Internal (rather than a local function) so it can be unit-tested directly: the emulator code path
+    // always passes an emulator connection string, so the absolute-URI and non-emulator branches would
+    // otherwise be unreachable from tests.
+    internal static CosmosClient CreateCosmosClient(string connectionString)
+    {
+        var clientOptions = new CosmosClientOptions();
+        clientOptions.CosmosClientTelemetryOptions.DisableDistributedTracing = true;
+
+        if (Uri.TryCreate(connectionString, UriKind.Absolute, out var uri))
         {
-            var clientOptions = new CosmosClientOptions();
-            clientOptions.CosmosClientTelemetryOptions.DisableDistributedTracing = true;
-
-            if (Uri.TryCreate(connectionString, UriKind.Absolute, out var uri))
+            return new CosmosClient(uri.OriginalString, AzureCredentialHelper.CreateDefaultAzureCredential(), clientOptions);
+        }
+        else
+        {
+            if (CosmosUtils.IsEmulatorConnectionString(connectionString))
             {
-                return new CosmosClient(uri.OriginalString, AzureCredentialHelper.CreateDefaultAzureCredential(), clientOptions);
+                clientOptions.ConnectionMode = ConnectionMode.Gateway;
+                clientOptions.LimitToEndpoint = true;
             }
-            else
-            {
-                if (CosmosUtils.IsEmulatorConnectionString(connectionString))
-                {
-                    clientOptions.ConnectionMode = ConnectionMode.Gateway;
-                    clientOptions.LimitToEndpoint = true;
-                }
 
-                return new CosmosClient(connectionString, clientOptions);
-            }
+            return new CosmosClient(connectionString, clientOptions);
         }
     }
 

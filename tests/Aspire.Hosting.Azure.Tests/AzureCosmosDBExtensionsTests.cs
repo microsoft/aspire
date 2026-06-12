@@ -12,6 +12,7 @@ using Aspire.Hosting.Azure.CosmosDB;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.CosmosDB;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.DependencyInjection;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
@@ -666,9 +667,9 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
 
         await certConfigAnnotation.Callback(context);
 
-        Assert.Contains("PROTOCOL", env.Keys);
-        Assert.Contains("EXPLORER_PROTOCOL", env.Keys);
-        Assert.Contains("CERT_PATH", env.Keys);
+        Assert.Equal("https", env["PROTOCOL"]);
+        Assert.Equal("https", env["EXPLORER_PROTOCOL"]);
+        Assert.Same(context.PfxPath, env["CERT_PATH"]);
         Assert.DoesNotContain("CERT_SECRET", env.Keys);
     }
 
@@ -733,10 +734,9 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
 
         await certConfigAnnotation.Callback(context);
 
-        Assert.Contains("PROTOCOL", env.Keys);
-        Assert.Contains("EXPLORER_PROTOCOL", env.Keys);
-        Assert.Contains("CERT_PATH", env.Keys);
-        Assert.Contains("CERT_SECRET", env.Keys);
+        Assert.Equal("https", env["PROTOCOL"]);
+        Assert.Equal("https", env["EXPLORER_PROTOCOL"]);
+        Assert.Same(context.PfxPath, env["CERT_PATH"]);
         Assert.Same(passwordParam, env["CERT_SECRET"]);
     }
 
@@ -1003,6 +1003,132 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         // ENABLE_EXPLORER is a vNext-only concept; the classic emulator should not have it set.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
         Assert.DoesNotContain("ENABLE_EXPLORER", config.Keys);
+    }
+
+    [Fact]
+    public void RunAsPreviewEmulatorConfiguresHealthEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator();
+
+        var healthEndpoint = Assert.Single(cosmos.Resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "emulatorhealth");
+        Assert.Equal(8080, healthEndpoint.TargetPort);
+        Assert.Equal("http", healthEndpoint.UriScheme);
+        Assert.True(healthEndpoint.ExcludeReferenceEndpoint);
+
+        Assert.Contains(cosmos.Resource.Annotations, a => a is HealthCheckAnnotation);
+    }
+
+    [Fact]
+    public void RunAsEmulatorRegistersHealthCheck()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
+
+        Assert.Contains(cosmos.Resource.Annotations, a => a is HealthCheckAnnotation hc && hc.Key == "cosmos_check");
+    }
+
+    [Fact]
+    public void WithDataVolumeUsesProvidedVolumeName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos")
+                           .RunAsEmulator(e => e.WithDataVolume("my-custom-volume"));
+
+        var mount = Assert.Single(cosmos.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal("my-custom-volume", mount.Source);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(250)]
+    public async Task WithPartitionCountAcceptsBoundaryValues(int count)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator(e => e.WithPartitionCount(count));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        Assert.Equal(count.ToString(CultureInfo.InvariantCulture), config["AZURE_COSMOS_EMULATOR_PARTITION_COUNT"]);
+    }
+
+    [Fact]
+    public void WithDataExplorerDefaultPortLeavesHostPortNull()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos")
+                           .RunAsPreviewEmulator(e => e.WithDataExplorer());
+
+        var endpoint = Assert.Single(cosmos.Resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "data-explorer");
+        Assert.Equal(1234, endpoint.TargetPort);
+        Assert.Null(endpoint.Port);
+    }
+
+    [Fact]
+    public async Task RunAsPreviewEmulatorResourceReadyThrowsWhenCosmosClientNotInitialized()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator();
+
+        using var app = builder.Build();
+
+        // Publishing ResourceReadyEvent without ConnectionStringAvailableEvent leaves the CosmosClient uninitialized.
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => builder.Eventing.PublishAsync(new ResourceReadyEvent(cosmos.Resource, app.Services)));
+        Assert.Equal("CosmosClient is not initialized.", ex.Message);
+    }
+
+    [Fact]
+    public async Task RunAsEmulatorConnectionStringAvailableInitializesCosmosClient()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator(e =>
+        {
+            e.WithEndpoint("emulator", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 10001));
+        });
+
+        using var app = builder.Build();
+
+        // Resolves the emulator connection string and constructs the CosmosClient without throwing.
+        await builder.Eventing.PublishAsync(new ConnectionStringAvailableEvent(cosmos.Resource, app.Services));
+    }
+
+    [Fact]
+    public void CreateCosmosClientForEmulatorConnectionStringUsesGatewayMode()
+    {
+        var connectionString = $"AccountKey={CosmosConstants.EmulatorAccountKey};AccountEndpoint=https://localhost:8081/";
+
+        using var client = AzureCosmosExtensions.CreateCosmosClient(connectionString);
+
+        Assert.Equal(ConnectionMode.Gateway, client.ClientOptions.ConnectionMode);
+        Assert.True(client.ClientOptions.LimitToEndpoint);
+    }
+
+    [Fact]
+    public void CreateCosmosClientForNonEmulatorConnectionStringUsesDefaults()
+    {
+        // A well-formed non-emulator connection string (valid base64 key) must not force Gateway/LimitToEndpoint.
+        var connectionString = "AccountEndpoint=https://example.documents.azure.com:443/;AccountKey=dGVzdGtleQ==";
+
+        using var client = AzureCosmosExtensions.CreateCosmosClient(connectionString);
+
+        Assert.NotEqual(ConnectionMode.Gateway, client.ClientOptions.ConnectionMode);
+        Assert.False(client.ClientOptions.LimitToEndpoint);
+    }
+
+    [Fact]
+    public void CreateCosmosClientForAbsoluteUriUsesEndpoint()
+    {
+        using var client = AzureCosmosExtensions.CreateCosmosClient("https://localhost:8081/");
+
+        Assert.Equal("localhost", client.Endpoint.Host);
+        Assert.Equal(8081, client.Endpoint.Port);
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
