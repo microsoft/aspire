@@ -36,10 +36,25 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Set up .NET Core
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+      # No actions/setup-dotnet here on purpose. global.json declares tools.runtimes, so Arcade's
+      # InitializeDotNetCli (eng/common/tools.sh) always installs the SDK + runtime toolsets into the
+      # repo-local .dotnet and never reuses a system SDK on PATH. dotnet.sh below provisions the SDK
+      # and enumerate-tests bootstraps the toolset; a setup-dotnet step would just download the SDK a
+      # second time into a location nothing reads.
+
+      # [EXPERIMENT] Cache the repo-local .dotnet (SDK + the runtime toolsets that enumerate-tests
+      # bootstraps from global.json tools.runtimes). Restored before dotnet.sh so that on a warm
+      # runner dotnet.sh finds .dotnet/sdk/<version> present (skips the SDK install) and enumerate's
+      # toolset bootstrap finds the runtimes present (skips ~the toolset download). The Post step
+      # saves the .dotnet that exists at job end, so the toolsets installed during enumerate are
+      # captured. Key tracks the SDK version (global.json) + runtime toolset versions (eng/Versions.props
+      # drives the global.json $(DotNetRuntime*) placeholders). NuGet packages are not cached (closed
+      # #18145 showed that was a net loss).
+      - name: Cache .dotnet
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
-          global-json-file: ${{ github.workspace }}/global.json
+          path: .dotnet
+          key: dotnet-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('global.json', 'eng/Versions.props') }}
 
       # [EXPERIMENT] Minimal SDK bootstrap instead of the full ./restore.sh. dotnet.sh ->
       # InitializeDotNetCli installs only the SDK into .dotnet (no runtime toolsets, no project
@@ -121,6 +136,10 @@ jobs:
           # so enumerate must restore. For ALL this is a full restore; the follow-up will restrict it
           # to the selected projects (BeforeBuildPropsPath) so selective PRs restore only what they run.
           restore: 'true'
+          # The job already installed the SDK via dotnet.sh above, so the action's setup-dotnet would
+          # just re-download it into a location nothing reads (global.json has tools.runtimes -> Arcade
+          # always uses repo-local .dotnet). Skip it; restore: 'true' still bootstraps the toolset.
+          setupDotNet: 'false'
           beforeBuildPropsPath: ${{ steps.select_tests.outputs.before_build_props }}
 
       # The expanded matrix can exceed 128KB. It MUST reach the bash step below via a file, not an
