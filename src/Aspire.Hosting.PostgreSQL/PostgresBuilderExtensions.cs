@@ -746,7 +746,16 @@ public static class PostgresBuilderExtensions
 
             if (scriptAnnotation?.Script is not null)
             {
-                logger.LogInformation("Completed custom creation script for database '{DatabaseName}' with {RowsAffected} rows affected", npgsqlDatabase.DatabaseName, rowsAffected);
+                // ADO.NET returns -1 for DDL statements (CREATE DATABASE, etc.) because they don't affect data rows.
+                // Only include the rows-affected count when it carries meaningful information.
+                if (rowsAffected >= 0)
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}' ({RowsAffected} rows affected)", npgsqlDatabase.DatabaseName, rowsAffected);
+                }
+                else
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
+                }
             }
 
             logger.LogDebug("Database '{DatabaseName}' created successfully", npgsqlDatabase.DatabaseName);

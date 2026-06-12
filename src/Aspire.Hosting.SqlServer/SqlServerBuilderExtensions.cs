@@ -340,7 +340,16 @@ public static partial class SqlServerBuilderExtensions
                 command.CommandText = batch;
                 var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
-                logger.LogInformation("Completed custom creation script batch {BatchNumber} execution {ExecutionNumber}/{ExecutionCount} for database '{DatabaseName}' with {RowsAffected} rows affected", batchNumber, i + 1, executionCount, sqlDatabase.DatabaseName, rowsAffected);
+                // ADO.NET returns -1 for DDL statements (CREATE DATABASE, USE, etc.) because they don't affect data rows.
+                // Only include the rows-affected count when it carries meaningful information.
+                if (rowsAffected >= 0)
+                {
+                    logger.LogInformation("Completed custom creation script batch {BatchNumber} execution {ExecutionNumber}/{ExecutionCount} for database '{DatabaseName}' ({RowsAffected} rows affected)", batchNumber, i + 1, executionCount, sqlDatabase.DatabaseName, rowsAffected);
+                }
+                else
+                {
+                    logger.LogInformation("Completed custom creation script batch {BatchNumber} execution {ExecutionNumber}/{ExecutionCount} for database '{DatabaseName}'", batchNumber, i + 1, executionCount, sqlDatabase.DatabaseName);
+                }
             }
         }
     }
