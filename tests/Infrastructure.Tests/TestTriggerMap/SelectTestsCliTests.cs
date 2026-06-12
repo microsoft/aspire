@@ -99,6 +99,42 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    // The sticky PR comment (SELECT_TESTS_COMMENT_FILE) is the terse, scannable view: a "## Tests
+    // selector" heading, the selected test projects, and the selected jobs -- and none of the
+    // step-summary audit detail (options, changed files, would-have-skipped). Pin that so the comment
+    // stays reader-friendly, and that enforcing mode omits the "(audit mode)" qualifier.
+    [Fact]
+    public void WritesConciseSelectionComment()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
+
+                var comment = File.ReadAllText(commentPath);
+                Assert.StartsWith("## Tests selector", comment);
+                Assert.DoesNotContain("audit mode", comment);
+                Assert.Contains("**Test projects (1 / 2)**", comment);
+                Assert.Contains("- `Aspire.Hosting.Tests`", comment);
+                Assert.Contains("**Jobs (1)**", comment);
+                Assert.Contains("- `extension-e2e`", comment);
+                Assert.DoesNotContain("### Options", comment);
+                Assert.DoesNotContain("Changed files", comment);
+                Assert.DoesNotContain("Would have been", comment);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
+            }
+        });
+    }
+
     // Audit mode (no --enforce) writes the run_* booleans and the summary but no restriction props,
     // so enumerate-tests enumerates the full matrix unchanged even when a subset was selected.
     [Fact]

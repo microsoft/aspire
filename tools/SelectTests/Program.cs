@@ -139,6 +139,7 @@ internal static class Selection
 
         WriteSummary(options, result, allTestProjects, changedFiles, layer1Affected);
         WriteJobBooleans(options, result);
+        WriteSelectionComment(options, result, allTestProjects);
 
         // Enforce + a non-ALL selection restricts the downstream enumerate-tests build to the selected
         // test projects via an OverrideProjectToBuild props file. A selection with ZERO buildable test
@@ -370,6 +371,75 @@ internal static class Selection
         }
     }
 
+    // Builds the sticky PR comment: a terse, scannable view of exactly what runs for this PR -- the
+    // selected test projects and the selected jobs, nothing else. Deliberately omits the audit detail
+    // (options, changed files, would-have-skipped) that the job step summary carries; reviewers want a
+    // quick "what runs", not the full trace. Written to SELECT_TESTS_COMMENT_FILE when set.
+    private static void WriteSelectionComment(RunOptions options, SelectionResult result, IReadOnlySet<string> allTestProjects)
+    {
+        var commentPath = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+        if (string.IsNullOrEmpty(commentPath))
+        {
+            return;
+        }
+
+        var sb = new StringBuilder();
+        // Audit mode is advisory (the full matrix runs regardless), so call it out in the title;
+        // enforcing is the normal case and needs no qualifier.
+        sb.AppendLine(options.Enforce ? "## Tests selector" : "## Tests selector (audit mode)");
+        sb.AppendLine();
+
+        if (result.SelectsAll)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Runs the full test matrix + all jobs (ALL)** — {result.EscalationReason}");
+        }
+        else
+        {
+            var tests = result.TestProjects.OrderBy(p => p, StringComparer.Ordinal).ToList();
+            var jobs = result.Jobs
+                .Select(j => j.StartsWith("job:", StringComparison.Ordinal) ? j["job:".Length..] : j)
+                .OrderBy(j => j, StringComparer.Ordinal)
+                .ToList();
+
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Test projects ({tests.Count} / {allTestProjects.Count})**");
+            sb.AppendLine();
+            if (tests.Count == 0)
+            {
+                sb.AppendLine("_none — no .NET test projects run for this change._");
+            }
+            else
+            {
+                foreach (var t in tests)
+                {
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"- `{t}`");
+                }
+            }
+            sb.AppendLine();
+
+            sb.AppendLine(CultureInfo.InvariantCulture, $"**Jobs ({jobs.Count})**");
+            sb.AppendLine();
+            if (jobs.Count == 0)
+            {
+                sb.AppendLine("_none_");
+            }
+            else
+            {
+                foreach (var j in jobs)
+                {
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"- `{j}`");
+                }
+            }
+        }
+        sb.AppendLine();
+
+        var dir = Path.GetDirectoryName(Path.GetFullPath(commentPath));
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+        File.WriteAllText(commentPath, sb.ToString());
+    }
+
     private static void WriteSummary(
         RunOptions options,
         SelectionResult result,
@@ -446,8 +516,9 @@ internal static class Selection
         sb.AppendLine(CultureInfo.InvariantCulture, $"- triggered jobs: {(result.Jobs.Count == 0 ? "(none)" : string.Join(", ", result.Jobs.OrderBy(j => j, StringComparer.Ordinal)))}");
         sb.AppendLine();
         AppendProjectList(sb, "Selected test projects", selected);
-        // The would-have-been-skipped set is the whole point of audit mode: what selective CI drops.
-        AppendProjectList(sb, "Would have been skipped", skipped);
+        // In enforcing mode the unselected projects are actually skipped; in audit mode the full matrix
+        // still runs, so they only "would have been" skipped.
+        AppendProjectList(sb, options.Enforce ? "Skipped (not run)" : "Would have been skipped", skipped);
 
         WriteOut(sb);
 
@@ -475,20 +546,6 @@ internal static class Selection
             else
             {
                 Console.Error.Write(markdown);
-            }
-
-            // Also emit the full markdown to a standalone file when requested, so the workflow can post
-            // it as a sticky PR comment. The job summary alone is not visible without opening the run,
-            // and the selection (which test projects + jobs run) is the thing reviewers want up front.
-            var commentPath = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
-            if (!string.IsNullOrEmpty(commentPath))
-            {
-                var dir = Path.GetDirectoryName(Path.GetFullPath(commentPath));
-                if (!string.IsNullOrEmpty(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-                File.WriteAllText(commentPath, markdown);
             }
         }
     }
