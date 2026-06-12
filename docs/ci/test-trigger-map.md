@@ -100,7 +100,7 @@ set instead of repeating it. Example:
 
 ```yaml
 groups:
-  CLI_BUNDLE: [test:Aspire.Cli.EndToEnd.Tests, job:cli-starter, job:extension-e2e]
+  CLI_BUNDLE: [test:Aspire.Cli.EndToEnd.Tests, job:cli-starter, job:extension-e2e, job:winget-installer, job:homebrew-installer]
 ```
 
 Group members may themselves be group names; expansion is recursive and

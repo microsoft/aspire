@@ -58,6 +58,10 @@ groups:
     - test:Aspire.Cli.EndToEnd.Tests
     - job:cli-starter
     - job:extension-e2e
+    # The WinGet/Homebrew installer artifacts package and ship this CLI bundle, so a change to the
+    # bundle (eng/Bundle.proj) must regenerate/validate them too.
+    - job:winget-installer
+    - job:homebrew-installer
 
 # Conventions: <name> captures one path segment; the derived target is emitted only when that test
 # project exists in the matrix (existence guard), so a folder with no same-named test (tests/Shared,
@@ -224,8 +228,8 @@ path_rules:
     reason: Acquisition.Tests asserts script behavior; CliE2EAutomatorHelpers.cs:406,415 invokes get-aspire-cli*.sh at runtime
   - paths:
       - eng/clipack/**
-    targets: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests, test:Infrastructure.Tests]
-    reason: Cli.Tests/Npm/AspireJsLauncherTests reads eng/clipack/npm/aspire.js; Infrastructure.Tests reads eng/clipack/*; CLI archive consumed by e2e
+    targets: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests, test:Infrastructure.Tests, job:winget-installer, job:homebrew-installer]
+    reason: Cli.Tests/Npm/AspireJsLauncherTests reads eng/clipack/npm/aspire.js; Infrastructure.Tests reads eng/clipack/*; CLI archive consumed by e2e and packaged into the WinGet/Homebrew installer artifacts
   - paths:
       - eng/scripts/pack-cli-npm-package.ps1
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
