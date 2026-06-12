@@ -127,6 +127,21 @@ jobs:
       # file the selector wrote survives -- a fresh checkout would git-clean it away. When a
       # restriction was written, beforeBuildPropsPath points enumerate at the selected subset; in
       # audit mode before_build_props is empty and enumerate builds the full matrix.
+
+      # [EXPERIMENT] Cache the class-mode test class lists. Class-mode split projects
+      # (Aspire.Cli.EndToEnd.Tests, Aspire.Templates.Tests) discover their per-class matrix entries
+      # by building the project + closure and running --list-tests -- the bulk of enumerate. The
+      # class set changes only when those projects' source changes, so the discovered
+      # .tests-partitions.json is cached and keyed on that source (incl. tests/Shared, which they
+      # depend on). On a hit, enumerate restores the lists and skips the class-mode restore + build +
+      # --list-tests. A source change -> new key -> miss -> the real --list-tests reruns and repopulates,
+      # so the cached lists are always the exact --list-tests output (never a source-scan approximation).
+      - name: Cache class-mode test class lists
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .partitions-cache
+          key: classlists-${{ runner.os }}-${{ hashFiles('tests/Aspire.Cli.EndToEnd.Tests/**/*.cs', 'tests/Aspire.Cli.EndToEnd.Tests/**/*.csproj', 'tests/Aspire.Templates.Tests/**/*.cs', 'tests/Aspire.Templates.Tests/**/*.csproj', 'tests/Shared/**/*.cs') }}
+
       - uses: ./.github/actions/enumerate-tests
         id: generate_tests_matrix
         with:
@@ -140,6 +155,7 @@ jobs:
           # just re-download it into a location nothing reads (global.json has tools.runtimes -> Arcade
           # always uses repo-local .dotnet). Skip it; restore: 'true' still bootstraps the toolset.
           setupDotNet: 'false'
+          partitionsCacheDir: ${{ github.workspace }}/.partitions-cache
           beforeBuildPropsPath: ${{ steps.select_tests.outputs.before_build_props }}
 
       # The expanded matrix can exceed 128KB. It MUST reach the bash step below via a file, not an

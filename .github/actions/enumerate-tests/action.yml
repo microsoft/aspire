@@ -22,6 +22,10 @@ inputs:
     required: false
     default: ''
     description: 'Path to an OverrideProjectToBuild props file (imported by eng/Build.props via $(BeforeBuildPropsPath)) that restricts the -test build, and thus the enumeration, to a subset of test projects. Empty enumerates everything.'
+  partitionsCacheDir:
+    required: false
+    default: ''
+    description: 'Directory (backed by actions/cache in the caller) holding cached class-mode <Project>.tests-partitions.json files. When set, class lists are restored from it before class-mode detection (skipping the build + --list-tests for unchanged projects) and re-saved into it afterwards. Empty disables the cache.'
 
 # Output format: JSON with structure {"include": [{...}, ...]}
 # Each entry contains:
@@ -90,6 +94,15 @@ runs:
         /bl
         ${{ inputs.buildArgs }}
 
+    - name: Restore cached class lists
+      if: ${{ inputs.partitionsCacheDir != '' }}
+      shell: pwsh
+      run: >
+        ./eng/scripts/sync-class-mode-partitions-cache.ps1
+        -Mode restore
+        -ArtifactsDir artifacts
+        -CacheDir ${{ inputs.partitionsCacheDir }}
+
     - name: Find class-mode split test projects
       id: class_mode
       shell: pwsh
@@ -143,6 +156,15 @@ runs:
           "all_tests=$emptyMatrix" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           Write-Host "No canonical test matrix found, using empty matrix"
         }
+
+    - name: Save class lists to cache
+      if: ${{ inputs.partitionsCacheDir != '' }}
+      shell: pwsh
+      run: >
+        ./eng/scripts/sync-class-mode-partitions-cache.ps1
+        -Mode save
+        -ArtifactsDir artifacts
+        -CacheDir ${{ inputs.partitionsCacheDir }}
 
     - name: Upload logs
       if: always()
