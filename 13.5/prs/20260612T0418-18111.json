@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard new feature: graceful reconnect modal when resource service connection is lost",
+  "mergedAt": "2026-06-12T04:18:18Z",
+  "number": 18111,
+  "runDate": "2026-06-12T07:31:41Z",
+  "status": "included",
+  "title": "Dashboard: gracefully handle resource service connection errors"
+}

@@ -7,15 +7,16 @@
   "communityContributors": [
     "@shauryalowkeygotaura"
   ],
-  "description": "Version mismatch errors between the AppHost and CLI now specify which side is out of date and include the exact update command to run, replacing the previous generic incompatibility message.",
+  "description": "Version mismatch errors between the AppHost and CLI now specify which side is out of date and include the exact update command to run, replacing the previous generic incompatibility message. The error display was also updated to use an aligned grid with consistent lowercase labels for better readability.",
   "docsPrs": [],
   "docsRequired": false,
   "emoji": "🛠️",
   "firstMergedAt": "2026-06-11T14:48:01Z",
-  "lastMergedAt": "2026-06-11T14:48:01Z",
+  "lastMergedAt": "2026-06-12T04:15:18Z",
   "name": "Actionable AppHost/CLI version mismatch errors",
   "owner": "JamesNK",
   "prs": [
-    18067
+    18067,
+    18139
   ]
 }

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only fix for flaky StaticUriHealthCheck test in CI",
+  "mergedAt": "2026-06-12T07:06:24Z",
+  "number": 18142,
+  "runDate": "2026-06-12T07:31:41Z",
+  "status": "excluded",
+  "title": "Fix flaky StaticUriHealthCheck_ReturnsStatusCodeMessage test"
+}

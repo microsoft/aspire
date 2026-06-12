@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI bug fix: ProcessSignaler.AreClose now correctly handles second boundary comparisons in orphan detection",
+  "mergedAt": "2026-06-12T04:35:26Z",
+  "number": 18136,
+  "runDate": "2026-06-12T07:31:41Z",
+  "status": "included",
+  "title": "Fix ProcessSignaler.AreClose flaky tolerance on second boundaries"
+}

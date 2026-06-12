@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI UX improvement: aligned grid for incompatible version error display, grouped with PR #18067",
+  "mergedAt": "2026-06-12T04:15:18Z",
+  "number": 18139,
+  "runDate": "2026-06-12T07:31:41Z",
+  "status": "included",
+  "title": "Use aligned grid for DisplayIncompatibleVersionError"
+}

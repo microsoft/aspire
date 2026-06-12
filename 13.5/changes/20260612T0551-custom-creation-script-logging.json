@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When a custom database creation script is provided via WithCreationScript(), the resource logger now emits informational messages showing the script being executed and its outcome. This applies to SQL Server, PostgreSQL, MySQL, and Azure Kusto database resources.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-06-12T05:51:57Z",
+  "lastMergedAt": "2026-06-12T05:51:57Z",
+  "name": "Custom database creation scripts log execution details",
+  "owner": "mitchdenny",
+  "prs": [
+    18138
+  ]
+}

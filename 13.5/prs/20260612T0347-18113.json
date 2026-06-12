@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only changes to stabilize playground test startup waits",
+  "mergedAt": "2026-06-12T03:47:19Z",
+  "number": 18113,
+  "runDate": "2026-06-12T07:31:41Z",
+  "status": "excluded",
+  "title": "[tests] Stabilize TestEndpointsReturnOk startup waits"
+}

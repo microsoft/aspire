@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "AppHost improvement: WithCreationScript() now logs execution details for SQL Server, PostgreSQL, MySQL, and Azure Kusto",
+  "mergedAt": "2026-06-12T05:51:57Z",
+  "number": 18138,
+  "runDate": "2026-06-12T07:31:41Z",
+  "status": "included",
+  "title": "Log custom creation script execution in resource logger for `WithCreationScript(...)`"
+}

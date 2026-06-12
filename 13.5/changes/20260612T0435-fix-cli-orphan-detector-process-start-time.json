@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The CLI orphan detector now correctly compares process start times near second boundaries, preventing false PID-reuse exclusions that could cause orphaned processes to linger between CLI sessions.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-06-12T04:35:26Z",
+  "lastMergedAt": "2026-06-12T04:35:26Z",
+  "name": "Fix CLI orphan detector process start time comparison",
+  "owner": "JamesNK",
+  "prs": [
+    18136
+  ]
+}
