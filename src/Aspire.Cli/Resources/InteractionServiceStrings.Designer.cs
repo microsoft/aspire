@@ -88,7 +88,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire CLI Version.
+        ///   Looks up a localized string similar to Aspire CLI version.
         /// </summary>
         public static string AspireCLIVersion {
             get {
@@ -97,7 +97,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire.Hosting Version.
+        ///   Looks up a localized string similar to Aspire.Hosting version.
         /// </summary>
         public static string AspireHostingSDKVersion {
             get {
@@ -376,7 +376,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Required Capability.
+        ///   Looks up a localized string similar to Required capability.
         /// </summary>
         public static string RequiredCapability {
             get {

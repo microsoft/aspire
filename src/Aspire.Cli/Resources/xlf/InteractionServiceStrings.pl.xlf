@@ -33,13 +33,13 @@
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
-        <source>Aspire CLI Version</source>
-        <target state="translated">Wersja interfejsu wiersza polecenia platformy Aspire</target>
+        <source>Aspire CLI version</source>
+        <target state="needs-review-translation">Wersja interfejsu wiersza polecenia platformy Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
-        <source>Aspire.Hosting Version</source>
-        <target state="translated">Wersja Aspire.Hosting</target>
+        <source>Aspire.Hosting version</source>
+        <target state="needs-review-translation">Wersja Aspire.Hosting</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
@@ -173,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
-        <source>Required Capability</source>
-        <target state="translated">Wymagana możliwość</target>
+        <source>Required capability</source>
+        <target state="needs-review-translation">Wymagana możliwość</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">
