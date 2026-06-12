@@ -191,13 +191,14 @@ public class AzureBicepProvisionerTests
     }
 
     [Fact]
-    public async Task GetOrCreateResourceAsync_InPublishMode_DoesNotEnrichDeploymentStartFailures()
+    public async Task GetOrCreateResourceAsync_InPublishMode_EnrichesDeploymentStartFailures()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
         using var services = builder.Services.BuildServiceProvider();
 
         var resource = new AzureBicepResource("search", templateString: "output name string = 'search'");
+        resource.Parameters[AzureBicepResource.KnownParameters.Location] = "australiacentral";
         var armClient = new TestArmClient(
             [],
             new Dictionary<string, IEnumerable<string>>(StringComparer.OrdinalIgnoreCase)
@@ -220,10 +221,84 @@ public class AzureBicepProvisionerTests
             resourceGroup: new DeploymentCollectionResourceGroupResource(new LocationUnavailableArmDeploymentCollection()),
             executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
 
-        await Assert.ThrowsAsync<RequestFailedException>(() => provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<AzureProvisioningFailureException>(() => provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
 
+        Assert.Equal(AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode, exception.FailureDetails.ErrorCode);
+        Assert.Equal("Microsoft.Search/searchServices", exception.FailureDetails.ResourceType);
+        Assert.Equal("australiacentral", exception.FailureDetails.CurrentLocation);
+        Assert.Equal(["australiaeast", "westus3"], exception.FailureDetails.SupportedLocations);
         Assert.Equal(0, armClient.DeploymentOperationsCallCount);
-        Assert.Equal(0, armClient.SupportedLocationsCallCount);
+        Assert.Equal(1, armClient.SupportedLocationsCallCount);
+    }
+
+    [Fact]
+    public async Task GetOrCreateResourceAsync_InPublishMode_UsesDeploymentOperationDetailsWhenWaitingFails()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
+        using var services = builder.Services.BuildServiceProvider();
+
+        var resource = new AzureBicepResource("search", templateString: "output name string = 'search'");
+        var resourceGroup = new DeploymentCollectionResourceGroupResource(new WaitingThrowingArmDeploymentCollection());
+        var deploymentId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/search-0";
+        var failedSearchId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Search/searchServices/search";
+        var failureDetails = new AzureProvisioningFailureDetails(
+            Provider: "Microsoft.Search",
+            ResourceType: "Microsoft.Search/searchServices",
+            ResourceName: "search",
+            TargetResourceId: failedSearchId,
+            CurrentLocation: null,
+            SupportedLocations: [],
+            HttpStatus: 400,
+            ErrorCode: AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode,
+            ErrorMessage: "The provided location 'antarctica' is not available for resource type 'Microsoft.Search/searchServices'.",
+            Operation: "deploy",
+            RequestId: "request-id",
+            CorrelationId: "correlation-id",
+            RecommendedActions: AzureProvisioningFailureDetails.GetRecommendedActions(AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode));
+        var armClient = new TestArmClient(
+            [
+                new AzureDeploymentOperationDetails(
+                    OperationId: "search-create",
+                    DeploymentId: deploymentId,
+                    ProvisioningOperation: AzureDeploymentOperationDetails.CreateOperation,
+                    ProvisioningState: AzureDeploymentOperationDetails.FailedState,
+                    Timestamp: DateTimeOffset.Parse("2026-06-11T06:39:22Z"),
+                    Duration: TimeSpan.FromSeconds(15),
+                    StatusCode: "BadRequest",
+                    ServiceRequestId: "service-request-id",
+                    TargetResource: new AzureDeploymentOperationTarget(failedSearchId, "Microsoft.Search/searchServices", "search"),
+                    FailureDetails: failureDetails)
+            ],
+            new Dictionary<string, IEnumerable<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Microsoft.Search/searchServices"] = ["eastus", "westus3"]
+            });
+
+        var provisioner = new BicepProvisioner(
+            services.GetRequiredService<ResourceNotificationService>(),
+            services.GetRequiredService<ResourceLoggerService>(),
+            new TestBicepCliExecutor(),
+            new TestSecretClientProvider(),
+            services.GetRequiredService<IDeploymentStateManager>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            services.GetRequiredService<IFileSystemService>(),
+            NullLogger<BicepProvisioner>.Instance);
+
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            resourceGroup: resourceGroup,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var exception = await Assert.ThrowsAsync<AzureProvisioningFailureException>(() => provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
+
+        Assert.Equal(AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode, exception.FailureDetails.ErrorCode);
+        Assert.Equal("Microsoft.Search/searchServices", exception.FailureDetails.ResourceType);
+        Assert.Equal(failedSearchId, exception.FailureDetails.TargetResourceId);
+        Assert.Equal("westus2", exception.FailureDetails.CurrentLocation);
+        Assert.Equal(["eastus", "westus3"], exception.FailureDetails.SupportedLocations);
+        Assert.Equal(1, armClient.DeploymentOperationsCallCount);
+        Assert.Equal(1, armClient.SupportedLocationsCallCount);
     }
 
     [Fact]

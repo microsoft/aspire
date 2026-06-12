@@ -250,11 +250,6 @@ internal sealed class BicepProvisioner(
         }
         catch (RequestFailedException ex)
         {
-            if (!context.ExecutionContext.IsRunMode)
-            {
-                throw;
-            }
-
             // Some validation failures occur before Azure creates a deployment operation. In that
             // path there is no operation list to poll, so parse and enrich the provider error from
             // the CreateOrUpdate response itself.
@@ -265,11 +260,14 @@ internal sealed class BicepProvisioner(
             }
 
             failureDetails = await EnrichFailureDetailsAsync(failureDetails, context, effectiveLocation, cancellationToken).ConfigureAwait(false);
-            await notificationService.PublishUpdateAsync(resource, state => state with
+            if (context.ExecutionContext.IsRunMode)
             {
-                State = new("Azure deployment failed", KnownResourceStateStyles.Error),
-                Properties = failureDetails.SetResourceProperties(ClearDeploymentOperationProperties(state.Properties), AzureProvisioningFailureDetails.ProvisionOperation)
-            }).ConfigureAwait(false);
+                await notificationService.PublishUpdateAsync(resource, state => state with
+                {
+                    State = new("Azure deployment failed", KnownResourceStateStyles.Error),
+                    Properties = failureDetails.SetResourceProperties(ClearDeploymentOperationProperties(state.Properties), AzureProvisioningFailureDetails.ProvisionOperation)
+                }).ConfigureAwait(false);
+            }
 
             throw new AzureProvisioningFailureException(failureDetails, ex);
         }
@@ -306,8 +304,9 @@ internal sealed class BicepProvisioner(
         using var deploymentOperationTrackingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var deploymentOperationTracker = new DeploymentOperationProgressTracker();
 
-        // Operation polling is run-mode UX only. Publish/deploy paths should stay deterministic
-        // and let the deployment LRO result drive success or failure.
+        // Operation polling is run-mode UX only. Publish/deploy paths do a single operation lookup
+        // after an LRO failure so CLI deployments get the same provider-level diagnostics without
+        // adding steady-state polling to successful deployments.
         var deploymentOperationTrackingTask = context.ExecutionContext.IsRunMode
             ? TrackDeploymentOperationsAsync(resource, context, deploymentId, effectiveLocation, deploymentOperationTracker, deploymentOperationTrackingCts.Token)
             : Task.CompletedTask;
@@ -322,13 +321,25 @@ internal sealed class BicepProvisioner(
         }
         catch (RequestFailedException ex)
         {
-            if (context.ExecutionContext.IsRunMode)
+            var summary = await PublishDeploymentOperationSummaryAsync(
+                resource,
+                context,
+                deploymentId,
+                effectiveLocation,
+                deploymentOperationTracker,
+                force: true,
+                context.ExecutionContext.IsRunMode ? CancellationToken.None : cancellationToken).ConfigureAwait(false);
+
+            if (summary.FailedOperations.FirstOrDefault(static operation => operation.FailureDetails is not null)?.FailureDetails is { } failureDetails)
             {
-                var summary = await PublishDeploymentOperationSummaryAsync(resource, context, deploymentId, effectiveLocation, deploymentOperationTracker, force: true, CancellationToken.None).ConfigureAwait(false);
-                if (summary.FailedOperations.FirstOrDefault(static operation => operation.FailureDetails is not null)?.FailureDetails is { } failureDetails)
-                {
-                    throw new AzureProvisioningFailureException(failureDetails, ex);
-                }
+                throw new AzureProvisioningFailureException(failureDetails, ex);
+            }
+
+            var requestFailureDetails = AzureProvisioningFailureDetails.FromRequestFailedException(ex, AzureProvisioningFailureDetails.ProvisionOperation);
+            if (requestFailureDetails.IsLocationAvailabilityFailure)
+            {
+                requestFailureDetails = await EnrichFailureDetailsAsync(requestFailureDetails, context, effectiveLocation, cancellationToken).ConfigureAwait(false);
+                throw new AzureProvisioningFailureException(requestFailureDetails, ex);
             }
 
             throw;
