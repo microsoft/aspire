@@ -227,6 +227,9 @@ public class AzureBicepProvisionerTests
         Assert.Equal("Microsoft.Search/searchServices", exception.FailureDetails.ResourceType);
         Assert.Equal("australiacentral", exception.FailureDetails.CurrentLocation);
         Assert.Equal(["australiaeast", "westus3"], exception.FailureDetails.SupportedLocations);
+        Assert.DoesNotContain(exception.FailureDetails.RecommendedActions, static action => action.Code == "change-location");
+        Assert.Contains(exception.FailureDetails.RecommendedActions, static action => action.Code == "set-location");
+        Assert.Contains("Azure__Location", exception.Message, StringComparison.Ordinal);
         Assert.Equal(0, armClient.DeploymentOperationsCallCount);
         Assert.Equal(1, armClient.SupportedLocationsCallCount);
     }
@@ -297,6 +300,9 @@ public class AzureBicepProvisionerTests
         Assert.Equal(failedSearchId, exception.FailureDetails.TargetResourceId);
         Assert.Equal("westus2", exception.FailureDetails.CurrentLocation);
         Assert.Equal(["eastus", "westus3"], exception.FailureDetails.SupportedLocations);
+        Assert.DoesNotContain(exception.FailureDetails.RecommendedActions, static action => action.Code == "change-location");
+        Assert.Contains(exception.FailureDetails.RecommendedActions, static action => action.Code == "set-location");
+        Assert.Contains("Azure__Location", exception.Message, StringComparison.Ordinal);
         Assert.Equal(1, armClient.DeploymentOperationsCallCount);
         Assert.Equal(1, armClient.SupportedLocationsCallCount);
     }

@@ -540,13 +540,18 @@ internal sealed class BicepProvisioner(
     {
         if (!failureDetails.IsLocationAvailabilityFailure)
         {
-            return failureDetails;
+            return context.ExecutionContext.IsRunMode
+                ? failureDetails
+                : failureDetails.WithDeploymentRecommendedActions();
         }
 
         try
         {
             var supportedLocations = await context.ArmClient.GetSupportedLocationsAsync(context.Subscription.Id.Name, failureDetails.ResourceType!, cancellationToken).ConfigureAwait(false);
-            return failureDetails.WithLocationAvailability(currentLocation, supportedLocations);
+            var enrichedFailureDetails = failureDetails.WithLocationAvailability(currentLocation, supportedLocations);
+            return context.ExecutionContext.IsRunMode
+                ? enrichedFailureDetails
+                : enrichedFailureDetails.WithDeploymentRecommendedActions();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -557,7 +562,10 @@ internal sealed class BicepProvisioner(
             // Provider metadata is advisory diagnostic context. Preserve the provider error even
             // when ARM blocks or throttles the supported-location lookup.
             logger.LogDebug(ex, "Unable to query supported Azure locations for resource type {ResourceType}.", failureDetails.ResourceType);
-            return failureDetails.WithLocationAvailability(currentLocation, []);
+            var enrichedFailureDetails = failureDetails.WithLocationAvailability(currentLocation, []);
+            return context.ExecutionContext.IsRunMode
+                ? enrichedFailureDetails
+                : enrichedFailureDetails.WithDeploymentRecommendedActions();
         }
     }
 

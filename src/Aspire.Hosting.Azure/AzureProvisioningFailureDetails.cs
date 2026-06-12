@@ -170,6 +170,12 @@ internal sealed record AzureProvisioningFailureDetails(
         };
     }
 
+    internal AzureProvisioningFailureDetails WithDeploymentRecommendedActions()
+        => this with
+        {
+            RecommendedActions = GetDeploymentRecommendedActions(ErrorCode, SupportedLocations)
+        };
+
     internal static ImmutableArray<AzureProvisioningRecommendedAction> GetRecommendedActions(
         string? errorCodeOrReason,
         ImmutableArray<string> supportedLocations = default)
@@ -258,6 +264,67 @@ internal sealed record AzureProvisioningFailureDetails(
         }
 
         return [];
+    }
+
+    private static ImmutableArray<AzureProvisioningRecommendedAction> GetDeploymentRecommendedActions(
+        string? errorCodeOrReason,
+        ImmutableArray<string> supportedLocations)
+    {
+        if (string.Equals(errorCodeOrReason, ResourceGroupBeingDeletedErrorCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return
+            [
+                Action("set-resource-group", "Set the Azure:ResourceGroup configuration value, or Azure__ResourceGroup environment variable, to a different resource group before rerunning the deployment."),
+                Action("wait-for-deletion", "Wait for Azure to finish deleting the resource group before reusing that name.")
+            ];
+        }
+
+        if (string.Equals(errorCodeOrReason, LocationNotAvailableForResourceTypeErrorCode, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!supportedLocations.IsDefaultOrEmpty)
+            {
+                return
+                [
+                    Action("set-location", $"Set the Azure:Location configuration value, or Azure__Location environment variable, to {supportedLocations[0]} or another supported region, then rerun the deployment."),
+                    Action("clear-deployment-cache", "If the deployment environment already cached Azure context, rerun with --clear-cache so the new location is used.")
+                ];
+            }
+
+            return
+            [
+                Action("set-location", "Set the Azure:Location configuration value, or Azure__Location environment variable, to a supported Azure region before rerunning the deployment."),
+                Action("clear-deployment-cache", "If the deployment environment already cached Azure context, rerun with --clear-cache so the new location is used.")
+            ];
+        }
+
+        if (string.Equals(errorCodeOrReason, MissingResourceIdReason, StringComparison.OrdinalIgnoreCase))
+        {
+            return
+            [
+                Action("clear-deployment-cache", "Rerun the deployment with --clear-cache to rebuild cached deployment state."),
+                Action("set-resource-group", "If the selected resource group is unavailable, set Azure:ResourceGroup or Azure__ResourceGroup to a different resource group.")
+            ];
+        }
+
+        if (string.Equals(errorCodeOrReason, MissingLiveResourceReason, StringComparison.OrdinalIgnoreCase))
+        {
+            return
+            [
+                Action("clear-deployment-cache", "Rerun the deployment with --clear-cache to recreate missing Azure resources."),
+                Action("set-resource-group", "Set Azure:ResourceGroup or Azure__ResourceGroup if the cached Azure context points at the wrong resource group.")
+            ];
+        }
+
+        if (string.Equals(errorCodeOrReason, SubscriptionNotFoundErrorCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return
+            [
+                Action("set-subscription", "Set the Azure:SubscriptionId configuration value, or Azure__SubscriptionId environment variable, to a subscription in the selected tenant."),
+                Action("check-subscription-access", "Verify the signed-in Azure account can access the selected subscription.")
+            ];
+        }
+
+        return GetRecommendedActions(errorCodeOrReason, supportedLocations);
     }
 
     internal static JsonArray CreateRecommendedActionsJsonArray(IEnumerable<AzureProvisioningRecommendedAction> recommendedActions)
