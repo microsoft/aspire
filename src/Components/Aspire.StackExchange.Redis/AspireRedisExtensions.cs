@@ -279,3 +279,5 @@ public static class AspireRedisExtensions
         public override bool AbortOnConnectFail => false;
     }
 }
+
+// ci-probe: no-op change; PR body carries the full-ci token to force the full matrix.
