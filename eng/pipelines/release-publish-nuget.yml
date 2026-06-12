@@ -4,7 +4,8 @@
 # 1. Downloads signed packages from a specified build
 # 2. Publishes packages to NuGet.org and npm
 # 3. Promotes the build to the Aspire GA channel via darc
-# 4. Submits WinGet manifests and validates the Homebrew cask
+# 4. Submits WinGet manifests and, when SkipHomebrewValidation=false,
+#    validates the Homebrew cask
 # 5. Optionally publishes the signed VS Code extension to the Marketplace
 # 6. Dispatches the release-github-tasks GitHub Actions workflow as the
 #    aspire-repo-bot GitHub App (tag, GitHub Release, merge-back PR,

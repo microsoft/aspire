@@ -13,7 +13,7 @@ The Aspire release process uses two main automation components:
    - Publishes Aspire CLI npm packages through ESRP/MicroBuild.
    - Promotes the build to the GA channel via darc.
    - Submits WinGet manifest PRs.
-   - Validates the Homebrew cask against the live GitHub release (cask version bumps themselves are submitted by upstream autobump; see [Installer channels](#installer-channels)).
+   - Optionally validates the Homebrew cask against the live GitHub release when `SkipHomebrewValidation=false` (cask version bumps themselves are submitted by upstream autobump; see [Installer channels](#installer-channels)).
    - Optionally publishes the signed VS Code extension to the Visual Studio Marketplace.
    - Dispatches the GitHub Actions workflow below as the `aspire-repo-bot` GitHub App and waits for it to complete.
    - Uploads `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the GitHub Release as the `aspire-repo-bot`.
@@ -38,7 +38,7 @@ Aspire ships through several channels. The release pipeline either submits the b
 |---------|------------------------------|------------------|
 | **NuGet** (libraries, AppHost SDK, `Aspire.Cli` tool packages) | `release-publish-nuget` pushes to NuGet.org | This document |
 | **WinGet** (`winget install Microsoft.Aspire`) | `release-publish-nuget` submits manifest PRs to `microsoft/winget-pkgs` via `wingetcreate` | [`eng/winget/README.md`](../eng/winget/README.md) |
-| **Homebrew cask** (`brew install --cask aspire`) | Upstream Homebrew/homebrew-cask's [autobump workflow](https://github.com/Homebrew/homebrew-cask/blob/master/.github/workflows/autobump.yml) opens the bump PR on a 3-hour schedule, detecting the new version via the cask's `livecheck` block. `release-publish-nuget` only validates the cask against the live GitHub release after asset upload. | [`eng/homebrew/README.md`](../eng/homebrew/README.md) |
+| **Homebrew cask** (`brew install --cask aspire`) | Upstream Homebrew/homebrew-cask's [autobump workflow](https://github.com/Homebrew/homebrew-cask/blob/master/.github/workflows/autobump.yml) opens the bump PR on a 3-hour schedule, detecting the new version via the cask's `livecheck` block. `release-publish-nuget` validates the cask against the live GitHub release after asset upload only when `SkipHomebrewValidation=false` (skipped by default). | [`eng/homebrew/README.md`](../eng/homebrew/README.md) |
 | **`dotnet tool install -g Aspire.Cli`** | `release-publish-nuget` pushes the per-RID `Aspire.Cli.*.nupkg` packages to NuGet.org alongside the libraries | [`docs/specs/install-routes.md`](specs/install-routes.md) |
 | **Install script** (`get-aspire-cli.sh` / `.ps1`) | No separate publication — the script downloads directly from the GitHub release assets attached in Step 1 | [`docs/specs/install-routes.md`](specs/install-routes.md), `eng/scripts/get-aspire-cli.*` |
 
@@ -342,7 +342,7 @@ Azure DevOps release-publish-nuget.yml
   -> GitHubTasks
      -> dispatch release-github-tasks.yml as aspire-repo-bot
      -> upload aspire-cli-* assets to the GitHub release
-     -> validate Homebrew cask against the live release
+     -> validate Homebrew cask against the live release (only when SkipHomebrewValidation=false)
 
 GitHub release-github-tasks.yml
   -> create tag
