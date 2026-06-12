@@ -151,3 +151,5 @@ public static class ConnectionStringBuilderExtensions
     }
 
 }
+
+// ci-probe: no-op change to exercise the core fan-out reverse-dependency closure.
