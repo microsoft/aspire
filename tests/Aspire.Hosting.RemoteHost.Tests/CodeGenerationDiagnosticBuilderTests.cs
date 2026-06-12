@@ -128,9 +128,10 @@ public class CodeGenerationDiagnosticBuilderTests
 
         var localRpc = Assert.IsType<LocalRpcException>(result);
         Assert.Equal(CodeGenerationErrorCodes.IncompatibleAspireSdk, localRpc.ErrorCode);
-        Assert.False(string.IsNullOrWhiteSpace(localRpc.Message));
-        // The actionable message must not leak the raw "no code generator found" text.
-        Assert.DoesNotContain("no code generator found", localRpc.Message, StringComparison.OrdinalIgnoreCase);
+        // The cryptic ArgumentException is replaced with the actionable incompatible-SDK guidance.
+        Assert.Equal(
+            "Aspire SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured SDK version. Run 'aspire update' to align the CLI and SDK and try again.",
+            localRpc.Message);
     }
 
     [Fact]
