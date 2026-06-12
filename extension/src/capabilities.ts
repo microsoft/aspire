@@ -107,3 +107,5 @@ export function getRunSessionInfo(): RunSessionInfo {
 }
 
 // ci-probe: no-op change to exercise Layer 2 extension job routing.
+
+// ci-probe: re-trigger after empty-matrix fix; still extension-only (0 .NET tests expected).
