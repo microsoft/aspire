@@ -734,8 +734,21 @@ public static class PostgresBuilderExtensions
         {
             var quotedDatabaseIdentifier = new NpgsqlCommandBuilder().QuoteIdentifier(npgsqlDatabase.DatabaseName);
             using var command = npgsqlConnection.CreateCommand();
-            command.CommandText = scriptAnnotation?.Script ?? $"CREATE DATABASE {quotedDatabaseIdentifier}";
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            var commandText = scriptAnnotation?.Script ?? $"CREATE DATABASE {quotedDatabaseIdentifier}";
+            command.CommandText = commandText;
+
+            if (scriptAnnotation?.Script is { } script)
+            {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}':{NewLine}{Script}", npgsqlDatabase.DatabaseName, Environment.NewLine, script);
+            }
+
+            var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            if (scriptAnnotation?.Script is not null)
+            {
+                logger.LogInformation("Completed custom creation script for database '{DatabaseName}' with {RowsAffected} rows affected", npgsqlDatabase.DatabaseName, rowsAffected);
+            }
+
             logger.LogDebug("Database '{DatabaseName}' created successfully", npgsqlDatabase.DatabaseName);
         }
         catch (PostgresException p) when (p.SqlState == "42P04")

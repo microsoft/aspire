@@ -283,6 +283,7 @@ public static class AzureKustoBuilderExtensions
         crp.SetParameter(ClientRequestProperties.OptionQueryConsistency, ClientRequestProperties.OptionQueryConsistency_Strong);
 
         var script = databaseResource.GetDatabaseCreationScript();
+        var hasCustomScript = databaseResource.Annotations.OfType<AzureKustoCreateDatabaseScriptAnnotation>().Any();
 
         var logger = serviceProvider.GetRequiredService<ResourceLoggerService>().GetLogger(databaseResource);
         var rns = serviceProvider.GetRequiredService<ResourceNotificationService>();
@@ -291,7 +292,18 @@ public static class AzureKustoBuilderExtensions
 
         try
         {
+            if (hasCustomScript)
+            {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}':{NewLine}{Script}", databaseResource.DatabaseName, Environment.NewLine, script);
+            }
+
             await AzureKustoEmulatorResiliencePipelines.Default.ExecuteAsync(async ct => await adminProvider.ExecuteControlCommandAsync(databaseResource.DatabaseName, script, crp).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+
+            if (hasCustomScript)
+            {
+                logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", databaseResource.DatabaseName);
+            }
+
             logger.LogDebug("Database '{DatabaseName}' created successfully", databaseResource.DatabaseName);
         }
         catch (Exception e)

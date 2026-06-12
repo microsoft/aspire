@@ -277,8 +277,10 @@ public static partial class SqlServerBuilderExtensions
             }
             else
             {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
                 using var reader = new StringReader(scriptAnnotation.Script);
                 var batchBuilder = new StringBuilder();
+                var batchNumber = 0;
 
                 while (reader.ReadLine() is { } line)
                 {
@@ -286,15 +288,13 @@ public static partial class SqlServerBuilderExtensions
 
                     if (matchGo.Success)
                     {
-                        // Execute the current batch
                         var count = matchGo.Groups["repeat"].Success ? int.Parse(matchGo.Groups["repeat"].Value, CultureInfo.InvariantCulture) : 1;
                         var batch = batchBuilder.ToString();
 
-                        for (var i = 0; i < count; i++)
+                        if (!string.IsNullOrWhiteSpace(batch))
                         {
-                            using var command = sqlConnection.CreateCommand();
-                            command.CommandText = batch;
-                            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                            batchNumber++;
+                            await ExecuteBatchAsync(batch, batchNumber, count, ct).ConfigureAwait(false);
                         }
 
                         batchBuilder.Clear();
@@ -312,10 +312,15 @@ public static partial class SqlServerBuilderExtensions
                 // Process the remaining batch lines
                 if (batchBuilder.Length > 0)
                 {
-                    using var command = sqlConnection.CreateCommand();
-                    command.CommandText = batchBuilder.ToString();
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                    var batch = batchBuilder.ToString();
+                    if (!string.IsNullOrWhiteSpace(batch))
+                    {
+                        batchNumber++;
+                        await ExecuteBatchAsync(batch, batchNumber, 1, ct).ConfigureAwait(false);
+                    }
                 }
+
+                logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
             }
 
             logger.LogDebug("Database '{DatabaseName}' created successfully", sqlDatabase.DatabaseName);
@@ -323,6 +328,20 @@ public static partial class SqlServerBuilderExtensions
         catch (Exception e)
         {
             logger.LogError(e, "Failed to create database '{DatabaseName}'", sqlDatabase.DatabaseName);
+        }
+
+        async Task ExecuteBatchAsync(string batch, int batchNumber, int executionCount, CancellationToken cancellationToken)
+        {
+            logger.LogInformation("Executing custom creation script batch {BatchNumber} for database '{DatabaseName}':{NewLine}{Batch}", batchNumber, sqlDatabase.DatabaseName, Environment.NewLine, batch);
+
+            for (var i = 0; i < executionCount; i++)
+            {
+                using var command = sqlConnection.CreateCommand();
+                command.CommandText = batch;
+                var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+                logger.LogInformation("Completed custom creation script batch {BatchNumber} execution {ExecutionNumber}/{ExecutionCount} for database '{DatabaseName}' with {RowsAffected} rows affected", batchNumber, i + 1, executionCount, sqlDatabase.DatabaseName, rowsAffected);
+            }
         }
     }
 }
