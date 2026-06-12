@@ -267,6 +267,13 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         var documentCount = documents.Count;
         foreach (var (token, count) in documentFrequency)
         {
+            // Use the smoothed BM25-style IDF shape:
+            //   log(1 + (N - df + 0.5) / (df + 0.5))
+            // where N is the number of indexed docs and df is the number of docs that contain
+            // the token. The 0.5 terms keep very small corpora from producing extreme weights,
+            // while the +1 inside the log keeps terms that appear in every doc positive but tiny.
+            // We only use the result as a rarity multiplier in the existing field scorer; this is
+            // not a full BM25 implementation.
             idf[token] = MathF.Log(1.0f + (documentCount - count + 0.5f) / (count + 0.5f));
         }
 
