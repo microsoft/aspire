@@ -271,15 +271,29 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         if (Scope is not null)
         {
             context.Writer.WriteStartObject("scope");
-            var resourceGroup = Scope.ResourceGroup switch
+            WriteScopeValue(context, "resourceGroup", Scope.ResourceGroup);
+            WriteScopeValue(context, "subscription", Scope.Subscription);
+            if (Scope.IsTenantScope)
             {
-                IManifestExpressionProvider output => output.ValueExpression,
-                object obj => obj.ToString(),
-                null => ""
-            };
-            context.Writer.WriteString("resourceGroup", resourceGroup);
+                context.Writer.WriteString("tenant", "current");
+            }
             context.Writer.WriteEndObject();
         }
+    }
+
+    private static void WriteScopeValue(ManifestPublishingContext context, string propertyName, object? scopeValue)
+    {
+        if (scopeValue is null)
+        {
+            return;
+        }
+
+        var value = scopeValue switch
+        {
+            IManifestExpressionProvider output => output.ValueExpression,
+            object obj => obj.ToString(),
+        };
+        context.Writer.WriteString(propertyName, value);
     }
 
     /// <summary>

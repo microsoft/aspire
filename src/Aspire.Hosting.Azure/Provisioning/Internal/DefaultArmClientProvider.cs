@@ -107,6 +107,13 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             return subscriptions;
         }
 
+        public async Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
+        {
+            var subscription = await armClient.GetSubscriptions().GetAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
+
+            return new DefaultSubscriptionResource(subscription.Value);
+        }
+
         public async Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default)
         {
             var subscription = await armClient.GetSubscriptions().GetAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
@@ -375,6 +382,11 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             public Guid? TenantId => tenantResource.Data.TenantId;
             public string? DisplayName => tenantResource.Data.DisplayName;
             public string? DefaultDomain => tenantResource.Data.DefaultDomain;
+
+            public IArmDeploymentCollection GetArmDeployments()
+            {
+                return new DefaultArmDeploymentCollection(tenantResource.GetArmDeployments());
+            }
         }
     }
 }

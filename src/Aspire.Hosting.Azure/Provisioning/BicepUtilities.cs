@@ -75,17 +75,23 @@ internal static class BicepUtilities
     /// </summary>
     public static async Task SetScopeAsync(JsonObject scope, AzureBicepResource resource, CancellationToken cancellationToken = default)
     {
+        scope.Clear();
+
         // Resolve the scope from the AzureBicepResource if it has already been set
         // via the ConfigureInfrastructure callback. If not, fallback to the ExistingAzureResourceAnnotation.
-        var targetScope = GetExistingResourceGroup(resource);
-
-        scope["resourceGroup"] = targetScope switch
+        var targetScope = GetExistingResourceScope(resource);
+        if (targetScope is null)
         {
-            string s => s,
-            IValueProvider v => await v.GetValueAsync(cancellationToken).ConfigureAwait(false),
-            null => null,
-            _ => throw new NotSupportedException($"The scope value type {targetScope.GetType()} is not supported.")
-        };
+            scope["resourceGroup"] = null;
+            return;
+        }
+
+        await SetScopeValueAsync(scope, "resourceGroup", targetScope.ResourceGroup, cancellationToken).ConfigureAwait(false);
+        await SetScopeValueAsync(scope, "subscription", targetScope.Subscription, cancellationToken).ConfigureAwait(false);
+        if (targetScope.IsTenantScope)
+        {
+            scope["tenant"] = "current";
+        }
     }
 
     /// <summary>
@@ -125,7 +131,9 @@ internal static class BicepUtilities
             var parameters = JsonNode.Parse(jsonString)?.AsObject();
             var scope = section[DeploymentStateScopeKey] is string scopeString
                 ? JsonNode.Parse(scopeString)?.AsObject()
-                : null;
+                : GetExistingResourceScope(resource) is not null
+                    ? new JsonObject()
+                    : null;
 
             if (parameters is null)
             {
@@ -167,7 +175,9 @@ internal static class BicepUtilities
             var parameters = JsonNode.Parse(jsonString)?.AsObject();
             var scope = section.Data[DeploymentStateScopeKey]?.GetValue<string>() is { Length: > 0 } scopeString
                 ? JsonNode.Parse(scopeString)?.AsObject()
-                : null;
+                : GetExistingResourceScope(resource) is not null
+                    ? new JsonObject()
+                    : null;
 
             if (parameters is null)
             {
@@ -191,9 +201,30 @@ internal static class BicepUtilities
         }
     }
 
-    internal static object? GetExistingResourceGroup(AzureBicepResource resource) =>
-        resource.Scope?.ResourceGroup ??
-            (resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingResource) ?
-                existingResource.ResourceGroup :
-                null);
+    internal static AzureBicepResourceScope? GetExistingResourceScope(AzureBicepResource resource)
+    {
+        if (resource.Scope is not null)
+        {
+            return resource.Scope;
+        }
+
+        return resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingResource)
+            ? AzureBicepResourceScope.FromExistingResourceAnnotation(existingResource)
+            : null;
+    }
+
+    private static async Task SetScopeValueAsync(JsonObject scope, string propertyName, object? value, CancellationToken cancellationToken)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        scope[propertyName] = value switch
+        {
+            string s => s,
+            IValueProvider v => await v.GetValueAsync(cancellationToken).ConfigureAwait(false),
+            _ => throw new NotSupportedException($"The scope {propertyName} value type {value.GetType()} is not supported.")
+        };
+    }
 }

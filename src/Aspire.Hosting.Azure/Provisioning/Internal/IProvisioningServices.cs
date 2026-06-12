@@ -139,6 +139,11 @@ internal interface IArmClient
     Task<IEnumerable<ISubscriptionResource>> GetAvailableSubscriptionsAsync(string? tenantId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets a subscription by identifier.
+    /// </summary>
+    Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets all available locations for the specified subscription.
     /// </summary>
     Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default);
@@ -334,6 +339,11 @@ internal interface ITenantResource
     /// Gets the default domain.
     /// </summary>
     string? DefaultDomain { get; }
+
+    /// <summary>
+    /// Gets ARM deployments collection.
+    /// </summary>
+    IArmDeploymentCollection GetArmDeployments();
 }
 
 /// <summary>

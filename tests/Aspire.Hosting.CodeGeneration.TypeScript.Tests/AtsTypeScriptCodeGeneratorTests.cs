@@ -1074,6 +1074,41 @@ public class AtsTypeScriptCodeGeneratorTests
         AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppContainers/configureContainerAppScale", "configureScale", typeof(ContainerApp), GetRequiredType("Aspire.Hosting.Azure.AzureContainerAppScaleConfig, Aspire.Hosting.Azure.AppContainers"));
     }
 
+    [Fact]
+    public void Scanner_AzureExistingResourceScopes_ExposeTypeScriptCapabilities()
+    {
+        var capabilities = ScanCapabilitiesFromAzureAssemblies();
+
+        AssertAzureExistingResourceScopeCapability(capabilities, "runAsExistingInResourceGroup", ["name", "resourceGroup", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "publishAsExistingInResourceGroup", ["name", "resourceGroup", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "asExistingInResourceGroup", ["name", "resourceGroup", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "runAsExistingInSubscription", ["name", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "publishAsExistingInSubscription", ["name", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "asExistingInSubscription", ["name", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "runAsExistingInTenant", ["name"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "publishAsExistingInTenant", ["name"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "asExistingInTenant", ["name"]);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithAzureExistingResourceScopes_EmitsTypeScriptMethods()
+    {
+        var result = AtsCapabilityScanner.ScanAssemblies(LoadAzureAssemblies());
+
+        var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
+        var aspireTs = files["aspire.mts"];
+
+        Assert.Contains("runAsExistingInResourceGroup", aspireTs);
+        Assert.Contains("publishAsExistingInResourceGroup", aspireTs);
+        Assert.Contains("asExistingInResourceGroup", aspireTs);
+        Assert.Contains("runAsExistingInSubscription", aspireTs);
+        Assert.Contains("publishAsExistingInSubscription", aspireTs);
+        Assert.Contains("asExistingInSubscription", aspireTs);
+        Assert.Contains("runAsExistingInTenant", aspireTs);
+        Assert.Contains("publishAsExistingInTenant", aspireTs);
+        Assert.Contains("asExistingInTenant", aspireTs);
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
     {
         var testAssembly = LoadTestAssembly();
@@ -1212,6 +1247,16 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal(methodName, capability.MethodName);
         Assert.Equal(GetAtsTypeId(targetType), capability.TargetTypeId);
         Assert.Equal(GetAtsTypeId(parameterType), parameter.Type?.TypeId);
+    }
+
+    private static void AssertAzureExistingResourceScopeCapability(IReadOnlyList<AtsCapabilityInfo> capabilities, string methodName, string[] parameterNames)
+    {
+        var capability = Assert.Single(capabilities, c => c.CapabilityId == $"Aspire.Hosting.Azure/{methodName}");
+
+        Assert.Equal(methodName, capability.MethodName);
+        Assert.Equal(GetAtsTypeId(typeof(IAzureResource)), capability.TargetTypeId);
+        Assert.True(capability.ReturnsBuilder);
+        Assert.Equal(parameterNames, capability.Parameters.Select(p => p.Name));
     }
 
     private static Type GetRequiredType(string assemblyQualifiedTypeName)

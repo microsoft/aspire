@@ -408,6 +408,45 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ConnectionStringAvailableEventPublishesBeforeBeforeResourceStartedEvent()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb"));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var applicationEventing = new DistributedApplicationEventing();
+        var observedEvents = new List<string>();
+
+        applicationEventing.Subscribe<ConnectionStringAvailableEvent>(resource.Resource, (_, _) =>
+        {
+            observedEvents.Add(nameof(ConnectionStringAvailableEvent));
+            return Task.CompletedTask;
+        });
+        applicationEventing.Subscribe<BeforeResourceStartedEvent>(resource.Resource, (_, _) =>
+        {
+            observedEvents.Add(nameof(BeforeResourceStartedEvent));
+            return Task.CompletedTask;
+        });
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: applicationEventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnConnectionStringAvailableContext(CancellationToken.None, resource.Resource));
+        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Executable, resource.Resource, "test-resource-dcp"));
+
+        Assert.Collection(
+            observedEvents,
+            eventName => Assert.Equal(nameof(ConnectionStringAvailableEvent), eventName),
+            eventName => Assert.Equal(nameof(BeforeResourceStartedEvent), eventName));
+    }
+
+    [Fact]
     public async Task ConnectionStringAvailableEventPublishesUpdateWithConnectionStringValue()
     {
         var builder = DistributedApplication.CreateBuilder();

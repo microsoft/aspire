@@ -4650,6 +4650,14 @@ public class AzureEnvironmentResourceExtensionsTests
             return Task.FromResult(result);
         }
 
+        public Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
+        {
+            var subscription = _subscriptionsByTenant.Values
+                .SelectMany(static subscriptions => subscriptions)
+                .Single(s => string.Equals(s.Id.Name, subscriptionId, StringComparison.OrdinalIgnoreCase));
+            return Task.FromResult<ISubscriptionResource>(subscription);
+        }
+
         public Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IEnumerable<(string Name, string DisplayName)>>(_locations);
@@ -4691,6 +4699,9 @@ public class AzureEnvironmentResourceExtensionsTests
         public string? DisplayName { get; } = displayName;
 
         public string? DefaultDomain { get; } = $"{displayName.Replace(" ", "", StringComparison.Ordinal).ToLowerInvariant()}.onmicrosoft.com";
+
+        public IArmDeploymentCollection GetArmDeployments()
+            => new TestArmDeploymentCollection([]);
     }
 
     private sealed class ContextSubscriptionResource(string subscriptionId, string displayName, string tenantId) : ISubscriptionResource
@@ -4961,6 +4972,9 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<IEnumerable<ISubscriptionResource>> GetAvailableSubscriptionsAsync(string? tenantId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
@@ -5025,6 +5039,9 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<IEnumerable<ISubscriptionResource>> GetAvailableSubscriptionsAsync(string? tenantId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
@@ -5081,6 +5098,9 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<IEnumerable<ISubscriptionResource>> GetAvailableSubscriptionsAsync(string? tenantId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
@@ -5128,6 +5148,9 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<IEnumerable<ISubscriptionResource>> GetAvailableSubscriptionsAsync(string? tenantId, CancellationToken cancellationToken = default)
             => _inner.GetAvailableSubscriptionsAsync(tenantId, cancellationToken);
 
+        public Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
+            => _inner.GetSubscriptionAsync(subscriptionId, cancellationToken);
+
         public Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default)
             => _inner.GetAvailableLocationsAsync(subscriptionId, cancellationToken);
 
@@ -5174,6 +5197,9 @@ public class AzureEnvironmentResourceExtensionsTests
 
         public Task<IEnumerable<ISubscriptionResource>> GetAvailableSubscriptionsAsync(string? tenantId, CancellationToken cancellationToken = default)
             => _inner.GetAvailableSubscriptionsAsync(tenantId, cancellationToken);
+
+        public Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
+            => _inner.GetSubscriptionAsync(subscriptionId, cancellationToken);
 
         public Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default)
             => _inner.GetAvailableLocationsAsync(subscriptionId, cancellationToken);
