@@ -192,14 +192,14 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         {
             root.Add(new XElement("ItemGroup",
                 new XAttribute("Condition", projectCondition),
-                projectFile.PackageReferences.Select(CreatePackageReferenceElement)));
+                projectFile.PackageReferences.Select(CSharpProjectFile.CreatePackageReferenceElement)));
         }
 
         if (projectFile.ProjectReferences.Count > 0)
         {
             root.Add(new XElement("ItemGroup",
                 new XAttribute("Condition", projectCondition),
-                projectFile.ProjectReferences.Select(CreateProjectReferenceElement)));
+                projectFile.ProjectReferences.Select(CSharpProjectFile.CreateProjectReferenceElement)));
         }
 
         await using var stream = appHostBuildPropsFile.Create();
@@ -248,37 +248,6 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
     {
         var appHostDirectory = appHostFile.Directory ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' does not have a containing directory.");
         return new FileInfo(Path.Combine(appHostDirectory.FullName, AspireJsonConfiguration.SettingsFolder, ModulesDirectoryName, AppHostBuildTargetsFileName));
-    }
-
-    private static XElement CreatePackageReferenceElement(CSharpPackageReference packageReference)
-    {
-        var element = new XElement("PackageReference", new XAttribute("Include", packageReference.Name));
-
-        if (packageReference.Version is not null)
-        {
-            element.Add(new XAttribute("Version", packageReference.Version));
-        }
-
-        return element;
-    }
-
-    private static XElement CreateProjectReferenceElement(CSharpProjectReference projectReference)
-    {
-        var element = new XElement("ProjectReference", new XAttribute("Include", projectReference.ProjectPath));
-
-        AddBooleanElement(element, "IsAspireProjectResource", projectReference.IsAspireProjectResource);
-        AddBooleanElement(element, "ReferenceOutputAssembly", projectReference.ReferenceOutputAssembly);
-        AddBooleanElement(element, "Private", projectReference.Private);
-
-        return element;
-    }
-
-    private static void AddBooleanElement(XElement element, string name, bool? value)
-    {
-        if (value is not null)
-        {
-            element.Add(new XElement(name, value.Value ? "true" : "false"));
-        }
     }
 
     private static string EnsureTrailingSlash(string path)

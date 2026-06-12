@@ -181,7 +181,7 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
         return new XDocument(root);
     }
 
-    private static XElement CreatePackageReferenceElement(CSharpPackageReference packageReference)
+    internal static XElement CreatePackageReferenceElement(CSharpPackageReference packageReference)
     {
         var element = new XElement("PackageReference", new XAttribute("Include", packageReference.Name));
 
@@ -193,7 +193,7 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
         return element;
     }
 
-    private static XElement CreateProjectReferenceElement(CSharpProjectReference projectReference)
+    internal static XElement CreateProjectReferenceElement(CSharpProjectReference projectReference)
     {
         var element = new XElement("ProjectReference", new XAttribute("Include", projectReference.ProjectPath));
 
@@ -216,7 +216,7 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
         return element;
     }
 
-    private static void AddBooleanElement(XElement element, string name, bool? value)
+    internal static void AddBooleanElement(XElement element, string name, bool? value)
     {
         if (value is not null)
         {
