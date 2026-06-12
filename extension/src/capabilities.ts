@@ -111,3 +111,5 @@ export function getRunSessionInfo(): RunSessionInfo {
 // ci-probe: re-trigger after empty-matrix fix; still extension-only (0 .NET tests expected).
 
 // ci-probe: verify enumerate-skip fix; extension-only (0 .NET tests, jobs still run).
+
+// ci-probe: re-trigger after gate + comment fixes.
