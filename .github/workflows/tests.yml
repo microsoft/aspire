@@ -41,6 +41,18 @@ jobs:
         with:
           global-json-file: ${{ github.workspace }}/global.json
 
+      # [EXPERIMENT] Cache the global NuGet packages folder to cut restore.sh download time.
+      # restore.sh restores into $HOME/.nuget/packages (use_global_nuget_cache, see
+      # eng/common/tools.sh GetNuGetPackageCachePath). No lock files exist, so the key hashes the
+      # version-defining files; restore reconciles any missed packages, so a partial hit is safe.
+      - name: Cache NuGet packages
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', 'eng/Versions.props', 'global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
       - name: Restore
         shell: bash
         run: ./restore.sh
