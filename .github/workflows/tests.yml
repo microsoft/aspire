@@ -45,13 +45,19 @@ jobs:
       # [EXPERIMENT] Cache the repo-local .dotnet (SDK + the runtime toolsets that enumerate-tests
       # bootstraps from global.json tools.runtimes). Restored before dotnet.sh so that on a warm
       # runner dotnet.sh finds .dotnet/sdk/<version> present (skips the SDK install) and enumerate's
-      # toolset bootstrap finds the runtimes present (skips ~the toolset download). The Post step
-      # saves the .dotnet that exists at job end, so the toolsets installed during enumerate are
-      # captured. Key tracks the SDK version (global.json) + runtime toolset versions (eng/Versions.props
-      # drives the global.json $(DotNetRuntime*) placeholders). NuGet packages are not cached (closed
-      # #18145 showed that was a net loss).
-      - name: Cache .dotnet
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      # toolset bootstrap finds the runtimes present (skips ~the toolset download). Key tracks the SDK
+      # version (global.json) + runtime toolset versions (eng/Versions.props drives the global.json
+      # $(DotNetRuntime*) placeholders). NuGet packages are not cached (closed #18145, net loss).
+      #
+      # Restore-everywhere / save-only-on-main-or-release: a PR run restores main's (or its release
+      # base's) entry but never writes its own. This keeps the 363 MB payload to ~one shared entry per
+      # (os, arch, version-hash) instead of one per PR ref, which would churn the repo's 10 GB Actions
+      # cache budget (see GitHub's guidance to populate caches from push/merge workflows, not PRs). On
+      # a miss the job just runs the normal cold ./restore.sh below. The matching save step is at the
+      # end of the job (after enumerate has populated .dotnet with the toolsets).
+      - name: Restore .dotnet cache
+        id: dotnet_cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .dotnet
           key: dotnet-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('global.json', 'eng/Versions.props') }}
@@ -161,6 +167,17 @@ jobs:
           $matrix = Get-Content -Raw "${{ github.workspace }}/all_tests.json"
           $splitScript = "${{ github.workspace }}/eng/scripts/split-test-matrix-by-deps.ps1"
           & $splitScript -AllTestsMatrix $matrix -OutputToGitHubEnv
+
+      # Save the .dotnet cache only on main / release pushes, and only when this run missed the cache
+      # (a hit means the entry already exists). PR runs deliberately never save -- they restore the
+      # shared entry but don't add a per-PR 363 MB copy. enumerate-tests ran above, so .dotnet now
+      # holds the SDK + the bootstrapped runtime toolsets.
+      - name: Save .dotnet cache
+        if: ${{ steps.dotnet_cache.outputs.cache-hit != 'true' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')) }}
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .dotnet
+          key: ${{ steps.dotnet_cache.outputs.cache-primary-key }}
 
   build_packages:
     name: Build packages
