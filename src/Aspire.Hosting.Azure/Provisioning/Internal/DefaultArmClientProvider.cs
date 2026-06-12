@@ -2,10 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.ClientModel.Primitives;
-using System.Text.Json.Serialization;
 using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
@@ -20,23 +17,30 @@ namespace Aspire.Hosting.Azure.Provisioning.Internal;
 /// </summary>
 internal sealed class DefaultArmClientProvider : IArmClientProvider
 {
-    private const string ArmManagementEndpoint = "https://management.azure.com";
-    private const string ArmScope = $"{ArmManagementEndpoint}/.default";
-    private static readonly HttpClient s_httpClient = new();
+    private readonly ArmClientOptions? _options;
+
+    public DefaultArmClientProvider()
+    {
+    }
+
+    internal DefaultArmClientProvider(ArmClientOptions options)
+    {
+        _options = options;
+    }
 
     public IArmClient GetArmClient(TokenCredential credential, string subscriptionId)
     {
-        var armClient = new ArmClient(credential, subscriptionId);
-        return new DefaultArmClient(armClient, credential);
+        var armClient = new ArmClient(credential, subscriptionId, _options);
+        return new DefaultArmClient(armClient);
     }
 
     public IArmClient GetArmClient(TokenCredential credential)
     {
-        var armClient = new ArmClient(credential);
-        return new DefaultArmClient(armClient, credential);
+        var armClient = new ArmClient(credential, default, _options);
+        return new DefaultArmClient(armClient);
     }
 
-    private sealed class DefaultArmClient(ArmClient armClient, TokenCredential credential) : IArmClient
+    private sealed class DefaultArmClient(ArmClient armClient) : IArmClient
     {
         public async Task<(ISubscriptionResource subscription, ITenantResource tenant)> GetSubscriptionAndTenantAsync(CancellationToken cancellationToken = default)
         {
@@ -117,14 +121,8 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
         public async Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default)
         {
             var subscription = await armClient.GetSubscriptions().GetAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
-            var locations = new List<(string Name, string DisplayName)>();
 
-            foreach (var location in subscription.Value.GetLocations(cancellationToken: cancellationToken))
-            {
-                locations.Add((location.Name, location.DisplayName ?? location.Name));
-            }
-
-            return locations.OrderBy(l => l.DisplayName);
+            return GetAvailableLocations(subscription.Value, cancellationToken).OrderBy(l => l.DisplayName);
         }
 
         public async Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default)
@@ -147,33 +145,22 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
                 return [];
             }
 
-            var locationNameByProviderValue = await CreateLocationNameLookupAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
-            using var request = new HttpRequestMessage(
-                HttpMethod.Get,
-                $"{ArmManagementEndpoint}/subscriptions/{Uri.EscapeDataString(subscriptionId)}/providers/{Uri.EscapeDataString(providerNamespace)}?api-version=2021-04-01");
+            var subscription = await armClient.GetSubscriptions().GetAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
+            var locationNameByProviderValue = CreateLocationNameLookup(GetAvailableLocations(subscription.Value, cancellationToken));
 
-            // The Azure.ResourceManager package version used here does not expose the provider
-            // metadata shape needed for per-resource supported locations, so use the documented ARM
-            // endpoint directly:
-            //   GET /subscriptions/{subscriptionId}/providers/Microsoft.Search?api-version=2021-04-01
+            // Use the ArmClient pipeline so this metadata request follows the same ArmEnvironment
+            // endpoint and token scope as the rest of provisioning. The SDK requests provider
+            // metadata equivalent to:
+            //   GET /subscriptions/{subscriptionId}/providers/Microsoft.Search
             // This is advisory diagnostics only; callers keep the original provider error if this
             // metadata request fails.
-            var token = await credential.GetTokenAsync(new TokenRequestContext([ArmScope]), cancellationToken).ConfigureAwait(false);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
-
-            using var response = await s_httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                throw new HttpRequestException($"Unable to query Azure resource provider locations. Status code: {(int)response.StatusCode}. Response: {content}");
-            }
+            var provider = await subscription.Value.GetResourceProviderAsync(providerNamespace, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             // ARM provider metadata is shaped as:
             //   { "resourceTypes": [ { "resourceType": "searchServices", "locations": [ "East US", "West US 2" ] } ] }
             // The locations are often display names, while Aspire commands accept canonical names
             // like "eastus", so map through the subscription location list before surfacing them.
-            var providerMetadata = await response.Content.ReadFromJsonAsync<ProviderMetadataResponse>(cancellationToken).ConfigureAwait(false);
-            if (providerMetadata?.ResourceTypes is not { } resourceTypes)
+            if (provider.Value.Data.ResourceTypes is not { Count: > 0 } resourceTypes)
             {
                 return [];
             }
@@ -181,7 +168,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             foreach (var resourceTypeMetadata in resourceTypes)
             {
                 if (!string.Equals(resourceTypeMetadata.ResourceType, providerResourceType, StringComparison.OrdinalIgnoreCase) ||
-                    resourceTypeMetadata.Locations is not { Length: > 0 } locations)
+                    resourceTypeMetadata.Locations is not { Count: > 0 } locations)
                 {
                     continue;
                 }
@@ -311,10 +298,22 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
                 FailureDetails: failureDetails);
         }
 
-        private async Task<Dictionary<string, string>> CreateLocationNameLookupAsync(string subscriptionId, CancellationToken cancellationToken)
+        private static IEnumerable<(string Name, string DisplayName)> GetAvailableLocations(SubscriptionResource subscription, CancellationToken cancellationToken)
+        {
+            var locations = new List<(string Name, string DisplayName)>();
+
+            foreach (var location in subscription.GetLocations(cancellationToken: cancellationToken))
+            {
+                locations.Add((location.Name, location.DisplayName ?? location.Name));
+            }
+
+            return locations;
+        }
+
+        private static Dictionary<string, string> CreateLocationNameLookup(IEnumerable<(string Name, string DisplayName)> availableLocations)
         {
             var locationNameByProviderValue = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (name, displayName) in await GetAvailableLocationsAsync(subscriptionId, cancellationToken).ConfigureAwait(false))
+            foreach (var (name, displayName) in availableLocations)
             {
                 AddLocation(name, name);
                 AddLocation(displayName, name);
@@ -361,21 +360,6 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
 
         private static string NormalizeLocation(string location)
             => string.Concat(location.Where(static c => !char.IsWhiteSpace(c))).ToLowerInvariant();
-
-        private sealed class ProviderMetadataResponse
-        {
-            [JsonPropertyName("resourceTypes")]
-            public ProviderResourceTypeMetadata[]? ResourceTypes { get; init; }
-        }
-
-        private sealed class ProviderResourceTypeMetadata
-        {
-            [JsonPropertyName("resourceType")]
-            public string? ResourceType { get; init; }
-
-            [JsonPropertyName("locations")]
-            public string[]? Locations { get; init; }
-        }
 
         private sealed class DefaultTenantResource(TenantResource tenantResource) : ITenantResource
         {
