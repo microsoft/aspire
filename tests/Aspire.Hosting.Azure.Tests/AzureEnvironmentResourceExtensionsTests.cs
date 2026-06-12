@@ -2212,16 +2212,16 @@ public class AzureEnvironmentResourceExtensionsTests
 
         try
         {
-            var storageSnapshot = await WaitForResourceSnapshotBeforeOperationCompletesAsync(
-                notifications,
-                storage.Resource.Name,
-                snapshot => snapshot.Commands.SingleOrDefault(c => c.Name == AzureProvisioningController.ChangeResourceLocationCommandName)?.State == ResourceCommandState.Disabled,
+            await WaitForSignalBeforeOperationCompletesAsync(
+                testBicepProvisioner.FirstProvisionStarted.Task,
                 commandTask,
                 "Change location command completed before command states were disabled.");
 
             Assert.True(notifications.TryGetCurrentState(environmentResource.Name, out var environmentEvent));
             Assert.All(environmentEvent.Snapshot.Commands, command => Assert.Equal(ResourceCommandState.Disabled, command.State));
 
+            Assert.True(notifications.TryGetCurrentState(storage.Resource.Name, out var storageEvent));
+            var storageSnapshot = storageEvent.Snapshot;
             AssertAffectedResourceCommandsDuringOperation(storageSnapshot);
 
             Assert.True(notifications.TryGetCurrentState(storage2.Resource.Name, out var storage2Event));
@@ -4518,44 +4518,6 @@ public class AzureEnvironmentResourceExtensionsTests
         }
 
         Assert.Fail(completionMessage);
-    }
-
-    private static async Task<CustomResourceSnapshot> WaitForResourceSnapshotBeforeOperationCompletesAsync(
-        ResourceNotificationService notifications,
-        string resourceName,
-        Func<CustomResourceSnapshot, bool> waitCondition,
-        Task operationTask,
-        string completionMessage)
-    {
-        using var watchdog = new CancellationTokenSource(s_testSynchronizationTimeout);
-
-        while (true)
-        {
-            if (notifications.TryGetCurrentState(resourceName, out var resourceEvent) &&
-                waitCondition(resourceEvent.Snapshot))
-            {
-                return resourceEvent.Snapshot;
-            }
-
-            if (operationTask.IsCompleted)
-            {
-                if (operationTask.IsFaulted || operationTask.IsCanceled)
-                {
-                    await operationTask.ConfigureAwait(false);
-                }
-
-                Assert.Fail(completionMessage);
-            }
-
-            try
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(50), watchdog.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (watchdog.IsCancellationRequested)
-            {
-                Assert.Fail($"Timed out after {s_testSynchronizationTimeout} waiting for resource '{resourceName}' to match the expected snapshot. Operation status: {operationTask.Status}. {completionMessage}");
-            }
-        }
     }
 
     private static async Task<(IReadOnlyList<PipelineStep> Steps, PipelineContext PipelineContext)> CreateAzureEnvironmentPipelineStepsAsync(
