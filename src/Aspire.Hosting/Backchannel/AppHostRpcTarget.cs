@@ -263,7 +263,7 @@ internal class AppHostRpcTarget(
             var stepsByName = resolvedSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
             if (stepsByName.TryGetValue(request.Step, out var targetStep))
             {
-                resolvedSteps = DistributedApplicationPipeline.ComputeTargetStepDependencies(targetStep, stepsByName);
+                resolvedSteps = DistributedApplicationPipeline.ComputeTransitiveDependencies(targetStep, stepsByName);
             }
             else
             {
