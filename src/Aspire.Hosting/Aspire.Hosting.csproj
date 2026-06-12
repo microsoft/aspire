@@ -75,6 +75,19 @@
     <PackageReference Include="Semver" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="StreamJsonRpc" />
+    <!--
+        StreamJsonRpc 2.25.25 declares a transitive dependency on MessagePack 2.5.198,
+        which is inside the GHSA-hv8m-jj95-wg3x / CVE-2026-48109 vulnerable range
+        (MessagePack < 2.5.302). Aspire does not use MessagePack at runtime — every
+        JsonRpc instance in this repo uses SystemTextJsonFormatter — but transitive
+        consumers of Aspire.Hosting / Aspire.Hosting.AppHost (e.g. generated AppHost
+        projects from `aspire new aspire-starter`) emit NU1903 during restore. Adding
+        a direct reference to a patched MessagePack version overrides StreamJsonRpc's
+        transitive pin so the warning is silenced for downstream consumers.
+        Remove this once StreamJsonRpc ships a release that depends on MessagePack
+        >= 2.5.302 (or 3.x).
+    -->
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
 
   <ItemGroup>
