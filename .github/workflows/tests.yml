@@ -69,14 +69,22 @@ jobs:
           # selection writes BeforeBuildProps.props so enumerate-tests enumerates ONLY the selected
           # projects, and run_* gate the non-.NET jobs.
           ENFORCE_SELECTION: 'true'
+          # [EXPERIMENT] Simulate a typical selective PR (a single leaf-component test change) using
+          # the selector's own --changed-files debug input, so we can measure the SELECTIVE-case
+          # whole-job time. Without this the PR routes to ALL (it edits CI) and enumerate would
+          # full-restore. A normal PR would get this scoping from its real diff.
+          SIMULATE_CHANGED_FILES: 'tests/Aspire.Npgsql.Tests/ConfigurationTests.cs'
         run: |
           set -euo pipefail
 
           args=(--repo-root . --before-build-props "$BEFORE_BUILD_PROPS")
           [ "$ENFORCE_SELECTION" = "true" ] && args+=(--enforce)
 
+          if [ -n "${SIMULATE_CHANGED_FILES:-}" ]; then
+            # Bypass the PR diff and feed a fixed changed-file set (selective-case measurement).
+            args+=(--changed-files "$SIMULATE_CHANGED_FILES")
           # Kill switch: a [full ci] token in the PR body or the run-all-tests label forces everything.
-          if printf '%s' "$PR_BODY" | grep -qiF '[full ci]' || [ "$HAS_RUN_ALL_LABEL" = "true" ]; then
+          elif printf '%s' "$PR_BODY" | grep -qiF '[full ci]' || [ "$HAS_RUN_ALL_LABEL" = "true" ]; then
             args+=(--force-all)
           elif [ -n "$PR_BASE_SHA" ]; then
             # Pull requests diff base..head. This job's checkout is shallow, so fetch the base commit.

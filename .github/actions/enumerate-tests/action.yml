@@ -55,7 +55,11 @@ runs:
     - name: Restore
       if: ${{ inputs.restore == 'true' }}
       shell: bash
-      run: ./restore.sh
+      # [EXPERIMENT] When a restriction props file was written by the selector, scope the restore to
+      # the selected projects (eng/Build.props imports BeforeBuildPropsPath and its
+      # OverrideProjectToBuild REPLACES the default ProjectToBuild). For a selective PR this restores
+      # only the handful of projects that will be enumerated/run, instead of all 415.
+      run: ./restore.sh ${{ inputs.beforeBuildPropsPath != '' && format('/p:BeforeBuildPropsPath={0}', inputs.beforeBuildPropsPath) || '' }}
 
     - name: Build ExtractTestPartitions tool
       shell: bash
