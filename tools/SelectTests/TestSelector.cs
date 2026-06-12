@@ -16,8 +16,8 @@ public sealed record SelectorOptions(bool ForceAll = false);
 /// The outcome of selecting which CI work to run for a set of changed files.
 /// </summary>
 /// <param name="SelectsAll">
-/// True when the whole test matrix must run (a <c>run_all_globs</c> match, a fail-open escalation,
-/// or the kill switch). When true, <see cref="TestProjects"/> is the full matrix.
+/// True when the whole test matrix must run (a path rule whose target is <c>ALL</c>, a fail-open
+/// escalation, or the kill switch). When true, <see cref="TestProjects"/> is the full matrix.
 /// </param>
 /// <param name="TestProjects">The selected test project names (matrix <c>projectName</c>), aliases expanded.</param>
 /// <param name="Jobs">The selected non-.NET jobs (e.g. <c>job:polyglot</c>, <c>job:extension-e2e</c>).</param>
@@ -43,8 +43,7 @@ public sealed record SelectionResult(
 /// </summary>
 /// <remarks>
 /// Behavior is specified by the acceptance tests in
-/// <c>Infrastructure.Tests/TestTriggerMap/SelectTestsAcceptanceTests.cs</c>. The resolution logic
-/// is not implemented yet; <see cref="Select"/> throws until it is.
+/// <c>Infrastructure.Tests/TestTriggerMap/SelectTestsAcceptanceTests.cs</c>.
 /// </remarks>
 public sealed class TestSelector
 {
