@@ -418,8 +418,10 @@ public class ResourceOutgoingPeerResolverTests
         public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
         public ResourceViewModel? GetResource(string resourceName) => null;
         public IReadOnlyList<ResourceViewModel> GetResources() => [];
+        public Task<AssetReference?> GetInteractionAssetAsync(string route, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task SendInteractionRequestAsync(WatchInteractionsRequestUpdate request, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<StartPageInteractionResult?> StartPageInteractionAsync(string route, string sessionId, IReadOnlyDictionary<string, string> queryParameters, CancellationToken cancellationToken) => Task.FromResult<StartPageInteractionResult?>(null);
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<WatchInteractionsResponseUpdate> SubscribeInteractionsAsync(CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken) => subscribeResult;

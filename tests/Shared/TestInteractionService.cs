@@ -57,4 +57,24 @@ internal sealed class TestInteractionService : IInteractionService
     {
         throw new NotImplementedException();
     }
+
+    public IDisposable RegisterPage(string route, PageOptions options)
+    {
+        throw new NotImplementedException();
+    }
+
+    public IDisposable RegisterMenuButton(MenuButtonOptions options)
+    {
+        throw new NotImplementedException();
+    }
+
+    public IDisposable RegisterAsset(string route, string contentType, AssetContext context)
+    {
+        throw new NotImplementedException();
+    }
+
+    public IDisposable RegisterAsset(string route, string contentType, ReadOnlyMemory<byte> content)
+    {
+        throw new NotImplementedException();
+    }
 }

@@ -14,6 +14,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Markdown content is stored as a separate file to avoid the C# preprocessor
+         erroring on # characters (CS1024). Uses .txt extension to avoid markdown linters. -->
+    <EmbeddedResource Include="Resources\MarkdownShowcase.txt" />
+    <EmbeddedResource Include="Resources\AspireLogo.svg" />
+    <EmbeddedResource Include="Resources\TodoStyles.css" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
     <ProjectReference Include="..\Stress.ApiService\Stress.ApiService.csproj" />
     <ProjectReference Include="..\Stress.Empty\Stress.Empty.csproj" />

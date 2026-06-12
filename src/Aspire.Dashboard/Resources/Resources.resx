@@ -139,6 +139,18 @@
   <data name="ResourceFilterOptionEmpty" xml:space="preserve">
     <value>(Unset)</value>
   </data>
+  <data name="CustomPageUnavailableMessage" xml:space="preserve">
+    <value>The page at this route has been removed by the application host.</value>
+  </data>
+  <data name="CustomPageUnavailableTitle" xml:space="preserve">
+    <value>This page is no longer available.</value>
+  </data>
+  <data name="CustomPageIframeLoading" xml:space="preserve">
+    <value>Loading page content...</value>
+  </data>
+  <data name="CustomPageIframeError" xml:space="preserve">
+    <value>The embedded page failed to load. It may be unavailable or refusing to connect.</value>
+  </data>
   <data name="ResourcesStateColumnHeader" xml:space="preserve">
     <value>State</value>
   </data>

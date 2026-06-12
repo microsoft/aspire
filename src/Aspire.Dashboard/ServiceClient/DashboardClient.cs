@@ -551,6 +551,93 @@ internal sealed class DashboardClient : IDashboardClient
         await _incomingInteractionChannel.Writer.WriteAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<StartPageInteractionResult?> StartPageInteractionAsync(string route, string sessionId, IReadOnlyDictionary<string, string> queryParameters, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(sessionId);
+        ArgumentNullException.ThrowIfNull(queryParameters);
+
+        EnsureInitialized();
+
+        var request = new StartPageInteractionRequest
+        {
+            Route = route,
+            SessionId = sessionId
+        };
+        foreach (var (key, value) in queryParameters)
+        {
+            request.QueryParameters.Add(key, value);
+        }
+
+        try
+        {
+            using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+
+            var response = await _client!.StartPageInteractionAsync(request, headers: _headers, cancellationToken: combinedTokens.Token).ConfigureAwait(false);
+
+            return new StartPageInteractionResult(response.InteractionId);
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    public async Task<AssetReference?> GetInteractionAssetAsync(string route, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+
+        EnsureInitialized();
+
+        // Short lived token that doesn't need to be disposed.
+        var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+
+        try
+        {
+            var call = _client!.GetInteractionAsset(
+                new GetInteractionAssetRequest { Route = route },
+                headers: _headers,
+                cancellationToken: combinedTokens.Token);
+
+            // Disposed when the call is disposed.
+            var enumerator = call.ResponseStream.ReadAllAsync(combinedTokens.Token).GetAsyncEnumerator(combinedTokens.Token);
+
+            // Read the first update to get the content type.
+            if (!await enumerator.MoveNextAsync().ConfigureAwait(false))
+            {
+                call.Dispose();
+                return null;
+            }
+
+            var contentType = enumerator.Current.ContentType;
+            var firstContent = enumerator.Current.Content;
+
+            // The enumerator, call, and CTS are kept alive until the AssetReference is disposed.
+            return new AssetReference(contentType, async (destination, ct) =>
+            {
+                // Write any content from the first message.
+                if (firstContent.Length > 0)
+                {
+                    await destination.WriteAsync(firstContent.Memory, ct).ConfigureAwait(false);
+                }
+
+                // Continue reading remaining messages.
+                while (await enumerator.MoveNextAsync().ConfigureAwait(false))
+                {
+                    if (enumerator.Current.Content.Length > 0)
+                    {
+                        await destination.WriteAsync(enumerator.Current.Content.Memory, ct).ConfigureAwait(false);
+                    }
+                }
+            },
+            disposeCallback: call.Dispose);
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     public Task WhenConnected
     {
         get

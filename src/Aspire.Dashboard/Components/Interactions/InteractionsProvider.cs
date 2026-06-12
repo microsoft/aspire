@@ -86,6 +86,9 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
 
+    [Inject]
+    public required CustomInteractionState CustomInteractionState { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
@@ -477,6 +480,9 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                         // Complete interaction.
                         _pendingInteractions.Remove(item.InteractionId);
 
+                        // Remove menu button if applicable.
+                        CustomInteractionState.RemoveMenuButton(item.InteractionId);
+
                         // Close the interaction's dialog if it is open.
                         if (_interactionDialogReference?.InteractionId == item.InteractionId)
                         {
@@ -503,6 +509,28 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
                             // InvokeAsync not necessary here. It's called internally.
                             openMessageBar.Message.Close();
+                        }
+                        break;
+                    case WatchInteractionsResponseUpdate.KindOneofCase.MenuButton:
+                        var menuButton = item.MenuButton;
+                        CustomInteractionState.AddMenuButton(item.InteractionId, menuButton.IconName, menuButton.Text, menuButton.Url);
+                        break;
+                    case WatchInteractionsResponseUpdate.KindOneofCase.Page:
+                        var page = item.Page;
+                        if (!string.IsNullOrEmpty(page.SessionId))
+                        {
+                            // This is a content update for an active visitor session.
+                            CustomInteractionState.UpdatePageContent(
+                                item.InteractionId,
+                                page.Route,
+                                page.SessionId,
+                                page.Content,
+                                page.Title,
+                                page.CssRoutes.ToList(),
+                                page.ScriptRoutes.ToList(),
+                                page.EnableHtml,
+                                page.IframeUrl,
+                                page.IframePersistent);
                         }
                         break;
                     default:

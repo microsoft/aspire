@@ -1,0 +1,14 @@
+﻿@using Aspire.Dashboard.Model.Assistant
+@using Aspire.Dashboard.Model.Interaction
+@using Aspire.Dashboard.Resources
+
+<div class="messagebar-container">
+    @if (!HasActiveIframe)
+    {
+        <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
+    }
+    @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
+    {
+        <div class="layout-sidebar-spacer"></div>
+    }
+</div>

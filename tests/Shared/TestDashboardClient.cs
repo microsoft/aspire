@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
@@ -146,6 +147,16 @@ public class TestDashboardClient : IDashboardClient
         }
 
         await _sendInteractionUpdateChannel.Writer.WriteAsync(request, cancellationToken);
+    }
+
+    public Task<StartPageInteractionResult?> StartPageInteractionAsync(string route, string sessionId, IReadOnlyDictionary<string, string> queryParameters, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<StartPageInteractionResult?>(null);
+    }
+
+    public Task<AssetReference?> GetInteractionAssetAsync(string route, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
     }
 
     public ResourceViewModel? GetResource(string resourceName) => null;

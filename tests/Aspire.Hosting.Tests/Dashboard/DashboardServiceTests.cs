@@ -10,6 +10,7 @@ using Aspire.Hosting.Tests.Utils.Grpc;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Google.Protobuf.WellKnownTypes;
+using Grpc.Core;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -683,6 +684,73 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task GetInteractionAsset_StreamsContentInChunks()
+    {
+        // Arrange
+        var interactionService = new InteractionService(
+            NullLogger<InteractionService>.Instance,
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new ConfigurationBuilder().Build());
+
+        var payload = new byte[200_000];
+        Array.Fill(payload, (byte)'A');
+
+        using var registration = interactionService.RegisterAsset("scripts/large.bin", "application/octet-stream", payload);
+        using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService);
+        var dashboardService = new DashboardServiceImpl(
+            dashboardServiceData,
+            new TestHostEnvironment(),
+            new TestHostApplicationLifetime(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<DashboardServiceImpl>.Instance);
+
+        var context = TestServerCallContext.Create();
+        var writer = new TestServerStreamWriter<GetInteractionAssetResponse>(context);
+
+        // Act
+        var task = dashboardService.GetInteractionAsset(new GetInteractionAssetRequest { Route = "scripts/large.bin" }, writer, context);
+
+        // Assert
+        var firstMessage = await writer.ReadNextAsync().DefaultTimeout();
+        Assert.Equal("application/octet-stream", firstMessage.ContentType);
+        Assert.Empty(firstMessage.Content);
+
+        var totalBytes = 0;
+        var expectedChunkCount = (int)Math.Ceiling(payload.Length / 65536d);
+        for (var i = 0; i < expectedChunkCount; i++)
+        {
+            var update = await writer.ReadNextAsync().DefaultTimeout();
+            totalBytes += update.Content.Length;
+        }
+
+        await task.DefaultTimeout();
+        Assert.Equal(payload.Length, totalBytes);
+    }
+
+    [Fact]
+    public async Task GetInteractionAsset_UnknownRoute_ReturnsNotFound()
+    {
+        // Arrange
+        using var dashboardServiceData = CreateDashboardServiceData();
+        var dashboardService = new DashboardServiceImpl(
+            dashboardServiceData,
+            new TestHostEnvironment(),
+            new TestHostApplicationLifetime(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<DashboardServiceImpl>.Instance);
+
+        var context = TestServerCallContext.Create();
+        var writer = new TestServerStreamWriter<GetInteractionAssetResponse>(context);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<RpcException>(() =>
+            dashboardService.GetInteractionAsset(new GetInteractionAssetRequest { Route = "missing.js" }, writer, context));
+
+        Assert.Equal(StatusCode.NotFound, ex.StatusCode);
+    }
+
+    [Fact]
     public void WithCommandOverloadNotAmbiguous()
     {
         var testResource = new TestResource("test-resource");
@@ -789,6 +857,185 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         // Assert
         // The ComputeApplicationName method should strip the .AppHost suffix
         Assert.Equal("MyApp", response.ApplicationName);
+    }
+
+    [Fact]
+    public async Task WatchInteractions_PageWithMultipleSessions_SendsPerSessionMessages()
+    {
+        // Arrange
+        var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddXunit(testOutputHelper);
+        });
+
+        var interactionService = new InteractionService(
+            loggerFactory.CreateLogger<InteractionService>(),
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+
+        // Register a page that stores content per session and keeps the visit alive.
+        var session1Ready = new TaskCompletionSource();
+        var session2Ready = new TaskCompletionSource();
+
+        interactionService.RegisterPage("multi-session", new ContentPageOptions
+        {
+            Title = "Multi",
+            OnVisit = async ctx =>
+            {
+                await ctx.RenderAsync($"Hello {ctx.SessionId}", ctx.CancellationToken);
+                if (ctx.SessionId == "s1")
+                {
+                    session1Ready.SetResult();
+                }
+                else
+                {
+                    session2Ready.SetResult();
+                }
+
+                try { await Task.Delay(Timeout.Infinite, ctx.CancellationToken); }
+                catch (OperationCanceledException) { }
+            }
+        });
+
+        var startedPage1 = interactionService.StartPageInteraction("multi-session", "s1", new Dictionary<string, string>(), CancellationToken.None);
+        var startedPage2 = interactionService.StartPageInteraction("multi-session", "s2", new Dictionary<string, string>(), CancellationToken.None);
+
+        Assert.NotNull(startedPage1);
+        Assert.NotNull(startedPage2);
+
+        await session1Ready.Task.DefaultTimeout();
+        await session2Ready.Task.DefaultTimeout();
+
+        using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>());
+
+        var cts = new CancellationTokenSource();
+        var context = TestServerCallContext.Create(cancellationToken: cts.Token);
+        var writer = new TestServerStreamWriter<WatchInteractionsResponseUpdate>(context);
+        var reader = new TestAsyncStreamReader<WatchInteractionsRequestUpdate>(context);
+
+        // Act — start watching interactions. Each active page interaction should be streamed with its session content.
+        var task = dashboardService.WatchInteractions(reader, writer, context);
+
+        var sessionMessages = new List<WatchInteractionsResponseUpdate>();
+        sessionMessages.Add(await writer.ReadNextAsync().DefaultTimeout());
+        sessionMessages.Add(await writer.ReadNextAsync().DefaultTimeout());
+
+        // Assert — both sessions received their own message with correct content.
+        Assert.All(sessionMessages, msg => Assert.Equal(WatchInteractionsResponseUpdate.KindOneofCase.Page, msg.KindCase));
+
+        var s1Msg = sessionMessages.Single(m => m.Page.SessionId == "s1");
+        Assert.Equal("Hello s1", s1Msg.Page.Content);
+
+        var s2Msg = sessionMessages.Single(m => m.Page.SessionId == "s2");
+        Assert.Equal("Hello s2", s2Msg.Page.Content);
+
+        await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task WatchInteractions_PageAction_InvokesActionWithoutCompletingInteraction()
+    {
+        var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddXunit(testOutputHelper);
+        });
+
+        var interactionService = new InteractionService(
+            loggerFactory.CreateLogger<InteractionService>(),
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+
+        var actionCalled = new TaskCompletionSource<ActionContext>();
+        interactionService.RegisterPage("action-page", new ContentPageOptions
+        {
+            Actions = new Dictionary<string, Func<ActionContext, Task>>
+            {
+                ["save"] = context =>
+                {
+                    actionCalled.SetResult(context);
+                    return Task.CompletedTask;
+                }
+            }
+        });
+
+        var startedPage = interactionService.StartPageInteraction("action-page", "session-1", new Dictionary<string, string>(), CancellationToken.None);
+        Assert.NotNull(startedPage);
+
+        using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>());
+
+        var cts = new CancellationTokenSource();
+        var context = TestServerCallContext.Create(cancellationToken: cts.Token);
+        var writer = new TestServerStreamWriter<WatchInteractionsResponseUpdate>(context);
+        var reader = new TestAsyncStreamReader<WatchInteractionsRequestUpdate>(context);
+
+        var task = dashboardService.WatchInteractions(reader, writer, context);
+        reader.AddMessage(new WatchInteractionsRequestUpdate
+        {
+            InteractionId = startedPage.InteractionId,
+            PageAction = new InteractionPageAction
+            {
+                ActionName = "save",
+                Arguments = { { "id", "42" } }
+            }
+        });
+
+        var actionContext = await actionCalled.Task.DefaultTimeout();
+        Assert.Equal("session-1", actionContext.SessionId);
+        Assert.Equal("42", actionContext.Arguments["id"]);
+        Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task WatchInteractions_IframePage_SendsIframeUrl()
+    {
+        var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddXunit(testOutputHelper);
+        });
+
+        var interactionService = new InteractionService(
+            loggerFactory.CreateLogger<InteractionService>(),
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+
+        interactionService.RegisterPage("frontend", new IFramePageOptions
+        {
+            Title = "Frontend",
+            IFrameUrl = "https://example.com"
+        });
+
+        var startedPage = interactionService.StartPageInteraction("frontend", "session-1", new Dictionary<string, string>(), CancellationToken.None);
+        Assert.NotNull(startedPage);
+
+        using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>());
+
+        var cts = new CancellationTokenSource();
+        var context = TestServerCallContext.Create(cancellationToken: cts.Token);
+        var writer = new TestServerStreamWriter<WatchInteractionsResponseUpdate>(context);
+        var reader = new TestAsyncStreamReader<WatchInteractionsRequestUpdate>(context);
+
+        var task = dashboardService.WatchInteractions(reader, writer, context);
+        var message = await writer.ReadNextAsync().DefaultTimeout();
+
+        Assert.Equal(WatchInteractionsResponseUpdate.KindOneofCase.Page, message.KindCase);
+        Assert.Equal("frontend", message.Page.Route);
+        Assert.Equal("session-1", message.Page.SessionId);
+        Assert.Equal("Frontend", message.Page.Title);
+        Assert.Equal("https://example.com", message.Page.IframeUrl);
+        Assert.Empty(message.Page.Content);
+
+        await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
     }
 
     private static DashboardServiceData CreateDashboardServiceData(

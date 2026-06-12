@@ -86,6 +86,15 @@ var telemetryBuilder = builder.AddProject<Projects.Stress_TelemetryService>("str
 
 builder.AddCommandResources(serviceBuilder, telemetryBuilder);
 
+builder.OnBeforeStart((@event, ct) =>
+{
+    InteractionPages.Register(@event.Services);
+
+    return Task.CompletedTask;
+});
+
+new TodoInteraction(serviceBuilder).Register(builder);
+
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
 // of the dashboard. It is not required in end developer code. Comment out this code
@@ -124,3 +133,4 @@ builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: 
 builder.AddNoStatusResource("no-status-resource");
 
 builder.Build().Run();
+

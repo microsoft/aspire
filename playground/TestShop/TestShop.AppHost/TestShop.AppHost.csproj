@@ -14,6 +14,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Resources\RoguelikeStyles.css" />
+    <EmbeddedResource Include="Resources\RoguelikeControls.js" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.RabbitMQ" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Redis" />

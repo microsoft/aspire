@@ -6,13 +6,19 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 internal class InteractionService : IInteractionService
 {
+    internal const string DiagnosticId = "ASPIREINTERACTION001";
+
     // Tracks whether the current async flow is executing in a non-interactive context,
     // such as a resource command triggered by the CLI with NonInteractive=true.
     // When set, IsAvailable returns false so command callbacks know not to prompt the user.
@@ -21,6 +27,8 @@ internal class InteractionService : IInteractionService
     private Action<Interaction>? OnInteractionUpdated { get; set; }
     private readonly object _onInteractionUpdatedLock = new();
     private readonly InteractionCollection _interactionCollection = new();
+    private readonly Dictionary<string, RegisteredAsset> _assetRegistrations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, RegisteredPage> _pageRegistrations = new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<InteractionService> _logger;
     private readonly DistributedApplicationOptions _distributedApplicationOptions;
     private readonly IServiceProvider _serviceProvider;
@@ -272,6 +280,141 @@ internal class InteractionService : IInteractionService
         }
     }
 
+    public IDisposable RegisterPage(string route, PageOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(options);
+        EnsureServiceAvailable();
+
+        if (options is IFramePageOptions { IFrameUrl: not null, IFrameEndpoint: not null })
+        {
+            throw new InvalidOperationException($"Only one of {nameof(IFramePageOptions.IFrameUrl)} or {nameof(IFramePageOptions.IFrameEndpoint)} can be specified.");
+        }
+
+        lock (_onInteractionUpdatedLock)
+        {
+            if (_pageRegistrations.ContainsKey(route))
+            {
+                throw new InvalidOperationException($"A page with route '{route}' is already registered.");
+            }
+
+            var registeredPage = new RegisteredPage(route, options, new CancellationTokenSource());
+            _pageRegistrations.Add(route, registeredPage);
+
+            return new PageRegistration(this, registeredPage);
+        }
+    }
+
+    internal StartedPageInteraction? StartPageInteraction(string route, string sessionId, IReadOnlyDictionary<string, string> queryParameters, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(sessionId);
+        ArgumentNullException.ThrowIfNull(queryParameters);
+
+        RegisteredPage registeredPage;
+
+        lock (_onInteractionUpdatedLock)
+        {
+            if (!_pageRegistrations.TryGetValue(route, out registeredPage!))
+            {
+                _logger.LogDebug("No page registered for route '{Route}'.", route);
+                return null;
+            }
+        }
+
+        var visitorCts = CancellationTokenSource.CreateLinkedTokenSource(registeredPage.Cts.Token, cancellationToken);
+        var pageInfo = new Interaction.PageInteractionInfo(registeredPage.Route, registeredPage.Options, sessionId, new Dictionary<string, string>(queryParameters, StringComparer.Ordinal), visitorCts);
+        var newState = new Interaction(registeredPage.Options.Title ?? registeredPage.Route, null, InteractionOptions.Default, pageInfo, visitorCts.Token);
+
+        AddInteraction(newState);
+
+        _ = ProcessPageInteractionAsync(newState, pageInfo);
+
+        return new StartedPageInteraction(newState.InteractionId);
+    }
+
+    public IDisposable RegisterMenuButton(MenuButtonOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        EnsureServiceAvailable();
+
+        var interactionCts = new CancellationTokenSource();
+        var menuButtonInfo = new Interaction.MenuButtonInteractionInfo(options);
+        var newState = new Interaction(options.Text, null, InteractionOptions.Default, menuButtonInfo, interactionCts.Token);
+        AddInteractionUpdate(newState);
+
+        return new InteractionRegistration(this, newState, interactionCts);
+    }
+
+    public IDisposable RegisterAsset(string route, string contentType, AssetContext context)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(contentType);
+        ArgumentNullException.ThrowIfNull(context);
+        EnsureServiceAvailable();
+
+        route = NormalizeAssetRoute(route);
+
+        lock (_onInteractionUpdatedLock)
+        {
+            if (_assetRegistrations.ContainsKey(route))
+            {
+                throw new InvalidOperationException($"An asset with route '{route}' is already registered.");
+            }
+
+            _assetRegistrations[route] = new RegisteredAsset(contentType, context);
+        }
+
+        return new AssetRegistration(this, route);
+    }
+
+    public IDisposable RegisterAsset(string route, string contentType, ReadOnlyMemory<byte> content)
+    {
+        // Keep a private copy to avoid accidental mutation of caller-provided buffers.
+        var contentCopy = content.ToArray();
+
+        return RegisterAsset(route, contentType, new AssetContext
+        {
+            OnGet = context => context.WriteAsync(contentCopy)
+        });
+    }
+
+    internal bool TryGetAsset(string route, out RegisteredAsset asset)
+    {
+        try
+        {
+            route = NormalizeAssetRoute(route);
+        }
+        catch (ArgumentException)
+        {
+            asset = default!;
+            return false;
+        }
+
+        lock (_onInteractionUpdatedLock)
+        {
+            return _assetRegistrations.TryGetValue(route, out asset!);
+        }
+    }
+
+    internal async Task<bool> WriteAssetAsync(string route, Func<ReadOnlyMemory<byte>, Task> writeAsync, CancellationToken cancellationToken)
+    {
+        if (!TryGetAsset(route, out var asset))
+        {
+            return false;
+        }
+
+        await asset.Context.OnGet(new AssetGetContext
+        {
+            Route = route,
+            Services = _serviceProvider,
+            WriteAsync = writeAsync,
+            CancellationToken = cancellationToken
+        }).ConfigureAwait(false);
+
+        return true;
+    }
+
     // For testing.
     internal List<Interaction> GetCurrentInteractions()
     {
@@ -288,6 +431,82 @@ internal class InteractionService : IInteractionService
         interactionState.State = Interaction.InteractionState.Complete;
         interactionState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true });
         AddInteractionUpdate(interactionState);
+
+        if (interactionState.InteractionInfo is Interaction.PageInteractionInfo pageInfo)
+        {
+            CancelPageInteraction(pageInfo);
+        }
+    }
+
+    private void RemovePageRegistration(RegisteredPage registeredPage)
+    {
+        List<Interaction> activePageInteractions;
+
+        lock (_onInteractionUpdatedLock)
+        {
+            if (!_pageRegistrations.TryGetValue(registeredPage.Route, out var currentRegistration) ||
+                !ReferenceEquals(currentRegistration, registeredPage))
+            {
+                return;
+            }
+
+            _pageRegistrations.Remove(registeredPage.Route);
+
+            activePageInteractions = _interactionCollection
+                .Where(i => i.InteractionInfo is Interaction.PageInteractionInfo pageInfo &&
+                    string.Equals(pageInfo.Route, registeredPage.Route, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        foreach (var interaction in activePageInteractions)
+        {
+            OnInteractionCancellation(interaction);
+        }
+
+        registeredPage.Cts.Cancel();
+        registeredPage.Cts.Dispose();
+    }
+
+    private static void CancelPageInteraction(Interaction.PageInteractionInfo pageInfo)
+    {
+        try
+        {
+            pageInfo.Cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        pageInfo.Cts.Dispose();
+    }
+
+    private sealed class InteractionRegistration(InteractionService service, Interaction interaction, CancellationTokenSource cts) : IDisposable
+    {
+        public void Dispose()
+        {
+            service.OnInteractionCancellation(interaction);
+            cts.Cancel();
+            cts.Dispose();
+        }
+    }
+
+    private sealed class PageRegistration(InteractionService service, RegisteredPage registeredPage) : IDisposable
+    {
+        public void Dispose()
+        {
+            service.RemovePageRegistration(registeredPage);
+        }
+    }
+
+    private sealed class AssetRegistration(InteractionService service, string route) : IDisposable
+    {
+        public void Dispose()
+        {
+            lock (service._onInteractionUpdatedLock)
+            {
+                service._assetRegistrations.Remove(route);
+            }
+        }
     }
 
     private void AddInteractionUpdate(Interaction interactionUpdate)
@@ -321,6 +540,19 @@ internal class InteractionService : IInteractionService
             {
                 OnInteractionUpdated?.Invoke(interactionUpdate);
             }
+        }
+    }
+
+    private void AddInteraction(Interaction interaction)
+    {
+        lock (_onInteractionUpdatedLock)
+        {
+            if (_interactionCollection.Contains(interaction.InteractionId))
+            {
+                throw new InvalidOperationException($"An interaction with ID {interaction.InteractionId} already exists. Interaction IDs must be unique.");
+            }
+
+            _interactionCollection.Add(interaction);
         }
     }
 
@@ -361,6 +593,8 @@ internal class InteractionService : IInteractionService
             result = new InteractionCompletionState { Complete = false, State = result.State };
         }
 
+        Interaction.PageInteractionInfo? pageInfoToCancel = null;
+
         lock (_onInteractionUpdatedLock)
         {
             // Double check interaction is still in collection after awaiting the result creation.
@@ -374,10 +608,226 @@ internal class InteractionService : IInteractionService
                 interactionState.CompletionTcs.TrySetResult(result);
                 interactionState.State = Interaction.InteractionState.Complete;
                 _interactionCollection.Remove(interactionId);
+
+                if (interactionState.InteractionInfo is Interaction.PageInteractionInfo pageInfo)
+                {
+                    pageInfoToCancel = pageInfo;
+                }
             }
 
             // Either broadcast out the interaction is complete, or its updated state.
             OnInteractionUpdated?.Invoke(interactionState);
+        }
+
+        if (pageInfoToCancel is not null)
+        {
+            CancelPageInteraction(pageInfoToCancel);
+        }
+    }
+
+    internal async Task ProcessPageActionFromClientAsync(int interactionId, string actionName, IReadOnlyDictionary<string, string> arguments, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(actionName);
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        Func<ActionContext, Task>? action = null;
+        string sessionId = null!;
+        CancellationToken sessionToken = default;
+
+        lock (_onInteractionUpdatedLock)
+        {
+            if (!_interactionCollection.TryGetValue(interactionId, out var interactionState))
+            {
+                _logger.LogDebug("No interaction found with ID {InteractionId} for page action '{ActionName}'.", interactionId, actionName);
+                return;
+            }
+
+            if (interactionState.InteractionInfo is not Interaction.PageInteractionInfo pageInfo)
+            {
+                _logger.LogDebug("Interaction {InteractionId} is not a page interaction for page action '{ActionName}'.", interactionId, actionName);
+                return;
+            }
+
+            if (pageInfo.PageOptions.Actions is not { } actions)
+            {
+                _logger.LogDebug("Page interaction {InteractionId} does not define actions for page action '{ActionName}'.", interactionId, actionName);
+                return;
+            }
+
+            foreach (var (name, callback) in actions)
+            {
+                if (string.Equals(name, actionName, StringComparison.OrdinalIgnoreCase))
+                {
+                    action = callback;
+                    break;
+                }
+            }
+
+            if (action is null)
+            {
+                _logger.LogDebug("Page action '{ActionName}' was not found for interaction {InteractionId}.", actionName, interactionId);
+                return;
+            }
+
+            sessionId = pageInfo.SessionId;
+            sessionToken = pageInfo.Cts.Token;
+        }
+
+        var actionArguments = new Dictionary<string, string>(arguments, StringComparer.Ordinal);
+
+        CancellationTokenSource linkedCts;
+        try
+        {
+            linkedCts = CancellationTokenSource.CreateLinkedTokenSource(sessionToken, cancellationToken);
+        }
+        catch (ObjectDisposedException)
+        {
+            // The page session may complete between selecting the action callback and linking tokens.
+            return;
+        }
+
+        using (linkedCts)
+        {
+            try
+            {
+                await action(new ActionContext
+                {
+                    SessionId = sessionId,
+                    Arguments = actionArguments,
+                    CancellationToken = linkedCts.Token
+                }).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (sessionToken.IsCancellationRequested || cancellationToken.IsCancellationRequested)
+            {
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in page action '{ActionName}' callback for session '{SessionId}'.", actionName, sessionId);
+            }
+        }
+    }
+
+    private async Task ProcessPageInteractionAsync(Interaction interactionState, Interaction.PageInteractionInfo pageInfo)
+    {
+        if (pageInfo.PageOptions is IFramePageOptions iframePageOptions)
+        {
+            try
+            {
+            var iframeUrl = iframePageOptions.IFrameUrl;
+            if (iframeUrl is null && iframePageOptions.IFrameEndpoint is { } endpoint)
+                {
+                    var resourceNotificationService = (ResourceNotificationService)_serviceProvider.GetService(typeof(ResourceNotificationService))!;
+
+                    // Continuously monitor the resource health. When unhealthy, remove the iframe
+                    // and wait for it to become healthy again before re-displaying.
+                    while (!pageInfo.Cts.Token.IsCancellationRequested)
+                    {
+                        // Send a "waiting" message to the dashboard while the resource starts up.
+                        lock (pageInfo.Lock)
+                        {
+                            pageInfo.Content = $"Waiting for **{endpoint.Resource.Name}** to be ready...";
+                            pageInfo.IframeUrl = null;
+                            pageInfo.IsWaitingForEndpoint = true;
+                        }
+                        UpdateInteraction(interactionState);
+
+                        // Wait for the resource behind the endpoint to be healthy before displaying
+                        // the iframe. This avoids showing a broken page while the resource starts up.
+                        await resourceNotificationService.WaitForResourceHealthyAsync(
+                            endpoint.Resource.Name, WaitBehavior.WaitOnResourceUnavailable, pageInfo.Cts.Token).ConfigureAwait(false);
+
+                        iframeUrl = await EndpointHostHelpers.GetUrlWithTargetHostAsync(endpoint, pageInfo.Cts.Token).ConfigureAwait(false);
+
+                        if (!string.IsNullOrEmpty(iframeUrl))
+                        {
+                            lock (pageInfo.Lock)
+                            {
+                                pageInfo.Content = string.Empty;
+                                pageInfo.IframeUrl = iframeUrl;
+                                pageInfo.IframePersistent = iframePageOptions.Persistent;
+                                pageInfo.IsWaitingForEndpoint = false;
+                            }
+                            UpdateInteraction(interactionState);
+                        }
+
+                        // Watch for the resource to become unhealthy. When it does, loop back
+                        // to remove the iframe and wait for health again.
+                        await foreach (var resourceEvent in resourceNotificationService.WatchAsync(pageInfo.Cts.Token).ConfigureAwait(false))
+                        {
+                            if (!string.Equals(resourceEvent.Resource.Name, endpoint.Resource.Name, StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+
+                            if (resourceEvent.Snapshot.HealthStatus != HealthStatus.Healthy)
+                            {
+                                // Resource is no longer healthy — break out to re-enter the wait loop.
+                                break;
+                            }
+                        }
+                    }
+                }
+                else if (!string.IsNullOrEmpty(iframeUrl))
+                {
+                    lock (pageInfo.Lock)
+                    {
+                        pageInfo.IframeUrl = iframeUrl;
+                        pageInfo.IframePersistent = iframePageOptions.Persistent;
+                    }
+
+                    UpdateInteraction(interactionState);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when visitor leaves or page is removed.
+            }
+            catch (DistributedApplicationException ex)
+            {
+                _logger.LogWarning(ex, "Resource failed to become healthy for iframe page session '{SessionId}'.", pageInfo.SessionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resolving iframe URL for page session '{SessionId}'.", pageInfo.SessionId);
+            }
+        }
+
+        if (pageInfo.PageOptions is not ContentPageOptions { OnVisit: { } onVisit })
+        {
+            return;
+        }
+
+        var visitContext = new PageVisitContext
+        {
+            SessionId = pageInfo.SessionId,
+            Services = _serviceProvider,
+            QueryParameters = pageInfo.QueryParameters,
+            CancellationToken = pageInfo.Cts.Token,
+            RenderAsync = (content, ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+
+                lock (pageInfo.Lock)
+                {
+                    pageInfo.Content = content;
+                }
+
+                UpdateInteraction(interactionState);
+                return Task.CompletedTask;
+            }
+        };
+
+        try
+        {
+            await onVisit(visitContext).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when visitor leaves or page is removed.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in page OnVisit callback for session '{SessionId}'.", pageInfo.SessionId);
         }
     }
 
@@ -521,7 +971,36 @@ internal class InteractionService : IInteractionService
             throw new InvalidOperationException($"{nameof(InteractionService)} is not available because the dashboard is not enabled or because this command is running in non-interactive CLI mode.");
         }
     }
+
+    private static string NormalizeAssetRoute(string route)
+    {
+        route = route.Trim();
+
+        if (route.StartsWith('/'))
+        {
+            route = route[1..];
+        }
+
+        if (string.IsNullOrWhiteSpace(route))
+        {
+            throw new ArgumentException("Asset route cannot be empty.", nameof(route));
+        }
+
+        // Reject path traversal segments to prevent malicious route registration or lookup.
+        if (route.Contains(".."))
+        {
+            throw new ArgumentException("Asset route cannot contain '..' path traversal segments.", nameof(route));
+        }
+
+        return route;
+    }
 }
+
+internal sealed record RegisteredAsset(string ContentType, AssetContext Context);
+
+internal sealed record RegisteredPage(string Route, PageOptions Options, CancellationTokenSource Cts);
+
+internal sealed record StartedPageInteraction(int InteractionId);
 
 internal class InteractionCollection : KeyedCollection<int, Interaction>
 {
@@ -602,5 +1081,38 @@ internal class Interaction
         }
 
         public InteractionInputCollection Inputs { get; }
+    }
+
+    internal sealed class PageInteractionInfo : InteractionInfoBase
+    {
+        public PageInteractionInfo(string route, PageOptions pageOptions, string sessionId, IReadOnlyDictionary<string, string> queryParameters, CancellationTokenSource cts)
+        {
+            Route = route;
+            PageOptions = pageOptions;
+            SessionId = sessionId;
+            QueryParameters = queryParameters;
+            Cts = cts;
+        }
+
+        public object Lock { get; } = new();
+        public string Route { get; }
+        public PageOptions PageOptions { get; }
+        public string SessionId { get; }
+        public IReadOnlyDictionary<string, string> QueryParameters { get; }
+        public CancellationTokenSource Cts { get; }
+        public string? Content { get; set; }
+        public string? IframeUrl { get; set; }
+        public bool IframePersistent { get; set; }
+        public bool IsWaitingForEndpoint { get; set; }
+    }
+
+    internal sealed class MenuButtonInteractionInfo : InteractionInfoBase
+    {
+        public MenuButtonInteractionInfo(MenuButtonOptions options)
+        {
+            Options = options;
+        }
+
+        public MenuButtonOptions Options { get; }
     }
 }

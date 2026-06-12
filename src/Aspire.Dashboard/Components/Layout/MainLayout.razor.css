@@ -38,6 +38,7 @@
         border-left: 1px solid var(--neutral-stroke-rest);
         display: flex;
         flex: 1;
+        position: relative;
     }
 
     ::deep.layout .layout-sidebar-spacer {
@@ -121,6 +122,7 @@
         overflow-x: auto; /* allow horizontal scrolling */
         overflow: auto;
         border-left: 1px solid var(--neutral-stroke-rest);
+        position: relative;
     }
 
     ::deep.layout > .messagebar-container {

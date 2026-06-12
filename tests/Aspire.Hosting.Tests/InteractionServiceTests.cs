@@ -1144,13 +1144,13 @@ public class InteractionServiceTests
             CancellationToken.None);
     }
 
-    private static InteractionService CreateInteractionService(DistributedApplicationOptions? options = null)
+    private static InteractionService CreateInteractionService(DistributedApplicationOptions? options = null, IServiceProvider? serviceProvider = null)
     {
         var configuration = new ConfigurationBuilder().Build();
         return new InteractionService(
             NullLogger<InteractionService>.Instance,
             options ?? new DistributedApplicationOptions(),
-            new ServiceCollection().BuildServiceProvider(),
+            serviceProvider ?? new ServiceCollection().BuildServiceProvider(),
             configuration);
     }
 }

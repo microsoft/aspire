@@ -1,0 +1,19 @@
+.iframe-wrapper {
+    position: absolute;
+    inset: 0;
+}
+
+.iframe-visible {
+    display: block;
+}
+
+.iframe-hidden {
+    display: none;
+}
+
+.iframe-content {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
