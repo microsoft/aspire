@@ -461,14 +461,29 @@ internal static class Selection
 
         static void WriteOut(StringBuilder builder)
         {
+            var markdown = builder.ToString();
             var summaryPath = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
             if (summaryPath is not null)
             {
-                File.AppendAllText(summaryPath, builder.ToString());
+                File.AppendAllText(summaryPath, markdown);
             }
             else
             {
-                Console.Error.Write(builder.ToString());
+                Console.Error.Write(markdown);
+            }
+
+            // Also emit the full markdown to a standalone file when requested, so the workflow can post
+            // it as a sticky PR comment. The job summary alone is not visible without opening the run,
+            // and the selection (which test projects + jobs run) is the thing reviewers want up front.
+            var commentPath = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            if (!string.IsNullOrEmpty(commentPath))
+            {
+                var dir = Path.GetDirectoryName(Path.GetFullPath(commentPath));
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                File.WriteAllText(commentPath, markdown);
             }
         }
     }

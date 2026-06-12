@@ -11,6 +11,12 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+  # Needed by the "Comment selected tests on PR" step below to post/update the sticky selection
+  # comment. The token is still capped by the caller (ci.yml grants this on the tests job).
+  pull-requests: write
+
 jobs:
   setup_for_tests:
     name: Setup for tests
@@ -84,6 +90,9 @@ jobs:
           # Absolute path so eng/Build.props ($(BeforeBuildPropsPath)) resolves it regardless of cwd.
           # Under artifacts/ (gitignored) so it is not picked up as a source change.
           BEFORE_BUILD_PROPS: ${{ github.workspace }}/artifacts/BeforeBuildProps.props
+          # Where the selector writes the human-readable selection summary so the step below can post
+          # it as a sticky PR comment (the same content also goes to the job step summary).
+          SELECT_TESTS_COMMENT_FILE: ${{ github.workspace }}/artifacts/select-tests-comment.md
           # The ONE audit/enforce knob. 'false' (audit): no restriction props are written, so the
           # enumerate-tests step below builds the FULL matrix and run_* are all true; the advisory
           # summary still reports what enforcing would have skipped. 'true' (enforce): a non-ALL
@@ -128,6 +137,37 @@ jobs:
           # fatal Layer 1 graph failure -- under-selecting would silently skip tests). Let that fail
           # the run rather than mask the bug behind a silent fallback.
           ./dotnet.sh run --project tools/SelectTests/SelectTests.csproj -- "${args[@]}"
+
+      # Post (or update) a sticky PR comment listing which test projects and jobs the selector chose,
+      # so reviewers see the selection without opening the run's job summary. Informational only -- a
+      # token/permission hiccup (e.g. a fork PR with a read-only token) must never fail CI.
+      - name: Comment selected tests on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          SELECT_TESTS_COMMENT_FILE: ${{ github.workspace }}/artifacts/select-tests-comment.md
+        with:
+          script: |
+            const fs = require('fs');
+            const file = process.env.SELECT_TESTS_COMMENT_FILE;
+            if (!file || !fs.existsSync(file)) {
+              core.info(`No selection summary at ${file}; skipping comment.`);
+              return;
+            }
+            const marker = '<!-- select-tests-comment -->';
+            const body = `${marker}\n${fs.readFileSync(file, 'utf8')}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+              core.info(`Updated selection comment ${existing.id}.`);
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+              core.info('Created selection comment.');
+            }
 
       # enumerate-tests reuses this job's checkout + restore (checkout/restore=false) so the props
       # file the selector wrote survives -- a fresh checkout would git-clean it away. When a
