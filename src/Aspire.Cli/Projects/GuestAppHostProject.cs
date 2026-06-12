@@ -242,10 +242,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         var config = LoadConfiguration(directory);
-        return await BuildAndGenerateSdkAsync(directory, config, packageSourceOverride, cancellationToken);
+        return await BuildAndGenerateSdkAsync(directory, config, packageSourceOverride, cancellationToken: cancellationToken);
     }
 
-    private async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, AspireConfigFile config, string? packageSourceOverride = null, CancellationToken cancellationToken = default, OutputCollector? outputCollector = null)
+    private async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, AspireConfigFile config, string? packageSourceOverride = null, OutputCollector? outputCollector = null, CancellationToken cancellationToken = default)
     {
         var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
 
@@ -315,7 +315,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
 
         var config = LoadConfiguration(directory);
-        var success = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken, outputCollector: outputCollector);
+        var success = await BuildAndGenerateSdkAsync(directory, config, outputCollector: outputCollector, cancellationToken: cancellationToken);
         return success ? CliExitCodes.Success : CliExitCodes.FailedToBuildArtifacts;
     }
 
