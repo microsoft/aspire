@@ -829,6 +829,121 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         Assert.Equal("http", dataExplorerEndpoint.UriScheme);
     }
 
+    [Fact]
+    public void RunAsEmulatorUsesStableImageTag()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
+
+        var image = Assert.Single(cosmos.Resource.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("mcr.microsoft.com", image.Registry);
+        Assert.Equal("cosmosdb/linux/azure-cosmos-emulator", image.Image);
+        Assert.Equal("stable", image.Tag);
+    }
+
+    [Fact]
+    public void RunAsPreviewEmulatorUsesVNextLatestImageTag()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator();
+
+        var image = Assert.Single(cosmos.Resource.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("mcr.microsoft.com", image.Registry);
+        Assert.Equal("cosmosdb/linux/azure-cosmos-emulator", image.Image);
+        Assert.Equal("vnext-latest", image.Tag);
+    }
+
+    [Fact]
+    public async Task WithDataVolumeOnVNextEmulatorUsesDataPathWithoutPersistenceEnvVar()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos")
+                           .RunAsPreviewEmulator(e => e.WithDataVolume());
+
+        var mount = Assert.Single(cosmos.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal("/data", mount.Target);
+        Assert.Equal(ContainerMountType.Volume, mount.Type);
+        Assert.False(mount.IsReadOnly);
+
+        // The vNext emulator does not read AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE; persistence is
+        // enabled implicitly by mounting the volume at /data.
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        Assert.DoesNotContain("AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE", config.Keys);
+    }
+
+    [Fact]
+    public async Task WithDataVolumeOnClassicEmulatorUsesAppDataPathWithPersistenceEnvVar()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos")
+                           .RunAsEmulator(e => e.WithDataVolume());
+
+        var mount = Assert.Single(cosmos.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal("/tmp/cosmos/appdata", mount.Target);
+        Assert.Equal(ContainerMountType.Volume, mount.Type);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        Assert.Equal("true", config["AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE"]);
+    }
+
+    [Fact]
+    public void WithPartitionCountThrowsOnVNextEmulator()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos");
+
+        Assert.Throws<NotSupportedException>(() => cosmos.RunAsPreviewEmulator(e => e.WithPartitionCount(10)));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(251)]
+    public void WithPartitionCountThrowsWhenOutOfRange(int count)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos");
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => cosmos.RunAsEmulator(e => e.WithPartitionCount(count)));
+    }
+
+    [Fact]
+    public async Task WithDataExplorerExposesCustomPortAndEnablesExplorer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos")
+                           .RunAsPreviewEmulator(e => e.WithDataExplorer(9999));
+
+        var endpoint = Assert.Single(cosmos.Resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "data-explorer");
+        Assert.Equal(1234, endpoint.TargetPort);
+        Assert.Equal(9999, endpoint.Port);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        Assert.Equal("true", config["ENABLE_EXPLORER"]);
+    }
+
+    [Fact]
+    public void RunAsPreviewEmulatorUsesUrlBasedConnectionString()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator();
+
+        // Unlike the classic emulator (which uses https://{host}:{port};DisableServerCertificateValidation=True),
+        // the vNext emulator uses a URL-based AccountEndpoint whose scheme follows the emulator endpoint.
+        var csExpr = cosmos.Resource.ConnectionStringExpression;
+        Assert.Equal(
+            "AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==;AccountEndpoint={cosmos.bindings.emulator.url}",
+            csExpr.ValueExpression);
+        Assert.DoesNotContain("DisableServerCertificateValidation", csExpr.ValueExpression);
+    }
+
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 }
