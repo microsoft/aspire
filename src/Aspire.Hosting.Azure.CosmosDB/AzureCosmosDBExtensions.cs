@@ -62,13 +62,13 @@ public static class AzureCosmosExtensions
     /// </remarks>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
-        => RunAsEmulator(builder, configureContainer, useVNextPreview: false);
+        => RunAsEmulator(builder, configureContainer, useVNext: false);
 
     /// <summary>
-    /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB Linux-based emulator (preview) with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
+    /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB Linux-based (vNext) emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
     /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator-linux"></a>.
     /// </summary>
-    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the preview emulator</ats-summary>
+    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the Linux-based (vNext) emulator</ats-summary>
     /// <param name="builder">The Azure Cosmos DB resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
@@ -79,9 +79,9 @@ public static class AzureCosmosExtensions
     [AspireExport(RunSyncOnBackgroundThread = true)]
     [Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureCosmosDBResource> RunAsPreviewEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
-        => RunAsEmulator(builder, configureContainer, useVNextPreview: true);
+        => RunAsEmulator(builder, configureContainer, useVNext: true);
 
-    private static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer, bool useVNextPreview)
+    private static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer, bool useVNext)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -90,18 +90,18 @@ public static class AzureCosmosExtensions
             return builder;
         }
 
-        builder.Resource.IsPreviewEmulator = useVNextPreview;
+        builder.Resource.IsVNextEmulator = useVNext;
 
         // Mark this resource as an emulator for consistent resource identification and tooling support
         builder.WithAnnotation(new EmulatorResourceAnnotation());
 
-        var scheme = useVNextPreview ? "http" : null;
+        var scheme = useVNext ? "http" : null;
         builder.WithEndpoint(name: "emulator", scheme: scheme, targetPort: 8081)
                .WithAnnotation(new ContainerImageAnnotation
                {
                    Registry = CosmosDBEmulatorContainerImageTags.Registry,
                    Image = CosmosDBEmulatorContainerImageTags.Image,
-                   Tag = useVNextPreview ? CosmosDBEmulatorContainerImageTags.TagVNextLatest : CosmosDBEmulatorContainerImageTags.Tag
+                   Tag = useVNext ? CosmosDBEmulatorContainerImageTags.TagVNextLatest : CosmosDBEmulatorContainerImageTags.Tag
                });
 
         CosmosClient? cosmosClient = null;
@@ -138,14 +138,14 @@ public static class AzureCosmosExtensions
             }
         });
 
-        if (useVNextPreview)
+        if (useVNext)
         {
             builder.WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 8080)
                 .WithEndpoint(EmulatorHealthEndpointName, e => e.ExcludeReferenceEndpoint = true)
                 .WithHttpHealthCheck(endpointName: EmulatorHealthEndpointName, path: "/ready")
                 .WithUrlForEndpoint(EmulatorHealthEndpointName, u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly);
 
-            // Configure the preview emulator to use an Aspire-managed HTTPS certificate.
+            // Configure the vNext emulator to use an Aspire-managed HTTPS certificate.
             // Use a surrogate builder since AzureCosmosDBResource doesn't implement IResourceWithEnvironment/IResourceWithArgs
             // but AzureCosmosDBEmulatorResource (which extends ContainerResource) does. The surrogate's Annotations
             // delegate to the inner resource, so the annotation ends up on the correct resource.
@@ -244,7 +244,7 @@ public static class AzureCosmosExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var dataPath = builder.Resource.InnerResource.IsPreviewEmulator ? "/data" : "/tmp/cosmos/appdata";
+        var dataPath = builder.Resource.InnerResource.IsVNextEmulator ? "/data" : "/tmp/cosmos/appdata";
 
         return builder.WithEnvironment("AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE", "true")
             .WithVolume(name ?? VolumeNameGenerator.Generate(builder, "data"), dataPath, isReadOnly: false);
@@ -281,9 +281,9 @@ public static class AzureCosmosExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        if (builder.Resource.InnerResource.IsPreviewEmulator)
+        if (builder.Resource.InnerResource.IsVNextEmulator)
         {
-            throw new NotSupportedException($"'{nameof(WithPartitionCount)}' does not work when using the preview version of the Azure Cosmos DB emulator.");
+            throw new NotSupportedException($"'{nameof(WithPartitionCount)}' does not work when using the Linux-based (vNext) Azure Cosmos DB emulator.");
         }
 
         if (count < 1 || count > 250)
@@ -431,7 +431,7 @@ public static class AzureCosmosExtensions
     }
 
     /// <summary>
-    /// Configures the Azure Cosmos DB preview emulator to expose the Data Explorer endpoint.
+    /// Configures the Azure Cosmos DB Linux-based (vNext) emulator to expose the Data Explorer endpoint.
     /// </summary>
     /// <param name="builder">Builder for the Cosmos emulator container</param>
     /// <param name="port">Optional host port to bind the Data Explorer to.</param>
@@ -445,9 +445,9 @@ public static class AzureCosmosExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        if (!builder.Resource.InnerResource.IsPreviewEmulator)
+        if (!builder.Resource.InnerResource.IsVNextEmulator)
         {
-            throw new NotSupportedException($"The Data Explorer endpoint is only available when using the preview version of the Azure Cosmos DB emulator. Call '{nameof(RunAsPreviewEmulator)}' instead.");
+            throw new NotSupportedException($"The Data Explorer endpoint is only available when using the Linux-based (vNext) Azure Cosmos DB emulator. Call '{nameof(RunAsPreviewEmulator)}' instead.");
         }
 
         var result = builder.WithEndpoint(endpointName: KnownUrls.DataExplorer.EndpointName, endpoint =>
