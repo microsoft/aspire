@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resources marked with the ExcludeFromMcp property are now filtered from all CLI MCP tool results, including resource listings, console logs, structured logs, traces, and command execution.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🚫",
+  "firstMergedAt": "2026-06-11T17:36:11Z",
+  "lastMergedAt": "2026-06-11T17:36:11Z",
+  "name": "Resources excluded from MCP tools by ExcludeFromMcp property",
+  "owner": "JamesNK",
+  "prs": [
+    18106
+  ]
+}

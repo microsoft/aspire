@@ -1,0 +1,9 @@
+{
+  "author": "shauryalowkeygotaura",
+  "comment": "Improved CLI version mismatch error messages with actionable update instructions",
+  "mergedAt": "2026-06-11T14:48:01Z",
+  "number": 18067,
+  "runDate": "2026-06-12T00:31:48Z",
+  "status": "included",
+  "title": "Make AppHost/CLI incompatibility error specific and actionable"
+}

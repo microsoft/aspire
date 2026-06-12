@@ -1,0 +1,9 @@
+{
+  "author": "aradalvand",
+  "comment": "New WithModule() API for loading Redis native and custom modules",
+  "mergedAt": "2026-06-11T20:45:31Z",
+  "number": 18025,
+  "runDate": "2026-06-12T00:31:48Z",
+  "status": "included",
+  "title": "add WithModule extension methods to IResourceBuilder<RedisResource>"
+}

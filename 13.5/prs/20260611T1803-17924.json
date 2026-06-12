@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "New proxyless endpoint port allocator with breaking change in allocation timing",
+  "mergedAt": "2026-06-11T18:03:13Z",
+  "number": 17924,
+  "runDate": "2026-06-12T00:31:48Z",
+  "status": "included",
+  "title": "Add proxyless endpoint port allocator"
+}

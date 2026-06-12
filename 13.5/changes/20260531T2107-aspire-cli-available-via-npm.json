@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "The Aspire CLI is now available as an npm package (@microsoft/aspire-cli), providing an alternative installation method. The update command and update notifier now detect and handle npm-installed versions.",
-  "docsPrs": [],
+  "docsPrs": [
+    1243
+  ],
   "docsRequired": true,
-  "emoji": "\ud83d\udce6",
+  "emoji": "📦",
   "firstMergedAt": "2026-05-31T21:07:47Z",
   "lastMergedAt": "2026-05-31T21:07:47Z",
   "name": "Aspire CLI available via npm",

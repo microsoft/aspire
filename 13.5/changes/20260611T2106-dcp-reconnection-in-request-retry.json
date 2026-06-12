@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Reconnecting to the DCP API server is now part of the DCP request retry loop, protecting against timing issues with missing or partially written DCP kubeconfig files on startup.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-06-11T21:06:13Z",
+  "lastMergedAt": "2026-06-11T21:06:13Z",
+  "name": "DCP reconnection included in request retry loop",
+  "owner": "karolz-ms",
+  "prs": [
+    18121
+  ]
+}

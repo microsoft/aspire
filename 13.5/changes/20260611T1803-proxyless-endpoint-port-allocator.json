@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Proxyless endpoints without explicit public ports now receive deterministic host port assignments during DCP service preparation. The allocator scans a configurable port range (default 10000–32767, overridable via ASPIRE_PROXYLESS_ENDPOINT_PORT_RANGE) and persists assigned ports for persistent resources in user secrets.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-06-11T18:03:13Z",
+  "lastMergedAt": "2026-06-11T18:03:13Z",
+  "name": "Consistent port allocation for proxyless endpoints",
+  "owner": "danegsta",
+  "prs": [
+    17924
+  ]
+}

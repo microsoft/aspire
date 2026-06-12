@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Forward-port of PR #18096; fixes DCP reconnection timing issues in request retry",
+  "mergedAt": "2026-06-11T21:06:13Z",
+  "number": 18121,
+  "runDate": "2026-06-12T00:31:48Z",
+  "status": "included",
+  "title": "Re-connecting should be part of DCP request retry"
+}

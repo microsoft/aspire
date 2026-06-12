@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@aradalvand"
+  ],
+  "description": "Redis resources can now load native Redis 8+ modules or custom .so modules using WithModule(). Supported built-in modules include RedisNativeModule.Json and RedisNativeModule.Search. TypeScript polyglot AppHosts get a matching withModule() export.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧩",
+  "firstMergedAt": "2026-06-11T20:45:31Z",
+  "lastMergedAt": "2026-06-11T20:45:31Z",
+  "name": "Redis module support via WithModule()",
+  "owner": "sebastienros",
+  "prs": [
+    18025
+  ]
+}

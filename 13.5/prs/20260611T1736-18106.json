@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "New MCP tool filtering behavior for resources marked with ExcludeFromMcp",
+  "mergedAt": "2026-06-11T17:36:11Z",
+  "number": 18106,
+  "runDate": "2026-06-12T00:31:48Z",
+  "status": "included",
+  "title": "Filter resources with resource.excludeFromMcp from CLI MCP tools"
+}
