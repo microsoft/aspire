@@ -110,7 +110,8 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         await app.StartAsync();
 
-        await app.ResourceNotifications.WaitForResourceAsync("pyproj", KnownResourceStates.Finished).WaitAsync(TimeSpan.FromSeconds(90));
+        var timeout = TimeSpan.FromSeconds(PlatformDetection.IsRunningOnCI ? 180 : 45);
+        await app.ResourceNotifications.WaitForResourceAsync("pyproj", KnownResourceStates.Finished).WaitAsync(timeout);
 
         await app.StopAsync();
 
