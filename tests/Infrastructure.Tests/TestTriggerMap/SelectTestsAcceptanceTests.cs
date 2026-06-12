@@ -601,6 +601,21 @@ public sealed class SelectTestsAcceptanceTests
         Assert.Empty(r.Jobs);
     }
 
+    // Layer 1 reports the full affected set, which can include tests/ projects that are NOT in the
+    // runnable matrix (shared fixtures/helpers like a TestFixtures or testproject project). Those names
+    // are intersected with the matrix before selection, so they must never be selected as a test (only
+    // an affected_project_rule may reference such a name by name). Failure mode: a non-runnable project
+    // leaking into the matrix.
+    [Fact]
+    public void Layer1AffectedNonMatrixTestNameIsNotSelected()
+    {
+        var r = Select([], layer1: ["TestFixtures.Shared", "testproject"]);
+
+        Assert.False(r.SelectsAll);
+        Assert.Empty(r.TestProjects);
+        Assert.Empty(r.Jobs);
+    }
+
     // --- H. Real-map invariant smoke (computed from the filesystem; no hardcoded names) ------
 
     [Fact]

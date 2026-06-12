@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.SelectTests;
+using System.Diagnostics;
 using Xunit;
 
 namespace Infrastructure.Tests.TestTriggerMap;
@@ -107,6 +108,75 @@ public sealed class GraphAffectedProjectsTests
         Assert.Empty(affected);
     }
 
+    // Failure mode: a change to a repo build file imported by every project (Directory.Build.props,
+    // and by the same mechanism eng/Versions.props etc., captured via ProjectInstance.ImportPaths) is
+    // not attributed to the projects that import it, so a global build/version change silently runs no
+    // tests. It must fan out to every importing project. (The file lives at the repo root, under no
+    // project dir, so ONLY the ImportPaths index — not the containment fallback — can catch it.)
+    [Fact]
+    public void ChangeToImportedBuildPropsAffectsImportingProjects()
+    {
+        using var repo = new GraphFixture();
+
+        var affected = repo.Compute("Directory.Build.props");
+
+        Assert.Contains("Core", affected);
+        Assert.Contains("Mid", affected);
+        Assert.Contains("AppTests", affected);
+        Assert.Contains("Other", affected);
+    }
+
+    // Failure mode: an empty diff (e.g. a PR whose changed-file set resolved to nothing) builds the
+    // graph and/or throws instead of cheaply returning "nothing affected". It must short-circuit to an
+    // empty set so the selector falls through to Layer 2 alone.
+    [Fact]
+    public void EmptyChangeSetSelectsNothing()
+    {
+        using var repo = new GraphFixture();
+
+        var affected = repo.Compute();
+
+        Assert.Empty(affected);
+    }
+
+    // Failure mode: a deleted/unmodeled file under a project that is itself nested inside another
+    // project's directory is attributed to the OUTER (parent-dir) project, over-selecting the parent's
+    // dependents and missing the real owner. The longest-directory-first containment fallback must pick
+    // the deepest (most specific) owning project. Nested is isolated, so only it should be affected.
+    [Fact]
+    public void DeletedFileInNestedProjectDirAttributedToDeepestProject()
+    {
+        using var repo = new GraphFixture();
+
+        // Ghost.cs never existed and sits under Core/Nested (a project nested below Core/).
+        var affected = repo.Compute("Core/Nested/Ghost.cs");
+
+        Assert.Contains("Nested", affected);
+        Assert.DoesNotContain("Core", affected);
+        Assert.DoesNotContain("Mid", affected);
+        Assert.DoesNotContain("AppTests", affected);
+    }
+
+    // Failure mode: a cross-project rename (git -M reports one record "R<sim> <old> <new>") is parsed
+    // as only one path, so the project that LOST the file (old side) is not marked changed and its
+    // dependents' tests are silently skipped. data.txt is not a declared item, so neither side touches
+    // a .csproj — the attribution comes purely from parsing BOTH paths of the rename record plus the
+    // directory-containment fallback. Exercises the git diff path (GetChangedPathsFromGit), which the
+    // changed-files fixtures never reach.
+    [Fact]
+    public void CrossProjectRenameAttributesBothOldAndNewOwners()
+    {
+        using var repo = new GitGraphFixture();
+
+        var affected = repo.RenameAcrossProjectsAndCompute("Core/data.txt", "Other/data.txt");
+
+        // Old owner (Core) and its dependents, plus the new owner (Other).
+        Assert.Contains("Core", affected);
+        Assert.Contains("Mid", affected);
+        Assert.Contains("AppTests", affected);
+        Assert.Contains("Other", affected);
+    }
+
     /// <summary>
     /// Creates a disposable temp directory containing a minimal but real MSBuild project graph plus an
     /// <c>Aspire.slnx</c>, and runs <see cref="GraphAffectedProjects.Compute"/> against it using a
@@ -141,6 +211,11 @@ public sealed class GraphAffectedProjectsTests
             Write("Other/Other.cs", "namespace Other; public class O { }");
             WriteProject("Other/Other.csproj", compiles: ["Other.cs", @"..\Shared\Linked.cs"], references: []);
 
+            // Nested: an isolated project that lives UNDER Core's directory, so the containment
+            // fallback must prefer it over Core for files under Core/Nested.
+            Write("Core/Nested/Nested.cs", "namespace Nested; public class N { }");
+            WriteProject("Core/Nested/Nested.csproj", compiles: ["Nested.cs"], references: []);
+
             Write("Aspire.slnx",
                 """
                 <Solution>
@@ -148,6 +223,7 @@ public sealed class GraphAffectedProjectsTests
                   <Project Path="Mid/Mid.csproj" />
                   <Project Path="AppTests/AppTests.csproj" />
                   <Project Path="Other/Other.csproj" />
+                  <Project Path="Core/Nested/Nested.csproj" />
                 </Solution>
                 """);
         }
@@ -186,6 +262,130 @@ public sealed class GraphAffectedProjectsTests
                   </ItemGroup>
                 </Project>
                 """);
+        }
+
+        public void Dispose() => _temp.Dispose();
+    }
+
+    /// <summary>
+    /// A real git repo containing the same minimal project graph, used to exercise the git diff path
+    /// (<c>git diff --name-status -M</c>) — including rename records — that the changed-files fixture
+    /// cannot reach.
+    /// </summary>
+    private sealed class GitGraphFixture : IDisposable
+    {
+        private readonly TestTempDirectory _temp = new();
+
+        public GitGraphFixture()
+        {
+            Write("Directory.Build.props", "<Project />");
+            Write("Directory.Build.targets", "<Project />");
+
+            Write("Shared/Linked.cs", "namespace Shared; public static class Linked { }");
+
+            Write("Core/Core.cs", "namespace Core; public class C { }");
+            WriteProject("Core/Core.csproj", compiles: ["Core.cs", @"..\Shared\Linked.cs"], references: []);
+
+            Write("Mid/Mid.cs", "namespace Mid; public class M { }");
+            WriteProject("Mid/Mid.csproj", compiles: ["Mid.cs"], references: [@"..\Core\Core.csproj"]);
+
+            Write("AppTests/AppTests.cs", "namespace AppTests; public class T { }");
+            WriteProject("AppTests/AppTests.csproj", compiles: ["AppTests.cs"], references: [@"..\Mid\Mid.csproj"]);
+
+            Write("Other/Other.cs", "namespace Other; public class O { }");
+            WriteProject("Other/Other.csproj", compiles: ["Other.cs"], references: []);
+
+            // A loose, non-declared file (not a <Compile>/<Content> item). It is attributed purely by
+            // directory containment, so renaming it touches no .csproj — isolating the rename-record
+            // parse from any project-file edit.
+            Write("Core/data.txt", "payload");
+
+            Write("Aspire.slnx",
+                """
+                <Solution>
+                  <Project Path="Core/Core.csproj" />
+                  <Project Path="Mid/Mid.csproj" />
+                  <Project Path="AppTests/AppTests.csproj" />
+                  <Project Path="Other/Other.csproj" />
+                </Solution>
+                """);
+
+            Git("init", "-q", "-b", "main");
+            Git("config", "user.email", "test@example.com");
+            Git("config", "user.name", "Test");
+            Git("config", "commit.gpgsign", "false");
+            Git("add", "-A");
+            Git("commit", "-q", "-m", "base");
+        }
+
+        /// <summary>
+        /// Renames <paramref name="oldRelativePath"/> to <paramref name="newRelativePath"/> in a new
+        /// commit, then computes the affected set for <c>base..HEAD</c> via the git diff path.
+        /// </summary>
+        public IReadOnlyCollection<string> RenameAcrossProjectsAndCompute(string oldRelativePath, string newRelativePath)
+        {
+            var baseSha = Git("rev-parse", "HEAD");
+
+            var newFull = System.IO.Path.Combine(_temp.Path, newRelativePath.Replace('/', System.IO.Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(newFull)!);
+            Git("mv", oldRelativePath, newRelativePath);
+            Git("commit", "-q", "-m", "rename across projects");
+
+            return GraphAffectedProjects.Compute(_temp.Path, from: baseSha, to: "HEAD", changedFilesPath: null);
+        }
+
+        private void Write(string relativePath, string contents)
+        {
+            var fullPath = System.IO.Path.Combine(_temp.Path, relativePath.Replace('\\', System.IO.Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(fullPath)!);
+            File.WriteAllText(fullPath, contents);
+        }
+
+        private void WriteProject(string relativePath, string[] compiles, string[] references)
+        {
+            var items = string.Join(Environment.NewLine,
+                compiles.Select(c => $"""    <Compile Include="{c}" Link="{System.IO.Path.GetFileName(c)}" />""")
+                    .Concat(references.Select(r => $"""    <ProjectReference Include="{r}" />""")));
+
+            Write(relativePath,
+                $"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+                  </PropertyGroup>
+                  <ItemGroup>
+                {items}
+                  </ItemGroup>
+                </Project>
+                """);
+        }
+
+        private string Git(params string[] args)
+        {
+            var psi = new ProcessStartInfo("git")
+            {
+                WorkingDirectory = _temp.Path,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            psi.ArgumentList.Add("--no-pager");
+            foreach (var arg in args)
+            {
+                psi.ArgumentList.Add(arg);
+            }
+
+            using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start git.");
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({process.ExitCode}): {stderr}");
+            }
+
+            return stdout.Trim();
         }
 
         public void Dispose() => _temp.Dispose();
