@@ -673,6 +673,38 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task RunAsPreviewEmulatorCertificateTrustCallbackSetsNodeExtraCaCerts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var cosmos = builder.AddAzureCosmosDB("cosmos")
+                           .RunAsPreviewEmulator();
+
+        var trustConfigAnnotation = Assert.Single(
+            cosmos.Resource.Annotations.OfType<CertificateTrustConfigurationCallbackAnnotation>());
+
+        var env = new Dictionary<string, object>();
+        var bundlePath = ReferenceExpression.Create($"/certs/bundle.pem");
+
+        var context = new CertificateTrustConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            Resource = cosmos.Resource,
+            Arguments = new List<object>(),
+            EnvironmentVariables = env,
+            CertificateBundlePath = bundlePath,
+            CertificateDirectoriesPath = ReferenceExpression.Create($"/certs"),
+            Scope = CertificateTrustScope.Append,
+            CancellationToken = CancellationToken.None
+        };
+
+        await trustConfigAnnotation.Callback(context);
+
+        // The vNext emulator's Node-based Data Explorer trusts the Aspire-managed certificate bundle via NODE_EXTRA_CA_CERTS.
+        Assert.True(env.TryGetValue("NODE_EXTRA_CA_CERTS", out var caCerts));
+        Assert.Same(bundlePath, caCerts);
+    }
+
+    [Fact]
     public async Task RunAsPreviewEmulatorHttpsCertificateCallbackSetsPasswordWhenProvided()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
