@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.CosmosDB;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.CosmosDB;
@@ -885,9 +886,11 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         var mount = Assert.Single(cosmos.Resource.Annotations.OfType<ContainerMountAnnotation>());
         Assert.Equal("/tmp/cosmos/appdata", mount.Target);
         Assert.Equal(ContainerMountType.Volume, mount.Type);
+        Assert.False(mount.IsReadOnly);
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
-        Assert.Equal("true", config["AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE"]);
+        Assert.True(config.TryGetValue("AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE", out var persistence));
+        Assert.Equal("true", persistence);
     }
 
     [Fact]
@@ -925,7 +928,8 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         Assert.Equal(9999, endpoint.Port);
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
-        Assert.Equal("true", config["ENABLE_EXPLORER"]);
+        Assert.True(config.TryGetValue("ENABLE_EXPLORER", out var enableExplorer));
+        Assert.Equal("true", enableExplorer);
     }
 
     [Fact]
@@ -939,9 +943,34 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         // the vNext emulator uses a URL-based AccountEndpoint whose scheme follows the emulator endpoint.
         var csExpr = cosmos.Resource.ConnectionStringExpression;
         Assert.Equal(
-            "AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==;AccountEndpoint={cosmos.bindings.emulator.url}",
+            $"AccountKey={CosmosConstants.EmulatorAccountKey};AccountEndpoint={{cosmos.bindings.emulator.url}}",
             csExpr.ValueExpression);
         Assert.DoesNotContain("DisableServerCertificateValidation", csExpr.ValueExpression);
+    }
+
+    [Fact]
+    public async Task RunAsPreviewEmulatorDisablesDataExplorerByDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator();
+
+        // The vNext image enables the Data Explorer by default; Aspire disables it unless WithDataExplorer is called.
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        Assert.True(config.TryGetValue("ENABLE_EXPLORER", out var enableExplorer));
+        Assert.Equal("false", enableExplorer);
+    }
+
+    [Fact]
+    public async Task RunAsEmulatorDoesNotSetEnableExplorer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
+
+        // ENABLE_EXPLORER is a vNext-only concept; the classic emulator should not have it set.
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(cosmos.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+        Assert.DoesNotContain("ENABLE_EXPLORER", config.Keys);
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]

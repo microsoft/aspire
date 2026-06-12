@@ -152,6 +152,13 @@ public static class AzureCosmosExtensions
             var emulatorSurrogate = new AzureCosmosDBEmulatorResource(builder.Resource);
             var emulatorSurrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(emulatorSurrogate);
 
+            // The vNext image enables the Data Explorer by default (ENABLE_EXPLORER=true). That runs an
+            // otherwise-unused Node process and, because the emulator's readiness probe is
+            // "ready = postgres && gateway && (explorer || !ENABLE_EXPLORER)", it makes /ready wait on the
+            // explorer even when it is never exposed. Disable it by default; WithDataExplorer re-enables it
+            // later through configureContainer (environment callbacks are last-write-wins).
+            emulatorSurrogateBuilder.WithEnvironment("ENABLE_EXPLORER", "false");
+
             // VNext cosmosdb sets a default CERT_SECRET environment variable for the default emulator certificate and we can't
             // remove it, so we need to provide "some" secret value to avoid issues with our provided certificate. This simply sets the
             // dev cert used by cosmos to have a stable passphrase. Users can override by calling `WithHttpsDeveloperCertificate` again
