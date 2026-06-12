@@ -41,6 +41,17 @@ jobs:
         with:
           global-json-file: ${{ github.workspace }}/global.json
 
+      # [EXPERIMENT] Cache the repo-local .dotnet (arcade installs the SDK + the 8 runtime toolsets
+      # listed in global.json tools.runtimes here, ~40s of the restore bootstrap). Unlike the global
+      # NuGet packages folder (multi-GB, a net loss to cache), .dotnet is ~450MB. Keyed on global.json
+      # + eng/Versions.props (the runtime versions resolve from $(DotNetRuntime*VersionForTesting)).
+      # On a hit, arcade finds the SDK/runtimes already present and skips the installs.
+      - name: Cache .dotnet toolsets
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ github.workspace }}/.dotnet
+          key: dotnet-${{ runner.os }}-${{ hashFiles('global.json', 'eng/Versions.props') }}
+
       # [EXPERIMENT] Restrict restore to the test-project graph. The default restore pulls all 415
       # repo projects, incl. the native CLI (Aspire.Cli ~10s), Aspire.TerminalHost (~10s), the
       # per-RID dcppack/dashboardpack packaging projects, and playground apps -- none of which
