@@ -59,15 +59,6 @@ internal sealed class IntegrationClosureRestorer(
     IDotNetCliRunner dotNetCliRunner,
     ILogger<IntegrationClosureRestorer> logger) : IIntegrationClosureRestorer
 {
-    // Closure file names + project-file XML emission live on IntegrationClosureBuilder so they
-    // stay in lock-step with PrebuiltAppHostServer (the polyglot path emits the same files and
-    // we'd silently miss entries if these drifted).
-    internal const string IntegrationRestoreFolderName = IntegrationClosureBuilder.IntegrationRestoreFolderName;
-    internal const string ClosureMetadataFileName = IntegrationClosureBuilder.ClosureMetadataFileName;
-    internal const string ClosureSourcesFileName = IntegrationClosureBuilder.ClosureSourcesFileName;
-    internal const string ClosureTargetsFileName = IntegrationClosureBuilder.ClosureTargetsFileName;
-    internal const string ProjectRefAssemblyNamesFileName = IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName;
-
     public async Task<bool> RestoreAsync(FileInfo appHostFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken)
     {
         // Honor the caller-supplied PackageSourceOverride during module regeneration so that
@@ -131,7 +122,7 @@ internal sealed class IntegrationClosureRestorer(
         CancellationToken cancellationToken)
     {
         var workingDirectory = GetOrCreateWorkingDirectory(appHostFile);
-        var restoreDir = Path.Combine(workingDirectory.FullName, IntegrationRestoreFolderName);
+        var restoreDir = Path.Combine(workingDirectory.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
         Directory.CreateDirectory(restoreDir);
 
         if (options.BuildModule)

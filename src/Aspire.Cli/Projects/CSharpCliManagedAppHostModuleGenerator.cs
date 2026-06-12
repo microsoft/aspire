@@ -74,7 +74,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         }
 
         var workingDirectory = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
-        var integrationRestoreDir = Path.Combine(workingDirectory.FullName, IntegrationClosureRestorer.IntegrationRestoreFolderName);
+        var integrationRestoreDir = Path.Combine(workingDirectory.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
         Directory.CreateDirectory(integrationRestoreDir);
 
         IReadOnlyList<string> additionalSources = restoreSources.PackageSourceMappings is null

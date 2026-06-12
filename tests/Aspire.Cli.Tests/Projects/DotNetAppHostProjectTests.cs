@@ -2140,12 +2140,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     private static void WriteEmptyIntegrationClosureFiles(FileInfo appHostFile)
     {
         var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
-        var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureRestorer.IntegrationRestoreFolderName);
+        var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
         Directory.CreateDirectory(restoreDir);
-        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureSourcesFileName), string.Empty);
-        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureMetadataFileName), string.Empty);
-        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ClosureTargetsFileName), string.Empty);
-        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureRestorer.ProjectRefAssemblyNamesFileName), string.Empty);
+        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureSourcesFileName), string.Empty);
+        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureMetadataFileName), string.Empty);
+        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureTargetsFileName), string.Empty);
+        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName), string.Empty);
     }
 
     private static void WriteAspireConfigJson(string directory, string content)
