@@ -42,6 +42,19 @@ jobs:
       # everything this job needs; a setup-dotnet step would just download the SDK a second time into
       # a location nothing reads. (run-tests.yml keeps setup-dotnet only for tests that run outside
       # the repo, gated on requiresNugets.)
+
+      # [EXPERIMENT] Cache the repo-local .dotnet (SDK + the 8 runtime toolsets that restore.sh
+      # bootstraps from global.json tools.runtimes). The key tracks the SDK version (global.json) and
+      # the runtime toolset versions (eng/Versions.props drives the global.json $(DotNetRuntime*)
+      # placeholders), so a version bump invalidates the cache. On a hit, restore.sh finds
+      # .dotnet/sdk/<version> already present and skips the SDK install + toolset bootstrap; it still
+      # restores NuGet packages (not cached here -- see closed #18145, NuGet cache was a net loss).
+      - name: Cache .dotnet
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .dotnet
+          key: dotnet-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('global.json', 'eng/Versions.props') }}
+
       - name: Restore
         shell: bash
         run: ./restore.sh
