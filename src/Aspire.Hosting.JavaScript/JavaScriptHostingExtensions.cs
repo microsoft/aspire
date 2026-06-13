@@ -271,6 +271,13 @@ public static partial class JavaScriptHostingExtensions
 
                         if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
+                            if (resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsBuildCtx) &&
+                                wsBuildCtx.Workspace.GetBuildDependenciesCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName) is { } depBuildArgs)
+                            {
+                                builderStage.EmptyLine()
+                                    .Run(string.Join(' ', depBuildArgs));
+                            }
+
                             builderStage.EmptyLine()
                                 .Run(BuildPackageScriptCommand(packageManager, buildCommand, resource));
                         }
@@ -638,6 +645,13 @@ public static partial class JavaScriptHostingExtensions
 
                         if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
+                            if (resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsBuildCtx) &&
+                                wsBuildCtx.Workspace.GetBuildDependenciesCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName) is { } depBuildArgs)
+                            {
+                                builderStage.EmptyLine()
+                                    .Run(string.Join(' ', depBuildArgs));
+                            }
+
                             builderStage.EmptyLine()
                                 .Run(BuildPackageScriptCommand(packageManager, buildCommand, resource));
                         }
@@ -1856,6 +1870,12 @@ public static partial class JavaScriptHostingExtensions
 
                         if (c.Resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
+                            if (c.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsBuildCtx) &&
+                                wsBuildCtx.Workspace.GetBuildDependenciesCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName) is { } depBuildArgs)
+                            {
+                                dockerBuilder.Run(string.Join(' ', depBuildArgs));
+                            }
+
                             dockerBuilder.Run(BuildPackageScriptCommand(packageManager, buildCommand, c.Resource));
                         }
 

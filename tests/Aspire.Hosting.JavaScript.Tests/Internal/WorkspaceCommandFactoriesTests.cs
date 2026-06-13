@@ -22,10 +22,24 @@ public class WorkspaceCommandFactoriesTests
     }
 
     [Fact]
-    public void PnpmUsesTopologicalFilterSuffix()
+    public void PnpmScopesRunToSingleMember()
     {
-        var argv = WorkspaceCommandFactories.Pnpm("web", "build", []);
-        Assert.Equal(["pnpm", "--filter", "web...", "run", "build"], argv);
+        var argv = WorkspaceCommandFactories.Pnpm("web", "dev", ["--port", "5173"]);
+        // The topological "..." suffix must never appear on the script command: it would run the
+        // script in every workspace dependency AND forward the trailing args to all of them
+        // (ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL when a dependency's script rejects them).
+        Assert.Equal(["pnpm", "--filter", "web", "run", "dev", "--port", "5173"], argv);
+    }
+
+    [Fact]
+    public void PnpmBuildDependenciesSelectsDependenciesOnlyInTopologicalOrder()
+    {
+        var argv = WorkspaceCommandFactories.PnpmBuildDependencies("web", "build");
+        // "<name>^..." selects the member's workspace dependencies EXCLUDING the member itself,
+        // and carries no user args, so dependency scripts never see the member's build args.
+        // "--if-present" prevents ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT when none of the selected
+        // dependencies defines the script (not every workspace package needs a build script).
+        Assert.Equal(["pnpm", "--filter", "web^...", "run", "--if-present", "build"], argv);
     }
 
     [Fact]
