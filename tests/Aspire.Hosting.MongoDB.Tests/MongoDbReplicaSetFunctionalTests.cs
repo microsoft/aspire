@@ -18,12 +18,12 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
     private const string CollectionName = "movie_collection";
 
     private static readonly Movie[] s_movies =
-        [
-            new() { Name = "The Shawshank Redemption"},
-            new() { Name = "The Godfather"},
-            new() { Name = "The Dark Knight"},
-            new() { Name = "Schindler's List"},
-        ];
+    [
+        new() { Name = "The Shawshank Redemption"},
+        new() { Name = "The Godfather"},
+        new() { Name = "The Dark Knight"},
+        new() { Name = "Schindler's List"},
+    ];
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]

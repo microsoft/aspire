@@ -31,7 +31,19 @@ public static class MongoDBReplicaSetBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        var replicaSet = new MongoDBReplicaSetResource(name);
+        var replicaSet = new MongoDBReplicaSetResource(
+            name: name,
+            keyFile: ParameterResourceBuilderExtensions.CreateGeneratedParameter(
+                builder,
+                $"{name}-keyfile-content",
+                secret: true,
+                new GenerateParameterDefault
+                {
+                    MinLength = 32,
+                    Special = false,
+                }
+            )
+        );
 
         builder.Eventing.Subscribe<ResourceReadyEvent>(replicaSet, async (@event, ct) =>
         {
@@ -143,7 +155,9 @@ public static class MongoDBReplicaSetBuilderExtensions
         IResourceBuilder<MongoDBServerResource> member
     )
     {
-        member.WithReplicaSet(builder.Resource.Name);
+        member
+            .WithReplicaSet(builder.Resource.Name)
+            .WithKeyFile(builder.Resource.SharedKeyFileParameter);
 
         return builder
             .WithAnnotation(new MongoReplicaSetMemberAnnotation(member.Resource))
