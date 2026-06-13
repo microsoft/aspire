@@ -98,7 +98,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// pre-selected, which is what <c>aspire init</c> wants because aspireify is the natural follow-up.
     /// Other callers (e.g. <c>aspire new</c>) can pass a predicate to additionally filter out skills that
     /// don't fit their context (such as one-time setup skills after a template has already produced the AppHost).
-    /// Callers that expose <c>--skills</c> can pass <paramref name="skillsBinding"/> so the chained
+    /// Callers that expose <c>--skill-locations</c> and <c>--skills</c> can pass
+    /// <paramref name="skillLocationsBinding"/> and <paramref name="skillsBinding"/> so the chained
     /// execution reuses the same non-interactive selection semantics as standalone <c>aspire agent init</c>.
     /// </summary>
     internal async Task<AgentInitExecutionResult> PromptAndChainAsync(
