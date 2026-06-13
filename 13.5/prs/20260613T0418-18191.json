@@ -1,0 +1,9 @@
+{
+  "author": "nanookclaw",
+  "comment": "Adds --skills flag to aspire init, enabling non-interactive flows to control skill installation",
+  "mergedAt": "2026-06-13T04:18:47Z",
+  "number": 18191,
+  "runDate": "2026-06-13T07:15:08Z",
+  "status": "included",
+  "title": "Add --skills flag to aspire init"
+}

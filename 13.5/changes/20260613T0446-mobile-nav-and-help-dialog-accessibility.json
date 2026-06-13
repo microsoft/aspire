@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard mobile navigation now shows a visible checkmark for the active page and stays within the viewport at high zoom levels. The Help dialog keyboard shortcuts now use semantic term/definition pairs for improved screen reader compatibility.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "♿",
+  "firstMergedAt": "2026-06-13T04:46:29Z",
+  "lastMergedAt": "2026-06-13T04:46:29Z",
+  "name": "Mobile navigation and Help dialog accessibility improvements",
+  "owner": "adamint",
+  "prs": [
+    17927
+  ]
+}
