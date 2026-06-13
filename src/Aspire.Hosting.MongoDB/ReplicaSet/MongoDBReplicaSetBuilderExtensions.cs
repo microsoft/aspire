@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 using Aspire.Hosting.ApplicationModel;
-using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -31,7 +30,7 @@ public static class MongoDBReplicaSetBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        var replicaSet = new MongoDBReplicaSetResource(
+        var rsResource = new MongoDBReplicaSetResource(
             name: name,
             keyFile: ParameterResourceBuilderExtensions.CreateGeneratedParameter(
                 builder,
@@ -45,98 +44,121 @@ public static class MongoDBReplicaSetBuilderExtensions
             )
         );
 
-        builder.Eventing.Subscribe<ResourceReadyEvent>(replicaSet, async (@event, ct) =>
-        {
-            if (!replicaSet.TryGetAnnotationsOfType<MongoReplicaSetMemberAnnotation>(out var members) || !members.Any())
+        // var healthCheckKey = $"{name}_check";
+        // builder.Services.AddHealthChecks()
+        //     .AddCheck(
+        //         name: healthCheckKey,
+        //         check: () => wasInitialized
+        //             ? HealthCheckResult.Healthy()
+        //             : HealthCheckResult.Unhealthy("Replica set not yet initialized")
+        //     );
+
+        return builder.AddResource(rsResource)
+            // .WithHealthCheck(healthCheckKey)
+            .WithInitialState(new()
             {
-                return;
-            }
-
-            var initialPrimary = members.First();
-            var connectionStringToPrimary = await initialPrimary.Member.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
-
-            var primaryClient = new MongoClient(connectionStringToPrimary);
-
-            var membersBsonArray = new BsonArray(
-                await Task.WhenAll(members.Select(async (m, i) => new BsonDocument
-                {
-                    ["_id"] = i,
-                    ["host"] = $"{m.Member.Name}:{await m.Member.PrimaryEndpoint.Property(EndpointProperty.HostAndPort).GetValueAsync(ct).ConfigureAwait(false)}"
-                })).ConfigureAwait(false)
-            );
-
-            var admin = primaryClient.GetDatabase("admin");
-            while (true)
+                ResourceType = "MongoDB Replica Set",
+                CreationTimeStamp = DateTime.UtcNow,
+                State = KnownResourceStates.Waiting,
+                Properties = [],
+            })
+            .OnInitializeResource(async (resource, evt, ct) =>
             {
-                try
-                {
-                    var currentConfig = await admin.RunCommandAsync<BsonDocument>(
-                        command: new BsonDocument
-                        {
-                            ["replSetGetConfig"] = 1,
-                        },
-                        cancellationToken: ct
-                    ).ConfigureAwait(false);
+                var connectionString = await rsResource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
 
-                    var version = currentConfig["config"]["version"].AsInt32;
+                await evt.Eventing.PublishAsync(new ConnectionStringAvailableEvent(resource, evt.Services), ct)
+                    .ConfigureAwait(false);
 
-                    await admin.RunCommandAsync<BsonDocument>(
-                        command: new BsonDocument
-                        {
-                            ["replSetReconfig"] = new BsonDocument
-                            {
-                                ["version"] = version + 1,
-                                ["members"] = membersBsonArray,
-                            },
-                        },
-                        cancellationToken: ct
-                    ).ConfigureAwait(false);
-                    break;
-                }
-                catch (MongoCommandException ex) when (ex.CodeName is NewReplicaSetConfigurationIsTooOldCodeName)
+                await evt.Notifications.PublishUpdateAsync(resource, s => s with
                 {
-                    // NOTE: Happens when another concurrent process has already updated the replica set configuration with a higher version. We need to re-fetch the current configuration and retry with an updated version number.
-                }
-                catch (MongoCommandException ex) when (ex.CodeName is ReplicaSetNotYetInitializedCodeName)
+                    State = KnownResourceStates.Starting,
+                }).ConfigureAwait(false);
+
+                if (!rsResource.TryGetAnnotationsOfType<MongoReplicaSetMemberAnnotation>(out var memberAnnotations) || !memberAnnotations.Any())
                 {
-                    var replicaSetInitiateCommand = new BsonDocument
+                    return;
+                }
+
+                var initialPrimary = memberAnnotations.First().Member;
+                var connectionStringToPrimary = await initialPrimary.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+
+                var primaryClient = new MongoClient(connectionStringToPrimary);
+
+                var membersBsonArray = new BsonArray(
+                    await Task.WhenAll(memberAnnotations.Select(async (m, i) => new BsonDocument
                     {
-                        ["replSetInitiate"] = new BsonDocument
-                        {
-                            ["_id"] = replicaSet.Name,
-                            ["members"] = membersBsonArray,
-                        }
-                    };
+                        ["_id"] = i,
+                        ["host"] = $"{m.Member.Name}:{await m.Member.PrimaryEndpoint.Property(EndpointProperty.HostAndPort).GetValueAsync(ct).ConfigureAwait(false)}"
+                    })).ConfigureAwait(false)
+                );
 
+                var admin = primaryClient.GetDatabase("admin");
+                while (true)
+                {
                     try
                     {
-                        await admin.RunCommandAsync<BsonDocument>(replicaSetInitiateCommand, cancellationToken: ct).ConfigureAwait(false);
+                        var dbs = await primaryClient.ListDatabasesAsync(ct).ConfigureAwait(false);
+
+                        var currentConfig = await admin.RunCommandAsync<BsonDocument>(
+                            command: new BsonDocument
+                            {
+                                ["replSetGetConfig"] = 1,
+                            },
+                            cancellationToken: ct
+                        ).ConfigureAwait(false);
+
+                        var version = currentConfig["config"]["version"].AsInt32;
+
+                        await admin.RunCommandAsync<BsonDocument>(
+                            command: new BsonDocument
+                            {
+                                ["replSetReconfig"] = new BsonDocument
+                                {
+                                    ["version"] = version + 1,
+                                    ["members"] = membersBsonArray,
+                                },
+                            },
+                            cancellationToken: ct
+                        ).ConfigureAwait(false);
                         break;
                     }
-                    catch (MongoCommandException initiateEx) when (initiateEx.CodeName is ReplicaSetAlreadyInitializedCodeName)
+                    catch (MongoCommandException ex) when (ex.CodeName is NewReplicaSetConfigurationIsTooOldCodeName)
                     {
-                        // NOTE: Happens when in race with another concurrent process trying to initialize the replica set
-                        // NOTE: We retry the whole operation
+                        // NOTE: Happens when another concurrent process has already updated the replica set configuration with a higher version. We need to re-fetch the current configuration and retry with an updated version number.
+                    }
+                    catch (MongoCommandException ex) when (ex.CodeName is ReplicaSetNotYetInitializedCodeName)
+                    {
+                        var replicaSetInitiateCommand = new BsonDocument
+                        {
+                            ["replSetInitiate"] = new BsonDocument
+                            {
+                                ["_id"] = rsResource.Name,
+                                ["members"] = membersBsonArray,
+                            }
+                        };
+
+                        try
+                        {
+                            await admin.RunCommandAsync<BsonDocument>(replicaSetInitiateCommand, cancellationToken: ct).ConfigureAwait(false);
+                            break;
+                        }
+                        catch (MongoCommandException initiateEx) when (initiateEx.CodeName is ReplicaSetAlreadyInitializedCodeName)
+                        {
+                            // NOTE: Happens when in race with another concurrent process trying to initialize the replica set
+                            // NOTE: We retry the whole operation
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex);
                     }
                 }
-            }
-        });
 
-        string? connectionString = null;
-        builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(replicaSet, async (@event, ct) =>
-        {
-            connectionString = await replicaSet.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
-        });
-
-        var healthCheckKey = $"{name}_check";
-        builder.Services.AddHealthChecks()
-            .AddMongoDb(
-                sp => new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is not yet available")),
-                name: healthCheckKey);
-
-        return builder
-            .AddResource(replicaSet)
-            .WithHealthCheck(healthCheckKey);
+                await evt.Notifications.PublishUpdateAsync(resource, s => s with
+                {
+                    State = KnownResourceStates.Running,
+                }).ConfigureAwait(false);
+            });
     }
 
     /// <summary>

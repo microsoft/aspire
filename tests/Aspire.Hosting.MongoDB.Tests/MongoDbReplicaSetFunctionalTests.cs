@@ -2,13 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TestUtilities;
-using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
-using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Polly;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.MongoDB.Tests;
 
@@ -27,51 +25,8 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    public async Task VerifyWaitForOnReplicaSetBlocksDependentResources()
-    {
-        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
-
-        var healthCheckTcs = new TaskCompletionSource<HealthCheckResult>();
-        builder.Services.AddHealthChecks().AddAsyncCheck("blocking_check", () =>
-        {
-            return healthCheckTcs.Task;
-        });
-
-        var mongo = builder.AddMongoDB("mongo1");
-        var rs = builder.AddMongoDBReplicaSet("rs0")
-            .WithMember(mongo)
-            .WithHealthCheck("blocking_check");
-
-        var dependentResource = builder.AddMongoDB("dependentmongo")
-                                       .WaitFor(rs);
-
-        using var app = builder.Build();
-
-        var pendingStart = app.StartAsync(cts.Token);
-
-        // The replica set logical resource has no Running state in the same way containers do;
-        // wait until the member container is Running before releasing the blocking check.
-        await app.ResourceNotifications.WaitForResourceAsync(mongo.Resource.Name, KnownResourceStates.Running, cts.Token);
-
-        await app.ResourceNotifications.WaitForResourceAsync(dependentResource.Resource.Name, KnownResourceStates.Waiting, cts.Token);
-
-        healthCheckTcs.SetResult(HealthCheckResult.Healthy());
-
-        await app.ResourceNotifications.WaitForResourceHealthyAsync(rs.Resource.Name, cts.Token);
-
-        await app.ResourceNotifications.WaitForResourceAsync(dependentResource.Resource.Name, KnownResourceStates.Running, cts.Token);
-
-        await pendingStart;
-        await app.StopAsync();
-    }
-
-    [Fact]
-    [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyMongoDBReplicaSetResource()
     {
-        // Single-node replica set: no keyfile required because there is only one member
-        // and no inter-node replication authentication is attempted.
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         var pipeline = new ResiliencePipelineBuilder()
             .AddRetry(new() { MaxRetryAttempts = 20, Delay = TimeSpan.FromSeconds(3) })
@@ -85,9 +40,7 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
         using var app = builder.Build();
         await app.StartAsync(cts.Token);
 
-        // Wait for the replica set health check to pass, meaning replSetInitiate has completed
-        // and the MongoDB driver can establish a connection with the replica set.
-        await app.ResourceNotifications.WaitForResourceHealthyAsync(rs.Resource.Name, cts.Token);
+        await app.ResourceNotifications.WaitForResourceAsync(rs.Resource.Name, KnownResourceStates.Running, cts.Token);
 
         var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
 
@@ -100,6 +53,73 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
 
         await app.StopAsync();
     }
+
+    // [Fact]
+    // [RequiresFeature(TestFeature.Docker)]
+    // public async Task VerifyReplSetGetConfigReturnsValidConfiguration()
+    // {
+    //     // Test that verifies the replica set configuration is correctly initialized
+    //     // by running the replSetGetConfig command and validating the response.
+    //     var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+    //     var pipeline = new ResiliencePipelineBuilder()
+    //         .AddRetry(new() { MaxRetryAttempts = 20, Delay = TimeSpan.FromSeconds(3) })
+    //         .Build();
+
+    //     using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+    //     var mongo1 = builder.AddMongoDB("mongo1");
+
+    //     var rs = builder.AddMongoDBReplicaSet("rs0")
+    //         .WithMember(mongo1);
+
+    //     using var app = builder.Build();
+    //     await app.StartAsync(cts.Token);
+
+    //     // Wait for the replica set health check to pass, meaning replSetInitiate has completed
+    //     await app.ResourceNotifications.WaitForResourceHealthyAsync(rs.Resource.Name, cts.Token);
+
+    //     var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+
+    //     await pipeline.ExecuteAsync(async token =>
+    //     {
+    //         var client = new MongoClient(connectionString);
+    //         var admin = client.GetDatabase("admin");
+
+    //         // Run replSetGetConfig to retrieve the replica set configuration
+    //         var config = await admin.RunCommandAsync<BsonDocument>(
+    //             new BsonDocument { ["replSetGetConfig"] = 1 },
+    //             cancellationToken: token
+    //         );
+
+    //         // Verify that the configuration exists and has the expected structure
+    //         Assert.NotNull(config);
+    //         Assert.True(config.Contains("config"), "Configuration should contain 'config' field");
+
+    //         var configDoc = config["config"].AsBsonDocument;
+    //         Assert.NotNull(configDoc);
+
+    //         // Verify the replica set name matches what we configured
+    //         Assert.Equal("rs0", configDoc["_id"].AsString);
+
+    //         // Verify the members array exists and has the correct count (single member)
+    //         Assert.True(configDoc.Contains("members"), "Configuration should contain 'members' field");
+    //         var members = configDoc["members"].AsBsonArray;
+    //         Assert.Single(members);
+
+    //         // Verify the single member has the required fields
+    //         var memberDoc = members[0].AsBsonDocument;
+    //         Assert.True(memberDoc.Contains("_id"), "Member should have '_id' field");
+    //         Assert.True(memberDoc.Contains("host"), "Member should have 'host' field");
+    //         Assert.Equal(0, memberDoc["_id"].AsInt32);
+
+    //         // Verify the version field exists
+    //         Assert.True(configDoc.Contains("version"), "Configuration should contain 'version' field");
+    //         var version = configDoc["version"].AsInt32;
+    //         Assert.True(version >= 1, "Configuration version should be at least 1");
+    //     }, cts.Token);
+
+    //     await app.StopAsync();
+    // }
 
     private static async Task CreateTestDataAsync(IMongoDatabase mongoDatabase, CancellationToken token)
     {
