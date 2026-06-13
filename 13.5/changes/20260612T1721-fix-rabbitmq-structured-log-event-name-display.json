@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@alirezafzali"
+  ],
+  "description": "RabbitMQ log entries no longer show misleading level names ('Error', 'Warn', 'Info') as the event name in the Aspire dashboard structured log view. The event name is now left unset, with log level still flowing correctly via LogLevel.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-06-12T17:21:14Z",
+  "lastMergedAt": "2026-06-12T17:21:14Z",
+  "name": "Fix RabbitMQ structured log event name display",
+  "owner": "radical",
+  "prs": [
+    17355
+  ]
+}

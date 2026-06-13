@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Temporary CI maintenance change, no user-facing impact",
+  "mergedAt": "2026-06-12T21:06:37Z",
+  "number": 18171,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "excluded",
+  "title": "ci: temporarily force-rerun all failed CI jobs"
+}

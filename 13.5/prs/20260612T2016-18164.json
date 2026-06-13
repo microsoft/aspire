@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Release engineering pipeline fix, no direct user-facing product change",
+  "mergedAt": "2026-06-12T20:16:48Z",
+  "number": 18164,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "excluded",
+  "title": "Port npm release pipeline fixes to main"
+}

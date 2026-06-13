@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only fix for flaky test, no user-facing impact",
+  "mergedAt": "2026-06-12T17:18:42Z",
+  "number": 18159,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "excluded",
+  "title": "Fix flaky GetRpcClientAsync server-exit timing test"
+}

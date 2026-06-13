@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CI workflow maintenance: updates github-script to Node 24 compatible version, no user-facing impact",
+  "mergedAt": "2026-06-12T18:07:58Z",
+  "number": 16901,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "excluded",
+  "title": "Update all workflow files to use Node 24-compatible github-script"
+}

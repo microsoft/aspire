@@ -1,0 +1,9 @@
+{
+  "author": "alirezafzali",
+  "comment": "Bug fix: RabbitMQ log forwarder was emitting misleading level names as event name in structured logs",
+  "mergedAt": "2026-06-12T17:21:14Z",
+  "number": 17355,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "included",
+  "title": "Fix RabbitMQ log forwarder EventId names in structured logs"
+}

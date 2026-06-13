@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dependency version bump for Spectre.Console, not user-facing",
+  "mergedAt": "2026-06-12T14:41:04Z",
+  "number": 18154,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "excluded",
+  "title": "Update Spectre.Console to 0.57.0"
+}

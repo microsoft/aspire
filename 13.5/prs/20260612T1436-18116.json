@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only change: fixes a flaky test timeout, no user-facing impact",
+  "mergedAt": "2026-06-12T14:36:01Z",
+  "number": 18116,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "excluded",
+  "title": "Fix PythonResourceFinishesSuccessfully test timeout (#8466)"
+}

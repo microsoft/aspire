@@ -1,0 +1,9 @@
+{
+  "author": "guanzhousongmicrosoft",
+  "comment": "Fix: restores Cosmos DB preview emulator access by updating retired container image tag",
+  "mergedAt": "2026-06-12T15:11:01Z",
+  "number": 18158,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "included",
+  "title": "Update Cosmos DB preview emulator tag to vnext-latest"
+}

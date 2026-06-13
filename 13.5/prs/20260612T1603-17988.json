@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "New feature: Azure resource scope support for cross-subscription and cross-resource-group deployments",
+  "mergedAt": "2026-06-12T16:03:34Z",
+  "number": 17988,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "included",
+  "title": "Add Azure resource scope support"
+}

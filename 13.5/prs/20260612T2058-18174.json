@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Agentic workflow tooling upgrade, no user-facing product change",
+  "mergedAt": "2026-06-12T20:58:53Z",
+  "number": 18174,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "excluded",
+  "title": "Upgrade gh-aw to v0.79.6 and recompile workflows"
+}

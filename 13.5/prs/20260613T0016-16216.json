@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency bump in playground app, not user-facing",
+  "mergedAt": "2026-06-13T00:16:00Z",
+  "number": 16216,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "excluded",
+  "title": "Bump python-multipart from 0.0.20 to 0.0.26 in /playground/FoundryAgentBasic/app in the uv group across 1 directory"
+}

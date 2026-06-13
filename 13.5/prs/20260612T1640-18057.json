@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal CI build maintenance, no user-facing impact",
+  "mergedAt": "2026-06-12T16:40:56Z",
+  "number": 18057,
+  "runDate": "2026-06-13T00:32:43Z",
+  "status": "excluded",
+  "title": "[ci] Make internal build robust to download failures"
+}
