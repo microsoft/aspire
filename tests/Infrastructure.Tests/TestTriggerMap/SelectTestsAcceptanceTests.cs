@@ -440,6 +440,83 @@ public sealed class SelectTestsAcceptanceTests
         Assert.Empty(r.Jobs);
     }
 
+    // --- F2. Cause attribution (the "why") --------------------------------------------------
+
+    [Fact]
+    public void PathRuleCauseCarriesTheChangedFile()
+    {
+        var r = Select(["eng/installer/manifest.yml"]);
+
+        var cause = Assert.Single(r.TestCauses["InstallerTests"]);
+        Assert.Equal(CauseKind.PathRule, cause.Kind);
+        Assert.Equal("eng/installer/manifest.yml", cause.Trigger);
+    }
+
+    [Fact]
+    public void ConventionCauseCarriesTheChangedFile()
+    {
+        var r = Select(["src/Components/Foo/Bar.cs"]);
+
+        var cause = Assert.Single(r.TestCauses["Foo.Tests"]);
+        Assert.Equal(CauseKind.Convention, cause.Kind);
+        Assert.Equal("src/Components/Foo/Bar.cs", cause.Trigger);
+    }
+
+    [Fact]
+    public void Layer1GraphCauseNamesTheAffectedTestProject()
+    {
+        var r = Select(["src/OwnedProj/Thing.cs"], layer1: ["Layer1Only"], projectDirs: ["src/OwnedProj"]);
+
+        var cause = Assert.Single(r.TestCauses["Layer1Only"]);
+        Assert.Equal(CauseKind.Layer1Graph, cause.Kind);
+        Assert.Equal("Layer1Only", cause.Trigger);
+    }
+
+    [Fact]
+    public void AffectedProjectCauseNamesTheMatchedProject()
+    {
+        var r = Select(["src/OwnedProj/Thing.cs"], layer1: ["Aspire.ProjCli"], projectDirs: ["src/OwnedProj"]);
+
+        var cause = Assert.Single(r.JobCauses["job:projjob"]);
+        Assert.Equal(CauseKind.AffectedProject, cause.Kind);
+        Assert.Equal("Aspire.ProjCli", cause.Trigger);
+    }
+
+    [Fact]
+    public void DerivedJobCauseNamesTheTriggeringTestProject()
+    {
+        // A job pulled in purely because a test project is selected: tests/CliTests/** -> test:CliTests
+        // (convention) -> job:cli-starter (derived_targets). The cause must say "via test CliTests".
+        var r = Select(["tests/CliTests/Foo.cs"]);
+
+        var cause = Assert.Single(r.JobCauses["job:cli-starter"]);
+        Assert.Equal(CauseKind.DerivedFromTest, cause.Kind);
+        Assert.Equal("CliTests", cause.Trigger);
+    }
+
+    [Fact]
+    public void ItemSelectedByTwoTriggersRecordsBothCauses()
+    {
+        // job:installer is hit by two distinct changed files; both must be attributed.
+        var r = Select(["eng/installer/a.yml", "src/OwnedProj/x.cs"], layer1: ["Aspire.ProjCli"], projectDirs: ["src/OwnedProj"]);
+
+        // job:projjob comes from the affected project; job:installer from the path rule. Each has its
+        // own distinct cause kind.
+        Assert.Equal(CauseKind.PathRule, Assert.Single(r.JobCauses["job:installer"]).Kind);
+        Assert.Equal(CauseKind.AffectedProject, Assert.Single(r.JobCauses["job:projjob"]).Kind);
+    }
+
+    [Fact]
+    public void SelectsAllTracksNoPerItemCauses()
+    {
+        var r = Select(["global.json"]);
+
+        Assert.True(r.SelectsAll);
+        Assert.Empty(r.TestCauses);
+        Assert.Empty(r.JobCauses);
+        Assert.NotNull(r.EscalationReason);
+    }
+
     // --- G. test_self / curated_jobs / loose_file_deps --------------------------------------
 
     [Fact]

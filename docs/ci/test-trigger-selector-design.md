@@ -334,10 +334,18 @@ Audit mode computes the subset and writes a `$GITHUB_STEP_SUMMARY`, but CI still
 runs the full matrix and all jobs. The summary shows:
 
 - the invocation mode and change source;
-- selected test projects and triggered jobs;
+- selected test projects and triggered jobs, each annotated with **why** it was
+  selected — the changed file, affected project, graph edge, or selected test
+  that pulled it in, plus the curated rule's `reason` text;
 - the would-have-been-skipped list;
 - any `ALL` or kill-switch escalation and why;
 - unattributed changed files that may need curated rules.
+
+The sticky PR comment carries the same selection in a terser form: each test
+project and job is listed with its single most-direct cause (e.g. a job pulled
+in only because a test runs reads `via test <Name>`), with a `(+N more)` tail
+when an item has several causes. The full per-item cause list, including the
+rule `reason`, stays in the step summary.
 
 Any audit run where a would-be-skipped test would have failed is a map bug,
 fixed before enforcing. Once audit data shows the skip set is consistently safe,

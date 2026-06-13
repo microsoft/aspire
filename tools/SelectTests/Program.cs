@@ -406,10 +406,8 @@ internal static class Selection
         else
         {
             var tests = result.TestProjects.OrderBy(p => p, StringComparer.Ordinal).ToList();
-            var jobs = result.Jobs
-                .Select(j => j.StartsWith("job:", StringComparison.Ordinal) ? j["job:".Length..] : j)
-                .OrderBy(j => j, StringComparer.Ordinal)
-                .ToList();
+            // Keep the full job: tokens for cause lookup; strip the prefix only for display.
+            var jobs = result.Jobs.OrderBy(j => j, StringComparer.Ordinal).ToList();
 
             sb.AppendLine(CultureInfo.InvariantCulture, $"**Test projects ({tests.Count} / {allTestProjects.Count})**");
             sb.AppendLine();
@@ -421,7 +419,7 @@ internal static class Selection
             {
                 foreach (var t in tests)
                 {
-                    sb.AppendLine(CultureInfo.InvariantCulture, $"- `{t}`");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"- `{t}`{PrimaryCauseSuffix(result.TestCauses, t)}");
                 }
             }
             sb.AppendLine();
@@ -434,9 +432,10 @@ internal static class Selection
             }
             else
             {
-                foreach (var j in jobs)
+                foreach (var token in jobs)
                 {
-                    sb.AppendLine(CultureInfo.InvariantCulture, $"- `{j}`");
+                    var name = token.StartsWith("job:", StringComparison.Ordinal) ? token["job:".Length..] : token;
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"- `{name}`{PrimaryCauseSuffix(result.JobCauses, token)}");
                 }
             }
         }
@@ -521,16 +520,52 @@ internal static class Selection
         var skipped = allTestProjects.Except(result.TestProjects, StringComparer.Ordinal)
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToList();
+        var jobTokens = result.Jobs.OrderBy(j => j, StringComparer.Ordinal).ToList();
 
         sb.AppendLine(CultureInfo.InvariantCulture, $"- selected test projects: {selected.Count} / {allTestProjects.Count}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- triggered jobs: {(result.Jobs.Count == 0 ? "(none)" : string.Join(", ", result.Jobs.OrderBy(j => j, StringComparer.Ordinal)))}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- triggered jobs: {(jobTokens.Count == 0 ? "(none)" : string.Join(", ", jobTokens))}");
         sb.AppendLine();
-        AppendProjectList(sb, "Selected test projects", selected);
+
+        // Each selected test project / job is listed with the full set of reasons it was selected
+        // (the changed file, affected project, graph edge, or selected test that pulled it in, plus
+        // the curated rule's reason text). This is the "why" an auditor needs to trust the selection.
+        AppendCauseList(sb, "Selected test projects", selected, p => p, result.TestCauses);
+        AppendCauseList(
+            sb,
+            "Triggered jobs",
+            jobTokens,
+            t => t.StartsWith("job:", StringComparison.Ordinal) ? t["job:".Length..] : t,
+            result.JobCauses);
         // In enforcing mode the unselected projects are actually skipped; in audit mode the full matrix
         // still runs, so they only "would have been" skipped.
         AppendProjectList(sb, options.Enforce ? "Skipped (not run)" : "Would have been skipped", skipped);
 
         WriteOut(sb);
+
+        static void AppendCauseList(
+            StringBuilder builder,
+            string title,
+            IReadOnlyList<string> keys,
+            Func<string, string> display,
+            IReadOnlyDictionary<string, IReadOnlyList<Cause>> causes)
+        {
+            builder.AppendLine(CultureInfo.InvariantCulture, $"<details><summary>{title} ({keys.Count})</summary>");
+            builder.AppendLine();
+            foreach (var key in keys)
+            {
+                builder.AppendLine(CultureInfo.InvariantCulture, $"- `{display(key)}`");
+                if (causes.TryGetValue(key, out var list))
+                {
+                    foreach (var cause in list.OrderBy(c => CausePriority(c.Kind)))
+                    {
+                        builder.AppendLine(CultureInfo.InvariantCulture, $"  - {VerboseCause(cause)}");
+                    }
+                }
+            }
+            builder.AppendLine();
+            builder.AppendLine("</details>");
+            builder.AppendLine();
+        }
 
         static void AppendProjectList(StringBuilder builder, string title, IReadOnlyList<string> projects)
         {
@@ -558,6 +593,65 @@ internal static class Selection
                 Console.Error.Write(markdown);
             }
         }
+    }
+
+    // Renders the single most-direct cause for the terse PR comment, with a "(+N more)" tail when an
+    // item has several causes. Returns "" when nothing attributed the item (e.g. an ALL selection,
+    // where per-item causes aren't tracked).
+    private static string PrimaryCauseSuffix(IReadOnlyDictionary<string, IReadOnlyList<Cause>> causes, string key)
+    {
+        if (!causes.TryGetValue(key, out var list) || list.Count == 0)
+        {
+            return "";
+        }
+
+        var primary = list.OrderBy(c => CausePriority(c.Kind)).First();
+        var extra = list.Count - 1;
+        var tail = extra > 0 ? $" (+{extra} more)" : "";
+        return $" — {ShortCause(primary)}{tail}";
+    }
+
+    // Lower = more "direct" / closer to the change, so it's the cause shown first in the comment and
+    // listed first in the summary: a literal changed file beats an affected-project edge beats a
+    // graph edge beats a test-derived pull.
+    private static int CausePriority(CauseKind kind) => kind switch
+    {
+        CauseKind.Convention => 0,
+        CauseKind.PathRule => 1,
+        CauseKind.AffectedProject => 2,
+        CauseKind.Layer1Graph => 3,
+        CauseKind.DerivedFromTest => 4,
+        _ => 5,
+    };
+
+    // Terse, one-line cause for the PR comment (no rule reason text).
+    private static string ShortCause(Cause cause) => cause.Kind switch
+    {
+        CauseKind.Convention => $"`{cause.Trigger}`",
+        CauseKind.PathRule => $"`{cause.Trigger}`",
+        CauseKind.AffectedProject => $"affected project `{cause.Trigger}`",
+        CauseKind.Layer1Graph => "changed source (graph)",
+        CauseKind.DerivedFromTest => $"via test `{cause.Trigger}`",
+        _ => cause.Trigger,
+    };
+
+    // Full cause for the step summary, including the curated rule reason when present.
+    private static string VerboseCause(Cause cause)
+    {
+        var head = cause.Kind switch
+        {
+            CauseKind.Convention => $"convention match `{cause.Trigger}`",
+            CauseKind.PathRule => $"path rule `{cause.Trigger}`",
+            CauseKind.AffectedProject => $"affected project `{cause.Trigger}`",
+            CauseKind.Layer1Graph => "affected by changed source (graph closure)",
+            CauseKind.DerivedFromTest => $"derived from selected test `{cause.Trigger}`",
+            _ => cause.Trigger,
+        };
+
+        // Map reasons can be YAML folded scalars spanning lines; collapse to one line for the bullet.
+        return string.IsNullOrWhiteSpace(cause.Reason)
+            ? head
+            : $"{head} — {string.Join(' ', cause.Reason!.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))}";
     }
 
     private static string RunProcess(

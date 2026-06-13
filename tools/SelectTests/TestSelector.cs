@@ -13,6 +13,41 @@ namespace Aspire.SelectTests;
 public sealed record SelectorOptions(bool ForceAll = false);
 
 /// <summary>
+/// Why a single test project or job was selected — the trigger that pulled it in, so the PR comment
+/// and step summary can explain the selection instead of listing bare names. One selected item can
+/// have several causes (e.g. a job hit directly by a changed file <em>and</em> derived from a
+/// selected test); the selector records all of them.
+/// </summary>
+public enum CauseKind
+{
+    /// <summary>A changed file matched a <c>conventions</c> capture pattern (<see cref="Cause.Trigger"/> is the file).</summary>
+    Convention,
+
+    /// <summary>A changed file matched a <c>path_rules</c> glob (<see cref="Cause.Trigger"/> is the file; <see cref="Cause.Reason"/> is the rule's <c>reason</c>).</summary>
+    PathRule,
+
+    /// <summary>An affected production project matched an <c>affected_project_rules</c> glob (<see cref="Cause.Trigger"/> is the project name).</summary>
+    AffectedProject,
+
+    /// <summary>The Layer 1 MSBuild graph marked this test project affected by a changed source file (<see cref="Cause.Trigger"/> is the project name).</summary>
+    Layer1Graph,
+
+    /// <summary>A selected test project pulled this in via <c>derived_targets</c> (<see cref="Cause.Trigger"/> is the triggering test project).</summary>
+    DerivedFromTest,
+}
+
+/// <summary>
+/// A single reason a test project or job was selected.
+/// </summary>
+/// <param name="Kind">Which selection mechanism fired.</param>
+/// <param name="Trigger">
+/// The thing that triggered it: a changed file path, an affected project name, or — for
+/// <see cref="CauseKind.DerivedFromTest"/> — the selected test project that pulled this in.
+/// </param>
+/// <param name="Reason">The curated <c>reason</c> string from the map rule, when the rule carries one.</param>
+public sealed record Cause(CauseKind Kind, string Trigger, string? Reason = null);
+
+/// <summary>
 /// The outcome of selecting which CI work to run for a set of changed files.
 /// </summary>
 /// <param name="SelectsAll">
@@ -29,12 +64,23 @@ public sealed record SelectorOptions(bool ForceAll = false);
 /// raw set is still the early-warning signal for a loose, non-project dependency that needs a
 /// curated rule.
 /// </param>
+/// <param name="TestCauses">
+/// Per-selected-test-project attribution: why each entry of <see cref="TestProjects"/> was selected.
+/// Empty when <see cref="SelectsAll"/> is true (the whole matrix runs; <see cref="EscalationReason"/>
+/// is the single explanation).
+/// </param>
+/// <param name="JobCauses">
+/// Per-selected-job attribution (keyed by the full <c>job:</c> token): why each entry of
+/// <see cref="Jobs"/> was selected. Empty when <see cref="SelectsAll"/> is true.
+/// </param>
 public sealed record SelectionResult(
     bool SelectsAll,
     IReadOnlySet<string> TestProjects,
     IReadOnlySet<string> Jobs,
     string? EscalationReason,
-    IReadOnlySet<string> UnmatchedFiles);
+    IReadOnlySet<string> UnmatchedFiles,
+    IReadOnlyDictionary<string, IReadOnlyList<Cause>> TestCauses,
+    IReadOnlyDictionary<string, IReadOnlyList<Cause>> JobCauses);
 
 /// <summary>
 /// Filters the full CI matrix down to the subset relevant to a PR's changed files, using the
@@ -84,8 +130,10 @@ public sealed class TestSelector
     {
         var map = TriggerMap.Load(_mapPath);
 
-        var testProjects = new HashSet<string>(StringComparer.Ordinal);
-        var jobs = new HashSet<string>(StringComparer.Ordinal);
+        // name -> the reasons it was selected. The key set IS the selected set; the lists carry the
+        // attribution surfaced in the PR comment / step summary.
+        var testCauses = new Dictionary<string, List<Cause>>(StringComparer.Ordinal);
+        var jobCauses = new Dictionary<string, List<Cause>>(StringComparer.Ordinal);
         var unmatchedFiles = new HashSet<string>(StringComparer.Ordinal);
         var selectsAll = false;
         string? reason = null;
@@ -115,7 +163,7 @@ public sealed class TestSelector
                     var project = StripTestPrefix(target);
                     if (_allTestProjects.Contains(project))
                     {
-                        testProjects.Add(project);
+                        AddCause(testCauses, project, new Cause(CauseKind.Convention, file));
                         fileMatched = true;
                     }
                 }
@@ -126,7 +174,8 @@ public sealed class TestSelector
             {
                 if (rule.Paths.Any(g => TriggerMap.GlobMatches(g, file)))
                 {
-                    ApplyTargets(rule.Targets, map, testProjects, jobs, ref selectsAll, ref reason, file);
+                    ApplyTargets(rule.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
+                        new Cause(CauseKind.PathRule, file, rule.Reason));
                     fileMatched = true;
                 }
             }
@@ -164,7 +213,7 @@ public sealed class TestSelector
         {
             if (_allTestProjects.Contains(project))
             {
-                testProjects.Add(project);
+                AddCause(testCauses, project, new Cause(CauseKind.Layer1Graph, project));
             }
         }
 
@@ -175,45 +224,74 @@ public sealed class TestSelector
         // produced none (e.g. --skip-layer1) -- the path_rules still cover the loose-file triggers.
         foreach (var rule in map.AffectedProjectRules)
         {
-            if (layer1Affected.Any(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name))))
+            // Attribute the rule to the first affected project that matched it, so the cause names a
+            // concrete project rather than the rule's whole glob set.
+            var matchedProject = layer1Affected.FirstOrDefault(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name)));
+            if (matchedProject is not null)
             {
-                ApplyTargets(rule.Targets, map, testProjects, jobs, ref selectsAll, ref reason, "(affected project)");
+                ApplyTargets(rule.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
+                    new Cause(CauseKind.AffectedProject, matchedProject, rule.Reason));
             }
         }
 
         if (selectsAll)
         {
-            // ALL = full matrix + all jobs. Replace any partial set so the result is exactly the
-            // universe the caller passed in (the matrix and the map's full job vocabulary).
-            return new SelectionResult(
-                SelectsAll: true,
-                TestProjects: new HashSet<string>(_allTestProjects, StringComparer.Ordinal),
-                Jobs: new HashSet<string>(map.AllJobTokens(), StringComparer.Ordinal),
-                EscalationReason: reason ?? "full matrix selected",
-                UnmatchedFiles: unmatchedFiles);
+            return SelectsAllResult(reason, unmatchedFiles);
         }
 
         // derived_targets: a selected test project (from Layer 1 or Layer 2) can pull in extra
         // jobs/tests. Iterate to a fixpoint so a test->test edge whose target has its own derived
         // rule is followed; a no-growth pass terminates (cycle-safe).
-        ApplyDerivedTargets(map, testProjects, jobs, ref selectsAll, ref reason);
+        ApplyDerivedTargets(map, testCauses, jobCauses, ref selectsAll, ref reason);
 
         if (selectsAll)
         {
-            return new SelectionResult(
-                SelectsAll: true,
-                TestProjects: new HashSet<string>(_allTestProjects, StringComparer.Ordinal),
-                Jobs: new HashSet<string>(map.AllJobTokens(), StringComparer.Ordinal),
-                EscalationReason: reason ?? "full matrix selected",
-                UnmatchedFiles: unmatchedFiles);
+            return SelectsAllResult(reason, unmatchedFiles);
         }
 
         return new SelectionResult(
             SelectsAll: false,
-            TestProjects: testProjects,
-            Jobs: jobs,
+            TestProjects: testCauses.Keys.ToHashSet(StringComparer.Ordinal),
+            Jobs: jobCauses.Keys.ToHashSet(StringComparer.Ordinal),
             EscalationReason: null,
-            UnmatchedFiles: unmatchedFiles);
+            UnmatchedFiles: unmatchedFiles,
+            TestCauses: Freeze(testCauses),
+            JobCauses: Freeze(jobCauses));
+
+        // ALL = full matrix + all jobs. Replace any partial set so the result is exactly the universe
+        // the caller passed in (the matrix and the map's full job vocabulary). Per-item causes are not
+        // tracked under ALL: the whole matrix runs and EscalationReason is the single explanation.
+        SelectionResult SelectsAllResult(string? escalationReason, IReadOnlySet<string> unmatched) =>
+            new(
+                SelectsAll: true,
+                TestProjects: new HashSet<string>(_allTestProjects, StringComparer.Ordinal),
+                Jobs: new HashSet<string>(map.AllJobTokens(), StringComparer.Ordinal),
+                EscalationReason: escalationReason ?? "full matrix selected",
+                UnmatchedFiles: unmatched,
+                TestCauses: s_emptyCauses,
+                JobCauses: s_emptyCauses);
+    }
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<Cause>> s_emptyCauses =
+        new Dictionary<string, IReadOnlyList<Cause>>(StringComparer.Ordinal);
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<Cause>> Freeze(Dictionary<string, List<Cause>> causes) =>
+        causes.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Cause>)kv.Value, StringComparer.Ordinal);
+
+    // Records one reason a test project / job was selected, de-duplicating identical causes (e.g. the
+    // same derived rule re-fires across fixpoint passes).
+    private static void AddCause(Dictionary<string, List<Cause>> causes, string key, Cause cause)
+    {
+        if (!causes.TryGetValue(key, out var list))
+        {
+            list = new List<Cause>();
+            causes[key] = list;
+        }
+
+        if (!list.Contains(cause))
+        {
+            list.Add(cause);
+        }
     }
 
     // A changed file is "Layer-1-owned" when it lives under a project directory in Aspire.slnx -- the
@@ -237,8 +315,8 @@ public sealed class TestSelector
     // ends the loop (so cycles such as A->B, B->A terminate).
     private static void ApplyDerivedTargets(
         TriggerMap map,
-        HashSet<string> testProjects,
-        HashSet<string> jobs,
+        Dictionary<string, List<Cause>> testCauses,
+        Dictionary<string, List<Cause>> jobCauses,
         ref bool selectsAll,
         ref string? reason)
     {
@@ -250,37 +328,42 @@ public sealed class TestSelector
         var changed = true;
         while (changed && !selectsAll)
         {
-            var beforeTests = testProjects.Count;
-            var beforeJobs = jobs.Count;
+            var beforeTests = testCauses.Count;
+            var beforeJobs = jobCauses.Count;
 
             foreach (var derived in map.DerivedTargets)
             {
-                // If ANY of the rule's triggering tests is selected, add its targets.
-                if (derived.Tests.Any(t => testProjects.Contains(StripTestPrefix(t))))
+                // If ANY of the rule's triggering tests is selected, add its targets and attribute
+                // them to the (first) selected triggering test, so the cause reads "via test X".
+                var triggeringTest = derived.Tests
+                    .Select(StripTestPrefix)
+                    .FirstOrDefault(testCauses.ContainsKey);
+                if (triggeringTest is not null)
                 {
-                    ApplyTargets(derived.Targets, map, testProjects, jobs, ref selectsAll, ref reason, derived.Tests.FirstOrDefault() ?? "");
+                    ApplyTargets(derived.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
+                        new Cause(CauseKind.DerivedFromTest, triggeringTest, derived.Reason));
                 }
             }
 
-            changed = testProjects.Count != beforeTests || jobs.Count != beforeJobs;
+            changed = testCauses.Count != beforeTests || jobCauses.Count != beforeJobs;
         }
     }
 
     private static void ApplyTargets(
         IEnumerable<string> targets,
         TriggerMap map,
-        HashSet<string> testProjects,
-        HashSet<string> jobs,
+        Dictionary<string, List<Cause>> testCauses,
+        Dictionary<string, List<Cause>> jobCauses,
         ref bool selectsAll,
         ref string? reason,
-        string file)
+        Cause cause)
     {
         var localSelectsAll = selectsAll;
         string? localReason = reason;
 
         foreach (var target in targets)
         {
-            AddTarget(target, map, testProjects, jobs, ref localSelectsAll, ref localReason, file, visitedGroups: null);
+            AddTarget(target, map, testCauses, jobCauses, ref localSelectsAll, ref localReason, cause, visitedGroups: null);
         }
 
         selectsAll = localSelectsAll;
@@ -289,20 +372,21 @@ public sealed class TestSelector
 
     // Routes a single target into the result sets. Group names expand recursively (a group member
     // may itself be a group name), tracking visited groups so a cyclic group reference terminates.
+    // The cause propagates unchanged to every test/job leaf the target expands to.
     private static void AddTarget(
         string target,
         TriggerMap map,
-        HashSet<string> testProjects,
-        HashSet<string> jobs,
+        Dictionary<string, List<Cause>> testCauses,
+        Dictionary<string, List<Cause>> jobCauses,
         ref bool selectsAll,
         ref string? reason,
-        string file,
+        Cause cause,
         HashSet<string>? visitedGroups)
     {
         if (target == "ALL")
         {
             selectsAll = true;
-            reason ??= $"a rule matching '{file}' selects ALL";
+            reason ??= $"a rule matching '{cause.Trigger}' selects ALL";
         }
         else if (map.Groups.TryGetValue(target, out var members))
         {
@@ -315,16 +399,16 @@ public sealed class TestSelector
 
             foreach (var member in members)
             {
-                AddTarget(member, map, testProjects, jobs, ref selectsAll, ref reason, file, visitedGroups);
+                AddTarget(member, map, testCauses, jobCauses, ref selectsAll, ref reason, cause, visitedGroups);
             }
         }
         else if (target.StartsWith("test:", StringComparison.Ordinal))
         {
-            testProjects.Add(StripTestPrefix(target));
+            AddCause(testCauses, StripTestPrefix(target), cause);
         }
         else if (target.StartsWith("job:", StringComparison.Ordinal))
         {
-            jobs.Add(target);
+            AddCause(jobCauses, target, cause);
         }
     }
 
