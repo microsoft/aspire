@@ -41,6 +41,7 @@ namespace Aspire.Dashboard.ServiceClient;
 internal sealed class DashboardClient : IDashboardClient
 {
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
+    private const string TroubleshootingUrl = "https://aka.ms/aspire/dashboard-apphost-connection-failed";
 
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly InteractionCollection _pendingInteractionCollection = new();
