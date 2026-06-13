@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -43,16 +44,14 @@ public class AddMongoDBReplicaSetTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void WithMemberConfiguresServerWithReplSetArg()
+    public async Task WithMemberConfiguresServerWithReplSetArg()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var mongo1 = builder.AddMongoDB("mongo1");
         builder.AddMongoDBReplicaSet("rs0")
             .WithMember(mongo1);
 
-        var argsAnnotation = Assert.Single(mongo1.Resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>());
-        var args = new List<object>();
-        argsAnnotation.Callback(new CommandLineArgsCallbackContext(args));
+        var args = await ArgumentEvaluator.GetArgumentListAsync(mongo1.Resource);
         Assert.Contains("--replSet", args);
         Assert.Contains("rs0", args);
     }

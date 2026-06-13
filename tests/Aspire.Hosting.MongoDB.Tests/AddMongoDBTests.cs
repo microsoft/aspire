@@ -328,4 +328,27 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
             config1.First(kvp => kvp.Key == "ME_CONFIG_MONGODB_SERVER").Value,
             config2.First(kvp => kvp.Key == "ME_CONFIG_MONGODB_SERVER").Value);
     }
+
+    [Fact]
+    public async Task WithReplicaSetAddsReplSetArg()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var mongo1 = builder.AddMongoDB("mongo1").WithReplicaSet("test");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(mongo1.Resource);
+        Assert.Contains("--replSet", args);
+        Assert.Contains("test", args);
+    }
+
+    [Fact]
+    public async Task WithKeyFileAddsKeyFileArg()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var mongo1 = builder.AddMongoDB("mongo1")
+            .WithKeyFile(new ParameterResource("test", _ => "test"), "/the/key/file/path");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(mongo1.Resource);
+        Assert.Contains("--keyFile", args);
+        Assert.Contains("/the/key/file/path", args);
+    }
 }
