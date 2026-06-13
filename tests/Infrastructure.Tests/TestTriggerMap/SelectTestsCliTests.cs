@@ -403,6 +403,35 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    // P1-10. The --skip-layer1 footgun: with Layer 1 disabled there is no graph attribution, so a
+    // src/** file under a real solution project dir must still fall to the run-all fallback rather
+    // than be treated as "Layer-1-owned" and silently select nothing. Failure mode (before the fix):
+    // project dirs were loaded even under --skip-layer1, so the file looked owned, no rule matched,
+    // and --enforce reported has_dotnet_tests=false -- a real source change skipping all .NET tests.
+    [Fact]
+    public void EnforceSkipLayer1SrcFileUnderProjectStillForcesRunAll()
+    {
+        const string slnx = """
+            <Solution>
+              <Project Path="tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj" />
+              <Project Path="src/Aspire.Managed/Aspire.Managed.csproj" />
+            </Solution>
+            """;
+
+        RunInTempRepo((repoRoot, propsPath, output) =>
+        {
+            // Matched by no map rule and under a solution project dir.
+            var changed = WriteChangedFiles(repoRoot, "src/Aspire.Managed/Program.cs");
+
+            Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
+
+            // Run-all: the full matrix is enumerated and no restriction props are written.
+            Assert.Equal("true", output()["has_dotnet_tests"]);
+            Assert.Equal("", output()["before_build_props"]);
+            Assert.False(File.Exists(propsPath));
+        }, slnx: slnx);
+    }
+
     private static RunOptions Options(
         string repoRoot,
         string propsPath,

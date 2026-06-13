@@ -74,13 +74,21 @@ if (-not (Test-Path $ProjectDirectory)) {
   Write-FatalError "ProjectDirectory not found: $ProjectDirectory"
 }
 
-# Matches [Trait("Partition", "<value>")] allowing arbitrary inner whitespace.
+# Matches a Partition trait attribute, allowing arbitrary inner whitespace, an optional namespace
+# qualifier, the optional 'Attribute' suffix, and a case-insensitive key -- the same shapes the
+# compiled extractor (Infrastructure.Tests/ExtractTestPartitions) accepts. The compiled assembly is
+# the source of truth; this source scan is only valid as a build-free shortcut if it recognises every
+# form the extractor would, otherwise a class on a missed partition silently runs in NO shard.
 # Examples matched:
 #   [Trait("Partition", "5")]
 #   [Trait( "Partition" , "BasicTests" )]
-# The value is a string literal (xunit trait values are compile-time constants),
-# so a source scan captures every partition the compiled assembly would expose.
-$partitionRegex = [regex]'\[\s*Trait\s*\(\s*"Partition"\s*,\s*"([^"]+)"\s*\)\s*\]'
+#   [Xunit.Trait("Partition", "5")]
+#   [TraitAttribute("partition", "5")]
+# The value is a string literal (xunit trait values are compile-time constants), so the captured set
+# matches what the compiled assembly exposes. Note: this does not catch the rarer combined-attribute
+# form [Trait(...), Trait(...)]; the repo uses only the standalone form today (enforced by the
+# compiled extractor being the authority for split projects).
+$partitionRegex = [regex]'(?i)\[\s*(?:[\w.]+\.)?Trait(?:Attribute)?\s*\(\s*"Partition"\s*,\s*"([^"]+)"\s*\)\s*\]'
 
 $partitions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 

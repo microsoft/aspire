@@ -150,6 +150,18 @@ public sealed class SelectTestsAcceptanceTests
     }
 
     [Fact]
+    public void ConventionGuardMissOnUnownedSrcFileForcesRunAll()
+    {
+        // The convention matches src/Components/Ghost/** -> test:Ghost.Tests, but Ghost.Tests is absent
+        // from the matrix (existence guard drops it), no path_rule matches, and the file is not
+        // Layer-1-owned. It must fall to the run-all fallback, not silently select nothing -- the
+        // dangerous false-negative direction.
+        var r = Select(["src/Components/Ghost/Bar.cs"]);
+
+        Assert.True(r.SelectsAll);
+    }
+
+    [Fact]
     public void CoreHostingDirIsNotMatchedByConvention()
     {
         // src/Aspire.Hosting (no dotted suffix) must NOT match src/Aspire.Hosting.<name>. Owned so
@@ -274,6 +286,18 @@ public sealed class SelectTestsAcceptanceTests
         Assert.False(r.SelectsAll);
         Assert.Empty(r.TestProjects);
         Assert.DoesNotContain("src/OwnedProj/Thing.cs", r.UnmatchedFiles);
+    }
+
+    [Fact]
+    public void Layer1OwnedPrefixRequiresPathBoundary()
+    {
+        // "src/OwnedProj" must not own the sibling "src/OwnedProjExtra/..." -- ownership matches on a
+        // trailing-separator prefix. A bare StartsWith would falsely own the sibling and suppress its
+        // run-all fallback (a silent under-selection); this is the regression that guard prevents.
+        var r = Select(["src/OwnedProjExtra/Thing.cs"], projectDirs: ["src/OwnedProj"]);
+
+        Assert.True(r.SelectsAll);
+        Assert.Contains("src/OwnedProjExtra/Thing.cs", r.UnmatchedFiles);
     }
 
     [Fact]

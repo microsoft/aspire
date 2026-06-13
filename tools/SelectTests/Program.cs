@@ -132,7 +132,12 @@ internal static class Selection
             ? Array.Empty<string>()
             : RunLayer1(options);
 
-        var projectDirectories = LoadProjectDirectories(options.RepoRoot);
+        // When Layer 1 is skipped there is no graph attribution, so the project-directory set must be
+        // empty too. Otherwise TestSelector would treat files under those dirs as "Layer-1-owned" and
+        // suppress the run-all fallback even though nothing attributed them -- a silent under-selection.
+        var projectDirectories = options.SkipLayer1
+            ? Array.Empty<string>()
+            : LoadProjectDirectories(options.RepoRoot);
 
         var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories);
         var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll));
