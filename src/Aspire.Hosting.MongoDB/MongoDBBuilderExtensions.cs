@@ -264,6 +264,21 @@ public static class MongoDBBuilderExtensions
         return builder.WithContainerFiles(initPath, importFullPath);
     }
 
+    /// <summary>
+    /// Annotates a MongoDB server resource as a member of a replica set with the specified name. This will configure the necessary command line arguments on the MongoDB container to initialize it as a member of the replica set.
+    /// </summary>
+    /// <remarks>
+    /// This method will normally be called by the replica set resource builder when you add a MongoDB server resource as a member of the replica set using <see cref="MongoDBReplicaSetBuilderExtensions.WithMember(IResourceBuilder{MongoDBReplicaSetResource}, IResourceBuilder{MongoDBServerResource})"/>. It can also be called directly if are looking for lower-level control.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string name)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return builder.WithArgs("--replSet", name);
+    }
+
     private static void ConfigureMongoExpressContainer(EnvironmentCallbackContext context, MongoDBServerResource resource)
     {
         // Mongo Express assumes Mongo is being accessed over a default Aspire container network and hardcodes the resource address
