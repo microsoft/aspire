@@ -57,8 +57,21 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Emit a fatal diagnostic as a single plain-text stderr line and exit non-zero.
+#
+# We deliberately bypass Write-Error here. Under PowerShell's default ConciseView, a Write-Error
+# raised from a script is rendered with ANSI color codes and the message is wrapped across several
+# lines at the host's buffer width (e.g. ~120 cols on a CI runner vs. the local terminal width).
+# That wrapping injects newlines mid-sentence, which makes the message hard to read in CI logs and
+# non-deterministic to match (the same message wraps at different points depending on the width).
+# Writing the raw string to stderr keeps the diagnostic on one contiguous line in every environment.
+function Write-FatalError([string]$Message) {
+  [Console]::Error.WriteLine($Message)
+  exit 1
+}
+
 if (-not (Test-Path $ProjectDirectory)) {
-  Write-Error "ProjectDirectory not found: $ProjectDirectory"
+  Write-FatalError "ProjectDirectory not found: $ProjectDirectory"
 }
 
 # Matches [Trait("Partition", "<value>")] allowing arbitrary inner whitespace.
