@@ -339,7 +339,7 @@ internal sealed class DashboardClient : IDashboardClient
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading data from the resource service. For troubleshooting, see https://aka.ms/aspire/dashboard-connection-failed");
+            _logger.LogError(ex, "Error loading data from the resource service. For troubleshooting, see https://aka.ms/aspire/dashboard-apphost-connection-failed");
             throw;
         }
     }
@@ -411,7 +411,7 @@ internal sealed class DashboardClient : IDashboardClient
             catch (Exception ex)
             {
                 errorCount++;
-                _logger.LogError(ex, "Error #{ErrorCount} connecting to the resource service. For troubleshooting, see https://aka.ms/aspire/dashboard-connection-failed", errorCount);
+                _logger.LogError(ex, "Error #{ErrorCount} connecting to the resource service. For troubleshooting, see https://aka.ms/aspire/dashboard-apphost-connection-failed", errorCount);
             }
         }
     }
@@ -500,7 +500,7 @@ internal sealed class DashboardClient : IDashboardClient
             {
                 retryContext.ErrorCount++;
 
-                _logger.LogError(ex, "Error #{ErrorCount} watching {WatchName}. For troubleshooting, see https://aka.ms/aspire/dashboard-connection-failed", retryContext.ErrorCount, actionName);
+                _logger.LogError(ex, "Error #{ErrorCount} watching {WatchName}. For troubleshooting, see https://aka.ms/aspire/dashboard-apphost-connection-failed", retryContext.ErrorCount, actionName);
             }
         }
 

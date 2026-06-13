@@ -394,7 +394,7 @@ public sealed class DashboardClientTests
 
         var errorLog = testSink.Writes.FirstOrDefault(w => w.LogLevel == LogLevel.Error);
         Assert.NotNull(errorLog);
-        Assert.Contains("https://aka.ms/aspire/dashboard-connection-failed", errorLog.Message);
+        Assert.Contains("https://aka.ms/aspire/dashboard-apphost-connection-failed", errorLog.Message);
     }
 
     private sealed class MockDashboardServiceClient : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient
