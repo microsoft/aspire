@@ -299,4 +299,33 @@ public class MongoDBPublicApiTests(ITestOutputHelper testOutputHelper)
             : Assert.Throws<ArgumentException>(action);
         Assert.Equal(nameof(name), exception.ParamName);
     }
+
+    [Fact]
+    public void WithReplicaSetShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<MongoDBServerResource> builder = null!;
+        const string name = "rs0";
+
+        var action = () => builder.WithReplicaSet(name);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithReplicaSetShouldThrowWhenNameIsNullOrEmpty(bool isNull)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var mongo = builder.AddMongoDB("mongo1");
+        var name = isNull ? null! : string.Empty;
+
+        var action = () => mongo.WithReplicaSet(name);
+
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(name), exception.ParamName);
+    }
 }
