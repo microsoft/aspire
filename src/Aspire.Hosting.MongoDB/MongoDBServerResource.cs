@@ -55,6 +55,11 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
     public ParameterResource? UserNameParameter { get; }
 
     /// <summary>
+    /// Gets the name of the replica set this MongoDB server belongs to, or <see langword="null"/> if it is not part of a replica set.
+    /// </summary>
+    public string? ReplicaSetName { get; internal set; }
+
+    /// <summary>
     /// Gets a reference to the user name for the MongoDB server.
     /// </summary>
     /// <remarks>
@@ -117,6 +122,13 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
             builder.Append($"{DefaultAuthenticationDatabase:uri}");
             builder.AppendLiteral("&authMechanism=");
             builder.Append($"{DefaultAuthenticationMechanism:uri}");
+        }
+
+        if (ReplicaSetName is not null)
+        {
+            builder.AppendLiteral(PasswordParameter is not null ? "&" : "?");
+            // NOTE: This is necessary when connecting to a single node that happens to be part of the replica set. Otherwise, the driver will attempt to discover other nodes in the replica set, and this would most notably fail upon attempting to `rs.initialize` since the replica set is not fully initialized at that point.
+            builder.AppendLiteral("directConnection=true");
         }
 
         return builder.Build();

@@ -97,8 +97,6 @@ public static class MongoDBReplicaSetBuilderExtensions
                 {
                     try
                     {
-                        var dbs = await primaryClient.ListDatabasesAsync(ct).ConfigureAwait(false);
-
                         var currentConfig = await admin.RunCommandAsync<BsonDocument>(
                             command: new BsonDocument
                             {
