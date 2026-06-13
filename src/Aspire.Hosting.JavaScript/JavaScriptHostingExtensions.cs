@@ -268,9 +268,12 @@ public static class JavaScriptHostingExtensions
                             List<string> commandArgs;
                             if (resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsBuildCtx))
                             {
-                                // The workspace resource owns the entire build argv. This is what carries
-                                // pnpm's topological "<name>..." filter so a member's workspace dependencies
-                                // are built first — the single most important publish-mode correctness fix.
+                                if (wsBuildCtx.Workspace.GetBuildDependenciesCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName) is { } depBuildArgs)
+                                {
+                                    builderStage.EmptyLine()
+                                        .Run(string.Join(' ', depBuildArgs));
+                                }
+
                                 commandArgs = [.. wsBuildCtx.Workspace.GetRunScriptCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName, buildCommand.Args)];
                             }
                             else
@@ -667,7 +670,12 @@ public static class JavaScriptHostingExtensions
                             List<string> commandArgs;
                             if (resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsBuildCtx))
                             {
-                                // The workspace resource owns the entire build argv.
+                                if (wsBuildCtx.Workspace.GetBuildDependenciesCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName) is { } depBuildArgs)
+                                {
+                                    builderStage.EmptyLine()
+                                        .Run(string.Join(' ', depBuildArgs));
+                                }
+
                                 commandArgs = [.. wsBuildCtx.Workspace.GetRunScriptCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName, buildCommand.Args)];
                             }
                             else
@@ -1354,7 +1362,11 @@ public static class JavaScriptHostingExtensions
                             List<string> commandArgs;
                             if (c.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsBuildCtx))
                             {
-                                // The workspace resource owns the entire build argv (pnpm topological filter, etc.).
+                                if (wsBuildCtx.Workspace.GetBuildDependenciesCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName) is { } depBuildArgs)
+                                {
+                                    dockerBuilder.Run(string.Join(' ', depBuildArgs));
+                                }
+
                                 commandArgs = [.. wsBuildCtx.Workspace.GetRunScriptCommand(wsBuildCtx.WorkspaceProjectName, buildCommand.ScriptName, buildCommand.Args)];
                             }
                             else
