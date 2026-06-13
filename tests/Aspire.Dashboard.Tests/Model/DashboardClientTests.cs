@@ -8,7 +8,9 @@ using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -359,15 +361,46 @@ public sealed class DashboardClientTests
         // Without the Connecting transition between retries, only 1 Disconnected event would fire.
         for (var i = 0; i < 3; i++)
         {
-            await disconnectedSemaphore.WaitAsync(TimeSpan.FromSeconds(30)).DefaultTimeout();
+            await disconnectedSemaphore.WaitAsync().DefaultTimeout();
         }
 
         Assert.True(disconnectedCount >= 3, $"Expected at least 3 Disconnected events but got {disconnectedCount}.");
     }
 
+    [Fact]
+    public async Task ConnectWithRetry_LogsErrorWithTroubleshootingLink()
+    {
+        var testSink = new TestSink();
+        var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new TestLoggerProvider(testSink)));
+
+        await using var instance = new DashboardClient(loggerFactory, _configuration, _dashboardOptions, new MockKnownPropertyLookup());
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnGetApplicationInformation = true });
+
+        IDashboardClient client = instance;
+        var disconnectedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.ConnectionStateChanged += state =>
+        {
+            if (state == DashboardConnectionState.Disconnected)
+            {
+                disconnectedTcs.TrySetResult();
+            }
+        };
+
+        // Trigger the connection attempt which will fail on GetApplicationInformationAsync.
+        _ = client.WhenConnected;
+
+        // Wait for the first Disconnected event which means the error has been logged.
+        await disconnectedTcs.Task.DefaultTimeout();
+
+        var errorLog = testSink.Writes.FirstOrDefault(w => w.LogLevel == LogLevel.Error);
+        Assert.NotNull(errorLog);
+        Assert.Contains("https://aka.ms/aspire/dashboard-connection-failed", errorLog.Message);
+    }
+
     private sealed class MockDashboardServiceClient : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient
     {
         public bool FailOnWatchResources { get; init; }
+        public bool FailOnGetApplicationInformation { get; init; }
 
         public override AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate> WatchInteractions(CallOptions options)
         {
@@ -382,6 +415,16 @@ public sealed class DashboardClientTests
 
         public override AsyncUnaryCall<ApplicationInformationResponse> GetApplicationInformationAsync(ApplicationInformationRequest request, CallOptions options)
         {
+            if (FailOnGetApplicationInformation)
+            {
+                return new AsyncUnaryCall<ApplicationInformationResponse>(
+                    Task.FromException<ApplicationInformationResponse>(new RpcException(new Status(StatusCode.Unavailable, "Service unavailable"))),
+                    Task.FromResult(new Metadata()),
+                    () => new Status(StatusCode.Unavailable, "Service unavailable"),
+                    () => new Metadata(),
+                    () => { });
+            }
+
             return new AsyncUnaryCall<ApplicationInformationResponse>(
                 Task.FromResult(new ApplicationInformationResponse
                 {
