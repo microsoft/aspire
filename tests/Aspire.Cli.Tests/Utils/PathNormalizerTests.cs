@@ -140,6 +140,18 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public void ResolveToFilesystemPath_DoesNotThrow_WhenIntermediateDirectoryIsMissing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var missingPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Missing.AppHost", "Missing.AppHost.csproj");
+
+        var resolved = PathNormalizer.ResolveToFilesystemPath(missingPath);
+
+        Assert.EndsWith(Path.Combine("Missing.AppHost", "Missing.AppHost.csproj"), resolved, StringComparison.Ordinal);
+    }
+
     private static void TryCreateSymlink(string linkPath, string targetPath, bool isDirectory)
     {
         try

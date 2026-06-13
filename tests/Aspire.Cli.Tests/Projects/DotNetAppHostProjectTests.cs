@@ -8,6 +8,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -2160,13 +2161,25 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     private static void WriteEmptyIntegrationClosureFiles(FileInfo appHostFile)
     {
-        var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
-        var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
-        Directory.CreateDirectory(restoreDir);
-        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureSourcesFileName), string.Empty);
-        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureMetadataFileName), string.Empty);
-        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureTargetsFileName), string.Empty);
-        File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName), string.Empty);
+        WriteEmptyIntegrationClosureFilesCore(appHostFile);
+
+        var canonicalAppHostFile = new FileInfo(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName));
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        if (!pathComparer.Equals(appHostFile.FullName, canonicalAppHostFile.FullName))
+        {
+            WriteEmptyIntegrationClosureFilesCore(canonicalAppHostFile);
+        }
+
+        static void WriteEmptyIntegrationClosureFilesCore(FileInfo appHostFile)
+        {
+            var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+            var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
+            Directory.CreateDirectory(restoreDir);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureSourcesFileName), string.Empty);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureMetadataFileName), string.Empty);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureTargetsFileName), string.Empty);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName), string.Empty);
+        }
     }
 
     private static void WriteAspireConfigJson(string directory, string content)

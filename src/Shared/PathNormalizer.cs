@@ -68,13 +68,17 @@ internal static class PathNormalizer
             if (i == parts.Length - 1)
             {
                 // Final component: find the file with its real name.
-                var files = Directory.GetFiles(current, parts[i]);
-                return files.Length == 1 ? files[0] : Path.Combine(current, parts[i]);
+                return TryGetSingleFile(current, parts[i], out var resolvedFile) ? resolvedFile : Path.Combine(current, parts[i]);
             }
 
             // Intermediate component: find the directory with its real name.
-            var dirs = Directory.GetDirectories(current, parts[i]);
-            current = dirs.Length == 1 ? dirs[0] : Path.Combine(current, parts[i]);
+            if (!TryGetSingleDirectory(current, parts[i], out var resolvedDirectory))
+            {
+                current = Path.Combine(current, parts[i]);
+                return CombineRemaining(current, parts, i + 1);
+            }
+
+            current = resolvedDirectory;
 
             if (!current.EndsWith(Path.DirectorySeparatorChar))
             {
@@ -83,6 +87,66 @@ internal static class PathNormalizer
         }
 
         return path;
+
+        static bool TryGetSingleFile(string directory, string searchPattern, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? resolvedFile)
+        {
+            try
+            {
+                var files = Directory.GetFiles(directory, searchPattern);
+                resolvedFile = files.Length == 1 ? files[0] : null;
+                return resolvedFile is not null;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                resolvedFile = null;
+                return false;
+            }
+            catch (IOException)
+            {
+                resolvedFile = null;
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                resolvedFile = null;
+                return false;
+            }
+        }
+
+        static bool TryGetSingleDirectory(string directory, string searchPattern, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? resolvedDirectory)
+        {
+            try
+            {
+                var dirs = Directory.GetDirectories(directory, searchPattern);
+                resolvedDirectory = dirs.Length == 1 ? dirs[0] : null;
+                return resolvedDirectory is not null;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                resolvedDirectory = null;
+                return false;
+            }
+            catch (IOException)
+            {
+                resolvedDirectory = null;
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                resolvedDirectory = null;
+                return false;
+            }
+        }
+
+        static string CombineRemaining(string current, string[] segments, int startIndex)
+        {
+            for (var j = startIndex; j < segments.Length; j++)
+            {
+                current = Path.Combine(current, segments[j]);
+            }
+
+            return current;
+        }
     }
 
     /// <summary>

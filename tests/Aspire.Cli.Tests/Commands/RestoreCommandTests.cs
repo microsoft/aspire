@@ -7,6 +7,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -47,7 +48,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(Aspire.Cli.CliExitCodes.Success, exitCode);
         Assert.True(restoreCalled);
-        Assert.Equal(appHostFile.FullName, capturedProjectFilePath);
+        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName), capturedProjectFilePath);
     }
 
     [Fact]
@@ -148,7 +149,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
 
                     // The CLI-managed restore path builds the integration module project
                     // (.aspire/modules/Aspire.csproj), not the user's apphost.cs.
-                    var moduleProjectPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj");
+                    var moduleProjectPath = PathNormalizer.ResolveToFilesystemPath(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj"));
                     Assert.Equal(moduleProjectPath, projectFilePath.FullName);
                     Assert.True(File.Exists(moduleProjectPath));
                     Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
@@ -156,13 +157,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
 
                     // Stub out the closure-manifest files MSBuild would emit so the restorer
                     // post-processes them into a probe manifest.
-                    var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
-                    var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
-                    Directory.CreateDirectory(restoreDir);
-                    File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureSourcesFileName), string.Empty);
-                    File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureMetadataFileName), string.Empty);
-                    File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureTargetsFileName), string.Empty);
-                    File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName), string.Empty);
+                    WriteEmptyIntegrationClosureFiles(appHostFile);
 
                     return (int)Aspire.Cli.CliExitCodes.Success;
                 }
@@ -177,6 +172,29 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(Aspire.Cli.CliExitCodes.Success, exitCode);
         Assert.True(buildCalled);
+    }
+
+    private static void WriteEmptyIntegrationClosureFiles(FileInfo appHostFile)
+    {
+        WriteEmptyIntegrationClosureFilesCore(appHostFile);
+
+        var canonicalAppHostFile = new FileInfo(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName));
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        if (!pathComparer.Equals(appHostFile.FullName, canonicalAppHostFile.FullName))
+        {
+            WriteEmptyIntegrationClosureFilesCore(canonicalAppHostFile);
+        }
+
+        static void WriteEmptyIntegrationClosureFilesCore(FileInfo appHostFile)
+        {
+            var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+            var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
+            Directory.CreateDirectory(restoreDir);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureSourcesFileName), string.Empty);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureMetadataFileName), string.Empty);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureTargetsFileName), string.Empty);
+            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName), string.Empty);
+        }
     }
 
     [Fact]
