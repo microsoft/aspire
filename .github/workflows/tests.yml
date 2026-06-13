@@ -98,7 +98,7 @@ jobs:
           # summary still reports what enforcing would have skipped. 'true' (enforce): a non-ALL
           # selection writes BeforeBuildProps.props so enumerate-tests enumerates ONLY the selected
           # projects, and run_* gate the non-.NET jobs.
-          ENFORCE_SELECTION: 'true'
+          ENFORCE_SELECTION: 'false'
         run: |
           set -euo pipefail
 
