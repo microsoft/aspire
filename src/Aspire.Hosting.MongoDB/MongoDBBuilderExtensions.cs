@@ -288,7 +288,7 @@ public static class MongoDBBuilderExtensions
     public static IResourceBuilder<MongoDBServerResource> WithKeyFile(
         this IResourceBuilder<MongoDBServerResource> builder,
         IExpressionValue keyValue,
-        string keyFilePath = "/etc/mongo-keyfile"
+        string keyFilePath = "/etc/rs.key"
     )
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -296,14 +296,14 @@ public static class MongoDBBuilderExtensions
 
         return builder
             .WithContainerFiles(
-                destinationPath: keyFilePath,
+                destinationPath: Path.GetDirectoryName(keyFilePath)!,
                 callback: async (_, ct) => [new ContainerFile
                 {
                     Name = Path.GetFileName(keyFilePath),
                     Contents = await keyValue.GetValueAsync(ct).ConfigureAwait(false),
-                    Mode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                    Mode = UnixFileMode.UserRead,
                 }],
-                // NOTE: 999 is required by MongoDB for the keyfile permissions.
+                // NOTE: 999 is the default user and group id used by the official MongoDB container image for the mongod process
                 defaultOwner: 999,
                 defaultGroup: 999
             )

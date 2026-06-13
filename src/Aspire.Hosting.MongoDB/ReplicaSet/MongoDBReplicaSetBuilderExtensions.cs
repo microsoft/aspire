@@ -38,7 +38,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                 secret: true,
                 new GenerateParameterDefault
                 {
-                    MinLength = 32,
+                    MinLength = 512,
                     Special = false,
                 }
             )
