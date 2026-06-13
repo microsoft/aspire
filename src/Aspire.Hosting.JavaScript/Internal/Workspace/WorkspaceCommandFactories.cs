@@ -11,14 +11,10 @@
 //          https://docs.npmjs.com/cli/v10/using-npm/workspaces
 //   yarn : yarn workspace <name> run <script> [args...]
 //          https://yarnpkg.com/cli/workspace
-//   pnpm : pnpm --filter <name>... run <script> [args...]
-//          https://pnpm.io/filtering — the trailing "..." selects <name> AND
-//          its workspace dependencies in topological order, so building a
-//          target also builds the workspace libraries it depends on.
+//   pnpm : pnpm --filter <name> run <script> [args...]
+//          https://pnpm.io/filtering
 //   bun  : bun --filter=<name> run <script> [args...]
-//          https://bun.com/docs/cli/run#run-scripts-in-workspaces — the attached
-//          "--filter=<name>" form is required: the space-separated "--filter <name>"
-//          form fails to match the member once "run" follows (observed on bun 1.3.14).
+//          https://bun.com/docs/cli/run#run-scripts-in-workspaces
 //
 // The per-workspace-resource GetRunScriptCommand overrides delegate to these
 // factories so the Dockerfile generator and the run-mode wiring don't have to
@@ -29,7 +25,9 @@ namespace Aspire.Hosting.JavaScript.Internal.Workspace;
 /// <summary>
 /// Workspace-aware run-script command factories for npm/yarn/pnpm/bun. Each
 /// factory is the same shape: <c>(workspaceName, scriptName, scriptArgs) =&gt;
-/// argv</c>.
+/// argv</c> and always scopes the script to the single target member.
+/// <see cref="PnpmBuildDependencies"/> is the separate publish-time step that
+/// builds a member's workspace dependencies first.
 /// </summary>
 internal static class WorkspaceCommandFactories
 {
@@ -56,14 +54,32 @@ internal static class WorkspaceCommandFactories
     public static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> Pnpm =
         static (workspaceName, scriptName, scriptArgs) =>
         {
-            // pnpm filter syntax: "<name>..." (suffix) selects <name> AND its workspace dependencies
-            // in topological order. When the package has no workspace deps, this is equivalent to
-            // "--filter <name>". This makes monorepo builds correct by default — a target's workspace
-            // libraries are built before the target itself. See https://pnpm.io/filtering.
-            var argv = new List<string> { "pnpm", "--filter", $"{workspaceName}...", "run", scriptName };
+            // Plain "<name>" filter only — never the topological "<name>..." suffix here, because
+            // pnpm would run the script in every workspace dependency and forward scriptArgs to all
+            // of them. See the file header and PnpmBuildDependencies for the dependency-build step.
+            var argv = new List<string> { "pnpm", "--filter", workspaceName, "run", scriptName };
             argv.AddRange(scriptArgs);
             return argv;
         };
+
+    /// <summary>
+    /// Builds the publish-time command that builds a member's workspace dependencies before the
+    /// member itself: <c>pnpm --filter "&lt;name&gt;^..." run --if-present &lt;script&gt;</c>. The
+    /// <c>"^..."</c> suffix selects the dependencies in topological order while EXCLUDING the member,
+    /// and the command deliberately carries no user args so dependency scripts never receive args
+    /// meant for the member's own build. A member with no workspace dependencies yields a no-op
+    /// ("No projects matched the filters", exit 0). See https://pnpm.io/filtering#--filter-package_name_1.
+    /// </summary>
+    /// <remarks>
+    /// <c>--if-present</c> is required: not every workspace package defines a build script, and when
+    /// NONE of the selected dependencies has one, pnpm otherwise fails the recursive run with
+    /// <c>ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT</c> ("None of the selected packages has a ... script",
+    /// observed on pnpm 11.3). With the flag, packages missing the script are skipped and the build
+    /// continues. https://pnpm.io/cli/run#--if-present
+    /// </remarks>
+    public static readonly Func<string, string, IReadOnlyList<string>> PnpmBuildDependencies =
+        static (workspaceName, scriptName) =>
+            ["pnpm", "--filter", $"{workspaceName}^...", "run", "--if-present", scriptName];
 
     public static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> Bun =
         static (workspaceName, scriptName, scriptArgs) =>

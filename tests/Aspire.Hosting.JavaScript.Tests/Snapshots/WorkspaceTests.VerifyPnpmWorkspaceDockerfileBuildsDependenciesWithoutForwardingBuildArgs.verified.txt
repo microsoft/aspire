@@ -7,4 +7,4 @@ COPY packages/web/package.json ./packages/web/package.json
 RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm --filter web^... run --if-present build
-RUN pnpm --filter web run build
+RUN pnpm --filter web run build --mode production

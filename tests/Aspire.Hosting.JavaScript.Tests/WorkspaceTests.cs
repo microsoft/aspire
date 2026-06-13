@@ -48,6 +48,38 @@ public class WorkspaceTests
     }
 
     [Fact]
+    public async Task VerifyPnpmWorkspaceDockerfileBuildsDependenciesWithoutForwardingBuildArgs()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var root = Path.Combine(tempDir.Path, "ws");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root" }""");
+        File.WriteAllText(Path.Combine(root, "pnpm-workspace.yaml"), "packages:\n  - \"packages/*\"\n");
+        File.WriteAllText(Path.Combine(root, "pnpm-lock.yaml"), string.Empty);
+
+        var webDir = Path.Combine(root, "packages", "web");
+        Directory.CreateDirectory(webDir);
+        File.WriteAllText(Path.Combine(webDir, "package.json"), """{ "name": "web", "scripts": { "build": "vite build" } }""");
+
+        var apiDir = Path.Combine(root, "packages", "api");
+        Directory.CreateDirectory(apiDir);
+        File.WriteAllText(Path.Combine(apiDir, "package.json"), """{ "name": "api", "scripts": { "build": "tsc" } }""");
+
+        var workspace = builder.AddPnpmWorkspace("ws", root);
+        // Build args must reach only the member's own build: the dependency pre-build RUN
+        // (pnpm --filter web^... run build) carries no args, the member RUN carries them.
+        var webApp = workspace.AddJavaScriptApp("web", "web", "packages/web").WithBuildScript("build", ["--mode", "production"]);
+
+        await ManifestUtils.GetManifest(webApp.Resource, tempDir.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "web.Dockerfile"));
+
+        await Verify(dockerfile);
+    }
+
+    [Fact]
     public async Task VerifyNpmWorkspaceDockerfileBuildsMember()
     {
         using var tempDir = new TestTempDirectory();
@@ -513,7 +545,9 @@ public class WorkspaceTests
 
         AssertWorkspaceAppWiring(appResource, workspaceResource, "project1", "packages/web");
 
-        // Verify the arguments are the full workspace argv, including pnpm's topological filter.
+        // Verify the run-mode argv scopes to the single member. A topological filter suffix must NOT
+        // appear here: it would make pnpm run `dev` in every workspace dependency and forward the dev
+        // args to all of them. Dependency building is a separate publish-only command (GetBuildDependenciesCommand).
         Assert.True(appResource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var argsCallbackAnnotations));
         List<object> args = [];
         var ctx = new CommandLineArgsCallbackContext(args, appResource);
@@ -526,7 +560,7 @@ public class WorkspaceTests
         Assert.Collection(args,
             arg => Assert.Equal("pnpm", arg),
             arg => Assert.Equal("--filter", arg),
-            arg => Assert.Equal("project1...", arg),
+            arg => Assert.Equal("project1", arg),
             arg => Assert.Equal("run", arg),
             arg => Assert.Equal("dev", arg)
         );
@@ -583,10 +617,33 @@ public class WorkspaceTests
     }
 
     [Fact]
-    public void PnpmWorkspaceGetRunScriptCommandReturnsTopologicalFilterArgv()
+    public void PnpmWorkspaceGetRunScriptCommandScopesToSingleMember()
     {
         var workspace = new PnpmWorkspaceResource("test", "/tmp");
-        Assert.Equal(["pnpm", "--filter", "my-app...", "run", "build"], workspace.GetRunScriptCommand("my-app", "build", []));
+        // The script command must never carry the topological "..." suffix: it would run the script
+        // in every workspace dependency and forward the script args to all of them. Dependency
+        // building is a separate, args-free command (see GetBuildDependenciesCommand tests).
+        Assert.Equal(["pnpm", "--filter", "my-app", "run", "build"], workspace.GetRunScriptCommand("my-app", "build", []));
+    }
+
+    [Fact]
+    public void PnpmWorkspaceGetBuildDependenciesCommandUsesDependenciesOnlyFilter()
+    {
+        var workspace = new PnpmWorkspaceResource("test", "/tmp");
+        // "<name>^..." selects the member's workspace dependencies excluding the member itself,
+        // in topological order, so libraries build before the member without receiving its args.
+        // "--if-present" skips dependencies that don't define the build script instead of failing.
+        Assert.Equal(["pnpm", "--filter", "my-app^...", "run", "--if-present", "build"], workspace.GetBuildDependenciesCommand("my-app", "build"));
+    }
+
+    [Fact]
+    public void GetBuildDependenciesCommandReturnsNullWhenPackageManagerHasNoTopologicalSelector()
+    {
+        // npm/yarn/bun have no native dependencies-first selector, so they opt out of the
+        // dependency pre-build step entirely instead of taking a flag they would ignore.
+        Assert.Null(new NpmWorkspaceResource("test", "/tmp").GetBuildDependenciesCommand("my-app", "build"));
+        Assert.Null(new YarnWorkspaceResource("test", "/tmp").GetBuildDependenciesCommand("my-app", "build"));
+        Assert.Null(new BunWorkspaceResource("test", "/tmp").GetBuildDependenciesCommand("my-app", "build"));
     }
 
     [Fact]
