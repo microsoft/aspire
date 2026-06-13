@@ -1,6 +1,5 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
-
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
@@ -10,7 +9,10 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// This resource is a logical grouping of multiple <see cref="MongoDBServerResource"/> instances that are configured as members of the same replica set.
 /// </remarks>
-public sealed class MongoDBReplicaSetResource(string name) : Resource(name), IResourceWithWaitSupport, IResourceWithConnectionString
+public sealed class MongoDBReplicaSetResource(
+    string name,
+    ParameterResource keyFile
+) : Resource(name), IResourceWithWaitSupport, IResourceWithConnectionString
 {
     /// <summary>
     /// Gets the combined connection string for the MongoDB replica set, which includes the endpoints of all members, interpretable by the MongoDB driver.
@@ -41,4 +43,9 @@ public sealed class MongoDBReplicaSetResource(string name) : Resource(name), IRe
 
         return builder.Build();
     }
+
+    /// <summary>
+    /// Gets the parameter that contains the content of the key file used for internal authentication between members of the MongoDB replica set.
+    /// </summary>
+    public ParameterResource SharedKeyFileParameter => keyFile;
 }

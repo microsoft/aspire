@@ -1,6 +1,5 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
-
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MongoDB;
@@ -277,6 +276,38 @@ public static class MongoDBBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         return builder.WithArgs("--replSet", name);
+    }
+
+    /// <summary>
+    /// Specifies a keyfile for internal authentication between members of a MongoDB replica set, with the specified <paramref name="keyValue"/> as the content of the file.
+    /// </summary>
+    /// <remarks>
+    /// All members in a replica set should share the same keyfile content in order for the communication authentication to succeed.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<MongoDBServerResource> WithKeyFile(
+        this IResourceBuilder<MongoDBServerResource> builder,
+        IExpressionValue keyValue,
+        string keyFilePath = "/etc/mongo-keyfile"
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(keyFilePath);
+
+        return builder
+            .WithContainerFiles(
+                destinationPath: keyFilePath,
+                callback: async (_, ct) => [new ContainerFile
+                {
+                    Name = Path.GetFileName(keyFilePath),
+                    Contents = await keyValue.GetValueAsync(ct).ConfigureAwait(false),
+                    Mode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                }],
+                // NOTE: 999 is required by MongoDB for the keyfile permissions.
+                defaultOwner: 999,
+                defaultGroup: 999
+            )
+            .WithArgs("--keyFile", keyFilePath);
     }
 
     private static void ConfigureMongoExpressContainer(EnvironmentCallbackContext context, MongoDBServerResource resource)
