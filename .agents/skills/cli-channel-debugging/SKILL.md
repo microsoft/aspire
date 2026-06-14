@@ -304,6 +304,48 @@ ASPIRE_CLI_PACKAGES="$PWD/artifacts/packages/Release/Shipping" \
 Identity stays `stable`/`13.4.2` while `Aspire*` resolves from your locally rebuilt packages, so
 you can validate a CLI+hosting fix together before publishing anything.
 
+### Scenario 7c — All-local "future release" (version not yet on nuget.org)
+
+Use this to dry-run a not-yet-shipped release (e.g. emulate a future `13.5.0` stable build)
+entirely from locally built packages — templates and integrations both resolve from a local
+directory, nothing has to be published. This is the most self-contained scenario and the one the
+identity-sidecar package-resolution fix specifically enables.
+
+```bash
+# 1. Build packages in the exact version shape you want to emulate.
+#    Stable shape (no prerelease suffix):
+./build.sh --pack -c Release /p:VersionPrefix=13.5.0 /p:StabilizePackageVersion=true
+#    Prerelease shape instead: /p:VersionPrefix=13.5.0 /p:VersionSuffix=preview.1
+STABLE_DIR="$PWD/artifacts/packages/Release/Shipping"   # clean: one version per Aspire* id
+
+# 2. (Buildability) Register the local dir as an AMBIENT NuGet source — see note below.
+dotnet nuget add source "$STABLE_DIR" --name local-emulated-stable
+
+# 3. Emulate the release. aspire new + aspire add now resolve 13.5.0 from the local dir.
+ASPIRE_CLI_CHANNEL=stable ASPIRE_CLI_VERSION=13.5.0 ASPIRE_CLI_PACKAGES="$STABLE_DIR" \
+  dotnet run --project src/Aspire.Cli -- new aspire-starter --name MyApp --non-interactive
+```
+
+**Package/template resolution now honors `ASPIRE_CLI_PACKAGES` for *any* emulated channel name.**
+Historically the CLI only searched the local-packages channel when its name looked like a
+local build (`local`/`pr-<N>`/`run-<N>`); emulating `stable`/`staging`/`daily` silently fell back
+to nuget.org for `aspire new`/`aspire add`. The CLI now recognizes a channel as locally backed by
+its **mappings** (an `Aspire*` mapping pointing at an existing directory), not its name, so the
+override works under every emulated identity.
+
+> **⚠️ Buildability needs an _ambient_ NuGet source (step 2).** A real `stable` build deliberately
+> drops **no** per-project `NuGet.config` (it relies on nuget.org being an ambient source). When
+> you emulate `stable` with a *local* version that isn't on nuget.org, the apphost still won't
+> **build** unless the local dir is reachable: MSBuild resolves the `Aspire.AppHost.Sdk` **before**
+> restore and reads only `NuGet.config` sources (it ignores `RestoreAdditionalProjectSources` and
+> `ASPIRE_CLI_PACKAGES`). So `aspire new` will scaffold the project (templates come from the local
+> dir), but `aspire add`/`aspire run` fail with `Could not resolve SDK "Aspire.AppHost.Sdk/13.5.0"`
+> until you add the local dir as an ambient source (`dotnet nuget add source`, a user/parent-level
+> `NuGet.config`, etc.). This mirrors how real stable relies on an ambient nuget.org — the local
+> dir is the emulated ambient feed. `aspire add` itself still drops a project `NuGet.config` for the
+> `dotnet add package` restore; the ambient source is only needed for the SDK-resolution build step.
+> Remove the source when done: `dotnet nuget remove source local-emulated-stable`.
+
 ## ⚠️ `ASPIRE_CLI_PACKAGES` cleanliness caveat (fail-fast)
 
 A flat directory feed has no "latest stable vs latest prerelease" semantics: if the same

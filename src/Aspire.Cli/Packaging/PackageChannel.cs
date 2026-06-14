@@ -61,6 +61,29 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public bool ShouldCreateNuGetConfig() =>
         ShouldPersistChannelName() && Mappings is { Length: > 0 };
 
+    /// <summary>
+    /// Whether this channel resolves Aspire.* packages from a local directory of <c>.nupkg</c>
+    /// files (a <c>~/.aspire/hives/&lt;name&gt;</c> hive, a PR-install hive, or an
+    /// <c>ASPIRE_CLI_PACKAGES</c> / sidecar <c>packages</c> override) rather than a remote feed.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="VersionHelper.IsLocalBuildChannel(string)"/> — which keys off the channel
+    /// <em>name</em> (<c>local</c>/<c>pr-&lt;N&gt;</c>/<c>run-&lt;N&gt;</c>) — this inspects the actual
+    /// mappings. That matters when a locally built CLI emulates a released build: the synthesized
+    /// channel is named after the emulated identity (<c>stable</c>/<c>daily</c>/<c>staging</c>) yet
+    /// points Aspire.* at a local directory. The name check would misclassify it as remote and
+    /// silently fall back to nuget.org; this property recognizes it as locally backed so
+    /// <c>aspire new</c>/<c>aspire add</c> resolve those local packages. See
+    /// <c>docs/specs/cli-identity-sidecar.md</c>.
+    /// </remarks>
+    public bool IsBackedByLocalPackageDirectory =>
+        Type is PackageChannelType.Explicit &&
+        Mappings?.Any(static mapping =>
+            mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
+            mapping.PackageFilter != PackageMapping.AllPackages &&
+            !UrlHelper.IsHttpUrl(mapping.Source) &&
+            Directory.Exists(mapping.Source)) == true;
+
     private static string ComputeSourceDetails(PackageMapping[]? mappings)
     {
         if (mappings is null)

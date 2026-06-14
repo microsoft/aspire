@@ -2675,6 +2675,79 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(staleVersion, selectedVersion);
     }
 
+    [Fact]
+    public async Task AddCommand_WithIdentityPackagesOverrideEmulatingStable_PrefersCurrentCliVersion()
+    {
+        // Emulating a released build via ASPIRE_CLI_PACKAGES / the sidecar `packages` field: the
+        // synthesized channel is NAMED after the emulated identity ("stable", a non-local-build
+        // name) yet resolves Aspire.* from a local directory. `aspire add` must still treat it as a
+        // CLI-version-pinned local source so the exact-CLI-version package wins over the implicit
+        // channel's stale version — i.e. the IsBackedByLocalPackageDirectory recognition, not the
+        // channel name, drives selection. Regression guard for the identity-sidecar emulation bug
+        // where a stable/daily/staging emulated name excluded the local channel from add resolution.
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var identityPackagesDir = workspace.CreateDirectory("identity-packages");
+        // Aspire.Hosting drives GetLocalHivePinnedVersion; Aspire.Hosting.Redis is the integration we add.
+        File.WriteAllText(Path.Combine(identityPackagesDir.FullName, $"Aspire.Hosting.{cliVersion}.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(identityPackagesDir.FullName, $"Aspire.Hosting.Redis.{cliVersion}.nupkg"), string.Empty);
+
+        var selectedPackageVersion = string.Empty;
+        var promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityChannel: PackageChannelNames.Stable,
+                identityVersion: cliVersion,
+                identityOverridden: true,
+                identityPackagesDirectory: identityPackagesDir);
+
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt when the current CLI version is available in the local package override.");
+                };
+                return prompter;
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                // Only the implicit channel goes through package search; it returns a stale version
+                // that must lose to the on-disk CLI-version match from the emulated-stable local source.
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
+                    (0, new[] { new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "implicit", Version = "13.2.2" } });
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
+                {
+                    selectedPackageVersion = packageVersion;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add redis");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.False(promptedForVersion);
+        Assert.Equal(cliVersion, selectedPackageVersion);
+    }
+
     /// <summary>
     /// Shared scaffolding for "aspire add redis" + hive precedence tests. The three tests
     /// (PR-hive / local-hive / both-hives) differ only in (a) how the hive directory is

@@ -247,7 +247,14 @@ internal sealed class AddCommand : BaseCommand
             // WITHOUT package source mapping restrictions, so that transitive deps
             // (including RID-specific and stable-versioned packages) can still resolve
             // from NuGet.org via the normal NuGet source hierarchy.
-            if (string.IsNullOrEmpty(source) && VersionHelper.IsLocalBuildChannel(selectedNuGetPackage.Channel.Name))
+            //
+            // IsBackedByLocalPackageDirectory (not just the local-build NAME) is required so this
+            // also fires when emulating a released build via ASPIRE_CLI_PACKAGES: there the channel
+            // is named stable/daily/staging but its Aspire.* packages live in a local directory, and
+            // without the local source in nuget.config the C# `dotnet add package` restore of the
+            // local-only version fails. See docs/specs/cli-identity-sidecar.md.
+            if (string.IsNullOrEmpty(source) &&
+                (VersionHelper.IsLocalBuildChannel(selectedNuGetPackage.Channel.Name) || selectedNuGetPackage.Channel.IsBackedByLocalPackageDirectory))
             {
                 var mappings = selectedNuGetPackage.Channel.Mappings;
                 if (mappings is { Length: > 0 })
@@ -431,8 +438,10 @@ internal sealed class AddCommand : BaseCommand
 
         // When PR hives are present, prefer the package that exactly matches the installed
         // CLI/SDK version so template- and add-generated projects stay on the same build.
+        // IsBackedByLocalPackageDirectory also covers the ASPIRE_CLI_PACKAGES emulation case,
+        // where the local channel is named stable/daily/staging rather than a local-build name.
         var prChannelPackageVersions = packageVersions
-            .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name))
+            .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name) || p.Channel.IsBackedByLocalPackageDirectory)
             .ToArray();
 
         if (VersionHelper.TryGetCurrentCliVersionMatch(
@@ -441,7 +450,7 @@ internal sealed class AddCommand : BaseCommand
             ExecutionContext.IdentitySdkVersion,
             out var cliVersionPackage,
             channelName: null,
-            hasPrHives: ExecutionContext.GetHiveCount() > 0))
+            hasPrHives: ExecutionContext.GetHiveCount() > 0 || ExecutionContext.IdentityPackagesDirectory is not null))
         {
             return cliVersionPackage;
         }

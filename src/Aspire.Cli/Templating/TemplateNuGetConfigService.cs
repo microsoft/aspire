@@ -204,9 +204,18 @@ internal sealed class TemplateNuGetConfigService(
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.
         // PR dogfood installs can discover a matching local-build channel outside the default
         // hives directory, so also treat an installed local-build source as a hive signal.
-        var hasPrHives = query.IncludePrHives &&
-            (executionContext.GetHiveCount() > 0 ||
-                allChannels.Any(static c => c.Type is PackageChannelType.Explicit && HasInstalledLocalBuildPackageSource(c)));
+        //
+        // An ASPIRE_CLI_PACKAGES / sidecar `packages` override is different from a stale hive: it
+        // is a deliberate, per-invocation instruction to resolve Aspire.* from a local directory
+        // (used to emulate a released/staging build entirely from locally built packages). Honor it
+        // unconditionally — even when PR-hive discovery is suppressed (e.g. `init`) and regardless of
+        // the emulated channel name (stable/daily/staging) — otherwise template resolution silently
+        // falls back to nuget.org instead of the local packages. See docs/specs/cli-identity-sidecar.md.
+        var hasLocalPackagesOverride = executionContext.IdentityPackagesDirectory is not null;
+        var hasPrHives = hasLocalPackagesOverride ||
+            (query.IncludePrHives &&
+                (executionContext.GetHiveCount() > 0 ||
+                    allChannels.Any(static c => c.Type is PackageChannelType.Explicit && HasInstalledLocalBuildPackageSource(c))));
 
         IEnumerable<PackageChannel> channels;
         if (!string.IsNullOrEmpty(query.RequestedChannel))

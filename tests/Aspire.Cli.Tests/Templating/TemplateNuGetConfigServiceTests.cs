@@ -426,6 +426,62 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             hivesDirectory: hivesDirectory);
     }
 
+    // Emulating a released build via ASPIRE_CLI_PACKAGES / the sidecar `packages` field: the
+    // synthesized channel is named after the emulated identity (here "stable", a NON-local-build
+    // name) and points Aspire.* at a local directory. Even with IncludePrHives:false (the
+    // `aspire init` shape) and no hive on disk, the deliberate local-packages override must be
+    // honored so templates resolve from the local directory instead of silently falling back to
+    // nuget.org. Regression guard for the identity-sidecar emulation bug where a stable/daily/
+    // staging emulated name caused the local channel to be filtered out of template resolution.
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_IdentityPackagesOverride_IncludesLocalChannelEvenWhenPrHivesSuppressed()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packagesDir = workspace.CreateDirectory("identity-packages");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: "stable",
+            identityVersion: "13.5.0",
+            identityOverridden: true,
+            identityPackagesDirectory: packagesDir);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                    [
+                        new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "13.4.3", Source = "nuget.org" }
+                    ])
+                }, new TestFeatures());
+                var localStableCh = PackageChannel.CreateExplicitChannel(
+                    "stable",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", packagesDir.FullName.Replace('\\', '/'))],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    pinnedVersion: "13.5.0");
+                return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, localStableCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+
+        var query = new TemplatePackageQuery(
+            RequestedChannel: null,
+            VersionOverride: null,
+            SourceOverride: null,
+            IncludePrHives: false);
+
+        var selection = await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+
+        Assert.Equal("13.5.0", selection.Package.Version);
+        Assert.Equal(PackageChannelType.Explicit, selection.Channel.Type);
+        Assert.Equal("stable", selection.Channel.Name);
+    }
+
     private static string[] GetPackagePatternsForSource(XDocument doc, string source)
     {
         var packageSourceMapping = doc.Root!.Element("packageSourceMapping");
