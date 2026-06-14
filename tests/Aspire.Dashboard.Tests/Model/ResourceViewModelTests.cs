@@ -157,6 +157,41 @@ public sealed class ResourceViewModelTests
     }
 
     [Fact]
+    public void ToViewModel_ProducerSuppliedPropertyMetadata_DoesNotRequireKnownProperty()
+    {
+        // Arrange
+        var resource = new Resource
+        {
+            Name = "container-abc",
+            DisplayName = "container",
+            ResourceType = KnownResourceTypes.Container,
+            CreatedAt = Timestamp.FromDateTime(s_dateTime),
+            Properties =
+            {
+                new ResourceProperty
+                {
+                    Name = KnownProperties.Container.Image,
+                    Value = Value.ForString("redis:latest"),
+                    DisplayName = "Container image",
+                    IsHighlighted = true,
+                    SortOrder = 7
+                }
+            }
+        };
+
+        // Act
+        var vm = ToViewModel(resource, new KnownPropertyLookup());
+
+        // Assert
+        var property = vm.Properties[KnownProperties.Container.Image];
+        Assert.Equal("Container image", property.DisplayName);
+        Assert.True(property.IsHighlighted);
+        Assert.Equal(int.MaxValue, property.Priority);
+        Assert.Equal(7, property.SortOrder);
+        Assert.Null(property.KnownProperty);
+    }
+
+    [Fact]
     public void ToViewModel_WithCustomIcon_SetsIconProperties()
     {
         // Arrange

@@ -167,7 +167,8 @@ partial class Resource
                 knownProperty: knownProperty,
                 priority: priority,
                 displayName: property.HasDisplayName ? property.DisplayName : null,
-                isHighlighted: property.IsHighlighted)
+                isHighlighted: property.IsHighlighted,
+                sortOrder: property.HasSortOrder ? property.SortOrder : null)
             {
                 IsValueMasked = property.IsSensitive
             };

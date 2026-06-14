@@ -167,7 +167,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 // in the details grid instead of routing it through masking behavior. Preserve the
                 // display/highlight metadata so the placeholder keeps the original property behavior.
                 if (_resource.HasMissingParameterValueState() &&
-                    property.KnownProperty?.Key == KnownProperties.Parameter.Value &&
+                    string.Equals(property.Name, KnownProperties.Parameter.Value, StringComparisons.ResourcePropertyName) &&
                     property.IsValueSensitive)
                 {
                     displayedProperty = new ResourcePropertyViewModel(
@@ -177,7 +177,8 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                         knownProperty: property.KnownProperty,
                         priority: property.Priority,
                         displayName: property.DisplayName,
-                        isHighlighted: property.IsHighlighted);
+                        isHighlighted: property.IsHighlighted,
+                        sortOrder: property.SortOrder);
                 }
 
                 _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
@@ -227,7 +228,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             // as the parameters grid so the details panel stays consistent with the grid.
             if (_resource.HasMissingParameterValueState())
             {
-                _valueComponents[KnownProperties.Parameter.Value] = new ComponentMetadata
+                var metadata = new ComponentMetadata
                 {
                     Type = typeof(ParameterValueDisplayCell),
                     Parameters =
@@ -237,6 +238,9 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                         ["IsCommandExecuting"] = IsCommandExecuting,
                     }
                 };
+
+                _valueComponents[KnownProperties.Parameter.Value] = metadata;
+                _valueComponents[DisplayedResourcePropertyViewModel.GetUnknownKey(KnownProperties.Parameter.Value)] = metadata;
             }
 
             UpdateResourceActionsMenu();
@@ -410,7 +414,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 || string.Equals(vm.KnownProperty?.Key, KnownProperties.Resource.State, StringComparisons.ResourcePropertyName));
 
         return ordered
-            ? vms.OrderBy(vm => vm.Priority).ThenBy(vm => vm.DisplayName)
+            ? vms.OrderBy(vm => vm.SortOrder).ThenBy(vm => vm.DisplayName)
             : vms;
     }
 

@@ -279,6 +279,14 @@ public sealed record ResourcePropertySnapshot(string Name, object? Value)
     /// </remarks>
     public bool IsHighlighted { get; init; }
 
+    /// <summary>
+    /// Gets the optional sort order used when displaying the property in UI.
+    /// </summary>
+    /// <remarks>
+    /// Properties with lower values are displayed before properties with higher values.
+    /// </remarks>
+    public int? SortOrder { get; init; }
+
     internal void Deconstruct(out string name, out object? value, out bool isSensitive)
     {
         name = Name;

@@ -3,6 +3,8 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Model;
+using static Aspire.Hosting.Resources.MessageStrings;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -17,6 +19,10 @@ namespace Aspire.Hosting.ApplicationModel;
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Tool = {ToolConfiguration?.PackageId}")]
 public class DotnetToolResource : ExecutableResource
 {
+    // Generic resource properties are still ordered by the dashboard as 0-6. Tool-specific
+    // properties start after those values so they appear after state/health/timing details.
+    private const int FirstToolSpecificSortOrder = 7;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="DotnetToolResource"/> class.
     /// </summary>
@@ -36,5 +42,28 @@ public class DotnetToolResource : ExecutableResource
             this.TryGetLastAnnotation<DotnetToolAnnotation>(out var toolConfig);
             return toolConfig;
         }
+    }
+
+    internal IEnumerable<ResourcePropertySnapshot> CreateSnapshotProperties()
+    {
+        var toolConfig = ToolConfiguration;
+        if (toolConfig is null)
+        {
+            yield break;
+        }
+
+        yield return CreateHighlightedProperty(KnownProperties.Tool.Package, toolConfig.PackageId, ResourcePropertyToolPackageDisplayName, FirstToolSpecificSortOrder);
+        yield return CreateHighlightedProperty(KnownProperties.Tool.Version, toolConfig.Version, ResourcePropertyToolVersionDisplayName, FirstToolSpecificSortOrder + 1);
+        yield return new(KnownProperties.Resource.Source, toolConfig.PackageId);
+    }
+
+    private static ResourcePropertySnapshot CreateHighlightedProperty(string name, object? value, string displayName, int sortOrder)
+    {
+        return new(name, value)
+        {
+            DisplayName = displayName,
+            IsHighlighted = true,
+            SortOrder = sortOrder
+        };
     }
 }

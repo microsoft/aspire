@@ -13,10 +13,6 @@ public interface IKnownPropertyLookup
 public sealed class KnownPropertyLookup : IKnownPropertyLookup
 {
     private readonly List<KnownProperty> _resourceProperties;
-    private readonly List<KnownProperty> _projectProperties;
-    private readonly List<KnownProperty> _executableProperties;
-    private readonly List<KnownProperty> _containerProperties;
-    private readonly List<KnownProperty> _parameterProperties;
 
     public KnownPropertyLookup()
     {
@@ -30,55 +26,13 @@ public sealed class KnownPropertyLookup : IKnownPropertyLookup
             new(KnownProperties.Resource.ExitCode, loc => loc[nameof(ResourcesDetailsExitCodeProperty)]),
             new(KnownProperties.Resource.ConnectionString, loc => loc[nameof(ResourcesDetailsConnectionStringProperty)])
         ];
-
-        _projectProperties =
-        [
-            .. _resourceProperties,
-            new(KnownProperties.Project.Path, loc => loc[nameof(ResourcesDetailsProjectPathProperty)]),
-            new(KnownProperties.Project.LaunchProfile, loc => loc[nameof(ResourcesDetailsProjectLaunchProfileProperty)]),
-            new(KnownProperties.Executable.Pid, loc => loc[nameof(ResourcesDetailsExecutableProcessIdProperty)]),
-        ];
-
-        _executableProperties =
-        [
-            .. _resourceProperties,
-            new(KnownProperties.Executable.Path, loc => loc[nameof(ResourcesDetailsExecutablePathProperty)]),
-            new(KnownProperties.Executable.WorkDir, loc => loc[nameof(ResourcesDetailsExecutableWorkingDirectoryProperty)]),
-            new(KnownProperties.Executable.Args, loc => loc[nameof(ResourcesDetailsExecutableArgumentsProperty)]),
-            new(KnownProperties.Executable.Pid, loc => loc[nameof(ResourcesDetailsExecutableProcessIdProperty)]),
-        ];
-
-        _containerProperties =
-        [
-            .. _resourceProperties,
-            new(KnownProperties.Container.Image, loc => loc[nameof(ResourcesDetailsContainerImageProperty)]),
-            new(KnownProperties.Container.Id, loc => loc[nameof(ResourcesDetailsContainerIdProperty)]),
-            new(KnownProperties.Container.Command, loc => loc[nameof(ResourcesDetailsContainerCommandProperty)]),
-            new(KnownProperties.Container.Args, loc => loc[nameof(ResourcesDetailsContainerArgumentsProperty)]),
-            new(KnownProperties.Container.Ports, loc => loc[nameof(ResourcesDetailsContainerPortsProperty)]),
-            new(KnownProperties.Container.Lifetime, loc => loc[nameof(ResourcesDetailsContainerLifetimeProperty)]),
-        ];
-
-        _parameterProperties =
-        [
-            new(KnownProperties.Parameter.Value, loc => loc[nameof(ResourcesDetailsParameterValueProperty)])
-        ];
     }
 
     public (int priority, KnownProperty? knownProperty) FindProperty(string resourceType, string uid)
     {
-        var knownProperties = resourceType switch
+        for (var i = 0; i < _resourceProperties.Count; i++)
         {
-            KnownResourceTypes.Project => _projectProperties,
-            KnownResourceTypes.Executable => _executableProperties,
-            KnownResourceTypes.Container => _containerProperties,
-            KnownResourceTypes.Parameter => _parameterProperties,
-            _ => _resourceProperties
-        };
-
-        for (var i = 0; i < knownProperties.Count; i++)
-        {
-            var kp = knownProperties[i];
+            var kp = _resourceProperties[i];
             if (kp.Key == uid)
             {
                 return (i, kp);
