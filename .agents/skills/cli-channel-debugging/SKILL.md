@@ -332,6 +332,26 @@ ASPIRE_CLI_CHANNEL=stable ASPIRE_CLI_VERSION=13.5.0 ASPIRE_CLI_PACKAGES="$STABLE
 > `StabilizePackageVersion` flags and no stale-version cleanup needed. Add `--archive` to also produce a
 > portable `.tar.gz` for the E2E tests (below). You still set the three `ASPIRE_CLI_*` env vars (and the
 > ambient source for buildability) to emulate the release from that hive.
+>
+> **Fully turnkey with `-o DIR`.** `./localhive.sh --version 13.5.0 -o /tmp/aspire-1350` writes a
+> self-contained portable layout (`bin/`, `hives/local/packages/`) **and** an `activate.sh`
+> (`localhive.ps1` writes `activate.ps1`). `source /tmp/aspire-1350/activate.sh` puts the CLI on PATH,
+> exports the three `ASPIRE_CLI_*` vars (channel=stable, version=`13.5.0`, packages=the hive), sets a
+> **hermetic** `NUGET_PACKAGES` (see the cache hazard below), and drops you into a `work/` dir — a
+> one-command emulated stable session.
+
+> **⚠️ NuGet global-cache pollution when rebuilding a FIXED stable version.** NuGet's global packages
+> folder (`~/.nuget/packages/<id>/<version>/`) caches **extracted** packages keyed by the version
+> string. When you emulate a *fixed* stable version like `13.5.0` and then **rebuild** it, a stale
+> `13.5.0` left in that shared cache by an earlier build **silently shadows** the freshly built one —
+> same version string, different content — because restore never re-extracts from your local hive. The
+> stale `Aspire.AppHost.Sdk/13.5.0` can then inject a prerelease version floor (e.g.
+> `Version=">= 13.5.0-dogfood.…"`); NuGet picks the lowest version satisfying that floor and restore
+> **drifts** to a stray cached prerelease (e.g. `13.5.0-pr.17781`) instead of your stable packages —
+> visible as `NU1603` warnings and a `project.assets.json` bound to the prerelease. **Remedy:** isolate
+> the cache per emulation with a hermetic `NUGET_PACKAGES` (e.g. `export NUGET_PACKAGES=/tmp/aspire-1350/.nuget-packages`).
+> `localhive … -o DIR`'s generated `activate.sh`/`activate.ps1` does this for you. CI is unaffected
+> (fresh containers start with an empty cache); this only bites local iterative rebuilds.
 
 > **Automated coverage.** `EmulatedLocalReleaseBuildTests` (C# + TypeScript) exercises this exact
 > scenario end-to-end: it consumes a `localhive --version <X.Y.Z> --archive` archive, emulates the

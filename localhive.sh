@@ -539,6 +539,43 @@ if [[ $SKIP_CLI -eq 0 ]]; then
   fi
 fi
 
+# For a stable-shaped emulated release written to a portable layout, drop an
+# activate script so the layout is turnkey. Sourcing it puts the CLI on PATH,
+# stamps the emulated stable identity (so the locally-built CLI resolves Aspire*
+# from the bundled hive), and — critically — isolates the NuGet global-packages
+# cache.
+#
+# Why the isolated cache matters: NuGet's global packages folder
+# ($HOME/.nuget/packages) caches EXTRACTED packages by version. When you emulate a
+# FIXED stable version (e.g. 13.5.0) and rebuild it, a stale 13.5.0 left in that
+# shared cache by an earlier build silently shadows the freshly built one — same
+# version string, different content. The stale AppHost SDK can then inject a
+# prerelease version floor (Version=">= X.Y.Z-<suffix>") and restore drifts to an
+# unrelated prerelease of the same version instead of your stable packages. A
+# per-layout cache guarantees restore only ever sees this emulation's packages.
+if [[ -n "$OUTPUT_DIR" ]] && [[ $STABLE_BUILD -eq 1 ]] && [[ $SKIP_CLI -eq 0 ]]; then
+  ACTIVATE_PATH="$OUTPUT_DIR/activate.sh"
+  log "Writing emulated-stable activation script: $ACTIVATE_PATH"
+  # Unquoted heredoc: $STABLE_VERSION and $HIVE_NAME are expanded now; everything
+  # that must be evaluated at activation time (paths, PATH, command -v) is escaped.
+  cat > "$ACTIVATE_PATH" <<ACTIVATE
+# Activate the emulated stable $STABLE_VERSION Aspire release (all-local, hermetic).
+# Usage: source "<path-to-this-layout>/activate.sh"
+_aspire_root="\$(cd "\$(dirname "\${BASH_SOURCE[0]:-\$0}")" && pwd)"
+export PATH="\$_aspire_root/bin:\$PATH"
+export ASPIRE_CLI_CHANNEL=stable
+export ASPIRE_CLI_VERSION=$STABLE_VERSION
+export ASPIRE_CLI_PACKAGES="\$_aspire_root/hives/$HIVE_NAME/packages"
+# Hermetic NuGet global-packages cache for this emulated release. A per-layout
+# cache is required when rebuilding a fixed stable version so restore can't be
+# shadowed by a stale, same-versioned package in \$HOME/.nuget/packages.
+export NUGET_PACKAGES="\$_aspire_root/.nuget-packages"
+mkdir -p "\$_aspire_root/work"
+cd "\$_aspire_root/work"
+echo "Activated emulated stable $STABLE_VERSION (hermetic NUGET_PACKAGES). CLI: \$(command -v aspire)"
+ACTIVATE
+fi
+
 # Create archive if requested
 if [[ $ARCHIVE -eq 1 ]]; then
   # Resolve to absolute path before cd to avoid relative path issues
@@ -560,6 +597,13 @@ log "Done."
 echo
 if [[ -n "$OUTPUT_DIR" ]]; then
   log "Portable layout created at: $OUTPUT_DIR"
+  if [[ $STABLE_BUILD -eq 1 ]] && [[ $SKIP_CLI -eq 0 ]]; then
+    log ""
+    log "Emulated stable $STABLE_VERSION. Activate a hermetic, all-local session with:"
+    log "  source $OUTPUT_DIR/activate.sh"
+    log "It sets PATH + ASPIRE_CLI_* (channel=stable, version=$STABLE_VERSION) and an isolated"
+    log "NUGET_PACKAGES so restores can't be shadowed by a stale cached $STABLE_VERSION."
+  fi
   if [[ $ARCHIVE -eq 1 ]]; then
     log "Archive: $ARCHIVE_PATH"
     log ""
@@ -570,6 +614,9 @@ if [[ -n "$OUTPUT_DIR" ]]; then
     else
       log "  mkdir -p ~/.aspire && tar -xzf $(basename "$ARCHIVE_PATH") -C ~/.aspire"
       log "  ~/.aspire/bin/aspire"
+      if [[ $STABLE_BUILD -eq 1 ]] && [[ $SKIP_CLI -eq 0 ]]; then
+        log "  source ~/.aspire/activate.sh   # hermetic emulated stable $STABLE_VERSION session"
+      fi
     fi
   fi
 else

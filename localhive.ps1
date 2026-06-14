@@ -566,6 +566,44 @@ if (-not $SkipCli) {
   }
 }
 
+# For a stable-shaped emulated release written to a portable layout, drop an
+# activate script so the layout is turnkey. Dot-sourcing it puts the CLI on PATH,
+# stamps the emulated stable identity (so the locally-built CLI resolves Aspire*
+# from the bundled hive), and — critically — isolates the NuGet global-packages
+# cache.
+#
+# Why the isolated cache matters: NuGet's global packages folder caches EXTRACTED
+# packages by version. When you emulate a FIXED stable version (e.g. 13.5.0) and
+# rebuild it, a stale 13.5.0 left in that shared cache by an earlier build silently
+# shadows the freshly built one — same version string, different content. The stale
+# AppHost SDK can then inject a prerelease version floor and restore drifts to an
+# unrelated prerelease of the same version instead of your stable packages. A
+# per-layout cache guarantees restore only ever sees this emulation's packages.
+if ($Output -and $stableBuild -and (-not $SkipCli)) {
+  $activatePath = Join-Path $Output 'activate.ps1'
+  Write-Log "Writing emulated-stable activation script: $activatePath"
+  # Expandable here-string: $Version and $Name are baked in now; everything that
+  # must be evaluated at activation time is backtick-escaped to stay literal.
+  $activateContent = @"
+# Activate the emulated stable $Version Aspire release (all-local, hermetic).
+# Usage: . "<path-to-this-layout>\activate.ps1"
+`$AspireRoot = Split-Path -Parent `$MyInvocation.MyCommand.Path
+`$env:PATH = (Join-Path `$AspireRoot 'bin') + [System.IO.Path]::PathSeparator + `$env:PATH
+`$env:ASPIRE_CLI_CHANNEL = 'stable'
+`$env:ASPIRE_CLI_VERSION = '$Version'
+`$env:ASPIRE_CLI_PACKAGES = Join-Path `$AspireRoot (Join-Path 'hives' (Join-Path '$Name' 'packages'))
+# Hermetic NuGet global-packages cache for this emulated release. A per-layout
+# cache is required when rebuilding a fixed stable version so restore can't be
+# shadowed by a stale, same-versioned package in the shared NuGet cache.
+`$env:NUGET_PACKAGES = Join-Path `$AspireRoot '.nuget-packages'
+`$work = Join-Path `$AspireRoot 'work'
+New-Item -ItemType Directory -Path `$work -Force | Out-Null
+Set-Location `$work
+Write-Host "Activated emulated stable $Version (hermetic NUGET_PACKAGES). CLI: `$((Get-Command aspire -ErrorAction SilentlyContinue).Source)"
+"@
+  Set-Content -LiteralPath $activatePath -Value $activateContent -Encoding UTF8
+}
+
 # Create archive if requested
 if ($Archive) {
   if ($bundleRid -like 'win-*') {
@@ -625,6 +663,13 @@ Write-Log 'Done.'
 Write-Host
 if ($Output) {
   Write-Log "Portable layout created at: $Output"
+  if ($stableBuild -and (-not $SkipCli)) {
+    Write-Log ""
+    Write-Log "Emulated stable $Version. Activate a hermetic, all-local session with:"
+    Write-Log "  . $Output/activate.ps1"
+    Write-Log "It sets PATH + ASPIRE_CLI_* (channel=stable, version=$Version) and an isolated"
+    Write-Log "NUGET_PACKAGES so restores can't be shadowed by a stale cached $Version."
+  }
   if ($Archive) {
     Write-Log "Archive: $archivePath"
     Write-Log ""
@@ -632,6 +677,9 @@ if ($Output) {
     if ($bundleRid -like 'win-*') {
       Write-Log "  Expand-Archive -Path $(Split-Path $archivePath -Leaf) -DestinationPath `$HOME\.aspire"
       Write-Log "  `$HOME\.aspire\bin\aspire.exe"
+      if ($stableBuild -and (-not $SkipCli)) {
+        Write-Log "  . `$HOME\.aspire\activate.ps1   # hermetic emulated stable $Version session"
+      }
     } else {
       Write-Log "  mkdir -p ~/.aspire && tar -xzf $(Split-Path $archivePath -Leaf) -C ~/.aspire"
       Write-Log "  ~/.aspire/bin/aspire"

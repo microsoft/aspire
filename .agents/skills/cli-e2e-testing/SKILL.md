@@ -234,6 +234,17 @@ skip and add zero CI cost — CI relies on `--ignore-exit-code 8` (set in `eng/T
 **ambient** NuGet source (`dotnet nuget add source`) because MSBuild resolves the apphost's
 `Aspire.AppHost.Sdk` before restore from nuget.config sources only, ignoring `ASPIRE_CLI_PACKAGES`.
 
+> **⚠️ Local rebuilds: isolate the NuGet global cache.** This only affects **local** iteration of a
+> stable-shaped emulation (the E2E tests run in fresh Docker containers, so CI is immune). NuGet's
+> global packages folder (`~/.nuget/packages/<id>/<version>/`) caches **extracted** packages keyed by
+> version. When you emulate a *fixed* stable version (e.g. `13.5.0`) and **rebuild** it, a stale
+> `13.5.0` in that shared cache silently shadows the freshly built one — same version, different
+> content — so restore drifts (the stale AppHost SDK injects a prerelease floor and you get `NU1603`
+> warnings binding the graph to a stray `13.5.0-pr.…`). **Fix:** point `NUGET_PACKAGES` at a
+> per-emulation directory (`export NUGET_PACKAGES=/tmp/aspire-localrelease/.nuget-packages`).
+> `localhive … -o DIR`'s generated `activate.sh`/`activate.ps1` already sets this up. See the cache
+> hazard note in `.agents/skills/cli-channel-debugging/SKILL.md` (Scenario 7c) for the full mechanism.
+
 ## SequenceCounter and Prompt Detection
 
 The `SequenceCounter` class tracks the number of shell commands executed. This enables deterministic waiting for command completion via a custom shell prompt.
