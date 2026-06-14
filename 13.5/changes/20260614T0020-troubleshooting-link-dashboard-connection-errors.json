@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dashboard connection error logs now include a troubleshooting link when the dashboard fails to connect to the AppHost resource service, helping users quickly find the relevant documentation.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-06-14T00:20:24Z",
+  "lastMergedAt": "2026-06-14T00:20:24Z",
+  "name": "Troubleshooting links in dashboard connection error logs",
+  "owner": "JamesNK",
+  "prs": [
+    18194
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement: adds troubleshooting link to dashboard resource service connection error logs",
+  "mergedAt": "2026-06-14T00:20:24Z",
+  "number": 18194,
+  "runDate": "2026-06-14T00:29:35Z",
+  "status": "included",
+  "title": "Add troubleshooting link to dashboard resource service connection error logs"
+}
