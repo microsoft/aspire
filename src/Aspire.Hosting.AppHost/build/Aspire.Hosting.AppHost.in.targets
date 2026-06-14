@@ -24,21 +24,6 @@
     <ProjectCapability Include="Aspire_@VERSION@" Condition=" '$(IsAspireHost)' == 'true' " />
   </ItemGroup>
 
-  <!--
-    StreamJsonRpc 2.25+ ships an analyzer (StreamJsonRpc.Analyzers.dll) built against
-    Roslyn 4.14, which is newer than the Roslyn 4.11 in the .NET 8 SDK. When an
-    AppHost project targets net8.0 and is built with the .NET 8 SDK, the C# compiler
-    fails to load the analyzer with CSC error CS9057. Aspire does not depend on any
-    StreamJsonRpc analyzer diagnostic, so unconditionally remove it from the
-    AppHost's Analyzer item set before compile.
-    See: https://github.com/microsoft/vs-streamjsonrpc/pull/1459
-  -->
-  <Target Name="_AspireRemoveStreamJsonRpcAnalyzer" BeforeTargets="CoreCompile">
-    <ItemGroup>
-      <Analyzer Remove="@(Analyzer)" Condition="$([System.String]::Copy('%(Analyzer.Identity)').Contains('StreamJsonRpc.Analyzers'))" />
-    </ItemGroup>
-  </Target>
-
   <ItemGroup>
     <JsonSchemaSegment Include="$(MSBuildThisFileDirectory)..\AspireAppHostConfiguration.json"
                        FilePathPattern="appsettings\..*json" />
