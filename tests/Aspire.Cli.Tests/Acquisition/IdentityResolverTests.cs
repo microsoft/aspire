@@ -212,7 +212,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("abcdef0")]
+    [InlineData("abcdef01")]
     [InlineData("ABCDEF0123456789")]
     [InlineData("0123456789012345678901234567890123456789")]
     public void ResolveCommit_AcceptsHexSha(string commit)
@@ -231,7 +231,8 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("xyz1234")]        // non-hex characters
-    [InlineData("abc")]            // too short (< 7)
+    [InlineData("abc")]            // too short (< 8)
+    [InlineData("abcdef0")]        // 7 hex chars: one short of the 8-char darc feed contract
     [InlineData("abcdef 0")]       // embedded space
     public void ResolveCommit_FromEnv_FailsFast_WhenNotHex(string commit)
     {

@@ -235,13 +235,16 @@ internal sealed class IdentityResolver : IIdentityResolver
     {
         // ASPIRE_CLI_COMMIT is the source revision carried in the "+<sha>" suffix of the informational
         // version. Its one behavioral use is deriving the staging feed name
-        // darc-pub-microsoft-aspire-<sha8> (first 8 chars, lowercased), so it must be hexadecimal.
-        // Accept 7 (git's default abbreviation) through 64 characters so both abbreviated and full
-        // SHA-1 (40) and SHA-256 (64) revisions validate.
-        if (!IsHex(value, minLength: 7, maxLength: 64))
+        // darc-pub-microsoft-aspire-<sha8> (PackagingService takes the first 8 chars, lowercased), so
+        // it must be hexadecimal AND at least 8 characters. A shorter value passes a naive hex check
+        // but then yields a feed name one character short of that contract (a 7-char commit derives
+        // ...-aspire-<7char>, which can never match a real darc feed), so restore fails far from the
+        // typo. Accept 8 through 64 characters so git's abbreviated short SHAs and full SHA-1 (40) /
+        // SHA-256 (64) revisions all validate.
+        if (!IsHex(value, minLength: 8, maxLength: 64))
         {
             throw InvalidOverride(source, CommitEnvVar, "commit", value,
-                "a hexadecimal commit SHA of 7 to 64 characters, e.g. 'abcdef0'");
+                "a hexadecimal commit SHA of 8 to 64 characters, e.g. 'abcdef01'");
         }
     }
 

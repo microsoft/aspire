@@ -611,6 +611,9 @@ internal class PackagingService : IPackagingService
             return null;
         }
 
+        // Env/sidecar commits are guaranteed >= 8 chars by IdentityResolver.ValidateCommit; only the
+        // never-validated assembly informational version could be shorter (e.g. a test or malformed
+        // build), so fall back to the raw value there rather than throwing on this resolve path.
         var truncatedHash = commitHash.Length >= 8 ? commitHash[..8] : commitHash;
 
         return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
