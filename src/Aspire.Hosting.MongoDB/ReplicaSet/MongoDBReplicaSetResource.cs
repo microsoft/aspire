@@ -31,15 +31,43 @@ public sealed class MongoDBReplicaSetResource(
         // Build the seed list `mongodb://host1:port1,host2:port2,.../?replicaSet=<name>` — see https://www.mongodb.com/docs/manual/reference/connection-string/#dns-seedlist-connection-format
         builder.AppendLiteral("mongodb://");
         var membersList = members.ToList();
+        var hasAuth = false;
         for (var i = 0; i < membersList.Count; i++)
         {
-            builder.Append($"{membersList[i].Member.PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}");
+            var @this = membersList[i];
+            if (i is 0)
+            {
+                if (@this.Member.PasswordParameter is not null)
+                {
+                    if (@this.Member.UserNameParameter is not null)
+                    {
+                        builder.Append($"{@this.Member.UserNameParameter:uri}:{@this.Member.PasswordParameter:uri}@");
+                    }
+                    else
+                    {
+                        builder.Append($"{MongoDBServerResource.DefaultUserName:uri}:{@this.Member.PasswordParameter:uri}@");
+                    }
+                    hasAuth = true;
+                }
+            }
+
+            builder.Append($"{@this.Member.PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}");
+
             if (i < membersList.Count - 1)
             {
                 builder.AppendLiteral(",");
             }
         }
+
         builder.AppendLiteral($"/?replicaSet={Name}");
+
+        if (hasAuth)
+        {
+            builder.AppendLiteral("&authSource=");
+            builder.Append($"{MongoDBServerResource.DefaultAuthenticationDatabase:uri}");
+            builder.AppendLiteral("&authMechanism=");
+            builder.Append($"{MongoDBServerResource.DefaultAuthenticationMechanism:uri}");
+        }
 
         return builder.Build();
     }

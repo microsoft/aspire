@@ -85,11 +85,19 @@ public static class MongoDBReplicaSetBuilderExtensions
                 var primaryClient = new MongoClient(connectionStringToPrimary);
 
                 var membersBsonArray = new BsonArray(
-                    await Task.WhenAll(memberAnnotations.Select(async (m, i) => new BsonDocument
-                    {
-                        ["_id"] = i,
-                        ["host"] = $"{m.Member.Name}:{await m.Member.PrimaryEndpoint.Property(EndpointProperty.HostAndPort).GetValueAsync(ct).ConfigureAwait(false)}"
-                    })).ConfigureAwait(false)
+                    // todo
+                    [
+                        new BsonDocument
+                        {
+                            ["_id"] = 0,
+                            ["host"] = $"localhost:{initialPrimary.PrimaryEndpoint.TargetPort ?? 27017}",
+                        }
+                    ]
+                // memberAnnotations.Select(async (m, i) => new BsonDocument
+                // {
+                //     ["_id"] = i,
+                //     ["host"] = $"localhost:{m.Member.PrimaryEndpoint.TargetPort ?? 27017}",
+                // })
                 );
 
                 var admin = primaryClient.GetDatabase("admin");
@@ -97,6 +105,26 @@ public static class MongoDBReplicaSetBuilderExtensions
                 {
                     try
                     {
+                        var replicaSetInitiateCommand = new BsonDocument
+                        {
+                            ["replSetInitiate"] = new BsonDocument
+                            {
+                                ["_id"] = rsResource.Name,
+                                ["members"] = membersBsonArray,
+                            }
+                        };
+
+                        try
+                        {
+                            await admin.RunCommandAsync<BsonDocument>(replicaSetInitiateCommand, cancellationToken: ct).ConfigureAwait(false);
+                            break;
+                        }
+                        catch (MongoCommandException initiateEx) when (initiateEx.CodeName is ReplicaSetAlreadyInitializedCodeName)
+                        {
+                            // NOTE: Happens when in race with another concurrent process trying to initialize the replica set
+                            // NOTE: We retry the whole operation
+                        }
+
                         var currentConfig = await admin.RunCommandAsync<BsonDocument>(
                             command: new BsonDocument
                             {
@@ -151,6 +179,9 @@ public static class MongoDBReplicaSetBuilderExtensions
                         Console.WriteLine(ex);
                     }
                 }
+
+                var foo = new MongoClient(connectionString);
+                var v = await foo.ListDatabaseNamesAsync(ct).ConfigureAwait(false);
 
                 await evt.Notifications.PublishUpdateAsync(resource, s => s with
                 {

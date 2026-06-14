@@ -11,9 +11,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public class MongoDBServerResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
     internal const string PrimaryEndpointName = "tcp";
-    private const string DefaultUserName = "admin";
-    private const string DefaultAuthenticationDatabase = "admin";
-    private const string DefaultAuthenticationMechanism = "SCRAM-SHA-256";
+    internal const string DefaultUserName = "admin";
+    internal const string DefaultAuthenticationDatabase = "admin";
+    internal const string DefaultAuthenticationMechanism = "SCRAM-SHA-256";
 
     private EndpointReference? _primaryEndpoint;
 
