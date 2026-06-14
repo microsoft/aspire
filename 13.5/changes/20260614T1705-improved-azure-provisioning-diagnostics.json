@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Azure provisioning failures now surface richer diagnostics with actionable recovery guidance in resource state and `aspire deploy` output. Errors such as unsupported regions, missing subscriptions, and invalid resource properties are normalized into provider-specific details with targeted remediation steps instead of generic ARM wrapper messages.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-06-14T17:05:54Z",
+  "lastMergedAt": "2026-06-14T17:05:54Z",
+  "name": "Improved Azure provisioning diagnostics",
+  "owner": "davidfowl",
+  "prs": [
+    18132
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Improved Azure provisioning diagnostics with actionable recovery guidance for provisioning failures",
+  "mergedAt": "2026-06-14T17:05:54Z",
+  "number": 18132,
+  "runDate": "2026-06-14T18:27:00Z",
+  "status": "included",
+  "title": "Improve Azure provisioning diagnostics"
+}
