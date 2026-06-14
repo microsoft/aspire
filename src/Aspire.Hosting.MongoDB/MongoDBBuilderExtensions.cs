@@ -6,6 +6,9 @@ using Aspire.Hosting.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 
+#pragma warning disable ASPIRECERTIFICATES001
+#pragma warning disable ASPIREDOCKERFILEBUILDER001
+
 namespace Aspire.Hosting;
 
 /// <summary>
@@ -264,6 +267,18 @@ public static class MongoDBBuilderExtensions
     }
 
     /// <summary>
+    /// Configures the MongoDB server to bind to and listen on all network interfaces.
+    /// </summary>
+    [AspireExport]
+    public static IResourceBuilder<MongoDBServerResource> WithBindIpAll(this IResourceBuilder<MongoDBServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder
+            .WithArgs("--bind_ip_all");
+    }
+
+    /// <summary>
     /// Annotates a MongoDB server resource as a member of a replica set with the specified name. This will configure the necessary command line arguments on the MongoDB container to initialize it as a member of the replica set.
     /// </summary>
     /// <remarks>
@@ -276,7 +291,9 @@ public static class MongoDBBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         builder.Resource.ReplicaSetName = name;
-        return builder.WithArgs("--replSet", name);
+        return builder
+            .WithBindIpAll()
+            .WithArgs("--replSet", name);
     }
 
     /// <summary>
@@ -311,6 +328,50 @@ public static class MongoDBBuilderExtensions
             .WithArgs("--keyFile", keyFilePath);
     }
 
+    /// <summary>
+    /// Configures the MongoDB server to use TLS with the specified certificate and CA files.
+    /// </summary>
+    [AspireExport]
+    public static IResourceBuilder<MongoDBServerResource> WithTls(
+        this IResourceBuilder<MongoDBServerResource> builder,
+        MongoDBTlsMode mode = MongoDBTlsMode.RequireTls
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder
+            .WithArgs("--tlsMode", mode switch
+            {
+                MongoDBTlsMode.Disabled => "disabled",
+                MongoDBTlsMode.AllowTls => "allowTLS",
+                MongoDBTlsMode.PreferTls => "preferTLS",
+                MongoDBTlsMode.RequireTls => "requireTLS",
+                _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Unsupported TLS mode: {mode}"),
+            })
+            .WithArgs("--tlsAllowConnectionsWithoutCertificates") // NOTE: This allows clients to connect without having to provide the certificate again.
+            .WithCertificateTrustConfiguration(ctx =>
+            {
+                ctx.Arguments.Add("--tlsCAFile");
+                ctx.Arguments.Add(ctx.CertificateBundlePath);
+                builder.Resource.TlsCaFilePath = ctx.CertificateBundlePath;
+
+                return Task.CompletedTask;
+            })
+            .WithHttpsCertificateConfiguration(ctx =>
+            {
+                ctx.Arguments.Add("--tlsCertificateKeyFile");
+                ctx.Arguments.Add(ctx.CertificateWithKeyPath);
+
+                if (ctx.Password is not null)
+                {
+                    ctx.Arguments.Add("--tlsCertificateKeyFilePassword"); // NOTE: See https://www.mongodb.com/docs/manual/tutorial/configure-ssl/#tls-ssl-certificate-passphrase
+                    ctx.Arguments.Add(ctx.Password);
+                }
+
+                return Task.CompletedTask;
+            });
+    }
+
     private static void ConfigureMongoExpressContainer(EnvironmentCallbackContext context, MongoDBServerResource resource)
     {
         // Mongo Express assumes Mongo is being accessed over a default Aspire container network and hardcodes the resource address
@@ -328,4 +389,33 @@ public static class MongoDBBuilderExtensions
             context.EnvironmentVariables["ME_CONFIG_MONGODB_ADMINPASSWORD"] = resource.PasswordParameter;
         }
     }
+}
+
+/// <summary>
+/// Defines the TLS mode for MongoDB server.
+/// </summary>
+/// <remarks>
+/// See https://www.mongodb.com/docs/manual/reference/configuration-options/#mongodb-setting-net.tls.mode
+/// </remarks>
+public enum MongoDBTlsMode
+{
+    /// <summary>
+    /// The server does not use TLS.
+    /// </summary>
+    Disabled,
+
+    /// <summary>
+    /// Connections between servers do not use TLS. For incoming connections, the server accepts both TLS and non-TLS.
+    /// </summary>
+    AllowTls,
+
+    /// <summary>
+    /// Connections between servers use TLS. For incoming connections, the server accepts both TLS and non-TLS.
+    /// </summary>
+    PreferTls,
+
+    /// <summary>
+    /// The server uses and accepts only TLS encrypted connections.
+    /// </summary>
+    RequireTls,
 }

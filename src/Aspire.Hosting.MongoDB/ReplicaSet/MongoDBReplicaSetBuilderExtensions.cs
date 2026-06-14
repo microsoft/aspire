@@ -45,6 +45,7 @@ public static class MongoDBReplicaSetBuilderExtensions
         );
 
         // var healthCheckKey = $"{name}_check";
+        // todo
         // builder.Services.AddHealthChecks()
         //     .AddCheck(
         //         name: healthCheckKey,
@@ -90,7 +91,16 @@ public static class MongoDBReplicaSetBuilderExtensions
                         new BsonDocument
                         {
                             ["_id"] = 0,
-                            ["host"] = $"localhost:{initialPrimary.PrimaryEndpoint.TargetPort ?? 27017}",
+                            // NOTE: `host` represents the host and port that should be accessible from within the MongoDB server's container.
+                            ["host"] = $"{initialPrimary.Name}:{initialPrimary.PrimaryEndpoint.TargetPort!.Value}", // NOTE: We know this is always set.
+                            ["horizons"] = new BsonDocument
+                            {
+                                // NOTE: This represents the host and port that would actually be advertised to outside clients, and should as such be accessible from outside the MongoDB server's container
+                                ["external"] = await initialPrimary.PrimaryEndpoint
+                                    .Property(EndpointProperty.HostAndPort)
+                                    .GetValueAsync(ct)
+                                    .ConfigureAwait(false),
+                            }
                         }
                     ]
                 // memberAnnotations.Select(async (m, i) => new BsonDocument
@@ -208,7 +218,7 @@ public static class MongoDBReplicaSetBuilderExtensions
     {
         member
             .WithReplicaSet(builder.Resource.Name)
-            .WithKeyFile(builder.Resource.SharedKeyFileParameter);
+            .WithTls();
 
         return builder
             .WithAnnotation(new MongoReplicaSetMemberAnnotation(member.Resource))

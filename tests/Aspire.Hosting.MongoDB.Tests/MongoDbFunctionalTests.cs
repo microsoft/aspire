@@ -101,6 +101,44 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
         }, cts.Token);
     }
 
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task VerifyMongoDBWithTls()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        var pipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new() { MaxRetryAttempts = 10, Delay = TimeSpan.FromSeconds(1) })
+            .Build();
+
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        var mongodb = builder.AddMongoDB("mongodb")
+            .WithTls();
+        var db = mongodb.AddDatabase("testdb");
+        using var app = builder.Build();
+
+        await app.StartAsync();
+
+        var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
+
+        var connectionString = await db.Resource.ConnectionStringExpression.GetValueAsync(default);
+        hb.Configuration[$"ConnectionStrings:{db.Resource.Name}"] = connectionString;
+        Assert.Contains("tls=true", connectionString, StringComparison.OrdinalIgnoreCase);
+
+        hb.AddMongoDBClient(db.Resource.Name);
+
+        using var host = hb.Build();
+
+        await host.StartAsync();
+
+        await pipeline.ExecuteAsync(async token =>
+        {
+            var mongoDatabase = host.Services.GetRequiredService<IMongoDatabase>();
+            await CreateTestDataAsync(mongoDatabase, token);
+        }, cts.Token);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

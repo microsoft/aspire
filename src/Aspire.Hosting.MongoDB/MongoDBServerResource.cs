@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
@@ -83,6 +85,17 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
     /// </remarks>
     public ReferenceExpression UriExpression => BuildConnectionString();
 
+    /// <summary>
+    /// Gets a value indicating whether TLS is enabled for the MongoDB server.
+    /// </summary>
+    [MemberNotNullWhen(true, nameof(TlsCaFilePath))]
+    public bool TlsEnabled => TlsCaFilePath is not null;
+
+    /// <summary>
+    /// Gets the file path to the TLS CA certificate, if TLS is enabled.
+    /// </summary>
+    public ReferenceExpression? TlsCaFilePath { get; internal set; }
+
     private static ReferenceExpression AuthenticationDatabaseReference => ReferenceExpression.Create($"{DefaultAuthenticationDatabase}");
 
     private static ReferenceExpression AuthenticationMechanismReference => ReferenceExpression.Create($"{DefaultAuthenticationMechanism}");
@@ -129,6 +142,12 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
             builder.AppendLiteral(PasswordParameter is not null ? "&" : "?");
             // NOTE: This is necessary when connecting to a single node that happens to be part of the replica set. Otherwise, the driver will attempt to discover other nodes in the replica set, and this would most notably fail upon attempting to `rs.initialize` since the replica set is not fully initialized at that point.
             builder.AppendLiteral("directConnection=true");
+        }
+
+        if (TlsEnabled)
+        {
+            builder.AppendLiteral(PasswordParameter is not null || ReplicaSetName is not null ? "&" : "?");
+            builder.AppendLiteral("tls=true");
         }
 
         return builder.Build();
