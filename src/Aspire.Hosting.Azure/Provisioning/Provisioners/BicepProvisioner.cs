@@ -36,6 +36,7 @@ internal sealed class BicepProvisioner(
     internal const string DeploymentStateProvisioningStateCanceled = "Canceled";
     internal const string DeploymentStateProvisioningStateSucceeded = "Succeeded";
 
+    private const string DeploymentOperationPropertyPrefix = "azure.deployment.operations.";
     private static readonly TimeSpan s_deploymentOperationPollingInterval = TimeSpan.FromSeconds(2);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -123,7 +124,7 @@ internal sealed class BicepProvisioner(
         {
             // Reused deployment state should expose the same Azure identity metadata as a freshly provisioned resource
             // so agents and commands can reliably locate the backing Azure deployment.
-            var props = state.Properties.ClearAzureProvisioningFailureProperties().SetResourcePropertyRange([
+            var props = state.Properties.WithoutAzureProvisioningFailureProperties().SetResourcePropertyRange([
                 new("azure.subscription.id", azureContext.SubscriptionId),
                 new("azure.resource.group", azureContext.ResourceGroup),
                 new("azure.tenant.id", azureContext.TenantId),
@@ -174,7 +175,7 @@ internal sealed class BicepProvisioner(
         {
             ResourceType = resource.GetType().Name,
             State = new("Starting", KnownResourceStateStyles.Info),
-            Properties = ClearDeploymentOperationProperties(state.Properties.ClearAzureProvisioningFailureProperties()).SetResourcePropertyRange([
+            Properties = WithoutDeploymentOperationProperties(state.Properties.WithoutAzureProvisioningFailureProperties()).SetResourcePropertyRange([
                 new("azure.subscription.id", subscription.Id.Name),
                 new("azure.resource.group", resourceGroupName),
                 new("azure.tenant.id", context.Tenant.TenantId?.ToString()),
@@ -273,6 +274,7 @@ internal sealed class BicepProvisioner(
             var failureDetails = AzureProvisioningFailureDetails.FromRequestFailedException(ex, AzureProvisioningFailureDetails.ProvisionOperation);
             if (!failureDetails.IsLocationAvailabilityFailure)
             {
+                LogProvisioningFailure(resourceLogger, failureDetails);
                 throw;
             }
 
@@ -282,13 +284,17 @@ internal sealed class BicepProvisioner(
                 await notificationService.PublishUpdateAsync(resource, state => state with
                 {
                     State = new("Azure deployment failed", KnownResourceStateStyles.Error),
-                    Properties = failureDetails.SetResourceProperties(ClearDeploymentOperationProperties(state.Properties), AzureProvisioningFailureDetails.ProvisionOperation)
+                    Properties = failureDetails.SetResourceProperties(WithoutDeploymentOperationProperties(state.Properties), AzureProvisioningFailureDetails.ProvisionOperation)
                 }).ConfigureAwait(false);
             }
 
+            LogProvisioningFailure(resourceLogger, failureDetails);
             throw new AzureProvisioningFailureException(failureDetails, ex);
         }
 
+        // Run mode keeps persisting deployment state and final diagnostics after cancellation so
+        // Ctrl+C leaves enough information for recovery. Publish/deploy should still honor the
+        // caller's cancellation token because those operations are command-scoped.
         var statePersistenceCancellationToken = context.ExecutionContext.IsRunMode ? CancellationToken.None : cancellationToken;
         DeploymentStateSection? stateSection = null;
         string? locationOverride = null;
@@ -332,7 +338,7 @@ internal sealed class BicepProvisioner(
             await operation.WaitForCompletionAsync(cancellationToken).ConfigureAwait(false);
             if (context.ExecutionContext.IsRunMode)
             {
-                await PublishDeploymentOperationSummaryAsync(resource, context, deploymentId, effectiveLocation, deploymentOperationTracker, force: true, CancellationToken.None).ConfigureAwait(false);
+                await PublishDeploymentOperationSummaryAsync(resource, context, deploymentId, effectiveLocation, deploymentOperationTracker, force: true, statePersistenceCancellationToken).ConfigureAwait(false);
             }
         }
         catch (RequestFailedException ex)
@@ -344,10 +350,11 @@ internal sealed class BicepProvisioner(
                 effectiveLocation,
                 deploymentOperationTracker,
                 force: true,
-                context.ExecutionContext.IsRunMode ? CancellationToken.None : cancellationToken).ConfigureAwait(false);
+                statePersistenceCancellationToken).ConfigureAwait(false);
 
             if (summary.FailedOperations.FirstOrDefault(static operation => operation.FailureDetails is not null)?.FailureDetails is { } failureDetails)
             {
+                LogProvisioningFailure(resourceLogger, failureDetails);
                 throw new AzureProvisioningFailureException(failureDetails, ex);
             }
 
@@ -355,9 +362,11 @@ internal sealed class BicepProvisioner(
             if (requestFailureDetails.IsLocationAvailabilityFailure)
             {
                 requestFailureDetails = await EnrichFailureDetailsAsync(requestFailureDetails, context, effectiveLocation, cancellationToken).ConfigureAwait(false);
+                LogProvisioningFailure(resourceLogger, requestFailureDetails);
                 throw new AzureProvisioningFailureException(requestFailureDetails, ex);
             }
 
+            LogProvisioningFailure(resourceLogger, requestFailureDetails);
             throw;
         }
         catch (OperationCanceledException)
@@ -400,6 +409,7 @@ internal sealed class BicepProvisioner(
                 await deploymentStateManager.SaveSectionAsync(stateSection, statePersistenceCancellationToken).ConfigureAwait(false);
             }
 
+            resourceLogger.LogError("Azure deployment of {Name} to {DeploymentTarget} completed with provisioning state {ProvisioningState}.", resource.Name, deploymentTargetName, provisioningState);
             throw new InvalidOperationException($"Deployment of {resource.Name} to {deploymentTargetName} failed with {provisioningState}");
         }
 
@@ -435,7 +445,7 @@ internal sealed class BicepProvisioner(
 
         await notificationService.PublishUpdateAsync(resource, state =>
         {
-            ImmutableArray<ResourcePropertySnapshot> properties = state.Properties.ClearAzureProvisioningFailureProperties().SetResourcePropertyRange([
+            ImmutableArray<ResourcePropertySnapshot> properties = state.Properties.WithoutAzureProvisioningFailureProperties().SetResourcePropertyRange([
                 new("azure.subscription.id", subscription.Id.Name),
                 new("azure.resource.group", resourceGroupName),
                 new("azure.tenant.id", context.Tenant.TenantId?.ToString()),
@@ -502,7 +512,7 @@ internal sealed class BicepProvisioner(
 
         await notificationService.PublishUpdateAsync(resource, state =>
         {
-            var properties = ClearDeploymentOperationProperties(state.Properties).SetResourcePropertyRange(CreateDeploymentOperationProperties(summary));
+            var properties = WithoutDeploymentOperationProperties(state.Properties).SetResourcePropertyRange(CreateDeploymentOperationProperties(summary));
             if (summary.FailedOperations.FirstOrDefault(static operation => operation.FailureDetails is not null)?.FailureDetails is { } failureDetails)
             {
                 properties = failureDetails.SetResourceProperties(properties, AzureProvisioningFailureDetails.ProvisionOperation);
@@ -526,26 +536,70 @@ internal sealed class BicepProvisioner(
         CancellationToken cancellationToken)
     {
         var operations = ImmutableArray.CreateBuilder<AzureDeploymentOperationDetails>();
+        var runningOperations = ImmutableArray.CreateBuilder<AzureDeploymentOperationDetails>();
+        var succeededOperations = ImmutableArray.CreateBuilder<AzureDeploymentOperationDetails>();
+        var failedOperations = ImmutableArray.CreateBuilder<AzureDeploymentOperationDetails>();
+        var canceledOperations = ImmutableArray.CreateBuilder<AzureDeploymentOperationDetails>();
+        var enrichmentTasks = new List<(int OperationIndex, Task<AzureProvisioningFailureDetails> EnrichmentTask)>();
+
         await foreach (var operation in context.ArmClient.GetDeploymentOperationsAsync(deploymentId.ToString(), recursive: true, cancellationToken).ConfigureAwait(false))
         {
-            operations.Add(operation.FailureDetails is { } failureDetails
-                ? operation with
-                {
-                    FailureDetails = await EnrichFailureDetailsAsync(failureDetails, context, currentLocation, cancellationToken).ConfigureAwait(false)
-                }
-                : operation);
+            if (operation.FailureDetails is { } failureDetails)
+            {
+                // Supported-location lookups are independent provider metadata calls. Start them as
+                // operations arrive and await them together so multiple failed resources do not add
+                // serial ARM round trips to failure reporting.
+                enrichmentTasks.Add((operations.Count, EnrichFailureDetailsAsync(failureDetails, context, currentLocation, cancellationToken)));
+            }
+
+            operations.Add(operation);
         }
 
-        var displayOperations = operations
-            .Where(static operation => operation is { IsCreateOperation: true, TargetResource: not null } && !operation.IsNestedDeploymentCreate)
-            .ToArray();
+        if (enrichmentTasks.Count > 0)
+        {
+            await Task.WhenAll(enrichmentTasks.Select(static enrichment => enrichment.EnrichmentTask)).ConfigureAwait(false);
+
+            foreach (var (operationIndex, enrichmentTask) in enrichmentTasks)
+            {
+                operations[operationIndex] = operations[operationIndex] with
+                {
+                    FailureDetails = await enrichmentTask.ConfigureAwait(false)
+                };
+            }
+        }
+
+        foreach (var operationDetails in operations)
+        {
+            if (operationDetails is not { IsCreateOperation: true, TargetResource: not null } ||
+                operationDetails.IsNestedDeploymentCreate)
+            {
+                continue;
+            }
+
+            if (string.Equals(operationDetails.ProvisioningState, AzureDeploymentOperationDetails.RunningState, StringComparisons.AzureProvisioningState))
+            {
+                runningOperations.Add(operationDetails);
+            }
+            else if (string.Equals(operationDetails.ProvisioningState, AzureDeploymentOperationDetails.SucceededState, StringComparisons.AzureProvisioningState))
+            {
+                succeededOperations.Add(operationDetails);
+            }
+            else if (string.Equals(operationDetails.ProvisioningState, AzureDeploymentOperationDetails.FailedState, StringComparisons.AzureProvisioningState))
+            {
+                failedOperations.Add(operationDetails);
+            }
+            else if (string.Equals(operationDetails.ProvisioningState, AzureDeploymentOperationDetails.CanceledState, StringComparisons.AzureProvisioningState))
+            {
+                canceledOperations.Add(operationDetails);
+            }
+        }
 
         return new(
             Operations: operations.ToImmutable(),
-            RunningOperations: [.. displayOperations.Where(static operation => string.Equals(operation.ProvisioningState, AzureDeploymentOperationDetails.RunningState, StringComparison.OrdinalIgnoreCase))],
-            SucceededOperations: [.. displayOperations.Where(static operation => string.Equals(operation.ProvisioningState, AzureDeploymentOperationDetails.SucceededState, StringComparison.OrdinalIgnoreCase))],
-            FailedOperations: [.. displayOperations.Where(static operation => string.Equals(operation.ProvisioningState, AzureDeploymentOperationDetails.FailedState, StringComparison.OrdinalIgnoreCase))],
-            CanceledOperations: [.. displayOperations.Where(static operation => string.Equals(operation.ProvisioningState, AzureDeploymentOperationDetails.CanceledState, StringComparison.OrdinalIgnoreCase))]);
+            RunningOperations: runningOperations.ToImmutable(),
+            SucceededOperations: succeededOperations.ToImmutable(),
+            FailedOperations: failedOperations.ToImmutable(),
+            CanceledOperations: canceledOperations.ToImmutable());
     }
 
     private async Task<AzureProvisioningFailureDetails> EnrichFailureDetailsAsync(
@@ -611,17 +665,22 @@ internal sealed class BicepProvisioner(
         }
     }
 
-    private static ImmutableArray<ResourcePropertySnapshot> ClearDeploymentOperationProperties(ImmutableArray<ResourcePropertySnapshot> properties)
+    private static ImmutableArray<ResourcePropertySnapshot> WithoutDeploymentOperationProperties(ImmutableArray<ResourcePropertySnapshot> properties)
     {
         if (properties.IsDefaultOrEmpty)
         {
             return [];
         }
 
+        if (!properties.Any(static property => property.Name.StartsWith(DeploymentOperationPropertyPrefix, StringComparison.Ordinal)))
+        {
+            return properties;
+        }
+
         // A later deployment can fail before operations exist, or the set of running/succeeded
-        // resources can shrink between polls. Clear all old operation properties before publishing
+        // resources can shrink between polls. Filter all old operation properties before publishing
         // new state so describe output never mixes a fresh failure with stale resource counters.
-        return [.. properties.Where(static property => !property.Name.StartsWith("azure.deployment.operations.", StringComparison.Ordinal))];
+        return [.. properties.Where(static property => !property.Name.StartsWith(DeploymentOperationPropertyPrefix, StringComparison.Ordinal))];
     }
 
     private static string[] CreateOperationResourceLabels(IEnumerable<AzureDeploymentOperationDetails> operations)
@@ -639,7 +698,8 @@ internal sealed class BicepProvisioner(
                 })
                 .Where(static label => !string.IsNullOrEmpty(label))
                 .Select(static label => label!)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Distinct(StringComparers.AzureResourceName)
+                .OrderBy(static label => label, StringComparers.AzureResourceName)
         ];
     }
 
@@ -666,6 +726,34 @@ internal sealed class BicepProvisioner(
         }
 
         return new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info);
+    }
+
+    private static void LogProvisioningFailure(ILogger resourceLogger, AzureProvisioningFailureDetails failureDetails)
+    {
+        resourceLogger.LogError("Azure provisioning failed: {Message}{Details}", failureDetails.ErrorMessage, CreateFailureLogDetails(failureDetails));
+    }
+
+    private static string CreateFailureLogDetails(AzureProvisioningFailureDetails failureDetails)
+    {
+        var details = new List<string>();
+
+        AddDetail("code", failureDetails.ErrorCode);
+        AddDetail("resource type", failureDetails.ResourceType);
+        AddDetail("resource name", failureDetails.ResourceName);
+        AddDetail("target resource", failureDetails.TargetResourceId);
+        AddDetail("current location", failureDetails.CurrentLocation);
+        AddDetail("request id", failureDetails.RequestId);
+        AddDetail("correlation id", failureDetails.CorrelationId);
+
+        return details.Count == 0 ? string.Empty : $" ({string.Join("; ", details)})";
+
+        void AddDetail(string name, string? value)
+        {
+            if (!string.IsNullOrEmpty(value))
+            {
+                details.Add($"{name}: {value}");
+            }
+        }
     }
 
     private static async Task<string> ResolveScopeValueAsync(object scopeValue, CancellationToken cancellationToken)
@@ -716,7 +804,7 @@ internal sealed class BicepProvisioner(
         // Only preserve a per-resource override when it still matches the resource we just deployed. This keeps
         // run-mode reprovisioning sticky while allowing global context changes to clear stale overrides naturally.
         if (!string.IsNullOrEmpty(locationOverride) &&
-            string.Equals(locationOverride, effectiveLocation, StringComparison.OrdinalIgnoreCase))
+            string.Equals(locationOverride, effectiveLocation, StringComparisons.AzureLocation))
         {
             stateSection.Data[AzureProvisioningController.LocationOverrideKey] = locationOverride;
         }

@@ -59,19 +59,19 @@ internal sealed record AzureDeploymentOperationDetails(
     internal const string FailedState = "Failed";
     internal const string CanceledState = "Canceled";
 
-    internal bool IsCreateOperation => string.Equals(ProvisioningOperation, CreateOperation, StringComparison.OrdinalIgnoreCase);
+    internal bool IsCreateOperation => string.Equals(ProvisioningOperation, CreateOperation, StringComparisons.AzureProvisioningOperation);
 
     // ARM templates commonly expand into nested Microsoft.Resources/deployments operations. Those
     // operations are control-plane scaffolding, not user resources, but they point to child
     // deployments that contain the provider-level status and errors we need to walk.
     internal bool IsNestedDeploymentCreate =>
         IsCreateOperation &&
-        string.Equals(TargetResource?.ResourceType, DeploymentResourceType, StringComparison.OrdinalIgnoreCase);
+        string.Equals(TargetResource?.ResourceType, DeploymentResourceType, StringComparisons.AzureResourceType);
 
     internal bool IsTerminal =>
-        string.Equals(ProvisioningState, SucceededState, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(ProvisioningState, FailedState, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(ProvisioningState, CanceledState, StringComparison.OrdinalIgnoreCase);
+        string.Equals(ProvisioningState, SucceededState, StringComparisons.AzureProvisioningState) ||
+        string.Equals(ProvisioningState, FailedState, StringComparisons.AzureProvisioningState) ||
+        string.Equals(ProvisioningState, CanceledState, StringComparisons.AzureProvisioningState);
 
     internal JsonObject ToJsonObject()
     {

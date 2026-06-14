@@ -354,128 +354,145 @@ internal sealed class AzureProvisioningController(
 
     private static async Task LoadTenantArgumentOptionsAsync(LoadInputContext context)
     {
-        var controller = context.Services.GetRequiredService<AzureProvisioningController>();
-        var currentContext = await controller.GetCurrentAzureContextAsync(context.CancellationToken).ConfigureAwait(false);
-
-        // Preserve a value the user has already typed or selected. Dynamic loading can run again
-        // after dashboard updates, and replacing a non-empty value here would undo user intent.
-        if (string.IsNullOrEmpty(context.Input.Value))
+        try
         {
-            context.Input.Value = currentContext.TenantId;
-        }
+            var controller = context.Services.GetRequiredService<AzureProvisioningController>();
+            var currentContext = await controller.GetCurrentAzureContextAsync(context.CancellationToken).ConfigureAwait(false);
 
-        var tenantOptions = await controller.GetTenantOptionsAsync(context.CancellationToken).ConfigureAwait(false);
-        if (tenantOptions.Count > 0)
+            // Preserve a value the user has already typed or selected. Dynamic loading can run again
+            // after dashboard updates, and replacing a non-empty value here would undo user intent.
+            if (string.IsNullOrEmpty(context.Input.Value))
+            {
+                context.Input.Value = currentContext.TenantId;
+            }
+
+            var tenantOptions = await controller.GetTenantOptionsAsync(context.CancellationToken).ConfigureAwait(false);
+            if (tenantOptions.Count > 0)
+            {
+                context.Input.Options = tenantOptions;
+            }
+        }
+        finally
         {
-            context.Input.Options = tenantOptions;
+            // Re-enable even if context or tenant enumeration fails. AllowCustomChoice lets users
+            // paste a tenant ID manually and then retry the command.
+            context.Input.Disabled = false;
         }
-
-        // Re-enable even when tenant enumeration fails. AllowCustomChoice lets users paste a tenant
-        // ID manually, and the current tenant value was already seeded from persisted/config state.
-        context.Input.Disabled = false;
     }
 
     private static async Task LoadSubscriptionArgumentOptionsAsync(LoadInputContext context)
     {
-        var controller = context.Services.GetRequiredService<AzureProvisioningController>();
-        var currentContext = await controller.GetCurrentAzureContextAsync(context.CancellationToken).ConfigureAwait(false);
-        var tenantId = context.AllInputs.TryGetByName(TenantIdArgumentName, out var tenantInput) && !string.IsNullOrWhiteSpace(tenantInput.Value)
-            ? tenantInput.Value
-            : currentContext.TenantId;
-
-        // Seed with the current subscription so the common case is preselected. If the user picked
-        // a different tenant and this subscription is not in the loaded option list, the interaction
-        // loading pipeline clears the invalid value for non-custom choices. This input allows custom
-        // choices, so users can still paste a subscription that enumeration did not return.
-        if (string.IsNullOrEmpty(context.Input.Value))
+        try
         {
-            context.Input.Value = currentContext.SubscriptionId;
-        }
+            var controller = context.Services.GetRequiredService<AzureProvisioningController>();
+            var currentContext = await controller.GetCurrentAzureContextAsync(context.CancellationToken).ConfigureAwait(false);
+            var tenantId = context.AllInputs.TryGetByName(TenantIdArgumentName, out var tenantInput) && !string.IsNullOrWhiteSpace(tenantInput.Value)
+                ? tenantInput.Value
+                : currentContext.TenantId;
 
-        var subscriptionOptions = await controller.GetSubscriptionOptionsAsync(tenantId, context.CancellationToken).ConfigureAwait(false);
-        if (subscriptionOptions.Count > 0)
+            // Seed with the current subscription so the common case is preselected. If the user picked
+            // a different tenant and this subscription is not in the loaded option list, the interaction
+            // loading pipeline clears the invalid value for non-custom choices. This input allows custom
+            // choices, so users can still paste a subscription that enumeration did not return.
+            if (string.IsNullOrEmpty(context.Input.Value))
+            {
+                context.Input.Value = currentContext.SubscriptionId;
+            }
+
+            var subscriptionOptions = await controller.GetSubscriptionOptionsAsync(tenantId, context.CancellationToken).ConfigureAwait(false);
+            if (subscriptionOptions.Count > 0)
+            {
+                context.Input.Options = subscriptionOptions;
+            }
+        }
+        finally
         {
-            context.Input.Options = subscriptionOptions;
+            // The control starts disabled because it is tenant-scoped. Re-enable it even if context
+            // or enumeration fails; AllowCustomChoice lets the user enter a subscription ID manually.
+            context.Input.Disabled = false;
         }
-
-        // The control starts disabled because it is tenant-scoped. Re-enable it even if enumeration
-        // returns no options; AllowCustomChoice lets the user enter a subscription ID manually.
-        context.Input.Disabled = false;
     }
 
     private static async Task LoadResourceGroupArgumentOptionsAsync(LoadInputContext context)
     {
-        var controller = context.Services.GetRequiredService<AzureProvisioningController>();
-        var currentContext = await controller.GetCurrentAzureContextAsync(context.CancellationToken).ConfigureAwait(false);
-        var subscriptionId = context.AllInputs.TryGetByName(SubscriptionIdArgumentName, out var subscriptionInput) && !string.IsNullOrWhiteSpace(subscriptionInput.Value)
-            ? subscriptionInput.Value
-            : currentContext.SubscriptionId;
-
-        // Keep the persisted/current resource group as the default unless the user has already
-        // provided a value in the open dialog.
-        if (string.IsNullOrEmpty(context.Input.Value))
+        try
         {
-            context.Input.Value = currentContext.ResourceGroup;
-        }
+            var controller = context.Services.GetRequiredService<AzureProvisioningController>();
+            var currentContext = await controller.GetCurrentAzureContextAsync(context.CancellationToken).ConfigureAwait(false);
+            var subscriptionId = context.AllInputs.TryGetByName(SubscriptionIdArgumentName, out var subscriptionInput) && !string.IsNullOrWhiteSpace(subscriptionInput.Value)
+                ? subscriptionInput.Value
+                : currentContext.SubscriptionId;
 
-        var resourceGroupOptions = await controller.GetResourceGroupOptionsAsync(subscriptionId, context.CancellationToken).ConfigureAwait(false);
-        context.Input.Options = resourceGroupOptions.Select(static rg => KeyValuePair.Create(rg.Name, rg.Name)).ToList();
-        // A user can create or target a resource group that is not returned by enumeration, so an
-        // empty option list should still leave the input editable.
-        context.Input.Disabled = false;
+            // Keep the persisted/current resource group as the default unless the user has already
+            // provided a value in the open dialog.
+            if (string.IsNullOrEmpty(context.Input.Value))
+            {
+                context.Input.Value = currentContext.ResourceGroup;
+            }
+
+            var resourceGroupOptions = await controller.GetResourceGroupOptionsAsync(subscriptionId, context.CancellationToken).ConfigureAwait(false);
+            context.Input.Options = resourceGroupOptions.Select(static rg => KeyValuePair.Create(rg.Name, rg.Name)).ToList();
+        }
+        finally
+        {
+            // A user can create or target a resource group that is not returned by enumeration, so
+            // context or enumeration failures should still leave the input editable.
+            context.Input.Disabled = false;
+        }
     }
 
     private static async Task LoadLocationArgumentOptionsAsync(LoadInputContext context, string? deploymentStateResourceName = null)
     {
-        var controller = context.Services.GetRequiredService<AzureProvisioningController>();
-        var currentContext = await controller.GetCurrentAzureContextAsync(context.CancellationToken).ConfigureAwait(false);
-        var subscriptionId = context.AllInputs.TryGetByName(SubscriptionIdArgumentName, out var subscriptionInput) && !string.IsNullOrWhiteSpace(subscriptionInput.Value)
-            ? subscriptionInput.Value
-            : currentContext.SubscriptionId;
-        var resourceGroupName = context.AllInputs.TryGetByName(ResourceGroupArgumentName, out var resourceGroupInput) && !string.IsNullOrWhiteSpace(resourceGroupInput.Value)
-            ? resourceGroupInput.Value
-            : null;
-
-        if (!string.IsNullOrWhiteSpace(resourceGroupName))
+        var locationPinnedToResourceGroup = false;
+        try
         {
-            var resourceGroupOptions = await controller.GetResourceGroupOptionsAsync(subscriptionId, context.CancellationToken).ConfigureAwait(false);
-            var (_, resourceGroupLocation) = resourceGroupOptions.FirstOrDefault(rg => rg.Name.Equals(resourceGroupName, StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrEmpty(resourceGroupLocation))
+            var controller = context.Services.GetRequiredService<AzureProvisioningController>();
+            var currentContext = await controller.GetCurrentAzureContextAsync(context.CancellationToken).ConfigureAwait(false);
+            var subscriptionId = context.AllInputs.TryGetByName(SubscriptionIdArgumentName, out var subscriptionInput) && !string.IsNullOrWhiteSpace(subscriptionInput.Value)
+                ? subscriptionInput.Value
+                : currentContext.SubscriptionId;
+            var resourceGroupName = context.AllInputs.TryGetByName(ResourceGroupArgumentName, out var resourceGroupInput) && !string.IsNullOrWhiteSpace(resourceGroupInput.Value)
+                ? resourceGroupInput.Value
+                : null;
+
+            if (!string.IsNullOrWhiteSpace(resourceGroupName))
             {
-                // Existing resource groups are pinned to a single Azure region. When the selected
-                // group is known, constrain the location input to that region instead of letting the
-                // user pick a value that ARM will reject for deployments into that group.
-                context.Input.Options = [KeyValuePair.Create(resourceGroupLocation, resourceGroupLocation)];
-                context.Input.Value = resourceGroupLocation;
-                context.Input.Disabled = true;
-                return;
+                var resourceGroupOptions = await controller.GetResourceGroupOptionsAsync(subscriptionId, context.CancellationToken).ConfigureAwait(false);
+                var (_, resourceGroupLocation) = resourceGroupOptions.FirstOrDefault(rg => rg.Name.Equals(resourceGroupName, StringComparisons.AzureResourceGroupName));
+                if (!string.IsNullOrEmpty(resourceGroupLocation))
+                {
+                    // Existing resource groups are pinned to a single Azure region. When the selected
+                    // group is known, constrain the location input to that region instead of letting the
+                    // user pick a value that ARM will reject for deployments into that group.
+                    context.Input.Options = [KeyValuePair.Create(resourceGroupLocation, resourceGroupLocation)];
+                    context.Input.Value = resourceGroupLocation;
+                    locationPinnedToResourceGroup = true;
+                    context.Input.Disabled = true;
+                    return;
+                }
+            }
+
+            // For Change resource location, deploymentStateResourceName identifies the specific resource
+            // whose effective location should be shown. For Change Azure context, there is no per-resource
+            // target, so the current environment location is the fallback.
+            if (string.IsNullOrEmpty(context.Input.Value))
+            {
+                context.Input.Value = !string.IsNullOrEmpty(deploymentStateResourceName)
+                    ? await controller.GetEffectiveResourceLocationAsync(deploymentStateResourceName, context.CancellationToken).ConfigureAwait(false)
+                    : currentContext.Location;
+            }
+
+            context.Input.Options = await controller.GetLocationOptionsAsync(subscriptionId, context.CancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!locationPinnedToResourceGroup)
+            {
+                // The input is disabled only when an existing resource group determines the location.
+                // Otherwise the user must be able to choose or type a location even if loading fails.
+                context.Input.Disabled = false;
             }
         }
-
-        // For Change resource location, deploymentStateResourceName identifies the specific resource
-        // whose effective location should be shown. For Change Azure context, there is no per-resource
-        // target, so the current environment location is the fallback.
-        if (string.IsNullOrEmpty(context.Input.Value))
-        {
-            context.Input.Value = !string.IsNullOrEmpty(deploymentStateResourceName)
-                ? await controller.GetEffectiveResourceLocationAsync(deploymentStateResourceName, context.CancellationToken).ConfigureAwait(false)
-                : currentContext.Location;
-        }
-
-        var locationOptions = await controller.GetLocationOptionsAsync(subscriptionId, context.CancellationToken).ConfigureAwait(false);
-        if (locationOptions.Count == 0)
-        {
-            // Enumeration is best-effort and the input allows custom choices, so keep the field
-            // editable if ARM returns no location list.
-            context.Input.Disabled = false;
-            return;
-        }
-
-        context.Input.Options = locationOptions;
-        // The input is disabled only when an existing resource group determines the location. If we
-        // got here, either no resource group is selected or the group location is unknown, so the
-        // user must be able to choose or type a location.
-        context.Input.Disabled = false;
     }
 
     private static Task ValidateAzureContextCommandArguments(InputsDialogValidationContext validationContext)
@@ -950,7 +967,7 @@ internal sealed class AzureProvisioningController(
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
                 State = new("Starting", KnownResourceStateStyles.Info),
-                Properties = state.Properties.ClearAzureProvisioningFailureProperties()
+                Properties = state.Properties.WithoutAzureProvisioningFailureProperties()
             }).ConfigureAwait(false);
 
             afterProvisionTasks.Add(AfterProvisionAsync(resource, parentChildLookup));
@@ -2222,7 +2239,7 @@ internal sealed class AzureProvisioningController(
         bool requireDeployment,
         CancellationToken cancellationToken)
     {
-        var canceledDeploymentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var canceledDeploymentIds = new HashSet<string>(StringComparers.AzureResourceId);
 
         foreach (var resource in targetResources)
         {
@@ -2287,7 +2304,7 @@ internal sealed class AzureProvisioningController(
         IReadOnlyCollection<(IResource Resource, IAzureResource AzureResource)> targetResources,
         CancellationToken cancellationToken)
     {
-        var resourceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var resourceIds = new HashSet<string>(StringComparers.AzureResourceId);
 
         foreach (var resource in targetResources)
         {
@@ -2405,7 +2422,7 @@ internal sealed class AzureProvisioningController(
             return false;
         }
 
-        return string.Equals(parsedResourceId.ResourceType.ToString(), "Microsoft.Resources/deployments", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(parsedResourceId.ResourceType.ToString(), "Microsoft.Resources/deployments", StringComparisons.AzureResourceType);
     }
 
     private string? TryGetCurrentResourceLocationOverride(AzureBicepResource resource, string? environmentLocation)
@@ -2413,7 +2430,7 @@ internal sealed class AzureProvisioningController(
         var currentLocationValue = TryGetCurrentResourceLocation(resource);
         if (!string.IsNullOrWhiteSpace(currentLocationValue) &&
             (string.IsNullOrWhiteSpace(environmentLocation) ||
-             !string.Equals(currentLocationValue, environmentLocation, StringComparison.OrdinalIgnoreCase)))
+             !string.Equals(currentLocationValue, environmentLocation, StringComparisons.AzureLocation)))
         {
             // The dashboard snapshot is the most recent observed effective location. Prefer it when
             // deciding whether a reset should preserve a per-resource override.
@@ -2423,7 +2440,7 @@ internal sealed class AzureProvisioningController(
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.Location, out var parameterLocation) &&
             parameterLocation?.ToString() is { Length: > 0 } parameterLocationValue &&
             (string.IsNullOrWhiteSpace(environmentLocation) ||
-             !string.Equals(parameterLocationValue, environmentLocation, StringComparison.OrdinalIgnoreCase)))
+             !string.Equals(parameterLocationValue, environmentLocation, StringComparisons.AzureLocation)))
         {
             // If the Bicep parameter is already different from the environment location, treat it as
             // an explicit per-resource setting that should survive reset/reprovision operations.
@@ -2468,7 +2485,7 @@ internal sealed class AzureProvisioningController(
             }
 
             if (string.IsNullOrWhiteSpace(environmentLocation) ||
-                !string.Equals(persistedLocation, environmentLocation, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(persistedLocation, environmentLocation, StringComparisons.AzureLocation))
             {
                 // A resource can intentionally live in a different Azure region than the environment.
                 // Preserve that persisted per-resource value across reprovisioning instead of replacing
@@ -2496,8 +2513,8 @@ internal sealed class AzureProvisioningController(
 
         foreach (var option in locationOptions)
         {
-            if (string.Equals(option.Key, location, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(option.Value, location, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(option.Key, location, StringComparisons.AzureLocation) ||
+                string.Equals(option.Value, location, StringComparisons.AzureLocation))
             {
                 // Prefer the option key because Azure SDK/Bicep APIs expect canonical location names
                 // even though users often choose or type display names.
@@ -2712,7 +2729,7 @@ internal sealed class AzureProvisioningController(
         var currentLocation = TryGetCurrentResourceLocation(resource) ??
             await TryGetPersistedResourceLocationAsync(resource, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(currentLocation) ||
-            string.Equals(currentLocation, requestedLocation, StringComparison.OrdinalIgnoreCase))
+            string.Equals(currentLocation, requestedLocation, StringComparisons.AzureLocation))
         {
             // If the current location is unknown or already matches the requested location, there is
             // nothing safe or necessary to delete before reprovisioning.

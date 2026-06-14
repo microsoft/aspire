@@ -1130,7 +1130,7 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
-    public void ClearAzureProvisioningFailureProperties_RemovesOnlyFailureProperties()
+    public void WithoutAzureProvisioningFailureProperties_RemovesOnlyFailureProperties()
     {
         ImmutableArray<ResourcePropertySnapshot> properties =
         [
@@ -1140,11 +1140,34 @@ public class AzureEnvironmentResourceExtensionsTests
             new("custom.property", "kept")
         ];
 
-        var cleared = properties.ClearAzureProvisioningFailureProperties();
+        var filtered = properties.WithoutAzureProvisioningFailureProperties();
 
-        Assert.DoesNotContain(cleared, property => AzureProvisioningFailureDetails.IsFailureProperty(property.Name));
-        Assert.Equal("12345678-1234-1234-1234-123456789012", cleared.Single(property => property.Name == "azure.subscription.id").Value);
-        Assert.Equal("kept", cleared.Single(property => property.Name == "custom.property").Value);
+        Assert.Collection(
+            filtered,
+            property =>
+            {
+                Assert.Equal("azure.subscription.id", property.Name);
+                Assert.Equal("12345678-1234-1234-1234-123456789012", property.Value);
+            },
+            property =>
+            {
+                Assert.Equal("custom.property", property.Name);
+                Assert.Equal("kept", property.Value);
+            });
+    }
+
+    [Fact]
+    public void WithoutAzureProvisioningFailureProperties_ReturnsOriginalPropertiesWhenNoFailurePropertiesExist()
+    {
+        ImmutableArray<ResourcePropertySnapshot> properties =
+        [
+            new("azure.subscription.id", "12345678-1234-1234-1234-123456789012"),
+            new("custom.property", "kept")
+        ];
+
+        var filtered = properties.WithoutAzureProvisioningFailureProperties();
+
+        Assert.True(properties.Equals(filtered));
     }
 
     [Fact]
@@ -4635,6 +4658,9 @@ public class AzureEnvironmentResourceExtensionsTests
             return Task.FromResult(result);
         }
 
+        public Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+            => Task.FromResult<IEnumerable<string>>([]);
+
         public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
             => throw new NotSupportedException();
 
@@ -4648,6 +4674,15 @@ public class AzureEnvironmentResourceExtensionsTests
             => throw new NotSupportedException();
 
         public async IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public async IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(
+            string deploymentId,
+            bool recursive = true,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.CompletedTask;
             yield break;
@@ -4943,6 +4978,9 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+            => Task.FromResult<IEnumerable<string>>([]);
+
         public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
             => throw new NotSupportedException();
 
@@ -4956,6 +4994,15 @@ public class AzureEnvironmentResourceExtensionsTests
             => throw new RequestFailedException(409, "The deployment is already completed.");
 
         public async IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public async IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(
+            string deploymentId,
+            bool recursive = true,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.CompletedTask;
             yield break;
@@ -5010,6 +5057,9 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+            => Task.FromResult<IEnumerable<string>>([]);
+
         public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
             => throw new NotSupportedException();
 
@@ -5031,6 +5081,15 @@ public class AzureEnvironmentResourceExtensionsTests
             => Task.CompletedTask;
 
         public async IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public async IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(
+            string deploymentId,
+            bool recursive = true,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.CompletedTask;
             yield break;
@@ -5069,6 +5128,9 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+            => Task.FromResult<IEnumerable<string>>([]);
+
         public IRoleAssignmentCollection GetRoleAssignments(global::Azure.Core.ResourceIdentifier scope)
             => throw new NotSupportedException();
 
@@ -5083,6 +5145,15 @@ public class AzureEnvironmentResourceExtensionsTests
 
         public IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+
+        public async IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(
+            string deploymentId,
+            bool recursive = true,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
     }
 
     private sealed class ThrowingResourceProbeArmClientProvider(RequestFailedException exception) : IArmClientProvider
@@ -5119,6 +5190,9 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default)
             => _inner.GetAvailableResourceGroupsWithLocationAsync(subscriptionId, cancellationToken);
 
+        public Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+            => _inner.GetSupportedLocationsAsync(subscriptionId, resourceType, cancellationToken);
+
         public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
             => _inner.GetRoleAssignments(scope);
 
@@ -5133,6 +5207,9 @@ public class AzureEnvironmentResourceExtensionsTests
 
         public IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, CancellationToken cancellationToken = default)
             => _inner.GetDeploymentTargetResourceIdsAsync(deploymentId, cancellationToken);
+
+        public IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(string deploymentId, bool recursive = true, CancellationToken cancellationToken = default)
+            => _inner.GetDeploymentOperationsAsync(deploymentId, recursive, cancellationToken);
     }
 
     private sealed class DeleteResourceFailureArmClientProvider(string existingResourceId, RequestFailedException deleteException) : IArmClientProvider
@@ -5169,6 +5246,9 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default)
             => _inner.GetAvailableResourceGroupsWithLocationAsync(subscriptionId, cancellationToken);
 
+        public Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+            => _inner.GetSupportedLocationsAsync(subscriptionId, resourceType, cancellationToken);
+
         public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
             => _inner.GetRoleAssignments(scope);
 
@@ -5185,5 +5265,8 @@ public class AzureEnvironmentResourceExtensionsTests
 
         public IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, CancellationToken cancellationToken = default)
             => _inner.GetDeploymentTargetResourceIdsAsync(deploymentId, cancellationToken);
+
+        public IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(string deploymentId, bool recursive = true, CancellationToken cancellationToken = default)
+            => _inner.GetDeploymentOperationsAsync(deploymentId, recursive, cancellationToken);
     }
 }

@@ -195,6 +195,7 @@ internal sealed class TestArmClient : IArmClient
     private readonly IEnumerable<string>? _deploymentTargetResourceIds;
     private readonly IReadOnlyList<AzureDeploymentOperationDetails>? _deploymentOperations;
     private readonly IReadOnlyDictionary<string, IEnumerable<string>>? _supportedLocationsByResourceType;
+    private readonly Func<string, string, CancellationToken, Task<IEnumerable<string>>>? _supportedLocationsProvider;
     private readonly List<string>? _canceledDeploymentIds;
     private readonly bool _resourceGroupLookupReturnsNotFound;
 
@@ -223,11 +224,13 @@ internal sealed class TestArmClient : IArmClient
 
     public TestArmClient(
         IReadOnlyList<AzureDeploymentOperationDetails> deploymentOperations,
-        IReadOnlyDictionary<string, IEnumerable<string>>? supportedLocationsByResourceType = null)
+        IReadOnlyDictionary<string, IEnumerable<string>>? supportedLocationsByResourceType = null,
+        Func<string, string, CancellationToken, Task<IEnumerable<string>>>? supportedLocationsProvider = null)
         : this(new Dictionary<string, object>())
     {
         _deploymentOperations = deploymentOperations;
         _supportedLocationsByResourceType = supportedLocationsByResourceType;
+        _supportedLocationsProvider = supportedLocationsProvider;
     }
 
     public TestArmClient(
@@ -337,16 +340,18 @@ internal sealed class TestArmClient : IArmClient
         return Task.FromResult<IEnumerable<(string, string)>>(resourceGroups);
     }
 
-    public Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
     {
-        _ = subscriptionId;
-        _ = cancellationToken;
-
         SupportedLocationsCallCount++;
 
-        return Task.FromResult(_supportedLocationsByResourceType?.TryGetValue(resourceType, out var locations) == true
+        if (_supportedLocationsProvider is not null)
+        {
+            return await _supportedLocationsProvider(subscriptionId, resourceType, cancellationToken).ConfigureAwait(false);
+        }
+
+        return _supportedLocationsByResourceType?.TryGetValue(resourceType, out var locations) == true
             ? locations
-            : []);
+            : [];
     }
 
     public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
@@ -395,8 +400,6 @@ internal sealed class TestArmClient : IArmClient
         bool recursive = true,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        _ = deploymentId;
-        _ = recursive;
         DeploymentOperationsCallCount++;
         await Task.CompletedTask;
 

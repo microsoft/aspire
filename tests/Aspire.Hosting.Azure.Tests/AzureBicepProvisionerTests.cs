@@ -468,11 +468,130 @@ public class AzureBicepProvisionerTests
         Assert.Equal(failedSearchId, exception.FailureDetails.TargetResourceId);
         Assert.Equal("westus2", exception.FailureDetails.CurrentLocation);
         Assert.Equal(["eastus", "westus3"], exception.FailureDetails.SupportedLocations);
-        Assert.DoesNotContain(exception.FailureDetails.RecommendedActions, static action => action.Code == "change-location");
-        Assert.Contains(exception.FailureDetails.RecommendedActions, static action => action.Code == "set-location");
+        Assert.Collection(
+            exception.FailureDetails.RecommendedActions,
+            action =>
+            {
+                Assert.Equal("set-location", action.Code);
+                Assert.Contains("eastus", action.Message, StringComparison.Ordinal);
+            },
+            action => Assert.Equal("clear-deployment-cache", action.Code));
         Assert.Contains("Azure__Location", exception.Message, StringComparison.Ordinal);
         Assert.Equal(1, armClient.DeploymentOperationsCallCount);
         Assert.Equal(1, armClient.SupportedLocationsCallCount);
+    }
+
+    [Fact]
+    public async Task GetOrCreateResourceAsync_InPublishMode_EnrichesDeploymentOperationFailuresInParallel()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
+        using var services = builder.Services.BuildServiceProvider();
+
+        var resource = new AzureBicepResource("search", templateString: "output name string = 'search'");
+        var resourceGroup = new DeploymentCollectionResourceGroupResource(new WaitingThrowingArmDeploymentCollection());
+        var deploymentId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/search-0";
+        var failedSearchId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Search/searchServices/search";
+        var failedCosmosId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.DocumentDB/databaseAccounts/cosmos";
+        var allLookupsStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var activeLookups = 0;
+        var startedLookups = 0;
+        var maxConcurrentLookups = 0;
+        var armClient = new TestArmClient(
+            [
+                CreateLocationFailureOperation(deploymentId, "search-create", failedSearchId, "Microsoft.Search/searchServices", "search"),
+                CreateLocationFailureOperation(deploymentId, "cosmos-create", failedCosmosId, "Microsoft.DocumentDB/databaseAccounts", "cosmos")
+            ],
+            supportedLocationsProvider: async (subscriptionId, resourceType, cancellationToken) =>
+            {
+                _ = subscriptionId;
+                var active = Interlocked.Increment(ref activeLookups);
+                try
+                {
+                    UpdateMaxConcurrentLookups(active);
+
+                    if (Interlocked.Increment(ref startedLookups) == 2)
+                    {
+                        allLookupsStarted.TrySetResult();
+                    }
+
+                    await allLookupsStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+
+                    return resourceType.Contains("Search", StringComparison.OrdinalIgnoreCase)
+                        ? ["eastus"]
+                        : ["westus3"];
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref activeLookups);
+                }
+            });
+
+        var provisioner = new BicepProvisioner(
+            services.GetRequiredService<ResourceNotificationService>(),
+            services.GetRequiredService<ResourceLoggerService>(),
+            new TestBicepCliExecutor(),
+            new TestSecretClientProvider(),
+            services.GetRequiredService<IDeploymentStateManager>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            services.GetRequiredService<IFileSystemService>(),
+            NullLogger<BicepProvisioner>.Instance);
+
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            resourceGroup: resourceGroup,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        await Assert.ThrowsAsync<AzureProvisioningFailureException>(() => provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
+
+        Assert.Equal(2, armClient.SupportedLocationsCallCount);
+        Assert.Equal(2, Volatile.Read(ref maxConcurrentLookups));
+
+        void UpdateMaxConcurrentLookups(int active)
+        {
+            while (true)
+            {
+                var observed = Volatile.Read(ref maxConcurrentLookups);
+                if (active <= observed ||
+                    Interlocked.CompareExchange(ref maxConcurrentLookups, active, observed) == observed)
+                {
+                    return;
+                }
+            }
+        }
+
+        static AzureDeploymentOperationDetails CreateLocationFailureOperation(
+            string deploymentId,
+            string operationId,
+            string targetResourceId,
+            string resourceType,
+            string resourceName)
+        {
+            return new(
+                OperationId: operationId,
+                DeploymentId: deploymentId,
+                ProvisioningOperation: AzureDeploymentOperationDetails.CreateOperation,
+                ProvisioningState: AzureDeploymentOperationDetails.FailedState,
+                Timestamp: DateTimeOffset.Parse("2026-06-11T06:39:22Z"),
+                Duration: TimeSpan.FromSeconds(15),
+                StatusCode: "BadRequest",
+                ServiceRequestId: "service-request-id",
+                TargetResource: new AzureDeploymentOperationTarget(targetResourceId, resourceType, resourceName),
+                FailureDetails: new AzureProvisioningFailureDetails(
+                    Provider: resourceType[..resourceType.IndexOf('/', StringComparison.Ordinal)],
+                    ResourceType: resourceType,
+                    ResourceName: resourceName,
+                    TargetResourceId: targetResourceId,
+                    CurrentLocation: null,
+                    SupportedLocations: [],
+                    HttpStatus: 400,
+                    ErrorCode: AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode,
+                    ErrorMessage: $"The provided location 'antarctica' is not available for resource type '{resourceType}'.",
+                    Operation: "deploy",
+                    RequestId: "request-id",
+                    CorrelationId: "correlation-id",
+                    RecommendedActions: AzureProvisioningFailureDetails.GetRecommendedActions(AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode)));
+        }
     }
 
     [Fact]
@@ -877,6 +996,20 @@ public class AzureBicepProvisionerTests
                 TargetResource: new AzureDeploymentOperationTarget(failedSearchId, "Microsoft.Search/searchServices", "search"),
                 FailureDetails: failureDetails),
             new AzureDeploymentOperationDetails(
+                OperationId: "alpha-search-create",
+                DeploymentId: deploymentId,
+                ProvisioningOperation: AzureDeploymentOperationDetails.CreateOperation,
+                ProvisioningState: AzureDeploymentOperationDetails.FailedState,
+                Timestamp: DateTimeOffset.Parse("2026-06-11T06:39:21Z"),
+                Duration: TimeSpan.FromSeconds(14),
+                StatusCode: "BadRequest",
+                ServiceRequestId: "alpha-service-request-id",
+                TargetResource: new AzureDeploymentOperationTarget(
+                    "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Search/searchServices/alpha-search",
+                    "Microsoft.Search/searchServices",
+                    "alpha-search"),
+                FailureDetails: null),
+            new AzureDeploymentOperationDetails(
                 OperationId: "nested-deployment",
                 DeploymentId: deploymentId,
                 ProvisioningOperation: AzureDeploymentOperationDetails.CreateOperation,
@@ -913,19 +1046,66 @@ public class AzureBicepProvisionerTests
         var notifications = services.GetRequiredService<ResourceNotificationService>();
         Assert.True(notifications.TryGetCurrentState(resource.Name, out var resourceEvent));
         Assert.Equal("Azure deployment failed", resourceEvent.Snapshot.State?.Text);
-        Assert.Equal(2, resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.deployment.operations.total").Value);
-        Assert.Equal(1, resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.deployment.operations.failed").Value);
-        Assert.DoesNotContain(resourceEvent.Snapshot.Properties, p => p.Name == "azure.deployment.operations.succeeded.resources");
-        var failedResources = Assert.IsType<string[]>(resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.deployment.operations.failed.resources").Value);
-        Assert.Equal(["search (Microsoft.Search/searchServices)"], failedResources);
-        Assert.Equal(AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode, resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.code").Value);
-        Assert.Equal("Microsoft.Search/searchServices", resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.resource.type").Value);
-        Assert.Equal(failedSearchId, resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.target.resource.id").Value);
-        Assert.Equal("westus2", resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.current.location").Value);
-        var supportedLocations = Assert.IsType<string[]>(resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.supported.locations").Value);
-        Assert.Equal(["eastus", "westus3"], supportedLocations);
-        var recommendedActions = Assert.IsType<string[]>(resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.recommendedActions").Value);
-        Assert.Contains("eastus", recommendedActions[0], StringComparison.Ordinal);
+        Assert.Collection(
+            resourceEvent.Snapshot.Properties,
+            property => AssertResourceProperty(property, "azure.subscription.id", "12345678-1234-1234-1234-123456789012"),
+            property => AssertResourceProperty(property, "azure.resource.group", "test-rg"),
+            property => AssertResourceProperty(property, "azure.tenant.id", "87654321-4321-4321-4321-210987654321"),
+            property => AssertResourceProperty(property, "azure.tenant.domain", "testdomain.onmicrosoft.com"),
+            property => AssertResourceProperty(property, "azure.location", "westus2"),
+            property => AssertResourceProperty(property, CustomResourceKnownProperties.Source, deploymentId),
+            property => AssertResourceProperty(property, "azure.deployment.operations.total", 3),
+            property => AssertResourceProperty(property, "azure.deployment.operations.running", 0),
+            property => AssertResourceProperty(property, "azure.deployment.operations.succeeded", 0),
+            property => AssertResourceProperty(property, "azure.deployment.operations.failed", 2),
+            property => AssertResourceProperty(property, "azure.deployment.operations.canceled", 0),
+            property =>
+            {
+                var failedResources = AssertStringArrayProperty(property, "azure.deployment.operations.failed.resources");
+                Assert.Equal(["alpha-search (Microsoft.Search/searchServices)", "search (Microsoft.Search/searchServices)"], failedResources);
+            },
+            property => AssertResourceProperty(property, "azure.provisioning.error.provider", "Microsoft.Search"),
+            property => AssertResourceProperty(property, "azure.provisioning.error.message", "The provided location 'antarctica' is not available for resource type 'Microsoft.Search/searchServices'."),
+            property => AssertResourceProperty(property, "azure.provisioning.error.operation", "deploy"),
+            property => AssertResourceProperty(property, "azure.provisioning.error.resource.type", "Microsoft.Search/searchServices"),
+            property => AssertResourceProperty(property, "azure.provisioning.error.resource.name", "search"),
+            property => AssertResourceProperty(property, "azure.provisioning.error.target.resource.id", failedSearchId),
+            property => AssertResourceProperty(property, "azure.provisioning.error.current.location", "westus2"),
+            property =>
+            {
+                var supportedLocations = AssertStringArrayProperty(property, "azure.provisioning.error.supported.locations");
+                Assert.Equal(["eastus", "westus3"], supportedLocations);
+            },
+            property => AssertResourceProperty(property, "azure.provisioning.error.code", AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode),
+            property => AssertResourceProperty(property, "azure.provisioning.error.http.status", 400),
+            property => AssertResourceProperty(property, "azure.provisioning.error.request.id", "request-id"),
+            property => AssertResourceProperty(property, "azure.provisioning.error.correlation.id", "correlation-id"),
+            property =>
+            {
+                var recommendedActions = AssertStringArrayProperty(property, "azure.provisioning.error.recommendedActions");
+                Assert.Collection(
+                    recommendedActions,
+                    action => Assert.Contains("change-location --location eastus", action, StringComparison.Ordinal),
+                    action => Assert.Contains("Supported regions include: eastus, westus3", action, StringComparison.Ordinal));
+            });
+
+        static void AssertResourceProperty(ResourcePropertySnapshot property, string name, object value)
+        {
+            Assert.Equal(name, property.Name);
+            Assert.Equal(value, property.Value);
+        }
+
+        static string[] AssertStringArrayProperty(ResourcePropertySnapshot property, string name)
+        {
+            Assert.Equal(name, property.Name);
+            return Assert.IsType<string[]>(property.Value);
+        }
+
+        var resourceLogs = await ReadInitialResourceLogsAsync(services.GetRequiredService<ResourceLoggerService>(), resource);
+        Assert.Contains(resourceLogs, log =>
+            log.IsErrorMessage &&
+            log.Content.Contains("Azure provisioning failed:", StringComparison.Ordinal) &&
+            log.Content.Contains(AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -979,6 +1159,12 @@ public class AzureBicepProvisionerTests
         Assert.Equal("australiacentral", resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.current.location").Value);
         var supportedLocations = Assert.IsType<string[]>(resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.supported.locations").Value);
         Assert.Equal(["australiaeast", "westus3"], supportedLocations);
+
+        var resourceLogs = await ReadInitialResourceLogsAsync(services.GetRequiredService<ResourceLoggerService>(), resource);
+        Assert.Contains(resourceLogs, log =>
+            log.IsErrorMessage &&
+            log.Content.Contains("Azure provisioning failed:", StringComparison.Ordinal) &&
+            log.Content.Contains(AzureProvisioningFailureDetails.LocationNotAvailableForResourceTypeErrorCode, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1191,6 +1377,19 @@ public class AzureBicepProvisionerTests
         var property = Assert.Single(resourceEvent.Snapshot.Properties, p => p.Name == "azure.resource.group");
 
         Assert.Null(property.Value);
+    }
+
+    private static async Task<IReadOnlyList<(string Content, bool IsErrorMessage)>> ReadInitialResourceLogsAsync(ResourceLoggerService loggerService, IResource resource)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await using var logEnumerator = loggerService.WatchAsync(resource).GetAsyncEnumerator(cts.Token);
+
+        if (!await logEnumerator.MoveNextAsync())
+        {
+            return [];
+        }
+
+        return [.. logEnumerator.Current.Select(static log => (log.Content, log.IsErrorMessage))];
     }
 
     private static BicepProvisioner CreateProvisioner(IServiceProvider services, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)

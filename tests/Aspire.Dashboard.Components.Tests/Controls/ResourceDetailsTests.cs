@@ -482,7 +482,7 @@ public class ResourceDetailsTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_HighlightedUnknownProperty_ShowsInDefaultResourceDetails()
+    public async Task Render_HighlightedUnknownProperty_ShowsInDefaultResourceDetailsAndPreservesSensitivity()
     {
         ResourceSetupHelpers.SetupResourceDetails(this);
 
@@ -495,6 +495,14 @@ public class ResourceDetailsTests : DashboardTestContext
                 knownProperty: null,
                 priority: int.MaxValue,
                 displayName: "Provider diagnostic",
+                isHighlighted: true),
+            ["provider.diagnostic.secret"] = new(
+                "provider.diagnostic.secret",
+                Value.ForString("Sensitive provider diagnostic detail."),
+                isValueSensitive: true,
+                knownProperty: null,
+                priority: int.MaxValue,
+                displayName: "Provider secret",
                 isHighlighted: true),
             ["provider.diagnostic.hidden"] = new(
                 "provider.diagnostic.hidden",
@@ -518,7 +526,18 @@ public class ResourceDetailsTests : DashboardTestContext
         var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
         Assert.Contains("Provider diagnostic", resourcePropertyGrid.TextContent);
         Assert.Contains("The provider reported a recoverable deployment error.", resourcePropertyGrid.TextContent);
+        Assert.Contains("Provider secret", resourcePropertyGrid.TextContent);
+        Assert.DoesNotContain("Sensitive provider diagnostic detail.", resourcePropertyGrid.TextContent);
         Assert.DoesNotContain("This should require show all.", resourcePropertyGrid.TextContent);
+
+        var maskValueButton = cut.Find(".property-grid .grid-value-mask-button");
+        await maskValueButton.ClickAsync(new MouseEventArgs());
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedResourcePropertyGrid = cut.FindAll(".property-grid")[0];
+            Assert.Contains("Sensitive provider diagnostic detail.", updatedResourcePropertyGrid.TextContent);
+        });
     }
 
     [Fact]

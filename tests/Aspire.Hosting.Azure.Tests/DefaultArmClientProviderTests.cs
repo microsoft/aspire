@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Azure;
 using Azure.Core;
@@ -14,6 +16,9 @@ namespace Aspire.Hosting.Azure.Tests;
 public class DefaultArmClientProviderTests
 {
     private const string SubscriptionId = "12345678-1234-1234-1234-123456789012";
+    private const string RootDeploymentId = $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/root";
+    private const string NestedADeploymentId = $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/nested-a";
+    private const string NestedBDeploymentId = $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/nested-b";
 
     [Fact]
     public async Task GetSupportedLocationsAsyncUsesConfiguredArmEnvironment()
@@ -43,6 +48,61 @@ public class DefaultArmClientProviderTests
         Assert.Contains(
             transport.RequestUris,
             static uri => uri.AbsolutePath.EndsWith($"/subscriptions/{SubscriptionId}/providers/Microsoft.Search", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GetAvailableLocationsAsyncSortsWithAzureLocationComparer()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUICulture = CultureInfo.CurrentUICulture;
+
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            CultureInfo.CurrentUICulture = new CultureInfo("de-DE");
+
+            var transport = new ProviderMetadataTransport(
+                locations:
+                [
+                    ("asia", "Äsia"),
+                    ("zulu", "Zulu"),
+                    ("alpha", "alpha")
+                ]);
+            var provider = new DefaultArmClientProvider(new ArmClientOptions
+            {
+                Transport = transport
+            });
+            var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
+
+            var locations = await armClient.GetAvailableLocationsAsync(SubscriptionId, CancellationToken.None);
+
+            Assert.Equal(["alpha", "zulu", "asia"], locations.Select(static location => location.Name));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUICulture;
+        }
+    }
+
+    [Fact]
+    public async Task GetDeploymentOperationsAsyncFetchesNestedDeploymentOperationsInParallel()
+    {
+        var transport = new ProviderMetadataTransport();
+        var provider = new DefaultArmClientProvider(new ArmClientOptions
+        {
+            Transport = transport
+        });
+        var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
+        var operations = new List<AzureDeploymentOperationDetails>();
+
+        await foreach (var operation in armClient.GetDeploymentOperationsAsync(RootDeploymentId, recursive: true, CancellationToken.None))
+        {
+            operations.Add(operation);
+        }
+
+        Assert.Equal(["nested-a", "nested-b", "storage-a", "storage-b"], operations.Select(static operation => operation.OperationId));
+        Assert.Equal(2, transport.MaxConcurrentNestedDeploymentOperationRequests);
     }
 
     private sealed class CapturingTokenCredential : TokenCredential
@@ -89,6 +149,24 @@ public class DefaultArmClientProviderTests
     {
         private readonly object _lock = new();
         private readonly List<Uri> _requestUris = [];
+        private readonly IReadOnlyList<(string Name, string DisplayName)> _locations;
+        private readonly IReadOnlyList<string> _providerLocations;
+        private readonly TaskCompletionSource _nestedDeploymentOperationRequestsStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _activeNestedDeploymentOperationRequests;
+        private int _maxConcurrentNestedDeploymentOperationRequests;
+        private int _nestedDeploymentOperationRequestCount;
+
+        public ProviderMetadataTransport(
+            IReadOnlyList<(string Name, string DisplayName)>? locations = null,
+            IReadOnlyList<string>? providerLocations = null)
+        {
+            _locations = locations ??
+            [
+                ("eastus", "East US"),
+                ("westus3", "West US 3")
+            ];
+            _providerLocations = providerLocations ?? ["East US", "West US 3"];
+        }
 
         public IReadOnlyList<Uri> RequestUris
         {
@@ -101,21 +179,28 @@ public class DefaultArmClientProviderTests
             }
         }
 
+        public int MaxConcurrentNestedDeploymentOperationRequests => Volatile.Read(ref _maxConcurrentNestedDeploymentOperationRequests);
+
         public override Request CreateRequest()
             => new TestRequest();
 
         public override void Process(HttpMessage message)
         {
-            message.Response = CreateResponse(message.Request);
+            message.Response = CreateResponse(CaptureUri(message.Request));
         }
 
-        public override ValueTask ProcessAsync(HttpMessage message)
+        public override async ValueTask ProcessAsync(HttpMessage message)
         {
-            message.Response = CreateResponse(message.Request);
-            return ValueTask.CompletedTask;
+            var uri = CaptureUri(message.Request);
+            if (IsNestedDeploymentOperationsPath(uri.AbsolutePath))
+            {
+                await WaitForConcurrentNestedDeploymentOperationRequestAsync().ConfigureAwait(false);
+            }
+
+            message.Response = CreateResponse(uri);
         }
 
-        private Response CreateResponse(Request request)
+        private Uri CaptureUri(Request request)
         {
             var uri = request.Uri.ToUri();
             lock (_lock)
@@ -123,6 +208,11 @@ public class DefaultArmClientProviderTests
                 _requestUris.Add(uri);
             }
 
+            return uri;
+        }
+
+        private Response CreateResponse(Uri uri)
+        {
             var content = uri.AbsolutePath switch
             {
                 $"/subscriptions/{SubscriptionId}" => $$"""
@@ -134,39 +224,116 @@ public class DefaultArmClientProviderTests
                       "tenantId": "87654321-4321-4321-4321-210987654321"
                     }
                     """,
-                $"/subscriptions/{SubscriptionId}/locations" => $$"""
-                    {
-                      "value": [
-                        {
-                          "id": "/subscriptions/{{SubscriptionId}}/locations/eastus",
-                          "name": "eastus",
-                          "displayName": "East US"
-                        },
-                        {
-                          "id": "/subscriptions/{{SubscriptionId}}/locations/westus3",
-                          "name": "westus3",
-                          "displayName": "West US 3"
-                        }
-                      ]
-                    }
-                    """,
-                $"/subscriptions/{SubscriptionId}/providers/Microsoft.Search" => $$"""
-                    {
-                      "id": "/subscriptions/{{SubscriptionId}}/providers/Microsoft.Search",
-                      "namespace": "Microsoft.Search",
-                      "registrationState": "Registered",
-                      "resourceTypes": [
-                        {
-                          "resourceType": "searchServices",
-                          "locations": [ "East US", "West US 3" ]
-                        }
-                      ]
-                    }
-                    """,
+                $"/subscriptions/{SubscriptionId}/locations" => CreateLocationsContent(),
+                $"/subscriptions/{SubscriptionId}/providers/Microsoft.Search" => CreateProviderContent(),
+                var path when string.Equals(path, $"{RootDeploymentId}/operations", StringComparison.Ordinal) => CreateDeploymentOperationsContent(
+                    RootDeploymentId,
+                    ("nested-a", NestedADeploymentId, AzureDeploymentOperationDetails.DeploymentResourceType, "nested-a"),
+                    ("nested-b", NestedBDeploymentId, AzureDeploymentOperationDetails.DeploymentResourceType, "nested-b")),
+                var path when string.Equals(path, $"{NestedADeploymentId}/operations", StringComparison.Ordinal) => CreateDeploymentOperationsContent(
+                    NestedADeploymentId,
+                    ("storage-a", $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage-a", "Microsoft.Storage/storageAccounts", "storage-a")),
+                var path when string.Equals(path, $"{NestedBDeploymentId}/operations", StringComparison.Ordinal) => CreateDeploymentOperationsContent(
+                    NestedBDeploymentId,
+                    ("storage-b", $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage-b", "Microsoft.Storage/storageAccounts", "storage-b")),
                 _ => throw new InvalidOperationException($"Unexpected ARM request: {uri}")
             };
 
             return CreateJsonResponse(content);
+        }
+
+        private async Task WaitForConcurrentNestedDeploymentOperationRequestAsync()
+        {
+            var activeRequests = Interlocked.Increment(ref _activeNestedDeploymentOperationRequests);
+            UpdateMaxConcurrentNestedDeploymentOperationRequests(activeRequests);
+
+            try
+            {
+                if (Interlocked.Increment(ref _nestedDeploymentOperationRequestCount) == 2)
+                {
+                    _nestedDeploymentOperationRequestsStarted.TrySetResult();
+                }
+
+                await _nestedDeploymentOperationRequestsStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _activeNestedDeploymentOperationRequests);
+            }
+        }
+
+        private void UpdateMaxConcurrentNestedDeploymentOperationRequests(int activeRequests)
+        {
+            while (true)
+            {
+                var observed = Volatile.Read(ref _maxConcurrentNestedDeploymentOperationRequests);
+                if (activeRequests <= observed ||
+                    Interlocked.CompareExchange(ref _maxConcurrentNestedDeploymentOperationRequests, activeRequests, observed) == observed)
+                {
+                    return;
+                }
+            }
+        }
+
+        private static bool IsNestedDeploymentOperationsPath(string path)
+            => string.Equals(path, $"{NestedADeploymentId}/operations", StringComparison.Ordinal) ||
+               string.Equals(path, $"{NestedBDeploymentId}/operations", StringComparison.Ordinal);
+
+        private string CreateLocationsContent()
+        {
+            return JsonSerializer.Serialize(new
+            {
+                value = _locations.Select(static location => new
+                {
+                    id = $"/subscriptions/{SubscriptionId}/locations/{location.Name}",
+                    name = location.Name,
+                    displayName = location.DisplayName
+                })
+            });
+        }
+
+        private string CreateProviderContent()
+        {
+            return JsonSerializer.Serialize(new
+            {
+                id = $"/subscriptions/{SubscriptionId}/providers/Microsoft.Search",
+                @namespace = "Microsoft.Search",
+                registrationState = "Registered",
+                resourceTypes = new[]
+                {
+                    new
+                    {
+                        resourceType = "searchServices",
+                        locations = _providerLocations
+                    }
+                }
+            });
+        }
+
+        private static string CreateDeploymentOperationsContent(
+            string deploymentId,
+            params (string OperationId, string TargetResourceId, string TargetResourceType, string TargetResourceName)[] operations)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                value = operations.Select(operation => new
+                {
+                    id = $"{deploymentId}/operations/{operation.OperationId}",
+                    operationId = operation.OperationId,
+                    properties = new
+                    {
+                        provisioningOperation = AzureDeploymentOperationDetails.CreateOperation,
+                        provisioningState = AzureDeploymentOperationDetails.SucceededState,
+                        statusCode = "OK",
+                        targetResource = new
+                        {
+                            id = operation.TargetResourceId,
+                            resourceType = operation.TargetResourceType,
+                            resourceName = operation.TargetResourceName
+                        }
+                    }
+                })
+            });
         }
 
         private static MockResponse CreateJsonResponse(string content)

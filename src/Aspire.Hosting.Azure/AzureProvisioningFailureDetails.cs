@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Resources;
+using Aspire.Hosting.Utils;
 using Azure;
 
 namespace Aspire.Hosting.Azure;
@@ -58,7 +59,7 @@ internal sealed record AzureProvisioningFailureDetails(
     private const string PropertyPrefix = "azure.provisioning.error.";
 
     internal bool IsLocationAvailabilityFailure =>
-        string.Equals(ErrorCode, LocationNotAvailableForResourceTypeErrorCode, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(ErrorCode, LocationNotAvailableForResourceTypeErrorCode, StringComparisons.AzureProvisioningErrorCode) &&
         !string.IsNullOrEmpty(ResourceType);
 
     internal static AzureProvisioningFailureDetails FromRequestFailedException(RequestFailedException requestEx, string? operation = null)
@@ -69,9 +70,9 @@ internal sealed record AzureProvisioningFailureDetails(
         // ARM body because the useful provider error is usually nested under details[] and can be
         // lost when only the exception message is rendered.
         var parsedError = TryParseResponseContent(response?.Content?.ToString());
-        var errorCode = FirstNonEmpty(parsedError?.ErrorCode, requestEx.ErrorCode);
-        var errorMessage = FirstNonEmpty(parsedError?.ErrorMessage, requestEx.Message) ?? requestEx.Message;
-        var resourceType = FirstNonEmpty(parsedError?.ResourceType, TryGetResourceType(errorMessage));
+        var errorCode = StringUtils.FirstNonEmpty(parsedError?.ErrorCode, requestEx.ErrorCode);
+        var errorMessage = StringUtils.FirstNonEmpty(parsedError?.ErrorMessage, requestEx.Message) ?? requestEx.Message;
+        var resourceType = StringUtils.FirstNonEmpty(parsedError?.ResourceType, TryGetResourceTypeFromProviderMessage(errorMessage));
         var requestId = TryGetHeaderValue(response, "x-ms-request-id");
         var correlationId = TryGetHeaderValue(response, "x-ms-correlation-request-id");
 
@@ -90,7 +91,7 @@ internal sealed record AzureProvisioningFailureDetails(
             HttpStatus: requestEx.Status > 0 ? requestEx.Status : null,
             ErrorCode: errorCode,
             ErrorMessage: errorMessage,
-            Operation: FirstNonEmpty(operation, parsedError?.Operation),
+            Operation: StringUtils.FirstNonEmpty(operation, parsedError?.Operation),
             RequestId: requestId,
             CorrelationId: correlationId,
             RecommendedActions: GetRecommendedActions(errorCode));
@@ -98,7 +99,7 @@ internal sealed record AzureProvisioningFailureDetails(
 
     internal static AzureProvisioningFailureDetails? TryCreate(Exception exception, string? operation = null)
     {
-        foreach (var current in EnumerateExceptions(exception))
+        foreach (var current in ExceptionUtils.EnumerateSelfAndInnerExceptions(exception))
         {
             if (current is AzureProvisioningFailureException provisioningFailureException)
             {
@@ -128,27 +129,30 @@ internal sealed record AzureProvisioningFailureDetails(
             return null;
         }
 
-        var errorCode = FirstNonEmpty(parsedError?.ErrorCode, responseError?.Code);
-        var errorMessage = FirstNonEmpty(parsedError?.ErrorMessage, responseError?.Message);
+        var errorCode = StringUtils.FirstNonEmpty(parsedError?.ErrorCode, responseError?.Code);
+        var errorMessage = StringUtils.FirstNonEmpty(parsedError?.ErrorMessage, responseError?.Message);
         if (string.IsNullOrEmpty(errorCode) && string.IsNullOrEmpty(errorMessage))
         {
             return null;
         }
 
-        errorMessage = FirstNonEmpty(errorMessage, errorCode) ?? "Azure deployment operation failed.";
-        var resourceType = FirstNonEmpty(parsedError?.ResourceType, FirstNonEmpty(targetResource?.ResourceType, TryGetResourceType(errorMessage)));
+        errorMessage = StringUtils.FirstNonEmpty(errorMessage, errorCode) ?? "Azure deployment operation failed.";
+        var resourceType = StringUtils.FirstNonEmpty(
+            parsedError?.ResourceType,
+            StringUtils.FirstNonEmpty(targetResource?.ResourceType, TryGetResourceTypeFromProviderMessage(errorMessage)));
+        var httpStatus = int.TryParse(statusCode, out var parsedHttpStatus) ? parsedHttpStatus : (int?)null;
 
         return new(
             Provider: GetProvider(resourceType),
             ResourceType: resourceType,
-            ResourceName: FirstNonEmpty(parsedError?.ResourceName, targetResource?.ResourceName),
-            TargetResourceId: FirstNonEmpty(parsedError?.TargetResourceId, targetResource?.Id),
+            ResourceName: StringUtils.FirstNonEmpty(parsedError?.ResourceName, targetResource?.ResourceName),
+            TargetResourceId: StringUtils.FirstNonEmpty(parsedError?.TargetResourceId, targetResource?.Id),
             CurrentLocation: null,
             SupportedLocations: [],
-            HttpStatus: TryParseHttpStatus(statusCode),
+            HttpStatus: httpStatus,
             ErrorCode: errorCode,
             ErrorMessage: errorMessage,
-            Operation: FirstNonEmpty(operation, parsedError?.Operation),
+            Operation: StringUtils.FirstNonEmpty(operation, parsedError?.Operation),
             RequestId: requestId,
             CorrelationId: null,
             RecommendedActions: GetRecommendedActions(errorCode));
@@ -158,8 +162,8 @@ internal sealed record AzureProvisioningFailureDetails(
     {
         var locations = supportedLocations
             .Where(static location => !string.IsNullOrWhiteSpace(location))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(static location => location, StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparers.AzureLocation)
+            .OrderBy(static location => location, StringComparers.AzureLocation)
             .ToImmutableArray();
 
         return this with
@@ -180,7 +184,7 @@ internal sealed record AzureProvisioningFailureDetails(
         string? errorCodeOrReason,
         ImmutableArray<string> supportedLocations = default)
     {
-        if (string.Equals(errorCodeOrReason, ResourceGroupBeingDeletedErrorCode, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, ResourceGroupBeingDeletedErrorCode, StringComparisons.AzureProvisioningErrorCode))
         {
             return
             [
@@ -189,7 +193,7 @@ internal sealed record AzureProvisioningFailureDetails(
             ];
         }
 
-        if (string.Equals(errorCodeOrReason, LocationNotAvailableForResourceTypeErrorCode, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, LocationNotAvailableForResourceTypeErrorCode, StringComparisons.AzureProvisioningErrorCode))
         {
             if (!supportedLocations.IsDefaultOrEmpty)
             {
@@ -212,7 +216,7 @@ internal sealed record AzureProvisioningFailureDetails(
         // These Aspire-only reasons are shaped like provider errors so command output and resource
         // snapshots can use one diagnostics pipeline for both live Azure failures and forgotten or
         // incomplete local deployment state.
-        if (string.Equals(errorCodeOrReason, MissingResourceIdReason, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, MissingResourceIdReason, StringComparisons.AzureProvisioningErrorCode))
         {
             return
             [
@@ -221,7 +225,7 @@ internal sealed record AzureProvisioningFailureDetails(
             ];
         }
 
-        if (string.Equals(errorCodeOrReason, MissingLiveResourceReason, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, MissingLiveResourceReason, StringComparisons.AzureProvisioningErrorCode))
         {
             return
             [
@@ -230,7 +234,7 @@ internal sealed record AzureProvisioningFailureDetails(
             ];
         }
 
-        if (string.Equals(errorCodeOrReason, SubscriptionNotFoundErrorCode, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, SubscriptionNotFoundErrorCode, StringComparisons.AzureProvisioningErrorCode))
         {
             return
             [
@@ -245,7 +249,7 @@ internal sealed record AzureProvisioningFailureDetails(
         //   InvalidResourceProperties: The specified scale type 'Standard' is not supported by the model ...
         // Both point at model/version/SKU availability, so avoid sending users down the generic
         // resource-group or location troubleshooting path.
-        if (string.Equals(errorCodeOrReason, ServiceModelDeprecatedErrorCode, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, ServiceModelDeprecatedErrorCode, StringComparisons.AzureProvisioningErrorCode))
         {
             return
             [
@@ -254,7 +258,7 @@ internal sealed record AzureProvisioningFailureDetails(
             ];
         }
 
-        if (string.Equals(errorCodeOrReason, InvalidResourcePropertiesErrorCode, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, InvalidResourcePropertiesErrorCode, StringComparisons.AzureProvisioningErrorCode))
         {
             return
             [
@@ -270,7 +274,7 @@ internal sealed record AzureProvisioningFailureDetails(
         string? errorCodeOrReason,
         ImmutableArray<string> supportedLocations)
     {
-        if (string.Equals(errorCodeOrReason, ResourceGroupBeingDeletedErrorCode, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, ResourceGroupBeingDeletedErrorCode, StringComparisons.AzureProvisioningErrorCode))
         {
             return
             [
@@ -279,7 +283,7 @@ internal sealed record AzureProvisioningFailureDetails(
             ];
         }
 
-        if (string.Equals(errorCodeOrReason, LocationNotAvailableForResourceTypeErrorCode, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, LocationNotAvailableForResourceTypeErrorCode, StringComparisons.AzureProvisioningErrorCode))
         {
             if (!supportedLocations.IsDefaultOrEmpty)
             {
@@ -297,7 +301,7 @@ internal sealed record AzureProvisioningFailureDetails(
             ];
         }
 
-        if (string.Equals(errorCodeOrReason, MissingResourceIdReason, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, MissingResourceIdReason, StringComparisons.AzureProvisioningErrorCode))
         {
             return
             [
@@ -306,7 +310,7 @@ internal sealed record AzureProvisioningFailureDetails(
             ];
         }
 
-        if (string.Equals(errorCodeOrReason, MissingLiveResourceReason, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, MissingLiveResourceReason, StringComparisons.AzureProvisioningErrorCode))
         {
             return
             [
@@ -315,7 +319,7 @@ internal sealed record AzureProvisioningFailureDetails(
             ];
         }
 
-        if (string.Equals(errorCodeOrReason, SubscriptionNotFoundErrorCode, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(errorCodeOrReason, SubscriptionNotFoundErrorCode, StringComparisons.AzureProvisioningErrorCode))
         {
             return
             [
@@ -399,7 +403,7 @@ internal sealed record AzureProvisioningFailureDetails(
             failureProperties.Add(CreateHighlightedFailureProperty("recommendedActions", RecommendedActions.Select(static action => action.Message).ToArray(), AzureProvisioningStrings.FailurePropertyRecommendedActionsDisplayName));
         }
 
-        return properties.ClearAzureProvisioningFailureProperties().SetResourcePropertyRange(failureProperties);
+        return properties.WithoutAzureProvisioningFailureProperties().SetResourcePropertyRange(failureProperties);
     }
 
     internal static bool IsFailureProperty(string propertyName)
@@ -629,14 +633,14 @@ internal sealed record AzureProvisioningFailureDetails(
     // TryParseAzureError decides whether a nested details[] entry is more actionable.
     private static ParsedAzureError? CreateParsedAzureError(JsonObject errorObj, ParsedAzureTargetResource? targetResource)
     {
-        var code = FirstNonEmpty(errorObj["code"]?.ToString(), errorObj["errorCode"]?.ToString());
-        var message = FirstNonEmpty(errorObj["message"]?.ToString(), errorObj["errorMessage"]?.ToString());
-        var operation = FirstNonEmpty(errorObj["operation"]?.ToString(), errorObj["target"]?.ToString());
-        var resourceType = FirstNonEmpty(
+        var code = StringUtils.FirstNonEmpty(errorObj["code"]?.ToString(), errorObj["errorCode"]?.ToString());
+        var message = StringUtils.FirstNonEmpty(errorObj["message"]?.ToString(), errorObj["errorMessage"]?.ToString());
+        var operation = StringUtils.FirstNonEmpty(errorObj["operation"]?.ToString(), errorObj["target"]?.ToString());
+        var resourceType = StringUtils.FirstNonEmpty(
             errorObj["resourceType"]?.ToString(),
-            FirstNonEmpty(targetResource?.ResourceType, TryGetResourceType(message)));
-        var resourceName = FirstNonEmpty(errorObj["resourceName"]?.ToString(), targetResource?.ResourceName);
-        var targetResourceId = FirstNonEmpty(errorObj["targetResourceId"]?.ToString(), targetResource?.Id);
+            StringUtils.FirstNonEmpty(targetResource?.ResourceType, TryGetResourceTypeFromProviderMessage(message)));
+        var resourceName = StringUtils.FirstNonEmpty(errorObj["resourceName"]?.ToString(), targetResource?.ResourceName);
+        var targetResourceId = StringUtils.FirstNonEmpty(errorObj["targetResourceId"]?.ToString(), targetResource?.Id);
 
         return !string.IsNullOrEmpty(code) ||
                !string.IsNullOrEmpty(message) ||
@@ -695,13 +699,16 @@ internal sealed record AzureProvisioningFailureDetails(
             : "Azure";
     }
 
-    private static string? TryGetResourceType(string? message)
+    private static string? TryGetResourceTypeFromProviderMessage(string? message)
     {
         if (string.IsNullOrEmpty(message))
         {
             return null;
         }
 
+        // This is a best-effort fallback for older provider errors that omit structured
+        // resourceType/targetResource metadata. If the provider localizes or changes the message,
+        // parsing fails closed and callers still preserve the original error code and message.
         // ARM provider messages commonly include the target type as:
         //   The provided location 'invalidlocationxyz' is not available for resource type 'Microsoft.Search/searchServices'.
         //   The provided location 'invalidlocationxyz' is not available for resource type 'Microsoft.DocumentDB/databaseAccounts'.
@@ -732,42 +739,10 @@ internal sealed record AzureProvisioningFailureDetails(
             : null;
     }
 
-    private static IEnumerable<Exception> EnumerateExceptions(Exception exception)
-    {
-        yield return exception;
-
-        if (exception is AggregateException aggregateException)
-        {
-            foreach (var innerException in aggregateException.InnerExceptions)
-            {
-                foreach (var nestedException in EnumerateExceptions(innerException))
-                {
-                    yield return nestedException;
-                }
-            }
-
-            yield break;
-        }
-
-        if (exception.InnerException is { } inner)
-        {
-            foreach (var innerException in EnumerateExceptions(inner))
-            {
-                yield return innerException;
-            }
-        }
-    }
-
     private static ParsedAzureTargetResource? CreateParsedAzureTargetResource(AzureDeploymentOperationTarget? targetResource)
         => targetResource is not null
             ? new ParsedAzureTargetResource(targetResource.Id, targetResource.ResourceName, targetResource.ResourceType)
             : null;
-
-    private static int? TryParseHttpStatus(string? statusCode)
-        => int.TryParse(statusCode, out var httpStatus) ? httpStatus : null;
-
-    private static string? FirstNonEmpty(string? first, string? second)
-        => !string.IsNullOrEmpty(first) ? first : !string.IsNullOrEmpty(second) ? second : null;
 
     private static AzureProvisioningRecommendedAction Action(string code, string message)
         => new(code, message);
@@ -779,11 +754,16 @@ internal sealed record AzureProvisioningFailureDetails(
 
 internal static class AzureProvisioningFailureResourcePropertyExtensions
 {
-    internal static ImmutableArray<ResourcePropertySnapshot> ClearAzureProvisioningFailureProperties(this ImmutableArray<ResourcePropertySnapshot> properties)
+    internal static ImmutableArray<ResourcePropertySnapshot> WithoutAzureProvisioningFailureProperties(this ImmutableArray<ResourcePropertySnapshot> properties)
     {
         if (properties.IsDefaultOrEmpty)
         {
             return [];
+        }
+
+        if (!properties.Any(static property => AzureProvisioningFailureDetails.IsFailureProperty(property.Name)))
+        {
+            return properties;
         }
 
         return [.. properties.Where(static property => !AzureProvisioningFailureDetails.IsFailureProperty(property.Name))];

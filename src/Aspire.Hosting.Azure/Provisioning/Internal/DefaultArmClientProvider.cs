@@ -102,7 +102,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             await foreach (var subscription in armClient.GetSubscriptions().GetAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
             {
                 // Filter subscriptions by tenant ID
-                if (subscription.Data.TenantId?.ToString().Equals(tenantId, StringComparison.OrdinalIgnoreCase) == true)
+                if (subscription.Data.TenantId?.ToString().Equals(tenantId, StringComparisons.AzureTenantId) == true)
                 {
                     subscriptions.Add(new DefaultSubscriptionResource(subscription));
                 }
@@ -122,7 +122,9 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
         {
             var subscription = await armClient.GetSubscriptions().GetAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
 
-            return GetAvailableLocations(subscription.Value, cancellationToken).OrderBy(l => l.DisplayName);
+            // Azure locations are ARM protocol values, so keep option ordering deterministic
+            // instead of allowing the current UI culture to change the sort order.
+            return GetAvailableLocations(subscription.Value, cancellationToken).OrderBy(static l => l.DisplayName, StringComparers.AzureLocation);
         }
 
         public async Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default)
@@ -135,7 +137,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
                 resourceGroups.Add((resourceGroup.Data.Name, resourceGroup.Data.Location.Name));
             }
 
-            return resourceGroups.OrderBy(rg => rg.Name);
+            return resourceGroups.OrderBy(static rg => rg.Name, StringComparers.AzureResourceGroupName);
         }
 
         public async Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
@@ -146,14 +148,13 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             }
 
             var subscription = await armClient.GetSubscriptions().GetAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
-            var locationNameByProviderValue = CreateLocationNameLookup(GetAvailableLocations(subscription.Value, cancellationToken));
-
             // Use the ArmClient pipeline so this metadata request follows the same ArmEnvironment
             // endpoint and token scope as the rest of provisioning. The SDK requests provider
             // metadata equivalent to:
             //   GET /subscriptions/{subscriptionId}/providers/Microsoft.Search
             // This is advisory diagnostics only; callers keep the original provider error if this
             // metadata request fails.
+            var locationNameByProviderValue = CreateLocationNameLookup(GetAvailableLocations(subscription.Value, cancellationToken));
             var provider = await subscription.Value.GetResourceProviderAsync(providerNamespace, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             // ARM provider metadata is shaped as:
@@ -167,7 +168,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
 
             foreach (var resourceTypeMetadata in resourceTypes)
             {
-                if (!string.Equals(resourceTypeMetadata.ResourceType, providerResourceType, StringComparison.OrdinalIgnoreCase) ||
+                if (!string.Equals(resourceTypeMetadata.ResourceType, providerResourceType, StringComparisons.AzureResourceType) ||
                     resourceTypeMetadata.Locations is not { Count: > 0 } locations)
                 {
                     continue;
@@ -176,8 +177,8 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
                 return locations
                     .Where(static location => !string.IsNullOrWhiteSpace(location))
                     .Select(location => TryGetLocationName(locationNameByProviderValue, location) ?? location)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(static location => location, StringComparer.OrdinalIgnoreCase)
+                    .Distinct(StringComparers.AzureLocation)
+                    .OrderBy(static location => location, StringComparers.AzureLocation)
                     .ToArray();
             }
 
@@ -232,7 +233,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var pendingDeployments = new Queue<ResourceIdentifier>();
-            var visitedDeployments = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var visitedDeployments = new HashSet<string>(StringComparers.AzureResourceId);
             pendingDeployments.Enqueue(new ResourceIdentifier(deploymentId));
 
             // ARM operation lists are per deployment, but Bicep frequently emits nested deployment
@@ -241,28 +242,52 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             // the outer Microsoft.Resources/deployments wrapper.
             while (pendingDeployments.Count > 0)
             {
-                var currentDeploymentId = pendingDeployments.Dequeue();
-                if (!visitedDeployments.Add(currentDeploymentId.ToString()))
+                var currentDeploymentIds = new List<ResourceIdentifier>();
+                while (pendingDeployments.Count > 0)
                 {
-                    continue;
+                    var currentDeploymentId = pendingDeployments.Dequeue();
+                    if (visitedDeployments.Add(currentDeploymentId.ToString()))
+                    {
+                        currentDeploymentIds.Add(currentDeploymentId);
+                    }
                 }
 
-                var deployment = armClient.GetArmDeploymentResource(currentDeploymentId);
-                await foreach (var operation in deployment.GetDeploymentOperationsAsync(top: null, cancellationToken).ConfigureAwait(false))
-                {
-                    var operationDetails = CreateDeploymentOperationDetails(operation, currentDeploymentId.ToString());
-                    yield return operationDetails;
+                // Fetch each breadth-first level concurrently. Deployments discovered from the same
+                // parent level have independent ARM operation lists; Task.WhenAll preserves input
+                // order so diagnostics stay deterministic while avoiding serial round trips.
+                var operationGroups = await Task.WhenAll(
+                    currentDeploymentIds.Select(deploymentId => GetDeploymentOperationsForDeploymentAsync(deploymentId, cancellationToken)))
+                    .ConfigureAwait(false);
 
-                    if (recursive &&
-                        operationDetails.IsNestedDeploymentCreate &&
-                        operationDetails.TargetResource?.Id is { Length: > 0 } nestedDeploymentId &&
-                        ResourceIdentifier.TryParse(nestedDeploymentId, out var nestedResourceId) &&
-                        nestedResourceId is not null)
+                foreach (var operationGroup in operationGroups)
+                {
+                    foreach (var operationDetails in operationGroup)
                     {
-                        pendingDeployments.Enqueue(nestedResourceId);
+                        yield return operationDetails;
+
+                        if (recursive &&
+                            operationDetails.IsNestedDeploymentCreate &&
+                            operationDetails.TargetResource?.Id is { Length: > 0 } nestedDeploymentId &&
+                            ResourceIdentifier.TryParse(nestedDeploymentId, out var nestedResourceId) &&
+                            nestedResourceId is not null)
+                        {
+                            pendingDeployments.Enqueue(nestedResourceId);
+                        }
                     }
                 }
             }
+        }
+
+        private async Task<AzureDeploymentOperationDetails[]> GetDeploymentOperationsForDeploymentAsync(ResourceIdentifier deploymentId, CancellationToken cancellationToken)
+        {
+            var operations = new List<AzureDeploymentOperationDetails>();
+            var deployment = armClient.GetArmDeploymentResource(deploymentId);
+            await foreach (var operation in deployment.GetDeploymentOperationsAsync(top: null, cancellationToken).ConfigureAwait(false))
+            {
+                operations.Add(CreateDeploymentOperationDetails(operation, deploymentId.ToString()));
+            }
+
+            return [.. operations];
         }
 
         private static AzureDeploymentOperationDetails CreateDeploymentOperationDetails(ArmDeploymentOperation operation, string deploymentId)
@@ -312,7 +337,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
 
         private static Dictionary<string, string> CreateLocationNameLookup(IEnumerable<(string Name, string DisplayName)> availableLocations)
         {
-            var locationNameByProviderValue = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var locationNameByProviderValue = new Dictionary<string, string>(StringComparers.AzureLocation);
             foreach (var (name, displayName) in availableLocations)
             {
                 AddLocation(name, name);
