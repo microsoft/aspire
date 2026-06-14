@@ -326,6 +326,19 @@ ASPIRE_CLI_CHANNEL=stable ASPIRE_CLI_VERSION=13.5.0 ASPIRE_CLI_PACKAGES="$STABLE
   dotnet run --project src/Aspire.Cli -- new aspire-starter --name MyApp --non-interactive
 ```
 
+> **Turnkey alternative — `localhive --version`.** `./localhive.sh --version 13.5.0` (or
+> `.\localhive.ps1 -Version 13.5.0`) packs the stable shape, populates `~/.aspire/hives/local/packages`
+> with **only** the exact `13.5.0` packages, and installs the CLI — no manual `VersionPrefix`/
+> `StabilizePackageVersion` flags and no stale-version cleanup needed. Add `--archive` to also produce a
+> portable `.tar.gz` for the E2E tests (below). You still set the three `ASPIRE_CLI_*` env vars (and the
+> ambient source for buildability) to emulate the release from that hive.
+
+> **Automated coverage.** `EmulatedLocalReleaseBuildTests` (C# + TypeScript) exercises this exact
+> scenario end-to-end: it consumes a `localhive --version <X.Y.Z> --archive` archive, emulates the
+> stable identity with `ASPIRE_CLI_PACKAGES` pointed at the hive, and asserts `aspire new`/`aspire add`
+> resolve the future-only version locally. The tests skip unless given a stable-shaped local archive, so
+> they add zero cost to default CI. See `.agents/skills/cli-e2e-testing/SKILL.md`.
+
 **Package/template resolution now honors `ASPIRE_CLI_PACKAGES` for *any* emulated channel name.**
 Historically the CLI only searched the local-packages channel when its name looked like a
 local build (`local`/`pr-<N>`/`run-<N>`); emulating `stable`/`staging`/`daily` silently fell back

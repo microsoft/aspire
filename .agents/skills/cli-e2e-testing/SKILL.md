@@ -199,6 +199,41 @@ ASPIRE_E2E_QUALITY=dev dotnet test ...
 ASPIRE_E2E_VERSION=13.2.1 dotnet test ...
 ```
 
+### Emulated channel matrix tests (identity sidecar)
+
+A set of tests validates the **CLI identity sidecar** — the ability to make a locally built CLI
+emulate a different channel/version via `ASPIRE_CLI_*` env vars. They form an AppHost-language ×
+channel-emulation matrix (one test per language because C# and TypeScript scaffold through different
+code paths and have diverged before):
+
+| Class | Channel emulated | `Aspire*` source | NuGet.config dropped? |
+|-------|------------------|------------------|------------------------|
+| `EmulatedReleasedBuildTests` | `stable` (latest shipped) | nuget.org | No (C# and TS) |
+| `EmulatedStagingBuildTests` | `staging` (latest darc build) | `darc-pub-...` feed | Yes — darc feed pin |
+| `EmulatedLocalReleaseBuildTests` | `stable` (**future, local-only**) | local hive via `ASPIRE_CLI_PACKAGES` | No (C# and TS) |
+
+`EmulatedLocalReleaseBuildTests` is the **all-local "future release"** row: it emulates a version
+(e.g. `13.5.0`) that exists only in a locally built hive, so a successful resolve proves the CLI
+consulted `ASPIRE_CLI_PACKAGES` rather than nuget.org. Run it by building a **stable-shaped** archive
+with `localhive --version`:
+
+```bash
+# 1. Build a stable-shaped archive (note: --version X.Y.Z, NOT a prerelease suffix)
+./localhive.sh --version 13.5.0 -o /tmp/aspire-localrelease -r linux-arm64 --archive
+
+# 2. Run the all-local class
+ASPIRE_E2E_ARCHIVE=/tmp/aspire-localrelease.tar.gz \
+  dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+  -- --filter-class "*.EmulatedLocalReleaseBuildTests"
+```
+
+These tests **skip** unless the CLI was installed from a `LocalHive` archive *and* that archive is
+stable-shaped (no prerelease suffix). In default CI the archive is a prerelease `LocalArchive`, so they
+skip and add zero CI cost — CI relies on `--ignore-exit-code 8` (set in `eng/Testing.props`
+`MtpBaseArgs`) so an all-skipped class job still passes. The test also registers the hive as an
+**ambient** NuGet source (`dotnet nuget add source`) because MSBuild resolves the apphost's
+`Aspire.AppHost.Sdk` before restore from nuget.config sources only, ignoring `ASPIRE_CLI_PACKAGES`.
+
 ## SequenceCounter and Prompt Detection
 
 The `SequenceCounter` class tracks the number of shell commands executed. This enables deterministic waiting for command completion via a custom shell prompt.

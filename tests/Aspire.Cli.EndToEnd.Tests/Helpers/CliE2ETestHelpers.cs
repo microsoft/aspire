@@ -1056,6 +1056,59 @@ internal static class CliE2ETestHelpers
         return new LocalChannelInfo(sdkVersion);
     }
 
+    /// <summary>
+    /// Detects whether the host's packed Aspire packages contain a <b>stable-shaped</b> release version
+    /// (e.g. <c>13.5.0</c>) and returns the highest such version, or <c>null</c> when only the usual
+    /// pre-release packages (e.g. <c>13.5.0-dev</c>) are present.
+    /// </summary>
+    /// <remarks>
+    /// This gates the all-local emulated-release E2E tests. Those tests only make sense when a developer
+    /// has deliberately built a stable-shaped archive with <c>localhive --version X.Y.Z</c>; in every
+    /// other configuration (default CI uses a pre-release <c>LocalArchive</c>; a normal local hive build
+    /// produces a pre-release <c>-dev</c> version) there is no stable package to emulate and the test
+    /// skips. A future release version such as <c>13.5.0</c> exists <em>only</em> in this local build, so
+    /// a successful resolve against it later proves resolution came from the local packages rather than
+    /// nuget.org.
+    /// </remarks>
+    internal static string? TryGetLocalStableAspireVersion(string repoRoot)
+    {
+        var shippingDirectories = new[]
+        {
+            Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping"),
+            Path.Combine(repoRoot, "artifacts", "packages", "Release", "Shipping")
+        };
+
+        // A stable-shaped package is named exactly Aspire.Hosting.<major>.<minor>.<patch>.nupkg with no
+        // pre-release label and no build metadata, e.g. "Aspire.Hosting.13.5.0.nupkg". The default
+        // pre-release packages look like "Aspire.Hosting.13.5.0-dev.nupkg" and must NOT match.
+        var stablePackageRegex = new Regex(@"^Aspire\.Hosting\.(?<version>\d+\.\d+\.\d+)\.nupkg$", RegexOptions.IgnoreCase);
+
+        Version? bestParsed = null;
+        string? bestRaw = null;
+        foreach (var directory in shippingDirectories.Where(Directory.Exists))
+        {
+            foreach (var file in Directory.EnumerateFiles(directory, "Aspire.Hosting.*.nupkg", SearchOption.TopDirectoryOnly))
+            {
+                var fileName = Path.GetFileName(file);
+                if (fileName.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var match = stablePackageRegex.Match(fileName);
+                if (match.Success &&
+                    Version.TryParse(match.Groups["version"].Value, out var parsed) &&
+                    (bestParsed is null || parsed > bestParsed))
+                {
+                    bestParsed = parsed;
+                    bestRaw = match.Groups["version"].Value;
+                }
+            }
+        }
+
+        return bestRaw;
+    }
+
     internal static void WriteLocalChannelSettings(string projectRoot, string sdkVersion)
     {
         var configPath = Path.Combine(projectRoot, "aspire.config.json");
