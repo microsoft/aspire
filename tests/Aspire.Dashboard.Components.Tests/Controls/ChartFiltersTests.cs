@@ -13,8 +13,8 @@ public class ChartFiltersTests
     {
         // Arrange - all values selected
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET" });
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST" });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", Order = 0, });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", Order = 1, });
         dimensionFilter.SelectedValues.Add(dimensionFilter.Values[0]);
         dimensionFilter.SelectedValues.Add(dimensionFilter.Values[1]);
 
@@ -37,8 +37,8 @@ public class ChartFiltersTests
 
         // Arrange - only GET selected (partial selection, AreAllValuesSelected = null)
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET" });
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST" });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", Order = 0, });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", Order = 1, });
         dimensionFilter.SelectedValues.Add(dimensionFilter.Values[0]); // Only GET
 
         Assert.Null(dimensionFilter.AreAllValuesSelected); // Partial selection = null
@@ -56,8 +56,8 @@ public class ChartFiltersTests
     {
         // Arrange - no values selected
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET" });
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST" });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", Order = 0, });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", Order = 1, });
 
         // Act
         dimensionFilter.AreAllValuesSelected = true;
@@ -74,8 +74,8 @@ public class ChartFiltersTests
 
         // Arrange - both selected
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
-        var getValue = new DimensionValueViewModel { Text = "GET", Value = "GET" };
-        var postValue = new DimensionValueViewModel { Text = "POST", Value = "POST" };
+        var getValue = new DimensionValueViewModel { Text = "GET", Value = "GET", Order = 0, };
+        var postValue = new DimensionValueViewModel { Text = "POST", Value = "POST", Order = 1, };
         dimensionFilter.Values.Add(getValue);
         dimensionFilter.Values.Add(postValue);
         dimensionFilter.SelectedValues.Add(getValue);

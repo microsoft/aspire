@@ -5,94 +5,115 @@
 @inject IStringLocalizer<ControlsStrings> Loc
 
 <div class="metrics-filters-container">
-    @if (DimensionFilters.Count > 0)
-    {
-        <div class="metrics-filters-section">
-            <h5>@Loc[nameof(ControlsStrings.ChartContainerFiltersHeader)]</h5>
-            <FluentDataGrid Items="@Queryable.AsQueryable(DimensionFilters)"
-                            GridTemplateColumns="200px 1fr auto"
-                            GenerateHeader="GenerateHeaderOption.None"
-                            RowSize="DataGridRowSize.Medium">
-                <ChildContent>
-                    <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
-                    <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.SelectedValues.Count == 0 ? Loc[nameof(ControlsStrings.LabelNone)] : string.Join(", ", c.SelectedValues.OrderBy(v => v.Text).Select(v => v.Text)))">
-                        <FluentOverflow Class="dimension-overflow">
-                            <ChildContent>
-                                @if (context.SelectedValues.Count == 0)
-                                {
-                                    <FluentBadge>@Loc[nameof(ControlsStrings.LabelNone)]</FluentBadge>
-                                }
-                                else
-                                {
-                                    var i = 0;
-                                    foreach (var item in context.SelectedValues.OrderBy(v => v.Text))
-                                    {
-                                        // Always display the first item by setting a fixed value.
-                                        <FluentOverflowItem Fixed="@((i == 0) ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)">
-                                            <span class="dimension-tag">@item.Text</span>
-                                        </FluentOverflowItem>
-                                        i++;
-                                    }
-                                }
-                            </ChildContent>
-                            <MoreButtonTemplate Context="overflow">
-                                @* Display must be inline block so the width is correctly calculated. *@
-                                <span class="dimension-tag" style="display:inline-block;">
-                                    @($"+{overflow.ItemsOverflow.Count()}")
-                                </span>
-                            </MoreButtonTemplate>
-                            <OverflowTemplate Context="overflow">
-                                @* Intentionally empty. Don't display an overflow template here. *@
-                            </OverflowTemplate>
-                        </FluentOverflow>
-                    </AspireTemplateColumn>
-                    <AspireTemplateColumn>
-                        @{
-                            var id = $"typeFilterButton-{context.SanitizedHtmlId}-{Guid.NewGuid()}";
-                        }
-                        <FluentButton id="@id"
-                                      IconEnd="@(new Icons.Regular.Size20.Filter())"
-                                      Appearance="@(context.AreAllValuesSelected is true ? Appearance.Stealth : Appearance.Accent)"
-                                      @onclick="() => context.PopupVisible = !context.PopupVisible"
-                                      aria-label="@(context.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])"/>
-                        @* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
-                        <FluentPopover AnchorId="@id" @bind-Open="context.PopupVisible" VerticalThreshold="@(Math.Min((context.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
-                            <Header>@context.Name</Header>
-                            <Body>
-                            <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
-                                <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
-                                                ThreeState="true"
-                                                ShowIndeterminate="false"
-                                                ThreeStateOrderUncheckToIntermediate="true"
-                                                @bind-CheckState:get="context.AreAllValuesSelected"
-                                                @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(context, v))"/>
-                                @foreach (var tag in context.Values.OrderBy(v => v.Text))
-                                {
-                                    var isChecked = context.SelectedValues.Contains(tag);
-                                    <FluentCheckbox Label="@tag.Text"
-                                                    title="@tag.Text"
-                                                    @key=tag
-                                                    @bind-Value:get="isChecked"
-                                                    @bind-Value:set="c => OnTagSelectionChangedAsync(context, tag, c)"/>
-                                }
-                            </FluentStack>
-                            </Body>
-                        </FluentPopover>
-                    </AspireTemplateColumn>
-                </ChildContent>
-            </FluentDataGrid>
-        </div>
-    }
-    @if (Instrument.Summary.Type == OtlpInstrumentType.Histogram)
-    {
-        <div class="metrics-filters-section">
-            <h5>@Loc[nameof(ControlsStrings.ChartContainerOptionsHeader)]</h5>
-            <div>
-                <FluentSwitch Class="table-switch"
-                              Label="@Loc[nameof(ControlsStrings.ChartContainerShowCountLabel)]"
-                              @bind-Value="@ShowCounts"
-                              @bind-Value:after="ShowCountChanged"/>
-            </div>
-        </div>
-    }
+	@if (DimensionFilters.Count > 0)
+	{
+		<div class="metrics-filters-section">
+			<h5>@Loc[nameof(ControlsStrings.ChartContainerFiltersHeader)]</h5>
+			<FluentDataGrid Items="@Queryable.AsQueryable(DimensionFilters)"
+							GridTemplateColumns="200px 1fr auto"
+							GenerateHeader="GenerateHeaderOption.None"
+							RowSize="DataGridRowSize.Medium">
+				<ChildContent>
+					<AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
+					<AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.AreAllValuesSelected is true || c.SelectedValues.Count == 0 ? Loc[nameof(ControlsStrings.LabelNone)] : string.Join(", ", c.SelectedValues.OrderBy(v => v.Text).Select(v => v.Text)))">
+						@{
+							var areAllValuesSelected = context.AreAllValuesSelected is true;
+						}
+						<FluentOverflow Class="dimension-overflow" OnOverflowRaised="@(items => HandleOverflowChanged(context, items))">
+							<ChildContent>
+								@{
+									var i = 0;
+								}
+								@foreach (var item in context.Values.OrderBy(v => v.Order))
+								{
+									var isIncludedInFilters = context.SelectedValues.Contains(item);
+									var isIncludedInFiltersClass = !areAllValuesSelected && isIncludedInFilters ? "included-in-filters" : "";
+									var additionalAttributes = new Dictionary<string, object>()
+									{
+										["item"] = item,
+										["isIncludedInFilters"] = isIncludedInFilters,
+									};
+
+									// Always display the first item by setting a fixed value.
+									<FluentOverflowItem Fixed="@((i == 0) ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)" AdditionalAttributes="additionalAttributes">
+										<span class="dimension-tag filter-value-tag @isIncludedInFiltersClass" @onclick="@(() => OnTagSelectionChangedAsync(context, item, !context.SelectedValues.Contains(item)))">@item.Text</span>
+									</FluentOverflowItem>
+									i++;
+								}
+							</ChildContent>
+							<MoreButtonTemplate Context="overflow">
+								@{
+									var isIncludedInFiltersClass = !areAllValuesSelected && overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes!["isIncludedInFilters"]) ? "included-in-filters" : "";
+								}
+								@* Display must be inline block so the width is correctly calculated. *@
+								<span class="dimension-tag filter-value-tag @isIncludedInFiltersClass" style="display:inline-block;" @onclick="@(() => context.PopupVisible = true)">
+									@($"+{overflow.ItemsOverflow.Count()}")
+								</span>
+							</MoreButtonTemplate>
+							<OverflowTemplate Context="overflow">
+								@* Intentionally empty. Don't display an overflow template here. *@
+							</OverflowTemplate>
+						</FluentOverflow>
+					</AspireTemplateColumn>
+					<AspireTemplateColumn>
+						@{
+							var id = $"typeFilterButton-{context.SanitizedHtmlId}-{Guid.NewGuid()}";
+							var isBold = context.AreAllValuesSelected is true || context.SelectedValues.Count is 0;
+						}
+						<FluentButton id="@id"
+									  IconEnd="@(new Icons.Regular.Size20.Filter())"
+									  Appearance="@(isBold ? Appearance.Stealth : Appearance.Accent)"
+									  @onclick="() => context.PopupVisible = !context.PopupVisible"
+									  aria-label="@(isBold ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])" />
+						@* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
+						<FluentPopover AnchorId="@id" @bind-Open="context.PopupVisible" VerticalThreshold="@(Math.Min((context.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
+							<Header>@context.Name</Header>
+							<Body>
+								<FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
+									<FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
+													ThreeState="true"
+													ShowIndeterminate="false"
+													ThreeStateOrderUncheckToIntermediate="true"
+													@bind-CheckState:get="context.AreAllValuesSelected"
+													@bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(context, v))"/>
+									@foreach (var tag in context.Values.OrderBy(v => v.Text))
+									{
+										var isChecked = context.SelectedValues.Contains(tag);
+										<FluentCheckbox Label="@tag.Text"
+														title="@tag.Text"
+														@key=tag
+														@bind-Value:get="isChecked"
+														@bind-Value:set="c => OnTagSelectionChangedAsync(context, tag, c)"/>
+									}
+								</FluentStack>
+							</Body>
+						</FluentPopover>
+					</AspireTemplateColumn>
+				</ChildContent>
+			</FluentDataGrid>
+		</div>
+	}
+	@if (Instrument.Summary.Type == OtlpInstrumentType.Histogram)
+	{
+		<div class="metrics-filters-section">
+			<h5>@Loc[nameof(ControlsStrings.ChartContainerOptionsHeader)]</h5>
+			<div>
+				<FluentSwitch Class="table-switch"
+							  Label="@Loc[nameof(ControlsStrings.ChartContainerShowCountLabel)]"
+							  @bind-Value="@ShowCounts"
+							  @bind-Value:after="ShowCountChanged"/>
+			</div>
+		</div>
+	}
 </div>
+
+@code {
+	private void HandleOverflowChanged(DimensionFilterViewModel context, IEnumerable<FluentOverflowItem> overflowItems)
+	{
+		var overflowedValues = overflowItems
+			.Select(i => (DimensionValueViewModel)i.AdditionalAttributes!["item"])
+			.ToArray();
+
+		context.OverflowedValues = overflowedValues;
+	}
+}

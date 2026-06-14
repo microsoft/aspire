@@ -12,8 +12,9 @@ public class DimensionFilterViewModel
     private string? _sanitizedHtmlId;
 
     public required string Name { get; init; }
-    public List<DimensionValueViewModel> Values { get; } = new();
-    public HashSet<DimensionValueViewModel> SelectedValues { get; } = new();
+    public List<DimensionValueViewModel> Values { get; } = [];
+    public HashSet<DimensionValueViewModel> SelectedValues { get; } = [];
+    public DimensionValueViewModel[] OverflowedValues { get; set; } = [];
     public bool PopupVisible { get; set; }
 
     public bool? AreAllValuesSelected
@@ -55,6 +56,11 @@ public class DimensionFilterViewModel
         if (isChecked)
         {
             SelectedValues.Add(dimensionValue);
+
+            if (AreAllValuesSelected is true)
+            {
+                SelectedValues.Clear();
+            }
         }
         else
         {
@@ -70,5 +76,6 @@ public class DimensionValueViewModel
 {
     public required string Text { get; init; }
     public required string? Value { get; init; }
+    public required int Order { get; set; }
 }
 

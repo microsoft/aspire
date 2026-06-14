@@ -144,10 +144,10 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     private static bool MatchFilter(KeyValuePair<string, string>[] attributes, DimensionFilterViewModel filter)
     {
-        // No filter selected.
-        if (!filter.SelectedValues.Any())
+        // No filter selected, so we show all of the data.
+        if (filter.SelectedValues.Count == 0)
         {
-            return false;
+            return true;
         }
 
         var value = OtlpHelpers.GetValue(attributes, filter.Name);
@@ -223,6 +223,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                     Name = item.Key
                 };
 
+                var order = 0;
                 dimensionModel.Values.AddRange(item.Value.Select(v =>
                 {
                     var text = v switch
@@ -231,12 +232,19 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                         { Length: 0 } => Loc[nameof(ControlsStrings.LabelEmpty)],
                         _ => v
                     };
-                    return new DimensionValueViewModel
+                    return new
                     {
                         Text = text,
-                        Value = v
+                        Value = v,
                     };
-                }).OrderBy(v => v.Text));
+                })
+                .OrderBy(v => v.Text)
+                .Select(i => new DimensionValueViewModel
+                {
+                    Text = i.Text,
+                    Value = i.Value,
+                    Order = order++,
+                }));
 
                 filters.Add(dimensionModel);
             }
@@ -245,15 +253,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
             {
                 item.SelectedValues.Clear();
 
-                if (hasInstrumentChanged)
-                {
-                    // Select all by default.
-                    foreach (var v in item.Values)
-                    {
-                        item.SelectedValues.Add(v);
-                    }
-                }
-                else
+                if (!hasInstrumentChanged)
                 {
                     var existing = DimensionFilters.SingleOrDefault(m => m.Name == item.Name);
                     if (existing != null)
@@ -261,7 +261,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                         // Select previously selected.
                         // Automatically select new incoming values if existing values are all selected.
                         var newSelectedValues = (existing.AreAllValuesSelected ?? false)
-                            ? item.Values
+                            ? []
                             : item.Values.Where(newValue => existing.SelectedValues.Any(existingValue => existingValue.Value == newValue.Value));
 
                         foreach (var v in newSelectedValues)
@@ -271,11 +271,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                     }
                     else
                     {
-                        // New filter. Select all by default.
-                        foreach (var v in item.Values)
-                        {
-                            item.SelectedValues.Add(v);
-                        }
+                        // New filter. Select no filter value to show all the data.
                     }
                 }
             }

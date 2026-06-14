@@ -24,6 +24,12 @@ public partial class ChartFilters
 
     public bool ShowCounts { get; set; }
 
+    // when some filter value is selected which is not visible (overflowed)
+    // we reorder it to the top of the list. For doing so we use this counter
+    // to assign decremental negative number to the Order property of
+    // DimensionValueViewModel
+    private int _reOrderingCounter;
+
     protected override void OnInitialized()
     {
         InstrumentViewModel.DataUpdateSubscriptions.Add(() =>
@@ -40,6 +46,16 @@ public partial class ChartFilters
 
     private async Task OnTagSelectionChangedAsync(DimensionFilterViewModel context, DimensionValueViewModel tag, bool isChecked)
     {
+        if (isChecked)
+        {
+            if (context.OverflowedValues.Contains(tag))
+            {
+                // reorder tag
+                _reOrderingCounter++;
+                tag.Order = -_reOrderingCounter;
+            }
+        }
+
         context.OnTagSelectionChanged(tag, isChecked);
         await OnDimensionValuesChanged.InvokeAsync(context);
     }
