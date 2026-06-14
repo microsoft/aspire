@@ -675,6 +675,51 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Azure location.
+        /// </summary>
+        internal static string ContextPropertyLocationDisplayName {
+            get {
+                return ResourceManager.GetString("ContextPropertyLocationDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure resource group.
+        /// </summary>
+        internal static string ContextPropertyResourceGroupDisplayName {
+            get {
+                return ResourceManager.GetString("ContextPropertyResourceGroupDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure subscription ID.
+        /// </summary>
+        internal static string ContextPropertySubscriptionIdDisplayName {
+            get {
+                return ResourceManager.GetString("ContextPropertySubscriptionIdDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure tenant domain.
+        /// </summary>
+        internal static string ContextPropertyTenantDomainDisplayName {
+            get {
+                return ResourceManager.GetString("ContextPropertyTenantDomainDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure tenant ID.
+        /// </summary>
+        internal static string ContextPropertyTenantIdDisplayName {
+            get {
+                return ResourceManager.GetString("ContextPropertyTenantIdDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Azure error code.
         /// </summary>
         internal static string FailurePropertyCodeDisplayName {

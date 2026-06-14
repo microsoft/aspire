@@ -3042,10 +3042,10 @@ public class AzureEnvironmentResourceExtensionsTests
 
         Assert.True(notifications.TryGetCurrentState(environmentResource.Name, out var environmentEvent));
         Assert.Equal(KnownResourceStates.Running, environmentEvent.Snapshot.State?.Text);
-        Assert.Equal("12345678-1234-1234-1234-123456789012", environmentEvent.Snapshot.Properties.Single(p => p.Name == "azure.subscription.id").Value?.ToString());
-        Assert.Equal("cli-rg-é", environmentEvent.Snapshot.Properties.Single(p => p.Name == "azure.resource.group").Value?.ToString());
-        Assert.Equal("westus3", environmentEvent.Snapshot.Properties.Single(p => p.Name == "azure.location").Value?.ToString());
-        Assert.Equal("87654321-4321-4321-4321-210987654321", environmentEvent.Snapshot.Properties.Single(p => p.Name == "azure.tenant.id").Value?.ToString());
+        AssertHighlightedContextProperty(environmentEvent.Snapshot.Properties, "azure.subscription.id", "12345678-1234-1234-1234-123456789012", AzureProvisioningStrings.ContextPropertySubscriptionIdDisplayName);
+        AssertHighlightedContextProperty(environmentEvent.Snapshot.Properties, "azure.resource.group", "cli-rg-é", AzureProvisioningStrings.ContextPropertyResourceGroupDisplayName);
+        AssertHighlightedContextProperty(environmentEvent.Snapshot.Properties, "azure.location", "westus3", AzureProvisioningStrings.ContextPropertyLocationDisplayName);
+        AssertHighlightedContextProperty(environmentEvent.Snapshot.Properties, "azure.tenant.id", "87654321-4321-4321-4321-210987654321", AzureProvisioningStrings.ContextPropertyTenantIdDisplayName);
     }
 
     [Fact]
@@ -3708,6 +3708,8 @@ public class AzureEnvironmentResourceExtensionsTests
         azureSection.Data["SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
         azureSection.Data["Location"] = "westus2";
         azureSection.Data["ResourceGroup"] = "test-rg";
+        azureSection.Data["TenantId"] = "87654321-4321-4321-4321-210987654321";
+        azureSection.Data["Tenant"] = "testdomain.onmicrosoft.com";
         await deploymentStateManager.SaveSectionAsync(azureSection);
 
         var storageSection = await deploymentStateManager.AcquireSectionAsync("Azure:Deployments:storage");
@@ -3722,6 +3724,11 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.True(notifications.TryGetCurrentState(environmentResource.Name, out var environmentEvent));
         Assert.Equal(AzureProvisioningController.DriftedState, environmentEvent.Snapshot.State?.Text);
         Assert.Equal(KnownResourceStateStyles.Error, environmentEvent.Snapshot.State?.Style);
+        AssertHighlightedContextProperty(environmentEvent.Snapshot.Properties, "azure.subscription.id", "12345678-1234-1234-1234-123456789012", AzureProvisioningStrings.ContextPropertySubscriptionIdDisplayName);
+        AssertHighlightedContextProperty(environmentEvent.Snapshot.Properties, "azure.resource.group", "test-rg", AzureProvisioningStrings.ContextPropertyResourceGroupDisplayName);
+        AssertHighlightedContextProperty(environmentEvent.Snapshot.Properties, "azure.location", "westus2", AzureProvisioningStrings.ContextPropertyLocationDisplayName);
+        AssertHighlightedContextProperty(environmentEvent.Snapshot.Properties, "azure.tenant.id", "87654321-4321-4321-4321-210987654321", AzureProvisioningStrings.ContextPropertyTenantIdDisplayName);
+        AssertHighlightedContextProperty(environmentEvent.Snapshot.Properties, "azure.tenant.domain", "testdomain.onmicrosoft.com", AzureProvisioningStrings.ContextPropertyTenantDomainDisplayName);
 
         Assert.True(notifications.TryGetCurrentState(storage.Resource.Name, out var resourceEvent));
         Assert.Equal(AzureProvisioningController.MissingInAzureState, resourceEvent.Snapshot.State?.Text);
@@ -4463,6 +4470,15 @@ public class AzureEnvironmentResourceExtensionsTests
     {
         var command = Assert.Single(snapshot.Commands, c => c.Name == commandName);
         Assert.Equal(expectedState, command.State);
+    }
+
+    private static void AssertHighlightedContextProperty(IEnumerable<ResourcePropertySnapshot> properties, string name, object value, string displayName)
+    {
+        var property = Assert.Single(properties, p => p.Name == name);
+
+        Assert.Equal(value, property.Value);
+        Assert.Equal(displayName, property.DisplayName);
+        Assert.True(property.IsHighlighted);
     }
 
     private sealed class AzureProvisioningFailureTestResponse : Response

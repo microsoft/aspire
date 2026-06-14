@@ -124,14 +124,15 @@ internal sealed class BicepProvisioner(
         {
             // Reused deployment state should expose the same Azure identity metadata as a freshly provisioned resource
             // so agents and commands can reliably locate the backing Azure deployment.
-            var props = state.Properties.WithoutAzureProvisioningFailureProperties().SetResourcePropertyRange([
-                new("azure.subscription.id", azureContext.SubscriptionId),
-                new("azure.resource.group", azureContext.ResourceGroup),
-                new("azure.tenant.id", azureContext.TenantId),
-                new("azure.tenant.domain", azureContext.TenantDomain),
-                new("azure.location", configuredLocation),
-                new(CustomResourceKnownProperties.Source, deploymentId)
-            ]);
+            var props = state.Properties.WithoutAzureProvisioningFailureProperties()
+                .SetResourcePropertyRange(AzureResourceProperties.CreateContextProperties(
+                    azureContext.SubscriptionId,
+                    azureContext.ResourceGroup,
+                    azureContext.TenantId,
+                    azureContext.TenantDomain,
+                    configuredLocation,
+                    includeEmptyProperties: true))
+                .SetResourcePropertyRange([new(CustomResourceKnownProperties.Source, deploymentId)]);
 
             return state with
             {
@@ -175,13 +176,14 @@ internal sealed class BicepProvisioner(
         {
             ResourceType = resource.GetType().Name,
             State = new("Starting", KnownResourceStateStyles.Info),
-            Properties = WithoutDeploymentOperationProperties(state.Properties.WithoutAzureProvisioningFailureProperties()).SetResourcePropertyRange([
-                new("azure.subscription.id", subscription.Id.Name),
-                new("azure.resource.group", resourceGroupName),
-                new("azure.tenant.id", context.Tenant.TenantId?.ToString()),
-                new("azure.tenant.domain", context.Tenant.DefaultDomain),
-                new("azure.location", effectiveLocation),
-            ])
+            Properties = WithoutDeploymentOperationProperties(state.Properties.WithoutAzureProvisioningFailureProperties()).SetResourcePropertyRange(
+                AzureResourceProperties.CreateContextProperties(
+                    subscription.Id.Name,
+                    resourceGroupName,
+                    context.Tenant.TenantId?.ToString(),
+                    context.Tenant.DefaultDomain,
+                    effectiveLocation,
+                    includeEmptyProperties: true))
         }).ConfigureAwait(false);
 
         var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-bicep").Path;
@@ -445,14 +447,15 @@ internal sealed class BicepProvisioner(
 
         await notificationService.PublishUpdateAsync(resource, state =>
         {
-            ImmutableArray<ResourcePropertySnapshot> properties = state.Properties.WithoutAzureProvisioningFailureProperties().SetResourcePropertyRange([
-                new("azure.subscription.id", subscription.Id.Name),
-                new("azure.resource.group", resourceGroupName),
-                new("azure.tenant.id", context.Tenant.TenantId?.ToString()),
-                new("azure.tenant.domain", context.Tenant.DefaultDomain),
-                new("azure.location", effectiveLocation),
-                new(CustomResourceKnownProperties.Source, deployment.Id.ToString())
-            ]);
+            ImmutableArray<ResourcePropertySnapshot> properties = state.Properties.WithoutAzureProvisioningFailureProperties()
+                .SetResourcePropertyRange(AzureResourceProperties.CreateContextProperties(
+                    subscription.Id.Name,
+                    resourceGroupName,
+                    context.Tenant.TenantId?.ToString(),
+                    context.Tenant.DefaultDomain,
+                    effectiveLocation,
+                    includeEmptyProperties: true))
+                .SetResourceProperty(CustomResourceKnownProperties.Source, deployment.Id.ToString());
 
             return state with
             {

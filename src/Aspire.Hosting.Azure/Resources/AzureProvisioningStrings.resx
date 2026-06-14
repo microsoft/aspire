@@ -324,6 +324,21 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   <data name="DeleteAzureResourcesCommandSuccess" xml:space="preserve">
     <value>Azure resources deleted and provisioning state reset.</value>
   </data>
+  <data name="ContextPropertyLocationDisplayName" xml:space="preserve">
+    <value>Azure location</value>
+  </data>
+  <data name="ContextPropertyResourceGroupDisplayName" xml:space="preserve">
+    <value>Azure resource group</value>
+  </data>
+  <data name="ContextPropertySubscriptionIdDisplayName" xml:space="preserve">
+    <value>Azure subscription ID</value>
+  </data>
+  <data name="ContextPropertyTenantDomainDisplayName" xml:space="preserve">
+    <value>Azure tenant domain</value>
+  </data>
+  <data name="ContextPropertyTenantIdDisplayName" xml:space="preserve">
+    <value>Azure tenant ID</value>
+  </data>
   <data name="FailurePropertyCodeDisplayName" xml:space="preserve">
     <value>Azure error code</value>
   </data>

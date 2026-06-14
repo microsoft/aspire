@@ -67,6 +67,31 @@
         <target state="new">Change Azure resource location</target>
         <note />
       </trans-unit>
+      <trans-unit id="ContextPropertyLocationDisplayName">
+        <source>Azure location</source>
+        <target state="new">Azure location</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContextPropertyResourceGroupDisplayName">
+        <source>Azure resource group</source>
+        <target state="new">Azure resource group</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContextPropertySubscriptionIdDisplayName">
+        <source>Azure subscription ID</source>
+        <target state="new">Azure subscription ID</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContextPropertyTenantDomainDisplayName">
+        <source>Azure tenant domain</source>
+        <target state="new">Azure tenant domain</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ContextPropertyTenantIdDisplayName">
+        <source>Azure tenant ID</source>
+        <target state="new">Azure tenant ID</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandConfirmation">
         <source>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, and clears cached deployment state. Do you want to continue?</source>
         <target state="new">This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, and clears cached deployment state. Do you want to continue?</target>

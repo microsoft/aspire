@@ -8,6 +8,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
+using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Azure;
@@ -620,8 +621,11 @@ public class AzureBicepProvisionerTests
 
         var notifications = services.GetRequiredService<ResourceNotificationService>();
         Assert.True(notifications.TryGetCurrentState(resource.Name, out var resourceEvent));
-        Assert.Equal("westus3", resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.location").Value?.ToString());
-        Assert.Equal("87654321-4321-4321-4321-210987654321", resourceEvent.Snapshot.Properties.Single(p => p.Name == "azure.tenant.id").Value?.ToString());
+        AssertHighlightedContextProperty(resourceEvent.Snapshot.Properties, "azure.subscription.id", "12345678-1234-1234-1234-123456789012", AzureProvisioningStrings.ContextPropertySubscriptionIdDisplayName);
+        AssertHighlightedContextProperty(resourceEvent.Snapshot.Properties, "azure.resource.group", "test-rg", AzureProvisioningStrings.ContextPropertyResourceGroupDisplayName);
+        AssertHighlightedContextProperty(resourceEvent.Snapshot.Properties, "azure.tenant.id", "87654321-4321-4321-4321-210987654321", AzureProvisioningStrings.ContextPropertyTenantIdDisplayName);
+        AssertHighlightedContextProperty(resourceEvent.Snapshot.Properties, "azure.tenant.domain", "testdomain.onmicrosoft.com", AzureProvisioningStrings.ContextPropertyTenantDomainDisplayName);
+        AssertHighlightedContextProperty(resourceEvent.Snapshot.Properties, "azure.location", "westus3", AzureProvisioningStrings.ContextPropertyLocationDisplayName);
         Assert.Equal("/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/storage", resourceEvent.Snapshot.Properties.Single(p => p.Name == CustomResourceKnownProperties.Source).Value?.ToString());
     }
 
@@ -1048,11 +1052,11 @@ public class AzureBicepProvisionerTests
         Assert.Equal("Azure deployment failed", resourceEvent.Snapshot.State?.Text);
         Assert.Collection(
             resourceEvent.Snapshot.Properties,
-            property => AssertResourceProperty(property, "azure.subscription.id", "12345678-1234-1234-1234-123456789012"),
-            property => AssertResourceProperty(property, "azure.resource.group", "test-rg"),
-            property => AssertResourceProperty(property, "azure.tenant.id", "87654321-4321-4321-4321-210987654321"),
-            property => AssertResourceProperty(property, "azure.tenant.domain", "testdomain.onmicrosoft.com"),
-            property => AssertResourceProperty(property, "azure.location", "westus2"),
+            property => AssertHighlightedResourceProperty(property, "azure.subscription.id", "12345678-1234-1234-1234-123456789012", AzureProvisioningStrings.ContextPropertySubscriptionIdDisplayName),
+            property => AssertHighlightedResourceProperty(property, "azure.resource.group", "test-rg", AzureProvisioningStrings.ContextPropertyResourceGroupDisplayName),
+            property => AssertHighlightedResourceProperty(property, "azure.tenant.id", "87654321-4321-4321-4321-210987654321", AzureProvisioningStrings.ContextPropertyTenantIdDisplayName),
+            property => AssertHighlightedResourceProperty(property, "azure.tenant.domain", "testdomain.onmicrosoft.com", AzureProvisioningStrings.ContextPropertyTenantDomainDisplayName),
+            property => AssertHighlightedResourceProperty(property, "azure.location", "westus2", AzureProvisioningStrings.ContextPropertyLocationDisplayName),
             property => AssertResourceProperty(property, CustomResourceKnownProperties.Source, deploymentId),
             property => AssertResourceProperty(property, "azure.deployment.operations.total", 3),
             property => AssertResourceProperty(property, "azure.deployment.operations.running", 0),
@@ -1088,6 +1092,10 @@ public class AzureBicepProvisionerTests
                     action => Assert.Contains("change-location --location eastus", action, StringComparison.Ordinal),
                     action => Assert.Contains("Supported regions include: eastus, westus3", action, StringComparison.Ordinal));
             });
+
+        Assert.All(
+            resourceEvent.Snapshot.Properties.Where(property => property.Name.StartsWith("azure.deployment.operations.", StringComparison.Ordinal)),
+            property => Assert.False(property.IsHighlighted));
 
         static void AssertResourceProperty(ResourcePropertySnapshot property, string name, object value)
         {
@@ -1377,6 +1385,20 @@ public class AzureBicepProvisionerTests
         var property = Assert.Single(resourceEvent.Snapshot.Properties, p => p.Name == "azure.resource.group");
 
         Assert.Null(property.Value);
+    }
+
+    private static void AssertHighlightedContextProperty(IEnumerable<ResourcePropertySnapshot> properties, string name, object value, string displayName)
+    {
+        var property = Assert.Single(properties, p => p.Name == name);
+        AssertHighlightedResourceProperty(property, name, value, displayName);
+    }
+
+    private static void AssertHighlightedResourceProperty(ResourcePropertySnapshot property, string name, object value, string displayName)
+    {
+        Assert.Equal(name, property.Name);
+        Assert.Equal(value, property.Value);
+        Assert.Equal(displayName, property.DisplayName);
+        Assert.True(property.IsHighlighted);
     }
 
     private static async Task<IReadOnlyList<(string Content, bool IsErrorMessage)>> ReadInitialResourceLogsAsync(ResourceLoggerService loggerService, IResource resource)

@@ -2688,7 +2688,8 @@ internal sealed class AzureProvisioningController(
             section.Data["SubscriptionId"]?.GetValue<string>() ?? provisionerOptions.Value.SubscriptionId ?? configuration["Azure:SubscriptionId"],
             section.Data["ResourceGroup"]?.GetValue<string>() ?? provisionerOptions.Value.ResourceGroup ?? configuration["Azure:ResourceGroup"],
             section.Data["Location"]?.GetValue<string>() ?? provisionerOptions.Value.Location ?? configuration["Azure:Location"],
-            section.Data["TenantId"]?.GetValue<string>() ?? provisionerOptions.Value.TenantId ?? configuration["Azure:TenantId"]);
+            section.Data["TenantId"]?.GetValue<string>() ?? provisionerOptions.Value.TenantId ?? configuration["Azure:TenantId"],
+            section.Data["Tenant"]?.GetValue<string>());
     }
 
     private bool ShouldCheckForDrift(IResource resource)
@@ -3324,29 +3325,12 @@ internal sealed class AzureProvisioningController(
 
     private static ImmutableArray<ResourcePropertySnapshot> BuildAzureEnvironmentProperties(AzureContextState context)
     {
-        var properties = ImmutableArray<ResourcePropertySnapshot>.Empty;
-
-        if (!string.IsNullOrEmpty(context.SubscriptionId))
-        {
-            properties = properties.SetResourceProperty("azure.subscription.id", context.SubscriptionId);
-        }
-
-        if (!string.IsNullOrEmpty(context.ResourceGroup))
-        {
-            properties = properties.SetResourceProperty("azure.resource.group", context.ResourceGroup);
-        }
-
-        if (!string.IsNullOrEmpty(context.Location))
-        {
-            properties = properties.SetResourceProperty("azure.location", context.Location);
-        }
-
-        if (!string.IsNullOrEmpty(context.TenantId))
-        {
-            properties = properties.SetResourceProperty("azure.tenant.id", context.TenantId);
-        }
-
-        return properties;
+        return AzureResourceProperties.CreateContextProperties(
+            context.SubscriptionId,
+            context.ResourceGroup,
+            context.TenantId,
+            context.TenantDomain,
+            context.Location);
     }
 
     private sealed class AzureOperationState(string displayName, bool isAllResources, IReadOnlySet<string> resourceNames)
@@ -3453,5 +3437,5 @@ internal sealed class AzureProvisioningController(
         TaskCompletionSource<object?> Completion,
         CancellationToken CancellationToken);
 
-    private sealed record AzureContextState(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId);
+    private sealed record AzureContextState(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId, string? TenantDomain);
 }
