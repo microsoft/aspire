@@ -33,13 +33,13 @@
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
-        <source>Aspire CLI Version</source>
-        <target state="translated">Aspire CLI 버전</target>
+        <source>Aspire CLI version</source>
+        <target state="needs-review-translation">Aspire CLI 버전</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
-        <source>Aspire.Hosting Version</source>
-        <target state="translated">Aspire.Hosting 버전</target>
+        <source>Aspire.Hosting version</source>
+        <target state="needs-review-translation">Aspire.Hosting 버전</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
@@ -173,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
-        <source>Required Capability</source>
-        <target state="translated">필수 기능</target>
+        <source>Required capability</source>
+        <target state="needs-review-translation">필수 기능</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">

@@ -72,7 +72,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             ConsoleInteractionService.NoneChoice)
     };
 
-    private static readonly Option<string?> s_skillsOption = new("--skills")
+    internal static readonly Option<string?> s_skillsOption = new("--skills")
     {
         Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillsOptionDescription,
             string.Join(",", SkillDefinition.CliDefined.Select(s => s.Name)),
@@ -96,6 +96,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// pre-selected, which is what <c>aspire init</c> wants because aspireify is the natural follow-up.
     /// Other callers (e.g. <c>aspire new</c>) can pass a predicate to additionally filter out skills that
     /// don't fit their context (such as one-time setup skills after a template has already produced the AppHost).
+    /// Callers that expose <c>--skills</c> can pass <paramref name="skillsBinding"/> so the chained
+    /// execution reuses the same non-interactive selection semantics as standalone <c>aspire agent init</c>.
     /// </summary>
     internal async Task<AgentInitExecutionResult> PromptAndChainAsync(
         IInteractionService interactionService,
@@ -103,7 +105,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         DirectoryInfo workspaceRoot,
         PromptBinding<bool> agentInitBinding,
         CancellationToken cancellationToken,
-        Func<SkillDefinition, bool>? selectByDefault = null)
+        Func<SkillDefinition, bool>? selectByDefault = null,
+        PromptBinding<string?>? skillsBinding = null)
     {
         if (previousResultExitCode != CliExitCodes.Success)
         {
@@ -120,7 +123,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, selectByDefault, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, selectByDefault, cancellationToken, skillsBinding);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -192,7 +195,12 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         return new DirectoryInfo(workspaceRootPath);
     }
 
-    private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, ParseResult? parseResult, Func<SkillDefinition, bool>? selectByDefault, CancellationToken cancellationToken)
+    private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(
+        DirectoryInfo workspaceRoot,
+        ParseResult? parseResult,
+        Func<SkillDefinition, bool>? selectByDefault,
+        CancellationToken cancellationToken,
+        PromptBinding<string?>? skillsBindingOverride = null)
     {
         var context = new AgentEnvironmentScanContext
         {
@@ -252,7 +260,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         if (selectedLocations.Count > 0)
         {
             IReadOnlyList<SkillDefinition> availableSkills;
-            if (ShouldSkipBundleCatalogResolution(parseResult))
+            if (ShouldSkipBundleCatalogResolution(parseResult, skillsBindingOverride))
             {
                 availableSkills = SkillDefinition.CliDefined
                     .Where(s => s.IsApplicableToLanguage(detectedLanguage))
@@ -296,7 +304,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             var defaultSkillNames = string.Join(",", defaultSkills.Select(s => s.Name));
             var skillsBinding = parseResult is not null
                 ? PromptBinding.Create(parseResult, s_skillsOption, defaultSkillNames)
-                : PromptBinding.CreateDefault<string?>(defaultSkillNames);
+                : skillsBindingOverride?.WithDefault(defaultSkillNames) ?? PromptBinding.CreateDefault<string?>(defaultSkillNames);
 
             // When the bundle failed to install and the caller passed an explicit --skills value
             // that names a bundle-only skill, the upcoming MatchChoicesOrThrow will reject the
@@ -529,11 +537,17 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         return false;
     }
 
-    private static bool ShouldSkipBundleCatalogResolution(ParseResult? parseResult)
+    private static bool ShouldSkipBundleCatalogResolution(ParseResult? parseResult, PromptBinding<string?>? skillsBinding)
     {
         if (parseResult is null)
         {
-            return false;
+            var (wasProvided, optionValue, _) = PromptBinding.Resolve(skillsBinding);
+            if (!wasProvided)
+            {
+                return false;
+            }
+
+            return ShouldSkipBundleCatalogResolution(optionValue);
         }
 
         var optionResult = parseResult.GetResult(s_skillsOption);
@@ -542,7 +556,11 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             return false;
         }
 
-        var value = parseResult.GetValue(s_skillsOption);
+        return ShouldSkipBundleCatalogResolution(parseResult.GetValue(s_skillsOption));
+    }
+
+    private static bool ShouldSkipBundleCatalogResolution(string? value)
+    {
         if (string.Equals(value, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase))
         {
             return true;

@@ -939,6 +939,25 @@ fluent-tooltip[anchor="dialog_close"] > div {
     text-overflow: ellipsis;
 }
 
+.aspire-menu-container fluent-menu-item.mobile-nav-menu-item-active {
+    /* Mirror the desktop FluentAppBar selected treatment with an accent bar on
+       the leading edge. position: relative anchors the ::before bar to the
+       menu item; the bar is purely decorative because the active state is
+       already announced via aria-current="page". */
+    position: relative;
+    background-color: var(--neutral-fill-stealth-selected);
+}
+
+.aspire-menu-container fluent-menu-item.mobile-nav-menu-item-active::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block: 4px;
+    width: 3px;
+    background-color: var(--accent-fill-rest);
+    border-radius: 2px;
+}
+
 .aspire-menu-container fluent-menu fluent-menu {
     max-width: var(--aspire-menu-max-width);
 }
